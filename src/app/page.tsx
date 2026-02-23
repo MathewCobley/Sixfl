@@ -11,15 +11,13 @@ export default function HomePage(): JSX.Element {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
   <div className="flex items-center gap-3">
-    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-      <img
-        src="/logo.png"
-        alt="SIXFL"
-        className="h-7 w-auto object-contain"
-      />
-    </div>
+    <img
+  src="/logo.png"
+  alt="SIXFL"
+  className="h-10 sm:h-12 w-auto object-contain drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
+/>
 
     <div className="leading-tight">
       <div className="text-xs font-semibold tracking-[0.22em] text-white/80">
