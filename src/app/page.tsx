@@ -12,18 +12,18 @@ export default function HomePage(): JSX.Element {
       </div>
 
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
-  <div className="flex items-center gap-3">
+  <div className="flex items-center gap-4">
     <img
   src="/logo.png"
   alt="SIXFL"
-  className="h-10 sm:h-12 w-auto object-contain drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
+  className="h-14 sm:h-16 w-auto object-contain drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
 />
 
     <div className="leading-tight">
-      <div className="text-xs font-semibold tracking-[0.22em] text-white/80">
-        SIXFL
-      </div>
-      <div className="text-[11px] text-white/50">6-A-SIDE LEAGUES</div>
+      <div className="text-sm font-bold tracking-[0.18em] text-white">
+  SIXFL
+</div>
+<div className="text-xs text-white/50">6-a-side football leagues</div>
     </div>
   </div>
 
