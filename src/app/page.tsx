@@ -11,19 +11,14 @@ export default function HomePage(): JSX.Element {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-8 sm:py-10">
   <div className="flex items-center gap-4">
-    <img
-  src="/logo.png"
-  alt="SIXFL"
-  className="h-14 sm:h-16 w-auto object-contain drop-shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
-/>
-
-    <div className="leading-tight">
-      <div className="text-sm font-bold tracking-[0.18em] text-white">
-  SIXFL
-</div>
-<div className="text-xs text-white/50">6-a-side football leagues</div>
+    <div className="shrink-0">
+      <img
+        src="/logo.png"
+        alt="SIXFL"
+        className="h-28 sm:h-36 w-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
+      />
     </div>
   </div>
 
@@ -35,7 +30,7 @@ export default function HomePage(): JSX.Element {
   </a>
 </header>
 
-      <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-10">
+      <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-4">
         {/* Hero */}
         <section className="grid gap-12 lg:grid-cols-12 lg:items-end">
           <div className="lg:col-span-7">
@@ -110,7 +105,7 @@ export default function HomePage(): JSX.Element {
                   PLANNED LAUNCH AREAS
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {["YORK", "LEEDS", "HARROGATE", "MANCHESTER", "LONDON"].map((x) => (
+                  {["YORK", "LEEDS", "HARROGATE", "WETHERBY", "RIPON"].map((x) => (
                     <span
                       key={x}
                       className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white/80"
