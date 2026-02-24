@@ -3,7 +3,7 @@ import type { JSX } from "react";
 export default function HomePage(): JSX.Element {
   return (
     <div className="relative min-h-screen bg-black text-white">
-      <h1>TEST 123</h1>
+     
 
       {/* Subtle texture + pitch lines */}
       <div className="pointer-events-none absolute inset-0 opacity-[0.10]">
