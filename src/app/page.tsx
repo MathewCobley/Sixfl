@@ -12,20 +12,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-2 sm:py-3">
-  <div className="flex items-center gap-4">
-    <div className="shrink-0">
-      <Image
-        src="/logo.png"
-        alt="SIXFL"
-        width={600}
-        height={300}
-        priority
-        className="w-56 sm:w-72 lg:w-96 h-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
-      />
-    </div>
-  </div>
-
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-end px-6 py-5">
   <a
     href="mailto:hello@sixfl.co.uk"
     className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white/85 hover:bg-white/10 transition"
@@ -36,95 +23,110 @@ export default function HomePage() {
 
 <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
   {/* Hero */}
-  <section className="mt-4 grid gap-12 lg:grid-cols-12 lg:items-end">
+  <section className="mt-4 grid gap-10 lg:grid-cols-12 lg:items-end">
     <div className="lg:col-span-7">
+      {/* BIG LOGO IN HERO */}
+      <div className="mb-4">
+        <Image
+          src="/logo.png"
+          alt="SIXFL"
+          width={1400}
+          height={700}
+          priority
+          className="h-24 sm:h-28 lg:h-36 w-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.7)] animate-fadeIn opacity-0"
+        />
+      </div>
+
+      {/* Pill */}
       <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white/80">
         <span className="h-2 w-2 rounded-full bg-emerald-500" />
         EARLY ACCESS • UK LAUNCH
       </div>
 
-            <h1 className="mt-6 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl">
-              6-A-SIDE.
-              <br />
-              <span className="text-white">DONE</span>{" "}
-              <span className="text-emerald-500">PROPERLY.</span>
-            </h1>
+      <h1 className="mt-4 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn [animation-delay:0.15s] opacity-0 [animation-fill-mode:forwards]">
+        6-A-SIDE.
+        <br />
+        <span className="text-white">DONE</span>{" "}
+        <span className="text-emerald-500 drop-shadow-[0_0_24px_rgba(16,185,129,0.55)]">
+  PROPERLY.
+</span>
+      </h1>
 
-            <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-white/65">
-              Fixtures that hold. Tables that update instantly. Captains in control.
-              Less admin. More football.
-            </p>
+        <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-white/65 animate-fadeIn [animation-delay:0.3s] opacity-0 [animation-fill-mode:forwards]">
+        Fixtures that hold. Tables that update instantly. Captains in control.
+        Less admin. More football.
+      </p>
 
-            {/* Nike-style CTA row */}
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <a
-                href="#waitlist"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
-              >
-                JOIN WAITLIST
-              </a>
+      {/* Nike-style CTA row */}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center animate-fadeIn [animation-delay:0.45s] opacity-0 [animation-fill-mode:forwards]">
+        <a
+          href="#waitlist"
+          className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition"
+        >
+          JOIN WAITLIST
+        </a>
 
-              <a
-                href="#whats-coming"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-bold tracking-wide text-white/85 hover:bg-white/10 transition"
-              >
-                SEE WHAT’S COMING
-              </a>
-            </div>
+        <a
+          href="#whats-coming"
+          className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
+        >
+          SEE WHAT’S COMING
+        </a>
+      </div>
 
-            <div className="mt-4 text-xs font-semibold tracking-wide text-emerald-500">
-              LIMITED EARLY ACCESS • FIRST LEAGUES OPENING SOON
-            </div>
+      <div className="mt-3 text-xs font-semibold tracking-wide text-emerald-500">
+        LIMITED EARLY ACCESS • FIRST LEAGUES OPENING SOON
+      </div>
+    </div>
+
+    {/* Right panel */}
+    <div className="lg:col-span-5 animate-fadeIn [animation-delay:0.6s] opacity-0 [animation-fill-mode:forwards]">
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold tracking-[0.22em] text-white/70">
+            SIXFL v1
           </div>
-
-          {/* Right panel */}
-          <div className="lg:col-span-5">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold tracking-[0.22em] text-white/70">
-                  SIXFL v1
-                </div>
-                <div className="text-[11px] font-semibold text-white/45">
-                  BUILT FOR CAPTAINS
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-3">
-                <Bullet
-                  title="Fixtures that actually work"
-                  desc="Clear schedules. Clean match pages. No confusion."
-                />
-                <Bullet
-                  title="Attendance that sticks"
-                  desc="Captains confirm squads early to reduce dropouts."
-                />
-                <Bullet
-                  title="Results, tables, done"
-                  desc="Fast updates, proper standings, simple admin."
-                />
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
-                <div className="text-[11px] font-semibold tracking-[0.22em] text-white/60">
-                  PLANNED LAUNCH AREAS
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {["YORK", "LEEDS", "HARROGATE", "WETHERBY", "RIPON"].map((x) => (
-                    <span
-                      key={x}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white/80"
-                    >
-                      {x}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Tiny accent */}
-            <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+          <div className="text-[11px] font-semibold text-white/45">
+            BUILT FOR CAPTAINS
           </div>
-        </section>
+        </div>
+
+        <div className="mt-5 grid gap-3">
+          <Bullet
+            title="Fixtures that actually work"
+            desc="Clear schedules. Clean match pages. No confusion."
+          />
+          <Bullet
+            title="Attendance that sticks"
+            desc="Captains confirm squads early to reduce dropouts."
+          />
+          <Bullet
+            title="Results, tables, done"
+            desc="Fast updates, proper standings, simple admin."
+          />
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
+          <div className="text-[11px] font-semibold tracking-[0.22em] text-white/60">
+            PLANNED LAUNCH AREAS
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {["YORK", "LEEDS", "HARROGATE", "WETHERBY", "RIPON"].map((x) => (
+              <span
+                key={x}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white/80"
+              >
+                {x}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Tiny accent */}
+      <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+    </div>
+  </section>
 
         {/* Waitlist */}
         <section id="waitlist" className="mt-14">
@@ -172,7 +174,7 @@ export default function HomePage() {
 
                 <button
                   type="submit"
-                  className="h-12 w-full md:w-auto rounded-2xl bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
+                  className="h-12 w-full md:w-auto rounded-2xl bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition"
                 >
                   NOTIFY ME
                 </button>
