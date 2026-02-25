@@ -1,10 +1,9 @@
-import type { JSX } from "react";
+import Image from "next/image";
 
 export default function HomePage(): JSX.Element {
   return (
     <div className="relative min-h-screen bg-black text-white">
      
-
       {/* Subtle texture + pitch lines */}
       <div className="pointer-events-none absolute inset-0 opacity-[0.10]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.20),transparent_45%)]" />
@@ -16,11 +15,14 @@ export default function HomePage(): JSX.Element {
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-8 sm:py-10">
   <div className="flex items-center gap-4">
     <div className="shrink-0">
-      <img
-        src="/logo.png"
-        alt="SIXFL"
-        className="h-28 sm:h-36 w-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
-      />
+     <Image
+  src="/logo.png"
+  alt="SIXFL"
+  width={200}
+  height={100}
+  priority
+  className="h-28 sm:h-36 w-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
+/> 
     </div>
   </div>
 
