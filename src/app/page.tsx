@@ -12,7 +12,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-3 sm:py-4">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-2 sm:py-3">
   <div className="flex items-center gap-4">
     <div className="shrink-0">
       <Image
@@ -36,7 +36,7 @@ export default function HomePage() {
 
 <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
   {/* Hero */}
-  <section className="grid gap-12 lg:grid-cols-12 lg:items-end">
+  <section className="mt-4 grid gap-12 lg:grid-cols-12 lg:items-end">
     <div className="lg:col-span-7">
       <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white/80">
         <span className="h-2 w-2 rounded-full bg-emerald-500" />
