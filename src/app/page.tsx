@@ -12,7 +12,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:py-4">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-3 sm:py-4">
   <div className="flex items-center gap-4">
     <div className="shrink-0">
       <Image
@@ -21,7 +21,7 @@ export default function HomePage() {
         width={600}
         height={300}
         priority
-        className="w-56 sm:w-72 h-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
+        className="w-56 sm:w-72 lg:w-96 h-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
       />
     </div>
   </div>
