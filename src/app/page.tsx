@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-export default function HomePage(): JSX.Element {
+export default function HomePage() {
   return (
     <div className="relative min-h-screen bg-black text-white">
      
