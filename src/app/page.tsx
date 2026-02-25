@@ -12,16 +12,16 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:py-6">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:py-4">
   <div className="flex items-center gap-4">
     <div className="shrink-0">
       <Image
         src="/logo.png"
         alt="SIXFL"
-        width={500}
-        height={250}
+        width={600}
+        height={300}
         priority
-        className="w-48 sm:w-64 h-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
+        className="w-56 sm:w-72 h-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
       />
     </div>
   </div>
@@ -34,7 +34,7 @@ export default function HomePage() {
   </a>
 </header>
 
-<main className="relative mx-auto max-w-6xl px-4 pb-20 pt-4">
+<main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
   {/* Hero */}
   <section className="grid gap-12 lg:grid-cols-12 lg:items-end">
     <div className="lg:col-span-7">
