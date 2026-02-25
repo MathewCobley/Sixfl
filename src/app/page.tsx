@@ -12,16 +12,16 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-6 sm:py-8">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:py-6">
   <div className="flex items-center gap-4">
     <div className="shrink-0">
       <Image
         src="/logo.png"
         alt="SIXFL"
-        width={400}
-        height={200}
+        width={500}
+        height={250}
         priority
-        className="h-20 sm:h-24 w-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
+        className="w-48 sm:w-64 h-auto object-contain drop-shadow-[0_15px_40px_rgba(0,0,0,0.6)]"
       />
     </div>
   </div>
