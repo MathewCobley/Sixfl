@@ -3,7 +3,6 @@ import Image from "next/image";
 export default function HomePage() {
   return (
     <div className="relative min-h-screen bg-black text-white">
-     
       {/* Subtle texture + pitch lines */}
       <div className="pointer-events-none absolute inset-0 opacity-[0.10]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.20),transparent_45%)]" />
@@ -12,121 +11,112 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-end px-6 py-5">
-  <a
-    href="mailto:hello@sixfl.co.uk"
-    className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white/85 hover:bg-white/10 transition"
-  >
-    CONTACT
-  </a>
-</header>
+      <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
+        {/* Hero */}
+        <section className="mt-4 grid gap-10 lg:grid-cols-12 lg:items-end">
+          <div className="lg:col-span-7">
+            {/* BIG LOGO IN HERO */}
+            <div className="mb-4">
+              <Image
+                src="/logo.png"
+                alt="SIXFL"
+                width={1400}
+                height={700}
+                priority
+                className="h-24 w-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.7)] animate-fadeIn opacity-0 sm:h-28 lg:h-36"
+              />
+            </div>
 
-<main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
-  {/* Hero */}
-  <section className="mt-4 grid gap-10 lg:grid-cols-12 lg:items-end">
-    <div className="lg:col-span-7">
-      {/* BIG LOGO IN HERO */}
-      <div className="mb-4">
-        <Image
-          src="/logo.png"
-          alt="SIXFL"
-          width={1400}
-          height={700}
-          priority
-          className="h-24 sm:h-28 lg:h-36 w-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.7)] animate-fadeIn opacity-0"
-        />
-      </div>
+            {/* Pill */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white/80">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              EARLY ACCESS • UK LAUNCH
+            </div>
 
-      {/* Pill */}
-      <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white/80">
-        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-        EARLY ACCESS • UK LAUNCH
-      </div>
-
-      <h1 className="mt-4 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn [animation-delay:0.15s] opacity-0 [animation-fill-mode:forwards]">
-        6-A-SIDE.
-        <br />
-        <span className="text-white">DONE</span>{" "}
-        <span className="text-emerald-500 drop-shadow-[0_0_24px_rgba(16,185,129,0.55)]">
-  PROPERLY.
-</span>
-      </h1>
-
-        <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-white/65 animate-fadeIn [animation-delay:0.3s] opacity-0 [animation-fill-mode:forwards]">
-        Fixtures that hold. Tables that update instantly. Captains in control.
-        Less admin. More football.
-      </p>
-
-      {/* Nike-style CTA row */}
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center animate-fadeIn [animation-delay:0.45s] opacity-0 [animation-fill-mode:forwards]">
-        <a
-          href="#waitlist"
-          className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition"
-        >
-          JOIN WAITLIST
-        </a>
-
-        <a
-          href="#whats-coming"
-          className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
-        >
-          SEE WHAT’S COMING
-        </a>
-      </div>
-
-      <div className="mt-3 text-xs font-semibold tracking-wide text-emerald-500">
-        LIMITED EARLY ACCESS • FIRST LEAGUES OPENING SOON
-      </div>
-    </div>
-
-    {/* Right panel */}
-    <div className="lg:col-span-5 animate-fadeIn [animation-delay:0.6s] opacity-0 [animation-fill-mode:forwards]">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-semibold tracking-[0.22em] text-white/70">
-            SIXFL v1
-          </div>
-          <div className="text-[11px] font-semibold text-white/45">
-            BUILT FOR CAPTAINS
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3">
-          <Bullet
-            title="Fixtures that actually work"
-            desc="Clear schedules. Clean match pages. No confusion."
-          />
-          <Bullet
-            title="Attendance that sticks"
-            desc="Captains confirm squads early to reduce dropouts."
-          />
-          <Bullet
-            title="Results, tables, done"
-            desc="Fast updates, proper standings, simple admin."
-          />
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
-          <div className="text-[11px] font-semibold tracking-[0.22em] text-white/60">
-            PLANNED LAUNCH AREAS
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {["YORK", "LEEDS", "HARROGATE", "WETHERBY", "RIPON"].map((x) => (
-              <span
-                key={x}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white/80"
-              >
-                {x}
+            <h1 className="mt-4 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn [animation-delay:0.15s] opacity-0 [animation-fill-mode:forwards]">
+              6-A-SIDE.
+              <br />
+              <span className="text-white">DONE</span>{" "}
+              <span className="text-emerald-500 drop-shadow-[0_0_24px_rgba(16,185,129,0.55)]">
+                PROPERLY.
               </span>
-            ))}
-          </div>
-        </div>
-      </div>
+            </h1>
 
-      {/* Tiny accent */}
-      <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-    </div>
-  </section>
+            <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-white/65 animate-fadeIn [animation-delay:0.3s] opacity-0 [animation-fill-mode:forwards]">
+              Fixtures that hold. Tables that update instantly. Captains in
+              control. Less admin. More football.
+            </p>
+
+            {/* Nike-style CTA row */}
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center animate-fadeIn [animation-delay:0.45s] opacity-0 [animation-fill-mode:forwards]">
+              <a
+                href="#waitlist"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition"
+              >
+                JOIN WAITLIST
+              </a>
+
+              <a
+                href="#whats-coming"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
+              >
+                SEE WHAT’S COMING
+              </a>
+            </div>
+
+            <div className="mt-3 text-xs font-semibold tracking-wide text-emerald-500">
+              LIMITED EARLY ACCESS • FIRST LEAGUES OPENING SOON
+            </div>
+          </div>
+
+          {/* Right panel */}
+          <div className="lg:col-span-5 animate-fadeIn [animation-delay:0.6s] opacity-0 [animation-fill-mode:forwards]">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold tracking-[0.22em] text-white/70">
+                  SIXFL v1
+                </div>
+                <div className="text-[11px] font-semibold text-white/45">
+                  BUILT FOR CAPTAINS
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                <Bullet
+                  title="Fixtures that actually work"
+                  desc="Clear schedules. Clean match pages. No confusion."
+                />
+                <Bullet
+                  title="Attendance that sticks"
+                  desc="Captains confirm squads early to reduce dropouts."
+                />
+                <Bullet
+                  title="Results, tables, done"
+                  desc="Fast updates, proper standings, simple admin."
+                />
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
+                <div className="text-[11px] font-semibold tracking-[0.22em] text-white/60">
+                  PLANNED LAUNCH AREAS
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {["YORK", "LEEDS", "HARROGATE", "WETHERBY", "RIPON"].map((x) => (
+                    <span
+                      key={x}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white/80"
+                    >
+                      {x}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Tiny accent */}
+            <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+          </div>
+        </section>
 
         {/* Waitlist */}
         <section id="waitlist" className="mt-14">
@@ -166,7 +156,7 @@ export default function HomePage() {
                   type="text"
                   name="location"
                   placeholder="Town/City (optional)"
-                  className="h-12 w-full md:w-56 rounded-2xl border border-white/10 bg-black/60 px-4 text-sm text-white placeholder:text-white/35 outline-none focus:border-emerald-500/60"
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/60 px-4 text-sm text-white placeholder:text-white/35 outline-none focus:border-emerald-500/60 md:w-56"
                 />
 
                 <input type="hidden" name="source" value="sixfl holding page" />
@@ -174,7 +164,7 @@ export default function HomePage() {
 
                 <button
                   type="submit"
-                  className="h-12 w-full md:w-auto rounded-2xl bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition"
+                  className="h-12 w-full rounded-2xl bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition md:w-auto"
                 >
                   NOTIFY ME
                 </button>
@@ -208,7 +198,10 @@ export default function HomePage() {
           <div className="h-px w-full max-w-6xl bg-white/10" />
           <p className="pt-6">© {new Date().getFullYear()} SIXFL</p>
           <p>
-            <a className="underline hover:text-white/70" href="mailto:hello@sixfl.co.uk">
+            <a
+              className="underline hover:text-white/70"
+              href="mailto:hello@sixfl.co.uk"
+            >
               hello@sixfl.co.uk
             </a>
           </p>
@@ -224,7 +217,9 @@ function Bullet({ title, desc }: { title: string; desc: string }) {
       <div className="flex items-start gap-3">
         <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
         <div>
-          <div className="text-sm font-extrabold tracking-tight text-white">{title}</div>
+          <div className="text-sm font-extrabold tracking-tight text-white">
+            {title}
+          </div>
           <div className="mt-1 text-sm leading-relaxed text-white/60">{desc}</div>
         </div>
       </div>
