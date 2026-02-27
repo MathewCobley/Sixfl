@@ -1,62 +1,102 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+
+function NavLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const active = pathname === href;
+
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={`relative transition-colors duration-200 ${
+        active ? "text-white" : "text-white/80 hover:text-white"
+      }`}
+    >
+      {children}
+      <span
+        className={`absolute left-0 -bottom-1 h-[2px] w-full bg-emerald-400 transition-all duration-300 ${
+          active ? "opacity-100" : "opacity-0"
+        }`}
+      />
+    </Link>
+  );
+}
 
 export default function SiteHeader() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/40 backdrop-blur-xl border-white/5">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+    <header
+      className={`sticky top-0 z-50 backdrop-blur-xl border-b border-white/5 shadow-[0_2px_20px_rgba(0,255,150,0.05)] transition-all duration-300 ${
+        scrolled ? "bg-black/80 py-2" : "bg-black/60 py-3"
+      }`}
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center">
           <Image
-            src="/logo2.png" // no-tagline logo
+            src="/logo2.png"
             alt="SIXFL"
             width={180}
             height={48}
             priority
             sizes="(max-width: 768px) 140px, 180px"
-            className="h-8 w-auto object-contain"
+            className={`w-auto object-contain transition-all duration-300 ${
+              scrolled ? "h-[30px]" : "h-[34px]"
+            }`}
           />
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-6 text-sm font-medium text-white/85 md:flex">
-          <Link className="hover:text-white transition" href="/leagues">
-            Leagues
-          </Link>
-          <Link className="hover:text-white transition" href="/venues">
-            Venues
-          </Link>
-          <Link className="hover:text-white transition" href="/pricing">
-            Pricing
-          </Link>
+        <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
+          <NavLink href="/leagues">Leagues</NavLink>
+          <NavLink href="/venues">Venues</NavLink>
+          <NavLink href="/pricing">Pricing</NavLink>
 
           <a
             href="mailto:hello@sixfl.co.uk"
-            className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white hover:bg-white/10 transition"
+            className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white hover:bg-white/10 transition"
           >
             Contact
           </a>
 
           <Link
-            className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
             href="/register"
+            className="rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
           >
             Register
           </Link>
         </nav>
 
-        {/* Mobile actions (no overflow) */}
+        {/* Mobile */}
         <div className="flex items-center gap-2 md:hidden">
           <a
             href="mailto:hello@sixfl.co.uk"
-            className="rounded-full border border-white/15 bg-white/5 px-3 py-2 text-[11px] font-semibold tracking-wide text-white hover:bg-white/10 transition"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition"
           >
             Contact
           </a>
 
           <Link
-            className="rounded-full bg-emerald-500 px-3 py-2 text-[11px] font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
             href="/register"
+            className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-extrabold text-black hover:bg-emerald-400 transition"
           >
             Register
           </Link>

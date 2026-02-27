@@ -20,7 +20,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <SiteHeader />
 
-        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 pt-6 pb-8">{children}</main>
 
         <SiteFooter />
       </body>

@@ -1,4 +1,4 @@
-import Image from "next/image";
+import Link from "next/link";
 
 export default function HomePage() {
   return (
@@ -43,21 +43,40 @@ export default function HomePage() {
             </p>
 
             {/* Nike-style CTA row */}
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center animate-fadeIn [animation-delay:0.45s] opacity-0 [animation-fill-mode:forwards]">
-              <a
-                href="#waitlist"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
-              >
-                JOIN WAITLIST
-              </a>
+<div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center animate-fadeIn [animation-delay:0.45s] opacity-0 [animation-fill-mode:forwards]">
+  <a
+    href="#waitlist"
+    className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
+  >
+    JOIN WAITLIST
+  </a>
 
-              <a
-                href="#whats-coming"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-white/5 border border-white/10 px-6 text-sm font-extrabold tracking-wide text-white hover:bg-white/10 transition"
-              >
-                SEE WHAT’S COMING
-              </a>
-            </div>
+  <a
+    href="#whats-coming"
+    className="inline-flex h-12 items-center justify-center rounded-full bg-white/5 border border-white/10 px-6 text-sm font-extrabold tracking-wide text-white hover:bg-white/10 transition"
+  >
+    SEE WHAT’S COMING
+  </a>
+</div>
+
+{/* 👇 Referral reward (GOES HERE, UNDER BUTTONS) */}
+<div className="mt-5 flex flex-wrap items-center gap-3 animate-fadeIn [animation-delay:0.52s] opacity-0 [animation-fill-mode:forwards]">
+  <Link
+    href="/referrals"
+    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[12px] font-semibold text-white/90 hover:bg-white/10 transition"
+  >
+    <span className="text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.6)]">
+  £50
+</span>
+    for introducing a new team
+    <span className="text-white/60">→</span>
+  </Link>
+
+  <span className="text-[12px] text-white/40
+  ">
+    Paid after registration + first payment.
+  </span>
+</div>
 
             <div className="mt-3 text-xs font-semibold tracking-wide text-emerald-500">
               LIMITED EARLY ACCESS • FIRST LEAGUES OPENING SOON
