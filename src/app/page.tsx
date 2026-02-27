@@ -13,18 +13,11 @@ export default function HomePage() {
 
       <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
         {/* Hero */}
-        <section className="mt-4 grid gap-10 lg:grid-cols-12 lg:items-end">
+        <section className="mt-6 grid gap-10 lg:grid-cols-12 lg:items-end">
           <div className="lg:col-span-7">
-            {/* BIG LOGO IN HERO */}
-            <div className="mb-4">
-              <Image
-                src="/logo.png"
-                alt="SIXFL"
-                width={1400}
-                height={700}
-                priority
-                className="h-24 w-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.7)] animate-fadeIn opacity-0 sm:h-28 lg:h-36"
-              />
+            {/* Brand kicker */}
+            <div className="mb-3 inline-block rounded-full border border-white/5 bg-white/5 px-3 py-1 text-[10px] font-semibold tracking-[0.25em] text-white/50">
+              SIXFL
             </div>
 
             {/* Pill */}
@@ -33,32 +26,34 @@ export default function HomePage() {
               EARLY ACCESS • UK LAUNCH
             </div>
 
-            <h1 className="mt-4 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn [animation-delay:0.15s] opacity-0 [animation-fill-mode:forwards]">
+            <h1 className="mt-6 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn [animation-delay:0.15s] opacity-0 [animation-fill-mode:forwards]">
               6-A-SIDE.
               <br />
               <span className="text-white">DONE</span>{" "}
-              <span className="text-emerald-500 drop-shadow-[0_0_24px_rgba(16,185,129,0.55)]">
+              <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.6)]">
                 PROPERLY.
               </span>
             </h1>
 
             <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-white/65 animate-fadeIn [animation-delay:0.3s] opacity-0 [animation-fill-mode:forwards]">
               Fixtures that hold. Tables that update instantly. Captains in
-              control. Less admin. More football.
+              control.
+              <br />
+              Less admin. More football.
             </p>
 
             {/* Nike-style CTA row */}
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center animate-fadeIn [animation-delay:0.45s] opacity-0 [animation-fill-mode:forwards]">
               <a
                 href="#waitlist"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
               >
                 JOIN WAITLIST
               </a>
 
               <a
                 href="#whats-coming"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-white/5 border border-white/10 px-6 text-sm font-extrabold tracking-wide text-white hover:bg-white/10 transition"
               >
                 SEE WHAT’S COMING
               </a>
@@ -81,7 +76,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-3">
+              <div className="mt-6 grid gap-3">
                 <Bullet
                   title="Fixtures that actually work"
                   desc="Clear schedules. Clean match pages. No confusion."
@@ -164,7 +159,7 @@ export default function HomePage() {
 
                 <button
                   type="submit"
-                  className="h-12 w-full rounded-2xl bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-500 transition md:w-auto"
+                  className="h-12 w-full rounded-2xl bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 transition md:w-auto"
                 >
                   NOTIFY ME
                 </button>

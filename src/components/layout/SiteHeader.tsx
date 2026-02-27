@@ -3,7 +3,7 @@ import Image from "next/image";
 
 export default function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/70 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/40 backdrop-blur-xl border-white/5">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         {/* Logo */}
         <Link href="/" className="flex items-center">
@@ -14,7 +14,7 @@ export default function SiteHeader() {
             height={48}
             priority
             sizes="(max-width: 768px) 140px, 180px"
-            className="h-7 w-auto object-contain"
+            className="h-8 w-auto object-contain"
           />
         </Link>
 
