@@ -66,10 +66,7 @@ export default function SiteHeader() {
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
-          <NavLink href="/leagues">Leagues</NavLink>
-          <NavLink href="/venues">Venues</NavLink>
-          <NavLink href="/pricing">Pricing</NavLink>
-
+          {/* Contact */}
           <a
             href="mailto:hello@sixfl.co.uk"
             className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white hover:bg-white/10 transition"
@@ -77,6 +74,10 @@ export default function SiteHeader() {
             Contact
           </a>
 
+          {/* Login (text link) */}
+          <NavLink href="/login">Login</NavLink>
+
+          {/* Register (primary button) */}
           <Link
             href="/register"
             className="rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
@@ -93,6 +94,13 @@ export default function SiteHeader() {
           >
             Contact
           </a>
+
+          <Link
+            href="/login"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition"
+          >
+            Login
+          </Link>
 
           <Link
             href="/register"
