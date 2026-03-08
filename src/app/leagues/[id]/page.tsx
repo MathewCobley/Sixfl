@@ -2,7 +2,7 @@
 
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getLeagueTable } from "@/lib/leagueTable";
+import { getLeagueTable } from "@/lib/leagueTableTemp";
 
 function formatDate(d: Date) {
   return d.toLocaleDateString("en-GB", {
