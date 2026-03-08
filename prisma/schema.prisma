@@ -1,3 +1,7 @@
+// ========================================
+// File: prisma/schema.prisma
+// ========================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +11,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/**
+ * NextAuth tables
+ * (No createdAt/updatedAt on User to avoid db push failure with existing rows)
+ */
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -14,8 +23,20 @@ model User {
   emailVerified DateTime?
   image         String?
 
-  accounts      Account[]
-  sessions      Session[]
+  // Platform-level role
+  role          UserRole  @default(USER)
+
+  accounts         Account[]
+  sessions         Session[]
+  teamMembers      TeamMember[]
+  refereedFixtures Fixture[] @relation("FixtureReferee")
+  enteredResults   MatchResult[] @relation("ResultEnteredBy")
+}
+
+enum UserRole {
+  USER
+  REFEREE
+  ADMIN
 }
 
 model Account {
@@ -52,4 +73,133 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/**
+ * SIXFL league models
+ */
+
+model League {
+  id        String  @id @default(cuid())
+  name      String
+  season    String?
+  isActive  Boolean @default(true)
+
+  teams     Team[]
+  fixtures  Fixture[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, season])
+}
+
+model Venue {
+  id        String  @id @default(cuid())
+  name      String
+  address   String?
+  postcode  String?
+  notes     String?
+
+  fixtures  Fixture[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id        String @id @default(cuid())
+  name      String
+  claimCode String @unique
+  logoUrl   String?
+
+  leagueId  String?
+  league    League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+
+  members   TeamMember[]
+  homeGames Fixture[] @relation("HomeTeam")
+  awayGames Fixture[] @relation("AwayTeam")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, leagueId])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  role      TeamRole @default(MANAGER)
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, teamId])
+}
+
+enum TeamRole {
+  MANAGER
+  PLAYER
+  COACH
+}
+
+model Fixture {
+  id         String        @id @default(cuid())
+  leagueId   String
+  homeTeamId String
+  awayTeamId String
+  venueId    String?
+  kickoffAt  DateTime
+
+  round      Int?
+  status     FixtureStatus @default(SCHEDULED)
+
+  refereeId  String?
+
+  league     League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeTeam   Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  venue      Venue? @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  referee    User?  @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
+
+  result     MatchResult?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([leagueId, kickoffAt])
+  @@index([leagueId, round])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@index([refereeId])
+}
+
+enum FixtureStatus {
+  SCHEDULED
+  COMPLETED
+  POSTPONED
+  CANCELLED
+}
+
+model MatchResult {
+  id              String   @id @default(cuid())
+  fixtureId       String   @unique
+
+  homeScore       Int
+  awayScore       Int
+
+  enteredByUserId String?
+  enteredAt       DateTime @default(now())
+
+  isDisputed      Boolean  @default(false)
+  disputeNote     String?
+
+  fixture         Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  enteredByUser   User?    @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

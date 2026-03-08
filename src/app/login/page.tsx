@@ -15,12 +15,21 @@ export default function LoginPage() {
         </p>
 
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            signIn("resend", {
+
+            const res = await signIn("email", {
               email,
               callbackUrl: "/dashboard",
+              redirect: false,
             });
+
+            if (res?.error) {
+              alert(res.error);
+              return;
+            }
+
+            alert("Magic link sent — check your inbox (and spam).");
           }}
           className="mt-6 space-y-3"
         >

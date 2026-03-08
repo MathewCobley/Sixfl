@@ -1,6 +1,8 @@
+// src/app/layout.tsx
 import "./globals.css";
 import SiteHeader from "../components/layout/SiteHeader";
 import SiteFooter from "../components/layout/SiteFooter";
+import Providers from "./providers";
 
 export const metadata = {
   title: "SIXFL",
@@ -18,11 +20,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#0b0f14] text-white">
-        <SiteHeader />
-
-        <main className="mx-auto max-w-6xl px-4 pt-6 pb-8">{children}</main>
-
-        <SiteFooter />
+        <Providers>
+          <SiteHeader />
+          <main className="mx-auto max-w-6xl px-4 pt-6 pb-8">{children}</main>
+          <SiteFooter />
+        </Providers>
       </body>
     </html>
   );

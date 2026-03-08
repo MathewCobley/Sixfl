@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 function NavLink({
   href,
@@ -24,6 +25,7 @@ function NavLink({
       }`}
     >
       {children}
+
       <span
         className={`absolute left-0 -bottom-1 h-[2px] w-full bg-emerald-400 transition-all duration-300 ${
           active ? "opacity-100" : "opacity-0"
@@ -35,6 +37,9 @@ function NavLink({
 
 export default function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
+  const { data: session } = useSession();
+
+  const isAdmin = session?.user?.email === "mathewcobley1@gmail.com";
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
@@ -74,10 +79,13 @@ export default function SiteHeader() {
             Contact
           </a>
 
-          {/* Login (text link) */}
+          {/* Login */}
           <NavLink href="/login">Login</NavLink>
 
-          {/* Register (primary button) */}
+          {/* Admin (only visible to admin) */}
+          {isAdmin && <NavLink href="/admin">Admin</NavLink>}
+
+          {/* Register */}
           <Link
             href="/register"
             className="rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
@@ -86,7 +94,7 @@ export default function SiteHeader() {
           </Link>
         </nav>
 
-        {/* Mobile */}
+        {/* Mobile nav */}
         <div className="flex items-center gap-2 md:hidden">
           <a
             href="mailto:hello@sixfl.co.uk"
@@ -101,6 +109,15 @@ export default function SiteHeader() {
           >
             Login
           </Link>
+
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition"
+            >
+              Admin
+            </Link>
+          )}
 
           <Link
             href="/register"
