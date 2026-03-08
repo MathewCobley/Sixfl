@@ -1,4 +1,4 @@
-/ src/app/referee/fixture/[id]/page.tsx
+// src/app/referee/fixture/[id]/page.tsx
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
