@@ -1,10 +1,13 @@
+// ========================================
+// File: src/app/dashboard/page.tsx
+// ========================================
+
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
+import { auth } from "@/auth";
 import SignOutButton from "./SignOutButton";
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session) {
     return (
