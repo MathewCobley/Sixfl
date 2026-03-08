@@ -4,7 +4,8 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function ClaimTeamPage({
@@ -12,7 +13,7 @@ export default async function ClaimTeamPage({
 }: {
   searchParams?: Promise<{ code?: string; error?: string }>;
 }) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
     redirect("/login");
@@ -25,7 +26,7 @@ export default async function ClaimTeamPage({
   async function claimTeamAction(formData: FormData) {
     "use server";
 
-    const session = await auth();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email) redirect("/login");
 
     const email = session.user.email;

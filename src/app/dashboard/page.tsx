@@ -3,11 +3,12 @@
 // ========================================
 
 import Link from "next/link";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import SignOutButton from "./SignOutButton";
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   if (!session) {
     return (

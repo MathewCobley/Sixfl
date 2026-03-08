@@ -2,13 +2,13 @@
 // File: src/auth.ts
 // ========================================
 
-import NextAuth from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import EmailProvider from "next-auth/providers/email";
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
 
   providers: [
@@ -46,4 +46,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/login" },
   debug: process.env.NEXTAUTH_DEBUG === "true",
-});
+};

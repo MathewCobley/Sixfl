@@ -2,13 +2,14 @@
 // File: src/lib/requireAdmin.ts
 // ========================================
 
+import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 
 export async function requireAdmin() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
     redirect("/login");
