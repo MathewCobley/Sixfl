@@ -1,5 +1,3 @@
-// src/app/page.tsx
-
 import Link from "next/link";
 
 export default function HomePage() {
@@ -50,6 +48,11 @@ export default function HomePage() {
               Less admin. More football.
             </p>
 
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">
+              Men’s, women’s and youth leagues. Join with a full team or register
+              as a player if you’re still looking for one.
+            </p>
+
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/register-team"
@@ -58,15 +61,14 @@ export default function HomePage() {
                 REGISTER YOUR TEAM
               </Link>
 
-              <a
-                href="#how-it-works"
+              <Link
+                href="/join-as-player"
                 className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
-                SEE HOW IT WORKS
-              </a>
+                JOIN AS A PLAYER
+              </Link>
             </div>
 
-            {/* Social proof / demand strip */}
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
@@ -78,7 +80,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Referral row */}
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <Link
                 href="/referrals"
@@ -136,8 +137,8 @@ export default function HomePage() {
                 />
 
                 <MiniPanel
-                  label="LAUNCH AREAS"
-                  items={["YORK", "LEEDS", "HARROGATE", "RIPON"]}
+                  label="WAYS TO JOIN"
+                  items={["FULL TEAM", "INDIVIDUAL PLAYER"]}
                 />
               </div>
             </div>
@@ -150,7 +151,7 @@ export default function HomePage() {
             <StripItem label="FORMAT" value="Men’s" />
             <StripItem label="FORMAT" value="Women’s" />
             <StripItem label="FORMAT" value="Youth" />
-            <StripItem label="STANDARD" value="Premium" />
+            <StripItem label="JOIN AS" value="Team or Player" />
           </div>
         </section>
 
@@ -161,12 +162,12 @@ export default function HomePage() {
               ONE LEAGUE. MULTIPLE PATHWAYS.
             </div>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-              Built for every kind of team.
+              Built for every kind of player.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
-              SIXFL is being built as a premium small-sided football brand with
-              the same structured experience across men’s, women’s and youth
-              leagues.
+              Whether you already run a team or you are looking for one, SIXFL
+              is being built to give men’s, women’s and youth football a more
+              professional, structured experience.
             </p>
           </div>
 
@@ -193,34 +194,34 @@ export default function HomePage() {
               HOW SIXFL WORKS
             </div>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-              Simple for captains. Better for teams.
+              Join as a team or as a player.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
-              The aim is straightforward: make it easier to join, easier to play
-              and easier to trust that your league is being run properly.
+              The aim is straightforward: make it easier to register, easier to
+              join and easier to trust that your league is being run properly.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-4">
             <StepCard
               number="01"
-              title="Register your team"
-              desc="Tell us your team name, city and preferred league type."
+              title="Choose how you join"
+              desc="Register a full team or join as an individual player."
             />
             <StepCard
               number="02"
-              title="Join a local division"
-              desc="We group teams into the right launch area and format."
+              title="Pick your area"
+              desc="Tell us your town or city so we can place you in the right launch area."
             />
             <StepCard
               number="03"
-              title="Play weekly fixtures"
-              desc="Clear schedules, proper match nights and less chasing around."
+              title="Select your format"
+              desc="Men’s, women’s or youth — depending on the type of football you want."
             />
             <StepCard
               number="04"
-              title="Tables update fast"
-              desc="Results feed into live standings so everyone knows where they stand."
+              title="Get launch access"
+              desc="We contact you first when spaces open in your area or when teams need players."
             />
           </div>
         </section>
@@ -234,11 +235,11 @@ export default function HomePage() {
                   EARLY ACCESS REGISTRATION
                 </div>
                 <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Start your team’s season with SIXFL.
+                  Ready to get involved with SIXFL?
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-white/60 sm:text-base">
-                  Register your team now and we’ll contact you first when launch
-                  spaces open in your area.
+                  Register your team now, or join as a player and we’ll let you
+                  know when launch spaces open in your area.
                 </p>
               </div>
 
@@ -250,12 +251,12 @@ export default function HomePage() {
                   REGISTER YOUR TEAM
                 </Link>
 
-                <a
-                  href="mailto:hello@sixfl.co.uk"
+                <Link
+                  href="/join-as-player"
                   className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
                 >
-                  CONTACT SIXFL
-                </a>
+                  JOIN AS A PLAYER
+                </Link>
               </div>
             </div>
           </div>
