@@ -26,7 +26,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Animation (cleaned up, single version) */
+/* Headline fade in */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -40,4 +40,23 @@ body {
 
 .animate-fadeIn {
   animation: fadeIn 0.8s ease-out forwards;
+}
+
+/* Emerald glow pulse */
+@keyframes glowPulse {
+  0% {
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
+  }
+  50% {
+    text-shadow:
+      0 0 18px rgba(16, 185, 129, 0.55),
+      0 0 34px rgba(16, 185, 129, 0.35);
+  }
+  100% {
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
+  }
+}
+
+.animate-glow {
+  animation: glowPulse 3.2s ease-in-out infinite;
 }

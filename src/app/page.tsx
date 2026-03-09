@@ -1,96 +1,115 @@
+// src/app/page.tsx
+
 import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <div className="relative min-h-screen bg-black text-white">
-      {/* Subtle texture + pitch lines */}
-      <div className="pointer-events-none absolute inset-0 opacity-[0.10]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.20),transparent_45%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(0,0,0,0.9))]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:48px_48px]" />
-        <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:48px_48px]" />
+    <div className="relative min-h-screen overflow-hidden bg-black text-white">
+      {/* Background */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(16,185,129,0.16),transparent_24%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_18%,rgba(16,185,129,0.10),transparent_18%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.08),transparent_28%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04),transparent_20%,rgba(0,0,0,0.7))]" />
+        <div className="absolute inset-0 opacity-[0.08] bg-[linear-gradient(90deg,rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:56px_56px]" />
+        <div className="absolute inset-0 opacity-[0.06] bg-[linear-gradient(0deg,rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:56px_56px]" />
       </div>
 
+      {/* Hero spotlight */}
+      <div className="pointer-events-none absolute left-1/2 top-24 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[120px]" />
+
       <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
-        {/* Hero */}
-        <section className="mt-6 grid gap-10 lg:grid-cols-12 lg:items-end">
+        {/* HERO */}
+        <section className="grid gap-10 pt-6 lg:grid-cols-12 lg:items-start">
+          {/* LEFT */}
           <div className="lg:col-span-7">
-            {/* Brand kicker */}
-            <div className="mb-3 inline-block rounded-full border border-white/5 bg-white/5 px-3 py-1 text-[10px] font-semibold tracking-[0.25em] text-white/50">
-              SIXFL
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-[0.28em] text-white/55">
+                SIXFL
+              </div>
+
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
+                EARLY ACCESS • UK LAUNCH
+              </div>
             </div>
 
-            {/* Pill */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-wide text-white/80">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              EARLY ACCESS • UK LAUNCH
-            </div>
-
-            <h1 className="mt-6 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn [animation-delay:0.15s] opacity-0 [animation-fill-mode:forwards]">
+            <h1 className="text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn">
               6-A-SIDE.
               <br />
               <span className="text-white">DONE</span>{" "}
-              <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.6)]">
+              <span className="text-emerald-500 animate-glow drop-shadow-[0_0_30px_rgba(16,185,129,0.6)]">
                 PROPERLY.
               </span>
             </h1>
 
-            <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-white/65 animate-fadeIn [animation-delay:0.3s] opacity-0 [animation-fill-mode:forwards]">
+            <p className="mt-5 max-w-2xl text-base leading-7 text-white/65 sm:text-lg">
               Fixtures that hold. Tables that update instantly. Captains in
               control.
               <br />
               Less admin. More football.
             </p>
 
-            {/* Nike-style CTA row */}
-<div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center animate-fadeIn [animation-delay:0.45s] opacity-0 [animation-fill-mode:forwards]">
-  <a
-    href="#waitlist"
-    className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 hover:scale-105 transition"
-  >
-    JOIN WAITLIST
-  </a>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Link
+                href="/register-team"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+              >
+                REGISTER YOUR TEAM
+              </Link>
 
-  <a
-    href="#whats-coming"
-    className="inline-flex h-12 items-center justify-center rounded-full bg-white/5 border border-white/10 px-6 text-sm font-extrabold tracking-wide text-white hover:bg-white/10 transition"
-  >
-    SEE WHAT’S COMING
-  </a>
-</div>
+              <a
+                href="#how-it-works"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+              >
+                SEE HOW IT WORKS
+              </a>
+            </div>
 
-{/* 👇 Referral reward (GOES HERE, UNDER BUTTONS) */}
-<div className="mt-5 flex flex-wrap items-center gap-3 animate-fadeIn [animation-delay:0.52s] opacity-0 [animation-fill-mode:forwards]">
-  <Link
-    href="/referrals"
-    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[12px] font-semibold text-white/90 hover:bg-white/10 transition"
-  >
-    <span className="text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.6)]">
-  £50
-</span>
-    for introducing a new team
-    <span className="text-white/60">→</span>
-  </Link>
+            {/* Social proof / demand strip */}
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+                Early interest building across North Yorkshire
+              </div>
 
-  <span className="text-[12px] text-white/40
-  ">
-    Paid after registration + first payment.
-  </span>
-</div>
+              <div className="text-[12px] text-white/45">
+                York, Leeds, Harrogate and Ripon targeted for first launch areas.
+              </div>
+            </div>
 
-            <div className="mt-3 text-xs font-semibold tracking-wide text-emerald-500">
+            {/* Referral row */}
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Link
+                href="/referrals"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[12px] font-semibold text-white/90 transition hover:bg-white/10"
+              >
+                <span className="text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.6)]">
+                  £50
+                </span>
+                for introducing a new team
+                <span className="text-white/50">→</span>
+              </Link>
+
+              <span className="text-[12px] text-white/40">
+                Paid after registration + first payment.
+              </span>
+            </div>
+
+            <div className="mt-4 text-xs font-bold tracking-[0.18em] text-emerald-500">
               LIMITED EARLY ACCESS • FIRST LEAGUES OPENING SOON
             </div>
           </div>
 
-          {/* Right panel */}
-          <div className="lg:col-span-5 animate-fadeIn [animation-delay:0.6s] opacity-0 [animation-fill-mode:forwards]">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+          {/* RIGHT PANEL */}
+          <div className="lg:col-span-5">
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
               <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold tracking-[0.22em] text-white/70">
-                  SIXFL v1
+                <div className="text-[11px] font-bold tracking-[0.24em] text-white/65">
+                  SIXFL PLATFORM
                 </div>
-                <div className="text-[11px] font-semibold text-white/45">
+
+                <div className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] font-bold tracking-[0.18em] text-white/45">
                   BUILT FOR CAPTAINS
                 </div>
               </div>
@@ -101,110 +120,144 @@ export default function HomePage() {
                   desc="Clear schedules. Clean match pages. No confusion."
                 />
                 <Bullet
-                  title="Attendance that sticks"
-                  desc="Captains confirm squads early to reduce dropouts."
+                  title="Tables that feel live"
+                  desc="Fast updates. Proper standings. A sharper league experience."
                 />
                 <Bullet
-                  title="Results, tables, done"
-                  desc="Fast updates, proper standings, simple admin."
+                  title="Admin without the mess"
+                  desc="Simple workflows built specifically for well run 6-a-side leagues."
                 />
               </div>
 
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
-                <div className="text-[11px] font-semibold tracking-[0.22em] text-white/60">
-                  PLANNED LAUNCH AREAS
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {["YORK", "LEEDS", "HARROGATE", "WETHERBY", "RIPON"].map((x) => (
-                    <span
-                      key={x}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white/80"
-                    >
-                      {x}
-                    </span>
-                  ))}
-                </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <MiniPanel
+                  label="LEAGUE TYPES"
+                  items={["MEN’S", "WOMEN’S", "YOUTH"]}
+                />
+
+                <MiniPanel
+                  label="LAUNCH AREAS"
+                  items={["YORK", "LEEDS", "HARROGATE", "RIPON"]}
+                />
               </div>
             </div>
-
-            {/* Tiny accent */}
-            <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
           </div>
         </section>
 
-        {/* Waitlist */}
-        <section id="waitlist" className="mt-14">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-xs font-semibold tracking-[0.22em] text-white/70">
-                  GET THE INVITE
+        {/* FLOATING GLASS STRIP */}
+        <section className="mt-10">
+          <div className="grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
+            <StripItem label="FORMAT" value="Men’s" />
+            <StripItem label="FORMAT" value="Women’s" />
+            <StripItem label="FORMAT" value="Youth" />
+            <StripItem label="STANDARD" value="Premium" />
+          </div>
+        </section>
+
+        {/* PATHWAYS */}
+        <section id="pathways" className="mt-16">
+          <div className="mb-6">
+            <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
+              ONE LEAGUE. MULTIPLE PATHWAYS.
+            </div>
+            <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
+              Built for every kind of team.
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
+              SIXFL is being built as a premium small-sided football brand with
+              the same structured experience across men’s, women’s and youth
+              leagues.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <PathwayCard
+              title="Men’s Leagues"
+              desc="Competitive 6-a-side football with proper fixtures, live tables and a cleaner weekly experience."
+            />
+            <PathwayCard
+              title="Women’s Leagues"
+              desc="Well-run leagues for women’s teams who want consistency, quality and properly organised football."
+            />
+            <PathwayCard
+              title="Youth Leagues"
+              desc="Structured football for younger players in a serious league environment with referees, fixtures and tables."
+            />
+          </div>
+        </section>
+
+        {/* HOW IT WORKS */}
+        <section id="how-it-works" className="mt-16">
+          <div className="mb-6">
+            <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
+              HOW SIXFL WORKS
+            </div>
+            <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
+              Simple for captains. Better for teams.
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
+              The aim is straightforward: make it easier to join, easier to play
+              and easier to trust that your league is being run properly.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-4">
+            <StepCard
+              number="01"
+              title="Register your team"
+              desc="Tell us your team name, city and preferred league type."
+            />
+            <StepCard
+              number="02"
+              title="Join a local division"
+              desc="We group teams into the right launch area and format."
+            />
+            <StepCard
+              number="03"
+              title="Play weekly fixtures"
+              desc="Clear schedules, proper match nights and less chasing around."
+            />
+            <StepCard
+              number="04"
+              title="Tables update fast"
+              desc="Results feed into live standings so everyone knows where they stand."
+            />
+          </div>
+        </section>
+
+        {/* FINAL CTA */}
+        <section id="final-cta" className="mt-16">
+          <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
+                  EARLY ACCESS REGISTRATION
                 </div>
-                <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
-                  Join the SIXFL waitlist.
+                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                  Start your team’s season with SIXFL.
                 </h2>
-                <p className="mt-2 text-sm text-white/60">
-                  One email at launch. Occasional early-access invites.
+                <p className="mt-3 text-sm leading-7 text-white/60 sm:text-base">
+                  Register your team now and we’ll contact you first when launch
+                  spaces open in your area.
                 </p>
               </div>
-              <div className="text-[11px] font-semibold tracking-wide text-white/45">
-                NO SPAM • EVER
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href="/register-team"
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+                >
+                  REGISTER YOUR TEAM
+                </Link>
+
+                <a
+                  href="mailto:hello@sixfl.co.uk"
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+                >
+                  CONTACT SIXFL
+                </a>
               </div>
             </div>
-
-            <form
-              action="https://formspree.io/f/xeelpjor"
-              method="POST"
-              className="mt-5"
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  placeholder="Email address"
-                  className="h-12 w-full flex-1 rounded-2xl border border-white/10 bg-black/60 px-4 text-sm text-white placeholder:text-white/35 outline-none focus:border-emerald-500/60"
-                />
-
-                <input
-                  type="text"
-                  name="location"
-                  placeholder="Town/City (optional)"
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/60 px-4 text-sm text-white placeholder:text-white/35 outline-none focus:border-emerald-500/60 md:w-56"
-                />
-
-                <input type="hidden" name="source" value="sixfl holding page" />
-                <input type="text" name="_gotcha" style={{ display: "none" }} />
-
-                <button
-                  type="submit"
-                  className="h-12 w-full rounded-2xl bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black hover:bg-emerald-400 transition md:w-auto"
-                >
-                  NOTIFY ME
-                </button>
-              </div>
-            </form>
-          </div>
-        </section>
-
-        {/* What's coming */}
-        <section id="whats-coming" className="mt-14">
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card
-              kicker="CAPTAINS"
-              title="Control the chaos"
-              desc="Confirm squads early. Reduce last-minute dropouts."
-            />
-            <Card
-              kicker="PLAYERS"
-              title="Play more, chase less"
-              desc="Clear fixtures, proper tables, fast updates."
-            />
-            <Card
-              kicker="LEAGUES"
-              title="Run it clean"
-              desc="Simple admin workflows built for 6-a-side."
-            />
           </div>
         </section>
 
@@ -213,7 +266,7 @@ export default function HomePage() {
           <p className="pt-6">© {new Date().getFullYear()} SIXFL</p>
           <p>
             <a
-              className="underline hover:text-white/70"
+              className="underline transition hover:text-white/70"
               href="mailto:hello@sixfl.co.uk"
             >
               hello@sixfl.co.uk
@@ -227,37 +280,90 @@ export default function HomePage() {
 
 function Bullet({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+    <div className="rounded-2xl border border-white/10 bg-black/40 p-4 transition hover:bg-black/50">
       <div className="flex items-start gap-3">
         <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
         <div>
-          <div className="text-sm font-extrabold tracking-tight text-white">
-            {title}
-          </div>
-          <div className="mt-1 text-sm leading-relaxed text-white/60">{desc}</div>
+          <div className="text-sm font-bold text-white">{title}</div>
+          <div className="mt-1 text-sm text-white/60">{desc}</div>
         </div>
       </div>
     </div>
   );
 }
 
-function Card({
-  kicker,
+function MiniPanel({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+      <div className="text-[10px] font-bold tracking-[0.2em] text-white/60">
+        {label}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((x) => (
+          <span
+            key={x}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-white/80"
+          >
+            {x}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StripItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/35 px-4 py-5">
+      <div className="text-[10px] font-bold tracking-[0.18em] text-white/45">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-black tracking-tight text-white">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PathwayCard({
   title,
   desc,
 }: {
-  kicker: string;
   title: string;
   desc: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-      <div className="text-[11px] font-semibold tracking-[0.22em] text-white/60">
-        {kicker}
+    <div className="rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07]">
+      <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
+        LEAGUE TYPE
       </div>
-      <div className="mt-2 text-xl font-extrabold tracking-tight">{title}</div>
-      <div className="mt-2 text-sm leading-relaxed text-white/60">{desc}</div>
-      <div className="mt-5 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+      <div className="mt-2 text-2xl font-black tracking-tight text-white">
+        {title}
+      </div>
+      <div className="mt-3 text-sm leading-7 text-white/60">{desc}</div>
+      <div className="mt-6 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+    </div>
+  );
+}
+
+function StepCard({
+  number,
+  title,
+  desc,
+}: {
+  number: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur">
+      <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-400">
+        {number}
+      </div>
+      <div className="mt-3 text-xl font-black tracking-tight text-white">
+        {title}
+      </div>
+      <div className="mt-3 text-sm leading-7 text-white/60">{desc}</div>
     </div>
   );
 }
