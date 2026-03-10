@@ -8,6 +8,11 @@ import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 
+const SUPER_ADMINS = [
+  "hello@sixfl.co.uk",
+  "mathew@sixfl.co.uk",
+];
+
 export async function requireAdmin() {
   const session = await getServerSession(authOptions);
 
@@ -15,8 +20,11 @@ export async function requireAdmin() {
     redirect("/login");
   }
 
+  const email = session.user.email.toLowerCase();
+  const isSuperAdmin = SUPER_ADMINS.includes(email);
+
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { email },
     select: {
       id: true,
       email: true,
@@ -25,7 +33,9 @@ export async function requireAdmin() {
     },
   });
 
-  if (!user || user.role !== UserRole.ADMIN) {
+  const isAdmin = user?.role === UserRole.ADMIN;
+
+  if (!isAdmin && !isSuperAdmin) {
     redirect("/dashboard");
   }
 

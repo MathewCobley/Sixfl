@@ -1,0 +1,534 @@
+// ========================================
+// File: src/app/admin/leads/page.tsx
+// ========================================
+
+import Link from "next/link";
+import { InterestType, LeadStatus, LeagueType, PreferredNight } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/requireAdmin";
+import AdminCard from "@/components/admin/AdminCard";
+
+type SearchParams = Promise<{
+  type?: string;
+  status?: string;
+  area?: string;
+  night?: string;
+}>;
+
+function isInterestType(value?: string): value is InterestType {
+  return value === "TEAM" || value === "PLAYER" || value === "REFEREE";
+}
+
+function isLeadStatus(value?: string): value is LeadStatus {
+  return value === "NEW" || value === "CONTACTED" || value === "QUALIFIED" || value === "CLOSED";
+}
+
+function isPreferredNight(value?: string): value is PreferredNight {
+  return (
+    value === "MONDAY" ||
+    value === "TUESDAY" ||
+    value === "WEDNESDAY" ||
+    value === "THURSDAY" ||
+    value === "FRIDAY" ||
+    value === "SATURDAY" ||
+    value === "SUNDAY" ||
+    value === "ANY"
+  );
+}
+
+function formatInterestType(value: InterestType) {
+  if (value === "TEAM") return "Team";
+  if (value === "PLAYER") return "Player";
+  return "Referee";
+}
+
+function formatLeadStatus(value: LeadStatus) {
+  if (value === "NEW") return "New";
+  if (value === "CONTACTED") return "Contacted";
+  if (value === "QUALIFIED") return "Qualified";
+  return "Closed";
+}
+
+function formatLeagueType(value: LeagueType | null) {
+  if (!value) return "—";
+  if (value === "MENS") return "Men’s";
+  if (value === "WOMENS") return "Women’s";
+  return "Youth";
+}
+
+function formatPreferredNight(value: PreferredNight | null) {
+  if (!value) return "—";
+  if (value === "ANY") return "Any";
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
+function formatDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
+}
+
+function statusClasses(status: LeadStatus) {
+  if (status === "NEW") {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+  }
+  if (status === "CONTACTED") {
+    return "border-blue-500/20 bg-blue-500/10 text-blue-300";
+  }
+  if (status === "QUALIFIED") {
+    return "border-violet-500/20 bg-violet-500/10 text-violet-300";
+  }
+  return "border-white/10 bg-white/5 text-white/70";
+}
+
+function typeClasses(type: InterestType) {
+  if (type === "TEAM") {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+  }
+  if (type === "PLAYER") {
+    return "border-white/10 bg-white/5 text-white";
+  }
+  return "border-amber-500/20 bg-amber-500/10 text-amber-300";
+}
+
+function buildHref(params: {
+  type?: string;
+  status?: string;
+  area?: string;
+  night?: string;
+}) {
+  const search = new URLSearchParams();
+
+  if (params.type) search.set("type", params.type);
+  if (params.status) search.set("status", params.status);
+  if (params.area) search.set("area", params.area);
+  if (params.night) search.set("night", params.night);
+
+  const query = search.toString();
+  return query ? `/admin/leads?${query}` : "/admin/leads";
+}
+
+function FilterChip({
+  label,
+  href,
+  active,
+}: {
+  label: string;
+  href: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={[
+        "inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-bold tracking-[0.16em] transition",
+        active
+          ? "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+          : "border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+      ].join(" ")}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  subtext,
+}: {
+  label: string;
+  value: number;
+  subtext: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
+        {label}
+      </div>
+      <div className="mt-2 text-3xl font-black tracking-tight text-white">
+        {value}
+      </div>
+      <div className="mt-1 text-sm text-white/55">{subtext}</div>
+    </div>
+  );
+}
+
+export default async function AdminLeadsPage({
+  searchParams,
+}: {
+  searchParams?: SearchParams;
+}) {
+  await requireAdmin();
+
+  const sp = (await searchParams) ?? {};
+
+  const selectedType = isInterestType(sp.type?.toUpperCase())
+    ? (sp.type?.toUpperCase() as InterestType)
+    : undefined;
+
+  const selectedStatus = isLeadStatus(sp.status?.toUpperCase())
+    ? (sp.status?.toUpperCase() as LeadStatus)
+    : undefined;
+
+  const selectedNight = isPreferredNight(sp.night?.toUpperCase())
+    ? (sp.night?.toUpperCase() as PreferredNight)
+    : undefined;
+
+  const selectedArea = sp.area?.trim() || undefined;
+
+  const where = {
+    ...(selectedType ? { interestType: selectedType } : {}),
+    ...(selectedStatus ? { status: selectedStatus } : {}),
+    ...(selectedNight ? { preferredNight: selectedNight } : {}),
+    ...(selectedArea ? { area: selectedArea } : {}),
+  };
+
+  const [leads, totalCount, teamCount, playerCount, refereeCount, allAreas] =
+    await Promise.all([
+      prisma.interestLead.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.interestLead.count(),
+      prisma.interestLead.count({ where: { interestType: "TEAM" } }),
+      prisma.interestLead.count({ where: { interestType: "PLAYER" } }),
+      prisma.interestLead.count({ where: { interestType: "REFEREE" } }),
+      prisma.interestLead.findMany({
+        distinct: ["area"],
+        select: { area: true },
+        orderBy: { area: "asc" },
+      }),
+    ]);
+
+  const areas = allAreas.map((x) => x.area).filter(Boolean);
+
+  return (
+    <AdminCard title="Leads">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-sm text-white/65">
+              View team, player and referee interest captured through the SIXFL funnel.
+            </div>
+            <div className="mt-1 text-xs text-white/45">
+              {leads.length} result{leads.length === 1 ? "" : "s"} shown
+              {selectedType || selectedStatus || selectedArea || selectedNight
+                ? " with filters applied"
+                : ` from ${totalCount} total leads`}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/admin"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
+            >
+              Back to admin
+            </Link>
+
+            <Link
+              href="/admin/leads"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
+            >
+              Clear filters
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="TOTAL LEADS" value={totalCount} subtext="All captured interest" />
+          <StatCard label="TEAM INTEREST" value={teamCount} subtext="Captains and organisers" />
+          <StatCard label="PLAYER INTEREST" value={playerCount} subtext="Waiting list players" />
+          <StatCard label="REFEREE INTEREST" value={refereeCount} subtext="Officials pipeline" />
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
+            FILTERS
+          </div>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                Lead type
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <FilterChip
+                  label="All"
+                  href={buildHref({
+                    status: selectedStatus,
+                    area: selectedArea,
+                    night: selectedNight,
+                  })}
+                  active={!selectedType}
+                />
+                <FilterChip
+                  label="Team"
+                  href={buildHref({
+                    type: "TEAM",
+                    status: selectedStatus,
+                    area: selectedArea,
+                    night: selectedNight,
+                  })}
+                  active={selectedType === "TEAM"}
+                />
+                <FilterChip
+                  label="Player"
+                  href={buildHref({
+                    type: "PLAYER",
+                    status: selectedStatus,
+                    area: selectedArea,
+                    night: selectedNight,
+                  })}
+                  active={selectedType === "PLAYER"}
+                />
+                <FilterChip
+                  label="Referee"
+                  href={buildHref({
+                    type: "REFEREE",
+                    status: selectedStatus,
+                    area: selectedArea,
+                    night: selectedNight,
+                  })}
+                  active={selectedType === "REFEREE"}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                Status
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <FilterChip
+                  label="All"
+                  href={buildHref({
+                    type: selectedType,
+                    area: selectedArea,
+                    night: selectedNight,
+                  })}
+                  active={!selectedStatus}
+                />
+                {(["NEW", "CONTACTED", "QUALIFIED", "CLOSED"] as LeadStatus[]).map(
+                  (status) => (
+                    <FilterChip
+                      key={status}
+                      label={formatLeadStatus(status)}
+                      href={buildHref({
+                        type: selectedType,
+                        status,
+                        area: selectedArea,
+                        night: selectedNight,
+                      })}
+                      active={selectedStatus === status}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                Preferred night
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <FilterChip
+                  label="All"
+                  href={buildHref({
+                    type: selectedType,
+                    status: selectedStatus,
+                    area: selectedArea,
+                  })}
+                  active={!selectedNight}
+                />
+                {(
+                  [
+                    "MONDAY",
+                    "TUESDAY",
+                    "WEDNESDAY",
+                    "THURSDAY",
+                    "FRIDAY",
+                    "SATURDAY",
+                    "SUNDAY",
+                    "ANY",
+                  ] as PreferredNight[]
+                ).map((night) => (
+                  <FilterChip
+                    key={night}
+                    label={formatPreferredNight(night)}
+                    href={buildHref({
+                      type: selectedType,
+                      status: selectedStatus,
+                      area: selectedArea,
+                      night,
+                    })}
+                    active={selectedNight === night}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {areas.length > 0 ? (
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                  Area
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <FilterChip
+                    label="All"
+                    href={buildHref({
+                      type: selectedType,
+                      status: selectedStatus,
+                      night: selectedNight,
+                    })}
+                    active={!selectedArea}
+                  />
+                  {areas.map((area) => (
+                    <FilterChip
+                      key={area}
+                      label={area}
+                      href={buildHref({
+                        type: selectedType,
+                        status: selectedStatus,
+                        area,
+                        night: selectedNight,
+                      })}
+                      active={selectedArea === area}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {leads.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/60">
+            No leads found for the current filters.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="overflow-x-auto rounded-2xl border border-white/10">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-white/5 text-white/70">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Area</th>
+                    <th className="px-4 py-3 font-semibold">League</th>
+                    <th className="px-4 py-3 font-semibold">Night</th>
+                    <th className="px-4 py-3 font-semibold">Email</th>
+                    <th className="px-4 py-3 font-semibold">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className="border-t border-white/10 align-top hover:bg-white/[0.03]"
+                    >
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
+                            lead.interestType
+                          )}`}
+                        >
+                          {formatInterestType(lead.interestType)}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
+                            lead.status
+                          )}`}
+                        >
+                          {formatLeadStatus(lead.status)}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-white">{lead.contactName}</div>
+                        <div className="mt-1 text-xs text-white/50">
+                          {lead.teamName || "—"}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 text-white/85">{lead.area}</td>
+
+                      <td className="px-4 py-3 text-white/85">
+                        {formatLeagueType(lead.leagueType)}
+                      </td>
+
+                      <td className="px-4 py-3 text-white/85">
+                        {formatPreferredNight(lead.preferredNight)}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <a
+                          href={`mailto:${lead.email}`}
+                          className="text-emerald-300 hover:text-emerald-200"
+                        >
+                          {lead.email}
+                        </a>
+                        {lead.phone ? (
+                          <div className="mt-1 text-xs text-white/50">{lead.phone}</div>
+                        ) : null}
+                      </td>
+
+                      <td className="px-4 py-3 text-white/60">
+                        {formatDate(lead.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
+                  QUICK VIEW
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-white/70">
+                  <div>Newest lead: {leads[0] ? formatDate(leads[0].createdAt) : "—"}</div>
+                  <div>
+                    Active filter type: {selectedType ? formatInterestType(selectedType) : "All"}
+                  </div>
+                  <div>
+                    Active filter area: {selectedArea || "All"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
+                  WHAT TO LOOK FOR
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-white/70">
+                  <div>Clusters by preferred night</div>
+                  <div>Repeated demand in the same area</div>
+                  <div>Player volume before opening leagues</div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
+                  NEXT STEP
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-white/70">
+                  <div>Contact high-intent team leads first</div>
+                  <div>Group player demand by area and night</div>
+                  <div>Build referee coverage before launch week</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </AdminCard>
+  );
+}

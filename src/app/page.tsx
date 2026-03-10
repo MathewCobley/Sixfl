@@ -1,4 +1,10 @@
+// ========================================
+// File: src/app/page.tsx
+// ========================================
+
 import Link from "next/link";
+
+const launchAreas = ["York", "Leeds", "Harrogate", "Ripon"];
 
 export default function HomePage() {
   return (
@@ -32,40 +38,45 @@ export default function HomePage() {
               </div>
             </div>
 
-            <h1 className="text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl animate-fadeIn">
+            <h1 className="text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl">
               6-A-SIDE.
               <br />
               <span className="text-white">DONE</span>{" "}
-              <span className="text-emerald-500 animate-glow drop-shadow-[0_0_30px_rgba(16,185,129,0.6)]">
+              <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.6)]">
                 PROPERLY.
               </span>
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-white/65 sm:text-lg">
-              Fixtures that hold. Tables that update instantly. Captains in
-              control.
-              <br />
-              Less admin. More football.
+              Weekly leagues with proper fixtures, live tables and a cleaner
+              experience for captains, players and referees.
             </p>
 
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">
-              Men’s, women’s and youth leagues. Join with a full team or register
-              as a player if you’re still looking for one.
+              Register your interest as a team, player or referee and be first
+              to hear when launch spaces open in your area.
             </p>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
-                href="/register-team"
+                href="/register-interest?type=team"
                 className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
               >
-                REGISTER YOUR TEAM
+                REGISTER INTEREST
               </Link>
 
               <Link
-                href="/join-as-player"
+                href="/register-interest?type=player"
                 className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
                 JOIN AS A PLAYER
+              </Link>
+
+              <Link
+                href="/register-interest?type=referee"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
+              >
+                REFEREE FOR SIXFL
               </Link>
             </div>
 
@@ -102,31 +113,46 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* RIGHT PANEL */}
+          {/* RIGHT FUNNEL PANEL */}
           <div className="lg:col-span-5">
             <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
               <div className="flex items-center justify-between">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-white/65">
-                  SIXFL PLATFORM
+                  JOIN SIXFL
                 </div>
 
                 <div className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] font-bold tracking-[0.18em] text-white/45">
-                  BUILT FOR CAPTAINS
+                  EARLY ACCESS
                 </div>
               </div>
 
+              <h2 className="mt-5 text-2xl font-black tracking-tight text-white">
+                Choose your route in.
+              </h2>
+
+              <p className="mt-2 text-sm leading-7 text-white/60">
+                Whether you already have a team or just want updates, the goal
+                is to capture interest with as little friction as possible.
+              </p>
+
               <div className="mt-6 grid gap-3">
-                <Bullet
-                  title="Fixtures that actually work"
-                  desc="Clear schedules. Clean match pages. No confusion."
+                <FunnelCard
+                  title="I have a team"
+                  desc="Captain or organiser interested in joining a future SIXFL league."
+                  href="/register-interest?type=team"
+                  cta="Register interest"
                 />
-                <Bullet
-                  title="Tables that feel live"
-                  desc="Fast updates. Proper standings. A sharper league experience."
+                <FunnelCard
+                  title="I need a team"
+                  desc="Individual player looking for a place in a league."
+                  href="/register-interest?type=player"
+                  cta="Join as player"
                 />
-                <Bullet
-                  title="Admin without the mess"
-                  desc="Simple workflows built specifically for well run 6-a-side leagues."
+                <FunnelCard
+                  title="I can referee"
+                  desc="Referees interested in working with SIXFL."
+                  href="/register-interest?type=referee"
+                  cta="Referee interest"
                 />
               </div>
 
@@ -135,54 +161,50 @@ export default function HomePage() {
                   label="LEAGUE TYPES"
                   items={["MEN’S", "WOMEN’S", "YOUTH"]}
                 />
-
-                <MiniPanel
-                  label="WAYS TO JOIN"
-                  items={["FULL TEAM", "INDIVIDUAL PLAYER"]}
-                />
+                <MiniPanel label="LAUNCH AREAS" items={launchAreas} />
               </div>
             </div>
           </div>
         </section>
 
-        {/* FLOATING GLASS STRIP */}
+        {/* STRIP */}
         <section className="mt-10">
           <div className="grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
             <StripItem label="FORMAT" value="Men’s" />
             <StripItem label="FORMAT" value="Women’s" />
             <StripItem label="FORMAT" value="Youth" />
-            <StripItem label="JOIN AS" value="Team or Player" />
+            <StripItem label="JOIN AS" value="Team, Player or Ref" />
           </div>
         </section>
 
-        {/* PATHWAYS */}
+        {/* LEAD TYPES */}
         <section id="pathways" className="mt-16">
           <div className="mb-6">
             <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
-              ONE LEAGUE. MULTIPLE PATHWAYS.
+              THREE CORE LEAD TYPES
             </div>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-              Built for every kind of player.
+              Built to capture every serious enquiry.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
-              Whether you already run a team or you are looking for one, SIXFL
-              is being built to give men’s, women’s and youth football a more
-              professional, structured experience.
+              At launch, the priority is not pushing people too hard too early.
+              It is making sure every visitor has a clear, low-friction next
+              step.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <PathwayCard
-              title="Men’s Leagues"
-              desc="Competitive 6-a-side football with proper fixtures, live tables and a cleaner weekly experience."
+              title="Team Interest"
+              desc="Perfect for captains or organisers who want updates, launch access and early contact without committing straight away."
             />
             <PathwayCard
-              title="Women’s Leagues"
-              desc="Well-run leagues for women’s teams who want consistency, quality and properly organised football."
+              title="Player Waiting List"
+              desc="Ideal for individual players who want to hear when teams or launch areas need more players."
             />
             <PathwayCard
-              title="Youth Leagues"
-              desc="Structured football for younger players in a serious league environment with referees, fixtures and tables."
+              title="Referee Interest"
+              desc="Build referee coverage early so leagues can launch with a more professional weekly setup."
             />
           </div>
         </section>
@@ -194,35 +216,101 @@ export default function HomePage() {
               HOW SIXFL WORKS
             </div>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-              Join as a team or as a player.
+              Simple journey. Stronger conversion.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
-              The aim is straightforward: make it easier to register, easier to
-              join and easier to trust that your league is being run properly.
+              Keep the message direct: register interest, tell us your area, and
+              we contact you first when spaces open.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-4">
             <StepCard
               number="01"
-              title="Choose how you join"
-              desc="Register a full team or join as an individual player."
+              title="Choose your route"
+              desc="Join as a team, player or referee."
             />
             <StepCard
               number="02"
               title="Pick your area"
-              desc="Tell us your town or city so we can place you in the right launch area."
+              desc="Tell us where you want to play or work."
             />
             <StepCard
               number="03"
-              title="Select your format"
-              desc="Men’s, women’s or youth — depending on the type of football you want."
+              title="Submit your interest"
+              desc="Use the right page and send your details."
             />
             <StepCard
               number="04"
-              title="Get launch access"
-              desc="We contact you first when spaces open in your area or when teams need players."
+              title="Get first access"
+              desc="Be first to hear when launch spaces open."
             />
+          </div>
+        </section>
+
+        {/* WAITLIST CTA */}
+        <section id="lead-capture" className="mt-16">
+          <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+            <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
+              <div className="lg:col-span-7">
+                <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
+                  EARLY ACCESS WAITING LIST
+                </div>
+                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                  Launching soon. Get in early.
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
+                  Before launch, every visitor should have a route to express
+                  interest. Capture team captains, solo players and referees now
+                  so SIXFL builds a proper pipeline before the first match.
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {launchAreas.map((area) => (
+                    <span
+                      key={area}
+                      className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[11px] font-bold text-white/80"
+                    >
+                      {area}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="lg:col-span-5">
+                <div className="rounded-[24px] border border-white/10 bg-black/35 p-5">
+                  <div className="text-sm font-bold text-white">
+                    Ready to register interest?
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/60">
+                    Pick the path that fits you best.
+                  </p>
+
+                  <div className="mt-5 grid gap-3">
+                    <Link
+                      href="/register-interest?type=team"
+                      className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+                    >
+                      REGISTER INTEREST
+                    </Link>
+
+                    <Link
+                      href="/register-interest?type=player"
+                      className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+                    >
+                      JOIN AS A PLAYER
+                    </Link>
+
+                    <Link
+                      href="/register-interest?type=referee"
+                      className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
+                    >
+                      REFEREE FOR SIXFL
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -232,27 +320,27 @@ export default function HomePage() {
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
-                  EARLY ACCESS REGISTRATION
+                  SIXFL EARLY ACCESS
                 </div>
                 <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
                   Ready to get involved with SIXFL?
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-white/60 sm:text-base">
-                  Register your team now, or join as a player and we’ll let you
-                  know when launch spaces open in your area.
+                  Register interest now and be first to hear when the first
+                  leagues go live.
                 </p>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
-                  href="/register-team"
+                  href="/register-interest?type=team"
                   className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
                 >
-                  REGISTER YOUR TEAM
+                  REGISTER INTEREST
                 </Link>
 
                 <Link
-                  href="/join-as-player"
+                  href="/register-interest?type=player"
                   className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
                 >
                   JOIN AS A PLAYER
@@ -279,17 +367,28 @@ export default function HomePage() {
   );
 }
 
-function Bullet({ title, desc }: { title: string; desc: string }) {
+function FunnelCard({
+  title,
+  desc,
+  href,
+  cta,
+}: {
+  title: string;
+  desc: string;
+  href: string;
+  cta: string;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/40 p-4 transition hover:bg-black/50">
-      <div className="flex items-start gap-3">
-        <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
-        <div>
-          <div className="text-sm font-bold text-white">{title}</div>
-          <div className="mt-1 text-sm text-white/60">{desc}</div>
-        </div>
+    <Link
+      href={href}
+      className="block rounded-2xl border border-white/10 bg-black/40 p-4 transition hover:border-emerald-500/30 hover:bg-black/50"
+    >
+      <div className="text-sm font-bold text-white">{title}</div>
+      <div className="mt-1 text-sm text-white/60">{desc}</div>
+      <div className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-emerald-400">
+        {cta} →
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -336,7 +435,7 @@ function PathwayCard({
   return (
     <div className="rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07]">
       <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
-        LEAGUE TYPE
+        LEAD TYPE
       </div>
       <div className="mt-2 text-2xl font-black tracking-tight text-white">
         {title}

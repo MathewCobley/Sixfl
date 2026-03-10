@@ -1,0 +1,445 @@
+// ========================================
+// File: src/app/register-interest/page.tsx
+// ========================================
+
+import Link from "next/link";
+import { submitRegisterInterest } from "./actions";
+
+type SearchParams = Promise<{
+  success?: string;
+  error?: string;
+  type?: string;
+}>;
+
+type InterestTypeValue = "TEAM" | "PLAYER" | "REFEREE";
+
+type LeadTypeConfig = {
+  type: InterestTypeValue;
+  badge: string;
+  title: string;
+  intro: string;
+  submitLabel: string;
+  successTitle: string;
+  successBody: string;
+  showTeamName: boolean;
+  showLeagueType: boolean;
+  showExperience: boolean;
+  notesLabel: string;
+  notesPlaceholder: string;
+};
+
+const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
+  TEAM: {
+    type: "TEAM",
+    badge: "SIXFL • TEAM INTEREST",
+    title: "Register team interest",
+    intro:
+      "Not ready to fully sign up yet? No problem. Leave your details and we’ll contact you when league spaces open in your area.",
+    submitLabel: "REGISTER TEAM INTEREST",
+    successTitle: "Team interest registered",
+    successBody:
+      "Thanks — your team interest has been registered. We’ll be in touch when SIXFL opens in your area.",
+    showTeamName: true,
+    showLeagueType: true,
+    showExperience: false,
+    notesLabel: "Notes",
+    notesPlaceholder:
+      "Anything useful to know? For example: likely squad size, preferred night, area you want to play in, or whether you are just exploring at this stage.",
+  },
+  PLAYER: {
+    type: "PLAYER",
+    badge: "SIXFL • PLAYER INTEREST",
+    title: "Join as a player",
+    intro:
+      "Looking for a team or a launch area to join? Leave your details and we’ll let you know when places open or teams need players.",
+    submitLabel: "JOIN PLAYER WAITING LIST",
+    successTitle: "Player interest registered",
+    successBody:
+      "Thanks — you’re now on the SIXFL player waiting list. We’ll be in touch when spaces open or teams need players in your area.",
+    showTeamName: false,
+    showLeagueType: true,
+    showExperience: false,
+    notesLabel: "Notes",
+    notesPlaceholder:
+      "Anything useful to know? For example: preferred area, preferred night, position, playing standard, or whether you already have friends looking to join too.",
+  },
+  REFEREE: {
+    type: "REFEREE",
+    badge: "SIXFL • REFEREE INTEREST",
+    title: "Register referee interest",
+    intro:
+      "Interested in refereeing for SIXFL? Leave your details and we’ll contact you as launch plans develop in your area.",
+    submitLabel: "REGISTER REFEREE INTEREST",
+    successTitle: "Referee interest registered",
+    successBody:
+      "Thanks — your referee interest has been registered. We’ll be in touch as SIXFL launch plans develop in your area.",
+    showTeamName: false,
+    showLeagueType: false,
+    showExperience: true,
+    notesLabel: "Experience / Notes",
+    notesPlaceholder:
+      "Tell us anything useful. For example: refereeing experience, qualifications, availability, preferred areas, or whether you are interested in regular weekly games.",
+  },
+};
+
+function getLeadType(rawType?: string): InterestTypeValue {
+  const value = String(rawType ?? "").trim().toUpperCase();
+
+  if (value === "PLAYER") return "PLAYER";
+  if (value === "REFEREE") return "REFEREE";
+  return "TEAM";
+}
+
+export default async function RegisterInterestPage({
+  searchParams,
+}: {
+  searchParams?: SearchParams;
+}) {
+  const sp = (await searchParams) ?? {};
+  const success = sp.success === "1";
+  const error = sp.error === "missing";
+  const leadType = getLeadType(sp.type);
+  const config = leadTypeConfig[leadType];
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-black px-4 py-10 text-white">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <Link
+              href="/"
+              className="text-sm text-white/60 transition hover:text-white"
+            >
+              ← Back to home
+            </Link>
+
+            <div className="flex flex-wrap gap-2">
+              <TypeLink
+                href="/register-interest?type=team"
+                label="Team"
+                active={leadType === "TEAM"}
+              />
+              <TypeLink
+                href="/register-interest?type=player"
+                label="Player"
+                active={leadType === "PLAYER"}
+              />
+              <TypeLink
+                href="/register-interest?type=referee"
+                label="Referee"
+                active={leadType === "REFEREE"}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8">
+            <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
+              {config.badge}
+            </div>
+
+            <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+              {config.successTitle}
+            </h1>
+
+            <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-emerald-200">
+              <p className="text-base leading-7">{config.successBody}</p>
+            </div>
+
+            <div className="mt-6 text-sm leading-7 text-white/65">
+              We’ve saved your details and you should also receive a confirmation
+              email shortly.
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+              >
+                BACK TO HOME
+              </Link>
+
+              <Link
+                href={`/register-interest?type=${leadType.toLowerCase()}`}
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+              >
+                ADD ANOTHER
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-black px-4 py-10 text-white">
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href="/"
+            className="text-sm text-white/60 transition hover:text-white"
+          >
+            ← Back to home
+          </Link>
+
+          <div className="flex flex-wrap gap-2">
+            <TypeLink
+              href="/register-interest?type=team"
+              label="Team"
+              active={leadType === "TEAM"}
+            />
+            <TypeLink
+              href="/register-interest?type=player"
+              label="Player"
+              active={leadType === "PLAYER"}
+            />
+            <TypeLink
+              href="/register-interest?type=referee"
+              label="Referee"
+              active={leadType === "REFEREE"}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8">
+          <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
+            {config.badge}
+          </div>
+
+          <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+            {config.title}
+          </h1>
+
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
+            {config.intro}
+          </p>
+
+          {error ? (
+            <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+              Please complete the required fields.
+            </div>
+          ) : null}
+
+          <form action={submitRegisterInterest} className="mt-8 grid gap-4">
+            <input type="hidden" name="interestType" value={config.type} />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Your name"
+                name="contactName"
+                placeholder="Mathew Cobley"
+                required
+              />
+              <Field
+                label="Email address"
+                name="email"
+                type="email"
+                placeholder="hello@sixfl.co.uk"
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Phone number"
+                name="phone"
+                type="tel"
+                placeholder="Optional"
+              />
+              {config.showTeamName ? (
+                <Field
+                  label="Team name"
+                  name="teamName"
+                  placeholder="Optional"
+                />
+              ) : (
+                <div />
+              )}
+            </div>
+
+            <div
+              className={`grid gap-4 ${
+                config.showLeagueType ? "sm:grid-cols-2" : "sm:grid-cols-1"
+              }`}
+            >
+              <SelectField
+                label="Area"
+                name="area"
+                required
+                options={["York", "Leeds", "Harrogate", "Ripon", "Other"]}
+              />
+
+              {config.showLeagueType ? (
+                <SelectField
+                  label="League type"
+                  name="leagueType"
+                  required
+                  options={[
+                    { label: "Men’s", value: "MENS" },
+                    { label: "Women’s", value: "WOMENS" },
+                    { label: "Youth", value: "YOUTH" },
+                  ]}
+                />
+              ) : null}
+            </div>
+
+            <SelectField
+              label="Preferred night"
+              name="preferredNight"
+              options={[
+                { label: "Monday", value: "MONDAY" },
+                { label: "Tuesday", value: "TUESDAY" },
+                { label: "Wednesday", value: "WEDNESDAY" },
+                { label: "Thursday", value: "THURSDAY" },
+                { label: "Friday", value: "FRIDAY" },
+                { label: "Saturday", value: "SATURDAY" },
+                { label: "Sunday", value: "SUNDAY" },
+                { label: "Any", value: "ANY" },
+              ]}
+            />
+
+            {config.showExperience ? (
+              <SelectField
+                label="Experience level"
+                name="experienceLevel"
+                options={[
+                  "New to refereeing",
+                  "Some experience",
+                  "Regular referee",
+                  "Qualified referee",
+                ]}
+              />
+            ) : null}
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-white/80">
+                {config.notesLabel}
+              </label>
+              <textarea
+                name="message"
+                rows={5}
+                placeholder={config.notesPlaceholder}
+                className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+              >
+                {config.submitLabel}
+              </button>
+
+              <Link
+                href="/"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+              >
+                BACK TO HOME
+              </Link>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TypeLink({
+  href,
+  label,
+  active,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={[
+        "inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-bold tracking-[0.18em] transition",
+        active
+          ? "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+          : "border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+      ].join(" ")}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function Field({
+  label,
+  name,
+  type = "text",
+  placeholder,
+  required = false,
+}: {
+  label: string;
+  name: string;
+  type?: string;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-white/80">
+        {label}
+      </label>
+      <input
+        name={name}
+        type={type}
+        placeholder={placeholder}
+        required={required}
+        className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  options,
+  required = false,
+}: {
+  label: string;
+  name: string;
+  options: Array<string | { label: string; value: string }>;
+  required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-white/80">
+        {label}
+      </label>
+      <select
+        name={name}
+        required={required}
+        defaultValue=""
+        className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-500/50"
+      >
+        <option value="" disabled className="bg-black text-white/60">
+          Select {label.toLowerCase()}
+        </option>
+
+        {options.map((option) => {
+          if (typeof option === "string") {
+            return (
+              <option key={option} value={option} className="bg-black">
+                {option}
+              </option>
+            );
+          }
+
+          return (
+            <option key={option.value} value={option.value} className="bg-black">
+              {option.label}
+            </option>
+          );
+        })}
+      </select>
+    </div>
+  );
+}

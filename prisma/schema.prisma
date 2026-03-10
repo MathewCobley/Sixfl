@@ -29,7 +29,7 @@ model User {
   accounts         Account[]
   sessions         Session[]
   teamMembers      TeamMember[]
-  refereedFixtures Fixture[] @relation("FixtureReferee")
+  refereedFixtures Fixture[]     @relation("FixtureReferee")
   enteredResults   MatchResult[] @relation("ResultEnteredBy")
 }
 
@@ -202,4 +202,58 @@ model MatchResult {
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model InterestLead {
+  id             String         @id @default(cuid())
+  interestType   InterestType
+  status         LeadStatus     @default(NEW)
+
+  contactName    String
+  email          String
+  phone          String?
+
+  teamName       String?
+  area           String
+  leagueType     LeagueType?
+  preferredNight PreferredNight?
+  message        String?
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([interestType])
+  @@index([status])
+  @@index([area])
+  @@index([createdAt])
+}
+
+enum InterestType {
+  TEAM
+  PLAYER
+  REFEREE
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CLOSED
+}
+
+enum LeagueType {
+  MENS
+  WOMENS
+  YOUTH
+}
+
+enum PreferredNight {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+  ANY
 }
