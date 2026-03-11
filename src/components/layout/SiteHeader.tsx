@@ -1,3 +1,7 @@
+// ========================================
+// File: src/components/SiteHeader.tsx
+// ========================================
+
 "use client";
 
 import Link from "next/link";
@@ -27,7 +31,7 @@ function NavLink({
       {children}
 
       <span
-        className={`absolute left-0 -bottom-1 h-[2px] w-full bg-emerald-400 transition-all duration-300 ${
+        className={`absolute left-0 -bottom-1 h-[2px] w-full bg-emerald-400 transition-opacity duration-300 ${
           active ? "opacity-100" : "opacity-0"
         }`}
       />
@@ -42,53 +46,54 @@ export default function SiteHeader() {
   const isAdmin = session?.user?.email === "mathewcobley1@gmail.com";
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", handleScroll);
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   return (
     <header
-      className={`sticky top-0 z-50 backdrop-blur-xl border-b border-white/5 shadow-[0_2px_20px_rgba(0,255,150,0.05)] transition-all duration-300 ${
-        scrolled ? "bg-black/80 py-2" : "bg-black/60 py-3"
+      className={`sticky top-0 z-50 border-b transition-colors duration-300 ${
+        scrolled
+          ? "border-white/10 bg-black/85 backdrop-blur-xl"
+          : "border-white/5 bg-black/60 backdrop-blur-xl"
       }`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center">
+        <Link href="/" className="flex shrink-0 items-center">
           <Image
             src="/logo2.png"
             alt="SIXFL"
             width={180}
             height={48}
             priority
-            sizes="(max-width: 768px) 140px, 180px"
-            className={`w-auto object-contain transition-all duration-300 ${
-              scrolled ? "h-[30px]" : "h-[34px]"
-            }`}
+            sizes="(max-width: 768px) 132px, 180px"
+            className="h-[28px] w-auto object-contain sm:h-[34px]"
           />
         </Link>
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
-          {/* Contact */}
           <a
             href="mailto:hello@sixfl.co.uk"
-            className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white hover:bg-white/10 transition"
+            className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-white/10"
           >
             Contact
           </a>
 
-          {/* Login */}
           <NavLink href="/login">Login</NavLink>
 
-          {/* Admin (only visible to admin) */}
           {isAdmin && <NavLink href="/admin">Admin</NavLink>}
 
-          {/* Register */}
           <Link
             href="/register"
-            className="rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-extrabold tracking-wide text-black hover:bg-emerald-400 transition"
+            className="rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
           >
             Register
           </Link>
@@ -98,14 +103,14 @@ export default function SiteHeader() {
         <div className="flex items-center gap-2 md:hidden">
           <a
             href="mailto:hello@sixfl.co.uk"
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/10"
           >
             Contact
           </a>
 
           <Link
             href="/login"
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/10"
           >
             Login
           </Link>
@@ -113,7 +118,7 @@ export default function SiteHeader() {
           {isAdmin && (
             <Link
               href="/admin"
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 transition"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/10"
             >
               Admin
             </Link>
@@ -121,7 +126,7 @@ export default function SiteHeader() {
 
           <Link
             href="/register"
-            className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-extrabold text-black hover:bg-emerald-400 transition"
+            className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-extrabold text-black transition hover:bg-emerald-400"
           >
             Register
           </Link>

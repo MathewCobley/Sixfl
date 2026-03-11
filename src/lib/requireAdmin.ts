@@ -14,6 +14,12 @@ const SUPER_ADMINS = [
 ];
 
 export async function requireAdmin() {
+
+  // TEMPORARY DEV BYPASS
+  if (process.env.NODE_ENV !== "production") {
+    return { session: null, user: null };
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {

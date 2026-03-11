@@ -13,6 +13,16 @@ export default function SiteFooter() {
             <a className="hover:underline" href="/venues">Venues</a>
             <a className="hover:underline" href="/pricing">Pricing</a>
             <a className="hover:underline" href="/contact">Register</a>
+
+            {/* Facebook */}
+            <a
+              className="hover:underline"
+              href="https://www.facebook.com/profile.php?id=61588172021259"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Facebook
+            </a>
           </div>
         </div>
 

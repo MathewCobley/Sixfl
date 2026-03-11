@@ -3,10 +3,16 @@
 // ========================================
 
 import Link from "next/link";
-import { InterestType, LeadStatus, LeagueType, PreferredNight } from "@prisma/client";
+import {
+  InterestType,
+  LeadStatus,
+  LeagueType,
+  PreferredNight,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import AdminCard from "@/components/admin/AdminCard";
+import { updateLeadStatus } from "./actions";
 
 type SearchParams = Promise<{
   type?: string;
@@ -20,7 +26,12 @@ function isInterestType(value?: string): value is InterestType {
 }
 
 function isLeadStatus(value?: string): value is LeadStatus {
-  return value === "NEW" || value === "CONTACTED" || value === "QUALIFIED" || value === "CLOSED";
+  return (
+    value === "NEW" ||
+    value === "CONTACTED" ||
+    value === "QUALIFIED" ||
+    value === "CLOSED"
+  );
 }
 
 function isPreferredNight(value?: string): value is PreferredNight {
@@ -67,6 +78,10 @@ function formatDate(value: Date) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(value);
+}
+
+function formatYesNo(value: boolean) {
+  return value ? "Yes" : "No";
 }
 
 function statusClasses(status: LeadStatus) {
@@ -155,6 +170,59 @@ function StatCard({
   );
 }
 
+function Detail({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 min-h-[80px]">
+      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+        {label}
+      </div>
+      <div className="mt-1 text-sm leading-relaxed text-white/85 break-words">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function StatusButton({
+  id,
+  nextStatus,
+  currentStatus,
+  returnTo,
+}: {
+  id: string;
+  nextStatus: LeadStatus;
+  currentStatus: LeadStatus;
+  returnTo: string;
+}) {
+  const isActive = currentStatus === nextStatus;
+
+  return (
+    <form action={updateLeadStatus}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="status" value={nextStatus} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <button
+        type="submit"
+        disabled={isActive}
+        className={[
+          "inline-flex h-9 items-center justify-center rounded-xl border px-3 text-xs font-bold tracking-[0.12em] transition",
+          isActive
+            ? "cursor-default border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+            : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10 hover:text-white",
+        ].join(" ")}
+      >
+        {formatLeadStatus(nextStatus)}
+      </button>
+    </form>
+  );
+}
+
 export default async function AdminLeadsPage({
   searchParams,
 }: {
@@ -185,24 +253,43 @@ export default async function AdminLeadsPage({
     ...(selectedArea ? { area: selectedArea } : {}),
   };
 
-  const [leads, totalCount, teamCount, playerCount, refereeCount, allAreas] =
-    await Promise.all([
-      prisma.interestLead.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.interestLead.count(),
-      prisma.interestLead.count({ where: { interestType: "TEAM" } }),
-      prisma.interestLead.count({ where: { interestType: "PLAYER" } }),
-      prisma.interestLead.count({ where: { interestType: "REFEREE" } }),
-      prisma.interestLead.findMany({
-        distinct: ["area"],
-        select: { area: true },
-        orderBy: { area: "asc" },
-      }),
-    ]);
+  const returnTo = buildHref({
+    type: selectedType,
+    status: selectedStatus,
+    area: selectedArea,
+    night: selectedNight,
+  });
 
-  const areas = allAreas.map((x) => x.area).filter(Boolean);
+  const [
+    leads,
+    totalCount,
+    teamCount,
+    playerCount,
+    refereeCount,
+    allAreas,
+    newCount,
+    contactedCount,
+  ] = await Promise.all([
+    prisma.interestLead.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.interestLead.count(),
+    prisma.interestLead.count({ where: { interestType: "TEAM" } }),
+    prisma.interestLead.count({ where: { interestType: "PLAYER" } }),
+    prisma.interestLead.count({ where: { interestType: "REFEREE" } }),
+    prisma.interestLead.findMany({
+      distinct: ["area"],
+      select: { area: true },
+      orderBy: { area: "asc" },
+    }),
+    prisma.interestLead.count({ where: { status: "NEW" } }),
+    prisma.interestLead.count({ where: { status: "CONTACTED" } }),
+  ]);
+
+  const areas = allAreas
+    .map((x) => x.area)
+    .filter((value): value is string => Boolean(value));
 
   return (
     <AdminCard title="Leads">
@@ -210,7 +297,8 @@ export default async function AdminLeadsPage({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="text-sm text-white/65">
-              View team, player and referee interest captured through the SIXFL funnel.
+              View team, player and referee interest captured through the SIXFL
+              funnel.
             </div>
             <div className="mt-1 text-xs text-white/45">
               {leads.length} result{leads.length === 1 ? "" : "s"} shown
@@ -238,10 +326,45 @@ export default async function AdminLeadsPage({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="TOTAL LEADS" value={totalCount} subtext="All captured interest" />
-          <StatCard label="TEAM INTEREST" value={teamCount} subtext="Captains and organisers" />
-          <StatCard label="PLAYER INTEREST" value={playerCount} subtext="Waiting list players" />
-          <StatCard label="REFEREE INTEREST" value={refereeCount} subtext="Officials pipeline" />
+          <StatCard
+            label="TOTAL LEADS"
+            value={totalCount}
+            subtext="All captured interest"
+          />
+          <StatCard
+            label="TEAM INTEREST"
+            value={teamCount}
+            subtext="Captains and organisers"
+          />
+          <StatCard
+            label="PLAYER INTEREST"
+            value={playerCount}
+            subtext="Waiting list players"
+          />
+          <StatCard
+            label="REFEREE INTEREST"
+            value={refereeCount}
+            subtext="Officials pipeline"
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="NEW" value={newCount} subtext="Needs follow-up" />
+          <StatCard
+            label="CONTACTED"
+            value={contactedCount}
+            subtext="Already touched"
+          />
+          <StatCard
+            label="FILTERED RESULTS"
+            value={leads.length}
+            subtext="Current view"
+          />
+          <StatCard
+            label="AREAS"
+            value={areas.length}
+            subtext="Distinct demand zones"
+          />
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -424,6 +547,7 @@ export default async function AdminLeadsPage({
                     <th className="px-4 py-3 font-semibold">Created</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {leads.map((lead) => (
                     <tr
@@ -451,13 +575,17 @@ export default async function AdminLeadsPage({
                       </td>
 
                       <td className="px-4 py-3">
-                        <div className="font-medium text-white">{lead.contactName}</div>
+                        <div className="font-medium text-white">
+                          {lead.contactName}
+                        </div>
                         <div className="mt-1 text-xs text-white/50">
                           {lead.teamName || "—"}
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 text-white/85">{lead.area}</td>
+                      <td className="px-4 py-3 text-white/85">
+                        {lead.area ?? "—"}
+                      </td>
 
                       <td className="px-4 py-3 text-white/85">
                         {formatLeagueType(lead.leagueType)}
@@ -468,15 +596,23 @@ export default async function AdminLeadsPage({
                       </td>
 
                       <td className="px-4 py-3">
-                        <a
-                          href={`mailto:${lead.email}`}
-                          className="text-emerald-300 hover:text-emerald-200"
-                        >
-                          {lead.email}
-                        </a>
-                        {lead.phone ? (
-                          <div className="mt-1 text-xs text-white/50">{lead.phone}</div>
-                        ) : null}
+                        <div className="flex flex-col">
+                          <a
+                            href={`mailto:${lead.email}`}
+                            className="break-all text-emerald-300 hover:text-emerald-200"
+                          >
+                            {lead.email}
+                          </a>
+
+                          {lead.phone ? (
+                            <a
+                              href={`tel:${lead.phone}`}
+                              className="mt-1 text-xs text-white/50"
+                            >
+                              {lead.phone}
+                            </a>
+                          ) : null}
+                        </div>
                       </td>
 
                       <td className="px-4 py-3 text-white/60">
@@ -488,19 +624,141 @@ export default async function AdminLeadsPage({
               </table>
             </div>
 
+            <div className="grid gap-4">
+              {leads.map((lead) => (
+                <div
+                  key={`${lead.id}-detail`}
+                  className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-lg font-bold text-white">
+                          {lead.contactName}
+                        </div>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
+                            lead.interestType
+                          )}`}
+                        >
+                          {formatInterestType(lead.interestType)}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
+                            lead.status
+                          )}`}
+                        >
+                          {formatLeadStatus(lead.status)}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 text-sm text-white/55">
+                        Captured {formatDate(lead.createdAt)}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <a
+                        href={`mailto:${lead.email}`}
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white hover:bg-white/10"
+                      >
+                        Email lead
+                      </a>
+
+                      {lead.phone ? (
+                        <a
+                          href={`tel:${lead.phone}`}
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white hover:bg-white/10"
+                        >
+                          Call lead
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <StatusButton
+                      id={lead.id}
+                      nextStatus="NEW"
+                      currentStatus={lead.status}
+                      returnTo={returnTo}
+                    />
+                    <StatusButton
+                      id={lead.id}
+                      nextStatus="CONTACTED"
+                      currentStatus={lead.status}
+                      returnTo={returnTo}
+                    />
+                    <StatusButton
+                      id={lead.id}
+                      nextStatus="QUALIFIED"
+                      currentStatus={lead.status}
+                      returnTo={returnTo}
+                    />
+                    <StatusButton
+                      id={lead.id}
+                      nextStatus="CLOSED"
+                      currentStatus={lead.status}
+                      returnTo={returnTo}
+                    />
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <Detail label="Email" value={lead.email} />
+                    <Detail label="Phone" value={lead.phone ?? "—"} />
+                    <Detail label="Team name" value={lead.teamName ?? "—"} />
+                    <Detail label="Area" value={lead.area ?? "—"} />
+                    <Detail
+                      label="League type"
+                      value={formatLeagueType(lead.leagueType)}
+                    />
+                    <Detail
+                      label="Preferred night"
+                      value={formatPreferredNight(lead.preferredNight)}
+                    />
+                    <Detail
+                      label="Status"
+                      value={formatLeadStatus(lead.status)}
+                    />
+                    <Detail label="Source" value={lead.source ?? "—"} />
+                    <Detail
+                      label="Free kit interest"
+                      value={formatYesNo(lead.wantsFreeKit)}
+                    />
+                    <Detail
+                      label="Marketing consent"
+                      value={formatYesNo(lead.marketingConsent)}
+                    />
+                    <Detail label="Updated" value={formatDate(lead.updatedAt)} />
+                    <Detail label="Lead ID" value={lead.id} />
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                      Message
+                    </div>
+                    <div className="mt-2 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
+                      {lead.message ?? "—"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
                   QUICK VIEW
                 </div>
                 <div className="mt-3 space-y-2 text-sm text-white/70">
-                  <div>Newest lead: {leads[0] ? formatDate(leads[0].createdAt) : "—"}</div>
                   <div>
-                    Active filter type: {selectedType ? formatInterestType(selectedType) : "All"}
+                    Newest lead: {leads[0] ? formatDate(leads[0].createdAt) : "—"}
                   </div>
                   <div>
-                    Active filter area: {selectedArea || "All"}
+                    Active filter type:{" "}
+                    {selectedType ? formatInterestType(selectedType) : "All"}
                   </div>
+                  <div>Active filter area: {selectedArea || "All"}</div>
                 </div>
               </div>
 
@@ -511,7 +769,7 @@ export default async function AdminLeadsPage({
                 <div className="mt-3 space-y-2 text-sm text-white/70">
                   <div>Clusters by preferred night</div>
                   <div>Repeated demand in the same area</div>
-                  <div>Player volume before opening leagues</div>
+                  <div>Women’s and youth demand by location</div>
                 </div>
               </div>
 

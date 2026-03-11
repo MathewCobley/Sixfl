@@ -205,26 +205,35 @@ model MatchResult {
 }
 
 model InterestLead {
-  id             String         @id @default(cuid())
-  interestType   InterestType
-  status         LeadStatus     @default(NEW)
+  id               String          @id @default(cuid())
+  interestType     InterestType
+  status           LeadStatus      @default(NEW)
 
-  contactName    String
-  email          String
-  phone          String?
+  contactName      String
+  email            String
+  phone            String?
 
-  teamName       String?
-  area           String
-  leagueType     LeagueType?
-  preferredNight PreferredNight?
-  message        String?
+  teamName         String?
+  area             String?
+  leagueType       LeagueType?
+  preferredNight   PreferredNight?
+  message          String?
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  source           String?
+  wantsFreeKit     Boolean         @default(false)
+  marketingConsent Boolean         @default(false)
+
+  contactedAt      DateTime?
+  closedAt         DateTime?
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@index([interestType])
   @@index([status])
   @@index([area])
+  @@index([leagueType])
+  @@index([preferredNight])
   @@index([createdAt])
 }
 
