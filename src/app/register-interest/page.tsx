@@ -24,6 +24,7 @@ type LeadTypeConfig = {
   showTeamName: boolean;
   showLeagueType: boolean;
   showExperience: boolean;
+  showFreeKit: boolean;
   notesLabel: string;
   notesPlaceholder: string;
 };
@@ -32,36 +33,38 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
   TEAM: {
     type: "TEAM",
     badge: "SIXFL • TEAM INTEREST",
-    title: "Register team interest",
+    title: "Register your team",
     intro:
-      "Not ready to fully sign up yet? No problem. Leave your details and we’ll contact you when league spaces open in your area.",
-    submitLabel: "REGISTER TEAM INTEREST",
+      "Register interest for a men’s, women’s or youth team and be first to hear when SIXFL opens in your area.",
+    submitLabel: "REGISTER YOUR TEAM",
     successTitle: "Team interest registered",
     successBody:
-      "Thanks — your team interest has been registered. We’ll be in touch when SIXFL opens in your area.",
+      "Thanks — your team details have been registered. We’ll be in touch when league spaces open in your area.",
     showTeamName: true,
     showLeagueType: true,
     showExperience: false,
+    showFreeKit: true,
     notesLabel: "Notes",
     notesPlaceholder:
-      "Anything useful to know? For example: likely squad size, preferred night, area you want to play in, or whether you are just exploring at this stage.",
+      "Anything useful to know? For example: likely squad size, preferred night, area you want to play in, or whether you are exploring a men’s, women’s or youth entry.",
   },
   PLAYER: {
     type: "PLAYER",
     badge: "SIXFL • PLAYER INTEREST",
     title: "Join as a player",
     intro:
-      "Looking for a team or a launch area to join? Leave your details and we’ll let you know when places open or teams need players.",
-    submitLabel: "JOIN PLAYER WAITING LIST",
+      "Looking for a men’s, women’s or youth team to join? Leave your details and we’ll contact you when places open or teams need players.",
+    submitLabel: "JOIN AS A PLAYER",
     successTitle: "Player interest registered",
     successBody:
-      "Thanks — you’re now on the SIXFL player waiting list. We’ll be in touch when spaces open or teams need players in your area.",
+      "Thanks — you’re now on the SIXFL player list. We’ll be in touch when teams need players or spaces open in your area.",
     showTeamName: false,
     showLeagueType: true,
     showExperience: false,
+    showFreeKit: false,
     notesLabel: "Notes",
     notesPlaceholder:
-      "Anything useful to know? For example: preferred area, preferred night, position, playing standard, or whether you already have friends looking to join too.",
+      "Anything useful to know? For example: preferred area, preferred night, position, age group, playing standard, or whether you are joining with friends.",
   },
   REFEREE: {
     type: "REFEREE",
@@ -76,6 +79,7 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
     showTeamName: false,
     showLeagueType: false,
     showExperience: true,
+    showFreeKit: false,
     notesLabel: "Experience / Notes",
     notesPlaceholder:
       "Tell us anything useful. For example: refereeing experience, qualifications, availability, preferred areas, or whether you are interested in regular weekly games.",
@@ -90,6 +94,15 @@ function getLeadType(rawType?: string): InterestTypeValue {
   return "TEAM";
 }
 
+function getErrorMessage(rawError?: string): string | null {
+  switch (rawError) {
+    case "missing":
+      return "Please complete the required fields.";
+    default:
+      return null;
+  }
+}
+
 export default async function RegisterInterestPage({
   searchParams,
 }: {
@@ -97,9 +110,9 @@ export default async function RegisterInterestPage({
 }) {
   const sp = (await searchParams) ?? {};
   const success = sp.success === "1";
-  const error = sp.error === "missing";
   const leadType = getLeadType(sp.type);
   const config = leadTypeConfig[leadType];
+  const errorMessage = getErrorMessage(sp.error);
 
   if (success) {
     return (
@@ -146,8 +159,8 @@ export default async function RegisterInterestPage({
             </div>
 
             <div className="mt-6 text-sm leading-7 text-white/65">
-              We’ve saved your details and you should also receive a confirmation
-              email shortly.
+              We’ve saved your details and will contact you as launch plans
+              develop.
             </div>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -214,27 +227,34 @@ export default async function RegisterInterestPage({
             {config.intro}
           </p>
 
-          {error ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Pill text="Men’s leagues" />
+            <Pill text="Women’s leagues" />
+            <Pill text="Youth leagues" />
+          </div>
+
+          {errorMessage ? (
             <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-              Please complete the required fields.
+              {errorMessage}
             </div>
           ) : null}
 
           <form action={submitRegisterInterest} className="mt-8 grid gap-4">
             <input type="hidden" name="interestType" value={config.type} />
+            <input type="hidden" name="source" value="register-interest-page" />
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="Your name"
                 name="contactName"
-                placeholder="Mathew Cobley"
+                placeholder="Your full name"
                 required
               />
               <Field
                 label="Email address"
                 name="email"
                 type="email"
-                placeholder="hello@sixfl.co.uk"
+                placeholder="your@email.com"
                 required
               />
             </div>
@@ -250,7 +270,7 @@ export default async function RegisterInterestPage({
                 <Field
                   label="Team name"
                   name="teamName"
-                  placeholder="Optional"
+                  placeholder="Your team name"
                 />
               ) : (
                 <div />
@@ -311,6 +331,13 @@ export default async function RegisterInterestPage({
               />
             ) : null}
 
+            {config.showFreeKit ? (
+              <CheckboxField
+                name="wantsFreeKit"
+                label="I’d like to be considered for the founding teams free kit offer"
+              />
+            ) : null}
+
             <div>
               <label className="mb-2 block text-sm font-semibold text-white/80">
                 {config.notesLabel}
@@ -322,6 +349,11 @@ export default async function RegisterInterestPage({
                 className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
               />
             </div>
+
+            <CheckboxField
+              name="marketingConsent"
+              label="I’m happy to receive SIXFL launch updates by email"
+            />
 
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
               <button
@@ -441,5 +473,33 @@ function SelectField({
         })}
       </select>
     </div>
+  );
+}
+
+function CheckboxField({
+  name,
+  label,
+}: {
+  name: string;
+  label: string;
+}) {
+  return (
+    <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/80">
+      <input
+        type="checkbox"
+        name={name}
+        value="true"
+        className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function Pill({ text }: { text: string }) {
+  return (
+    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold tracking-[0.14em] text-emerald-300">
+      {text}
+    </span>
   );
 }

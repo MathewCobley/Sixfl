@@ -159,6 +159,7 @@ export async function submitRegisterInterest(formData: FormData) {
   });
 
   const confirmation = buildConfirmationCopy(interestType);
+  const logoUrl = "https://sixfl.co.uk/sixfl-email.png";
 
   try {
     await sendEmail({
@@ -183,34 +184,51 @@ export async function submitRegisterInterest(formData: FormData) {
         .filter(Boolean)
         .join("\n"),
       html: `
-        <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#111;">
-          <h1 style="margin:0 0 16px;font-size:28px;">${confirmation.heading}</h1>
-          <p style="margin:0 0 18px;line-height:1.6;">Hi ${contactName},</p>
-          <p style="margin:0 0 18px;line-height:1.6;">${confirmation.body}</p>
+        <div style="font-family:Arial,sans-serif;background:#f5f7fa;padding:32px 16px;color:#111;">
+          <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;">
+            <div style="text-align:center;margin-bottom:24px;">
+              <img
+                src="${logoUrl}"
+                alt="SIXFL"
+                width="240"
+                style="display:inline-block;max-width:100%;height:auto;"
+              />
+            </div>
 
-          <div style="margin:24px 0;padding:16px 18px;border:1px solid #d1d5db;border-radius:12px;background:#f8fafc;">
-            <p style="margin:0 0 8px;"><strong>Type:</strong> ${formatInterestType(
-              createdLead.interestType
-            )}</p>
-            <p style="margin:0 0 8px;"><strong>Area:</strong> ${
-              createdLead.area ?? "—"
-            }</p>
-            <p style="margin:0 0 8px;"><strong>League type:</strong> ${formatLeagueType(
-              createdLead.leagueType
-            )}</p>
-            <p style="margin:0 0 8px;"><strong>Preferred night:</strong> ${formatPreferredNight(
-              createdLead.preferredNight
-            )}</p>
-            ${
-              interestType === "TEAM"
-                ? `<p style="margin:0;"><strong>Free kit interest:</strong> ${formatYesNo(
-                    createdLead.wantsFreeKit
-                  )}</p>`
-                : ""
-            }
+            <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;text-align:center;">
+              ${confirmation.heading}
+            </h1>
+
+            <p style="margin:0 0 18px;line-height:1.6;">Hi ${contactName},</p>
+            <p style="margin:0 0 18px;line-height:1.6;">${confirmation.body}</p>
+
+            <div style="margin:24px 0;padding:16px 18px;border:1px solid #d1d5db;border-radius:12px;background:#f8fafc;">
+              <p style="margin:0 0 8px;"><strong>Type:</strong> ${formatInterestType(
+                createdLead.interestType
+              )}</p>
+              <p style="margin:0 0 8px;"><strong>Area:</strong> ${
+                createdLead.area ?? "—"
+              }</p>
+              <p style="margin:0 0 8px;"><strong>League type:</strong> ${formatLeagueType(
+                createdLead.leagueType
+              )}</p>
+              <p style="margin:0 0 8px;"><strong>Preferred night:</strong> ${formatPreferredNight(
+                createdLead.preferredNight
+              )}</p>
+              ${
+                interestType === "TEAM"
+                  ? `<p style="margin:0;"><strong>Free kit interest:</strong> ${formatYesNo(
+                      createdLead.wantsFreeKit
+                    )}</p>`
+                  : ""
+              }
+            </div>
+
+            <p style="margin:24px 0 0;line-height:1.6;text-align:center;">
+              <strong>SIXFL</strong><br />
+              6-a-side football. Done properly.
+            </p>
           </div>
-
-          <p style="margin:0 0 10px;line-height:1.6;">SIXFL<br />6-a-side football. Done properly.</p>
         </div>
       `,
     });
@@ -235,31 +253,45 @@ export async function submitRegisterInterest(formData: FormData) {
         `Message: ${createdLead.message ?? "—"}`,
       ].join("\n"),
       html: `
-        <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#111;">
-          <h1 style="margin:0 0 16px;font-size:26px;">New SIXFL lead received</h1>
-          <div style="padding:16px 18px;border:1px solid #d1d5db;border-radius:12px;background:#f8fafc;">
-            <p style="margin:0 0 8px;"><strong>Type:</strong> ${formatInterestType(
-              createdLead.interestType
-            )}</p>
-            <p style="margin:0 0 8px;"><strong>Name:</strong> ${createdLead.contactName}</p>
-            <p style="margin:0 0 8px;"><strong>Email:</strong> ${createdLead.email}</p>
-            <p style="margin:0 0 8px;"><strong>Phone:</strong> ${createdLead.phone ?? "—"}</p>
-            <p style="margin:0 0 8px;"><strong>Team name:</strong> ${createdLead.teamName ?? "—"}</p>
-            <p style="margin:0 0 8px;"><strong>Area:</strong> ${createdLead.area ?? "—"}</p>
-            <p style="margin:0 0 8px;"><strong>League type:</strong> ${formatLeagueType(
-              createdLead.leagueType
-            )}</p>
-            <p style="margin:0 0 8px;"><strong>Preferred night:</strong> ${formatPreferredNight(
-              createdLead.preferredNight
-            )}</p>
-            <p style="margin:0 0 8px;"><strong>Source:</strong> ${createdLead.source ?? "—"}</p>
-            <p style="margin:0 0 8px;"><strong>Free kit interest:</strong> ${formatYesNo(
-              createdLead.wantsFreeKit
-            )}</p>
-            <p style="margin:0 0 8px;"><strong>Marketing consent:</strong> ${formatYesNo(
-              createdLead.marketingConsent
-            )}</p>
-            <p style="margin:0;"><strong>Message:</strong> ${createdLead.message ?? "—"}</p>
+        <div style="font-family:Arial,sans-serif;background:#f5f7fa;padding:32px 16px;color:#111;">
+          <div style="max-width:700px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;">
+            <div style="text-align:center;margin-bottom:24px;">
+              <img
+                src="${logoUrl}"
+                alt="SIXFL"
+                width="180"
+                style="display:inline-block;max-width:100%;height:auto;"
+              />
+            </div>
+
+            <h1 style="margin:0 0 16px;font-size:26px;text-align:center;">
+              New SIXFL lead received
+            </h1>
+
+            <div style="padding:16px 18px;border:1px solid #d1d5db;border-radius:12px;background:#f8fafc;">
+              <p style="margin:0 0 8px;"><strong>Type:</strong> ${formatInterestType(
+                createdLead.interestType
+              )}</p>
+              <p style="margin:0 0 8px;"><strong>Name:</strong> ${createdLead.contactName}</p>
+              <p style="margin:0 0 8px;"><strong>Email:</strong> ${createdLead.email}</p>
+              <p style="margin:0 0 8px;"><strong>Phone:</strong> ${createdLead.phone ?? "—"}</p>
+              <p style="margin:0 0 8px;"><strong>Team name:</strong> ${createdLead.teamName ?? "—"}</p>
+              <p style="margin:0 0 8px;"><strong>Area:</strong> ${createdLead.area ?? "—"}</p>
+              <p style="margin:0 0 8px;"><strong>League type:</strong> ${formatLeagueType(
+                createdLead.leagueType
+              )}</p>
+              <p style="margin:0 0 8px;"><strong>Preferred night:</strong> ${formatPreferredNight(
+                createdLead.preferredNight
+              )}</p>
+              <p style="margin:0 0 8px;"><strong>Source:</strong> ${createdLead.source ?? "—"}</p>
+              <p style="margin:0 0 8px;"><strong>Free kit interest:</strong> ${formatYesNo(
+                createdLead.wantsFreeKit
+              )}</p>
+              <p style="margin:0 0 8px;"><strong>Marketing consent:</strong> ${formatYesNo(
+                createdLead.marketingConsent
+              )}</p>
+              <p style="margin:0;"><strong>Message:</strong> ${createdLead.message ?? "—"}</p>
+            </div>
           </div>
         </div>
       `,
