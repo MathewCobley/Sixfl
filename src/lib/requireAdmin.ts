@@ -10,7 +10,7 @@ import { UserRole } from "@prisma/client";
 
 const SUPER_ADMINS = [
   "hello@sixfl.co.uk",
-  "mathew@sixfl.co.uk",
+  "mathew@sixfl.co.uk","mathewcobley1@gmail.com",
 ];
 
 export async function requireAdmin() {

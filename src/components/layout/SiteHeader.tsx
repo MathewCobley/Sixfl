@@ -10,6 +10,12 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
+const SUPER_ADMINS = [
+  "hello@sixfl.co.uk",
+  "mathew@sixfl.co.uk",
+  "mathewcobley1@gmail.com",
+];
+
 function NavLink({
   href,
   children,
@@ -43,7 +49,8 @@ export default function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
   const { data: session } = useSession();
 
-  const isAdmin = session?.user?.email === "mathewcobley1@gmail.com";
+  const email = session?.user?.email?.toLowerCase().trim() ?? "";
+  const isAdmin = SUPER_ADMINS.includes(email);
 
   useEffect(() => {
     const handleScroll = () => {
