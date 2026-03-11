@@ -1,5 +1,5 @@
 // ========================================
-// File: src/components/SiteHeader.tsx
+// File: src/components/layout/SiteHeader.tsx
 // ========================================
 
 "use client";
@@ -58,14 +58,17 @@ export default function SiteHeader() {
 
   return (
     <header
-      className={`sticky top-0 z-50 border-b transition-colors duration-300 ${
+      className={`sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300 ${
         scrolled
-          ? "border-white/10 bg-black/85 backdrop-blur-xl"
-          : "border-white/5 bg-black/60 backdrop-blur-xl"
+          ? "border-white/10 bg-black/85"
+          : "border-white/5 bg-black/60"
       }`}
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        {/* Logo */}
+      <div
+        className={`mx-auto flex max-w-6xl items-center justify-between px-4 transition-all duration-300 ${
+          scrolled ? "h-14" : "h-16"
+        }`}
+      >
         <Link href="/" className="flex shrink-0 items-center">
           <Image
             src="/logo2.png"
@@ -74,11 +77,12 @@ export default function SiteHeader() {
             height={48}
             priority
             sizes="(max-width: 768px) 132px, 180px"
-            className="h-[28px] w-auto object-contain sm:h-[34px]"
+            className={`w-auto object-contain transition-all duration-300 ${
+              scrolled ? "h-[24px] sm:h-[30px]" : "h-[28px] sm:h-[34px]"
+            }`}
           />
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
           <a
             href="mailto:hello@sixfl.co.uk"
@@ -86,6 +90,8 @@ export default function SiteHeader() {
           >
             Contact
           </a>
+
+          <NavLink href="/faq">FAQ</NavLink>
 
           <NavLink href="/login">Login</NavLink>
 
@@ -99,7 +105,6 @@ export default function SiteHeader() {
           </Link>
         </nav>
 
-        {/* Mobile nav */}
         <div className="flex items-center gap-2 md:hidden">
           <a
             href="mailto:hello@sixfl.co.uk"
@@ -107,6 +112,13 @@ export default function SiteHeader() {
           >
             Contact
           </a>
+
+          <Link
+            href="/faq"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/10"
+          >
+            FAQ
+          </Link>
 
           <Link
             href="/login"

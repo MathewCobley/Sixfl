@@ -30,6 +30,24 @@ const whySixflPoints = [
   },
 ];
 
+const joinSteps = [
+  {
+    number: "01",
+    title: "Choose your route",
+    desc: "Register as a team, player or referee depending on how you want to get involved.",
+  },
+  {
+    number: "02",
+    title: "Tell us your area",
+    desc: "Let us know where you want to play so we can match you to the right launch area.",
+  },
+  {
+    number: "03",
+    title: "Get confirmed",
+    desc: "We review your details, confirm availability and contact you with the next steps.",
+  },
+];
+
 export default function HomePage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -52,9 +70,7 @@ export default function HomePage() {
           {/* LEFT */}
           <div className="lg:col-span-7">
             <div className="mb-4 flex flex-wrap items-center gap-3">
-              <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-[0.28em] text-white/55">
-                SIXFL
-              </div>
+             
 
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
@@ -241,42 +257,56 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* HOW IT WORKS */}
+        {/* HOW JOINING WORKS */}
         <section id="how-it-works" className="mt-16">
-          <div className="mb-6">
-            <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
-              HOW SIXFL WORKS
+          <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+            <div className="mb-6 max-w-3xl">
+              <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
+                HOW JOINING WORKS
+              </div>
+              <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
+                Getting started with SIXFL is simple.
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
+                Whether you already have a team, need a team, or want to referee,
+                the process is straightforward. Register your interest, tell us
+                your area, and we will guide you through the next steps.
+              </p>
             </div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-              Get involved in four simple steps.
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
-              Whether you are entering a team, looking for a place to play or
-              registering interest as a referee, getting started is quick.
-            </p>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
-            <StepCard
-              number="01"
-              title="Choose your route"
-              desc="Register as a team, player or referee."
-            />
-            <StepCard
-              number="02"
-              title="Tell us your area"
-              desc="Choose where you want to play or work."
-            />
-            <StepCard
-              number="03"
-              title="Send your details"
-              desc="Complete the right form in under a minute."
-            />
-            <StepCard
-              number="04"
-              title="Get launch updates"
-              desc="Be first to hear when leagues open in your area."
-            />
+            <div className="grid gap-4 md:grid-cols-3">
+              {joinSteps.map((step) => (
+                <StepCard
+                  key={step.number}
+                  number={step.number}
+                  title={step.title}
+                  desc={step.desc}
+                />
+              ))}
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Link
+                href="/register-interest?type=team"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+              >
+                REGISTER YOUR TEAM
+              </Link>
+
+              <Link
+                href="/register-interest?type=player"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+              >
+                JOIN AS A PLAYER
+              </Link>
+
+              <Link
+                href="/faq"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
+              >
+                READ FAQS
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -400,55 +430,6 @@ export default function HomePage() {
             </div>
           </div>
         </section>
-
-        {/* FINAL CTA */}
-        <section id="final-cta" className="mt-16">
-          <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-2xl">
-                <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
-                  SIXFL EARLY ACCESS
-                </div>
-                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Ready to register for men’s, women’s or youth leagues?
-                </h2>
-                <p className="mt-3 text-sm leading-7 text-white/60 sm:text-base">
-                  Join the early access list and be first to hear when league
-                  spaces open in your area.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Link
-                  href="/register-interest?type=team"
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
-                >
-                  REGISTER YOUR TEAM
-                </Link>
-
-                <Link
-                  href="/register-interest?type=player"
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
-                >
-                  JOIN AS A PLAYER
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <footer className="mt-16 flex flex-col items-center gap-2 text-center text-xs text-white/45">
-          <div className="h-px w-full max-w-6xl bg-white/10" />
-          <p className="pt-6">© {new Date().getFullYear()} SIXFL</p>
-          <p>
-            <a
-              className="underline transition hover:text-white/70"
-              href="mailto:hello@sixfl.co.uk"
-            >
-              hello@sixfl.co.uk
-            </a>
-          </p>
-        </footer>
       </main>
     </div>
   );
