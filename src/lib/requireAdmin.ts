@@ -10,11 +10,11 @@ import { UserRole } from "@prisma/client";
 
 const SUPER_ADMINS = [
   "hello@sixfl.co.uk",
-  "mathew@sixfl.co.uk","mathewcobley1@gmail.com",
+  "mathew@sixfl.co.uk",
+  "mathewcobley1@gmail.com",
 ];
 
 export async function requireAdmin() {
-
   // TEMPORARY DEV BYPASS
   if (process.env.NODE_ENV !== "production") {
     return { session: null, user: null };
@@ -26,7 +26,7 @@ export async function requireAdmin() {
     redirect("/login");
   }
 
-  const email = session.user.email.toLowerCase();
+  const email = session.user.email.toLowerCase().trim();
   const isSuperAdmin = SUPER_ADMINS.includes(email);
 
   const user = await prisma.user.findUnique({
