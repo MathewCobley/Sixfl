@@ -95,11 +95,16 @@ export default function HomePage() {
               Register early to secure updates and first access when places open.
             </p>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              {leagueTypes.map((type) => (
-                <InfoBadge key={type} text={type} tone="emerald" />
-              ))}
-            </div>
+            <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
+  {leagueTypes.map((type, index) => (
+    <span key={type} className="inline-flex items-center">
+      {type}
+      {index < leagueTypes.length - 1 && (
+        <span className="ml-4 text-white/25">•</span>
+      )}
+    </span>
+  ))}
+</div>
 
             <div className="mt-6 flex flex-wrap gap-2">
               {trustPoints.map((point) => (
