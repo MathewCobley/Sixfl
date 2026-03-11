@@ -5,7 +5,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { submitTeamLeadAction } from "./actions";
 
 type TeamForm = {
   teamName: string;
@@ -20,15 +22,34 @@ type TeamForm = {
 const launchAreas = ["York", "Leeds", "Harrogate", "Ripon", "Other"];
 
 const leagueOptions = [
-  { value: "mens", label: "Men’s" },
-  { value: "womens", label: "Women’s" },
-  { value: "youth", label: "Youth" },
+  { value: "MENS", label: "Men’s" },
+  { value: "WOMENS", label: "Women’s" },
+  { value: "YOUTH", label: "Youth" },
 ];
 
+function getErrorMessage(error: string | null) {
+  switch (error) {
+    case "team-name":
+      return "Please enter your team name.";
+    case "league-type":
+      return "Please choose a league type.";
+    case "city":
+      return "Please enter your area or city.";
+    case "captain-name":
+      return "Please enter the captain name.";
+    case "email":
+      return "Please enter the email address.";
+    default:
+      return "";
+  }
+}
+
 export default function RegisterTeamPage() {
+  const searchParams = useSearchParams();
+  const serverError = getErrorMessage(searchParams.get("error"));
+
   const [step, setStep] = useState(1);
-  const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [clientError, setClientError] = useState("");
 
   const [team, setTeam] = useState<TeamForm>({
     teamName: "",
@@ -40,66 +61,56 @@ export default function RegisterTeamPage() {
     squadSize: "",
   });
 
+  const error = clientError || serverError;
+
   function updateField(field: keyof TeamForm, value: string) {
     setTeam((prev) => ({ ...prev, [field]: value }));
-    setError("");
+    setClientError("");
   }
 
   function next() {
-    if (step === 1) {
-      if (!team.teamName.trim()) {
-        setError("Please enter your team name.");
-        return;
-      }
+    if (step === 1 && !team.teamName.trim()) {
+      setClientError("Please enter your team name.");
+      return;
     }
 
     if (step === 2) {
-      if (!team.leagueType.trim() || !team.city.trim()) {
-        setError("Please choose a league type and enter your area.");
+      if (!team.leagueType.trim()) {
+        setClientError("Please choose a league type.");
+        return;
+      }
+
+      if (!team.city.trim()) {
+        setClientError("Please enter your area or city.");
         return;
       }
     }
 
-    setError("");
+    setClientError("");
     setStep((prev) => Math.min(prev + 1, 3));
   }
 
   function back() {
-    setError("");
+    setClientError("");
     setStep((prev) => Math.max(prev - 1, 1));
   }
 
-  const mailtoHref = useMemo(() => {
-    const subject = `SIXFL Team Registration - ${team.teamName || "New Team"}`;
-
-    const body = [
-      "New SIXFL team registration enquiry",
-      "",
-      `Team name: ${team.teamName || "-"}`,
-      `League type: ${team.leagueType || "-"}`,
-      `Area: ${team.city || "-"}`,
-      `Captain name: ${team.captainName || "-"}`,
-      `Email: ${team.email || "-"}`,
-      `Phone: ${team.phone || "-"}`,
-      `Approx squad size: ${team.squadSize || "-"}`,
-      "",
-      "Submitted from the SIXFL register-team page.",
-    ].join("\n");
-
-    return `mailto:hello@sixfl.co.uk?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(body)}`;
-  }, [team]);
-
-  function submitTeam() {
-    if (!team.captainName.trim() || !team.email.trim()) {
-      setError("Please enter the captain name and email address.");
+  function validateBeforeSubmit(
+    e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+  ) {
+    if (!team.captainName.trim()) {
+      e.preventDefault();
+      setClientError("Please enter the captain name.");
       return;
     }
 
-    setError("");
-    setSubmitted(true);
-    window.location.href = mailtoHref;
+    if (!team.email.trim()) {
+      e.preventDefault();
+      setClientError("Please enter the email address.");
+      return;
+    }
+
+    setClientError("");
   }
 
   const progressWidth = step === 1 ? "33%" : step === 2 ? "66%" : "100%";
@@ -135,7 +146,9 @@ export default function RegisterTeamPage() {
                   <span className="text-4xl font-black tracking-tight sm:text-5xl">
                     £40
                   </span>
-                  <span className="pb-1 text-white/70">per team / per week</span>
+                  <span className="pb-1 text-white/70">
+                    per team / per week
+                  </span>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-white/75">
                   Around £5 per player per match for most squads.
@@ -163,28 +176,36 @@ export default function RegisterTeamPage() {
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                   <h3 className="font-semibold text-white">Refereed matches</h3>
                   <p className="mt-1 text-sm leading-6 text-white/65">
-                    Weekly games run with proper structure and matchday standards.
+                    Weekly games run with proper structure and matchday
+                    standards.
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                  <h3 className="font-semibold text-white">Reliable fixtures</h3>
+                  <h3 className="font-semibold text-white">
+                    Reliable fixtures
+                  </h3>
                   <p className="mt-1 text-sm leading-6 text-white/65">
-                    Clear scheduling, consistent communication and less chaos for captains.
+                    Clear scheduling, consistent communication and less chaos
+                    for captains.
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                   <h3 className="font-semibold text-white">Live tables</h3>
                   <p className="mt-1 text-sm leading-6 text-white/65">
-                    Results, standings and league updates handled professionally.
+                    Results, standings and league updates handled
+                    professionally.
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                  <h3 className="font-semibold text-white">Built for captains</h3>
+                  <h3 className="font-semibold text-white">
+                    Built for captains
+                  </h3>
                   <p className="mt-1 text-sm leading-6 text-white/65">
-                    A smoother experience than chasing everything through group chats.
+                    A smoother experience than chasing everything through group
+                    chats.
                   </p>
                 </div>
               </div>
@@ -196,9 +217,8 @@ export default function RegisterTeamPage() {
                   Register Your Team
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-white/65">
-                  Complete the form below and your email app will open with your
-                  enquiry ready to send to{" "}
-                  <span className="font-semibold text-white">hello@sixfl.co.uk</span>.
+                  Complete the form below and we’ll save your team enquiry
+                  directly into the SIXFL lead pipeline.
                 </p>
               </div>
 
@@ -228,156 +248,175 @@ export default function RegisterTeamPage() {
                 </div>
               )}
 
-              {submitted && (
-                <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                  Your email app should now open with the enquiry ready to send.
-                  If it does not, email us directly at{" "}
-                  <span className="font-semibold text-white">hello@sixfl.co.uk</span>.
-                </div>
-              )}
+              <form action={submitTeamLeadAction} className="space-y-5">
+                <input type="hidden" name="teamName" value={team.teamName} />
+                <input type="hidden" name="leagueType" value={team.leagueType} />
+                <input type="hidden" name="city" value={team.city} />
+                <input
+                  type="hidden"
+                  name="captainName"
+                  value={team.captainName}
+                />
+                <input type="hidden" name="email" value={team.email} />
+                <input type="hidden" name="phone" value={team.phone} />
+                <input type="hidden" name="squadSize" value={team.squadSize} />
 
-              {step === 1 && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-white">
-                      Team name *
-                    </label>
-                    <input
-                      placeholder="e.g. Ripon Athletic"
-                      value={team.teamName}
-                      onChange={(e) => updateField("teamName", e.target.value)}
-                      className="w-full h-12 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
-                    />
-                  </div>
-
-                  <button
-                    onClick={next}
-                    className="w-full h-12 rounded-full bg-emerald-500 text-sm font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
-                  >
-                    CONTINUE
-                  </button>
-                </div>
-              )}
-
-              {step === 2 && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-white">
-                      League type *
-                    </label>
-                    <select
-                      value={team.leagueType}
-                      onChange={(e) => updateField("leagueType", e.target.value)}
-                      className="w-full h-12 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition focus:border-emerald-400"
-                    >
-                      <option value="">Select league type</option>
-                      {leagueOptions.map((option) => (
-                        <option key={option.value} value={option.label}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-white">
-                      Area / city *
-                    </label>
-                    <input
-                      placeholder="e.g. York"
-                      value={team.city}
-                      onChange={(e) => updateField("city", e.target.value)}
-                      className="w-full h-12 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-white">
-                      Approx squad size
-                    </label>
-                    <input
-                      placeholder="e.g. 8"
-                      value={team.squadSize}
-                      onChange={(e) => updateField("squadSize", e.target.value)}
-                      className="w-full h-12 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
-                    />
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={back}
-                      className="flex-1 h-12 rounded-full border border-white/10 bg-white/[0.03] text-sm font-bold text-white transition hover:bg-white/[0.06]"
-                    >
-                      Back
-                    </button>
+                {step === 1 && (
+                  <div className="space-y-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-white">
+                        Team name *
+                      </label>
+                      <input
+                        placeholder="e.g. Ripon Athletic"
+                        value={team.teamName}
+                        onChange={(e) =>
+                          updateField("teamName", e.target.value)
+                        }
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
+                      />
+                    </div>
 
                     <button
+                      type="button"
                       onClick={next}
-                      className="flex-1 h-12 rounded-full bg-emerald-500 text-sm font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
+                      className="h-12 w-full rounded-full bg-emerald-500 text-sm font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
                     >
                       CONTINUE
                     </button>
                   </div>
-                </div>
-              )}
+                )}
 
-              {step === 3 && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-white">
-                      Captain name *
-                    </label>
-                    <input
-                      placeholder="Your full name"
-                      value={team.captainName}
-                      onChange={(e) => updateField("captainName", e.target.value)}
-                      className="w-full h-12 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
-                    />
+                {step === 2 && (
+                  <div className="space-y-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-white">
+                        League type *
+                      </label>
+                      <select
+                        value={team.leagueType}
+                        onChange={(e) =>
+                          updateField("leagueType", e.target.value)
+                        }
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition focus:border-emerald-400"
+                      >
+                        <option value="">Select league type</option>
+                        {leagueOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-white">
+                        Area / city *
+                      </label>
+                      <input
+                        placeholder="e.g. York"
+                        value={team.city}
+                        onChange={(e) => updateField("city", e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-white">
+                        Approx squad size
+                      </label>
+                      <input
+                        placeholder="e.g. 8"
+                        value={team.squadSize}
+                        onChange={(e) =>
+                          updateField("squadSize", e.target.value)
+                        }
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={back}
+                        className="h-12 flex-1 rounded-full border border-white/10 bg-white/[0.03] text-sm font-bold text-white transition hover:bg-white/[0.06]"
+                      >
+                        Back
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={next}
+                        className="h-12 flex-1 rounded-full bg-emerald-500 text-sm font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
+                      >
+                        CONTINUE
+                      </button>
+                    </div>
                   </div>
+                )}
 
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-white">
-                      Email address *
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={team.email}
-                      onChange={(e) => updateField("email", e.target.value)}
-                      className="w-full h-12 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
-                    />
+                {step === 3 && (
+                  <div className="space-y-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-white">
+                        Captain name *
+                      </label>
+                      <input
+                        placeholder="Your full name"
+                        value={team.captainName}
+                        onChange={(e) =>
+                          updateField("captainName", e.target.value)
+                        }
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-white">
+                        Email address *
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={team.email}
+                        onChange={(e) => updateField("email", e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-white">
+                        Phone number
+                      </label>
+                      <input
+                        type="tel"
+                        placeholder="Best contact number"
+                        value={team.phone}
+                        onChange={(e) => updateField("phone", e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={back}
+                        className="h-12 flex-1 rounded-full border border-white/10 bg-white/[0.03] text-sm font-bold text-white transition hover:bg-white/[0.06]"
+                      >
+                        Back
+                      </button>
+
+                      <button
+                        type="submit"
+                        onClick={validateBeforeSubmit}
+                        className="h-12 flex-1 rounded-full bg-emerald-500 text-sm font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
+                      >
+                        SUBMIT TEAM
+                      </button>
+                    </div>
                   </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-white">
-                      Phone number
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="Best contact number"
-                      value={team.phone}
-                      onChange={(e) => updateField("phone", e.target.value)}
-                      className="w-full h-12 rounded-2xl border border-white/10 bg-black/50 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400"
-                    />
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={back}
-                      className="flex-1 h-12 rounded-full border border-white/10 bg-white/[0.03] text-sm font-bold text-white transition hover:bg-white/[0.06]"
-                    >
-                      Back
-                    </button>
-
-                    <button
-                      onClick={submitTeam}
-                      className="flex-1 h-12 rounded-full bg-emerald-500 text-sm font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
-                    >
-                      SUBMIT TEAM
-                    </button>
-                  </div>
-                </div>
-              )}
+                )}
+              </form>
 
               <p className="mt-6 text-xs leading-5 text-white/45">
                 By registering, you’re telling us you’re interested in joining a
