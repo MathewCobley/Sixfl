@@ -70,8 +70,6 @@ export default function HomePage() {
           {/* LEFT */}
           <div className="lg:col-span-7">
             <div className="mb-4 flex flex-wrap items-center gap-3">
-             
-
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
                 FOUNDING SEASON • NOW FORMING
@@ -99,24 +97,20 @@ export default function HomePage() {
 
             <div className="mt-5 flex flex-wrap gap-2">
               {leagueTypes.map((type) => (
-                <span
-                  key={type}
-                  className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold tracking-[0.14em] text-emerald-300"
-                >
-                  {type}
-                </span>
+                <InfoBadge key={type} text={type} tone="emerald" />
               ))}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
               {trustPoints.map((point) => (
-                <span
-                  key={point}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-white/75"
-                >
-                  {point}
-                </span>
+                <InfoBadge key={point} text={point} tone="neutral" />
               ))}
+            </div>
+
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+              Founding season places limited — early teams can qualify for free
+              SIXFL kit.
             </div>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -149,7 +143,8 @@ export default function HomePage() {
               </div>
 
               <div className="text-[12px] text-white/45">
-                Men’s, women’s and youth leagues planned in selected launch areas.
+                Men’s, women’s and youth leagues planned in selected launch
+                areas.
               </div>
             </div>
 
@@ -344,7 +339,8 @@ export default function HomePage() {
                     Ready to secure your place?
                   </div>
                   <p className="mt-2 text-sm leading-6 text-white/65">
-                    Early team registrations help shape the first SIXFL divisions.
+                    Early team registrations help shape the first SIXFL
+                    divisions.
                   </p>
 
                   <div className="mt-5 grid gap-3">
@@ -371,15 +367,15 @@ export default function HomePage() {
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-                  MEN’S • WOMEN’S • YOUTH
+                  PLAYERS • REFEREES • YOUTH INTEREST
                 </div>
                 <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Ready to join a SIXFL league?
+                  Not a team captain? Start here.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  Whether you are entering a team, looking for a team, helping a
-                  youth side or interested in refereeing, register now and we
-                  will keep you updated as leagues open in your area.
+                  Players, referees, parents and youth organisers can register
+                  interest here and we’ll guide you to the right route as SIXFL
+                  launches in your area.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -397,10 +393,11 @@ export default function HomePage() {
               <div className="lg:col-span-5">
                 <div className="rounded-[24px] border border-white/10 bg-black/35 p-5">
                   <div className="text-sm font-bold text-white">
-                    Choose the option that fits you best.
+                    Choose the route that fits you best.
                   </div>
                   <p className="mt-2 text-sm leading-6 text-white/60">
-                    Men’s, women’s and youth league interest all starts here.
+                    Team captains, players and referees can all register
+                    interest in a few quick steps.
                   </p>
 
                   <div className="mt-5 grid gap-3">
@@ -547,5 +544,26 @@ function BenefitPill({ text }: { text: string }) {
     <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/85">
       ✓ {text}
     </div>
+  );
+}
+
+function InfoBadge({
+  text,
+  tone = "neutral",
+}: {
+  text: string;
+  tone?: "neutral" | "emerald";
+}) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.12em]",
+        tone === "emerald"
+          ? "border-emerald-500/15 bg-emerald-500/[0.07] text-emerald-300/90"
+          : "border-white/8 bg-white/[0.04] text-white/60",
+      ].join(" ")}
+    >
+      {text}
+    </span>
   );
 }
