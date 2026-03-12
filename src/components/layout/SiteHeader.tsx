@@ -76,6 +76,7 @@ export default function SiteHeader() {
           scrolled ? "h-14" : "h-16"
         }`}
       >
+        {/* Logo */}
         <Link href="/" className="flex shrink-0 items-center">
           <Image
             src="/logo2.png"
@@ -90,6 +91,7 @@ export default function SiteHeader() {
           />
         </Link>
 
+        {/* Desktop navigation */}
         <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
           <Link
             href="/contact"
@@ -105,13 +107,14 @@ export default function SiteHeader() {
           {isAdmin && <NavLink href="/admin">Admin</NavLink>}
 
           <Link
-            href="/register"
+            href="/register-interest?type=team"
             className="rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
           >
-            Register
+            Register interest
           </Link>
         </nav>
 
+        {/* Mobile navigation */}
         <div className="flex items-center gap-2 md:hidden">
           <Link
             href="/contact"
@@ -144,10 +147,10 @@ export default function SiteHeader() {
           )}
 
           <Link
-            href="/register"
+            href="/register-interest?type=team"
             className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-extrabold text-black transition hover:bg-emerald-400"
           >
-            Register
+            Register interest
           </Link>
         </div>
       </div>
