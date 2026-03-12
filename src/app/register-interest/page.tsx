@@ -21,6 +21,7 @@ type LeadTypeConfig = {
   submitLabel: string;
   successTitle: string;
   successBody: string;
+  reassuranceText: string;
   showTeamName: boolean;
   showLeagueType: boolean;
   showExperience: boolean;
@@ -40,6 +41,7 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
     successTitle: "Team interest registered",
     successBody:
       "Thanks — your team details have been registered. We’ll be in touch when league spaces open in your area.",
+    reassuranceText: "No payment now • No commitment • Just register interest",
     showTeamName: true,
     showLeagueType: true,
     showExperience: false,
@@ -58,6 +60,7 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
     successTitle: "Player interest registered",
     successBody:
       "Thanks — you’re now on the SIXFL player list. We’ll be in touch when teams need players or spaces open in your area.",
+    reassuranceText: "No payment now • No commitment • Just register interest",
     showTeamName: false,
     showLeagueType: true,
     showExperience: false,
@@ -76,6 +79,7 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
     successTitle: "Referee interest registered",
     successBody:
       "Thanks — your referee interest has been registered. We’ll be in touch as SIXFL launch plans develop in your area.",
+    reassuranceText: "No commitment • Just register your interest",
     showTeamName: false,
     showLeagueType: false,
     showExperience: true,
@@ -228,13 +232,23 @@ export default async function RegisterInterestPage({
           </p>
 
           <p className="mt-3 text-sm font-medium text-white/50">
-            No payment now • No commitment • Just register interest
+            {config.reassuranceText}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <Pill text="Men’s leagues" />
-            <Pill text="Women’s leagues" />
-            <Pill text="Youth leagues" />
+            {leadType === "REFEREE" ? (
+              <>
+                <Pill text="Weekly games" />
+                <Pill text="Flexible availability" />
+                <Pill text="Launch opportunities" />
+              </>
+            ) : (
+              <>
+                <Pill text="Men’s leagues" />
+                <Pill text="Women’s leagues" />
+                <Pill text="Youth leagues" />
+              </>
+            )}
           </div>
 
           {errorMessage ? (

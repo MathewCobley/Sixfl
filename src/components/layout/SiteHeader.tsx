@@ -135,7 +135,7 @@ export default function SiteHeader() {
               href="/register-interest?type=team"
               className="rounded-full bg-emerald-500 px-4 py-2 text-[12px] font-extrabold tracking-wide text-black shadow-lg shadow-emerald-500/20 transition hover:-translate-y-[1px] hover:bg-emerald-400"
             >
-              Register interest
+              Register Interest
             </Link>
           </nav>
 
