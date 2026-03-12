@@ -95,7 +95,6 @@ export default function HomePage() {
               Register early to secure updates and first access when places open.
             </p>
 
-            {/* League types now styled as labels, not buttons */}
             <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
               {leagueTypes.map((type, index) => (
                 <span key={type} className="inline-flex items-center">
@@ -142,7 +141,6 @@ export default function HomePage() {
               </Link>
             </div>
 
-            {/* Friction removal / conversion booster */}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <ReassurancePill text="No payment now" />
               <ReassurancePill text="60-second form" />
@@ -308,40 +306,45 @@ export default function HomePage() {
 
         {/* FOUNDING TEAMS */}
         <section id="founding-teams" className="mt-16">
-          <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+          <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-                  FOUNDING SEASON
+                  FOUNDING TEAM OFFER
                 </div>
                 <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Be part of the first SIXFL leagues.
+                  Early teams may be considered for a free SIXFL kit.
                 </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  We are opening the first SIXFL leagues for men’s, women’s and
-                  youth football. Register early to get priority updates and
-                  first access when places become available.
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/75 sm:text-base">
+                  To mark the launch of SIXFL, a limited number of founding teams
+                  may qualify for a free team kit offer. Register early to be
+                  considered and to get priority launch updates as the first
+                  leagues take shape.
                 </p>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <BenefitPill text="Limited launch offer" />
                   <BenefitPill text="Priority launch updates" />
                   <BenefitPill text="Early league access" />
-                  <BenefitPill text="Men’s, women’s and youth pathways" />
-                  <BenefitPill text="Free team kit for founding teams" />
+                  <BenefitPill text="Founding team status" />
+                </div>
+
+                <div className="mt-6 text-xs font-bold tracking-[0.16em] text-white/55">
+                  SELECTED TEAMS ONLY • SUBJECT TO AVAILABILITY • LAUNCH LEAGUES
                 </div>
               </div>
 
               <div className="lg:col-span-5">
-                <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/[0.08] p-5">
+                <div className="rounded-[24px] border border-white/10 bg-black/35 p-5">
                   <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300">
                     TEAM CAPTAINS
                   </div>
                   <div className="mt-2 text-xl font-black text-white">
-                    Ready to secure your place?
+                    Want to know more about the founding team offer?
                   </div>
                   <p className="mt-2 text-sm leading-6 text-white/65">
-                    Early team registrations help shape the first SIXFL
-                    divisions.
+                    See how the offer works, who it is for, and how to register
+                    your team for early consideration.
                   </p>
 
                   <div className="mt-5 grid gap-3">
@@ -352,8 +355,15 @@ export default function HomePage() {
                       REGISTER YOUR TEAM
                     </Link>
 
+                    <Link
+                      href="/founding-teams"
+                      className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-bold tracking-wide text-white transition hover:bg-white/10"
+                    >
+                      LEARN ABOUT THE OFFER
+                    </Link>
+
                     <div className="rounded-full border border-white/10 bg-white/5 px-4 py-3 text-center text-xs font-bold tracking-[0.14em] text-white/80">
-                      FOUNDING TEAMS MAY QUALIFY FOR A FREE KIT
+                      EARLY TEAMS MAY QUALIFY FOR A FREE KIT
                     </div>
                   </div>
                 </div>
