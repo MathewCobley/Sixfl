@@ -2,84 +2,152 @@
 // File: src/components/layout/SiteFooter.tsx
 // ========================================
 
+import Image from "next/image";
 import Link from "next/link";
-import { FaFacebook, FaInstagram } from "react-icons/fa";
+import { FaFacebookF, FaInstagram } from "react-icons/fa";
 
 export default function SiteFooter() {
   return (
-    <footer className="border-t bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-10 text-sm text-gray-600">
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-            <div>
-              <div className="font-medium text-gray-900">SIXFL</div>
-              <div className="mt-1">6-a-side football. Done properly.</div>
+    <footer className="border-t border-white/10 bg-black text-white">
+
+      {/* Emerald accent line */}
+      <div className="h-[3px] w-full bg-emerald-500"></div>
+
+      <div className="mx-auto max-w-6xl px-4 py-12">
+        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+
+          {/* Brand / CTA */}
+          <div className="max-w-md">
+
+            <Link href="/" className="inline-flex items-center">
+              <Image
+                src="/logo2.png"
+                alt="SIXFL"
+                width={200}
+                height={60}
+                className="h-auto w-auto"
+              />
+            </Link>
+
+            <p className="mt-4 text-sm leading-6 text-white/70">
+              Premium 6-a-side football leagues with proper organisation,
+              fixtures, results, tables and matchnight management.
+            </p>
+
+            {/* Register CTA */}
+            <div className="mt-6">
+              <Link
+                href="/register-team"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold uppercase tracking-wide text-black transition hover:bg-emerald-400 hover:shadow-[0_0_14px_rgba(16,185,129,0.6)]"
+              >
+                Register your team
+              </Link>
             </div>
 
-            <div className="flex flex-wrap items-center gap-6">
-              <Link className="hover:underline" href="/leagues">
-                Leagues
-              </Link>
-
-              <Link className="hover:underline" href="/venues">
-                Venues
-              </Link>
-
-              <Link className="hover:underline" href="/pricing">
-                Pricing
-              </Link>
-
-              <Link className="hover:underline" href="/faq">
-                FAQ
-              </Link>
-
-              {/* FIXED REGISTER LINK */}
-              <Link className="hover:underline font-medium" href="/register-team">
-                Register
-              </Link>
+            {/* Social icons */}
+            <div className="mt-6 flex items-center gap-3">
 
               <a
-                className="flex items-center gap-2 hover:underline"
                 href="https://www.facebook.com/profile.php?id=61588172021259"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="SIXFL Facebook"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:border-emerald-400 hover:text-emerald-400"
               >
-                <FaFacebook className="text-blue-600 text-lg" />
-                Facebook
+                <FaFacebookF />
               </a>
 
               <a
-                className="flex items-center gap-2 hover:underline"
-                href="https://instagram.com/sixfl"
+                href="https://instagram.com/sixfl_official"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="SIXFL Instagram"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:border-emerald-400 hover:text-emerald-400"
               >
-                <FaInstagram className="text-pink-500 text-lg" />
-                Instagram
+                <FaInstagram />
               </a>
+
             </div>
           </div>
 
-          <div className="border-t border-gray-200 pt-5">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+          {/* Navigation */}
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
+              Navigation
+            </div>
+
+            <nav className="mt-4 flex flex-col gap-3 text-sm text-white/80">
+              <Link className="transition hover:text-emerald-400" href="/leagues">
+                Leagues
+              </Link>
+
+              <Link className="transition hover:text-emerald-400" href="/venues">
+                Venues
+              </Link>
+
+              <Link className="transition hover:text-emerald-400" href="/pricing">
+                Pricing
+              </Link>
+
+              <Link className="transition hover:text-emerald-400" href="/faq">
+                FAQ
+              </Link>
+
+              <Link
+                className="font-semibold text-white transition hover:text-emerald-400"
+                href="/register-team"
+              >
+                Register
+              </Link>
+            </nav>
+          </div>
+
+          {/* Legal */}
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
               Legal
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-5 text-sm">
-              <Link className="hover:underline" href="/league-rules">
+            <nav className="mt-4 flex flex-col gap-3 text-sm text-white/80">
+
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/league-rules"
+              >
                 League Rules
               </Link>
 
-              <Link className="hover:underline" href="/league-agreement">
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/league-agreement"
+              >
                 League Agreement
               </Link>
-            </div>
+<Link
+  className="transition hover:text-emerald-400"
+  href="/referee-agreement"
+>
+  Referee Agreement
+</Link>
+<Link
+  className="transition hover:text-emerald-400"
+  href="/match-rules"
+>
+  Match Rules
+</Link>
+            </nav>
           </div>
+
         </div>
 
-        <div className="mt-8 text-xs text-gray-500">
-          © {new Date().getFullYear()} SIXFL. All rights reserved.
+        {/* Bottom bar */}
+        <div className="mt-10 h-[2px] w-full bg-emerald-500/40"></div>
+
+        <div className="mt-5 flex flex-col gap-3 text-xs text-white/50 md:flex-row md:items-center md:justify-between">
+          <div>© {new Date().getFullYear()} SIXFL. All rights reserved.</div>
+          <div>6-a-side football. Done properly.</div>
         </div>
+
       </div>
     </footer>
   );

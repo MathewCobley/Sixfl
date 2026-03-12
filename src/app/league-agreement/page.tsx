@@ -7,16 +7,19 @@ import Link from "next/link";
 export default function LeagueAgreementPage() {
   return (
     <div className="space-y-10">
-
       <section className="rounded-3xl border border-white/10 bg-white/5 px-6 py-10 md:px-10">
         <div className="max-w-3xl">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
-            SIXFL
+            SIXFL AGREEMENT
           </p>
 
           <h1 className="mt-3 text-4xl font-black tracking-tight text-white md:text-5xl">
             League Participation Agreement
           </h1>
+
+          <p className="mt-2 text-sm text-white/50">
+            Version 1.0 — March 2026
+          </p>
 
           <p className="mt-4 text-white/70 md:text-lg">
             This agreement outlines the responsibilities of teams and players
@@ -27,7 +30,6 @@ export default function LeagueAgreementPage() {
       </section>
 
       <div className="space-y-6">
-
         <AgreementSection
           title="1. Team Registration"
           text="Teams register for a SIXFL league through a designated team captain or organiser. The captain confirms they are authorised to enter the team into the league and communicate with SIXFL on behalf of the team."
@@ -72,7 +74,6 @@ export default function LeagueAgreementPage() {
           title="9. Agreement Acceptance"
           text="By registering a team, joining a team or participating in a SIXFL match, players acknowledge and agree to these participation terms."
         />
-
       </div>
 
       <section className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 px-6 py-8">
@@ -85,7 +86,7 @@ export default function LeagueAgreementPage() {
           registration, please contact SIXFL.
         </p>
 
-        <div className="mt-6 flex gap-4">
+        <div className="mt-6 flex flex-wrap gap-4">
           <Link
             href="/contact"
             className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-extrabold text-black transition hover:bg-emerald-400"
@@ -102,6 +103,28 @@ export default function LeagueAgreementPage() {
         </div>
       </section>
 
+      <div className="flex flex-wrap gap-4 text-sm">
+        <Link
+          href="/match-rules"
+          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-white/80 transition hover:border-emerald-400/40 hover:text-white"
+        >
+          View Match Rules
+        </Link>
+
+        <Link
+          href="/league-rules"
+          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-white/80 transition hover:border-emerald-400/40 hover:text-white"
+        >
+          View League Rules
+        </Link>
+
+        <Link
+          href="/referee-agreement"
+          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-white/80 transition hover:border-emerald-400/40 hover:text-white"
+        >
+          View Referee Agreement
+        </Link>
+      </div>
     </div>
   );
 }

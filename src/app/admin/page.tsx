@@ -1,4 +1,4 @@
-// ========================================
+/ ========================================
 // File: src/app/admin/page.tsx
 // ========================================
 
@@ -40,6 +40,17 @@ export default async function AdminHome() {
           <div className="font-medium">Fixtures</div>
           <div className="mt-1 text-sm text-white/70">
             Schedule matches and assign referees.
+          </div>
+        </Link>
+
+        {/* NEW: Leads */}
+        <Link
+          className="rounded-xl border border-white/10 bg-black/20 p-4 hover:bg-black/30"
+          href="/admin/leads"
+        >
+          <div className="font-medium">Leads</div>
+          <div className="mt-1 text-sm text-white/70">
+            View team, player and referee interest.
           </div>
         </Link>
 

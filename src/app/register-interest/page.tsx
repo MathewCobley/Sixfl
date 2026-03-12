@@ -36,7 +36,7 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
     title: "Register your team",
     intro:
       "Register interest for a men’s, women’s or youth team and be first to hear when SIXFL opens in your area.",
-    submitLabel: "REGISTER YOUR TEAM",
+    submitLabel: "REGISTER TEAM INTEREST",
     successTitle: "Team interest registered",
     successBody:
       "Thanks — your team details have been registered. We’ll be in touch when league spaces open in your area.",
