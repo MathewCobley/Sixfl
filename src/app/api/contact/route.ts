@@ -17,6 +17,7 @@ type ContactPayload = {
   phone?: string;
   enquiryType?: string;
   message?: string;
+  website?: string;
 };
 
 function isValidEmail(email: string) {
@@ -46,6 +47,14 @@ export async function POST(req: Request) {
     const phone = body.phone?.trim() || "";
     const enquiryType = body.enquiryType?.trim() || "General enquiry";
     const message = body.message?.trim() || "";
+    const website = body.website?.trim() || "";
+
+    // Honeypot spam trap
+    if (website) {
+      return NextResponse.json({
+        message: "Thanks — your message has been sent. We’ll be in touch soon.",
+      });
+    }
 
     if (!name || !email || !message) {
       return NextResponse.json(
@@ -61,7 +70,12 @@ export async function POST(req: Request) {
       );
     }
 
-    if (name.length > 120 || email.length > 200 || phone.length > 50 || enquiryType.length > 100) {
+    if (
+      name.length > 120 ||
+      email.length > 200 ||
+      phone.length > 50 ||
+      enquiryType.length > 100
+    ) {
       return NextResponse.json(
         { error: "One or more fields are too long." },
         { status: 400 }
