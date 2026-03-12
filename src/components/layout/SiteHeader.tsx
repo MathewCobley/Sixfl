@@ -91,12 +91,12 @@ export default function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
-          <a
-            href="mailto:hello@sixfl.co.uk"
+          <Link
+            href="/contact"
             className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-white/10"
           >
             Contact
-          </a>
+          </Link>
 
           <NavLink href="/faq">FAQ</NavLink>
 
@@ -113,12 +113,12 @@ export default function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2 md:hidden">
-          <a
-            href="mailto:hello@sixfl.co.uk"
+          <Link
+            href="/contact"
             className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/10"
           >
             Contact
-          </a>
+          </Link>
 
           <Link
             href="/faq"
