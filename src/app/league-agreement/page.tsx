@@ -86,12 +86,12 @@ export default function LeagueAgreementPage() {
         </p>
 
         <div className="mt-6 flex gap-4">
-          <a
-            href="mailto:hello@sixfl.co.uk"
+          <Link
+            href="/contact"
             className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-extrabold text-black transition hover:bg-emerald-400"
           >
             Contact SIXFL
-          </a>
+          </Link>
 
           <Link
             href="/league-rules"

@@ -3,7 +3,7 @@
 // ========================================
 
 import Link from "next/link";
-import { FaFacebook } from "react-icons/fa";
+import { FaFacebook, FaInstagram } from "react-icons/fa";
 
 export default function SiteFooter() {
   return (
@@ -20,16 +20,21 @@ export default function SiteFooter() {
               <Link className="hover:underline" href="/leagues">
                 Leagues
               </Link>
+
               <Link className="hover:underline" href="/venues">
                 Venues
               </Link>
+
               <Link className="hover:underline" href="/pricing">
                 Pricing
               </Link>
+
               <Link className="hover:underline" href="/faq">
                 FAQ
               </Link>
-              <Link className="hover:underline" href="/register">
+
+              {/* FIXED REGISTER LINK */}
+              <Link className="hover:underline font-medium" href="/register-team">
                 Register
               </Link>
 
@@ -41,6 +46,16 @@ export default function SiteFooter() {
               >
                 <FaFacebook className="text-blue-600 text-lg" />
                 Facebook
+              </a>
+
+              <a
+                className="flex items-center gap-2 hover:underline"
+                href="https://instagram.com/sixfl"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <FaInstagram className="text-pink-500 text-lg" />
+                Instagram
               </a>
             </div>
           </div>
@@ -54,6 +69,7 @@ export default function SiteFooter() {
               <Link className="hover:underline" href="/league-rules">
                 League Rules
               </Link>
+
               <Link className="hover:underline" href="/league-agreement">
                 League Agreement
               </Link>
