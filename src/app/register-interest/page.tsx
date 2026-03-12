@@ -227,6 +227,10 @@ export default async function RegisterInterestPage({
             {config.intro}
           </p>
 
+          <p className="mt-3 text-sm font-medium text-white/50">
+            No payment now • No commitment • Just register interest
+          </p>
+
           <div className="mt-4 flex flex-wrap gap-2">
             <Pill text="Men’s leagues" />
             <Pill text="Women’s leagues" />

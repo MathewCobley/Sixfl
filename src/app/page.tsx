@@ -114,9 +114,10 @@ export default function HomePage() {
             </div>
 
             <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
-  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
-  Founding season places limited — early teams may qualify for free SIXFL kit.
-</div>
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+              Founding season places limited — early teams may qualify for free
+              SIXFL kit.
+            </div>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
@@ -141,18 +142,23 @@ export default function HomePage() {
               </Link>
             </div>
 
+            {/* Friction removal / conversion booster */}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <ReassurancePill text="No payment now" />
+              <ReassurancePill text="60-second form" />
+              <ReassurancePill text="Early teams may qualify for free kit" />
+            </div>
+
             <div className="mt-5 flex flex-wrap items-center gap-3">
-  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
-    <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
-    Launch interest building across North Yorkshire
-  </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+                Launch interest building across North Yorkshire
+              </div>
 
-  <div className="text-[12px] text-white/45">
-    York • Leeds • Harrogate • Ripon
-  </div>
-</div>
-
-            
+              <div className="text-[12px] text-white/45">
+                York • Leeds • Harrogate • Ripon
+              </div>
+            </div>
 
             <div className="mt-4 text-xs font-bold tracking-[0.18em] text-emerald-500">
               LIMITED TO 12 TEAMS PER LEAGUE • MEN’S, WOMEN’S & YOUTH LEAGUES
@@ -558,6 +564,14 @@ function InfoBadge({
           : "border-white/8 bg-white/[0.04] text-white/60",
       ].join(" ")}
     >
+      {text}
+    </span>
+  );
+}
+
+function ReassurancePill({ text }: { text: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-white/65">
       {text}
     </span>
   );
