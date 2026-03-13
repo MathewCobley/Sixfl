@@ -3,7 +3,7 @@
 // ========================================
 
 import Image from "next/image";
-import Link from "next/link";
+import TrackedLink from "@/components/analytics/TrackedLink";
 
 export default function LeaguesPage() {
   const leagues = [
@@ -163,12 +163,20 @@ export default function LeaguesPage() {
                     </p>
                   </div>
 
-                  <Link
+                  <TrackedLink
                     href={league.href}
+                    eventName="register_team_click"
+                    eventProps={{
+                      leagueName: league.name,
+                      location: league.location,
+                      night: league.night,
+                      leagueType: league.type,
+                      venue: league.venue,
+                    }}
                     className={`mt-auto inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-extrabold uppercase tracking-wide text-black transition ${league.button}`}
                   >
                     Register your team
-                  </Link>
+                  </TrackedLink>
                 </div>
               </div>
             );

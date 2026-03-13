@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { HiOutlineMenu, HiOutlineX } from "react-icons/hi";
+import { track } from "@vercel/analytics";
 
 const SUPER_ADMINS = [
   "hello@sixfl.co.uk",
@@ -94,7 +95,6 @@ export default function SiteHeader() {
             : "border-white/5 bg-black/75 backdrop-blur-xl"
         }`}
       >
-        {/* Emerald accent line */}
         <div className="h-[2px] w-full bg-emerald-500" />
 
         <div
@@ -102,8 +102,17 @@ export default function SiteHeader() {
             scrolled ? "h-14" : "h-16"
           }`}
         >
-          {/* Logo */}
-          <Link href="/" className="flex min-w-0 shrink-0 items-center">
+          <Link
+            href="/"
+            className="flex min-w-0 shrink-0 items-center"
+            onClick={() =>
+              track("header_nav_click", {
+                location: "header",
+                target: "/",
+                label: "logo",
+              })
+            }
+          >
             <Image
               src="/logo2.png"
               alt="SIXFL"
@@ -117,32 +126,89 @@ export default function SiteHeader() {
             />
           </Link>
 
-          {/* Desktop navigation */}
           <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
             <Link
               href="/contact"
+              onClick={() =>
+                track("header_nav_click", {
+                  location: "desktop_header",
+                  target: "/contact",
+                  label: "Contact",
+                })
+              }
               className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-white/10"
             >
               Contact
             </Link>
 
-            <NavLink href="/faq">FAQ</NavLink>
-            <NavLink href="/login">Login</NavLink>
+            <NavLink
+              href="/faq"
+              onClick={() =>
+                track("header_nav_click", {
+                  location: "desktop_header",
+                  target: "/faq",
+                  label: "FAQ",
+                })
+              }
+            >
+              FAQ
+            </NavLink>
 
-            {isAdmin && <NavLink href="/admin">Admin</NavLink>}
+            <NavLink
+              href="/login"
+              onClick={() =>
+                track("header_nav_click", {
+                  location: "desktop_header",
+                  target: "/login",
+                  label: "Login",
+                })
+              }
+            >
+              Login
+            </NavLink>
+
+            {isAdmin && (
+              <NavLink
+                href="/admin"
+                onClick={() =>
+                  track("header_nav_click", {
+                    location: "desktop_header",
+                    target: "/admin",
+                    label: "Admin",
+                  })
+                }
+              >
+                Admin
+              </NavLink>
+            )}
 
             <Link
               href="/register-interest?type=team"
+              onClick={() =>
+                track("header_cta_click", {
+                  location: "desktop_header",
+                  target: "/register-interest?type=team",
+                  label: "Register Interest",
+                  type: "team",
+                })
+              }
               className="rounded-full bg-emerald-500 px-4 py-2 text-[12px] font-extrabold tracking-wide text-black shadow-lg shadow-emerald-500/20 transition hover:-translate-y-[1px] hover:bg-emerald-400"
             >
               Register Interest
             </Link>
           </nav>
 
-          {/* Mobile actions */}
           <div className="flex items-center gap-2 md:hidden">
             <Link
               href="/register-interest?type=team"
+              onClick={() =>
+                track("header_cta_click", {
+                  location: "mobile_header",
+                  target: "/register-interest?type=team",
+                  label: "Register interest",
+                  type: "team",
+                })
+              }
               className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-3 text-[11px] font-extrabold whitespace-nowrap text-black transition hover:bg-emerald-400"
             >
               Register interest
@@ -152,7 +218,13 @@ export default function SiteHeader() {
               type="button"
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
-              onClick={() => setMobileMenuOpen((open) => !open)}
+              onClick={() => {
+                track("mobile_menu_toggle", {
+                  action: mobileMenuOpen ? "close" : "open",
+                  location: "header",
+                });
+                setMobileMenuOpen((open) => !open);
+              }}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
             >
               {mobileMenuOpen ? (
@@ -165,15 +237,19 @@ export default function SiteHeader() {
         </div>
       </header>
 
-      {/* Mobile menu overlay */}
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm md:hidden"
-          onClick={() => setMobileMenuOpen(false)}
+          onClick={() => {
+            track("mobile_menu_toggle", {
+              action: "close_overlay",
+              location: "header",
+            });
+            setMobileMenuOpen(false);
+          }}
         />
       )}
 
-      {/* Mobile menu panel */}
       <div
         className={`fixed right-0 top-0 z-50 h-full w-[88vw] max-w-sm border-l border-white/10 bg-black text-white shadow-2xl transition-transform duration-300 md:hidden ${
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
@@ -189,7 +265,13 @@ export default function SiteHeader() {
           <button
             type="button"
             aria-label="Close menu"
-            onClick={() => setMobileMenuOpen(false)}
+            onClick={() => {
+              track("mobile_menu_toggle", {
+                action: "close_button",
+                location: "header",
+              });
+              setMobileMenuOpen(false);
+            }}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
           >
             <HiOutlineX className="h-5 w-5" />
@@ -200,7 +282,14 @@ export default function SiteHeader() {
           <div className="space-y-2">
             <Link
               href="/login"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={() => {
+                track("header_nav_click", {
+                  location: "mobile_menu",
+                  target: "/login",
+                  label: "Login",
+                });
+                setMobileMenuOpen(false);
+              }}
               className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
             >
               <span>Login</span>
@@ -209,7 +298,14 @@ export default function SiteHeader() {
 
             <Link
               href="/contact"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={() => {
+                track("header_nav_click", {
+                  location: "mobile_menu",
+                  target: "/contact",
+                  label: "Contact",
+                });
+                setMobileMenuOpen(false);
+              }}
               className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
             >
               <span>Contact</span>
@@ -218,7 +314,14 @@ export default function SiteHeader() {
 
             <Link
               href="/faq"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={() => {
+                track("header_nav_click", {
+                  location: "mobile_menu",
+                  target: "/faq",
+                  label: "FAQ",
+                });
+                setMobileMenuOpen(false);
+              }}
               className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
             >
               <span>FAQ</span>
@@ -228,7 +331,14 @@ export default function SiteHeader() {
             {isAdmin && (
               <Link
                 href="/admin"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={() => {
+                  track("header_nav_click", {
+                    location: "mobile_menu",
+                    target: "/admin",
+                    label: "Admin",
+                  });
+                  setMobileMenuOpen(false);
+                }}
                 className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
               >
                 <span>Admin</span>
@@ -249,7 +359,15 @@ export default function SiteHeader() {
 
             <Link
               href="/register-interest?type=team"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={() => {
+                track("header_cta_click", {
+                  location: "mobile_menu",
+                  target: "/register-interest?type=team",
+                  label: "Register interest",
+                  type: "team",
+                });
+                setMobileMenuOpen(false);
+              }}
               className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-4 text-sm font-extrabold uppercase tracking-wide text-black transition hover:bg-emerald-400"
             >
               Register interest

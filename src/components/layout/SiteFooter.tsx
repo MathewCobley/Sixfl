@@ -2,23 +2,24 @@
 // File: src/components/layout/SiteFooter.tsx
 // ========================================
 
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { FaFacebookF, FaInstagram } from "react-icons/fa";
+import { track } from "@vercel/analytics";
 
 export default function SiteFooter() {
   return (
     <footer className="border-t border-white/10 bg-black text-white">
-
       {/* Emerald accent line */}
       <div className="h-[3px] w-full bg-emerald-500"></div>
 
       <div className="mx-auto max-w-6xl px-4 py-12">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
-
+        {/* Now 4 columns instead of 3 */}
+        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           {/* Brand / CTA */}
           <div className="max-w-md">
-
             <Link href="/" className="inline-flex items-center">
               <Image
                 src="/logo2.png"
@@ -34,10 +35,16 @@ export default function SiteFooter() {
               fixtures, results, tables and matchnight management.
             </p>
 
-            {/* Register CTA */}
             <div className="mt-6">
               <Link
                 href="/register-team"
+                onClick={() =>
+                  track("footer_cta_click", {
+                    location: "footer",
+                    target: "/register-team",
+                    label: "Register your team",
+                  })
+                }
                 className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold uppercase tracking-wide text-black transition hover:bg-emerald-400 hover:shadow-[0_0_14px_rgba(16,185,129,0.6)]"
               >
                 Register your team
@@ -46,12 +53,17 @@ export default function SiteFooter() {
 
             {/* Social icons */}
             <div className="mt-6 flex items-center gap-3">
-
               <a
                 href="https://www.facebook.com/profile.php?id=61588172021259"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="SIXFL Facebook"
+                onClick={() =>
+                  track("social_click", {
+                    platform: "facebook",
+                    location: "footer",
+                  })
+                }
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:border-emerald-400 hover:text-emerald-400"
               >
                 <FaFacebookF />
@@ -62,11 +74,16 @@ export default function SiteFooter() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="SIXFL Instagram"
+                onClick={() =>
+                  track("social_click", {
+                    platform: "instagram",
+                    location: "footer",
+                  })
+                }
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:border-emerald-400 hover:text-emerald-400"
               >
                 <FaInstagram />
               </a>
-
             </div>
           </div>
 
@@ -109,45 +126,60 @@ export default function SiteFooter() {
             </div>
 
             <nav className="mt-4 flex flex-col gap-3 text-sm text-white/80">
-
-              <Link
-                className="transition hover:text-emerald-400"
-                href="/league-rules"
-              >
+              <Link className="transition hover:text-emerald-400" href="/league-rules">
                 League Rules
               </Link>
 
-              <Link
-                className="transition hover:text-emerald-400"
-                href="/league-agreement"
-              >
+              <Link className="transition hover:text-emerald-400" href="/league-agreement">
                 League Agreement
               </Link>
 
-              <Link
-                className="transition hover:text-emerald-400"
-                href="/referee-agreement"
-              >
+              <Link className="transition hover:text-emerald-400" href="/referee-agreement">
                 Referee Agreement
               </Link>
 
-              <Link
-                className="transition hover:text-emerald-400"
-                href="/match-rules"
-              >
+              <Link className="transition hover:text-emerald-400" href="/match-rules">
                 Match Rules
               </Link>
-
-              <Link
-                className="transition hover:text-emerald-400"
-                href="/safeguarding"
-              >
-                Safeguarding
-              </Link>
-
             </nav>
           </div>
 
+          {/* Safeguarding */}
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
+              Safeguarding
+            </div>
+
+            <nav className="mt-4 flex flex-col gap-3 text-sm text-white/80">
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/safeguarding/safeguarding-policy"
+              >
+                Safeguarding Policy
+              </Link>
+
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/safeguarding/code-of-conduct"
+              >
+                Code of Conduct
+              </Link>
+
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/safeguarding/anti-bullying"
+              >
+                Anti-Bullying Policy
+              </Link>
+
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/safeguarding/reporting-concerns"
+              >
+                Reporting Concerns
+              </Link>
+            </nav>
+          </div>
         </div>
 
         {/* Bottom bar */}
@@ -157,7 +189,6 @@ export default function SiteFooter() {
           <div>© {new Date().getFullYear()} SIXFL. All rights reserved.</div>
           <div>6-a-side football. Done properly.</div>
         </div>
-
       </div>
     </footer>
   );
