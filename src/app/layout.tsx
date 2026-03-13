@@ -7,7 +7,7 @@ import SiteHeader from "../components/layout/SiteHeader";
 import SiteFooter from "../components/layout/SiteFooter";
 import Providers from "./providers";
 
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata = {
@@ -28,18 +28,13 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <Providers>
           <SiteHeader />
-
           <main className="mx-auto max-w-6xl px-4 pt-6 pb-8">
             {children}
           </main>
-
           <SiteFooter />
         </Providers>
 
-        {/* Vercel Analytics */}
         <Analytics />
-
-        {/* Vercel Speed Insights */}
         <SpeedInsights />
       </body>
     </html>
