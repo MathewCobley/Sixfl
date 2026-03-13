@@ -123,18 +123,28 @@ export default function SiteFooter() {
               >
                 League Agreement
               </Link>
-<Link
-  className="transition hover:text-emerald-400"
-  href="/referee-agreement"
->
-  Referee Agreement
-</Link>
-<Link
-  className="transition hover:text-emerald-400"
-  href="/match-rules"
->
-  Match Rules
-</Link>
+
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/referee-agreement"
+              >
+                Referee Agreement
+              </Link>
+
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/match-rules"
+              >
+                Match Rules
+              </Link>
+
+              <Link
+                className="transition hover:text-emerald-400"
+                href="/safeguarding"
+              >
+                Safeguarding
+              </Link>
+
             </nav>
           </div>
 
