@@ -8,6 +8,13 @@ const launchAreas = ["York", "Leeds", "Harrogate", "Ripon"];
 
 const leagueTypes = ["MEN’S LEAGUES", "WOMEN’S LEAGUES", "YOUTH LEAGUES"];
 
+const trustPoints = [
+  "Refereed matches",
+  "Reliable fixtures",
+  "Live tables & results",
+  "Quality venues",
+];
+
 const whySixflPoints = [
   {
     title: "Proper weekly structure",
@@ -62,6 +69,13 @@ export default function HomePage() {
         <section className="grid gap-10 pt-6 lg:grid-cols-12 lg:items-start">
           {/* LEFT */}
           <div className="lg:col-span-7">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
+                FOUNDING SEASON • NOW FORMING
+              </div>
+            </div>
+
             <h1 className="text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl">
               6-A-SIDE.
               <br />
@@ -92,70 +106,110 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* HERO CTA */}
-            <div className="mt-7 flex flex-wrap items-center gap-3">
+            <div className="mt-6 flex flex-wrap gap-2">
+              {trustPoints.map((point) => (
+                <InfoBadge key={point} text={point} tone="neutral" />
+              ))}
+            </div>
+
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+              Founding season places limited — early teams may qualify for free
+              SIXFL kit.
+            </div>
+
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
                 href="/register-interest?type=team"
-                className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-500 px-5 text-[13px] font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
               >
                 REGISTER YOUR TEAM
               </Link>
 
               <Link
                 href="/register-interest?type=player"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-[13px] font-extrabold tracking-wide text-white transition hover:bg-white/10"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
                 JOIN AS A PLAYER
               </Link>
+
+              <Link
+                href="/register-interest?type=referee"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
+              >
+                REFEREE FOR SIXFL
+              </Link>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <ReassurancePill text="No payment now" />
+              <ReassurancePill text="60-second form" />
+              <ReassurancePill text="Early teams may qualify for free kit" />
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+                Launch interest building across North Yorkshire
+              </div>
+
+              <div className="text-[12px] text-white/45">
+                York • Leeds • Harrogate • Ripon
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs font-bold tracking-[0.18em] text-emerald-500">
+              LIMITED TO 12 TEAMS PER LEAGUE • MEN’S, WOMEN’S & YOUTH LEAGUES
             </div>
           </div>
 
           {/* RIGHT FUNNEL PANEL */}
           <div className="lg:col-span-5">
-            <div className="lg:sticky lg:top-24">
-              <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                <div className="flex items-center justify-between">
-                  <div className="text-[11px] font-bold tracking-[0.24em] text-white/65">
-                    JOIN SIXFL
-                  </div>
-
-                  <div className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] font-bold tracking-[0.18em] text-white/45">
-                    EARLY ACCESS
-                  </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] font-bold tracking-[0.24em] text-white/65">
+                  JOIN SIXFL
                 </div>
 
-                <h2 className="mt-5 text-2xl font-black tracking-tight text-white">
-                  Choose your route in.
-                </h2>
-
-                <p className="mt-2 text-sm leading-7 text-white/60">
-                  Team captains, players, parents, coaches and referees can all
-                  register interest for the first SIXFL launch.
-                </p>
-
-                <div className="mt-6 grid gap-3">
-                  <FunnelCard
-                    title="I have a team"
-                    desc="Register a men’s, women’s or youth team for early launch access."
-                    href="/register-interest?type=team"
-                    cta="Register your team"
-                    featured
-                  />
-
-                  <FunnelCard
-                    title="I need a team"
-                    desc="Join the player list and hear when squads or leagues need players."
-                    href="/register-interest?type=player"
-                    cta="Join as player"
-                  />
-
-                  <FunnelCard
-                    title="I can referee"
-                    desc="Register interest to referee in SIXFL leagues from launch."
-                    href="/register-interest?type=referee"
-                    cta="Referee interest"
-                  />
+                <div className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] font-bold tracking-[0.18em] text-white/45">
+                  EARLY ACCESS
                 </div>
+              </div>
+
+              <h2 className="mt-5 text-2xl font-black tracking-tight text-white">
+                Choose your route in.
+              </h2>
+
+              <p className="mt-2 text-sm leading-7 text-white/60">
+                Team captains, players, parents, coaches and referees can all
+                register interest for the first SIXFL launch.
+              </p>
+
+              <div className="mt-6 grid gap-3">
+                <FunnelCard
+                  title="I have a team"
+                  desc="Register a men’s, women’s or youth team for early launch access."
+                  href="/register-interest?type=team"
+                  cta="Register your team"
+                  featured
+                />
+                <FunnelCard
+                  title="I need a team"
+                  desc="Join the player list and hear when squads or leagues need players."
+                  href="/register-interest?type=player"
+                  cta="Join as player"
+                />
+                <FunnelCard
+                  title="I can referee"
+                  desc="Register interest to referee in SIXFL leagues from launch."
+                  href="/register-interest?type=referee"
+                  cta="Referee interest"
+                />
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <MiniPanel label="LEAGUE TYPES" items={leagueTypes} />
+                <MiniPanel label="LAUNCH AREAS" items={launchAreas} />
               </div>
             </div>
           </div>
@@ -208,9 +262,9 @@ export default function HomePage() {
                 Getting started with SIXFL is simple.
               </h2>
               <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
-                Whether you already have a team, need a team, or want to
-                referee, the process is straightforward. Register your interest,
-                tell us your area, and we will guide you through the next steps.
+                Whether you already have a team, need a team, or want to referee,
+                the process is straightforward. Register your interest, tell us
+                your area, and we will guide you through the next steps.
               </p>
             </div>
 
@@ -262,9 +316,9 @@ export default function HomePage() {
                   Early teams may be considered for a free SIXFL kit.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/75 sm:text-base">
-                  To mark the launch of SIXFL, a limited number of founding
-                  teams may qualify for a free team kit offer. Register early to
-                  be considered and to get priority launch updates as the first
+                  To mark the launch of SIXFL, a limited number of founding teams
+                  may qualify for a free team kit offer. Register early to be
+                  considered and to get priority launch updates as the first
                   leagues take shape.
                 </p>
 
@@ -420,6 +474,26 @@ function FunnelCard({
   );
 }
 
+function MiniPanel({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+      <div className="text-[10px] font-bold tracking-[0.2em] text-white/60">
+        {label}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((x) => (
+          <span
+            key={x}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-white/80"
+          >
+            {x}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StripItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/35 px-4 py-5">
@@ -481,5 +555,34 @@ function BenefitPill({ text }: { text: string }) {
     <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/85">
       ✓ {text}
     </div>
+  );
+}
+
+function InfoBadge({
+  text,
+  tone = "neutral",
+}: {
+  text: string;
+  tone?: "neutral" | "emerald";
+}) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.12em]",
+        tone === "emerald"
+          ? "border-emerald-500/15 bg-emerald-500/[0.07] text-emerald-300/90"
+          : "border-white/8 bg-white/[0.04] text-white/60",
+      ].join(" ")}
+    >
+      {text}
+    </span>
+  );
+}
+
+function ReassurancePill({ text }: { text: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-white/65">
+      {text}
+    </span>
   );
 }

@@ -14,10 +14,20 @@ export const authOptions: NextAuthOptions = {
   providers: [
     EmailProvider({
       async sendVerificationRequest({ identifier, url, provider }) {
+        const email = identifier.toLowerCase().trim();
+
+        const existingUser = await prisma.user.findUnique({
+          where: { email },
+        });
+
+        if (!existingUser) {
+          return;
+        }
+
         const resend = new Resend(process.env.RESEND_API_KEY);
 
         const from = provider.from ?? process.env.EMAIL_FROM!;
-        const to = identifier;
+        const to = email;
         const subject = "Your SIXFL sign-in link";
 
         const html = `
@@ -44,6 +54,39 @@ export const authOptions: NextAuthOptions = {
 
   session: { strategy: "database" },
   secret: process.env.NEXTAUTH_SECRET,
-  pages: { signIn: "/login" },
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
   debug: process.env.NEXTAUTH_DEBUG === "true",
+
+  callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === "email") {
+        const email = user.email?.toLowerCase().trim();
+
+        if (!email) {
+          return false;
+        }
+
+        const existingUser = await prisma.user.findUnique({
+          where: { email },
+        });
+
+        if (!existingUser) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+
+    async session({ session, user }) {
+      if (session.user) {
+        (session.user as typeof session.user & { id: string }).id = user.id;
+      }
+
+      return session;
+    },
+  },
 };

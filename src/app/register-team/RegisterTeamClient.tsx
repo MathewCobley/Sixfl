@@ -18,7 +18,7 @@ type TeamForm = {
   squadSize: string;
 };
 
-const launchAreas = ["York", "Leeds", "Harrogate", "Ripon", "Other"];
+const launchAreas = ["York", "Leeds", "Harrogate", "Ripon", ];
 
 const leagueOptions = [
   { value: "MENS", label: "Men’s" },

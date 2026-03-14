@@ -1,29 +1,81 @@
+// ========================================
+// File: src/app/login/page.tsx
+// ========================================
+
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     setLoading(true);
+    setMessage(null);
+    setNotice(null);
+
+    const res = await fetch("/api/auth/check-email", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    const data = await res.json();
+
+    if (!data.exists) {
+      setLoading(false);
+      setNotice("This email isn’t currently registered with SIXFL.");
+      return;
+    }
 
     await signIn("email", {
       email,
       callbackUrl: "/dashboard",
     });
+
+    setLoading(false);
+    setMessage("Check your email for your SIXFL sign-in link.");
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl">
         <h1 className="text-xl font-semibold">Login</h1>
+
         <p className="mt-1 text-sm text-white/70">
-          Enter your email to receive a login link.
+          Enter your email to receive a SIXFL login link.
         </p>
+
+        {message && (
+          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            {message}
+          </div>
+        )}
+
+        {notice && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            <p>{notice}</p>
+            <p className="mt-2 text-amber-100/90">
+              If you’d like to play, enter a team or referee, please{" "}
+              <Link
+                href="/register-interest"
+                className="font-semibold text-emerald-300 underline underline-offset-4 transition hover:text-emerald-200"
+              >
+                register your interest here
+              </Link>
+              .
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-3">
           <input
@@ -32,17 +84,21 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="captain@email.com"
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none focus:border-emerald-400"
+            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-emerald-400"
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-black hover:bg-emerald-400 disabled:opacity-60"
+            className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60"
           >
-            {loading ? "Sending..." : "Send magic link"}
+            {loading ? "Checking..." : "Send magic link"}
           </button>
         </form>
+
+        <p className="mt-4 text-xs text-white/50">
+          Only registered SIXFL players, captains, referees and admins can log in.
+        </p>
       </div>
     </div>
   );
