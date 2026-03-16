@@ -1,0 +1,40 @@
+# Diff Summary
+
+Date : 2026-03-16 00:17:25
+
+Directory d:\\Dev\\SIXFL\\src
+
+Total : 18 files,  1039 codes, 36 comments, 168 blanks, all 1243 lines
+
+[Summary](results.md) / [Details](details.md) / Diff Summary / [Diff Details](diff-details.md)
+
+## Languages
+| language | files | code | comment | blank | total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| TypeScript JSX | 13 | 773 | 27 | 103 | 903 |
+| TypeScript | 5 | 266 | 9 | 65 | 340 |
+
+## Directories
+| path | files | code | comment | blank | total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| . | 18 | 1,039 | 36 | 168 | 1,243 |
+| . (Files) | 1 | 33 | 0 | 10 | 43 |
+| app | 9 | 554 | 19 | 110 | 683 |
+| app (Files) | 2 | -87 | 3 | -8 | -92 |
+| app\\admin | 4 | 576 | 10 | 103 | 689 |
+| app\\admin\\leads | 4 | 576 | 10 | 103 | 689 |
+| app\\admin\\leads (Files) | 2 | 294 | 0 | 38 | 332 |
+| app\\admin\\leads\\[id] | 2 | 282 | 10 | 65 | 357 |
+| app\\api | 1 | 14 | 3 | 5 | 22 |
+| app\\api\\auth | 1 | 14 | 3 | 5 | 22 |
+| app\\api\\auth\\check-email | 1 | 14 | 3 | 5 | 22 |
+| app\\leagues | 1 | 8 | 0 | 0 | 8 |
+| app\\login | 1 | 43 | 3 | 10 | 56 |
+| components | 7 | 441 | 14 | 45 | 500 |
+| components\\admin | 3 | 252 | 14 | 48 | 314 |
+| components\\admin\\leads | 3 | 252 | 14 | 48 | 314 |
+| components\\analytics | 2 | 45 | 6 | 7 | 58 |
+| components\\layout | 2 | 144 | -6 | -10 | 128 |
+| lib | 1 | 11 | 3 | 3 | 17 |
+
+[Summary](results.md) / [Details](details.md) / Diff Summary / [Diff Details](diff-details.md)

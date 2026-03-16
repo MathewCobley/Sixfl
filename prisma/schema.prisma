@@ -205,9 +205,9 @@ model MatchResult {
 }
 
 model InterestLead {
-  id               String          @id @default(cuid())
+  id               String              @id @default(cuid())
   interestType     InterestType
-  status           LeadStatus      @default(NEW)
+  status           LeadStatus          @default(NEW)
 
   contactName      String
   email            String
@@ -220,14 +220,16 @@ model InterestLead {
   message          String?
 
   source           String?
-  wantsFreeKit     Boolean         @default(false)
-  marketingConsent Boolean         @default(false)
+  wantsFreeKit     Boolean             @default(false)
+  marketingConsent Boolean             @default(false)
 
   contactedAt      DateTime?
   closedAt         DateTime?
 
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  emails           InterestLeadEmail[]
 
   @@index([interestType])
   @@index([status])
@@ -235,6 +237,20 @@ model InterestLead {
   @@index([leagueType])
   @@index([preferredNight])
   @@index([createdAt])
+}
+
+model InterestLeadEmail {
+  id             String       @id @default(cuid())
+  interestLeadId String
+  subject        String
+  body           String
+  sentTo         String
+  sentAt         DateTime     @default(now())
+
+  interestLead   InterestLead @relation(fields: [interestLeadId], references: [id], onDelete: Cascade)
+
+  @@index([interestLeadId])
+  @@index([sentAt])
 }
 
 enum InterestType {

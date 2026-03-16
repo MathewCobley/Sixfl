@@ -12,6 +12,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import AdminCard from "@/components/admin/AdminCard";
+import BulkLeadEmailForm from "@/components/admin/leads/BulkLeadEmailForm";
 import { updateLeadStatus } from "./actions";
 
 type SearchParams = Promise<{
@@ -170,6 +171,28 @@ function StatCard({
   );
 }
 
+function SummaryCard({
+  title,
+  value,
+  subtext,
+}: {
+  title: string;
+  value: string;
+  subtext: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
+        {title}
+      </div>
+      <div className="mt-2 text-xl font-black tracking-tight text-white">
+        {value}
+      </div>
+      <div className="mt-1 text-sm text-white/55">{subtext}</div>
+    </div>
+  );
+}
+
 function Detail({
   label,
   value,
@@ -178,11 +201,11 @@ function Detail({
   value: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 min-h-[80px]">
+    <div className="min-h-[80px] rounded-xl border border-white/10 bg-white/[0.03] p-3">
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
         {label}
       </div>
-      <div className="mt-1 text-sm leading-relaxed text-white/85 break-words">
+      <div className="mt-1 break-words text-sm leading-relaxed text-white/85">
         {value || "—"}
       </div>
     </div>
@@ -222,6 +245,14 @@ function StatusButton({
     </form>
   );
 }
+
+type AreaSummary = {
+  area: string;
+  total: number;
+  teams: number;
+  players: number;
+  referees: number;
+};
 
 export default async function AdminLeadsPage({
   searchParams,
@@ -269,6 +300,7 @@ export default async function AdminLeadsPage({
     allAreas,
     newCount,
     contactedCount,
+    allLeadsForSummary,
   ] = await Promise.all([
     prisma.interestLead.findMany({
       where,
@@ -285,11 +317,76 @@ export default async function AdminLeadsPage({
     }),
     prisma.interestLead.count({ where: { status: "NEW" } }),
     prisma.interestLead.count({ where: { status: "CONTACTED" } }),
+    prisma.interestLead.findMany({
+      select: {
+        area: true,
+        interestType: true,
+        preferredNight: true,
+        leagueType: true,
+      },
+    }),
   ]);
 
   const areas = allAreas
     .map((x) => x.area)
     .filter((value): value is string => Boolean(value));
+
+  const areaMap = new Map<string, AreaSummary>();
+
+  for (const lead of allLeadsForSummary) {
+    const area = lead.area?.trim();
+    if (!area) continue;
+
+    if (!areaMap.has(area)) {
+      areaMap.set(area, {
+        area,
+        total: 0,
+        teams: 0,
+        players: 0,
+        referees: 0,
+      });
+    }
+
+    const summary = areaMap.get(area)!;
+    summary.total += 1;
+
+    if (lead.interestType === "TEAM") summary.teams += 1;
+    if (lead.interestType === "PLAYER") summary.players += 1;
+    if (lead.interestType === "REFEREE") summary.referees += 1;
+  }
+
+  const areaSummaries = Array.from(areaMap.values()).sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    return a.area.localeCompare(b.area);
+  });
+
+  const topArea = areaSummaries[0];
+
+  const preferredNightCounts = allLeadsForSummary.reduce<
+    Partial<Record<PreferredNight, number>>
+  >((acc, lead) => {
+    if (!lead.preferredNight) return acc;
+    acc[lead.preferredNight] = (acc[lead.preferredNight] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const mostPopularNightEntry = Object.entries(preferredNightCounts).sort(
+    (a, b) => b[1] - a[1]
+  )[0] as [PreferredNight, number] | undefined;
+
+  const mostPopularNight = mostPopularNightEntry
+    ? `${formatPreferredNight(mostPopularNightEntry[0])}`
+    : "—";
+
+  const mensCount = allLeadsForSummary.filter(
+    (lead) => lead.leagueType === "MENS"
+  ).length;
+  const womensCount = allLeadsForSummary.filter(
+    (lead) => lead.leagueType === "WOMENS"
+  ).length;
+  const youthCount = allLeadsForSummary.filter(
+    (lead) => lead.leagueType === "YOUTH"
+  ).length;
 
   return (
     <AdminCard title="Leads">
@@ -365,6 +462,101 @@ export default async function AdminLeadsPage({
             value={areas.length}
             subtext="Distinct demand zones"
           />
+        </div>
+
+        <BulkLeadEmailForm
+          selectedType={selectedType}
+          selectedStatus={selectedStatus}
+          selectedArea={selectedArea}
+          selectedNight={selectedNight}
+          recipientCount={leads.length}
+        />
+
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
+            LEAD SUMMARY
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              title="TOP AREA"
+              value={topArea ? topArea.area : "—"}
+              subtext={
+                topArea
+                  ? `${topArea.total} total leads • ${topArea.teams} teams • ${topArea.players} players • ${topArea.referees} referees`
+                  : "No area data yet"
+              }
+            />
+            <SummaryCard
+              title="MOST POPULAR NIGHT"
+              value={mostPopularNight}
+              subtext={
+                mostPopularNightEntry
+                  ? `${mostPopularNightEntry[1]} leads selected this night`
+                  : "No night preference data yet"
+              }
+            />
+            <SummaryCard
+              title="MEN’S / WOMEN’S / YOUTH"
+              value={`${mensCount} / ${womensCount} / ${youthCount}`}
+              subtext="Demand split by league type"
+            />
+            <SummaryCard
+              title="LAUNCH READINESS"
+              value={
+                topArea
+                  ? `${topArea.area} looks strongest`
+                  : "Need more leads"
+              }
+              subtext={
+                topArea
+                  ? `Focus first contact and follow-up here`
+                  : "Capture more demand before deciding"
+              }
+            />
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+              Area demand snapshot
+            </div>
+
+            {areaSummaries.length === 0 ? (
+              <div className="mt-3 text-sm text-white/60">
+                No area data available yet.
+              </div>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-white/50">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Area</th>
+                      <th className="px-3 py-2 font-semibold">Total</th>
+                      <th className="px-3 py-2 font-semibold">Teams</th>
+                      <th className="px-3 py-2 font-semibold">Players</th>
+                      <th className="px-3 py-2 font-semibold">Referees</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {areaSummaries.slice(0, 8).map((summary) => (
+                      <tr
+                        key={summary.area}
+                        className="border-t border-white/10 text-white/80"
+                      >
+                        <td className="px-3 py-2 font-medium text-white">
+                          {summary.area}
+                        </td>
+                        <td className="px-3 py-2">{summary.total}</td>
+                        <td className="px-3 py-2">{summary.teams}</td>
+                        <td className="px-3 py-2">{summary.players}</td>
+                        <td className="px-3 py-2">{summary.referees}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -545,6 +737,7 @@ export default async function AdminLeadsPage({
                     <th className="px-4 py-3 font-semibold">Night</th>
                     <th className="px-4 py-3 font-semibold">Email</th>
                     <th className="px-4 py-3 font-semibold">Created</th>
+                    <th className="px-4 py-3 font-semibold">Action</th>
                   </tr>
                 </thead>
 
@@ -575,12 +768,17 @@ export default async function AdminLeadsPage({
                       </td>
 
                       <td className="px-4 py-3">
-                        <div className="font-medium text-white">
-                          {lead.contactName}
-                        </div>
-                        <div className="mt-1 text-xs text-white/50">
-                          {lead.teamName || "—"}
-                        </div>
+                        <Link
+                          href={`/admin/leads/${lead.id}`}
+                          className="block transition hover:opacity-90"
+                        >
+                          <div className="font-medium text-white hover:text-emerald-300">
+                            {lead.contactName}
+                          </div>
+                          <div className="mt-1 text-xs text-white/50">
+                            {lead.teamName || "—"}
+                          </div>
+                        </Link>
                       </td>
 
                       <td className="px-4 py-3 text-white/85">
@@ -617,6 +815,15 @@ export default async function AdminLeadsPage({
 
                       <td className="px-4 py-3 text-white/60">
                         {formatDate(lead.createdAt)}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/admin/leads/${lead.id}`}
+                          className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20"
+                        >
+                          View lead
+                        </Link>
                       </td>
                     </tr>
                   ))}
@@ -658,12 +865,12 @@ export default async function AdminLeadsPage({
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <a
-                        href={`mailto:${lead.email}`}
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white hover:bg-white/10"
+                      <Link
+                        href={`/admin/leads/${lead.id}`}
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20"
                       >
-                        Email lead
-                      </a>
+                        View lead
+                      </Link>
 
                       {lead.phone ? (
                         <a

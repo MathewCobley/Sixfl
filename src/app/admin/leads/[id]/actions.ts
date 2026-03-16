@@ -1,12 +1,10 @@
 // ========================================
-// File: src/app/admin/leads/actions.ts
+// File: src/app/admin/leads/[id]/actions.ts
 // ========================================
 
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { InterestType, LeadStatus, PreferredNight } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -118,72 +116,26 @@ function buildLeadEmailHtml(body: string) {
   `.trim();
 }
 
-function isLeadStatus(value: string): value is LeadStatus {
-  return (
-    value === "NEW" ||
-    value === "CONTACTED" ||
-    value === "QUALIFIED" ||
-    value === "CLOSED"
-  );
-}
-
-function isInterestType(value: string): value is InterestType {
-  return value === "TEAM" || value === "PLAYER" || value === "REFEREE";
-}
-
-function isPreferredNight(value: string): value is PreferredNight {
-  return (
-    value === "MONDAY" ||
-    value === "TUESDAY" ||
-    value === "WEDNESDAY" ||
-    value === "THURSDAY" ||
-    value === "FRIDAY" ||
-    value === "SATURDAY" ||
-    value === "SUNDAY" ||
-    value === "ANY"
-  );
-}
-
-export async function updateLeadStatus(formData: FormData) {
+export async function sendLeadEmailAction(formData: FormData) {
   await requireAdmin();
 
-  const id = String(formData.get("id") ?? "").trim();
-  const statusRaw = String(formData.get("status") ?? "").trim().toUpperCase();
-  const returnTo = String(formData.get("returnTo") ?? "/admin/leads").trim();
-
-  if (!id || !isLeadStatus(statusRaw)) {
-    redirect(returnTo || "/admin/leads");
-  }
-
-  await prisma.interestLead.update({
-    where: { id },
-    data: {
-      status: statusRaw,
-      ...(statusRaw === "CONTACTED" ? { contactedAt: new Date() } : {}),
-      ...(statusRaw === "CLOSED" ? { closedAt: new Date() } : {}),
-    },
-  });
-
-  redirect(returnTo || "/admin/leads");
-}
-
-export async function sendBulkLeadEmailAction(formData: FormData) {
-  await requireAdmin();
-
+  const leadId = String(formData.get("leadId") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  const typeRaw = String(formData.get("type") ?? "").trim().toUpperCase();
-  const statusRaw = String(formData.get("status") ?? "").trim().toUpperCase();
-  const area = String(formData.get("area") ?? "").trim();
-  const nightRaw = String(formData.get("night") ?? "").trim().toUpperCase();
+
+  if (!leadId) {
+    return { ok: false, error: "Missing lead id." };
+  }
 
   if (!subject) {
     return { ok: false, error: "Please enter a subject." };
   }
 
   if (!body) {
-    return { ok: false, error: "Please enter a message." };
+    return { ok: false, error: "Please enter an email message." };
   }
+
+  const fromEmail = process.env.EMAIL_FROM;
 
   if (!process.env.RESEND_API_KEY) {
     return {
@@ -192,85 +144,99 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
     };
   }
 
-  if (!process.env.EMAIL_FROM) {
+  if (!fromEmail) {
     return {
       ok: false,
       error: "EMAIL_FROM is missing from your environment variables.",
     };
   }
 
-  const where = {
-    ...(typeRaw && isInterestType(typeRaw) ? { interestType: typeRaw } : {}),
-    ...(statusRaw && isLeadStatus(statusRaw) ? { status: statusRaw } : {}),
-    ...(area ? { area } : {}),
-    ...(nightRaw && isPreferredNight(nightRaw)
-      ? { preferredNight: nightRaw }
-      : {}),
-  };
-
-  const leads = await prisma.interestLead.findMany({
-    where,
-    select: {
-      id: true,
-      email: true,
-      status: true,
-    },
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
   });
 
-  if (leads.length === 0) {
-    return {
-      ok: false,
-      error: "No leads match the current filters.",
-    };
+  if (!lead) {
+    return { ok: false, error: "Lead not found." };
   }
 
-  let sentCount = 0;
-  let failedCount = 0;
+  const signedTextBody = appendEmailSignatureText(body);
+  const signedHtmlBody = buildLeadEmailHtml(body);
 
-  for (const lead of leads) {
-    const signedTextBody = appendEmailSignatureText(body);
-    const signedHtmlBody = buildLeadEmailHtml(body);
+  try {
+    await resend.emails.send({
+      from: fromEmail,
+      to: lead.email,
+      subject,
+      text: signedTextBody,
+      html: signedHtmlBody,
+    });
 
-    try {
-      await resend.emails.send({
-        from: process.env.EMAIL_FROM,
-        to: lead.email,
+    await prisma.interestLeadEmail.create({
+      data: {
+        interestLeadId: lead.id,
         subject,
-        text: signedTextBody,
-        html: signedHtmlBody,
-      });
+        body: signedTextBody,
+        sentTo: lead.email,
+      },
+    });
 
-      await prisma.interestLeadEmail.create({
+    if (lead.status === "NEW") {
+      await prisma.interestLead.update({
+        where: { id: lead.id },
         data: {
-          interestLeadId: lead.id,
-          subject,
-          body: signedTextBody,
-          sentTo: lead.email,
+          status: "CONTACTED",
+          contactedAt: new Date(),
         },
       });
-
-      if (lead.status === "NEW") {
-        await prisma.interestLead.update({
-          where: { id: lead.id },
-          data: {
-            status: "CONTACTED",
-            contactedAt: new Date(),
-          },
-        });
-      }
-
-      sentCount += 1;
-    } catch (error) {
-      console.error("sendBulkLeadEmailAction item error", lead.id, error);
-      failedCount += 1;
     }
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${lead.id}`);
+
+    return { ok: true };
+  } catch (error) {
+    console.error("sendLeadEmailAction error", error);
+
+    return {
+      ok: false,
+      error:
+        "The email could not be sent. Please check your Resend domain and email settings.",
+    };
+  }
+}
+
+export async function deleteLeadAction(formData: FormData) {
+  await requireAdmin();
+
+  const leadId = String(formData.get("leadId") ?? "").trim();
+
+  if (!leadId) {
+    return { ok: false, error: "Missing lead id." };
   }
 
-  revalidatePath("/admin/leads");
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
+    select: { id: true },
+  });
 
-  return {
-    ok: true,
-    sentCount,
-    failedCount,
-  };
+  if (!lead) {
+    return { ok: false, error: "Lead not found." };
+  }
+
+  try {
+    await prisma.interestLead.delete({
+      where: { id: leadId },
+    });
+
+    revalidatePath("/admin/leads");
+
+    return { ok: true };
+  } catch (error) {
+    console.error("deleteLeadAction error", error);
+
+    return {
+      ok: false,
+      error: "Failed to delete lead.",
+    };
+  }
 }

@@ -1,0 +1,165 @@
+Date : 2026-03-16 00:17:57
+Directory : d:\Dev\SIXFL\prisma
+Total : 74 files,  -9347 codes, -244 comments, -1331 blanks, all -10922 lines
+
+Languages
++----------------+------------+------------+------------+------------+------------+
+| language       | files      | code       | comment    | blank      | total      |
++----------------+------------+------------+------------+------------+------------+
+| Prisma         |          1 |        212 |         11 |         61 |        284 |
+| PostCSS        |          1 |        -49 |         -5 |         -8 |        -62 |
+| TypeScript     |         18 |     -1,556 |        -52 |       -349 |     -1,957 |
+| TypeScript JSX |         54 |     -7,954 |       -198 |     -1,035 |     -9,187 |
++----------------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                           | files      | code       | comment    | blank      | total      |
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                              |         74 |     -9,347 |       -244 |     -1,331 |    -10,922 |
+| . (Files)                                                      |          1 |        212 |         11 |         61 |        284 |
+| ..                                                             |         73 |     -9,559 |       -255 |     -1,392 |    -11,206 |
+| ..\src                                                         |         73 |     -9,559 |       -255 |     -1,392 |    -11,206 |
+| ..\src (Files)                                                 |          1 |        -72 |         -3 |        -17 |        -92 |
+| ..\src\app                                                     |         53 |     -8,260 |       -198 |     -1,194 |     -9,652 |
+| ..\src\app (Files)                                             |          4 |       -513 |        -23 |        -61 |       -597 |
+| ..\src\app\admin                                               |         16 |     -3,097 |        -65 |       -475 |     -3,637 |
+| ..\src\app\admin (Files)                                       |          2 |       -101 |         -7 |        -18 |       -126 |
+| ..\src\app\admin\fixtures                                      |          3 |       -697 |        -27 |       -122 |       -846 |
+| ..\src\app\admin\fixtures (Files)                              |          2 |       -509 |        -17 |       -104 |       -630 |
+| ..\src\app\admin\fixtures\generate                             |          1 |       -188 |        -10 |        -18 |       -216 |
+| ..\src\app\admin\leads                                         |          4 |     -1,335 |        -16 |       -172 |     -1,523 |
+| ..\src\app\admin\leads (Files)                                 |          2 |     -1,053 |         -6 |       -107 |     -1,166 |
+| ..\src\app\admin\leads\[id]                                    |          2 |       -282 |        -10 |        -65 |       -357 |
+| ..\src\app\admin\leagues                                       |          2 |       -272 |         -2 |        -49 |       -323 |
+| ..\src\app\admin\results                                       |          1 |        -70 |         -1 |        -11 |        -82 |
+| ..\src\app\admin\teams                                         |          4 |       -622 |        -12 |       -103 |       -737 |
+| ..\src\app\admin\teams (Files)                                 |          2 |       -269 |         -6 |        -56 |       -331 |
+| ..\src\app\admin\teams\[id]                                    |          1 |       -261 |         -3 |        -37 |       -301 |
+| ..\src\app\admin\teams\[id]\edit                               |          1 |       -261 |         -3 |        -37 |       -301 |
+| ..\src\app\admin\teams\new                                     |          1 |        -92 |         -3 |        -10 |       -105 |
+| ..\src\app\api                                                 |          3 |       -151 |        -10 |        -31 |       -192 |
+| ..\src\app\api\auth                                            |          2 |        -19 |         -6 |         -9 |        -34 |
+| ..\src\app\api\auth\[...nextauth]                              |          1 |         -5 |         -3 |         -4 |        -12 |
+| ..\src\app\api\auth\check-email                                |          1 |        -14 |         -3 |         -5 |        -22 |
+| ..\src\app\api\contact                                         |          1 |       -132 |         -4 |        -22 |       -158 |
+| ..\src\app\claim                                               |          1 |       -103 |         -3 |        -22 |       -128 |
+| ..\src\app\contact                                             |          1 |       -269 |         -5 |        -33 |       -307 |
+| ..\src\app\dashboard                                           |          2 |        -65 |         -3 |         -9 |        -77 |
+| ..\src\app\faq                                                 |          1 |       -175 |         -3 |        -33 |       -211 |
+| ..\src\app\founding-teams                                      |          1 |       -194 |         -3 |        -28 |       -225 |
+| ..\src\app\league-agreement                                    |          1 |       -120 |         -3 |        -22 |       -145 |
+| ..\src\app\league-rules                                        |          1 |        -96 |         -3 |        -18 |       -117 |
+| ..\src\app\leagues                                             |          2 |       -424 |         -4 |        -36 |       -464 |
+| ..\src\app\leagues (Files)                                     |          1 |       -171 |         -3 |        -14 |       -188 |
+| ..\src\app\leagues\[id]                                        |          1 |       -253 |         -1 |        -22 |       -276 |
+| ..\src\app\login                                               |          1 |        -85 |         -3 |        -17 |       -105 |
+| ..\src\app\match-rules                                         |          1 |       -135 |         -3 |        -30 |       -168 |
+| ..\src\app\pricing                                             |          1 |       -221 |         -3 |        -29 |       -253 |
+| ..\src\app\referee                                             |          3 |       -501 |         -3 |        -67 |       -571 |
+| ..\src\app\referee (Files)                                     |          2 |       -257 |         -2 |        -38 |       -297 |
+| ..\src\app\referee-agreement                                   |          1 |        -96 |         -3 |        -18 |       -117 |
+| ..\src\app\referee\fixture                                     |          1 |       -244 |         -1 |        -29 |       -274 |
+| ..\src\app\referee\fixture\[id]                                |          1 |       -244 |         -1 |        -29 |       -274 |
+| ..\src\app\register-interest                                   |          3 |       -799 |         -9 |        -82 |       -890 |
+| ..\src\app\register-interest (Files)                           |          2 |       -748 |         -6 |        -73 |       -827 |
+| ..\src\app\register-interest\success                           |          1 |        -51 |         -3 |         -9 |        -63 |
+| ..\src\app\register-team                                       |          4 |       -507 |        -12 |        -68 |       -587 |
+| ..\src\app\register-team (Files)                               |          3 |       -471 |         -9 |        -62 |       -542 |
+| ..\src\app\register-team\success                               |          1 |        -36 |         -3 |         -6 |        -45 |
+| ..\src\app\safeguarding                                        |          5 |       -440 |        -29 |        -91 |       -560 |
+| ..\src\app\safeguarding (Files)                                |          1 |        -90 |         -3 |        -15 |       -108 |
+| ..\src\app\safeguarding\anti-bullying                          |          1 |       -113 |         -3 |        -17 |       -133 |
+| ..\src\app\safeguarding\code-of-conduct                        |          1 |       -104 |        -11 |        -25 |       -140 |
+| ..\src\app\safeguarding\reporting-concerns                     |          1 |        -94 |         -9 |        -20 |       -123 |
+| ..\src\app\safeguarding\safeguarding-policy                    |          1 |        -39 |         -3 |        -14 |        -56 |
+| ..\src\app\venues                                              |          1 |       -269 |         -8 |        -24 |       -301 |
+| ..\src\components                                              |         13 |     -1,010 |        -40 |       -129 |     -1,179 |
+| ..\src\components\admin                                        |          9 |       -459 |        -20 |        -61 |       -540 |
+| ..\src\components\admin (Files)                                |          6 |       -207 |         -6 |        -13 |       -226 |
+| ..\src\components\admin\leads                                  |          3 |       -252 |        -14 |        -48 |       -314 |
+| ..\src\components\analytics                                    |          2 |        -45 |         -6 |         -7 |        -58 |
+| ..\src\components\layout                                       |          2 |       -506 |        -14 |        -61 |       -581 |
+| ..\src\lib                                                     |          6 |       -217 |        -14 |        -52 |       -283 |
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------------------------------+----------------+------------+------------+------------+------------+
+| filename                                                       | language       | code       | comment    | blank      | total      |
++----------------------------------------------------------------+----------------+------------+------------+------------+------------+
+| d:\Dev\SIXFL\prisma\schema.prisma                              | Prisma         |        212 |         11 |         61 |        284 |
+| d:\Dev\SIXFL\src\app\admin\fixtures\actions.ts                 | TypeScript     |       -257 |         -8 |        -74 |       -339 |
+| d:\Dev\SIXFL\src\app\admin\fixtures\generate\page.tsx          | TypeScript JSX |       -188 |        -10 |        -18 |       -216 |
+| d:\Dev\SIXFL\src\app\admin\fixtures\page.tsx                   | TypeScript JSX |       -252 |         -9 |        -30 |       -291 |
+| d:\Dev\SIXFL\src\app\admin\layout.tsx                          | TypeScript JSX |        -50 |         -3 |         -9 |        -62 |
+| d:\Dev\SIXFL\src\app\admin\leads\[id]\actions.ts               | TypeScript     |       -102 |         -3 |        -28 |       -133 |
+| d:\Dev\SIXFL\src\app\admin\leads\[id]\page.tsx                 | TypeScript JSX |       -180 |         -7 |        -37 |       -224 |
+| d:\Dev\SIXFL\src\app\admin\leads\actions.ts                    | TypeScript     |       -137 |         -3 |        -27 |       -167 |
+| d:\Dev\SIXFL\src\app\admin\leads\page.tsx                      | TypeScript JSX |       -916 |         -3 |        -80 |       -999 |
+| d:\Dev\SIXFL\src\app\admin\leagues\actions.ts                  | TypeScript     |        -95 |         -1 |        -27 |       -123 |
+| d:\Dev\SIXFL\src\app\admin\leagues\page.tsx                    | TypeScript JSX |       -177 |         -1 |        -22 |       -200 |
+| d:\Dev\SIXFL\src\app\admin\page.tsx                            | TypeScript JSX |        -51 |         -4 |         -9 |        -64 |
+| d:\Dev\SIXFL\src\app\admin\results\page.tsx                    | TypeScript JSX |        -70 |         -1 |        -11 |        -82 |
+| d:\Dev\SIXFL\src\app\admin\teams\[id]\edit\page.tsx            | TypeScript JSX |       -261 |         -3 |        -37 |       -301 |
+| d:\Dev\SIXFL\src\app\admin\teams\actions.ts                    | TypeScript     |       -108 |         -3 |        -34 |       -145 |
+| d:\Dev\SIXFL\src\app\admin\teams\new\page.tsx                  | TypeScript JSX |        -92 |         -3 |        -10 |       -105 |
+| d:\Dev\SIXFL\src\app\admin\teams\page.tsx                      | TypeScript JSX |       -161 |         -3 |        -22 |       -186 |
+| d:\Dev\SIXFL\src\app\api\auth\[...nextauth]\route.ts           | TypeScript     |         -5 |         -3 |         -4 |        -12 |
+| d:\Dev\SIXFL\src\app\api\auth\check-email\route.ts             | TypeScript     |        -14 |         -3 |         -5 |        -22 |
+| d:\Dev\SIXFL\src\app\api\contact\route.ts                      | TypeScript     |       -132 |         -4 |        -22 |       -158 |
+| d:\Dev\SIXFL\src\app\claim\page.tsx                            | TypeScript JSX |       -103 |         -3 |        -22 |       -128 |
+| d:\Dev\SIXFL\src\app\contact\page.tsx                          | TypeScript JSX |       -269 |         -5 |        -33 |       -307 |
+| d:\Dev\SIXFL\src\app\dashboard\SignOutButton.tsx               | TypeScript JSX |        -12 |          0 |         -2 |        -14 |
+| d:\Dev\SIXFL\src\app\dashboard\page.tsx                        | TypeScript JSX |        -53 |         -3 |         -7 |        -63 |
+| d:\Dev\SIXFL\src\app\faq\page.tsx                              | TypeScript JSX |       -175 |         -3 |        -33 |       -211 |
+| d:\Dev\SIXFL\src\app\founding-teams\page.tsx                   | TypeScript JSX |       -194 |         -3 |        -28 |       -225 |
+| d:\Dev\SIXFL\src\app\globals.css                               | PostCSS        |        -49 |         -5 |         -8 |        -62 |
+| d:\Dev\SIXFL\src\app\layout.tsx                                | TypeScript JSX |        -34 |         -3 |         -5 |        -42 |
+| d:\Dev\SIXFL\src\app\league-agreement\page.tsx                 | TypeScript JSX |       -120 |         -3 |        -22 |       -145 |
+| d:\Dev\SIXFL\src\app\league-rules\page.tsx                     | TypeScript JSX |        -96 |         -3 |        -18 |       -117 |
+| d:\Dev\SIXFL\src\app\leagues\[id]\page.tsx                     | TypeScript JSX |       -253 |         -1 |        -22 |       -276 |
+| d:\Dev\SIXFL\src\app\leagues\page.tsx                          | TypeScript JSX |       -171 |         -3 |        -14 |       -188 |
+| d:\Dev\SIXFL\src\app\login\page.tsx                            | TypeScript JSX |        -85 |         -3 |        -17 |       -105 |
+| d:\Dev\SIXFL\src\app\match-rules\page.tsx                      | TypeScript JSX |       -135 |         -3 |        -30 |       -168 |
+| d:\Dev\SIXFL\src\app\page.tsx                                  | TypeScript JSX |       -425 |        -14 |        -46 |       -485 |
+| d:\Dev\SIXFL\src\app\pricing\page.tsx                          | TypeScript JSX |       -221 |         -3 |        -29 |       -253 |
+| d:\Dev\SIXFL\src\app\providers.tsx                             | TypeScript JSX |         -5 |         -1 |         -2 |         -8 |
+| d:\Dev\SIXFL\src\app\referee-agreement\page.tsx                | TypeScript JSX |        -96 |         -3 |        -18 |       -117 |
+| d:\Dev\SIXFL\src\app\referee\actions.ts                        | TypeScript     |        -89 |         -1 |        -20 |       -110 |
+| d:\Dev\SIXFL\src\app\referee\fixture\[id]\page.tsx             | TypeScript JSX |       -244 |         -1 |        -29 |       -274 |
+| d:\Dev\SIXFL\src\app\referee\page.tsx                          | TypeScript JSX |       -168 |         -1 |        -18 |       -187 |
+| d:\Dev\SIXFL\src\app\register-interest\actions.ts              | TypeScript     |       -272 |         -3 |        -29 |       -304 |
+| d:\Dev\SIXFL\src\app\register-interest\page.tsx                | TypeScript JSX |       -476 |         -3 |        -44 |       -523 |
+| d:\Dev\SIXFL\src\app\register-interest\success\page.tsx        | TypeScript JSX |        -51 |         -3 |         -9 |        -63 |
+| d:\Dev\SIXFL\src\app\register-team\RegisterTeamClient.tsx      | TypeScript JSX |       -406 |         -3 |        -49 |       -458 |
+| d:\Dev\SIXFL\src\app\register-team\actions.ts                  | TypeScript     |        -56 |         -3 |        -10 |        -69 |
+| d:\Dev\SIXFL\src\app\register-team\page.tsx                    | TypeScript JSX |         -9 |         -3 |         -3 |        -15 |
+| d:\Dev\SIXFL\src\app\register-team\success\page.tsx            | TypeScript JSX |        -36 |         -3 |         -6 |        -45 |
+| d:\Dev\SIXFL\src\app\safeguarding\anti-bullying\page.tsx       | TypeScript JSX |       -113 |         -3 |        -17 |       -133 |
+| d:\Dev\SIXFL\src\app\safeguarding\code-of-conduct\page.tsx     | TypeScript JSX |       -104 |        -11 |        -25 |       -140 |
+| d:\Dev\SIXFL\src\app\safeguarding\page.tsx                     | TypeScript JSX |        -90 |         -3 |        -15 |       -108 |
+| d:\Dev\SIXFL\src\app\safeguarding\reporting-concerns\page.tsx  | TypeScript JSX |        -94 |         -9 |        -20 |       -123 |
+| d:\Dev\SIXFL\src\app\safeguarding\safeguarding-policy\page.tsx | TypeScript JSX |        -39 |         -3 |        -14 |        -56 |
+| d:\Dev\SIXFL\src\app\venues\page.tsx                           | TypeScript JSX |       -269 |         -8 |        -24 |       -301 |
+| d:\Dev\SIXFL\src\auth.ts                                       | TypeScript     |        -72 |         -3 |        -17 |        -92 |
+| d:\Dev\SIXFL\src\components\admin\AdminButton.tsx              | TypeScript JSX |        -14 |          0 |          0 |        -14 |
+| d:\Dev\SIXFL\src\components\admin\AdminCard.tsx                | TypeScript JSX |        -14 |          0 |          0 |        -14 |
+| d:\Dev\SIXFL\src\components\admin\AdminField.tsx               | TypeScript JSX |        -29 |          0 |          0 |        -29 |
+| d:\Dev\SIXFL\src\components\admin\ConfirmDeleteButton.tsx      | TypeScript JSX |        -22 |         -1 |         -2 |        -25 |
+| d:\Dev\SIXFL\src\components\admin\CopyToClipboardButton.tsx    | TypeScript JSX |        -22 |         -1 |         -2 |        -25 |
+| d:\Dev\SIXFL\src\components\admin\TeamBadge.tsx                | TypeScript JSX |       -106 |         -4 |         -9 |       -119 |
+| d:\Dev\SIXFL\src\components\admin\leads\BulkLeadEmailForm.tsx  | TypeScript JSX |       -121 |         -3 |        -17 |       -141 |
+| d:\Dev\SIXFL\src\components\admin\leads\DeleteLeadButton.tsx   | TypeScript JSX |        -48 |         -3 |        -13 |        -64 |
+| d:\Dev\SIXFL\src\components\admin\leads\LeadEmailForm.tsx      | TypeScript JSX |        -83 |         -8 |        -18 |       -109 |
+| d:\Dev\SIXFL\src\components\analytics\AnalyticsProvider.tsx    | TypeScript JSX |        -11 |         -3 |         -3 |        -17 |
+| d:\Dev\SIXFL\src\components\analytics\TrackedLink.tsx          | TypeScript JSX |        -34 |         -3 |         -4 |        -41 |
+| d:\Dev\SIXFL\src\components\layout\SiteFooter.tsx              | TypeScript JSX |       -158 |        -11 |        -26 |       -195 |
+| d:\Dev\SIXFL\src\components\layout\SiteHeader.tsx              | TypeScript JSX |       -348 |         -3 |        -35 |       -386 |
+| d:\Dev\SIXFL\src\lib\admin.ts                                  | TypeScript     |        -41 |         -3 |        -11 |        -55 |
+| d:\Dev\SIXFL\src\lib\analytics.ts                              | TypeScript     |        -11 |         -3 |         -3 |        -17 |
+| d:\Dev\SIXFL\src\lib\email.ts                                  | TypeScript     |        -23 |         -3 |         -6 |        -32 |
+| d:\Dev\SIXFL\src\lib\leagueTable.ts                            | TypeScript     |       -103 |         -1 |        -19 |       -123 |
+| d:\Dev\SIXFL\src\lib\prisma.ts                                 | TypeScript     |         -4 |          0 |         -3 |         -7 |
+| d:\Dev\SIXFL\src\lib\requireAdmin.ts                           | TypeScript     |        -35 |         -4 |        -10 |        -49 |
+| Total                                                          |                |     -9,347 |       -244 |     -1,331 |    -10,922 |
++----------------------------------------------------------------+----------------+------------+------------+------------+------------+
