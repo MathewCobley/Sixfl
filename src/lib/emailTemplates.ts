@@ -52,12 +52,7 @@ To get you set up, could you quickly confirm:
 
 Once we’ve grouped teams in your area, we’ll send over full league details, start dates, and next steps.
 
-If you’ve got any questions in the meantime, just reply — happy to help.
-
-Speak soon,
-Mathew
-SIXFL
-6-a-side football. Done properly.`,
+If you’ve got any questions in the meantime, just reply — happy to help.`,
   };
 }
 
@@ -79,12 +74,7 @@ To help us place you correctly, could you reply with:
 
 Once we’ve grouped enough teams in your area, we’ll send over the next steps, league details, and proposed start date.
 
-Any questions, just reply to this email.
-
-Speak soon,
-Mathew
-SIXFL
-6-a-side football. Done properly.`,
+Any questions, just reply to this email.`,
   };
 }
 
@@ -106,12 +96,7 @@ To help us match you to the right setup, could you reply with:
 
 As soon as we have the right numbers in your area, we’ll be in touch with the next steps.
 
-If you’ve got any questions in the meantime, just reply.
-
-Speak soon,
-Mathew
-SIXFL
-6-a-side football. Done properly.`,
+If you’ve got any questions in the meantime, just reply.`,
   };
 }
 
@@ -133,12 +118,7 @@ To help us progress your application, could you reply with:
 
 Once we’ve finalised league nights and venues, we’ll be back in touch with next steps.
 
-Any questions, just reply to this email.
-
-Best,
-Mathew
-SIXFL
-6-a-side football. Done properly.`,
+Any questions, just reply to this email.`,
   };
 }
 
