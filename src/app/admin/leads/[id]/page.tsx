@@ -178,7 +178,11 @@ export default async function LeadPage({ params }: PageProps) {
 
         {/* RIGHT COLUMN */}
         <div className="space-y-4">
-          <LeadEmailForm leadId={lead.id} email={lead.email} />
+          <LeadEmailForm
+            leadId={lead.id}
+            email={lead.email}
+            firstName={lead.contactName}
+          />
 
           {/* DELETE LEAD */}
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6">

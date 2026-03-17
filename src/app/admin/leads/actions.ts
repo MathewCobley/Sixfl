@@ -4,12 +4,20 @@
 
 "use server";
 
+// ========================================
+// Imports
+// ========================================
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { InterestType, LeadStatus, PreferredNight } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+
+// ========================================
+// Constants
+// ========================================
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -24,6 +32,10 @@ www.sixfl.co.uk
 
 6-a-side football. Done properly.
 `;
+
+// ========================================
+// Helpers
+// ========================================
 
 function escapeHtml(value: string) {
   return value
@@ -118,6 +130,14 @@ function buildLeadEmailHtml(body: string) {
   `.trim();
 }
 
+function personaliseGreeting(body: string, contactName?: string | null) {
+  const firstName = contactName?.trim().split(/\s+/)[0] || "there";
+
+  return body
+    .replace(/{{name}}/gi, firstName)
+    .replace(/Hi there/gi, `Hi ${firstName}`);
+}
+
 function isLeadStatus(value: string): value is LeadStatus {
   return (
     value === "NEW" ||
@@ -143,6 +163,10 @@ function isPreferredNight(value: string): value is PreferredNight {
     value === "ANY"
   );
 }
+
+// ========================================
+// Actions
+// ========================================
 
 export async function updateLeadStatus(formData: FormData) {
   await requireAdmin();
@@ -220,6 +244,7 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
       id: true,
       email: true,
       status: true,
+      contactName: true,
     },
   });
 
@@ -234,10 +259,19 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
   let failedCount = 0;
 
   for (const lead of leads) {
-    const signedTextBody = appendEmailSignatureText(body);
-    const signedHtmlBody = buildLeadEmailHtml(body);
-
     try {
+      // ========================================
+      // Personalise message for this lead
+      // ========================================
+
+      const personalisedBody = personaliseGreeting(body, lead.contactName);
+      const signedTextBody = appendEmailSignatureText(personalisedBody);
+      const signedHtmlBody = buildLeadEmailHtml(personalisedBody);
+
+      // ========================================
+      // Send email
+      // ========================================
+
       await resend.emails.send({
         from: process.env.EMAIL_FROM,
         to: lead.email,
@@ -245,6 +279,10 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
         text: signedTextBody,
         html: signedHtmlBody,
       });
+
+      // ========================================
+      // Save email history
+      // ========================================
 
       await prisma.interestLeadEmail.create({
         data: {
@@ -254,6 +292,10 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
           sentTo: lead.email,
         },
       });
+
+      // ========================================
+      // Auto-update lead status
+      // ========================================
 
       if (lead.status === "NEW") {
         await prisma.interestLead.update({
