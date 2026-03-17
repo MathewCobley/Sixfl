@@ -216,7 +216,6 @@ model InterestLead {
   teamName         String?
   area             String?
   leagueType       LeagueType?
-  preferredNight   PreferredNight?
   message          String?
 
   source           String?
@@ -236,7 +235,6 @@ model InterestLead {
   @@index([status])
   @@index([area])
   @@index([leagueType])
-  @@index([preferredNight])
   @@index([createdAt])
 }
 
