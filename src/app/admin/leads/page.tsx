@@ -271,6 +271,15 @@ type AreaSummary = {
   referees: number;
 };
 
+type LaunchSignal = {
+  area: string;
+  night: PreferredNight;
+  total: number;
+  teams: number;
+  players: number;
+  referees: number;
+};
+
 export default async function AdminLeadsPage({
   searchParams,
 }: {
@@ -428,6 +437,49 @@ export default async function AdminLeadsPage({
     (lead) => lead.leagueType === "YOUTH"
   ).length;
 
+  const launchSignalMap = new Map<string, LaunchSignal>();
+
+  for (const lead of allLeadsForSummary) {
+    const area = lead.area?.trim();
+    if (!area) continue;
+
+    const uniqueNights = Array.from(
+      new Set(lead.preferredNights.map((item) => item.night))
+    ).filter((night) => night !== "ANY");
+
+    for (const night of uniqueNights) {
+      const key = `${area}__${night}`;
+
+      if (!launchSignalMap.has(key)) {
+        launchSignalMap.set(key, {
+          area,
+          night,
+          total: 0,
+          teams: 0,
+          players: 0,
+          referees: 0,
+        });
+      }
+
+      const signal = launchSignalMap.get(key)!;
+      signal.total += 1;
+
+      if (lead.interestType === "TEAM") signal.teams += 1;
+      if (lead.interestType === "PLAYER") signal.players += 1;
+      if (lead.interestType === "REFEREE") signal.referees += 1;
+    }
+  }
+
+  const launchSignals = Array.from(launchSignalMap.values()).sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    if (a.area !== b.area) return a.area.localeCompare(b.area);
+    return formatPreferredNight(a.night).localeCompare(
+      formatPreferredNight(b.night)
+    );
+  });
+
+  const strongestLaunchSignal = launchSignals[0];
+
   return (
     <AdminCard title="Leads">
       <div className="space-y-6">
@@ -544,13 +596,15 @@ export default async function AdminLeadsPage({
             <SummaryCard
               title="LAUNCH READINESS"
               value={
-                topArea
-                  ? `${topArea.area} looks strongest`
+                strongestLaunchSignal
+                  ? `${strongestLaunchSignal.area} • ${formatPreferredNight(
+                      strongestLaunchSignal.night
+                    )}`
                   : "Need more leads"
               }
               subtext={
-                topArea
-                  ? `Focus first contact and follow-up here`
+                strongestLaunchSignal
+                  ? `${strongestLaunchSignal.total} total signals across teams, players and referees`
                   : "Capture more demand before deciding"
               }
             />
@@ -597,6 +651,77 @@ export default async function AdminLeadsPage({
               </div>
             )}
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+          <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
+            LAUNCH SIGNALS
+          </div>
+
+          <div className="mt-2 text-sm text-white/60">
+            Strongest area + night combinations based on current lead demand.
+          </div>
+
+          {launchSignals.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
+              No launch signal data yet.
+            </div>
+          ) : (
+            <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-white/5 text-white/70">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Area</th>
+                    <th className="px-4 py-3 font-semibold">Night</th>
+                    <th className="px-4 py-3 font-semibold">Total</th>
+                    <th className="px-4 py-3 font-semibold">Teams</th>
+                    <th className="px-4 py-3 font-semibold">Players</th>
+                    <th className="px-4 py-3 font-semibold">Referees</th>
+                    <th className="px-4 py-3 font-semibold">Signal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {launchSignals.slice(0, 12).map((signal) => (
+                    <tr
+                      key={`${signal.area}-${signal.night}`}
+                      className="border-t border-white/10 text-white/80"
+                    >
+                      <td className="px-4 py-3 font-medium text-white">
+                        {signal.area}
+                      </td>
+                      <td className="px-4 py-3">
+                        {formatPreferredNight(signal.night)}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-white">
+                        {signal.total}
+                      </td>
+                      <td className="px-4 py-3">{signal.teams}</td>
+                      <td className="px-4 py-3">{signal.players}</td>
+                      <td className="px-4 py-3">{signal.referees}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={[
+                            "rounded-full border px-2.5 py-1 text-xs font-bold",
+                            signal.total >= 8
+                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                              : signal.total >= 5
+                              ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
+                              : "border-white/10 bg-white/5 text-white/65",
+                          ].join(" ")}
+                        >
+                          {signal.total >= 8
+                            ? "Strong"
+                            : signal.total >= 5
+                            ? "Building"
+                            : "Early"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
