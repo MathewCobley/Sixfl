@@ -51,7 +51,7 @@ export default function BulkLeadEmailForm({
   // ========================================
 
   const [selectedTemplate, setSelectedTemplate] =
-    useState<LeadEmailTemplateKey>("lead-response");
+    useState<LeadEmailTemplateKey | "">("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -65,6 +65,12 @@ export default function BulkLeadEmailForm({
   // ========================================
 
   useEffect(() => {
+    if (!selectedTemplate) {
+      setSubject("");
+      setBody("");
+      return;
+    }
+
     const template = getSixflLeadEmailTemplate(selectedTemplate, {
       firstName: undefined,
     });
@@ -93,12 +99,17 @@ export default function BulkLeadEmailForm({
           : `Bulk email complete. Sent: ${result.sentCount}. Failed: ${result.failedCount}. All emails are still sent individually.`
       );
 
-      const template = getSixflLeadEmailTemplate(selectedTemplate, {
-        firstName: undefined,
-      });
+      if (selectedTemplate) {
+        const template = getSixflLeadEmailTemplate(selectedTemplate, {
+          firstName: undefined,
+        });
 
-      setSubject(template.subject);
-      setBody(template.body);
+        setSubject(template.subject);
+        setBody(template.body);
+      } else {
+        setSubject("");
+        setBody("");
+      }
     } else {
       setError(result?.error || "Bulk email failed.");
     }
@@ -107,6 +118,12 @@ export default function BulkLeadEmailForm({
   }
 
   function resetTemplate() {
+    if (!selectedTemplate) {
+      setSubject("");
+      setBody("");
+      return;
+    }
+
     const template = getSixflLeadEmailTemplate(selectedTemplate, {
       firstName: undefined,
     });
@@ -202,9 +219,10 @@ export default function BulkLeadEmailForm({
               value={selectedTemplate}
               options={templateOptions}
               onChange={(value) =>
-                setSelectedTemplate(value as LeadEmailTemplateKey)
+                setSelectedTemplate(value as LeadEmailTemplateKey | "")
               }
-              disabled={sending || !hasRecipients} // ✅ FIXED
+              disabled={sending || !hasRecipients}
+              placeholder="Select email template"
             />
           </div>
         </div>
@@ -228,39 +246,37 @@ export default function BulkLeadEmailForm({
         </div>
 
         {/* ========================================
-    Message Field
-======================================== */}
-<div>
-  <div className="flex items-center justify-between">
-    <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-      Message
-    </label>
-    <span className="text-xs text-white/40">
-      Plain text email
-    </span>
-  </div>
+            Message Field
+        ======================================== */}
+        <div>
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+              Message
+            </label>
+            <span className="text-xs text-white/40">Plain text email</span>
+          </div>
 
-  <div className="mt-2 rounded-xl border border-white/10 bg-black/30 focus-within:border-emerald-400 transition">
-    <textarea
-      name="body"
-      rows={12}
-      value={body}
-      onChange={(e) => setBody(e.target.value)}
-      required
-      disabled={sending || !hasRecipients}
-      className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-      placeholder={`Hi there,
+          <div className="mt-2 rounded-xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400">
+            <textarea
+              name="body"
+              rows={12}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              required
+              disabled={sending || !hasRecipients}
+              className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder={`Hi there,
 
 Thanks for your interest in SIXFL...
 
 We’ll be in touch shortly with next steps.`}
-    />
-  </div>
+            />
+          </div>
 
-  <div className="mt-2 text-xs text-white/40">
-    Tip: Keep emails short and clear for better response rates.
-  </div>
-</div>
+          <div className="mt-2 text-xs text-white/40">
+            Tip: Keep emails short and clear for better response rates.
+          </div>
+        </div>
 
         {/* ========================================
             Feedback Messages
@@ -289,8 +305,8 @@ We’ll be in touch shortly with next steps.`}
             {sending
               ? "Sending bulk email..."
               : hasRecipients
-              ? "Send bulk email"
-              : "No matching recipients"}
+                ? "Send bulk email"
+                : "No matching recipients"}
           </button>
 
           <button

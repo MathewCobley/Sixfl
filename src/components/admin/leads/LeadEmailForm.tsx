@@ -47,7 +47,7 @@ export default function LeadEmailForm({
   // ========================================
 
   const [selectedTemplate, setSelectedTemplate] =
-    useState<LeadEmailTemplateKey>("lead-response");
+    useState<LeadEmailTemplateKey | "">("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -57,6 +57,12 @@ export default function LeadEmailForm({
   // ========================================
 
   useEffect(() => {
+    if (!selectedTemplate) {
+      setSubject("");
+      setBody("");
+      return;
+    }
+
     const template = getSixflLeadEmailTemplate(selectedTemplate, {
       firstName: firstName ?? undefined,
     });
@@ -90,6 +96,12 @@ export default function LeadEmailForm({
   }
 
   function resetTemplate() {
+    if (!selectedTemplate) {
+      setSubject("");
+      setBody("");
+      return;
+    }
+
     const template = getSixflLeadEmailTemplate(selectedTemplate, {
       firstName: firstName ?? undefined,
     });
@@ -120,9 +132,10 @@ export default function LeadEmailForm({
           value={selectedTemplate}
           options={templateOptions}
           onChange={(value) =>
-            setSelectedTemplate(value as LeadEmailTemplateKey)
+            setSelectedTemplate(value as LeadEmailTemplateKey | "")
           }
           disabled={sending}
+          placeholder="Select email template"
         />
       </div>
 
@@ -150,39 +163,38 @@ export default function LeadEmailForm({
           onChange={(e) => setSubject(e.target.value)}
           disabled={sending}
           className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          placeholder="SIXFL launch update"
         />
       </div>
 
       {/* ========================================
-    Message Field
-======================================== */}
-<div>
-  <div className="flex items-center justify-between">
-    <label className="block text-sm text-white/70">Message</label>
-    <span className="text-xs text-white/40">
-      Plain text email
-    </span>
-  </div>
+          Message Field
+      ======================================== */}
+      <div>
+        <div className="flex items-center justify-between">
+          <label className="block text-sm text-white/70">Message</label>
+          <span className="text-xs text-white/40">Plain text email</span>
+        </div>
 
-  <div className="mt-2 rounded-xl border border-white/10 bg-black/30 focus-within:border-emerald-400 transition">
-    <textarea
-      rows={14}
-      value={body}
-      onChange={(e) => setBody(e.target.value)}
-      disabled={sending}
-      className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-      placeholder={`Hi ${firstName || "there"},
+        <div className="mt-2 rounded-xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400">
+          <textarea
+            rows={14}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            disabled={sending}
+            className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder={`Hi ${firstName || "there"},
 
 Thanks for your interest in SIXFL...
 
 We’ll be in touch shortly.`}
-    />
-  </div>
+          />
+        </div>
 
-  <div className="mt-2 text-xs text-white/40">
-    This email will be sent directly to the lead.
-  </div>
-</div>
+        <div className="mt-2 text-xs text-white/40">
+          This email will be sent directly to the lead.
+        </div>
+      </div>
 
       {/* ========================================
           Actions

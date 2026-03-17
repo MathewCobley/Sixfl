@@ -18,7 +18,8 @@ type Props = {
   value: string;
   options: TemplateOption[];
   onChange: (value: string) => void;
-  disabled?: boolean; // ✅ NEW
+  disabled?: boolean;
+  placeholder?: string;
 };
 
 export default function TemplateSelect({
@@ -26,14 +27,11 @@ export default function TemplateSelect({
   value,
   options,
   onChange,
-  disabled = false, // ✅ NEW
+  disabled = false,
+  placeholder = "Select email template",
 }: Props) {
-  const selected =
-    options.find((option) => option.value === value) ?? options[0] ?? null;
-
-  if (!selected) {
-    return null;
-  }
+  const selected = options.find((option) => option.value === value) ?? null;
+  const hasSelection = !!selected;
 
   return (
     <div className="space-y-2">
@@ -41,11 +39,7 @@ export default function TemplateSelect({
         <label className="block text-sm text-white/70">{label}</label>
       ) : null}
 
-      <Listbox
-        value={selected.value}
-        onChange={onChange}
-        disabled={disabled} // ✅ IMPORTANT
-      >
+      <Listbox value={value} onChange={onChange} disabled={disabled}>
         <div className="relative">
           <Listbox.Button
             className={[
@@ -55,7 +49,14 @@ export default function TemplateSelect({
                 : "border-white/10 bg-black text-white hover:border-white/20 focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20",
             ].join(" ")}
           >
-            <span className="block truncate">{selected.label}</span>
+            <span
+              className={[
+                "block truncate",
+                hasSelection ? "text-white" : "text-white/45",
+              ].join(" ")}
+            >
+              {hasSelection ? selected.label : placeholder}
+            </span>
 
             <ChevronUpDownIcon
               className={[
@@ -81,9 +82,7 @@ export default function TemplateSelect({
                     className={({ active }) =>
                       [
                         "relative cursor-pointer select-none rounded-lg px-3 py-2.5 pr-10 text-sm transition",
-                        active
-                          ? "bg-white/8 text-white"
-                          : "text-white/85",
+                        active ? "bg-white/8 text-white" : "text-white/85",
                       ].join(" ")
                     }
                   >
@@ -92,9 +91,7 @@ export default function TemplateSelect({
                         <span
                           className={[
                             "block truncate",
-                            selected
-                              ? "font-medium text-emerald-300"
-                              : "",
+                            selected ? "font-medium text-emerald-300" : "",
                           ].join(" ")}
                         >
                           {option.label}
