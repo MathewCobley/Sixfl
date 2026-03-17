@@ -4,106 +4,207 @@
 
 "use client";
 
-import { useState } from "react";
+// ========================================
+// Imports
+// ========================================
+
+import { useEffect, useState } from "react";
+import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 import { sendLeadEmailAction } from "@/app/admin/leads/[id]/actions";
+import {
+  getSixflLeadEmailTemplate,
+  type LeadEmailTemplateKey,
+} from "@/lib/emailTemplates";
+
+// ========================================
+// Types
+// ========================================
 
 type Props = {
   leadId: string;
   email: string;
+  firstName?: string | null;
 };
 
-export default function LeadEmailForm({ leadId, email }: Props) {
+const templateOptions: { value: LeadEmailTemplateKey; label: string }[] = [
+  { value: "lead-response", label: "Lead response" },
+  { value: "team-follow-up", label: "Team follow-up" },
+  { value: "player-follow-up", label: "Player follow-up" },
+  { value: "referee-follow-up", label: "Referee follow-up" },
+];
+
+// ========================================
+// Component
+// ========================================
+
+export default function LeadEmailForm({
+  leadId,
+  email,
+  firstName,
+}: Props) {
+  // ========================================
+  // State
+  // ========================================
+
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<LeadEmailTemplateKey>("lead-response");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(formData: FormData) {
+  // ========================================
+  // Effects
+  // ========================================
+
+  useEffect(() => {
+    const template = getSixflLeadEmailTemplate(selectedTemplate, {
+      firstName: firstName ?? undefined,
+    });
+
+    setSubject(template.subject);
+    setBody(template.body);
+  }, [selectedTemplate, firstName]);
+
+  // ========================================
+  // Handlers
+  // ========================================
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setSending(true);
-    setSuccess(false);
-    setError(null);
+
+    const formData = new FormData();
+    formData.append("leadId", leadId);
+    formData.append("subject", subject);
+    formData.append("body", body);
 
     const result = await sendLeadEmailAction(formData);
 
-    if (result?.ok) {
-      setSuccess(true);
-      setSubject("");
-      setBody("");
+    if (!result?.ok) {
+      alert(result?.error || "Failed to send email.");
     } else {
-      setError(result?.error || "Email failed to send.");
+      alert("Email sent successfully.");
     }
 
     setSending(false);
   }
 
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-      <div className="text-lg font-bold text-white">Send email</div>
+  function resetTemplate() {
+    const template = getSixflLeadEmailTemplate(selectedTemplate, {
+      firstName: firstName ?? undefined,
+    });
 
-      <div className="mt-1 text-sm text-white/60">
-        Send directly to <span className="text-emerald-300">{email}</span>
+    setSubject(template.subject);
+    setBody(template.body);
+  }
+
+  // ========================================
+  // UI
+  // ========================================
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-6"
+    >
+      {/* ========================================
+          Template Selector
+      ======================================== */}
+      <div>
+        <label className="mb-1 block text-sm text-white/70">
+          Email template
+        </label>
+
+        <TemplateSelect
+          label=""
+          value={selectedTemplate}
+          options={templateOptions}
+          onChange={(value) =>
+            setSelectedTemplate(value as LeadEmailTemplateKey)
+          }
+          disabled={sending}
+        />
       </div>
 
-      <form action={handleSubmit} className="mt-4 space-y-4">
-        <input type="hidden" name="leadId" value={leadId} />
+      {/* ========================================
+          To Field
+      ======================================== */}
+      <div>
+        <label className="mb-1 block text-sm text-white/70">To</label>
+        <input
+          type="email"
+          value={email}
+          disabled
+          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
+        />
+      </div>
 
-        {/* SUBJECT */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-            Subject
-          </label>
+      {/* ========================================
+          Subject Field
+      ======================================== */}
+      <div>
+        <label className="mb-1 block text-sm text-white/70">Subject</label>
+        <input
+          type="text"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          disabled={sending}
+          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </div>
 
-          <input
-            name="subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            required
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-white outline-none focus:border-emerald-400"
-            placeholder="SIXFL league update"
-          />
-        </div>
+      {/* ========================================
+    Message Field
+======================================== */}
+<div>
+  <div className="flex items-center justify-between">
+    <label className="block text-sm text-white/70">Message</label>
+    <span className="text-xs text-white/40">
+      Plain text email
+    </span>
+  </div>
 
-        {/* MESSAGE */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-            Message
-          </label>
+  <div className="mt-2 rounded-xl border border-white/10 bg-black/30 focus-within:border-emerald-400 transition">
+    <textarea
+      rows={14}
+      value={body}
+      onChange={(e) => setBody(e.target.value)}
+      disabled={sending}
+      className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
+      placeholder={`Hi ${firstName || "there"},
 
-          <textarea
-            name="body"
-            rows={6}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            required
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none focus:border-emerald-400"
-            placeholder="Hi, thanks for registering interest in SIXFL..."
-          />
-        </div>
+Thanks for your interest in SIXFL...
 
-        {/* ERROR */}
-        {error && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {error}
-          </div>
-        )}
+We’ll be in touch shortly.`}
+    />
+  </div>
 
-        {/* SUCCESS */}
-        {success && (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-            Email sent successfully.
-          </div>
-        )}
+  <div className="mt-2 text-xs text-white/40">
+    This email will be sent directly to the lead.
+  </div>
+</div>
 
-        {/* SEND BUTTON */}
+      {/* ========================================
+          Actions
+      ======================================== */}
+      <div className="flex gap-3">
         <button
           type="submit"
           disabled={sending}
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 text-sm font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+          className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? "Sending..." : "Send email"}
         </button>
-      </form>
-    </div>
+
+        <button
+          type="button"
+          onClick={resetTemplate}
+          disabled={sending}
+          className="rounded-xl border border-white/10 px-4 py-2 text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Reset template
+        </button>
+      </div>
+    </form>
   );
 }
