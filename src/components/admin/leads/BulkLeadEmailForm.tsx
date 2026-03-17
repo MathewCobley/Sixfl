@@ -28,6 +28,8 @@ type Props = {
   recipientCount: number;
 };
 
+const BULK_SEND_CONFIRM_TEXT = "BULK SEND";
+
 const templateOptions: { value: LeadEmailTemplateKey; label: string }[] = [
   { value: "lead-response", label: "Lead response" },
   { value: "team-follow-up", label: "Team follow-up" },
@@ -58,7 +60,15 @@ export default function BulkLeadEmailForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmationText, setConfirmationText] = useState("");
+
   const hasRecipients = recipientCount > 0;
+  const hasSubject = subject.trim().length > 0;
+  const hasBody = body.trim().length > 0;
+  const canStartBulkSend = hasRecipients && hasSubject && hasBody && !sending;
+  const isConfirmationMatch =
+    confirmationText.trim() === BULK_SEND_CONFIRM_TEXT;
 
   // ========================================
   // Effects
@@ -80,10 +90,30 @@ export default function BulkLeadEmailForm({
   }, [selectedTemplate]);
 
   // ========================================
+  // Helpers
+  // ========================================
+
+  function closeConfirmation() {
+    setShowConfirmation(false);
+    setConfirmationText("");
+  }
+
+  function resetConfirmationIfOpen() {
+    if (showConfirmation) {
+      setShowConfirmation(false);
+      setConfirmationText("");
+    }
+  }
+
+  // ========================================
   // Handlers
   // ========================================
 
   async function handleSubmit(formData: FormData) {
+    if (!showConfirmation || !isConfirmationMatch || !canStartBulkSend) {
+      return;
+    }
+
     setSending(true);
     setSuccess(null);
     setError(null);
@@ -110,6 +140,8 @@ export default function BulkLeadEmailForm({
         setSubject("");
         setBody("");
       }
+
+      closeConfirmation();
     } else {
       setError(result?.error || "Bulk email failed.");
     }
@@ -121,6 +153,7 @@ export default function BulkLeadEmailForm({
     if (!selectedTemplate) {
       setSubject("");
       setBody("");
+      resetConfirmationIfOpen();
       return;
     }
 
@@ -130,6 +163,16 @@ export default function BulkLeadEmailForm({
 
     setSubject(template.subject);
     setBody(template.body);
+    resetConfirmationIfOpen();
+  }
+
+  function openConfirmation() {
+    if (!canStartBulkSend) return;
+
+    setError(null);
+    setSuccess(null);
+    setShowConfirmation(true);
+    setConfirmationText("");
   }
 
   // ========================================
@@ -204,6 +247,11 @@ export default function BulkLeadEmailForm({
         <input type="hidden" name="status" value={selectedStatus ?? ""} />
         <input type="hidden" name="area" value={selectedArea ?? ""} />
         <input type="hidden" name="night" value={selectedNight ?? ""} />
+        <input
+          type="hidden"
+          name="confirmBulkSend"
+          value={showConfirmation && isConfirmationMatch ? "yes" : ""}
+        />
 
         {/* ========================================
             Template Selector
@@ -218,9 +266,10 @@ export default function BulkLeadEmailForm({
               label=""
               value={selectedTemplate}
               options={templateOptions}
-              onChange={(value) =>
-                setSelectedTemplate(value as LeadEmailTemplateKey | "")
-              }
+              onChange={(value) => {
+                setSelectedTemplate(value as LeadEmailTemplateKey | "");
+                resetConfirmationIfOpen();
+              }}
               disabled={sending || !hasRecipients}
               placeholder="Select email template"
             />
@@ -237,7 +286,10 @@ export default function BulkLeadEmailForm({
           <input
             name="subject"
             value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            onChange={(e) => {
+              setSubject(e.target.value);
+              resetConfirmationIfOpen();
+            }}
             required
             disabled={sending || !hasRecipients}
             className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
@@ -261,7 +313,10 @@ export default function BulkLeadEmailForm({
               name="body"
               rows={12}
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => {
+                setBody(e.target.value);
+                resetConfirmationIfOpen();
+              }}
               required
               disabled={sending || !hasRecipients}
               className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
@@ -277,6 +332,74 @@ We’ll be in touch shortly with next steps.`}
             Tip: Keep emails short and clear for better response rates.
           </div>
         </div>
+
+        {/* ========================================
+            Confirmation Panel
+        ======================================== */}
+        {showConfirmation ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-300/85">
+              Final confirmation
+            </div>
+
+            <div className="mt-2 text-sm leading-6 text-white/80">
+              You are about to send this bulk email to{" "}
+              <span className="font-bold text-white">{recipientCount}</span>{" "}
+              {recipientCount === 1 ? "recipient" : "recipients"}.
+            </div>
+
+            <div className="mt-3 text-sm leading-6 text-white/70">
+              To confirm, type{" "}
+              <span className="rounded-md border border-white/10 bg-black/30 px-2 py-1 font-bold text-white">
+                {BULK_SEND_CONFIRM_TEXT}
+              </span>{" "}
+              below.
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                Confirmation text
+              </label>
+              <input
+                value={confirmationText}
+                onChange={(e) => setConfirmationText(e.target.value)}
+                disabled={sending}
+                autoComplete="off"
+                spellCheck={false}
+                className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder={BULK_SEND_CONFIRM_TEXT}
+              />
+            </div>
+
+            <div className="mt-2 text-xs text-white/45">
+              The final send button stays disabled until the text matches
+              exactly.
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={sending || !isConfirmationMatch || !hasRecipients}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 text-sm font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending
+                  ? "Sending bulk email..."
+                  : `Confirm send to ${recipientCount} ${
+                      recipientCount === 1 ? "recipient" : "recipients"
+                    }`}
+              </button>
+
+              <button
+                type="button"
+                onClick={closeConfirmation}
+                disabled={sending}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-6 text-sm font-bold tracking-[0.12em] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {/* ========================================
             Feedback Messages
@@ -297,17 +420,16 @@ We’ll be in touch shortly with next steps.`}
             Actions
         ======================================== */}
         <div className="flex flex-wrap gap-3">
-          <button
-            type="submit"
-            disabled={sending || !hasRecipients}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 text-sm font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sending
-              ? "Sending bulk email..."
-              : hasRecipients
-                ? "Send bulk email"
-                : "No matching recipients"}
-          </button>
+          {!showConfirmation ? (
+            <button
+              type="button"
+              onClick={openConfirmation}
+              disabled={sending || !hasRecipients || !hasSubject || !hasBody}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 text-sm font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {hasRecipients ? "Send bulk email" : "No matching recipients"}
+            </button>
+          ) : null}
 
           <button
             type="button"

@@ -200,6 +200,14 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
   const statusRaw = String(formData.get("status") ?? "").trim().toUpperCase();
   const area = String(formData.get("area") ?? "").trim();
   const nightRaw = String(formData.get("night") ?? "").trim().toUpperCase();
+  const confirmBulkSend = String(formData.get("confirmBulkSend") ?? "").trim();
+
+  if (confirmBulkSend !== "yes") {
+    return {
+      ok: false,
+      error: "Bulk send confirmation missing. Please type BULK SEND before sending.",
+    };
+  }
 
   if (!subject) {
     return { ok: false, error: "Please enter a subject." };
@@ -224,14 +232,18 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
   }
 
   const where = {
-    ...(typeRaw && isInterestType(typeRaw) ? { interestType: typeRaw } : {}),
-    ...(statusRaw && isLeadStatus(statusRaw) ? { status: statusRaw } : {}),
+    ...(typeRaw && isInterestType(typeRaw)
+      ? { interestType: typeRaw as InterestType }
+      : {}),
+    ...(statusRaw && isLeadStatus(statusRaw)
+      ? { status: statusRaw as LeadStatus }
+      : {}),
     ...(area ? { area } : {}),
     ...(nightRaw && isPreferredNight(nightRaw)
       ? {
           preferredNights: {
             some: {
-              night: nightRaw,
+              night: nightRaw as PreferredNight,
             },
           },
         }
@@ -248,18 +260,27 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
     },
   });
 
-  if (leads.length === 0) {
+  const validLeads = leads.filter((lead) => lead.email?.trim());
+
+  if (validLeads.length === 0) {
     return {
       ok: false,
-      error: "No leads match the current filters.",
+      error: "No matching recipients were found for this bulk email.",
     };
   }
 
   let sentCount = 0;
   let failedCount = 0;
 
-  for (const lead of leads) {
+  for (const lead of validLeads) {
     try {
+      const email = lead.email?.trim();
+
+      if (!email) {
+        failedCount += 1;
+        continue;
+      }
+
       // ========================================
       // Personalise message for this lead
       // ========================================
@@ -274,7 +295,7 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
 
       await resend.emails.send({
         from: process.env.EMAIL_FROM,
-        to: lead.email,
+        to: email,
         subject,
         text: signedTextBody,
         html: signedHtmlBody,
@@ -289,7 +310,7 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
           interestLeadId: lead.id,
           subject,
           body: signedTextBody,
-          sentTo: lead.email,
+          sentTo: email,
         },
       });
 

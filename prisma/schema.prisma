@@ -24,7 +24,7 @@ model User {
   image         String?
 
   // Platform-level role
-  role          UserRole  @default(USER)
+  role UserRole @default(USER)
 
   accounts         Account[]
   sessions         Session[]
@@ -80,13 +80,13 @@ model VerificationToken {
  */
 
 model League {
-  id        String  @id @default(cuid())
-  name      String
-  season    String?
-  isActive  Boolean @default(true)
+  id       String  @id @default(cuid())
+  name     String
+  season   String?
+  isActive Boolean @default(true)
 
-  teams     Team[]
-  fixtures  Fixture[]
+  teams    Team[]
+  fixtures Fixture[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -95,30 +95,32 @@ model League {
 }
 
 model Venue {
-  id        String  @id @default(cuid())
-  name      String
-  address   String?
-  postcode  String?
-  notes     String?
+  id       String  @id @default(cuid())
+  name     String
+  address  String?
+  postcode String?
+  notes    String?
 
-  fixtures  Fixture[]
+  fixtures Fixture[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Team {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   name      String
-  claimCode String @unique
+  claimCode String  @unique
   logoUrl   String?
 
-  leagueId  String?
-  league    League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+  leagueId String?
+  league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
   members   TeamMember[]
-  homeGames Fixture[] @relation("HomeTeam")
-  awayGames Fixture[] @relation("AwayTeam")
+  homeGames Fixture[]    @relation("HomeTeam")
+  awayGames Fixture[]    @relation("AwayTeam")
+
+  convertedFromLead InterestLead? @relation("LeadConvertedTeam")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,13 +129,13 @@ model Team {
 }
 
 model TeamMember {
-  id        String   @id @default(cuid())
-  userId    String
-  teamId    String
-  role      TeamRole @default(MANAGER)
+  id     String   @id @default(cuid())
+  userId String
+  teamId String
+  role   TeamRole @default(MANAGER)
 
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -141,34 +143,35 @@ model TeamMember {
 }
 
 enum TeamRole {
+  CAPTAIN
   MANAGER
   PLAYER
   COACH
 }
 
 model Fixture {
-  id         String        @id @default(cuid())
+  id         String   @id @default(cuid())
   leagueId   String
   homeTeamId String
   awayTeamId String
   venueId    String?
   kickoffAt  DateTime
 
-  round      Int?
-  status     FixtureStatus @default(SCHEDULED)
+  round  Int?
+  status FixtureStatus @default(SCHEDULED)
 
-  refereeId  String?
+  refereeId String?
 
-  league     League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  homeTeam   Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
-  awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
-  venue      Venue? @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  referee    User?  @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
+  league   League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeTeam Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  venue    Venue? @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  referee  User?  @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
 
-  result     MatchResult?
+  result MatchResult?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([leagueId, kickoffAt])
   @@index([leagueId, round])
@@ -185,51 +188,55 @@ enum FixtureStatus {
 }
 
 model MatchResult {
-  id              String   @id @default(cuid())
-  fixtureId       String   @unique
+  id        String @id @default(cuid())
+  fixtureId String @unique
 
-  homeScore       Int
-  awayScore       Int
+  homeScore Int
+  awayScore Int
 
   enteredByUserId String?
   enteredAt       DateTime @default(now())
 
-  isDisputed      Boolean  @default(false)
-  disputeNote     String?
+  isDisputed  Boolean @default(false)
+  disputeNote String?
 
-  fixture         Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
-  enteredByUser   User?    @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+  fixture       Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  enteredByUser User?   @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model InterestLead {
-  id               String                      @id @default(cuid())
-  interestType     InterestType
-  status           LeadStatus                  @default(NEW)
+  id           String       @id @default(cuid())
+  interestType InterestType
+  status       LeadStatus   @default(NEW)
 
-  contactName      String
-  email            String
-  phone            String?
+  contactName String
+  email       String
+  phone       String?
 
-  teamName         String?
-  area             String?
-  leagueType       LeagueType?
-  message          String?
+  teamName   String?
+  area       String?
+  leagueType LeagueType?
+  message    String?
 
   source           String?
-  wantsFreeKit     Boolean                     @default(false)
-  marketingConsent Boolean                     @default(false)
+  wantsFreeKit     Boolean @default(false)
+  marketingConsent Boolean @default(false)
 
-  contactedAt      DateTime?
-  closedAt         DateTime?
+  contactedAt DateTime?
+  closedAt    DateTime?
 
-  createdAt        DateTime                    @default(now())
-  updatedAt        DateTime                    @updatedAt
+  convertedAt     DateTime?
+  convertedTeamId String?   @unique
+  convertedTeam   Team?     @relation("LeadConvertedTeam", fields: [convertedTeamId], references: [id], onDelete: SetNull)
 
-  emails           InterestLeadEmail[]
-  preferredNights  InterestLeadPreferredNight[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emails          InterestLeadEmail[]
+  preferredNights InterestLeadPreferredNight[]
 
   @@index([interestType])
   @@index([status])
@@ -244,7 +251,7 @@ model InterestLeadPreferredNight {
   night     PreferredNight
   createdAt DateTime       @default(now())
 
-  lead      InterestLead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead InterestLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@unique([leadId, night])
   @@index([leadId])
@@ -252,14 +259,14 @@ model InterestLeadPreferredNight {
 }
 
 model InterestLeadEmail {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   interestLeadId String
   subject        String
   body           String
   sentTo         String
-  sentAt         DateTime     @default(now())
+  sentAt         DateTime @default(now())
 
-  interestLead   InterestLead @relation(fields: [interestLeadId], references: [id], onDelete: Cascade)
+  interestLead InterestLead @relation(fields: [interestLeadId], references: [id], onDelete: Cascade)
 
   @@index([interestLeadId])
   @@index([sentAt])

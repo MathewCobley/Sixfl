@@ -318,6 +318,16 @@ export default async function AdminLeadsPage({
       : {}),
   };
 
+  const recipientWhere = {
+    ...where,
+    email: {
+      not: "",
+    },
+    NOT: {
+      email: null,
+    },
+  };
+
   const returnTo = buildHref({
     type: selectedType,
     status: selectedStatus,
@@ -335,6 +345,8 @@ export default async function AdminLeadsPage({
     newCount,
     contactedCount,
     allLeadsForSummary,
+    recipientCount,
+    recipientPreview,
   ] = await Promise.all([
     prisma.interestLead.findMany({
       where,
@@ -366,6 +378,19 @@ export default async function AdminLeadsPage({
             night: true,
           },
         },
+      },
+    }),
+    prisma.interestLead.count({
+      where: recipientWhere,
+    }),
+    prisma.interestLead.findMany({
+      where: recipientWhere,
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        contactName: true,
+        email: true,
       },
     }),
   ]);
@@ -561,7 +586,8 @@ export default async function AdminLeadsPage({
           selectedStatus={selectedStatus}
           selectedArea={selectedArea}
           selectedNight={selectedNight}
-          recipientCount={leads.length}
+          recipientCount={recipientCount}
+          recipientPreview={recipientPreview}
         />
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -705,15 +731,15 @@ export default async function AdminLeadsPage({
                             signal.total >= 8
                               ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
                               : signal.total >= 5
-                              ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
-                              : "border-white/10 bg-white/5 text-white/65",
+                                ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
+                                : "border-white/10 bg-white/5 text-white/65",
                           ].join(" ")}
                         >
                           {signal.total >= 8
                             ? "Strong"
                             : signal.total >= 5
-                            ? "Building"
-                            : "Early"}
+                              ? "Building"
+                              : "Early"}
                         </span>
                       </td>
                     </tr>

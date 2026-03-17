@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { prisma } from "@/lib/prisma";
 import LeadEmailForm from "@/components/admin/leads/LeadEmailForm";
 import DeleteLeadButton from "@/components/admin/leads/DeleteLeadButton";
+import ConvertLeadToTeamButton from "@/components/admin/leads/ConvertLeadToTeamButton";
 import type {
   InterestType,
   LeadStatus,
@@ -75,6 +76,53 @@ function formatYesNo(value: boolean) {
   return value ? "Yes" : "No";
 }
 
+function statusClasses(status: LeadStatus) {
+  if (status === "NEW") {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+  }
+
+  if (status === "CONTACTED") {
+    return "border-blue-500/20 bg-blue-500/10 text-blue-300";
+  }
+
+  if (status === "QUALIFIED") {
+    return "border-violet-500/20 bg-violet-500/10 text-violet-300";
+  }
+
+  return "border-white/10 bg-white/5 text-white/70";
+}
+
+function typeClasses(type: InterestType) {
+  if (type === "TEAM") {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+  }
+
+  if (type === "PLAYER") {
+    return "border-white/10 bg-white/5 text-white";
+  }
+
+  return "border-amber-500/20 bg-amber-500/10 text-amber-300";
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-sm leading-relaxed text-white/85">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
 export default async function LeadPage({ params }: PageProps) {
   await requireAdmin();
 
@@ -89,6 +137,12 @@ export default async function LeadPage({ params }: PageProps) {
       emails: {
         orderBy: { sentAt: "desc" },
       },
+      convertedTeam: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -96,22 +150,54 @@ export default async function LeadPage({ params }: PageProps) {
     notFound();
   }
 
+  const emailCount = lead.emails.length;
+  const latestEmail = lead.emails[0];
+  const alreadyConverted = Boolean(lead.convertedAt || lead.convertedTeamId);
+  const canConvertToTeam = lead.interestType === "TEAM";
+
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-sm text-white/60">Admin • Lead</p>
 
           <h1 className="mt-2 text-3xl font-black text-white">
-            {lead.contactName}
+            {lead.contactName || "Unnamed lead"}
           </h1>
 
-          <p className="mt-1 text-white/70">{lead.email}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
+                lead.interestType
+              )}`}
+            >
+              {formatInterestType(lead.interestType)}
+            </span>
+
+            <span
+              className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
+                lead.status
+              )}`}
+            >
+              {formatLeadStatus(lead.status)}
+            </span>
+
+            {alreadyConverted ? (
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-300">
+                Converted
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-3 space-y-1 text-sm text-white/70">
+            <div>{lead.email || "No email address"}</div>
+            <div>{lead.area || "No area set"}</div>
+          </div>
         </div>
 
         <Link
           href="/admin/leads"
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+          className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
         >
           Back to leads
         </Link>
@@ -119,61 +205,96 @@ export default async function LeadPage({ params }: PageProps) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* LEFT COLUMN */}
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
-          <h2 className="text-lg font-bold text-white">Lead details</h2>
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
+            <h2 className="text-lg font-bold text-white">Lead details</h2>
 
-          <div className="mt-4 space-y-3 text-sm text-white/80">
-            <div>
-              <strong>Type:</strong> {formatInterestType(lead.interestType)}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <DetailRow
+                label="Type"
+                value={formatInterestType(lead.interestType)}
+              />
+              <DetailRow
+                label="Status"
+                value={formatLeadStatus(lead.status)}
+              />
+              <DetailRow label="Area" value={lead.area ?? "—"} />
+              <DetailRow
+                label="League type"
+                value={formatLeagueType(lead.leagueType)}
+              />
+              <DetailRow
+                label="Preferred nights"
+                value={formatPreferredNights(lead.preferredNights)}
+              />
+              <DetailRow label="Phone" value={lead.phone ?? "—"} />
+              <DetailRow label="Email" value={lead.email ?? "—"} />
+              <DetailRow label="Team name" value={lead.teamName ?? "—"} />
+              <DetailRow
+                label="Free kit interest"
+                value={formatYesNo(lead.wantsFreeKit)}
+              />
+              <DetailRow
+                label="Marketing consent"
+                value={formatYesNo(lead.marketingConsent)}
+              />
+              <DetailRow label="Source" value={lead.source ?? "—"} />
+              <DetailRow label="Created" value={formatDate(lead.createdAt)} />
+              <DetailRow
+                label="Converted"
+                value={lead.convertedAt ? formatDate(lead.convertedAt) : "—"}
+              />
+              <DetailRow
+                label="Converted team"
+                value={lead.convertedTeam?.name ?? "—"}
+              />
             </div>
 
-            <div>
-              <strong>Status:</strong> {formatLeadStatus(lead.status)}
-            </div>
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+                Message
+              </p>
 
-            <div>
-              <strong>Area:</strong> {lead.area ?? "—"}
-            </div>
-
-            <div>
-              <strong>League type:</strong> {formatLeagueType(lead.leagueType)}
-            </div>
-
-            <div>
-              <strong>Preferred nights:</strong>{" "}
-              {formatPreferredNights(lead.preferredNights)}
-            </div>
-
-            <div>
-              <strong>Phone:</strong> {lead.phone ?? "—"}
-            </div>
-
-            <div>
-              <strong>Team name:</strong> {lead.teamName ?? "—"}
-            </div>
-
-            <div>
-              <strong>Free kit interest:</strong>{" "}
-              {formatYesNo(lead.wantsFreeKit)}
-            </div>
-
-            <div>
-              <strong>Marketing consent:</strong>{" "}
-              {formatYesNo(lead.marketingConsent)}
-            </div>
-
-            <div>
-              <strong>Created:</strong> {formatDate(lead.createdAt)}
+              <div className="mt-2 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white/80">
+                {lead.message ?? "—"}
+              </div>
             </div>
           </div>
 
-          <div className="mt-4">
-            <p className="text-xs uppercase text-white/40">Message</p>
+          {canConvertToTeam ? (
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-lg font-bold text-white">Convert to team</h2>
+                <p className="text-sm text-white/65">
+                  Create a real team from this lead, assign the contact as the
+                  captain, and close the lead.
+                </p>
+              </div>
 
-            <div className="mt-2 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
-              {lead.message ?? "—"}
+              <div className="mt-4">
+                <ConvertLeadToTeamButton
+                  leadId={lead.id}
+                  alreadyConverted={alreadyConverted}
+                  convertedTeamId={lead.convertedTeamId}
+                />
+              </div>
+
+              {alreadyConverted && lead.convertedTeam ? (
+                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+                  Converted to{" "}
+                  <Link
+                    href={`/admin/teams/${lead.convertedTeam.id}`}
+                    className="font-semibold text-emerald-300 hover:text-emerald-200"
+                  >
+                    {lead.convertedTeam.name}
+                  </Link>
+                  {lead.convertedAt
+                    ? ` on ${formatDate(lead.convertedAt)}`
+                    : ""}.
+                </div>
+              ) : null}
             </div>
-          </div>
+          ) : null}
         </div>
 
         {/* RIGHT COLUMN */}
@@ -203,29 +324,90 @@ export default async function LeadPage({ params }: PageProps) {
 
           {/* EMAIL HISTORY */}
           <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
-            <h2 className="text-lg font-bold text-white">Email history</h2>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">Email history</h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Full audit trail of emails sent to this lead.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
+                  Total emails
+                </div>
+                <div className="mt-1 text-lg font-black text-white">
+                  {emailCount}
+                </div>
+              </div>
+            </div>
+
+            {latestEmail ? (
+              <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
+                  Latest email
+                </div>
+
+                <div className="mt-2 text-sm font-semibold text-white">
+                  {latestEmail.subject}
+                </div>
+
+                <div className="mt-1 text-xs text-white/55">
+                  Sent {formatDate(latestEmail.sentAt)}
+                  {latestEmail.sentTo ? ` • ${latestEmail.sentTo}` : ""}
+                </div>
+              </div>
+            ) : null}
 
             {lead.emails.length === 0 ? (
-              <p className="mt-3 text-sm text-white/60">No emails sent yet.</p>
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-sm text-white/60">No emails sent yet.</p>
+              </div>
             ) : (
               <div className="mt-4 space-y-4">
-                {lead.emails.map((email) => (
+                {lead.emails.map((email, index) => (
                   <div
                     key={email.id}
                     className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
                   >
-                    <div className="flex justify-between text-sm">
-                      <span className="font-semibold text-white">
-                        {email.subject}
-                      </span>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/60">
+                            #{emailCount - index}
+                          </span>
 
-                      <span className="text-white/50">
-                        {formatDate(email.sentAt)}
-                      </span>
+                          <span className="text-sm font-semibold text-white">
+                            {email.subject}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
+                          <span>Sent {formatDate(email.sentAt)}</span>
+
+                          {email.sentTo ? (
+                            <span>
+                              To:{" "}
+                              <a
+                                href={`mailto:${email.sentTo}`}
+                                className="text-emerald-300 hover:text-emerald-200"
+                              >
+                                {email.sentTo}
+                              </a>
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                      {email.body}
+                    <div className="mt-4">
+                      <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
+                        Message body
+                      </div>
+
+                      <div className="max-h-[360px] overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/80">
+                        {email.body}
+                      </div>
                     </div>
                   </div>
                 ))}
