@@ -98,7 +98,6 @@ const preferredNightOptions = [
   { label: "Friday", value: "FRIDAY" },
   { label: "Saturday", value: "SATURDAY" },
   { label: "Sunday", value: "SUNDAY" },
-  { label: "Any", value: "ANY" },
 ] as const;
 
 function getLeadType(rawType?: string): InterestTypeValue {
@@ -332,12 +331,7 @@ export default async function RegisterInterestPage({
               ) : null}
             </div>
 
-            <MultiCheckboxField
-              label="Preferred nights"
-              helperText="Select all that work for you."
-              name="preferredNights"
-              options={preferredNightOptions}
-            />
+            <PreferredNightsField />
 
             {config.showExperience ? (
               <SelectField
@@ -517,42 +511,45 @@ function CheckboxField({
   );
 }
 
-function MultiCheckboxField({
-  label,
-  helperText,
-  name,
-  options,
-}: {
-  label: string;
-  helperText?: string;
-  name: string;
-  options: readonly { label: string; value: string }[];
-}) {
+function PreferredNightsField() {
   return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-white/80">
-        {label}
-      </label>
+    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-white/80">
+          Preferred nights
+        </label>
+        <p className="text-xs leading-6 text-white/50">
+          Select all nights that work. If any night works, tick “Any” only.
+        </p>
+      </div>
 
-      {helperText ? (
-        <p className="mb-3 text-xs leading-6 text-white/50">{helperText}</p>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {options.map((option) => (
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {preferredNightOptions.map((option) => (
           <label
             key={option.value}
-            className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-500/30 hover:bg-white/[0.04]"
+            className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/80 transition hover:border-emerald-500/30 hover:bg-white/[0.05]"
           >
             <input
               type="checkbox"
-              name={name}
+              name="preferredNights"
               value={option.value}
               className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
             />
             <span>{option.label}</span>
           </label>
         ))}
+      </div>
+
+      <div className="mt-3">
+        <label className="flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 transition hover:border-emerald-500/30 hover:bg-emerald-500/15">
+          <input
+            type="checkbox"
+            name="preferredNights"
+            value="ANY"
+            className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
+          />
+          <span className="font-medium">Any</span>
+        </label>
       </div>
     </div>
   );
