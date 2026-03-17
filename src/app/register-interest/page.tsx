@@ -48,7 +48,7 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
     showFreeKit: true,
     notesLabel: "Notes",
     notesPlaceholder:
-      "Anything useful to know? For example: likely squad size, preferred night, area you want to play in, or whether you are exploring a men’s, women’s or youth entry.",
+      "Anything useful to know? For example: likely squad size, preferred nights, area you want to play in, or whether you are exploring a men’s, women’s or youth entry.",
   },
   PLAYER: {
     type: "PLAYER",
@@ -67,7 +67,7 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
     showFreeKit: false,
     notesLabel: "Notes",
     notesPlaceholder:
-      "Anything useful to know? For example: preferred area, preferred night, position, age group, playing standard, or whether you are joining with friends.",
+      "Anything useful to know? For example: preferred area, preferred nights, position, age group, playing standard, or whether you are joining with friends.",
   },
   REFEREE: {
     type: "REFEREE",
@@ -89,6 +89,17 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
       "Tell us anything useful. For example: refereeing experience, qualifications, availability, preferred areas, or whether you are interested in regular weekly games.",
   },
 };
+
+const preferredNightOptions = [
+  { label: "Monday", value: "MONDAY" },
+  { label: "Tuesday", value: "TUESDAY" },
+  { label: "Wednesday", value: "WEDNESDAY" },
+  { label: "Thursday", value: "THURSDAY" },
+  { label: "Friday", value: "FRIDAY" },
+  { label: "Saturday", value: "SATURDAY" },
+  { label: "Sunday", value: "SUNDAY" },
+  { label: "Any", value: "ANY" },
+] as const;
 
 function getLeadType(rawType?: string): InterestTypeValue {
   const value = String(rawType ?? "").trim().toUpperCase();
@@ -321,19 +332,11 @@ export default async function RegisterInterestPage({
               ) : null}
             </div>
 
-            <SelectField
-              label="Preferred night"
-              name="preferredNight"
-              options={[
-                { label: "Monday", value: "MONDAY" },
-                { label: "Tuesday", value: "TUESDAY" },
-                { label: "Wednesday", value: "WEDNESDAY" },
-                { label: "Thursday", value: "THURSDAY" },
-                { label: "Friday", value: "FRIDAY" },
-                { label: "Saturday", value: "SATURDAY" },
-                { label: "Sunday", value: "SUNDAY" },
-                { label: "Any", value: "ANY" },
-              ]}
+            <MultiCheckboxField
+              label="Preferred nights"
+              helperText="Select all that work for you."
+              name="preferredNights"
+              options={preferredNightOptions}
             />
 
             {config.showExperience ? (
@@ -511,6 +514,47 @@ function CheckboxField({
       />
       <span>{label}</span>
     </label>
+  );
+}
+
+function MultiCheckboxField({
+  label,
+  helperText,
+  name,
+  options,
+}: {
+  label: string;
+  helperText?: string;
+  name: string;
+  options: readonly { label: string; value: string }[];
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-white/80">
+        {label}
+      </label>
+
+      {helperText ? (
+        <p className="mb-3 text-xs leading-6 text-white/50">{helperText}</p>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {options.map((option) => (
+          <label
+            key={option.value}
+            className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-500/30 hover:bg-white/[0.04]"
+          >
+            <input
+              type="checkbox"
+              name={name}
+              value={option.value}
+              className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 

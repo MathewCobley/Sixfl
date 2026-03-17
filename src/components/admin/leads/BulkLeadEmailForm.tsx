@@ -77,7 +77,7 @@ export default function BulkLeadEmailForm({
           Area: {selectedArea || "All"}
         </span>
         <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-          Night: {selectedNight || "All"}
+          Preferred night: {selectedNight || "All"}
         </span>
       </div>
 

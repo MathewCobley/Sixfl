@@ -52,10 +52,27 @@ function formatLeagueType(value: LeagueType | null) {
   return "Youth";
 }
 
-function formatPreferredNight(value: PreferredNight | null) {
-  if (!value) return "—";
+function formatPreferredNight(value: PreferredNight) {
   if (value === "ANY") return "Any";
   return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
+function formatPreferredNights(
+  values: Array<{ night: PreferredNight }> | PreferredNight[]
+) {
+  const nights = values.map((value) =>
+    typeof value === "string" ? value : value.night
+  );
+
+  if (!nights.length) return "—";
+
+  const uniqueNights = Array.from(new Set(nights));
+
+  if (uniqueNights.includes("ANY")) {
+    return "Any";
+  }
+
+  return uniqueNights.map(formatPreferredNight).join(", ");
 }
 
 function formatYesNo(value: boolean) {
@@ -101,9 +118,18 @@ export async function submitRegisterInterest(formData: FormData) {
     .trim()
     .toUpperCase();
 
-  const preferredNightRaw = String(formData.get("preferredNight") ?? "")
-    .trim()
-    .toUpperCase();
+  const preferredNightValues = formData
+    .getAll("preferredNights")
+    .map((value) => String(value ?? "").trim().toUpperCase())
+    .filter(Boolean);
+
+  const validPreferredNights = Array.from(
+    new Set(preferredNightValues.filter(isPreferredNight))
+  ) as PreferredNight[];
+
+  const normalizedPreferredNights = validPreferredNights.includes("ANY")
+    ? (["ANY"] as PreferredNight[])
+    : validPreferredNights;
 
   const experienceLevel = String(formData.get("experienceLevel") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
@@ -148,18 +174,28 @@ export async function submitRegisterInterest(formData: FormData) {
       teamName: interestType === "TEAM" ? teamName || null : null,
       area,
       leagueType: requiresLeagueType ? (leagueTypeRaw as LeagueType) : null,
-      preferredNight: isPreferredNight(preferredNightRaw)
-        ? (preferredNightRaw as PreferredNight)
-        : null,
       message: combinedMessage || null,
       source: source || "register-interest-page",
       wantsFreeKit: interestType === "TEAM" ? wantsFreeKit : false,
       marketingConsent,
+      preferredNights: normalizedPreferredNights.length
+        ? {
+            create: normalizedPreferredNights.map((night) => ({
+              night,
+            })),
+          }
+        : undefined,
+    },
+    include: {
+      preferredNights: {
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 
   const confirmation = buildConfirmationCopy(interestType);
   const logoUrl = "https://sixfl.co.uk/sixfl-email.png";
+  const preferredNightsText = formatPreferredNights(createdLead.preferredNights);
 
   try {
     await sendEmail({
@@ -173,7 +209,7 @@ export async function submitRegisterInterest(formData: FormData) {
         `Type: ${formatInterestType(createdLead.interestType)}`,
         `Area: ${createdLead.area ?? "—"}`,
         `League type: ${formatLeagueType(createdLead.leagueType)}`,
-        `Preferred night: ${formatPreferredNight(createdLead.preferredNight)}`,
+        `Preferred nights: ${preferredNightsText}`,
         interestType === "TEAM"
           ? `Free kit interest: ${formatYesNo(createdLead.wantsFreeKit)}`
           : "",
@@ -212,9 +248,7 @@ export async function submitRegisterInterest(formData: FormData) {
               <p style="margin:0 0 8px;"><strong>League type:</strong> ${formatLeagueType(
                 createdLead.leagueType
               )}</p>
-              <p style="margin:0 0 8px;"><strong>Preferred night:</strong> ${formatPreferredNight(
-                createdLead.preferredNight
-              )}</p>
+              <p style="margin:0 0 8px;"><strong>Preferred nights:</strong> ${preferredNightsText}</p>
               ${
                 interestType === "TEAM"
                   ? `<p style="margin:0;"><strong>Free kit interest:</strong> ${formatYesNo(
@@ -246,7 +280,7 @@ export async function submitRegisterInterest(formData: FormData) {
         `Team name: ${createdLead.teamName ?? "—"}`,
         `Area: ${createdLead.area ?? "—"}`,
         `League type: ${formatLeagueType(createdLead.leagueType)}`,
-        `Preferred night: ${formatPreferredNight(createdLead.preferredNight)}`,
+        `Preferred nights: ${preferredNightsText}`,
         `Source: ${createdLead.source ?? "—"}`,
         `Free kit interest: ${formatYesNo(createdLead.wantsFreeKit)}`,
         `Marketing consent: ${formatYesNo(createdLead.marketingConsent)}`,
@@ -280,9 +314,7 @@ export async function submitRegisterInterest(formData: FormData) {
               <p style="margin:0 0 8px;"><strong>League type:</strong> ${formatLeagueType(
                 createdLead.leagueType
               )}</p>
-              <p style="margin:0 0 8px;"><strong>Preferred night:</strong> ${formatPreferredNight(
-                createdLead.preferredNight
-              )}</p>
+              <p style="margin:0 0 8px;"><strong>Preferred nights:</strong> ${preferredNightsText}</p>
               <p style="margin:0 0 8px;"><strong>Source:</strong> ${createdLead.source ?? "—"}</p>
               <p style="margin:0 0 8px;"><strong>Free kit interest:</strong> ${formatYesNo(
                 createdLead.wantsFreeKit

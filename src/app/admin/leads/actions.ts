@@ -204,7 +204,13 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
     ...(statusRaw && isLeadStatus(statusRaw) ? { status: statusRaw } : {}),
     ...(area ? { area } : {}),
     ...(nightRaw && isPreferredNight(nightRaw)
-      ? { preferredNight: nightRaw }
+      ? {
+          preferredNights: {
+            some: {
+              night: nightRaw,
+            },
+          },
+        }
       : {}),
   };
 

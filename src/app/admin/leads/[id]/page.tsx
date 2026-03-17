@@ -48,10 +48,27 @@ function formatLeagueType(type: LeagueType | null) {
   return "Youth";
 }
 
-function formatPreferredNight(night: PreferredNight | null) {
-  if (!night) return "—";
+function formatPreferredNight(night: PreferredNight) {
   if (night === "ANY") return "Any";
   return night.charAt(0) + night.slice(1).toLowerCase();
+}
+
+function formatPreferredNights(
+  values: Array<{ night: PreferredNight }> | PreferredNight[]
+) {
+  const nights = values.map((value) =>
+    typeof value === "string" ? value : value.night
+  );
+
+  if (!nights.length) return "—";
+
+  const uniqueNights = Array.from(new Set(nights));
+
+  if (uniqueNights.includes("ANY")) {
+    return "Any";
+  }
+
+  return uniqueNights.map(formatPreferredNight).join(", ");
 }
 
 function formatYesNo(value: boolean) {
@@ -66,6 +83,9 @@ export default async function LeadPage({ params }: PageProps) {
   const lead = await prisma.interestLead.findUnique({
     where: { id },
     include: {
+      preferredNights: {
+        orderBy: { createdAt: "asc" },
+      },
       emails: {
         orderBy: { sentAt: "desc" },
       },
@@ -104,38 +124,32 @@ export default async function LeadPage({ params }: PageProps) {
 
           <div className="mt-4 space-y-3 text-sm text-white/80">
             <div>
-              <strong>Type:</strong>{" "}
-              {formatInterestType(lead.interestType)}
+              <strong>Type:</strong> {formatInterestType(lead.interestType)}
             </div>
 
             <div>
-              <strong>Status:</strong>{" "}
-              {formatLeadStatus(lead.status)}
+              <strong>Status:</strong> {formatLeadStatus(lead.status)}
             </div>
 
             <div>
-              <strong>Area:</strong>{" "}
-              {lead.area ?? "—"}
+              <strong>Area:</strong> {lead.area ?? "—"}
             </div>
 
             <div>
-              <strong>League type:</strong>{" "}
-              {formatLeagueType(lead.leagueType)}
+              <strong>League type:</strong> {formatLeagueType(lead.leagueType)}
             </div>
 
             <div>
-              <strong>Preferred night:</strong>{" "}
-              {formatPreferredNight(lead.preferredNight)}
+              <strong>Preferred nights:</strong>{" "}
+              {formatPreferredNights(lead.preferredNights)}
             </div>
 
             <div>
-              <strong>Phone:</strong>{" "}
-              {lead.phone ?? "—"}
+              <strong>Phone:</strong> {lead.phone ?? "—"}
             </div>
 
             <div>
-              <strong>Team name:</strong>{" "}
-              {lead.teamName ?? "—"}
+              <strong>Team name:</strong> {lead.teamName ?? "—"}
             </div>
 
             <div>
@@ -149,15 +163,14 @@ export default async function LeadPage({ params }: PageProps) {
             </div>
 
             <div>
-              <strong>Created:</strong>{" "}
-              {formatDate(lead.createdAt)}
+              <strong>Created:</strong> {formatDate(lead.createdAt)}
             </div>
           </div>
 
           <div className="mt-4">
             <p className="text-xs uppercase text-white/40">Message</p>
 
-            <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
+            <div className="mt-2 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/80">
               {lead.message ?? "—"}
             </div>
           </div>
@@ -189,9 +202,7 @@ export default async function LeadPage({ params }: PageProps) {
             <h2 className="text-lg font-bold text-white">Email history</h2>
 
             {lead.emails.length === 0 ? (
-              <p className="mt-3 text-sm text-white/60">
-                No emails sent yet.
-              </p>
+              <p className="mt-3 text-sm text-white/60">No emails sent yet.</p>
             ) : (
               <div className="mt-4 space-y-4">
                 {lead.emails.map((email) => (

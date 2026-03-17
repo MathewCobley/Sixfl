@@ -68,10 +68,27 @@ function formatLeagueType(value: LeagueType | null) {
   return "Youth";
 }
 
-function formatPreferredNight(value: PreferredNight | null) {
-  if (!value) return "—";
+function formatPreferredNight(value: PreferredNight) {
   if (value === "ANY") return "Any";
   return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
+function formatPreferredNights(
+  values: Array<{ night: PreferredNight }> | PreferredNight[]
+) {
+  const nights = values.map((value) =>
+    typeof value === "string" ? value : value.night
+  );
+
+  if (!nights.length) return "—";
+
+  const uniqueNights = Array.from(new Set(nights));
+
+  if (uniqueNights.includes("ANY")) {
+    return "Any";
+  }
+
+  return uniqueNights.map(formatPreferredNight).join(", ");
 }
 
 function formatDate(value: Date) {
@@ -280,8 +297,16 @@ export default async function AdminLeadsPage({
   const where = {
     ...(selectedType ? { interestType: selectedType } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
-    ...(selectedNight ? { preferredNight: selectedNight } : {}),
     ...(selectedArea ? { area: selectedArea } : {}),
+    ...(selectedNight
+      ? {
+          preferredNights: {
+            some: {
+              night: selectedNight,
+            },
+          },
+        }
+      : {}),
   };
 
   const returnTo = buildHref({
@@ -305,6 +330,11 @@ export default async function AdminLeadsPage({
     prisma.interestLead.findMany({
       where,
       orderBy: { createdAt: "desc" },
+      include: {
+        preferredNights: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
     }),
     prisma.interestLead.count(),
     prisma.interestLead.count({ where: { interestType: "TEAM" } }),
@@ -321,8 +351,12 @@ export default async function AdminLeadsPage({
       select: {
         area: true,
         interestType: true,
-        preferredNight: true,
         leagueType: true,
+        preferredNights: {
+          select: {
+            night: true,
+          },
+        },
       },
     }),
   ]);
@@ -365,8 +399,14 @@ export default async function AdminLeadsPage({
   const preferredNightCounts = allLeadsForSummary.reduce<
     Partial<Record<PreferredNight, number>>
   >((acc, lead) => {
-    if (!lead.preferredNight) return acc;
-    acc[lead.preferredNight] = (acc[lead.preferredNight] ?? 0) + 1;
+    const uniqueNights = Array.from(
+      new Set(lead.preferredNights.map((item) => item.night))
+    );
+
+    for (const night of uniqueNights) {
+      acc[night] = (acc[night] ?? 0) + 1;
+    }
+
     return acc;
   }, {});
 
@@ -734,7 +774,7 @@ export default async function AdminLeadsPage({
                     <th className="px-4 py-3 font-semibold">Name</th>
                     <th className="px-4 py-3 font-semibold">Area</th>
                     <th className="px-4 py-3 font-semibold">League</th>
-                    <th className="px-4 py-3 font-semibold">Night</th>
+                    <th className="px-4 py-3 font-semibold">Nights</th>
                     <th className="px-4 py-3 font-semibold">Email</th>
                     <th className="px-4 py-3 font-semibold">Created</th>
                     <th className="px-4 py-3 font-semibold">Action</th>
@@ -790,7 +830,7 @@ export default async function AdminLeadsPage({
                       </td>
 
                       <td className="px-4 py-3 text-white/85">
-                        {formatPreferredNight(lead.preferredNight)}
+                        {formatPreferredNights(lead.preferredNights)}
                       </td>
 
                       <td className="px-4 py-3">
@@ -920,8 +960,8 @@ export default async function AdminLeadsPage({
                       value={formatLeagueType(lead.leagueType)}
                     />
                     <Detail
-                      label="Preferred night"
-                      value={formatPreferredNight(lead.preferredNight)}
+                      label="Preferred nights"
+                      value={formatPreferredNights(lead.preferredNights)}
                     />
                     <Detail
                       label="Status"
