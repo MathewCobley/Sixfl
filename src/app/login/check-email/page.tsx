@@ -1,0 +1,48 @@
+// ========================================
+// File: src/app/login/check-email/page.tsx
+// ========================================
+
+type PageProps = {
+  searchParams: Promise<{
+    email?: string;
+  }>;
+};
+
+export default async function CheckEmailPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const email = params.email ?? "your email address";
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
+      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl">
+        <h1 className="text-3xl font-semibold tracking-tight">Check your email</h1>
+
+        <p className="mt-4 text-base text-white/70">
+          We’ve sent your SIXFL sign-in link to:
+        </p>
+
+        <p className="mt-3 break-all text-lg font-medium text-emerald-300">
+          {email}
+        </p>
+
+        <p className="mt-6 text-sm text-white/50">
+          It should arrive in a moment. If you don’t see it, check your spam or
+          junk folder.
+        </p>
+
+        <div className="mt-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          Make sure you open the link on this device to complete sign-in.
+        </div>
+
+        <div className="mt-6">
+          <a
+            href="/login"
+            className="text-sm font-medium text-emerald-300 underline underline-offset-4 transition hover:text-emerald-200"
+          >
+            Use a different email
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}

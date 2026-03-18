@@ -11,14 +11,12 @@ import { signIn } from "next-auth/react";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     setLoading(true);
-    setMessage(null);
     setNotice(null);
 
     const res = await fetch("/api/auth/check-email", {
@@ -37,13 +35,19 @@ export default function LoginPage() {
       return;
     }
 
-    await signIn("email", {
+    const result = await signIn("email", {
       email,
       callbackUrl: "/dashboard",
+      redirect: false,
     });
 
-    setLoading(false);
-    setMessage("Check your email for your SIXFL sign-in link.");
+    if (result?.error) {
+      setLoading(false);
+      setNotice("We couldn’t send your sign-in link. Please try again.");
+      return;
+    }
+
+    window.location.href = `/login/check-email?email=${encodeURIComponent(email)}`;
   }
 
   return (
@@ -54,12 +58,6 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-white/70">
           Enter your email to receive a SIXFL login link.
         </p>
-
-        {message && (
-          <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-            {message}
-          </div>
-        )}
 
         {notice && (
           <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
@@ -92,7 +90,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60"
           >
-            {loading ? "Checking..." : "Send magic link"}
+            {loading ? "Sending link..." : "Send magic link"}
           </button>
         </form>
 

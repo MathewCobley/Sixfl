@@ -56,7 +56,6 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: "/login",
-    verifyRequest: "/auth/verify-request",
     error: "/login",
   },
   debug: process.env.NEXTAUTH_DEBUG === "true",
