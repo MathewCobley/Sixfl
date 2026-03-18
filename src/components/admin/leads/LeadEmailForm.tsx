@@ -9,6 +9,7 @@
 // ========================================
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 import { sendLeadEmailAction } from "@/app/admin/leads/[id]/actions";
 import {
@@ -42,6 +43,12 @@ export default function LeadEmailForm({
   email,
   firstName,
 }: Props) {
+  // ========================================
+  // Router
+  // ========================================
+
+  const router = useRouter();
+
   // ========================================
   // State
   // ========================================
@@ -79,20 +86,26 @@ export default function LeadEmailForm({
     e.preventDefault();
     setSending(true);
 
-    const formData = new FormData();
-    formData.append("leadId", leadId);
-    formData.append("subject", subject);
-    formData.append("body", body);
+    try {
+      const formData = new FormData();
+      formData.append("leadId", leadId);
+      formData.append("subject", subject);
+      formData.append("body", body);
 
-    const result = await sendLeadEmailAction(formData);
+      const result = await sendLeadEmailAction(formData);
 
-    if (!result?.ok) {
-      alert(result?.error || "Failed to send email.");
-    } else {
+      if (!result?.ok) {
+        alert(result?.error || "Failed to send email.");
+        return;
+      }
+
       alert("Email sent successfully.");
+      router.refresh();
+    } catch {
+      alert("Something went wrong while sending the email.");
+    } finally {
+      setSending(false);
     }
-
-    setSending(false);
   }
 
   function resetTemplate() {
