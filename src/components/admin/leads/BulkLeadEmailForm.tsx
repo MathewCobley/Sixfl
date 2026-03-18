@@ -15,17 +15,29 @@ import {
   getSixflLeadEmailTemplate,
   type LeadEmailTemplateKey,
 } from "@/lib/emailTemplates";
+import type {
+  InterestType,
+  LeadStatus,
+  PreferredNight,
+} from "@prisma/client";
 
 // ========================================
 // Types
 // ========================================
 
+type RecipientPreviewItem = {
+  id: string;
+  contactName: string | null;
+  email: string;
+};
+
 type Props = {
-  selectedType?: string;
-  selectedStatus?: string;
+  selectedType?: InterestType;
+  selectedStatus?: LeadStatus;
   selectedArea?: string;
-  selectedNight?: string;
+  selectedNight?: PreferredNight;
   recipientCount: number;
+  recipientPreview: RecipientPreviewItem[];
 };
 
 const BULK_SEND_CONFIRM_TEXT = "BULK SEND";
@@ -47,6 +59,7 @@ export default function BulkLeadEmailForm({
   selectedArea,
   selectedNight,
   recipientCount,
+  recipientPreview,
 }: Props) {
   // ========================================
   // State
@@ -69,6 +82,10 @@ export default function BulkLeadEmailForm({
   const canStartBulkSend = hasRecipients && hasSubject && hasBody && !sending;
   const isConfirmationMatch =
     confirmationText.trim() === BULK_SEND_CONFIRM_TEXT;
+
+  const previewItems = recipientPreview.filter((item) => item.email.trim());
+  const previewCount = previewItems.length;
+  const remainingPreviewCount = Math.max(recipientCount - previewCount, 0);
 
   // ========================================
   // Effects
@@ -103,6 +120,12 @@ export default function BulkLeadEmailForm({
       setShowConfirmation(false);
       setConfirmationText("");
     }
+  }
+
+  function getRecipientDisplayName(recipient: RecipientPreviewItem) {
+    const trimmedName = recipient.contactName?.trim();
+    if (trimmedName) return trimmedName;
+    return "Unnamed lead";
   }
 
   // ========================================
@@ -181,9 +204,6 @@ export default function BulkLeadEmailForm({
 
   return (
     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
-      {/* ========================================
-          Header
-      ======================================== */}
       <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-lg font-bold text-white">
@@ -200,9 +220,6 @@ export default function BulkLeadEmailForm({
         </div>
       </div>
 
-      {/* ========================================
-          Filter Summary
-      ======================================== */}
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/55">
         <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
           Type: {selectedType || "All"}
@@ -218,9 +235,6 @@ export default function BulkLeadEmailForm({
         </span>
       </div>
 
-      {/* ========================================
-          Privacy Note
-      ======================================== */}
       <div className="mt-4 rounded-xl border border-emerald-500/20 bg-black/20 px-4 py-3 text-sm text-white/75">
         <div className="font-semibold text-emerald-300">Privacy note</div>
         <div className="mt-1 leading-6">
@@ -229,9 +243,61 @@ export default function BulkLeadEmailForm({
         </div>
       </div>
 
-      {/* ========================================
-          Empty State
-      ======================================== */}
+      {hasRecipients ? (
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm font-semibold text-white">
+              Recipient preview
+            </div>
+            <div className="text-xs text-white/45">
+              Showing {previewCount} of {recipientCount}
+            </div>
+          </div>
+
+          <div className="mt-2 text-sm text-white/65">
+            This bulk email will go to the currently filtered leads with a valid
+            email address.
+          </div>
+
+          {previewCount > 0 ? (
+            <div className="mt-4 space-y-2">
+              {previewItems.map((recipient) => (
+                <div
+                  key={recipient.id}
+                  className="flex flex-col gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-white">
+                      {getRecipientDisplayName(recipient)}
+                    </div>
+                    <div className="truncate text-xs text-white/50">
+                      Lead recipient preview
+                    </div>
+                  </div>
+
+                  <div className="truncate text-sm text-emerald-300">
+                    {recipient.email}
+                  </div>
+                </div>
+              ))}
+
+              {remainingPreviewCount > 0 ? (
+                <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/55">
+                  And {remainingPreviewCount} more{" "}
+                  {remainingPreviewCount === 1 ? "recipient" : "recipients"}...
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              Recipient preview data has not been passed into this form yet, but
+              the current filters match {recipientCount}{" "}
+              {recipientCount === 1 ? "recipient" : "recipients"}.
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {!hasRecipients ? (
         <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           No leads match the current filters, so bulk email is currently
@@ -239,9 +305,6 @@ export default function BulkLeadEmailForm({
         </div>
       ) : null}
 
-      {/* ========================================
-          Form
-      ======================================== */}
       <form action={handleSubmit} className="mt-5 space-y-4">
         <input type="hidden" name="type" value={selectedType ?? ""} />
         <input type="hidden" name="status" value={selectedStatus ?? ""} />
@@ -253,9 +316,6 @@ export default function BulkLeadEmailForm({
           value={showConfirmation && isConfirmationMatch ? "yes" : ""}
         />
 
-        {/* ========================================
-            Template Selector
-        ======================================== */}
         <div>
           <div className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
             Email template
@@ -276,9 +336,6 @@ export default function BulkLeadEmailForm({
           </div>
         </div>
 
-        {/* ========================================
-            Subject Field
-        ======================================== */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
             Subject
@@ -297,9 +354,6 @@ export default function BulkLeadEmailForm({
           />
         </div>
 
-        {/* ========================================
-            Message Field
-        ======================================== */}
         <div>
           <div className="flex items-center justify-between">
             <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
@@ -333,9 +387,6 @@ We’ll be in touch shortly with next steps.`}
           </div>
         </div>
 
-        {/* ========================================
-            Confirmation Panel
-        ======================================== */}
         {showConfirmation ? (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-300/85">
@@ -401,9 +452,6 @@ We’ll be in touch shortly with next steps.`}
           </div>
         ) : null}
 
-        {/* ========================================
-            Feedback Messages
-        ======================================== */}
         {error ? (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {error}
@@ -416,9 +464,6 @@ We’ll be in touch shortly with next steps.`}
           </div>
         ) : null}
 
-        {/* ========================================
-            Actions
-        ======================================== */}
         <div className="flex flex-wrap gap-3">
           {!showConfirmation ? (
             <button
