@@ -6,10 +6,8 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import {
-  convertLeadToTeamAction,
-  initialConvertLeadToTeamState,
-} from "@/app/admin/leads/convert-actions";
+import { convertLeadToTeamAction } from "@/app/admin/leads/convert-actions";
+import { initialConvertLeadToTeamState } from "@/app/admin/leads/convert-action-state";
 
 type Props = {
   leadId: string;

@@ -10,16 +10,7 @@ import { redirect } from "next/navigation";
 import { Prisma, TeamRole, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-
-export type ConvertLeadToTeamState = {
-  ok: boolean;
-  error: string | null;
-};
-
-export const initialConvertLeadToTeamState: ConvertLeadToTeamState = {
-  ok: false,
-  error: null,
-};
+import type { ConvertLeadToTeamState } from "./convert-action-state";
 
 function getSafeTeamName(input: {
   manualTeamName?: string;
