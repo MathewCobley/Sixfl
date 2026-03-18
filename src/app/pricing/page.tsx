@@ -227,8 +227,7 @@ export default function PricingPage() {
           </h2>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
-            Get your team into the SIXFL launch pipeline and we’ll keep you
-            updated as leagues open in your area.
+            Register your team today and secure your place as leagues are finalised in your area.
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">

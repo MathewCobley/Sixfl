@@ -20,10 +20,10 @@ export default async function RegisterInterestSuccessPage({
 
   const body =
     type === "player"
-      ? "Your details have been added to the SIXFL player pipeline and we’ll be in touch as launch plans progress in your area."
+      ? "Your details have been received. We’re currently organising leagues in your area and will be in touch soon with updates and next steps."
       : type === "referee"
-      ? "Your details have been added to the SIXFL referee pipeline and we’ll be in touch as launch plans progress in your area."
-      : "Your team details have been added to the SIXFL pipeline and we’ll be in touch as league spaces open in your area.";
+      ? "Your details have been received. We’re currently organising leagues in your area and will be in touch soon with updates and next steps."
+      : "Your team has been registered. We’re now organising leagues in your area and will be in touch shortly with next steps.";
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -39,6 +39,11 @@ export default async function RegisterInterestSuccessPage({
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
             {body}
+          </p>
+
+          {/* 👇 small but powerful addition */}
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-white/50">
+            Keep an eye on your email — we’ll send updates as soon as your league is ready.
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">

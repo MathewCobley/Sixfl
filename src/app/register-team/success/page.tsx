@@ -14,13 +14,15 @@ export default function RegisterTeamSuccessPage() {
           </div>
 
           <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl">
-            Your team has been added.
+            Your team has been registered.
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
-            Thanks for registering your interest in SIXFL. Your enquiry is now
-            in the lead pipeline and we’ll be in touch as launch plans progress
-            in your area.
+            We’re now organising leagues in your area and will be in touch shortly with next steps.
+          </p>
+
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-white/50">
+            Keep an eye on your email — we’ll send updates as soon as your league is ready.
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">

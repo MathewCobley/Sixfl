@@ -18,7 +18,7 @@ type TeamForm = {
   squadSize: string;
 };
 
-const launchAreas = ["York", "Leeds", "Harrogate", "Ripon", ];
+const launchAreas = ["York", "Leeds", "Harrogate", "Ripon"];
 
 const leagueOptions = [
   { value: "MENS", label: "Men’s" },
@@ -128,16 +128,16 @@ export default function RegisterTeamClient({
               </div>
 
               <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
-                Join the
+                Register your team for
                 <span className="block text-emerald-400">
-                  SIXFL launch list.
+                  SIXFL.
                 </span>
               </h1>
 
               <p className="mt-5 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
-                Built for teams who want properly-run 6-a-side football.
-                Register your interest now and we’ll keep you updated as leagues
-                open in your area.
+                Built for teams who want properly run 6-a-side football.
+                Register today and we’ll be in touch with next steps as leagues
+                are organised in your area.
               </p>
 
               <div className="mt-8 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-6">
@@ -219,8 +219,8 @@ export default function RegisterTeamClient({
                   Register Your Team
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-white/65">
-                  Complete the form below and we’ll save your team enquiry
-                  directly into the SIXFL lead pipeline.
+                  Complete the form below and we’ll register your team interest
+                  with SIXFL.
                 </p>
               </div>
 
@@ -421,8 +421,8 @@ export default function RegisterTeamClient({
               </form>
 
               <p className="mt-6 text-xs leading-5 text-white/45">
-                By registering, you’re telling us you’re interested in joining a
-                SIXFL league when launch slots open in your area.
+                By registering, you’re telling us you’d like to join a SIXFL
+                league as soon as spaces become available in your area.
               </p>
             </div>
           </div>
