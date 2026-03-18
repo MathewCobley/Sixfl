@@ -23,6 +23,7 @@ function generateClaimCode(length = 8) {
 async function generateUniqueClaimCode() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const code = generateClaimCode();
+
     const existing = await prisma.team.findUnique({
       where: { claimCode: code },
       select: { id: true },
@@ -100,12 +101,15 @@ export async function regenerateClaimCodeAction(formData: FormData) {
   const newClaimCode = await generateUniqueClaimCode();
 
   await prisma.$transaction([
+    // ✅ REMOVE CURRENT CAPTAIN (unclaim team)
     prisma.teamMember.deleteMany({
       where: {
         teamId: id,
-        role: TeamRole.MANAGER,
+        role: TeamRole.CAPTAIN,
       },
     }),
+
+    // ✅ UPDATE CLAIM CODE
     prisma.team.update({
       where: { id },
       data: {

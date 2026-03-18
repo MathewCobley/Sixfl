@@ -6,7 +6,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { convertLeadToTeamAction } from "@/app/admin/leads/[id]/actions";
+import {
+  convertLeadToTeamAction,
+  initialConvertLeadToTeamState,
+} from "@/app/admin/leads/convert-actions";
 
 type Props = {
   leadId: string;
@@ -21,51 +24,32 @@ export default function ConvertLeadToTeamButton({
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [successTeamId, setSuccessTeamId] = useState<string | null>(
-    convertedTeamId ?? null
-  );
-  const [successMessage, setSuccessMessage] = useState<string | null>(
-    alreadyConverted
-      ? "This lead has already been converted to a team."
-      : null
-  );
 
   function handleConvert() {
     const confirmed = window.confirm(
-      "Convert this lead into a team? This will create the team, create or link the captain user, and close the lead."
+      "Convert this lead into a team? This will create the team, create or link the captain user, add them as captain, and close the lead."
     );
 
     if (!confirmed) return;
 
     setError(null);
-    setSuccessMessage(null);
 
     const formData = new FormData();
     formData.append("leadId", leadId);
 
     startTransition(async () => {
-      const result = await convertLeadToTeamAction(formData);
+      const result = await convertLeadToTeamAction(
+        initialConvertLeadToTeamState,
+        formData
+      );
 
       if (!result.ok) {
         setError(result.error ?? "Failed to convert lead to team.");
-
-        if (result.teamId) {
-          setSuccessTeamId(result.teamId);
-        }
-
-        return;
       }
-
-      setSuccessTeamId(result.teamId ?? null);
-      setSuccessMessage(
-        result.teamName
-          ? `Lead converted successfully. Team created: ${result.teamName}.`
-          : "Lead converted successfully."
-      );
     });
   }
 
-  if (alreadyConverted && successTeamId) {
+  if (alreadyConverted && convertedTeamId) {
     return (
       <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
         <div className="text-sm font-medium text-emerald-300">
@@ -74,7 +58,7 @@ export default function ConvertLeadToTeamButton({
 
         <div className="mt-3">
           <Link
-            href={`/admin/teams/${successTeamId}`}
+            href={`/admin/teams/${convertedTeamId}`}
             className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
           >
             View team
@@ -96,19 +80,15 @@ export default function ConvertLeadToTeamButton({
           {isPending ? "Converting..." : "Convert to team"}
         </button>
 
-        {successTeamId ? (
+        {convertedTeamId ? (
           <Link
-            href={`/admin/teams/${successTeamId}`}
+            href={`/admin/teams/${convertedTeamId}`}
             className="inline-flex items-center justify-center rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/5"
           >
             View team
           </Link>
         ) : null}
       </div>
-
-      {successMessage ? (
-        <p className="mt-3 text-sm text-emerald-300">{successMessage}</p>
-      ) : null}
 
       {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
     </div>

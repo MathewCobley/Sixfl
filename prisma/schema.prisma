@@ -26,9 +26,13 @@ model User {
   // Platform-level role
   role UserRole @default(USER)
 
+  // Optional audit field so we know this user originally came from a lead
+  createdFromLeadId String?
+
   accounts         Account[]
   sessions         Session[]
   teamMembers      TeamMember[]
+  createdTeams     Team[]        @relation("TeamCreatedBy")
   refereedFixtures Fixture[]     @relation("FixtureReferee")
   enteredResults   MatchResult[] @relation("ResultEnteredBy")
 }
@@ -113,6 +117,10 @@ model Team {
   claimCode String  @unique
   logoUrl   String?
 
+  // Useful for ownership / audit
+  createdByUserId String?
+  createdByUser   User? @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
@@ -140,6 +148,8 @@ model TeamMember {
   createdAt DateTime @default(now())
 
   @@unique([userId, teamId])
+  @@index([teamId])
+  @@index([userId])
 }
 
 enum TeamRole {
