@@ -323,9 +323,6 @@ export default async function AdminLeadsPage({
     email: {
       not: "",
     },
-    NOT: {
-      email: null,
-    },
   };
 
   const returnTo = buildHref({
