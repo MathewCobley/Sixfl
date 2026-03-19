@@ -31,8 +31,8 @@ function getSizeClasses(size: TeamBadgeProps["size"] = "md") {
       };
     case "lg":
       return {
-        outer: "h-16 w-16",
-        inner: "text-base",
+        outer: "h-40 w-40", // bigger, but clean (no scaling tricks)
+        inner: "text-2xl",
       };
     case "md":
     default:
@@ -75,7 +75,11 @@ function getTeamStyle(name: string) {
     },
   ];
 
-  const hash = Array.from(name).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const hash = Array.from(name).reduce(
+    (acc, char) => acc + char.charCodeAt(0),
+    0
+  );
+
   return styles[hash % styles.length];
 }
 
@@ -91,13 +95,15 @@ export default function TeamBadge({
   if (logoUrl) {
     return (
       <div
-        className={`overflow-hidden rounded-[30%] border border-white/10 bg-white/5 shadow-sm ${sizeClasses.outer}`}
+        className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black shadow-sm ${sizeClasses.outer}`}
+        title={`${name} badge`}
+        aria-label={`${name} badge`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={logoUrl}
           alt={`${name} badge`}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
         />
       </div>
     );
@@ -105,12 +111,12 @@ export default function TeamBadge({
 
   return (
     <div
-      className={`relative flex items-center justify-center rounded-[30%] border shadow-sm ${style.outer} ${sizeClasses.outer}`}
+      className={`relative flex shrink-0 items-center justify-center rounded-full border shadow-sm ${style.outer} ${sizeClasses.outer}`}
       title={`${name} badge`}
       aria-label={`${name} badge`}
     >
       <div
-        className={`flex h-[72%] w-[72%] items-center justify-center rounded-[24%] border font-bold tracking-wide ${style.inner} ${sizeClasses.inner}`}
+        className={`flex h-[72%] w-[72%] items-center justify-center rounded-full border font-bold tracking-wide ${style.inner} ${sizeClasses.inner}`}
       >
         {initials}
       </div>

@@ -1,3 +1,4 @@
+
 // ========================================
 // File: prisma/schema.prisma
 // ========================================
@@ -13,7 +14,6 @@ datasource db {
 
 /**
  * NextAuth tables
- * (No createdAt/updatedAt on User to avoid db push failure with existing rows)
  */
 
 model User {
@@ -23,10 +23,8 @@ model User {
   emailVerified DateTime?
   image         String?
 
-  // Platform-level role
   role UserRole @default(USER)
 
-  // Optional audit field so we know this user originally came from a lead
   createdFromLeadId String?
 
   accounts         Account[]
@@ -88,6 +86,7 @@ model League {
   name     String
   season   String?
   isActive Boolean @default(true)
+  slug     String? @unique
 
   teams    Team[]
   fixtures Fixture[]
@@ -117,7 +116,6 @@ model Team {
   claimCode String  @unique
   logoUrl   String?
 
-  // Useful for ownership / audit
   createdByUserId String?
   createdByUser   User? @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
@@ -235,6 +233,10 @@ model InterestLead {
   wantsFreeKit     Boolean @default(false)
   marketingConsent Boolean @default(false)
 
+  // 👇 ADD THESE
+  leagueId String?
+  league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+
   contactedAt DateTime?
   closedAt    DateTime?
 
@@ -253,6 +255,7 @@ model InterestLead {
   @@index([area])
   @@index([leagueType])
   @@index([createdAt])
+  @@index([leagueId])
 }
 
 model InterestLeadPreferredNight {

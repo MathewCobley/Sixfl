@@ -21,7 +21,11 @@ export default async function AdminTeamEditPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ error?: string; regenerated?: string; saved?: string }>;
+  searchParams?: Promise<{
+    error?: string;
+    regenerated?: string;
+    saved?: string;
+  }>;
 }) {
   await requireAdmin();
 
@@ -114,9 +118,7 @@ export default async function AdminTeamEditPage({
           {saved && <div className="text-emerald-300">Team details updated.</div>}
 
           {regenerated && (
-            <div className="text-emerald-300">
-              New claim code generated.
-            </div>
+            <div className="text-emerald-300">New claim code generated.</div>
           )}
 
           {error === "has_fixtures" && (
@@ -126,22 +128,18 @@ export default async function AdminTeamEditPage({
           )}
 
           {error && error !== "has_fixtures" ? (
-            <div className="text-red-300">
-              Something went wrong: {error}
-            </div>
+            <div className="text-red-300">Something went wrong: {error}</div>
           ) : null}
         </div>
       )}
 
       <div className="space-y-6 rounded-xl border border-white/10 p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-6">
           <TeamBadge name={team.name} logoUrl={team.logoUrl} size="lg" />
 
           <div className="space-y-1">
-            <div>
-              <div className="text-sm text-white/60">Team name</div>
-              <div className="text-lg text-white">{team.name}</div>
-            </div>
+            <div className="text-sm text-white/60">Team name</div>
+            <div className="text-2xl font-semibold text-white">{team.name}</div>
 
             <div className="text-sm text-white/60">
               {team.league
@@ -200,7 +198,9 @@ export default async function AdminTeamEditPage({
             />
 
             <div className="text-xs text-white/50">
-              Use a path from <span className="font-mono text-white/70">public/team-logos</span>, for example{" "}
+              Use a path from{" "}
+              <span className="font-mono text-white/70">public/team-logos</span>,
+              for example{" "}
               <span className="font-mono text-white/70">
                 /team-logos/ripon-rovers.png
               </span>

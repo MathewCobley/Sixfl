@@ -13,6 +13,7 @@ type FormState = {
   phone: string;
   enquiryType: string;
   message: string;
+  website: string;
 };
 
 const initialForm: FormState = {
@@ -21,6 +22,7 @@ const initialForm: FormState = {
   phone: "",
   enquiryType: "General enquiry",
   message: "",
+  website: "",
 };
 
 export default function ContactPage() {
@@ -29,7 +31,10 @@ export default function ContactPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
+  function updateField<K extends keyof FormState>(
+    field: K,
+    value: FormState[K]
+  ) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -115,6 +120,19 @@ export default function ContactPage() {
             ) : null}
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Honeypot field */}
+              <div className="hidden" aria-hidden="true">
+                <label htmlFor="website">Website</label>
+                <input
+                  id="website"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={form.website}
+                  onChange={(e) => updateField("website", e.target.value)}
+                />
+              </div>
+
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label
