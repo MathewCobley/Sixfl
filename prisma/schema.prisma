@@ -1,4 +1,3 @@
-
 // ========================================
 // File: prisma/schema.prisma
 // ========================================
@@ -90,6 +89,9 @@ model League {
 
   teams    Team[]
   fixtures Fixture[]
+
+  // ✅ FIX ADDED HERE
+  interestLeads InterestLead[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -233,7 +235,6 @@ model InterestLead {
   wantsFreeKit     Boolean @default(false)
   marketingConsent Boolean @default(false)
 
-  // 👇 ADD THESE
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
