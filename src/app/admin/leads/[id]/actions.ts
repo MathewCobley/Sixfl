@@ -166,33 +166,19 @@ export async function sendLeadEmailAction(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
 
-  console.log("[sendLeadEmailAction] started", {
-    leadId,
-    subject,
-    bodyLength: body.length,
-  });
-
   if (!leadId) {
-    console.warn("[sendLeadEmailAction] missing lead id");
     return { ok: false, error: "Missing lead id." };
   }
 
   if (!subject) {
-    console.warn("[sendLeadEmailAction] missing subject", { leadId });
     return { ok: false, error: "Please enter a subject." };
   }
 
   if (!body) {
-    console.warn("[sendLeadEmailAction] missing body", { leadId });
     return { ok: false, error: "Please enter an email message." };
   }
 
   const fromEmail = process.env.EMAIL_FROM;
-
-  console.log("[sendLeadEmailAction] env check", {
-    hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
-    fromEmail,
-  });
 
   if (!process.env.RESEND_API_KEY) {
     return {
@@ -212,32 +198,15 @@ export async function sendLeadEmailAction(formData: FormData) {
     where: { id: leadId },
   });
 
-  console.log("[sendLeadEmailAction] lead lookup", {
-    found: Boolean(lead),
-    leadEmail: lead?.email ?? null,
-    leadStatus: lead?.status ?? null,
-  });
-
   if (!lead) {
     return { ok: false, error: "Lead not found." };
-  }
-
-  if (!lead.email?.trim()) {
-    console.warn("[sendLeadEmailAction] lead missing email", { leadId });
-    return { ok: false, error: "Lead email address not found." };
   }
 
   const signedTextBody = appendEmailSignatureText(body);
   const signedHtmlBody = buildLeadEmailHtml(body);
 
   try {
-    console.log("[sendLeadEmailAction] calling resend.emails.send", {
-      from: fromEmail,
-      to: lead.email,
-      subject,
-    });
-
-    const resendResult = await resend.emails.send({
+    await resend.emails.send({
       from: fromEmail,
       to: lead.email,
       subject,
@@ -245,20 +214,13 @@ export async function sendLeadEmailAction(formData: FormData) {
       html: signedHtmlBody,
     });
 
-    console.log("[sendLeadEmailAction] resend success", resendResult);
-
-    const historyRecord = await prisma.interestLeadEmail.create({
+    await prisma.interestLeadEmail.create({
       data: {
         interestLeadId: lead.id,
         subject,
         body: signedTextBody,
         sentTo: lead.email,
       },
-    });
-
-    console.log("[sendLeadEmailAction] email history saved", {
-      historyId: historyRecord.id,
-      leadId: lead.id,
     });
 
     if (lead.status === "NEW") {
@@ -269,182 +231,23 @@ export async function sendLeadEmailAction(formData: FormData) {
           contactedAt: new Date(),
         },
       });
-
-      console.log("[sendLeadEmailAction] lead status updated to CONTACTED", {
-        leadId: lead.id,
-      });
     }
 
     revalidatePath("/admin/leads");
     revalidatePath(`/admin/leads/${lead.id}`);
 
-    console.log("[sendLeadEmailAction] completed successfully", {
-      leadId: lead.id,
-    });
-
     return { ok: true };
   } catch (error) {
-    console.error("[sendLeadEmailAction] error", error);
+    console.error("sendLeadEmailAction error", error);
 
     return {
       ok: false,
       error:
-        error instanceof Error
-          ? error.message
-          : "The email could not be sent. Please check your Resend domain and email settings.",
+        "The email could not be sent. Please check your Resend domain and email settings.",
     };
   }
 }
 
-export async function convertLeadToTeamAction(formData: FormData) {
-  await requireAdmin();
-
-  const leadId = String(formData.get("leadId") ?? "").trim();
-
-  if (!leadId) {
-    return { ok: false, error: "Missing lead id." };
-  }
-
-  try {
-    const lead = await prisma.interestLead.findUnique({
-      where: { id: leadId },
-      select: {
-        id: true,
-        interestType: true,
-        status: true,
-        contactName: true,
-        email: true,
-        teamName: true,
-        convertedAt: true,
-        convertedTeamId: true,
-      },
-    });
-
-    if (!lead) {
-      return { ok: false, error: "Lead not found." };
-    }
-
-    if (lead.interestType !== "TEAM") {
-      return { ok: false, error: "Only TEAM leads can be converted to a team." };
-    }
-
-    if (!lead.contactName.trim()) {
-      return { ok: false, error: "Lead is missing a contact name." };
-    }
-
-    if (!lead.email.trim()) {
-      return { ok: false, error: "Lead is missing an email address." };
-    }
-
-    if (lead.convertedAt || lead.convertedTeamId) {
-      return {
-        ok: false,
-        error: "This lead has already been converted.",
-        teamId: lead.convertedTeamId ?? undefined,
-      };
-    }
-
-    const teamName = buildTeamNameFromLead(lead);
-    const claimCode = await generateUniqueClaimCode(teamName);
-
-    const result = await prisma.$transaction(async (tx) => {
-      const freshLead = await tx.interestLead.findUnique({
-        where: { id: leadId },
-        select: {
-          id: true,
-          interestType: true,
-          status: true,
-          contactName: true,
-          email: true,
-          teamName: true,
-          convertedAt: true,
-          convertedTeamId: true,
-        },
-      });
-
-      if (!freshLead) {
-        throw new Error("Lead not found.");
-      }
-
-      if (freshLead.interestType !== "TEAM") {
-        throw new Error("Only TEAM leads can be converted to a team.");
-      }
-
-      if (freshLead.convertedAt || freshLead.convertedTeamId) {
-        throw new Error("This lead has already been converted.");
-      }
-
-      const existingUser = await tx.user.findUnique({
-        where: { email: freshLead.email },
-        select: { id: true },
-      });
-
-      const user =
-        existingUser ??
-        (await tx.user.create({
-          data: {
-            name: freshLead.contactName.trim(),
-            email: freshLead.email.trim(),
-          },
-          select: { id: true },
-        }));
-
-      const team = await tx.team.create({
-        data: {
-          name: buildTeamNameFromLead(freshLead),
-          claimCode,
-        },
-        select: {
-          id: true,
-          name: true,
-        },
-      });
-
-      await tx.teamMember.create({
-        data: {
-          userId: user.id,
-          teamId: team.id,
-          role: TeamRole.CAPTAIN,
-        },
-      });
-
-      await tx.interestLead.update({
-        where: { id: freshLead.id },
-        data: {
-          status: LeadStatus.CLOSED,
-          closedAt: new Date(),
-          convertedAt: new Date(),
-          convertedTeamId: team.id,
-        },
-      });
-
-      return team;
-    });
-
-    revalidatePath("/admin/leads");
-    revalidatePath(`/admin/leads/${leadId}`);
-    revalidatePath("/admin/teams");
-    revalidatePath(`/admin/teams/${result.id}`);
-
-    return {
-      ok: true,
-      teamId: result.id,
-      teamName: result.name,
-    };
-  } catch (error) {
-    console.error("convertLeadToTeamAction error", error);
-
-    const message =
-      error instanceof Error && error.message
-        ? error.message
-        : "Failed to convert lead to team.";
-
-    return {
-      ok: false,
-      error: message,
-    };
-  }
-}
 
 export async function deleteLeadAction(formData: FormData) {
   await requireAdmin();

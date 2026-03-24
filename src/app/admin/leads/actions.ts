@@ -68,7 +68,7 @@ function buildLeadEmailHtml(body: string) {
         style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;font-family:Arial,sans-serif;"
       >
         <tr>
-          <td style="padding:32px 32px 12px 32px;text-align:left;">
+          <td style="padding:32px 32px 12px 32px;">
             <img
               src="${SIXFL_LOGO_URL}"
               alt="SIXFL"

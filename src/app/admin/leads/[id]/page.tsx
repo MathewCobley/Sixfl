@@ -8,7 +8,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { prisma } from "@/lib/prisma";
 import LeadEmailForm from "@/components/admin/leads/LeadEmailForm";
 import DeleteLeadButton from "@/components/admin/leads/DeleteLeadButton";
-import ConvertLeadToTeamForm from "@/components/admin/leads/ConvertLeadToTeamForm";
+import ConvertLeadToTeamButton from "@/components/admin/leads/ConvertLeadToTeamButton";
 import type {
   InterestType,
   LeadStatus,
@@ -22,9 +22,7 @@ type PageProps = {
   }>;
 };
 
-function formatDate(date: Date | null | undefined) {
-  if (!date) return "—";
-
+function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -143,24 +141,19 @@ export default async function LeadPage({ params }: PageProps) {
         select: {
           id: true,
           name: true,
-          claimCode: true,
         },
       },
     },
   });
 
   if (!lead) {
-    return notFound();
+    notFound();
   }
 
   const emailCount = lead.emails.length;
-  const latestEmail = lead.emails[0] ?? null;
+  const latestEmail = lead.emails[0];
   const alreadyConverted = Boolean(lead.convertedAt || lead.convertedTeamId);
   const canConvertToTeam = lead.interestType === "TEAM";
-
-  const suggestedTeamName =
-    lead.teamName?.trim() ||
-    (lead.contactName?.trim() ? `${lead.contactName.trim()} FC` : "");
 
   return (
     <div className="space-y-8">
@@ -247,15 +240,9 @@ export default async function LeadPage({ params }: PageProps) {
               />
               <DetailRow label="Source" value={lead.source ?? "—"} />
               <DetailRow label="Created" value={formatDate(lead.createdAt)} />
-              <DetailRow label="Updated" value={formatDate(lead.updatedAt)} />
-              <DetailRow
-                label="Contacted"
-                value={formatDate(lead.contactedAt)}
-              />
-              <DetailRow label="Closed" value={formatDate(lead.closedAt)} />
               <DetailRow
                 label="Converted"
-                value={formatDate(lead.convertedAt)}
+                value={lead.convertedAt ? formatDate(lead.convertedAt) : "—"}
               />
               <DetailRow
                 label="Converted team"
@@ -285,9 +272,8 @@ export default async function LeadPage({ params }: PageProps) {
               </div>
 
               <div className="mt-4">
-                <ConvertLeadToTeamForm
+                <ConvertLeadToTeamButton
                   leadId={lead.id}
-                  defaultTeamName={suggestedTeamName}
                   alreadyConverted={alreadyConverted}
                   convertedTeamId={lead.convertedTeamId}
                 />
@@ -304,11 +290,7 @@ export default async function LeadPage({ params }: PageProps) {
                   </Link>
                   {lead.convertedAt
                     ? ` on ${formatDate(lead.convertedAt)}`
-                    : ""}
-                  .
-                  <div className="mt-2 text-xs text-white/55">
-                    Claim code: {lead.convertedTeam.claimCode}
-                  </div>
+                    : ""}.
                 </div>
               ) : null}
             </div>

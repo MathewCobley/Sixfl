@@ -21,11 +21,7 @@ export default async function AdminTeamEditPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{
-    error?: string;
-    regenerated?: string;
-    saved?: string;
-  }>;
+  searchParams?: Promise<{ error?: string; regenerated?: string; saved?: string }>;
 }) {
   await requireAdmin();
 
@@ -35,30 +31,22 @@ export default async function AdminTeamEditPage({
   const regenerated = sp.regenerated === "1";
   const saved = sp.saved === "1";
 
-  if (!id) {
-    return notFound();
-  }
+  if (!id) notFound();
 
   const [team, leagues] = await Promise.all([
     prisma.team.findUnique({
       where: { id },
       include: {
         members: {
-          where: {
-            role: "CAPTAIN",
-          },
+          where: { role: "MANAGER" },
           include: {
             user: {
               select: {
-                id: true,
                 email: true,
                 name: true,
                 role: true,
               },
             },
-          },
-          orderBy: {
-            createdAt: "asc",
           },
         },
         league: {
@@ -66,14 +54,6 @@ export default async function AdminTeamEditPage({
             id: true,
             name: true,
             season: true,
-          },
-        },
-        convertedFromLead: {
-          select: {
-            id: true,
-            contactName: true,
-            email: true,
-            convertedAt: true,
           },
         },
       },
@@ -89,25 +69,23 @@ export default async function AdminTeamEditPage({
     }),
   ]);
 
-  if (!team) {
-    return notFound();
-  }
+  if (!team) notFound();
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(team.claimCode)}`;
 
-  const captainUser = team.members[0]?.user;
-  const hasCaptain = Boolean(captainUser?.email);
-  const claimedByAdmin = hasCaptain && captainUser?.role === UserRole.ADMIN;
+  const managerUser = team.members[0]?.user;
+  const hasManager = Boolean(managerUser?.email);
+  const claimedByCaptain = hasManager && managerUser?.role !== UserRole.ADMIN;
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-white">Edit Team</h1>
+        <h1 className="text-2xl font-semibold">Edit Team</h1>
 
         <Link
           href="/admin/teams"
-          className="rounded-md border border-white/10 px-4 py-2 text-white hover:bg-white/5"
+          className="rounded-md border border-white/10 px-4 py-2 hover:bg-white/5"
         >
           Back to teams
         </Link>
@@ -115,10 +93,14 @@ export default async function AdminTeamEditPage({
 
       {(saved || regenerated || error) && (
         <div className="space-y-1 rounded-xl border border-white/10 bg-black/30 p-4 text-sm">
-          {saved && <div className="text-emerald-300">Team details updated.</div>}
+          {saved && (
+            <div className="text-emerald-300">Team details updated.</div>
+          )}
 
           {regenerated && (
-            <div className="text-emerald-300">New claim code generated.</div>
+            <div className="text-emerald-300">
+              New claim code generated (team unclaimed).
+            </div>
           )}
 
           {error === "has_fixtures" && (
@@ -126,20 +108,18 @@ export default async function AdminTeamEditPage({
               Can’t delete this team because fixtures already exist for it.
             </div>
           )}
-
-          {error && error !== "has_fixtures" ? (
-            <div className="text-red-300">Something went wrong: {error}</div>
-          ) : null}
         </div>
       )}
 
       <div className="space-y-6 rounded-xl border border-white/10 p-6">
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <TeamBadge name={team.name} logoUrl={team.logoUrl} size="lg" />
 
           <div className="space-y-1">
-            <div className="text-sm text-white/60">Team name</div>
-            <div className="text-2xl font-semibold text-white">{team.name}</div>
+            <div>
+              <div className="text-sm text-white/60">Team name</div>
+              <div className="text-lg text-white">{team.name}</div>
+            </div>
 
             <div className="text-sm text-white/60">
               {team.league
@@ -198,8 +178,7 @@ export default async function AdminTeamEditPage({
             />
 
             <div className="text-xs text-white/50">
-              Use a path from{" "}
-              <span className="font-mono text-white/70">public/team-logos</span>,
+              Use a path from <span className="font-mono text-white/70">public/team-logos</span>,
               for example{" "}
               <span className="font-mono text-white/70">
                 /team-logos/ripon-rovers.png
@@ -222,46 +201,21 @@ export default async function AdminTeamEditPage({
           </button>
         </form>
 
-        <div className="space-y-2">
+        <div>
           <div className="text-sm text-white/60">Captain status</div>
 
-          {!hasCaptain && <div className="text-white/80">No captain assigned</div>}
+          {!hasManager && <div className="text-white/80">Unclaimed</div>}
 
-          {hasCaptain && claimedByAdmin && (
-            <div className="text-yellow-200">
-              Captain is currently an admin account
-            </div>
+          {hasManager && !claimedByCaptain && (
+            <div className="text-yellow-200">Manager is admin</div>
           )}
 
-          {hasCaptain && !claimedByAdmin && (
+          {claimedByCaptain && (
             <div className="text-emerald-200">
-              Captain assigned • {captainUser?.email}
+              Claimed • {managerUser?.email}
             </div>
           )}
-
-          {captainUser?.name ? (
-            <div className="text-sm text-white/60">
-              Name: <span className="text-white/80">{captainUser.name}</span>
-            </div>
-          ) : null}
         </div>
-
-        {team.convertedFromLead ? (
-          <div className="space-y-2">
-            <div className="text-sm text-white/60">Converted from lead</div>
-            <div className="text-sm text-white/80">
-              <Link
-                href={`/admin/leads/${team.convertedFromLead.id}`}
-                className="text-emerald-300 hover:text-emerald-200"
-              >
-                {team.convertedFromLead.contactName || team.convertedFromLead.email}
-              </Link>
-            </div>
-            <div className="text-xs text-white/50">
-              {team.convertedFromLead.email}
-            </div>
-          </div>
-        ) : null}
 
         <div>
           <div className="text-sm text-white/60">Claim code</div>
@@ -299,9 +253,11 @@ export default async function AdminTeamEditPage({
       </div>
 
       <div className="space-y-3 rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6">
-        <div className="font-semibold text-yellow-200">Claim code</div>
+        <div className="font-semibold text-yellow-200">Captain code</div>
         <p className="text-sm text-white/60">
-          Regenerating the claim code will invalidate the old link.
+          Regenerating the claim code will invalidate the old link and{" "}
+          <span className="text-white/80">unclaim the team</span> (removes current
+          MANAGER assignment).
         </p>
 
         <form action={regenerateClaimCodeAction}>
@@ -313,7 +269,7 @@ export default async function AdminTeamEditPage({
           />
           <ConfirmDeleteButton
             label="Regenerate claim code"
-            confirmText={`Regenerate claim code for "${team.name}"?`}
+            confirmText={`Regenerate claim code for "${team.name}" and unclaim the team?`}
             className="rounded-md bg-yellow-600 px-4 py-2 text-black hover:bg-yellow-500"
           />
         </form>

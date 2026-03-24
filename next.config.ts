@@ -1,7 +1,36 @@
+// ========================================
+// File: next.config.ts
+// ========================================
+
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async redirects() {
+    return [
+      {
+        source: "/",
+        has: [
+          {
+            type: "host",
+            value: "apextrailers.co.uk",
+          },
+        ],
+        destination: "/coming-soon",
+        permanent: false,
+      },
+      {
+        source: "/",
+        has: [
+          {
+            type: "host",
+            value: "www.apextrailers.co.uk",
+          },
+        ],
+        destination: "/coming-soon",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
