@@ -520,21 +520,27 @@ export default async function AdminLeadsPage({
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              href="/admin"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-            >
-              Back to admin
-            </Link>
+  <Link
+    href="/admin"
+    className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
+  >
+    Back to admin
+  </Link>
 
-            <Link
-              href="/admin/leads"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-            >
-              Clear filters
-            </Link>
-          </div>
-        </div>
+  <Link
+    href="/admin/leads"
+    className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
+  >
+    Clear filters
+  </Link>
+
+  <Link
+    href="/admin/leads/import"
+    className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
+  >
+    Import CSV
+  </Link>
+</div></div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
