@@ -39,25 +39,45 @@ function sameFixture(
 }
 
 // ========================================
-// Update Match
+// Update Fixture
 // ========================================
 
 export async function updateMatchAction(formData: FormData) {
   await requireAdmin();
 
-  const matchId = formData.get("matchId") as string;
+  const fixtureId = String(formData.get("matchId") ?? "").trim();
+  const homeTeamId = String(formData.get("homeTeamId") ?? "").trim();
+  const awayTeamId = String(formData.get("awayTeamId") ?? "").trim();
+  const roundValue = String(formData.get("round") ?? "").trim();
+  const kickoffAtValue = String(formData.get("kickoffAt") ?? "").trim();
+  const pitchValue = String(formData.get("pitch") ?? "").trim();
 
-  await prisma.match.update({
-    where: { id: matchId },
+  if (!fixtureId) {
+    throw new Error("Missing fixture id.");
+  }
+
+  if (!homeTeamId || !awayTeamId) {
+    throw new Error("Both home and away teams are required.");
+  }
+
+  if (!kickoffAtValue) {
+    throw new Error("Kickoff date/time is required.");
+  }
+
+  const kickoffAt = new Date(kickoffAtValue);
+
+  if (Number.isNaN(kickoffAt.getTime())) {
+    throw new Error("Invalid kickoff date/time.");
+  }
+
+  await prisma.fixture.update({
+    where: { id: fixtureId },
     data: {
-      homeTeamId: formData.get("homeTeamId") as string,
-      awayTeamId: formData.get("awayTeamId") as string,
-      round: Number(formData.get("round")),
-      kickoffAt: formData.get("kickoffAt")
-        ? new Date(formData.get("kickoffAt") as string)
-        : null,
-      pitch: (formData.get("pitch") as string) || null,
-      isManual: true,
+      homeTeamId,
+      awayTeamId,
+      round: roundValue ? Number(roundValue) : null,
+      kickoffAt,
+      pitch: pitchValue || null,
     },
   });
 
@@ -65,7 +85,7 @@ export async function updateMatchAction(formData: FormData) {
 }
 
 // ========================================
-// Regenerate Fixtures (ELITE VERSION)
+// Regenerate Fixtures
 // ========================================
 
 export async function regenerateFixtures(
@@ -96,10 +116,10 @@ export async function regenerateFixtures(
   const rounds = generateRoundRobin(teamIds);
 
   // ----------------------------------------
-  // Existing matches (for preserve logic)
+  // Existing fixtures
   // ----------------------------------------
 
-  const existingMatches = await prisma.match.findMany({
+  const existingFixtures = await prisma.fixture.findMany({
     where: { leagueId },
   });
 
@@ -108,7 +128,7 @@ export async function regenerateFixtures(
   // ----------------------------------------
 
   if (!preserveManual) {
-    await prisma.match.deleteMany({
+    await prisma.fixture.deleteMany({
       where: { leagueId },
     });
   }
@@ -128,12 +148,17 @@ export async function regenerateFixtures(
       const m = round.matches[i];
 
       // ----------------------------------------
-      // Preserve manual logic
+      // Preserve existing logic
       // ----------------------------------------
 
       if (preserveManual) {
-        const exists = existingMatches.find((em) =>
-          sameFixture(em.homeTeamId, em.awayTeamId, m.home, m.away)
+        const exists = existingFixtures.find((fixture) =>
+          sameFixture(
+            fixture.homeTeamId,
+            fixture.awayTeamId,
+            m.home,
+            m.away
+          )
         );
 
         if (exists) continue;
@@ -143,22 +168,22 @@ export async function regenerateFixtures(
       // Prevent duplicate teams in same round
       // ----------------------------------------
 
-      const clash = existingMatches.find(
-        (em) =>
-          em.round === round.round &&
-          (em.homeTeamId === m.home ||
-            em.awayTeamId === m.home ||
-            em.homeTeamId === m.away ||
-            em.awayTeamId === m.away)
+      const clash = existingFixtures.find(
+        (fixture) =>
+          fixture.round === round.round &&
+          (fixture.homeTeamId === m.home ||
+            fixture.awayTeamId === m.home ||
+            fixture.homeTeamId === m.away ||
+            fixture.awayTeamId === m.away)
       );
 
       if (preserveManual && clash) continue;
 
       // ----------------------------------------
-      // Create match
+      // Create fixture
       // ----------------------------------------
 
-      await prisma.match.create({
+      await prisma.fixture.create({
         data: {
           leagueId,
           homeTeamId: m.home,
@@ -167,7 +192,6 @@ export async function regenerateFixtures(
           position: i,
           kickoffAt: slots[i],
           pitch: DEFAULT_PITCHES[i % DEFAULT_PITCHES.length],
-          isManual: false,
         },
       });
     }

@@ -217,7 +217,17 @@ export default function EmailTemplateForm({
   action,
   initialValues,
 }: EmailTemplateFormProps) {
-  const [state, formAction] = useActionState(action, INITIAL_STATE);
+  async function submitTemplateAction(
+    _prevState: FormState,
+    formData: FormData,
+  ): Promise<FormState> {
+    return action(formData);
+  }
+
+  const [state, formAction] = useActionState(
+    submitTemplateAction,
+    INITIAL_STATE,
+  );
 
   const [key, setKey] = useState(initialValues?.key ?? "");
   const [name, setName] = useState(initialValues?.name ?? "");
@@ -538,8 +548,8 @@ export default function EmailTemplateForm({
                 ))}
               </div>
               <p className="mt-3 text-sm leading-6 text-neutral-300">
-                Use <span className="text-white">{"{{cta}}"}</span> once to place the CTA button exactly
-                where you want it. If you do not include it, the button will appear at the end.
+                Use <span className="text-white">{"{{cta}}"}</span> once to place the CTA. If you do not
+                include it, the button will appear at the end.
               </p>
             </div>
 

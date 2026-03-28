@@ -21,6 +21,17 @@ import {
 } from "@/lib/email/buildEmail";
 
 // ========================================
+// Types
+// ========================================
+
+type BulkEmailActionState = {
+  ok?: boolean;
+  error?: string;
+  sentCount?: number;
+  failedCount?: number;
+};
+
+// ========================================
 // Constants
 // ========================================
 
@@ -107,7 +118,10 @@ export async function updateLeadStatus(formData: FormData) {
   redirect(returnTo || "/admin/leads");
 }
 
-export async function sendBulkLeadEmailAction(formData: FormData) {
+export async function sendBulkLeadEmailAction(
+  _prevState: BulkEmailActionState,
+  formData: FormData,
+): Promise<BulkEmailActionState> {
   await requireAdmin();
 
   const subject = String(formData.get("subject") ?? "").trim();

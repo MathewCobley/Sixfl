@@ -4,29 +4,61 @@
 
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { regenerateFixtures } from "@/app/admin/leagues/[id]/fixtures/actions";
 import MatchModal from "./MatchModal";
 
-export default function FixturesEditor({ leagueId, teams, matches }) {
-  const [selectedMatch, setSelectedMatch] = useState<any>(null);
+type TeamItem = {
+  id: string;
+  name: string;
+};
+
+type MatchItem = {
+  id: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeTeam: {
+    id: string;
+    name: string;
+  };
+  awayTeam: {
+    id: string;
+    name: string;
+  };
+  round: number | null;
+  position: number | null;
+  pitch: string | null;
+  kickoffAt: string | Date;
+};
+
+type FixturesEditorProps = {
+  leagueId: string;
+  teams: TeamItem[];
+  matches: MatchItem[];
+};
+
+export default function FixturesEditor({
+  leagueId,
+  teams,
+  matches,
+}: FixturesEditorProps) {
+  const [selectedMatch, setSelectedMatch] = useState<MatchItem | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [preserveManual, setPreserveManual] = useState(true);
   const [confirmText, setConfirmText] = useState("");
 
-  // ========================================
-  // Group matches by round
-  // ========================================
+  const rounds = useMemo(() => {
+    return matches.reduce<Record<number, MatchItem[]>>((acc, match) => {
+      const roundNumber = match.round ?? 0;
 
-  const rounds = matches.reduce((acc, match) => {
-    if (!acc[match.round]) acc[match.round] = [];
-    acc[match.round].push(match);
-    return acc;
-  }, {} as Record<number, typeof matches>);
+      if (!acc[roundNumber]) {
+        acc[roundNumber] = [];
+      }
 
-  // ========================================
-  // Handlers
-  // ========================================
+      acc[roundNumber].push(match);
+      return acc;
+    }, {});
+  }, [matches]);
 
   function closeConfirmModal() {
     setConfirming(false);
@@ -40,10 +72,6 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
 
   const isValid = confirmText === "REGENERATE";
 
-  // ========================================
-  // Render
-  // ========================================
-
   return (
     <div className="space-y-10">
       {/* ========================================
@@ -52,7 +80,7 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
       <div className="flex items-center justify-between">
         <button
           onClick={() => setConfirming(true)}
-          className="rounded-xl bg-red-600 px-4 py-2 text-white hover:bg-red-500 transition"
+          className="rounded-xl bg-red-600 px-4 py-2 text-white transition hover:bg-red-500"
         >
           Regenerate Fixtures
         </button>
@@ -61,45 +89,39 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
       {/* ========================================
           Weeks
       ======================================== */}
-      {Object.entries(rounds).map(([round, matches]) => (
+      {Object.entries(rounds).map(([round, roundMatches]) => (
         <div key={round} className="space-y-4">
           <h2 className="text-xl font-semibold text-white">
-            Week {round}
+            Week {round === "0" ? "Unassigned" : round}
           </h2>
 
           <div className="grid gap-3">
-            {matches.map((match) => (
+            {roundMatches.map((match) => (
               <div
                 key={match.id}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4 hover:bg-white/10 transition"
+                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4 transition hover:bg-white/10"
               >
                 <div className="flex items-center gap-4 text-white">
                   <span>{match.homeTeam.name}</span>
                   <span className="text-white/40">vs</span>
                   <span>{match.awayTeam.name}</span>
-
-                  {match.isManual && (
-                    <span className="text-xs text-yellow-400">
-                      Manual
-                    </span>
-                  )}
                 </div>
 
                 <div className="flex items-center gap-6 text-sm text-white/60">
-                  {match.pitch && <span>{match.pitch}</span>}
+                  {match.pitch ? <span>{match.pitch}</span> : null}
 
-                  {match.kickoffAt && (
+                  {match.kickoffAt ? (
                     <span>
                       {new Date(match.kickoffAt).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </span>
-                  )}
+                  ) : null}
 
                   <button
                     onClick={() => setSelectedMatch(match)}
-                    className="text-white/70 hover:text-white transition"
+                    className="transition hover:text-white"
                   >
                     Edit
                   </button>
@@ -113,21 +135,20 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
       {/* ========================================
           Match Modal
       ======================================== */}
-      {selectedMatch && (
+      {selectedMatch ? (
         <MatchModal
           match={selectedMatch}
           teams={teams}
           onClose={() => setSelectedMatch(null)}
         />
-      )}
+      ) : null}
 
       {/* ========================================
-          Regenerate Confirmation (ELITE)
+          Regenerate Confirmation
       ======================================== */}
-      {confirming && (
+      {confirming ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0B0B0B] p-6 space-y-5">
-
+          <div className="w-full max-w-md space-y-5 rounded-2xl border border-white/10 bg-[#0B0B0B] p-6">
             <h2 className="text-xl font-semibold text-white">
               Regenerate Fixtures
             </h2>
@@ -136,7 +157,6 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
               This may overwrite existing fixtures. This action cannot be undone.
             </p>
 
-            {/* Preserve toggle */}
             <label className="flex items-center gap-2 text-sm text-white/70">
               <input
                 type="checkbox"
@@ -146,10 +166,10 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
               Preserve manual edits
             </label>
 
-            {/* Type to confirm */}
             <div className="space-y-2">
               <label className="text-xs text-white/50">
-                Type <span className="text-white font-medium">REGENERATE</span> to confirm
+                Type <span className="font-medium text-white">REGENERATE</span>{" "}
+                to confirm
               </label>
 
               <input
@@ -157,15 +177,14 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
                 onChange={(e) => setConfirmText(e.target.value)}
                 placeholder="Type REGENERATE"
                 autoFocus
-                className="w-full rounded-lg bg-black px-3 py-2 text-white border border-white/10 focus:border-white/30 outline-none transition"
+                className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-white outline-none transition focus:border-white/30"
               />
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-between items-center pt-2">
+            <div className="flex items-center justify-between pt-2">
               <button
                 onClick={closeConfirmModal}
-                className="text-white/60 hover:text-white transition"
+                className="text-white/60 transition hover:text-white"
               >
                 Cancel
               </button>
@@ -173,10 +192,10 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
               <button
                 disabled={!isValid}
                 onClick={handleRegenerate}
-                className={`px-4 py-2 rounded-lg text-white transition ${
+                className={`rounded-lg px-4 py-2 text-white transition ${
                   isValid
                     ? "bg-red-600 hover:bg-red-500"
-                    : "bg-white/10 text-white/30 cursor-not-allowed"
+                    : "cursor-not-allowed bg-white/10 text-white/30"
                 }`}
               >
                 Confirm Regenerate
@@ -184,7 +203,7 @@ export default function FixturesEditor({ leagueId, teams, matches }) {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

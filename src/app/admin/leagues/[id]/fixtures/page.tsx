@@ -31,7 +31,7 @@ export default async function LeagueFixturesPage({
       teams: {
         orderBy: { name: "asc" },
       },
-      matches: {
+      fixtures: {
         orderBy: [{ round: "asc" }, { position: "asc" }],
         include: {
           homeTeam: true,
@@ -43,7 +43,7 @@ export default async function LeagueFixturesPage({
 
   if (!league) return notFound();
 
-  const hasFixtures = league.matches.length > 0;
+  const hasFixtures = league.fixtures.length > 0;
 
   // ========================================
   // Render
@@ -51,7 +51,6 @@ export default async function LeagueFixturesPage({
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
-
       {/* ========================================
           Header
       ======================================== */}
@@ -61,7 +60,7 @@ export default async function LeagueFixturesPage({
           <h1 className="text-3xl font-semibold text-white">
             Fixtures — {league.name}
           </h1>
-          <p className="text-white/60 text-sm">
+          <p className="text-sm text-white/60">
             Manage scheduling, kickoff times and pitches
           </p>
         </div>
@@ -70,7 +69,7 @@ export default async function LeagueFixturesPage({
           {/* Back */}
           <Link
             href="/admin/leagues"
-            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white transition"
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
           >
             Back to leagues
           </Link>
@@ -80,7 +79,7 @@ export default async function LeagueFixturesPage({
             <Link
               href={`/leagues/${league.slug}/fixtures`}
               target="_blank"
-              className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90 transition"
+              className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
             >
               View public
             </Link>
@@ -93,10 +92,8 @@ export default async function LeagueFixturesPage({
       ======================================== */}
 
       {!hasFixtures && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center space-y-3">
-          <p className="text-white/70">
-            No fixtures have been generated yet.
-          </p>
+        <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+          <p className="text-white/70">No fixtures have been generated yet.</p>
           <p className="text-sm text-white/50">
             Click “Regenerate Fixtures” to create your schedule.
           </p>
@@ -110,7 +107,7 @@ export default async function LeagueFixturesPage({
       <FixturesEditor
         leagueId={league.id}
         teams={league.teams}
-        matches={league.matches}
+        matches={league.fixtures}
       />
     </div>
   );

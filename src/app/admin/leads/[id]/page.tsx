@@ -132,6 +132,11 @@ export default async function LeadPage({ params }: PageProps) {
   const lead = await prisma.interestLead.findUnique({
     where: { id },
     include: {
+      league: {
+        select: {
+          slug: true,
+        },
+      },
       preferredNights: {
         orderBy: { createdAt: "asc" },
       },
@@ -176,10 +181,9 @@ export default async function LeadPage({ params }: PageProps) {
   const alreadyConverted = Boolean(lead.convertedAt || lead.convertedTeamId);
   const canConvertToTeam = lead.interestType === "TEAM";
 
-  const signupUrl =
-    lead.league?.slug
-      ? `https://www.sixfl.co.uk/leagues/${lead.league.slug}`
-      : "https://www.sixfl.co.uk/register-interest";
+  const signupUrl = lead.league?.slug
+    ? `https://www.sixfl.co.uk/leagues/${lead.league.slug}`
+    : "https://www.sixfl.co.uk/register-interest";
 
   return (
     <div className="space-y-8">

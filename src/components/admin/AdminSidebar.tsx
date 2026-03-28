@@ -17,6 +17,11 @@ import {
   UsersIcon,
 } from "@heroicons/react/24/outline";
 
+type AdminSidebarProps = {
+  name?: string | null;
+  email?: string | null;
+};
+
 const navigation = [
   {
     name: "Overview",
@@ -61,7 +66,7 @@ function isActivePath(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ name, email }: AdminSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -75,9 +80,11 @@ export default function AdminSidebar() {
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-white">Admin</div>
+                <div className="text-sm font-semibold text-white">
+                  {name?.trim() || "Admin"}
+                </div>
                 <div className="mt-1 text-sm text-white/45">
-                  SIXFL operations
+                  {email?.trim() || "SIXFL operations"}
                 </div>
               </div>
 

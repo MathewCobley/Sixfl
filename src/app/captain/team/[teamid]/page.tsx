@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/captain/team/[teamId]/fixtures/page.tsx
+// File: src/captain/team/[teamId]/fixtures/page.tsx
 // ========================================
 
 import { prisma } from "@/lib/prisma";
@@ -17,7 +17,7 @@ export default async function CaptainFixturesPage({
     include: {
       league: {
         include: {
-          matches: {
+          fixtures: {
             orderBy: [{ round: "asc" }, { position: "asc" }],
             include: {
               homeTeam: true,
@@ -29,36 +29,31 @@ export default async function CaptainFixturesPage({
     },
   });
 
-  if (!team) return notFound();
+  if (!team || !team.league) return notFound();
 
-  const matches = team.league.matches.filter(
-    (m) =>
-      m.homeTeamId === teamId || m.awayTeamId === teamId
+  const matches = team.league.fixtures.filter(
+    (m) => m.homeTeamId === teamId || m.awayTeamId === teamId
   );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 py-10">
-      <h1 className="text-2xl text-white font-semibold">
-        Your Fixtures
-      </h1>
+      <h1 className="text-2xl font-semibold text-white">Your Fixtures</h1>
 
       {matches.map((m) => (
         <div
           key={m.id}
-          className="flex justify-between bg-white/5 rounded-xl px-4 py-3 text-white"
+          className="flex justify-between rounded-xl bg-white/5 px-4 py-3 text-white"
         >
           <span>
             {m.homeTeam.name} vs {m.awayTeam.name}
           </span>
 
-          <span className="text-white/60 text-sm">
+          <span className="text-sm text-white/60">
             Week {m.round} · {m.pitch} ·{" "}
-            {m.kickoffAt
-              ? new Date(m.kickoffAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "TBC"}
+            {new Date(m.kickoffAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </span>
         </div>
       ))}

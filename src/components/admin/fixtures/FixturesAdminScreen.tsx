@@ -262,6 +262,7 @@ export default function FixturesAdminScreen({
     return teams
       .filter((team) => team.leagueId === selectedCreateLeagueId)
       .map((team) => ({
+        id: team.id,
         value: team.id,
         label: team.name,
       }));
@@ -303,19 +304,36 @@ export default function FixturesAdminScreen({
   }, [filteredFixtures]);
 
   const leagueOptions = leagues.map((league) => ({
+    id: league.id,
     value: league.id,
     label: getLeagueLabel(league),
   }));
 
-  const venueOptions = venues.map((venue) => ({
-    value: venue.id,
-    label: venue.name,
-  }));
+  const venueOptions = [
+    {
+      id: "no-venue",
+      value: "",
+      label: "No venue",
+    },
+    ...venues.map((venue) => ({
+      id: venue.id,
+      value: venue.id,
+      label: venue.name,
+    })),
+  ];
 
-  const refereeOptions = referees.map((referee) => ({
-    value: referee.id,
-    label: getRefereeLabel(referee),
-  }));
+  const refereeOptions = [
+    {
+      id: "unassigned",
+      value: "",
+      label: "Unassigned",
+    },
+    ...referees.map((referee) => ({
+      id: referee.id,
+      value: referee.id,
+      label: getRefereeLabel(referee),
+    })),
+  ];
 
   return (
     <div className="space-y-8">
@@ -372,7 +390,7 @@ export default function FixturesAdminScreen({
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 >
                   {leagueOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option key={option.id} value={option.value}>
                       {option.label}
                     </option>
                   ))}
@@ -398,8 +416,6 @@ export default function FixturesAdminScreen({
                 label="Venue"
                 placeholder="Select venue"
                 options={venueOptions}
-                allowEmpty
-                emptyLabel="No venue"
               />
 
               <AdminComboboxField
@@ -407,8 +423,6 @@ export default function FixturesAdminScreen({
                 label="Referee"
                 placeholder="Select referee"
                 options={refereeOptions}
-                allowEmpty
-                emptyLabel="Unassigned"
               />
 
               <div>
@@ -513,7 +527,7 @@ export default function FixturesAdminScreen({
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 >
                   {leagueOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option key={option.id} value={option.value}>
                       {option.label}
                     </option>
                   ))}
@@ -598,13 +612,11 @@ export default function FixturesAdminScreen({
               </div>
 
               <AdminComboboxField
-  name="venueId"
-  label="Venue"
-  placeholder="Select venue"
-  options={venueOptions}
-  allowEmpty
-  emptyLabel="No venue"
-/>
+                name="venueId"
+                label="Venue"
+                placeholder="Select venue"
+                options={venueOptions}
+              />
 
               <SegmentedStatusField
                 name="generatedStatus"

@@ -14,6 +14,14 @@ type PageProps = {
   }>;
 };
 
+const CTA_URL_KEYS = ["signupUrl", "manageTeamUrl"] as const;
+
+type CtaUrlKeyValue = (typeof CTA_URL_KEYS)[number];
+
+function isCtaUrlKeyValue(value: string | null): value is CtaUrlKeyValue {
+  return value !== null && CTA_URL_KEYS.includes(value as CtaUrlKeyValue);
+}
+
 export default async function AdminEmailTemplateEditPage({ params }: PageProps) {
   await requireAdmin();
 
@@ -49,11 +57,13 @@ export default async function AdminEmailTemplateEditPage({ params }: PageProps) 
             name: template.name,
             description: template.description ?? "",
             audience: template.audience,
-            interestType: template.interestType ?? "",
+            interestType: template.interestType ?? undefined,
             subject: template.subject,
             body: template.body,
             ctaLabel: template.ctaLabel ?? "",
-            ctaUrlKey: template.ctaUrlKey ?? "",
+            ctaUrlKey: isCtaUrlKeyValue(template.ctaUrlKey)
+              ? template.ctaUrlKey
+              : undefined,
             isActive: template.isActive,
           }}
         />

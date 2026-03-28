@@ -363,3 +363,211 @@ enum PreferredNight {
   SUNDAY
   ANY
 }
+
+/**
+ * SIXFL messaging system - stage 1 foundation
+ */
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+}
+
+enum NotificationAudience {
+  LEAD
+  TEAM
+  PLAYER
+  REFEREE
+  USER
+  GENERAL
+}
+
+enum NotificationTemplateKind {
+  TRANSACTIONAL
+  CAMPAIGN
+}
+
+enum NotificationRecipientSourceType {
+  LEAD
+  TEAM
+  PLAYER
+  REFEREE
+  USER
+  GENERAL
+}
+
+enum NotificationDispatchStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+  SKIPPED
+}
+
+enum NotificationAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model NotificationRecipient {
+  id String @id @default(cuid())
+
+  sourceType NotificationRecipientSourceType
+  sourceId   String?
+
+  audience NotificationAudience
+
+  displayName String?
+  email       String?
+  phone       String?
+
+  emailNormalized String?
+  phoneNormalized String?
+
+  marketingEmailOptIn     Boolean @default(false)
+  marketingSmsOptIn       Boolean @default(false)
+  transactionalEmailOptIn Boolean @default(true)
+  transactionalSmsOptIn   Boolean @default(true)
+
+  isSuppressed      Boolean @default(false)
+  suppressionReason String?
+
+  metadata     Json?
+  lastSyncedAt DateTime?
+
+  preferences NotificationPreference?
+  dispatches  NotificationDispatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceType, sourceId])
+  @@index([audience])
+  @@index([emailNormalized])
+  @@index([phoneNormalized])
+  @@index([isSuppressed])
+}
+
+model NotificationPreference {
+  id String @id @default(cuid())
+
+  recipientId String @unique
+
+  timezone        String?
+  quietHoursStart String?
+  quietHoursEnd   String?
+
+  emailEnabled          Boolean @default(true)
+  smsEnabled            Boolean @default(true)
+  urgentSmsEnabled      Boolean @default(true)
+  marketingEmailEnabled Boolean @default(false)
+  marketingSmsEnabled   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipient NotificationRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+model NotificationTemplate {
+  id String @id @default(cuid())
+
+  key         String @unique
+  name        String
+  description String?
+
+  kind     NotificationTemplateKind @default(TRANSACTIONAL)
+  channel  NotificationChannel
+  audience NotificationAudience
+
+  subject   String?
+  body      String
+  ctaLabel  String?
+  ctaUrlKey String?
+
+  isActive Boolean @default(true)
+
+  dispatches NotificationDispatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([channel])
+  @@index([audience])
+  @@index([kind])
+  @@index([isActive])
+}
+
+model NotificationDispatch {
+  id String @id @default(cuid())
+
+  recipientId String
+  templateId  String?
+
+  channel  NotificationChannel
+  audience NotificationAudience
+  status   NotificationDispatchStatus @default(QUEUED)
+
+  isTransactional Boolean @default(true)
+
+  subject  String?
+  bodyText String
+  bodyHtml String?
+
+  provider          String?
+  providerMessageId String?
+
+  sourceType String?
+  sourceId   String?
+
+  variables Json?
+  metadata  Json?
+
+  scheduledFor DateTime @default(now())
+  processedAt  DateTime?
+  sentAt       DateTime?
+  failedAt     DateTime?
+  cancelledAt  DateTime?
+
+  failureReason String?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipient NotificationRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  template  NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  attempts  NotificationAttempt[]
+
+  @@index([recipientId])
+  @@index([templateId])
+  @@index([channel, status])
+  @@index([scheduledFor, status])
+  @@index([sourceType, sourceId])
+  @@index([createdByUserId])
+}
+
+model NotificationAttempt {
+  id String @id @default(cuid())
+
+  dispatchId String
+
+  provider String
+  status   NotificationAttemptStatus @default(PENDING)
+
+  requestPayload  Json?
+  responsePayload Json?
+
+  errorMessage String?
+
+  attemptedAt DateTime @default(now())
+
+  dispatch NotificationDispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+
+  @@index([dispatchId])
+  @@index([status])
+  @@index([attemptedAt])
+}

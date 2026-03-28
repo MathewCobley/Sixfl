@@ -6,7 +6,17 @@
 
 import { submitResultAction } from "@/app/admin/fixtures/actions";
 
-export default function ResultInput({ match }) {
+type ResultMatch = {
+  id: string;
+  homeScore: number | null;
+  awayScore: number | null;
+};
+
+type ResultInputProps = {
+  match: ResultMatch;
+};
+
+export default function ResultInput({ match }: ResultInputProps) {
   return (
     <form
       action={submitResultAction}

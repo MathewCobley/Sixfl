@@ -68,7 +68,6 @@ export default async function TeamPage({ params }: PageProps) {
         select: {
           name: true,
           slug: true,
-          badgeUrl: true,
           heroImageUrl: true,
           venueName: true,
           area: true,
@@ -85,8 +84,7 @@ export default async function TeamPage({ params }: PageProps) {
     normaliseLogoUrl(team.league?.heroImageUrl) ||
     "/venues/rossett_dark_trendy.jpg";
 
-  const leagueBadge =
-    team.league?.badgeUrl || "/sixfl-badge.png";
+  const leagueBadge = "/sixfl-badge.png";
 
   const nightLabel = formatPreferredNight(team.league?.dayOfWeek);
 
@@ -109,7 +107,6 @@ export default async function TeamPage({ params }: PageProps) {
         <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/60 to-black" />
 
         <div className="relative mx-auto max-w-6xl px-6 py-16 sm:px-10 sm:py-24">
-          
           {/* Breadcrumb */}
           <div className="text-sm text-white/60">
             <Link href="/leagues" className="hover:text-white">
@@ -171,7 +168,7 @@ export default async function TeamPage({ params }: PageProps) {
           {/* Info */}
           <div className="mt-6 max-w-xl text-white/70">
             Playing in{" "}
-            <span className="text-white font-semibold">
+            <span className="font-semibold text-white">
               {team.league?.name}
             </span>{" "}
             — {nightLabel} nights at{" "}

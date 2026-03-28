@@ -175,7 +175,6 @@ function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
 // ========================================
 
 export async function createEmailTemplateAction(
-  _prevState: EmailTemplateActionState,
   formData: FormData,
 ): Promise<EmailTemplateActionState> {
   await requireAdmin();
@@ -223,7 +222,6 @@ export async function createEmailTemplateAction(
 }
 
 export async function updateEmailTemplateAction(
-  _prevState: EmailTemplateActionState,
   formData: FormData,
 ): Promise<EmailTemplateActionState> {
   await requireAdmin();
