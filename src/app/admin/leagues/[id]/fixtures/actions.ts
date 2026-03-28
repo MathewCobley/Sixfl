@@ -11,7 +11,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { revalidatePath } from "next/cache";
-import { generateRoundRobin } from "@/lib/fixtures/generateRoundRobin";
+import generateRoundRobin from "@/lib/fixtures/generateRoundRobin";
 import { generateTimeSlots } from "@/lib/fixtures/generateTimeSlots";
 
 // ========================================
@@ -133,12 +133,7 @@ export async function regenerateFixtures(
 
       if (preserveManual) {
         const exists = existingMatches.find((em) =>
-          sameFixture(
-            em.homeTeamId,
-            em.awayTeamId,
-            m.home,
-            m.away
-          )
+          sameFixture(em.homeTeamId, em.awayTeamId, m.home, m.away)
         );
 
         if (exists) continue;
