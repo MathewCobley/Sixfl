@@ -85,18 +85,31 @@ model League {
   name     String
   season   String?
   isActive Boolean @default(true)
-  slug     String? @unique
+  slug     String  @unique
 
-  teams    Team[]
-  fixtures Fixture[]
+  area         String?
+  dayOfWeek    PreferredNight?
+  leagueType   LeagueType?
+  venueName    String?
+  kickoffInfo  String?
+  format       String?
+  surface      String?
+  description  String?
+  heroImageUrl String?
+  ctaText      String?
 
-  // ✅ FIX ADDED HERE
+  teams         Team[]
+  fixtures      Fixture[]
   interestLeads InterestLead[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([name, season])
+  @@index([isActive])
+  @@index([area])
+  @@index([dayOfWeek])
+  @@index([leagueType])
 }
 
 model Venue {
@@ -134,6 +147,8 @@ model Team {
   updatedAt DateTime @updatedAt
 
   @@unique([name, leagueId])
+  @@index([leagueId])
+  @@index([createdByUserId])
 }
 
 model TeamMember {
@@ -150,6 +165,7 @@ model TeamMember {
   @@unique([userId, teamId])
   @@index([teamId])
   @@index([userId])
+  @@index([role])
 }
 
 enum TeamRole {
@@ -167,8 +183,10 @@ model Fixture {
   venueId    String?
   kickoffAt  DateTime
 
-  round  Int?
-  status FixtureStatus @default(SCHEDULED)
+  round    Int?
+  position Int?
+  pitch    String?
+  status   FixtureStatus @default(SCHEDULED)
 
   refereeId String?
 
@@ -215,6 +233,8 @@ model MatchResult {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([fixtureId])
 }
 
 model InterestLead {
@@ -284,6 +304,34 @@ model InterestLeadEmail {
 
   @@index([interestLeadId])
   @@index([sentAt])
+}
+
+model EmailTemplate {
+  id           String            @id @default(cuid())
+  key          String            @unique
+  name         String
+  description  String?
+  audience     TemplateAudience
+  interestType InterestType?
+  subject      String
+  body         String
+  ctaLabel     String?
+  ctaUrlKey    String?
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([audience])
+  @@index([interestType])
+  @@index([isActive])
+}
+
+enum TemplateAudience {
+  LEAD
+  TEAM
+  PLAYER
+  REFEREE
+  GENERAL
 }
 
 enum InterestType {

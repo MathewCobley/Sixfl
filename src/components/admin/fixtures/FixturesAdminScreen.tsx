@@ -1,0 +1,837 @@
+// ========================================
+// File: src/components/admin/fixtures/FixturesAdminScreen.tsx
+// ========================================
+
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import type { FixtureStatus } from "@prisma/client";
+import AdminCard from "@/components/admin/AdminCard";
+import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
+import {
+  createFixtureAction,
+  deleteFixtureAction,
+  generateFixtures,
+  submitResultAction,
+} from "@/app/admin/fixtures/actions";
+
+type LeagueOption = {
+  id: string;
+  name: string;
+  season: string | null;
+  slug: string;
+};
+
+type TeamOption = {
+  id: string;
+  name: string;
+  leagueId: string | null;
+  league: {
+    id: string;
+    name: string;
+    season: string | null;
+  } | null;
+};
+
+type VenueOption = {
+  id: string;
+  name: string;
+};
+
+type RefereeOption = {
+  id: string;
+  name: string | null;
+  email: string | null;
+};
+
+type FixtureItem = {
+  id: string;
+  leagueId: string | null;
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+  homeTeamName: string;
+  awayTeamName: string;
+  venueName: string | null;
+  refereeName: string | null;
+  kickoffLabel: string | null;
+  round: number | null;
+  position: number | null;
+  pitch: string | null;
+  status: FixtureStatus;
+  homeScore: number | null;
+  awayScore: number | null;
+};
+
+type FixturesAdminScreenProps = {
+  leagues: LeagueOption[];
+  teams: TeamOption[];
+  venues: VenueOption[];
+  referees: RefereeOption[];
+  fixtures: FixtureItem[];
+};
+
+const STATUS_OPTIONS: Array<{
+  value: FixtureStatus;
+  label: string;
+  tone: string;
+}> = [
+  {
+    value: "SCHEDULED",
+    label: "Scheduled",
+    tone:
+      "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 data-[active=true]:border-emerald-400 data-[active=true]:bg-emerald-500/20",
+  },
+  {
+    value: "COMPLETED",
+    label: "Completed",
+    tone:
+      "border-sky-500/30 bg-sky-500/10 text-sky-300 data-[active=true]:border-sky-400 data-[active=true]:bg-sky-500/20",
+  },
+  {
+    value: "POSTPONED",
+    label: "Postponed",
+    tone:
+      "border-amber-500/30 bg-amber-500/10 text-amber-300 data-[active=true]:border-amber-400 data-[active=true]:bg-amber-500/20",
+  },
+  {
+    value: "CANCELLED",
+    label: "Cancelled",
+    tone:
+      "border-rose-500/30 bg-rose-500/10 text-rose-300 data-[active=true]:border-rose-400 data-[active=true]:bg-rose-500/20",
+  },
+];
+
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
+
+function getLeagueLabel(league: LeagueOption) {
+  return league.season ? `${league.name} • ${league.season}` : league.name;
+}
+
+function getRefereeLabel(referee: RefereeOption) {
+  if (referee.name && referee.email) {
+    return `${referee.name} • ${referee.email}`;
+  }
+
+  return referee.name || referee.email || "Unnamed referee";
+}
+
+function formatFixtureStatus(status: FixtureStatus) {
+  return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+function getStatusTone(status: FixtureStatus) {
+  switch (status) {
+    case "SCHEDULED":
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+    case "COMPLETED":
+      return "border-sky-500/20 bg-sky-500/10 text-sky-300";
+    case "POSTPONED":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-300";
+    case "CANCELLED":
+      return "border-rose-500/20 bg-rose-500/10 text-rose-300";
+    default:
+      return "border-white/10 bg-white/5 text-white/70";
+  }
+}
+
+function SegmentedStatusField({
+  name,
+  value,
+  onChange,
+}: {
+  name: string;
+  value: FixtureStatus;
+  onChange: (value: FixtureStatus) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+        Status
+      </label>
+
+      <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
+        {STATUS_OPTIONS.map((option) => {
+          const active = value === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              data-active={active}
+              onClick={() => onChange(option.value)}
+              className={cx(
+                "group relative min-h-[56px] overflow-hidden rounded-2xl border px-4 py-3 text-left transition",
+                "hover:border-white/20 hover:bg-white/[0.07]",
+                "focus:outline-none focus:ring-2 focus:ring-emerald-400/40",
+                active ? "shadow-[0_0_0_1px_rgba(255,255,255,0.06)]" : "",
+                option.tone
+              )}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={option.value}
+                checked={active}
+                onChange={() => onChange(option.value)}
+                className="sr-only"
+              />
+              <div className="flex items-center gap-3">
+                <span
+                  className={cx(
+                    "h-2.5 w-2.5 shrink-0 rounded-full transition",
+                    active ? "bg-current opacity-100" : "bg-white/25 opacity-70"
+                  )}
+                />
+                <span className="truncate text-sm font-medium">
+                  {option.label}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+        {eyebrow}
+      </div>
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight text-white">
+          {title}
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MetricPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+      <div className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+        {label}
+      </div>
+      <div className="mt-1 text-lg font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+export default function FixturesAdminScreen({
+  leagues,
+  teams,
+  venues,
+  referees,
+  fixtures,
+}: FixturesAdminScreenProps) {
+  const [selectedCreateLeagueId, setSelectedCreateLeagueId] = useState(
+    leagues[0]?.id ?? ""
+  );
+  const [selectedGenerateLeagueId, setSelectedGenerateLeagueId] = useState(
+    leagues[0]?.id ?? ""
+  );
+  const [createStatus, setCreateStatus] =
+    useState<FixtureStatus>("SCHEDULED");
+  const [generateStatus, setGenerateStatus] =
+    useState<FixtureStatus>("SCHEDULED");
+
+  const createLeagueTeams = useMemo(() => {
+    return teams
+      .filter((team) => team.leagueId === selectedCreateLeagueId)
+      .map((team) => ({
+        value: team.id,
+        label: team.name,
+      }));
+  }, [teams, selectedCreateLeagueId]);
+
+  const generateLeague = useMemo(() => {
+    return (
+      leagues.find((league) => league.id === selectedGenerateLeagueId) ?? null
+    );
+  }, [leagues, selectedGenerateLeagueId]);
+
+  const filteredFixtures = useMemo(() => {
+    if (!selectedGenerateLeagueId) return fixtures;
+    return fixtures.filter(
+      (fixture) => fixture.leagueId === selectedGenerateLeagueId
+    );
+  }, [fixtures, selectedGenerateLeagueId]);
+
+  const fixtureSummary = useMemo(() => {
+    const completed = filteredFixtures.filter(
+      (fixture) => fixture.status === "COMPLETED"
+    ).length;
+    const scheduled = filteredFixtures.filter(
+      (fixture) => fixture.status === "SCHEDULED"
+    ).length;
+
+    const rounds = new Set(
+      filteredFixtures
+        .map((fixture) => fixture.round)
+        .filter((round): round is number => typeof round === "number")
+    );
+
+    return {
+      total: filteredFixtures.length,
+      completed,
+      scheduled,
+      rounds: rounds.size,
+    };
+  }, [filteredFixtures]);
+
+  const leagueOptions = leagues.map((league) => ({
+    value: league.id,
+    label: getLeagueLabel(league),
+  }));
+
+  const venueOptions = venues.map((venue) => ({
+    value: venue.id,
+    label: venue.name,
+  }));
+
+  const refereeOptions = referees.map((referee) => ({
+    value: referee.id,
+    label: getRefereeLabel(referee),
+  }));
+
+  return (
+    <div className="space-y-8">
+      <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
+        <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
+              Fixtures console
+            </div>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                Manage league fixtures properly
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
+                Create one-off matches, generate full schedules, and manage
+                rounds from one premium control surface built for SIXFL league
+                operations.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[520px] lg:grid-cols-4">
+            <MetricPill label="Leagues" value={leagues.length} />
+            <MetricPill label="Teams" value={teams.length} />
+            <MetricPill label="Fixtures" value={fixtureSummary.total} />
+            <MetricPill label="Rounds" value={fixtureSummary.rounds} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-8 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <div className="border-b border-white/10 px-6 py-6 md:px-8">
+            <SectionHeading
+              eyebrow="Manual match"
+              title="Create fixture"
+              description="Add a specific match with full control over teams, venue, referee, round, pitch and status."
+            />
+          </div>
+
+          <form
+            action={createFixtureAction}
+            className="space-y-8 px-6 py-6 md:px-8"
+          >
+            <div className="grid gap-6 xl:grid-cols-2">
+              <div className="xl:col-span-2">
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  League
+                </label>
+                <select
+                  name="leagueId"
+                  value={selectedCreateLeagueId}
+                  onChange={(event) => setSelectedCreateLeagueId(event.target.value)}
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                >
+                  {leagueOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <AdminComboboxField
+                name="homeTeamId"
+                label="Home team"
+                placeholder="Search home team"
+                options={createLeagueTeams}
+              />
+
+              <AdminComboboxField
+                name="awayTeamId"
+                label="Away team"
+                placeholder="Search away team"
+                options={createLeagueTeams}
+              />
+
+              <AdminComboboxField
+                name="venueId"
+                label="Venue"
+                placeholder="Select venue"
+                options={venueOptions}
+                allowEmpty
+                emptyLabel="No venue"
+              />
+
+              <AdminComboboxField
+                name="refereeId"
+                label="Referee"
+                placeholder="Select referee"
+                options={refereeOptions}
+                allowEmpty
+                emptyLabel="Unassigned"
+              />
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  Kickoff date
+                </label>
+                <input
+                  type="date"
+                  name="kickoffDate"
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  Kickoff time
+                </label>
+                <input
+                  type="time"
+                  name="kickoffTime"
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  Round
+                </label>
+                <input
+                  type="number"
+                  name="round"
+                  placeholder="e.g. 1"
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  Position
+                </label>
+                <input
+                  type="number"
+                  name="position"
+                  placeholder="e.g. 0"
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  Pitch
+                </label>
+                <input
+                  type="text"
+                  name="pitch"
+                  placeholder="e.g. Pitch 1"
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                />
+              </div>
+            </div>
+
+            <SegmentedStatusField
+              name="status"
+              value={createStatus}
+              onChange={setCreateStatus}
+            />
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+              <input type="hidden" name="status" value={createStatus} />
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"
+              >
+                Create fixture
+              </button>
+              <p className="text-sm text-white/45">
+                Best for manual rearrangements, cup matches, and one-off edits.
+              </p>
+            </div>
+          </form>
+        </AdminCard>
+
+        <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <div className="border-b border-white/10 px-6 py-6 md:px-8">
+            <SectionHeading
+              eyebrow="Automated schedule"
+              title="Generate fixtures"
+              description="Build out a full league schedule with spacing, round controls, pitch count and optional reset handling."
+            />
+          </div>
+
+          <form action={generateFixtures} className="space-y-8 px-6 py-6 md:px-8">
+            <div className="grid gap-6">
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  League
+                </label>
+                <select
+                  name="leagueId"
+                  value={selectedGenerateLeagueId}
+                  onChange={(event) => setSelectedGenerateLeagueId(event.target.value)}
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                >
+                  {leagueOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Start date
+                  </label>
+                  <input
+                    type="date"
+                    name="startDate"
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Start time
+                  </label>
+                  <input
+                    type="time"
+                    name="startTime"
+                    defaultValue="18:30"
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Week gap days
+                  </label>
+                  <input
+                    type="number"
+                    name="weekGapDays"
+                    defaultValue={7}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Slot minutes
+                  </label>
+                  <input
+                    type="number"
+                    name="slotMinutes"
+                    defaultValue={40}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Pitches
+                  </label>
+                  <input
+                    type="number"
+                    name="pitches"
+                    defaultValue={2}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Start round
+                  </label>
+                  <input
+                    type="number"
+                    name="startRound"
+                    defaultValue={1}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+              </div>
+
+              <AdminComboboxField
+  name="venueId"
+  label="Venue"
+  placeholder="Select venue"
+  options={venueOptions}
+  allowEmpty
+  emptyLabel="No venue"
+/>
+
+              <SegmentedStatusField
+                name="generatedStatus"
+                value={generateStatus}
+                onChange={setGenerateStatus}
+              />
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
+                  <input
+                    type="checkbox"
+                    name="doubleRoundRobin"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">
+                      Double round robin
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-white/50">
+                      Every team plays each opponent home and away.
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
+                  <input
+                    type="checkbox"
+                    name="clearExisting"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">
+                      Clear existing fixtures first
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-white/50">
+                      Use when regenerating a league schedule from scratch.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+              <input type="hidden" name="status" value={generateStatus} />
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                Generate fixtures
+              </button>
+              <p className="text-sm text-white/45">
+                {generateLeague
+                  ? `Generating for ${getLeagueLabel(generateLeague)}.`
+                  : "Choose a league to generate a schedule."}
+              </p>
+            </div>
+          </form>
+        </AdminCard>
+      </div>
+
+      <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+        <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:flex-row md:items-end md:justify-between md:px-8">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+              League schedule
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-white">
+              Fixtures
+            </h2>
+            <p className="max-w-2xl text-sm leading-6 text-white/60">
+              Review generated matches, submit results, or remove incorrect
+              fixtures without leaving the page.
+            </p>
+          </div>
+
+          <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[520px] lg:grid-cols-4">
+            <MetricPill label="Total" value={fixtureSummary.total} />
+            <MetricPill label="Scheduled" value={fixtureSummary.scheduled} />
+            <MetricPill label="Completed" value={fixtureSummary.completed} />
+            <MetricPill label="Rounds" value={fixtureSummary.rounds} />
+          </div>
+        </div>
+
+        {filteredFixtures.length === 0 ? (
+          <div className="px-6 py-10 md:px-8">
+            <div className="rounded-[1.75rem] border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/60">
+                ⚽
+              </div>
+              <h3 className="text-lg font-semibold text-white">
+                No fixtures yet
+              </h3>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-white/50">
+                Create a one-off match or generate a full schedule to populate
+                this league.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.025] text-left">
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Match
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Kickoff
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Venue
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Round
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Result
+                  </th>
+                  <th className="px-6 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredFixtures.map((fixture) => (
+                  <tr
+                    key={fixture.id}
+                    className="border-b border-white/5 transition hover:bg-white/[0.025]"
+                  >
+                    <td className="px-6 py-5">
+                      <div className="font-medium text-white">
+                        {fixture.homeTeamName} v {fixture.awayTeamName}
+                      </div>
+                      <div className="mt-1 text-sm text-white/45">
+                        {fixture.pitch ? fixture.pitch : "Pitch not set"}
+                        {fixture.position !== null
+                          ? ` • Slot ${fixture.position}`
+                          : ""}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-5 text-sm text-white/70">
+                      {fixture.kickoffLabel ?? "Not scheduled"}
+                    </td>
+
+                    <td className="px-6 py-5 text-sm text-white/70">
+                      <div>{fixture.venueName ?? "No venue"}</div>
+                      <div className="mt-1 text-white/40">
+                        {fixture.refereeName ?? "No referee"}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-5 text-sm text-white/70">
+                      {fixture.round ?? "—"}
+                    </td>
+
+                    <td className="px-6 py-5">
+                      <span
+                        className={cx(
+                          "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
+                          getStatusTone(fixture.status)
+                        )}
+                      >
+                        {formatFixtureStatus(fixture.status)}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-5">
+                      <form
+                        action={submitResultAction}
+                        className="flex items-center gap-2"
+                      >
+                        <input type="hidden" name="fixtureId" value={fixture.id} />
+                        <input
+                          type="number"
+                          name="homeScore"
+                          min={0}
+                          defaultValue={fixture.homeScore ?? undefined}
+                          className="h-10 w-16 rounded-xl border border-white/10 bg-black/40 px-3 text-center text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                        />
+                        <span className="text-white/35">-</span>
+                        <input
+                          type="number"
+                          name="awayScore"
+                          min={0}
+                          defaultValue={fixture.awayScore ?? undefined}
+                          className="h-10 w-16 rounded-xl border border-white/10 bg-black/40 px-3 text-center text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                        />
+                        <button
+                          type="submit"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+                        >
+                          Save
+                        </button>
+                      </form>
+                    </td>
+
+                    <td className="px-6 py-5 text-right">
+                      <form action={deleteFixtureAction}>
+                        <input type="hidden" name="fixtureId" value={fixture.id} />
+                        <button
+                          type="submit"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15"
+                        >
+                          Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </AdminCard>
+
+      <div className="flex justify-end">
+        <Link
+          href="/admin"
+          className="text-sm font-medium text-white/50 transition hover:text-white/80"
+        >
+          Back to admin overview
+        </Link>
+      </div>
+    </div>
+  );
+}

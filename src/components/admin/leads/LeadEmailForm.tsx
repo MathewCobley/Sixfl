@@ -8,31 +8,42 @@
 // Imports
 // ========================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 import { sendLeadEmailAction } from "@/app/admin/leads/[id]/actions";
 import {
-  getSixflLeadEmailTemplate,
-  type LeadEmailTemplateKey,
-} from "@/lib/emailTemplates";
+  buildBaseEmailTemplateContext,
+  mergeEmailTemplateContext,
+  resolveTemplateText,
+} from "@/lib/email/template-context";
+import type { InterestType } from "@prisma/client";
 
 // ========================================
 // Types
 // ========================================
 
-type Props = {
-  leadId: string;
-  email: string;
-  firstName?: string | null;
+type LeadEmailTemplateOption = {
+  id: string;
+  key: string;
+  name: string;
+  subject: string;
+  body: string;
+  description: string | null;
+  interestType: InterestType | null;
+  ctaLabel?: string | null;
+  ctaUrlKey?: string | null;
 };
 
-const templateOptions: { value: LeadEmailTemplateKey; label: string }[] = [
-  { value: "lead-response", label: "Lead response" },
-  { value: "team-follow-up", label: "Team follow-up" },
-  { value: "player-follow-up", label: "Player follow-up" },
-  { value: "referee-follow-up", label: "Referee follow-up" },
-];
+type Props = {
+  leadId: string;
+  email: string | null;
+  firstName?: string | null;
+  fullName?: string | null;
+  area?: string | null;
+  signupUrl?: string | null;
+  templates: LeadEmailTemplateOption[];
+};
 
 // ========================================
 // Component
@@ -42,26 +53,44 @@ export default function LeadEmailForm({
   leadId,
   email,
   firstName,
+  fullName,
+  area,
+  signupUrl,
+  templates,
 }: Props) {
-  // ========================================
-  // Router
-  // ========================================
-
   const router = useRouter();
 
-  // ========================================
-  // State
-  // ========================================
-
-  const [selectedTemplate, setSelectedTemplate] =
-    useState<LeadEmailTemplateKey | "">("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
 
-  // ========================================
-  // Effects
-  // ========================================
+  const templateOptions = useMemo(
+    () =>
+      templates.map((template) => ({
+        value: template.id,
+        label: template.name,
+      })),
+    [templates]
+  );
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId]
+  );
+
+  const templateContext = useMemo(() => {
+    const derivedFullName = fullName?.trim() || firstName?.trim() || "";
+
+    return mergeEmailTemplateContext(
+      buildBaseEmailTemplateContext({
+        firstName,
+        fullName: derivedFullName,
+        area,
+        signupUrl,
+      })
+    );
+  }, [firstName, fullName, area, signupUrl]);
 
   useEffect(() => {
     if (!selectedTemplate) {
@@ -70,17 +99,9 @@ export default function LeadEmailForm({
       return;
     }
 
-    const template = getSixflLeadEmailTemplate(selectedTemplate, {
-      firstName: firstName ?? undefined,
-    });
-
-    setSubject(template.subject);
-    setBody(template.body);
-  }, [selectedTemplate, firstName]);
-
-  // ========================================
-  // Handlers
-  // ========================================
+    setSubject(resolveTemplateText(selectedTemplate.subject, templateContext));
+    setBody(resolveTemplateText(selectedTemplate.body, templateContext));
+  }, [selectedTemplate, templateContext]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -91,6 +112,9 @@ export default function LeadEmailForm({
       formData.append("leadId", leadId);
       formData.append("subject", subject);
       formData.append("body", body);
+      formData.append("signupUrl", signupUrl ?? "");
+      formData.append("ctaLabel", selectedTemplate?.ctaLabel?.trim() || "");
+      formData.append("ctaUrlKey", selectedTemplate?.ctaUrlKey?.trim() || "");
 
       const result = await sendLeadEmailAction(formData);
 
@@ -115,59 +139,48 @@ export default function LeadEmailForm({
       return;
     }
 
-    const template = getSixflLeadEmailTemplate(selectedTemplate, {
-      firstName: firstName ?? undefined,
-    });
-
-    setSubject(template.subject);
-    setBody(template.body);
+    setSubject(resolveTemplateText(selectedTemplate.subject, templateContext));
+    setBody(resolveTemplateText(selectedTemplate.body, templateContext));
   }
-
-  // ========================================
-  // UI
-  // ========================================
 
   return (
     <form
       onSubmit={handleSubmit}
       className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-6"
     >
-      {/* ========================================
-          Template Selector
-      ======================================== */}
       <div>
-        <label className="mb-1 block text-sm text-white/70">
-          Email template
-        </label>
+        <label className="mb-1 block text-sm text-white/70">Email template</label>
 
         <TemplateSelect
           label=""
-          value={selectedTemplate}
+          value={selectedTemplateId}
           options={templateOptions}
-          onChange={(value) =>
-            setSelectedTemplate(value as LeadEmailTemplateKey | "")
-          }
+          onChange={(value) => setSelectedTemplateId(value)}
           disabled={sending}
-          placeholder="Select email template"
+          placeholder={
+            templates.length > 0
+              ? "Select email template"
+              : "No matching templates available"
+          }
         />
+
+        {selectedTemplate?.description ? (
+          <p className="mt-2 text-xs text-white/45">
+            {selectedTemplate.description}
+          </p>
+        ) : null}
       </div>
 
-      {/* ========================================
-          To Field
-      ======================================== */}
       <div>
         <label className="mb-1 block text-sm text-white/70">To</label>
         <input
           type="email"
-          value={email}
+          value={email ?? ""}
           disabled
           className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
         />
       </div>
 
-      {/* ========================================
-          Subject Field
-      ======================================== */}
       <div>
         <label className="mb-1 block text-sm text-white/70">Subject</label>
         <input
@@ -180,9 +193,6 @@ export default function LeadEmailForm({
         />
       </div>
 
-      {/* ========================================
-          Message Field
-      ======================================== */}
       <div>
         <div className="flex items-center justify-between">
           <label className="block text-sm text-white/70">Message</label>
@@ -209,13 +219,10 @@ We’ll be in touch shortly.`}
         </div>
       </div>
 
-      {/* ========================================
-          Actions
-      ======================================== */}
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={sending}
+          disabled={sending || !email}
           className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? "Sending..." : "Send email"}
@@ -224,7 +231,7 @@ We’ll be in touch shortly.`}
         <button
           type="button"
           onClick={resetTemplate}
-          disabled={sending}
+          disabled={sending || !selectedTemplate}
           className="rounded-xl border border-white/10 px-4 py-2 text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Reset template

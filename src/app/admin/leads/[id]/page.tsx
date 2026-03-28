@@ -14,6 +14,7 @@ import type {
   LeadStatus,
   LeagueType,
   PreferredNight,
+  TemplateAudience,
 } from "@prisma/client";
 
 type PageProps = {
@@ -150,10 +151,35 @@ export default async function LeadPage({ params }: PageProps) {
     notFound();
   }
 
+  const emailTemplates = await prisma.emailTemplate.findMany({
+    where: {
+      isActive: true,
+      audience: "LEAD" satisfies TemplateAudience,
+      OR: [{ interestType: null }, { interestType: lead.interestType }],
+    },
+    orderBy: [{ name: "asc" }],
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      subject: true,
+      body: true,
+      description: true,
+      interestType: true,
+      ctaLabel: true,
+      ctaUrlKey: true,
+    },
+  });
+
   const emailCount = lead.emails.length;
   const latestEmail = lead.emails[0];
   const alreadyConverted = Boolean(lead.convertedAt || lead.convertedTeamId);
   const canConvertToTeam = lead.interestType === "TEAM";
+
+  const signupUrl =
+    lead.league?.slug
+      ? `https://www.sixfl.co.uk/leagues/${lead.league.slug}`
+      : "https://www.sixfl.co.uk/register-interest";
 
   return (
     <div className="space-y-8">
@@ -204,7 +230,6 @@ export default async function LeadPage({ params }: PageProps) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* LEFT COLUMN */}
         <div className="space-y-6">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
             <h2 className="text-lg font-bold text-white">Lead details</h2>
@@ -297,15 +322,17 @@ export default async function LeadPage({ params }: PageProps) {
           ) : null}
         </div>
 
-        {/* RIGHT COLUMN */}
         <div className="space-y-4">
           <LeadEmailForm
             leadId={lead.id}
             email={lead.email}
             firstName={lead.contactName}
+            fullName={lead.contactName}
+            area={lead.area}
+            signupUrl={signupUrl}
+            templates={emailTemplates}
           />
 
-          {/* DELETE LEAD */}
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6">
             <h2 className="text-lg font-bold text-red-300">Danger zone</h2>
 
@@ -322,7 +349,6 @@ export default async function LeadPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* EMAIL HISTORY */}
           <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>

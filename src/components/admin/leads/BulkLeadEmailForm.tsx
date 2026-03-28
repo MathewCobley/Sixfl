@@ -4,26 +4,18 @@
 
 "use client";
 
-// ========================================
-// Imports
-// ========================================
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
+import TemplateSelect from "./TemplateSelect";
 
-import { useEffect, useState } from "react";
-import { sendBulkLeadEmailAction } from "@/app/admin/leads/actions";
-import TemplateSelect from "@/components/admin/leads/TemplateSelect";
-import {
-  getSixflLeadEmailTemplate,
-  type LeadEmailTemplateKey,
-} from "@/lib/emailTemplates";
-import type {
-  InterestType,
-  LeadStatus,
-  PreferredNight,
-} from "@prisma/client";
-
-// ========================================
-// Types
-// ========================================
+type Template = {
+  id: string;
+  key: string;
+  label: string;
+  subject: string;
+  body: string;
+  interestType: "TEAM" | "PLAYER" | "REFEREE" | null;
+};
 
 type RecipientPreviewItem = {
   id: string;
@@ -31,461 +23,228 @@ type RecipientPreviewItem = {
   email: string;
 };
 
-type Props = {
-  selectedType?: InterestType;
-  selectedStatus?: LeadStatus;
-  selectedArea?: string;
-  selectedNight?: PreferredNight;
-  recipientCount: number;
-  recipientPreview: RecipientPreviewItem[];
+type BulkEmailActionState = {
+  ok?: boolean;
+  error?: string;
+  sentCount?: number;
+  failedCount?: number;
 };
 
-const BULK_SEND_CONFIRM_TEXT = "BULK SEND";
+function SubmitButton() {
+  const { pending } = useFormStatus();
 
-const templateOptions: { value: LeadEmailTemplateKey; label: string }[] = [
-  { value: "lead-response", label: "Lead response" },
-  { value: "team-follow-up", label: "Team follow-up" },
-  { value: "player-follow-up", label: "Player follow-up" },
-  { value: "referee-follow-up", label: "Referee follow-up" },
-];
-
-// ========================================
-// Component
-// ========================================
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {pending ? "Sending bulk email..." : "Send bulk email"}
+    </button>
+  );
+}
 
 export default function BulkLeadEmailForm({
+  templates,
   selectedType,
   selectedStatus,
   selectedArea,
   selectedNight,
   recipientCount,
   recipientPreview,
-}: Props) {
-  // ========================================
-  // State
-  // ========================================
-
-  const [selectedTemplate, setSelectedTemplate] =
-    useState<LeadEmailTemplateKey | "">("");
+  action,
+}: {
+  templates: Template[];
+  selectedType?: "TEAM" | "PLAYER" | "REFEREE";
+  selectedStatus?: "NEW" | "CONTACTED" | "QUALIFIED" | "CLOSED";
+  selectedArea?: string;
+  selectedNight?:
+    | "MONDAY"
+    | "TUESDAY"
+    | "WEDNESDAY"
+    | "THURSDAY"
+    | "FRIDAY"
+    | "SATURDAY"
+    | "SUNDAY"
+    | "ANY";
+  recipientCount: number;
+  recipientPreview: RecipientPreviewItem[];
+  action: (
+    prevState: BulkEmailActionState,
+    formData: FormData,
+  ) => Promise<BulkEmailActionState>;
+}) {
+  const [state, formAction] = useActionState(action, {});
+  const [selectedTemplate, setSelectedTemplate] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [includedLeadIds, setIncludedLeadIds] = useState<string[]>([]);
 
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [confirmationText, setConfirmationText] = useState("");
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((t) => {
+      if (!selectedType) return true;
+      return !t.interestType || t.interestType === selectedType;
+    });
+  }, [templates, selectedType]);
 
-  const hasRecipients = recipientCount > 0;
-  const hasSubject = subject.trim().length > 0;
-  const hasBody = body.trim().length > 0;
-  const canStartBulkSend = hasRecipients && hasSubject && hasBody && !sending;
-  const isConfirmationMatch =
-    confirmationText.trim() === BULK_SEND_CONFIRM_TEXT;
-
-  const previewItems = recipientPreview.filter((item) => item.email.trim());
-  const previewCount = previewItems.length;
-  const remainingPreviewCount = Math.max(recipientCount - previewCount, 0);
-
-  // ========================================
-  // Effects
-  // ========================================
+  const templateOptions = filteredTemplates.map((t) => ({
+    value: t.id,
+    label: t.label,
+  }));
 
   useEffect(() => {
-    if (!selectedTemplate) {
+    setIncludedLeadIds(recipientPreview.map((recipient) => recipient.id));
+  }, [recipientPreview]);
+
+  useEffect(() => {
+    if (state?.ok) {
+      setSelectedTemplate("");
       setSubject("");
       setBody("");
-      return;
     }
+  }, [state?.ok]);
 
-    const template = getSixflLeadEmailTemplate(selectedTemplate, {
-      firstName: undefined,
-    });
+  function handleTemplateChange(templateId: string) {
+    setSelectedTemplate(templateId);
+
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return;
 
     setSubject(template.subject);
     setBody(template.body);
-  }, [selectedTemplate]);
-
-  // ========================================
-  // Helpers
-  // ========================================
-
-  function closeConfirmation() {
-    setShowConfirmation(false);
-    setConfirmationText("");
   }
 
-  function resetConfirmationIfOpen() {
-    if (showConfirmation) {
-      setShowConfirmation(false);
-      setConfirmationText("");
-    }
+  function toggleLead(id: string) {
+    setIncludedLeadIds((current) =>
+      current.includes(id)
+        ? current.filter((leadId) => leadId !== id)
+        : [...current, id],
+    );
   }
 
-  function getRecipientDisplayName(recipient: RecipientPreviewItem) {
-    const trimmedName = recipient.contactName?.trim();
-    if (trimmedName) return trimmedName;
-    return "Unnamed lead";
-  }
-
-  // ========================================
-  // Handlers
-  // ========================================
-
-  async function handleSubmit(formData: FormData) {
-    if (!showConfirmation || !isConfirmationMatch || !canStartBulkSend) {
-      return;
-    }
-
-    setSending(true);
-    setSuccess(null);
-    setError(null);
-
-    const result = await sendBulkLeadEmailAction(formData);
-
-    if (result?.ok) {
-      const allSent = result.failedCount === 0;
-
-      setSuccess(
-        allSent
-          ? `All ${result.sentCount} emails were sent individually with no shared recipient visibility.`
-          : `Bulk email complete. Sent: ${result.sentCount}. Failed: ${result.failedCount}. All emails are still sent individually.`
-      );
-
-      if (selectedTemplate) {
-        const template = getSixflLeadEmailTemplate(selectedTemplate, {
-          firstName: undefined,
-        });
-
-        setSubject(template.subject);
-        setBody(template.body);
-      } else {
-        setSubject("");
-        setBody("");
-      }
-
-      closeConfirmation();
-    } else {
-      setError(result?.error || "Bulk email failed.");
-    }
-
-    setSending(false);
-  }
-
-  function resetTemplate() {
-    if (!selectedTemplate) {
-      setSubject("");
-      setBody("");
-      resetConfirmationIfOpen();
-      return;
-    }
-
-    const template = getSixflLeadEmailTemplate(selectedTemplate, {
-      firstName: undefined,
-    });
-
-    setSubject(template.subject);
-    setBody(template.body);
-    resetConfirmationIfOpen();
-  }
-
-  function openConfirmation() {
-    if (!canStartBulkSend) return;
-
-    setError(null);
-    setSuccess(null);
-    setShowConfirmation(true);
-    setConfirmationText("");
-  }
-
-  // ========================================
-  // UI
-  // ========================================
+  const selectedPreviewCount = includedLeadIds.length;
 
   return (
-    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-lg font-bold text-white">
-            Bulk email filtered leads
+    <form
+      action={formAction}
+      className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+    >
+      <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
+        BULK EMAIL
+      </div>
+
+      <input type="hidden" name="templateId" value={selectedTemplate} />
+      <input type="hidden" name="selectedType" value={selectedType ?? ""} />
+      <input type="hidden" name="selectedStatus" value={selectedStatus ?? ""} />
+      <input type="hidden" name="selectedArea" value={selectedArea ?? ""} />
+      <input type="hidden" name="selectedNight" value={selectedNight ?? ""} />
+
+      {includedLeadIds.map((id) => (
+        <input key={id} type="hidden" name="includedLeadIds" value={id} />
+      ))}
+
+      <TemplateSelect
+        value={selectedTemplate}
+        onChange={handleTemplateChange}
+        options={templateOptions}
+        placeholder="Choose a template"
+      />
+
+      <input
+        name="subject"
+        value={subject}
+        onChange={(e) => setSubject(e.target.value)}
+        placeholder="Email subject"
+        className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-500 focus:outline-none"
+      />
+
+      <textarea
+        name="body"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Write your message..."
+        rows={8}
+        className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-500 focus:outline-none"
+      />
+
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+            Recipient preview
           </div>
-          <div className="mt-1 text-sm text-white/65">
-            This sends to the leads currently matching your filters.
+          <div className="text-sm text-white/60">
+            <span className="font-semibold text-white">{selectedPreviewCount}</span>{" "}
+            selected from preview •{" "}
+            <span className="font-semibold text-white">{recipientCount}</span>{" "}
+            total matching leads
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm text-white/75">
-          Recipients:{" "}
-          <span className="font-bold text-white">{recipientCount}</span>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/55">
-        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-          Type: {selectedType || "All"}
-        </span>
-        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-          Status: {selectedStatus || "All"}
-        </span>
-        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-          Area: {selectedArea || "All"}
-        </span>
-        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-          Preferred night: {selectedNight || "All"}
-        </span>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-emerald-500/20 bg-black/20 px-4 py-3 text-sm text-white/75">
-        <div className="font-semibold text-emerald-300">Privacy note</div>
-        <div className="mt-1 leading-6">
-          Emails are sent individually to each lead. Recipients will not see
-          other recipients&apos; email addresses.
-        </div>
-      </div>
-
-      {hasRecipients ? (
-        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm font-semibold text-white">
-              Recipient preview
-            </div>
-            <div className="text-xs text-white/45">
-              Showing {previewCount} of {recipientCount}
-            </div>
+        {recipientPreview.length === 0 ? (
+          <div className="mt-3 text-sm text-white/60">
+            No recipients match the current filters.
           </div>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {recipientPreview.map((recipient) => {
+              const checked = includedLeadIds.includes(recipient.id);
 
-          <div className="mt-2 text-sm text-white/65">
-            This bulk email will go to the currently filtered leads with a valid
-            email address.
-          </div>
-
-          {previewCount > 0 ? (
-            <div className="mt-4 space-y-2">
-              {previewItems.map((recipient) => (
-                <div
+              return (
+                <label
                   key={recipient.id}
-                  className="flex flex-col gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 hover:bg-white/[0.05]"
                 >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleLead(recipient.id)}
+                    className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500"
+                  />
+
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-white">
-                      {getRecipientDisplayName(recipient)}
+                    <div className="text-sm font-medium text-white">
+                      {recipient.contactName || "Unnamed lead"}
                     </div>
-                    <div className="truncate text-xs text-white/50">
-                      Lead recipient preview
+                    <div className="break-all text-sm text-white/55">
+                      {recipient.email}
                     </div>
                   </div>
+                </label>
+              );
+            })}
+          </div>
+        )}
 
-                  <div className="truncate text-sm text-emerald-300">
-                    {recipient.email}
-                  </div>
-                </div>
-              ))}
+        {recipientCount > recipientPreview.length ? (
+          <div className="mt-3 text-xs text-white/45">
+            Only the first {recipientPreview.length} matching recipients are shown
+            here for manual exclusion preview.
+          </div>
+        ) : null}
+      </div>
 
-              {remainingPreviewCount > 0 ? (
-                <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/55">
-                  And {remainingPreviewCount} more{" "}
-                  {remainingPreviewCount === 1 ? "recipient" : "recipients"}...
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              Recipient preview data has not been passed into this form yet, but
-              the current filters match {recipientCount}{" "}
-              {recipientCount === 1 ? "recipient" : "recipients"}.
-            </div>
-          )}
+      <div className="text-sm text-white/60">
+        This will send to{" "}
+        <span className="font-semibold text-white">{selectedPreviewCount}</span>{" "}
+        selected lead{selectedPreviewCount === 1 ? "" : "s"} from the preview.
+      </div>
+
+      {state?.ok ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          Bulk email sent. {state.sentCount ?? 0} sent
+          {typeof state.failedCount === "number"
+            ? `, ${state.failedCount} failed.`
+            : "."}
         </div>
       ) : null}
 
-      {!hasRecipients ? (
-        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          No leads match the current filters, so bulk email is currently
-          disabled.
+      {!state?.ok && state?.error ? (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {state.error}
         </div>
       ) : null}
 
-      <form action={handleSubmit} className="mt-5 space-y-4">
-        <input type="hidden" name="type" value={selectedType ?? ""} />
-        <input type="hidden" name="status" value={selectedStatus ?? ""} />
-        <input type="hidden" name="area" value={selectedArea ?? ""} />
-        <input type="hidden" name="night" value={selectedNight ?? ""} />
-        <input
-          type="hidden"
-          name="confirmBulkSend"
-          value={showConfirmation && isConfirmationMatch ? "yes" : ""}
-        />
-
-        <div>
-          <div className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-            Email template
-          </div>
-
-          <div className="mt-2">
-            <TemplateSelect
-              label=""
-              value={selectedTemplate}
-              options={templateOptions}
-              onChange={(value) => {
-                setSelectedTemplate(value as LeadEmailTemplateKey | "");
-                resetConfirmationIfOpen();
-              }}
-              disabled={sending || !hasRecipients}
-              placeholder="Select email template"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-            Subject
-          </label>
-          <input
-            name="subject"
-            value={subject}
-            onChange={(e) => {
-              setSubject(e.target.value);
-              resetConfirmationIfOpen();
-            }}
-            required
-            disabled={sending || !hasRecipients}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder="SIXFL launch update"
-          />
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between">
-            <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-              Message
-            </label>
-            <span className="text-xs text-white/40">Plain text email</span>
-          </div>
-
-          <div className="mt-2 rounded-xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400">
-            <textarea
-              name="body"
-              rows={12}
-              value={body}
-              onChange={(e) => {
-                setBody(e.target.value);
-                resetConfirmationIfOpen();
-              }}
-              required
-              disabled={sending || !hasRecipients}
-              className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder={`Hi there,
-
-Thanks for your interest in SIXFL...
-
-We’ll be in touch shortly with next steps.`}
-            />
-          </div>
-
-          <div className="mt-2 text-xs text-white/40">
-            Tip: Keep emails short and clear for better response rates.
-          </div>
-        </div>
-
-        {showConfirmation ? (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-300/85">
-              Final confirmation
-            </div>
-
-            <div className="mt-2 text-sm leading-6 text-white/80">
-              You are about to send this bulk email to{" "}
-              <span className="font-bold text-white">{recipientCount}</span>{" "}
-              {recipientCount === 1 ? "recipient" : "recipients"}.
-            </div>
-
-            <div className="mt-3 text-sm leading-6 text-white/70">
-              To confirm, type{" "}
-              <span className="rounded-md border border-white/10 bg-black/30 px-2 py-1 font-bold text-white">
-                {BULK_SEND_CONFIRM_TEXT}
-              </span>{" "}
-              below.
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                Confirmation text
-              </label>
-              <input
-                value={confirmationText}
-                onChange={(e) => setConfirmationText(e.target.value)}
-                disabled={sending}
-                autoComplete="off"
-                spellCheck={false}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder={BULK_SEND_CONFIRM_TEXT}
-              />
-            </div>
-
-            <div className="mt-2 text-xs text-white/45">
-              The final send button stays disabled until the text matches
-              exactly.
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="submit"
-                disabled={sending || !isConfirmationMatch || !hasRecipients}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 text-sm font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sending
-                  ? "Sending bulk email..."
-                  : `Confirm send to ${recipientCount} ${
-                      recipientCount === 1 ? "recipient" : "recipients"
-                    }`}
-              </button>
-
-              <button
-                type="button"
-                onClick={closeConfirmation}
-                disabled={sending}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-6 text-sm font-bold tracking-[0.12em] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {error}
-          </div>
-        ) : null}
-
-        {success ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-            {success}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap gap-3">
-          {!showConfirmation ? (
-            <button
-              type="button"
-              onClick={openConfirmation}
-              disabled={sending || !hasRecipients || !hasSubject || !hasBody}
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 text-sm font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {hasRecipients ? "Send bulk email" : "No matching recipients"}
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={resetTemplate}
-            disabled={sending || !hasRecipients}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-6 text-sm font-bold tracking-[0.12em] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Reset template
-          </button>
-        </div>
-      </form>
-    </div>
+      <SubmitButton />
+    </form>
   );
 }

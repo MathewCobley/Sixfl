@@ -4,118 +4,35 @@
 
 "use server";
 
+// ========================================
+// Imports
+// ========================================
+
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
+import { LeadStatus, TeamRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { LeadStatus, TeamRole } from "@prisma/client";
+import {
+  appendSIXFLTextSignature,
+  buildSIXFLEmailHtml,
+} from "@/lib/email/buildEmail";
+import {
+  buildBaseEmailTemplateContext,
+  mergeEmailTemplateContext,
+  resolveTemplateText,
+} from "@/lib/email/template-context";
+
+// ========================================
+// Constants
+// ========================================
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const CTA_PLACEHOLDER_TOKEN = "__SIXFL_CTA__";
 
-const SIXFL_LOGO_URL = "https://www.sixfl.co.uk/sixfl-email.png";
-
-const SIXFL_EMAIL_SIGNATURE_TEXT = `
-—
-SIXFL Admin
-League Operations
-hello@sixfl.co.uk
-www.sixfl.co.uk
-
-6-a-side football. Done properly.
-`;
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function convertTextToHtml(text: string) {
-  return escapeHtml(text).replace(/\n/g, "<br />");
-}
-
-function appendEmailSignatureText(body: string) {
-  return `${body.trim()}\n${SIXFL_EMAIL_SIGNATURE_TEXT}`.trim();
-}
-
-function buildLeadEmailHtml(body: string) {
-  const bodyHtml = convertTextToHtml(body.trim());
-
-  return `
-    <div style="background:#f5f5f5;padding:24px 12px;">
-      <table
-        role="presentation"
-        cellpadding="0"
-        cellspacing="0"
-        border="0"
-        width="100%"
-        style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;font-family:Arial,sans-serif;"
-      >
-        <tr>
-          <td style="padding:32px 32px 12px 32px;">
-            <img
-              src="${SIXFL_LOGO_URL}"
-              alt="SIXFL"
-              width="180"
-              style="display:block;width:180px;max-width:100%;height:auto;border:0;"
-            />
-          </td>
-        </tr>
-
-        <tr>
-          <td style="padding:0 32px 28px 32px;color:#111827;font-size:15px;line-height:1.7;">
-            ${bodyHtml}
-          </td>
-        </tr>
-
-        <tr>
-          <td style="padding:0 32px 32px 32px;">
-            <table
-              role="presentation"
-              cellpadding="0"
-              cellspacing="0"
-              border="0"
-              width="100%"
-              style="border-top:1px solid #e5e7eb;padding-top:20px;"
-            >
-              <tr>
-                <td style="padding-top:20px;color:#111827;font-size:14px;line-height:1.5;">
-                  <div style="font-weight:700;">SIXFL Admin</div>
-                  <div style="color:#4b5563;">League Operations</div>
-
-                  <div style="padding-top:10px;">
-                    <a
-                      href="mailto:hello@sixfl.co.uk"
-                      style="color:#166534;text-decoration:none;"
-                    >
-                      hello@sixfl.co.uk
-                    </a>
-                  </div>
-
-                  <div>
-                    <a
-                      href="https://www.sixfl.co.uk"
-                      style="color:#166534;text-decoration:none;"
-                    >
-                      www.sixfl.co.uk
-                    </a>
-                  </div>
-
-                  <div style="padding-top:12px;color:#6b7280;font-size:13px;">
-                    6-a-side football. Done properly.
-                  </div>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </div>
-  `.trim();
-}
+// ========================================
+// Helpers
+// ========================================
 
 function slugifyTeamName(value: string) {
   return value
@@ -151,34 +68,94 @@ function buildTeamNameFromLead(lead: {
   contactName: string;
 }) {
   const explicitTeamName = lead.teamName?.trim();
-  if (explicitTeamName) return explicitTeamName;
+
+  if (explicitTeamName) {
+    return explicitTeamName;
+  }
 
   const contactName = lead.contactName.trim();
-  if (contactName) return `${contactName}'s Team`;
+
+  if (contactName) {
+    return `${contactName}'s Team`;
+  }
 
   return "New Team";
 }
+
+function buildLeadEmailContext(input: {
+  contactName?: string | null;
+  area?: string | null;
+  signupUrl?: string | null;
+  teamName?: string | null;
+}) {
+  const fullName = input.contactName?.trim() || "";
+  const firstName = fullName.split(/\s+/)[0] || "there";
+
+  return mergeEmailTemplateContext(
+    buildBaseEmailTemplateContext({
+      firstName,
+      fullName,
+      area: input.area,
+      signupUrl: input.signupUrl,
+      teamName: input.teamName,
+    })
+  );
+}
+
+function resolveLeadEmailCta(input: {
+  ctaLabel?: string | null;
+  ctaUrlKey?: string | null;
+  signupUrl?: string | null;
+}) {
+  const label = input.ctaLabel?.trim() || "";
+  const urlKey = input.ctaUrlKey?.trim() || "";
+
+  if (!label || !urlKey) {
+    return undefined;
+  }
+
+  if (urlKey === "signupUrl") {
+    const url = input.signupUrl?.trim() || "";
+
+    if (!url) {
+      return undefined;
+    }
+
+    return {
+      label,
+      url,
+    };
+  }
+
+  return undefined;
+}
+
+// ========================================
+// Actions
+// ========================================
 
 export async function sendLeadEmailAction(formData: FormData) {
   await requireAdmin();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
-  const subject = String(formData.get("subject") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const subjectInput = String(formData.get("subject") ?? "").trim();
+  const bodyInput = String(formData.get("body") ?? "").trim();
+
+  const signupUrl = String(formData.get("signupUrl") ?? "").trim();
+  const ctaLabelInput = String(formData.get("ctaLabel") ?? "").trim();
+  const ctaUrlKeyInput = String(formData.get("ctaUrlKey") ?? "").trim();
 
   if (!leadId) {
     return { ok: false, error: "Missing lead id." };
   }
 
-  if (!subject) {
+  if (!subjectInput) {
     return { ok: false, error: "Please enter a subject." };
   }
 
-  if (!body) {
+  if (!bodyInput) {
     return { ok: false, error: "Please enter an email message." };
   }
-
-  const fromEmail = process.env.EMAIL_FROM;
 
   if (!process.env.RESEND_API_KEY) {
     return {
@@ -186,6 +163,8 @@ export async function sendLeadEmailAction(formData: FormData) {
       error: "RESEND_API_KEY is missing from your environment variables.",
     };
   }
+
+  const fromEmail = process.env.EMAIL_FROM;
 
   if (!fromEmail) {
     return {
@@ -202,14 +181,43 @@ export async function sendLeadEmailAction(formData: FormData) {
     return { ok: false, error: "Lead not found." };
   }
 
-  const signedTextBody = appendEmailSignatureText(body);
-  const signedHtmlBody = buildLeadEmailHtml(body);
+  const leadData = lead as typeof lead & {
+    area?: string | null;
+    teamName?: string | null;
+  };
+
+  const context = buildLeadEmailContext({
+    contactName: lead.contactName,
+    area: leadData.area ?? null,
+    signupUrl,
+    teamName: leadData.teamName ?? null,
+  });
+
+  const resolvedSubject = resolveTemplateText(subjectInput, context);
+
+  const resolvedBody = resolveTemplateText(
+    bodyInput.replaceAll("{{cta}}", CTA_PLACEHOLDER_TOKEN),
+    context
+  ).replaceAll(CTA_PLACEHOLDER_TOKEN, "{{cta}}");
+
+  const resolvedCta = resolveLeadEmailCta({
+    ctaLabel: ctaLabelInput,
+    ctaUrlKey: ctaUrlKeyInput,
+    signupUrl,
+  });
+
+  const signedTextBody = appendSIXFLTextSignature(resolvedBody);
+
+  const signedHtmlBody = buildSIXFLEmailHtml({
+    body: signedTextBody,
+    cta: resolvedCta,
+  });
 
   try {
     await resend.emails.send({
       from: fromEmail,
       to: lead.email,
-      subject,
+      subject: resolvedSubject,
       text: signedTextBody,
       html: signedHtmlBody,
     });
@@ -217,17 +225,17 @@ export async function sendLeadEmailAction(formData: FormData) {
     await prisma.interestLeadEmail.create({
       data: {
         interestLeadId: lead.id,
-        subject,
+        subject: resolvedSubject,
         body: signedTextBody,
         sentTo: lead.email,
       },
     });
 
-    if (lead.status === "NEW") {
+    if (lead.status === LeadStatus.NEW) {
       await prisma.interestLead.update({
         where: { id: lead.id },
         data: {
-          status: "CONTACTED",
+          status: LeadStatus.CONTACTED,
           contactedAt: new Date(),
         },
       });
@@ -247,7 +255,6 @@ export async function sendLeadEmailAction(formData: FormData) {
     };
   }
 }
-
 
 export async function deleteLeadAction(formData: FormData) {
   await requireAdmin();

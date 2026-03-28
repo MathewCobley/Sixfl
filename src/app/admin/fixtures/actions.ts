@@ -1,4 +1,6 @@
-// src/app/admin/fixtures/actions.ts
+// ========================================
+// File: src/app/admin/fixtures/actions.ts
+// ========================================
 
 "use server";
 
@@ -49,6 +51,24 @@ function parseOptionalInt(value: FormDataEntryValue | null, fieldName: string) {
 
   if (!Number.isInteger(num)) {
     throw new Error(`${fieldName} must be a whole number.`);
+  }
+
+  return num;
+}
+
+function parseOptionalPositiveInt(
+  value: FormDataEntryValue | null,
+  fieldName: string,
+  min = 0,
+) {
+  const str = String(value ?? "").trim();
+
+  if (!str) return null;
+
+  const num = Number(str);
+
+  if (!Number.isInteger(num) || num < min) {
+    throw new Error(`${fieldName} must be ${min} or more.`);
   }
 
   return num;
@@ -147,6 +167,59 @@ function mirrorRounds(rounds: Pair[][]): Pair[][] {
   );
 }
 
+export async function submitResultAction(formData: FormData) {
+  await requireAdmin();
+
+  const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture ID");
+  const homeScore = parseRequiredPositiveInt(formData.get("homeScore"), "Home score", 0);
+  const awayScore = parseRequiredPositiveInt(formData.get("awayScore"), "Away score", 0);
+
+  const fixture = await prisma.fixture.findUnique({
+    where: { id: fixtureId },
+    select: {
+      id: true,
+      leagueId: true,
+      league: {
+        select: {
+          slug: true,
+        },
+      },
+    },
+  });
+
+  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  await prisma.$transaction([
+    prisma.matchResult.upsert({
+      where: { fixtureId },
+      update: {
+        homeScore,
+        awayScore,
+        enteredAt: new Date(),
+      },
+      create: {
+        fixtureId,
+        homeScore,
+        awayScore,
+      },
+    }),
+    prisma.fixture.update({
+      where: { id: fixtureId },
+      data: {
+        status: FixtureStatus.COMPLETED,
+      },
+    }),
+  ]);
+
+  revalidatePath("/admin/fixtures");
+  revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${fixture.leagueId}`);
+  revalidatePath(`/leagues/${fixture.league.slug}`);
+  revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
+}
+
 export async function createFixtureAction(formData: FormData) {
   await requireAdmin();
 
@@ -156,6 +229,8 @@ export async function createFixtureAction(formData: FormData) {
   const venueId = parseOptionalString(formData.get("venueId"));
   const kickoffAt = parseKickoffAt(formData.get("kickoffAt"));
   const round = parseOptionalInt(formData.get("round"), "Round");
+  const position = parseOptionalPositiveInt(formData.get("position"), "Position", 0);
+  const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
 
   if (homeTeamId === awayTeamId) {
@@ -215,6 +290,8 @@ export async function createFixtureAction(formData: FormData) {
       venueId,
       kickoffAt,
       round,
+      position,
+      pitch,
       status,
     },
   });
@@ -306,6 +383,8 @@ export async function generateFixtures(formData: FormData) {
     venueId: string | null;
     kickoffAt: Date;
     round: number;
+    position: number;
+    pitch: string;
     status: FixtureStatus;
   }[] = [];
 
@@ -315,6 +394,7 @@ export async function generateFixtures(formData: FormData) {
 
     pairs.forEach((pair, matchIndex) => {
       const batch = Math.floor(matchIndex / pitches);
+      const pitchNumber = (matchIndex % pitches) + 1;
       const kickoffAt = addMinutes(roundBase, batch * slotMinutes);
 
       fixturesToCreate.push({
@@ -324,6 +404,8 @@ export async function generateFixtures(formData: FormData) {
         venueId,
         kickoffAt,
         round: roundNumber,
+        position: matchIndex,
+        pitch: `Pitch ${pitchNumber}`,
         status,
       });
     });

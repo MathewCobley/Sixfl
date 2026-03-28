@@ -157,10 +157,10 @@ export default async function AdminTeamsPage({
 
               <div className="flex shrink-0 items-center gap-4">
                 <Link
-                  href={`/admin/teams/${team.id}/edit`}
+                  href={`/admin/teams/${team.id}`}
                   className="text-sm text-emerald-400 hover:text-emerald-300"
                 >
-                  Edit
+                  Open
                 </Link>
 
                 <form action={deleteTeamAction}>

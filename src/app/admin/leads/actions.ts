@@ -14,6 +14,11 @@ import { InterestType, LeadStatus, PreferredNight } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import {
+  appendSIXFLTextSignature,
+  buildSIXFLEmailHtml,
+  type SIXFLEmailCta,
+} from "@/lib/email/buildEmail";
 
 // ========================================
 // Constants
@@ -21,120 +26,31 @@ import { requireAdmin } from "@/lib/requireAdmin";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const SIXFL_LOGO_URL = "https://www.sixfl.co.uk/sixfl-email.png";
-
-const SIXFL_EMAIL_SIGNATURE_TEXT = `
-—
-SIXFL Admin
-League Operations
-hello@sixfl.co.uk
-www.sixfl.co.uk
-
-6-a-side football. Done properly.
-`;
+const DEFAULT_BULK_EMAIL_CTA: SIXFLEmailCta = {
+  url: "https://www.sixfl.co.uk/register-interest",
+  label: "Register your interest",
+};
 
 // ========================================
 // Helpers
 // ========================================
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+function getPersonalisationValues(contactName?: string | null) {
+  const fullName = contactName?.trim() || "";
+  const firstName = fullName.split(/\s+/)[0] || "there";
+
+  return {
+    fullName,
+    firstName,
+  };
 }
 
-function convertTextToHtml(text: string) {
-  return escapeHtml(text).replace(/\n/g, "<br />");
-}
+function personaliseTemplateText(text: string, contactName?: string | null) {
+  const { fullName, firstName } = getPersonalisationValues(contactName);
 
-function appendEmailSignatureText(body: string) {
-  return `${body.trim()}\n${SIXFL_EMAIL_SIGNATURE_TEXT}`.trim();
-}
-
-function buildLeadEmailHtml(body: string) {
-  const bodyHtml = convertTextToHtml(body.trim());
-
-  return `
-    <div style="background:#f5f5f5;padding:24px 12px;">
-      <table
-        role="presentation"
-        cellpadding="0"
-        cellspacing="0"
-        border="0"
-        width="100%"
-        style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;font-family:Arial,sans-serif;"
-      >
-        <tr>
-          <td style="padding:32px 32px 12px 32px;">
-            <img
-              src="${SIXFL_LOGO_URL}"
-              alt="SIXFL"
-              width="180"
-              style="display:block;width:180px;max-width:100%;height:auto;border:0;"
-            />
-          </td>
-        </tr>
-
-        <tr>
-          <td style="padding:0 32px 28px 32px;color:#111827;font-size:15px;line-height:1.7;">
-            ${bodyHtml}
-          </td>
-        </tr>
-
-        <tr>
-          <td style="padding:0 32px 32px 32px;">
-            <table
-              role="presentation"
-              cellpadding="0"
-              cellspacing="0"
-              border="0"
-              width="100%"
-              style="border-top:1px solid #e5e7eb;padding-top:20px;"
-            >
-              <tr>
-                <td style="padding-top:20px;color:#111827;font-size:14px;line-height:1.5;">
-                  <div style="font-weight:700;">SIXFL Admin</div>
-                  <div style="color:#4b5563;">League Operations</div>
-
-                  <div style="padding-top:10px;">
-                    <a
-                      href="mailto:hello@sixfl.co.uk"
-                      style="color:#166534;text-decoration:none;"
-                    >
-                      hello@sixfl.co.uk
-                    </a>
-                  </div>
-
-                  <div>
-                    <a
-                      href="https://www.sixfl.co.uk"
-                      style="color:#166534;text-decoration:none;"
-                    >
-                      www.sixfl.co.uk
-                    </a>
-                  </div>
-
-                  <div style="padding-top:12px;color:#6b7280;font-size:13px;">
-                    6-a-side football. Done properly.
-                  </div>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </div>
-  `.trim();
-}
-
-function personaliseGreeting(body: string, contactName?: string | null) {
-  const firstName = contactName?.trim().split(/\s+/)[0] || "there";
-
-  return body
-    .replace(/{{name}}/gi, firstName)
+  return text
+    .replace(/{{firstName}}/gi, firstName)
+    .replace(/{{name}}/gi, fullName || firstName)
     .replace(/Hi there/gi, `Hi ${firstName}`);
 }
 
@@ -196,25 +112,35 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
 
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  const typeRaw = String(formData.get("type") ?? "").trim().toUpperCase();
-  const statusRaw = String(formData.get("status") ?? "").trim().toUpperCase();
-  const area = String(formData.get("area") ?? "").trim();
-  const nightRaw = String(formData.get("night") ?? "").trim().toUpperCase();
-  const confirmBulkSend = String(formData.get("confirmBulkSend") ?? "").trim();
 
-  if (confirmBulkSend !== "yes") {
+  const selectedTypeRaw = String(formData.get("selectedType") ?? "")
+    .trim()
+    .toUpperCase();
+  const selectedStatusRaw = String(formData.get("selectedStatus") ?? "")
+    .trim()
+    .toUpperCase();
+  const selectedArea = String(formData.get("selectedArea") ?? "").trim();
+  const selectedNightRaw = String(formData.get("selectedNight") ?? "")
+    .trim()
+    .toUpperCase();
+
+  const includedLeadIds = formData
+    .getAll("includedLeadIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  if (!subject) {
     return {
       ok: false,
-      error: "Bulk send confirmation missing. Please type BULK SEND before sending.",
+      error: "Please enter a subject.",
     };
   }
 
-  if (!subject) {
-    return { ok: false, error: "Please enter a subject." };
-  }
-
   if (!body) {
-    return { ok: false, error: "Please enter a message." };
+    return {
+      ok: false,
+      error: "Please enter a message.",
+    };
   }
 
   if (!process.env.RESEND_API_KEY) {
@@ -232,19 +158,29 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
   }
 
   const where = {
-    ...(typeRaw && isInterestType(typeRaw)
-      ? { interestType: typeRaw as InterestType }
+    ...(selectedTypeRaw && isInterestType(selectedTypeRaw)
+      ? { interestType: selectedTypeRaw as InterestType }
       : {}),
-    ...(statusRaw && isLeadStatus(statusRaw)
-      ? { status: statusRaw as LeadStatus }
+    ...(selectedStatusRaw && isLeadStatus(selectedStatusRaw)
+      ? { status: selectedStatusRaw as LeadStatus }
       : {}),
-    ...(area ? { area } : {}),
-    ...(nightRaw && isPreferredNight(nightRaw)
+    ...(selectedArea ? { area: selectedArea } : {}),
+    ...(selectedNightRaw && isPreferredNight(selectedNightRaw)
       ? {
           preferredNights: {
             some: {
-              night: nightRaw as PreferredNight,
+              night: selectedNightRaw as PreferredNight,
             },
+          },
+        }
+      : {}),
+    email: {
+      not: "",
+    },
+    ...(includedLeadIds.length > 0
+      ? {
+          id: {
+            in: includedLeadIds,
           },
         }
       : {}),
@@ -281,42 +217,34 @@ export async function sendBulkLeadEmailAction(formData: FormData) {
         continue;
       }
 
-      // ========================================
-      // Personalise message for this lead
-      // ========================================
+      const personalisedSubject = personaliseTemplateText(
+        subject,
+        lead.contactName,
+      );
+      const personalisedBody = personaliseTemplateText(body, lead.contactName);
 
-      const personalisedBody = personaliseGreeting(body, lead.contactName);
-      const signedTextBody = appendEmailSignatureText(personalisedBody);
-      const signedHtmlBody = buildLeadEmailHtml(personalisedBody);
-
-      // ========================================
-      // Send email
-      // ========================================
+      const signedTextBody = appendSIXFLTextSignature(personalisedBody);
+      const signedHtmlBody = buildSIXFLEmailHtml({
+        body: signedTextBody,
+        cta: DEFAULT_BULK_EMAIL_CTA,
+      });
 
       await resend.emails.send({
         from: process.env.EMAIL_FROM,
         to: email,
-        subject,
+        subject: personalisedSubject,
         text: signedTextBody,
         html: signedHtmlBody,
       });
 
-      // ========================================
-      // Save email history
-      // ========================================
-
       await prisma.interestLeadEmail.create({
         data: {
           interestLeadId: lead.id,
-          subject,
+          subject: personalisedSubject,
           body: signedTextBody,
           sentTo: email,
         },
       });
-
-      // ========================================
-      // Auto-update lead status
-      // ========================================
 
       if (lead.status === "NEW") {
         await prisma.interestLead.update({

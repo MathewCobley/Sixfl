@@ -13,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import AdminCard from "@/components/admin/AdminCard";
 import BulkLeadEmailForm from "@/components/admin/leads/BulkLeadEmailForm";
-import { updateLeadStatus } from "./actions";
+import { sendBulkLeadEmailAction, updateLeadStatus } from "./actions";
 
 type SearchParams = Promise<{
   type?: string;
@@ -74,10 +74,10 @@ function formatPreferredNight(value: PreferredNight) {
 }
 
 function formatPreferredNights(
-  values: Array<{ night: PreferredNight }> | PreferredNight[]
+  values: Array<{ night: PreferredNight }> | PreferredNight[],
 ) {
   const nights = values.map((value) =>
-    typeof value === "string" ? value : value.night
+    typeof value === "string" ? value : value.night,
   );
 
   if (!nights.length) return "—";
@@ -280,6 +280,21 @@ type LaunchSignal = {
   referees: number;
 };
 
+type RecipientPreviewItem = {
+  id: string;
+  contactName: string | null;
+  email: string;
+};
+
+type BulkEmailTemplate = {
+  id: string;
+  key: string;
+  label: string;
+  subject: string;
+  body: string;
+  interestType: InterestType | null;
+};
+
 export default async function AdminLeadsPage({
   searchParams,
 }: {
@@ -344,6 +359,7 @@ export default async function AdminLeadsPage({
     allLeadsForSummary,
     recipientCount,
     recipientPreview,
+    leadTemplates,
   ] = await Promise.all([
     prisma.interestLead.findMany({
       where,
@@ -383,11 +399,26 @@ export default async function AdminLeadsPage({
     prisma.interestLead.findMany({
       where: recipientWhere,
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 50,
       select: {
         id: true,
         contactName: true,
         email: true,
+      },
+    }),
+    prisma.emailTemplate.findMany({
+      where: {
+        audience: "LEAD",
+        isActive: true,
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        subject: true,
+        body: true,
+        interestType: true,
       },
     }),
   ]);
@@ -431,7 +462,7 @@ export default async function AdminLeadsPage({
     Partial<Record<PreferredNight, number>>
   >((acc, lead) => {
     const uniqueNights = Array.from(
-      new Set(lead.preferredNights.map((item) => item.night))
+      new Set(lead.preferredNights.map((item) => item.night)),
     );
 
     for (const night of uniqueNights) {
@@ -442,7 +473,7 @@ export default async function AdminLeadsPage({
   }, {});
 
   const mostPopularNightEntry = Object.entries(preferredNightCounts).sort(
-    (a, b) => b[1] - a[1]
+    (a, b) => b[1] - a[1],
   )[0] as [PreferredNight, number] | undefined;
 
   const mostPopularNight = mostPopularNightEntry
@@ -450,13 +481,13 @@ export default async function AdminLeadsPage({
     : "—";
 
   const mensCount = allLeadsForSummary.filter(
-    (lead) => lead.leagueType === "MENS"
+    (lead) => lead.leagueType === "MENS",
   ).length;
   const womensCount = allLeadsForSummary.filter(
-    (lead) => lead.leagueType === "WOMENS"
+    (lead) => lead.leagueType === "WOMENS",
   ).length;
   const youthCount = allLeadsForSummary.filter(
-    (lead) => lead.leagueType === "YOUTH"
+    (lead) => lead.leagueType === "YOUTH",
   ).length;
 
   const launchSignalMap = new Map<string, LaunchSignal>();
@@ -466,7 +497,7 @@ export default async function AdminLeadsPage({
     if (!area) continue;
 
     const uniqueNights = Array.from(
-      new Set(lead.preferredNights.map((item) => item.night))
+      new Set(lead.preferredNights.map((item) => item.night)),
     ).filter((night) => night !== "ANY");
 
     for (const night of uniqueNights) {
@@ -496,11 +527,30 @@ export default async function AdminLeadsPage({
     if (b.total !== a.total) return b.total - a.total;
     if (a.area !== b.area) return a.area.localeCompare(b.area);
     return formatPreferredNight(a.night).localeCompare(
-      formatPreferredNight(b.night)
+      formatPreferredNight(b.night),
     );
   });
 
   const strongestLaunchSignal = launchSignals[0];
+
+  const bulkEmailTemplates: BulkEmailTemplate[] = leadTemplates.map(
+    (template) => ({
+      id: template.id,
+      key: template.key,
+      label: template.name,
+      subject: template.subject,
+      body: template.body,
+      interestType: template.interestType,
+    }),
+  );
+
+  const previewRecipients: RecipientPreviewItem[] = recipientPreview.map(
+    (recipient) => ({
+      id: recipient.id,
+      contactName: recipient.contactName,
+      email: recipient.email,
+    }),
+  );
 
   return (
     <AdminCard title="Leads">
@@ -520,27 +570,28 @@ export default async function AdminLeadsPage({
           </div>
 
           <div className="flex flex-wrap gap-3">
-  <Link
-    href="/admin"
-    className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-  >
-    Back to admin
-  </Link>
+            <Link
+              href="/admin"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
+            >
+              Back to admin
+            </Link>
 
-  <Link
-    href="/admin/leads"
-    className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-  >
-    Clear filters
-  </Link>
+            <Link
+              href="/admin/leads"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
+            >
+              Clear filters
+            </Link>
 
-  <Link
-    href="/admin/leads/import"
-    className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
-  >
-    Import CSV
-  </Link>
-</div></div>
+            <Link
+              href="/admin/leads/import"
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
+            >
+              Import CSV
+            </Link>
+          </div>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -585,12 +636,14 @@ export default async function AdminLeadsPage({
         </div>
 
         <BulkLeadEmailForm
+          action={sendBulkLeadEmailAction}
           selectedType={selectedType}
           selectedStatus={selectedStatus}
           selectedArea={selectedArea}
           selectedNight={selectedNight}
           recipientCount={recipientCount}
-          recipientPreview={recipientPreview}
+          recipientPreview={previewRecipients}
+          templates={bulkEmailTemplates}
         />
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -627,7 +680,7 @@ export default async function AdminLeadsPage({
               value={
                 strongestLaunchSignal
                   ? `${strongestLaunchSignal.area} • ${formatPreferredNight(
-                      strongestLaunchSignal.night
+                      strongestLaunchSignal.night,
                     )}`
                   : "Need more leads"
               }
@@ -833,7 +886,7 @@ export default async function AdminLeadsPage({
                       })}
                       active={selectedStatus === status}
                     />
-                  )
+                  ),
                 )}
               </div>
             </div>
@@ -944,7 +997,7 @@ export default async function AdminLeadsPage({
                       <td className="px-4 py-3">
                         <span
                           className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
-                            lead.interestType
+                            lead.interestType,
                           )}`}
                         >
                           {formatInterestType(lead.interestType)}
@@ -954,7 +1007,7 @@ export default async function AdminLeadsPage({
                       <td className="px-4 py-3">
                         <span
                           className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
-                            lead.status
+                            lead.status,
                           )}`}
                         >
                           {formatLeadStatus(lead.status)}
@@ -1039,14 +1092,14 @@ export default async function AdminLeadsPage({
                         </div>
                         <span
                           className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
-                            lead.interestType
+                            lead.interestType,
                           )}`}
                         >
                           {formatInterestType(lead.interestType)}
                         </span>
                         <span
                           className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
-                            lead.status
+                            lead.status,
                           )}`}
                         >
                           {formatLeadStatus(lead.status)}

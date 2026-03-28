@@ -1,0 +1,36 @@
+"filename", "language", "TypeScript", "TypeScript JSX", "comment", "blank", "total"
+"d:\Dev\SIXFL\src\app\admin\email-templates\[id]\page.tsx", "TypeScript JSX", 0, 50, 3, 8, 61
+"d:\Dev\SIXFL\src\app\admin\email-templates\actions.ts", "TypeScript", 142, 0, 3, 31, 176
+"d:\Dev\SIXFL\src\app\admin\email-templates\new\page.tsx", "TypeScript JSX", 0, 29, 3, 5, 37
+"d:\Dev\SIXFL\src\app\admin\email-templates\page.tsx", "TypeScript JSX", 0, 193, 3, 26, 222
+"d:\Dev\SIXFL\src\app\admin\layout.tsx", "TypeScript JSX", 0, -28, 0, -4, -32
+"d:\Dev\SIXFL\src\app\admin\leads\[id]\actions.ts", "TypeScript", 34, 0, 0, 10, 44
+"d:\Dev\SIXFL\src\app\admin\leads\[id]\page.tsx", "TypeScript JSX", 0, 191, -4, 14, 201
+"d:\Dev\SIXFL\src\app\admin\leads\actions.ts", "TypeScript", -78, 0, -12, -8, -98
+"d:\Dev\SIXFL\src\app\admin\leads\convert-action-state.ts", "TypeScript", 8, 0, 3, 2, 13
+"d:\Dev\SIXFL\src\app\admin\leads\convert-actions.ts", "TypeScript", 210, 0, 3, 41, 254
+"d:\Dev\SIXFL\src\app\admin\leads\import\actions.ts", "TypeScript", 228, 0, 3, 54, 285
+"d:\Dev\SIXFL\src\app\admin\leads\import\page.tsx", "TypeScript JSX", 0, 42, 3, 8, 53
+"d:\Dev\SIXFL\src\app\admin\leads\page.tsx", "TypeScript JSX", 0, 75, 0, 6, 81
+"d:\Dev\SIXFL\src\app\auth\verify-request\page.tsx", "TypeScript JSX", 0, 25, 3, 6, 34
+"d:\Dev\SIXFL\src\app\contact\page.tsx", "TypeScript JSX", 0, 16, 1, 1, 18
+"d:\Dev\SIXFL\src\app\leagues\[id]\page.tsx", "TypeScript JSX", 0, -253, -1, -22, -276
+"d:\Dev\SIXFL\src\app\leagues\[slug]\actions.ts", "TypeScript", 49, 0, 3, 9, 61
+"d:\Dev\SIXFL\src\app\leagues\[slug]\page.tsx", "TypeScript JSX", 0, 272, 9, 34, 315
+"d:\Dev\SIXFL\src\app\leagues\manage\[id]\page.tsx", "TypeScript JSX", 0, 253, 1, 22, 276
+"d:\Dev\SIXFL\src\app\leagues\thanks\page.tsx", "TypeScript JSX", 0, 20, 3, 3, 26
+"d:\Dev\SIXFL\src\app\login\check-email\page.tsx", "TypeScript JSX", 0, 37, 3, 8, 48
+"d:\Dev\SIXFL\src\app\login\page.tsx", "TypeScript JSX", 0, -2, 0, 0, -2
+"d:\Dev\SIXFL\src\app\pricing\page.tsx", "TypeScript JSX", 0, -1, 0, 0, -1
+"d:\Dev\SIXFL\src\app\register-interest\success\page.tsx", "TypeScript JSX", 0, 3, 1, 1, 5
+"d:\Dev\SIXFL\src\app\register-team\success\page.tsx", "TypeScript JSX", 0, 1, 0, 1, 2
+"d:\Dev\SIXFL\src\components\admin\AdminSelect.tsx", "TypeScript JSX", 0, 131, 3, 15, 149
+"d:\Dev\SIXFL\src\components\admin\AdminSidebar.tsx", "TypeScript JSX", 0, 65, 3, 13, 81
+"d:\Dev\SIXFL\src\components\admin\TeamBadge.tsx", "TypeScript JSX", 0, 5, 0, 1, 6
+"d:\Dev\SIXFL\src\components\admin\email-templates\EmailTemplateForm.tsx", "TypeScript JSX", 0, 591, 3, 72, 666
+"d:\Dev\SIXFL\src\components\admin\leads\BulkLeadEmailForm.tsx", "TypeScript JSX", 0, -248, -46, -41, -335
+"d:\Dev\SIXFL\src\components\admin\leads\ConvertLeadToTeamButton.tsx", "TypeScript JSX", 0, 76, 3, 15, 94
+"d:\Dev\SIXFL\src\components\admin\leads\ImportLeadsForm.tsx", "TypeScript JSX", 0, 80, 3, 12, 95
+"d:\Dev\SIXFL\src\components\admin\leads\LeadEmailForm.tsx", "TypeScript JSX", 0, 29, -24, 1, 6
+"d:\Dev\SIXFL\src\lib\email\buildEmail.ts", "TypeScript", 142, 0, 3, 14, 159
+"Total", "-", 735, 1652, -21, 358, 2724
