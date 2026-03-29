@@ -1,11 +1,19 @@
 // ========================================
 // File: src/app/leagues/[slug]/page.tsx
 // ========================================
+
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createLeagueInterestLeadAction } from "./actions";
+
+// ========================================
+// Rendering
+// ========================================
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // ========================================
 // Types
@@ -550,7 +558,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                           key={row.team.id}
                           className="bg-black/20 px-4 py-4 sm:px-6"
                         >
-                          {/* Mobile */}
                           <div className="md:hidden">
                             <div className="flex items-center gap-3">
                               <div
@@ -598,7 +605,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                             </div>
                           </div>
 
-                          {/* Desktop */}
                           <div className="hidden grid-cols-[56px_minmax(0,1.8fr)_64px_64px_64px_64px_72px_72px] items-center gap-3 md:grid">
                             <div>
                               <div
