@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { HiOutlineMenu, HiOutlineX } from "react-icons/hi";
@@ -17,6 +17,18 @@ const SUPER_ADMINS = [
   "mathew@sixfl.co.uk",
   "mathewcobley1@gmail.com",
 ];
+
+type HeaderVariant = "public" | "admin";
+
+type SiteHeaderProps = {
+  variant?: HeaderVariant;
+};
+
+type NavItem = {
+  href: string;
+  label: string;
+  trackLabel: string;
+};
 
 function NavLink({
   href,
@@ -50,7 +62,9 @@ function NavLink({
   );
 }
 
-export default function SiteHeader() {
+export default function SiteHeader({
+  variant = "public",
+}: SiteHeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
@@ -86,6 +100,51 @@ export default function SiteHeader() {
     };
   }, [mobileMenuOpen]);
 
+  const navItems = useMemo<NavItem[]>(() => {
+    if (variant === "admin") {
+      return [
+        { href: "/admin", label: "Overview", trackLabel: "Overview" },
+        { href: "/admin/teams", label: "Teams", trackLabel: "Teams" },
+        { href: "/admin/leagues", label: "Leagues", trackLabel: "Leagues" },
+        { href: "/admin/fixtures", label: "Fixtures", trackLabel: "Fixtures" },
+        { href: "/admin/leads", label: "Leads", trackLabel: "Leads" },
+      ];
+    }
+
+    return [
+      { href: "/faq", label: "FAQ", trackLabel: "FAQ" },
+      { href: "/login", label: "Login", trackLabel: "Login" },
+    ];
+  }, [variant]);
+
+  const showAdminShortcutInPublic = variant === "public" && isAdmin;
+
+  const primaryCta =
+    variant === "admin"
+      ? {
+          href: "/",
+          label: "View site",
+          trackEvent: "header_admin_cta_click",
+          type: "site",
+        }
+      : {
+          href: "/register-interest?type=team",
+          label: "Register Interest",
+          trackEvent: "header_cta_click",
+          type: "team",
+        };
+
+  const secondaryPublicLink =
+    variant === "public"
+      ? {
+          href: "/contact",
+          label: "Contact",
+        }
+      : null;
+
+  const headerLabel =
+    variant === "admin" ? "SIXFL Admin" : "SIXFL – 6-a-side football";
+
   return (
     <>
       <header
@@ -98,76 +157,79 @@ export default function SiteHeader() {
         <div className="h-[2px] w-full bg-emerald-500" />
 
         <div
-          className={`mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 transition-all duration-300 ${
+          className={`mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 transition-all duration-300 sm:px-6 lg:px-8 ${
             scrolled ? "h-14" : "h-16"
           }`}
         >
-          <Link
-            href="/"
-            className="flex min-w-0 shrink-0 items-center"
-            onClick={() =>
-              track("header_nav_click", {
-                location: "header",
-                target: "/",
-                label: "logo",
-              })
-            }
-          >
-            <Image
-              src="/logo2.png"
-              alt="SIXFL"
-              width={180}
-              height={48}
-              priority
-              sizes="(max-width: 768px) 132px, 180px"
-              className={`w-auto object-contain transition-all duration-300 ${
-                scrolled ? "h-[24px] sm:h-[30px]" : "h-[28px] sm:h-[34px]"
-              }`}
-            />
-          </Link>
-
-          <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
+          <div className="flex min-w-0 items-center gap-4">
             <Link
-              href="/contact"
+              href={variant === "admin" ? "/admin" : "/"}
+              className="flex min-w-0 shrink-0 items-center"
               onClick={() =>
                 track("header_nav_click", {
-                  location: "desktop_header",
-                  target: "/contact",
-                  label: "Contact",
+                  location: `${variant}_header`,
+                  target: variant === "admin" ? "/admin" : "/",
+                  label: "logo",
                 })
               }
-              className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-white/10"
             >
-              Contact
+              <Image
+                src="/logo2.png"
+                alt="SIXFL"
+                width={180}
+                height={48}
+                priority
+                sizes="(max-width: 768px) 132px, 180px"
+                className={`w-auto object-contain transition-all duration-300 ${
+                  scrolled ? "h-[24px] sm:h-[30px]" : "h-[28px] sm:h-[34px]"
+                }`}
+              />
             </Link>
 
-            <NavLink
-              href="/faq"
-              onClick={() =>
-                track("header_nav_click", {
-                  location: "desktop_header",
-                  target: "/faq",
-                  label: "FAQ",
-                })
-              }
-            >
-              FAQ
-            </NavLink>
+            {variant === "admin" && (
+              <div className="hidden border-l border-white/10 pl-4 lg:block">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
+                  {headerLabel}
+                </div>
+              </div>
+            )}
+          </div>
 
-            <NavLink
-              href="/login"
-              onClick={() =>
-                track("header_nav_click", {
-                  location: "desktop_header",
-                  target: "/login",
-                  label: "Login",
-                })
-              }
-            >
-              Login
-            </NavLink>
+          <nav className="hidden items-center gap-5 text-[13px] font-medium md:flex">
+            {secondaryPublicLink && (
+              <Link
+                href={secondaryPublicLink.href}
+                onClick={() =>
+                  track("header_nav_click", {
+                    location: "desktop_header",
+                    target: secondaryPublicLink.href,
+                    label: secondaryPublicLink.label,
+                  })
+                }
+                className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[11px] font-semibold tracking-wide text-white transition hover:bg-white/10"
+              >
+                {secondaryPublicLink.label}
+              </Link>
+            )}
 
-            {isAdmin && (
+            {navItems.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                onClick={() =>
+                  track("header_nav_click", {
+                    location: "desktop_header",
+                    target: item.href,
+                    label: item.trackLabel,
+                    variant,
+                  })
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+
+            {showAdminShortcutInPublic && (
               <NavLink
                 href="/admin"
                 onClick={() =>
@@ -175,6 +237,7 @@ export default function SiteHeader() {
                     location: "desktop_header",
                     target: "/admin",
                     label: "Admin",
+                    variant,
                   })
                 }
               >
@@ -183,35 +246,37 @@ export default function SiteHeader() {
             )}
 
             <Link
-              href="/register-interest?type=team"
+              href={primaryCta.href}
               onClick={() =>
-                track("header_cta_click", {
+                track(primaryCta.trackEvent, {
                   location: "desktop_header",
-                  target: "/register-interest?type=team",
-                  label: "Register Interest",
-                  type: "team",
+                  target: primaryCta.href,
+                  label: primaryCta.label,
+                  variant,
+                  type: primaryCta.type,
                 })
               }
               className="rounded-full bg-emerald-500 px-4 py-2 text-[12px] font-extrabold tracking-wide text-black shadow-lg shadow-emerald-500/20 transition hover:-translate-y-[1px] hover:bg-emerald-400"
             >
-              Register Interest
+              {primaryCta.label}
             </Link>
           </nav>
 
           <div className="flex items-center gap-2 md:hidden">
             <Link
-              href="/register-interest?type=team"
+              href={primaryCta.href}
               onClick={() =>
-                track("header_cta_click", {
+                track(primaryCta.trackEvent, {
                   location: "mobile_header",
-                  target: "/register-interest?type=team",
-                  label: "Register interest",
-                  type: "team",
+                  target: primaryCta.href,
+                  label: primaryCta.label,
+                  variant,
+                  type: primaryCta.type,
                 })
               }
               className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-3 text-[11px] font-extrabold whitespace-nowrap text-black transition hover:bg-emerald-400"
             >
-              Register interest
+              {primaryCta.label}
             </Link>
 
             <button
@@ -221,7 +286,7 @@ export default function SiteHeader() {
               onClick={() => {
                 track("mobile_menu_toggle", {
                   action: mobileMenuOpen ? "close" : "open",
-                  location: "header",
+                  location: `${variant}_header`,
                 });
                 setMobileMenuOpen((open) => !open);
               }}
@@ -243,7 +308,7 @@ export default function SiteHeader() {
           onClick={() => {
             track("mobile_menu_toggle", {
               action: "close_overlay",
-              location: "header",
+              location: `${variant}_header`,
             });
             setMobileMenuOpen(false);
           }}
@@ -258,8 +323,13 @@ export default function SiteHeader() {
         <div className="h-[2px] w-full bg-emerald-500" />
 
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
-          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
-            Menu
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
+              {variant === "admin" ? "Admin menu" : "Menu"}
+            </div>
+            {variant === "admin" && (
+              <div className="mt-1 text-xs text-emerald-400">{headerLabel}</div>
+            )}
           </div>
 
           <button
@@ -268,7 +338,7 @@ export default function SiteHeader() {
             onClick={() => {
               track("mobile_menu_toggle", {
                 action: "close_button",
-                location: "header",
+                location: `${variant}_header`,
               });
               setMobileMenuOpen(false);
             }}
@@ -280,55 +350,46 @@ export default function SiteHeader() {
 
         <div className="flex h-[calc(100%-66px)] flex-col overflow-y-auto px-4 py-6">
           <div className="space-y-2">
-            <Link
-              href="/login"
-              onClick={() => {
-                track("header_nav_click", {
-                  location: "mobile_menu",
-                  target: "/login",
-                  label: "Login",
-                });
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
-            >
-              <span>Login</span>
-              <span className="text-white/40">→</span>
-            </Link>
+            {secondaryPublicLink && (
+              <Link
+                href={secondaryPublicLink.href}
+                onClick={() => {
+                  track("header_nav_click", {
+                    location: "mobile_menu",
+                    target: secondaryPublicLink.href,
+                    label: secondaryPublicLink.label,
+                    variant,
+                  });
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
+              >
+                <span>{secondaryPublicLink.label}</span>
+                <span className="text-white/40">→</span>
+              </Link>
+            )}
 
-            <Link
-              href="/contact"
-              onClick={() => {
-                track("header_nav_click", {
-                  location: "mobile_menu",
-                  target: "/contact",
-                  label: "Contact",
-                });
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
-            >
-              <span>Contact</span>
-              <span className="text-white/40">→</span>
-            </Link>
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => {
+                  track("header_nav_click", {
+                    location: "mobile_menu",
+                    target: item.href,
+                    label: item.trackLabel,
+                    variant,
+                  });
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
+              >
+                <span>{item.label}</span>
+                <span className="text-white/40">→</span>
+              </Link>
+            ))}
 
-            <Link
-              href="/faq"
-              onClick={() => {
-                track("header_nav_click", {
-                  location: "mobile_menu",
-                  target: "/faq",
-                  label: "FAQ",
-                });
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
-            >
-              <span>FAQ</span>
-              <span className="text-white/40">→</span>
-            </Link>
-
-            {isAdmin && (
+            {showAdminShortcutInPublic && (
               <Link
                 href="/admin"
                 onClick={() => {
@@ -336,6 +397,7 @@ export default function SiteHeader() {
                     location: "mobile_menu",
                     target: "/admin",
                     label: "Admin",
+                    variant,
                   });
                   setMobileMenuOpen(false);
                 }}
@@ -349,28 +411,30 @@ export default function SiteHeader() {
 
           <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">
-              Start here
+              {variant === "admin" ? "Quick action" : "Start here"}
             </div>
 
             <p className="mt-2 text-sm leading-6 text-white/70">
-              Join the waiting list and be first to hear when new SIXFL leagues
-              open.
+              {variant === "admin"
+                ? "Jump back to the public site while keeping the same SIXFL header system."
+                : "Join the waiting list and be first to hear when new SIXFL leagues open."}
             </p>
 
             <Link
-              href="/register-interest?type=team"
+              href={primaryCta.href}
               onClick={() => {
-                track("header_cta_click", {
+                track(primaryCta.trackEvent, {
                   location: "mobile_menu",
-                  target: "/register-interest?type=team",
-                  label: "Register interest",
-                  type: "team",
+                  target: primaryCta.href,
+                  label: primaryCta.label,
+                  variant,
+                  type: primaryCta.type,
                 });
                 setMobileMenuOpen(false);
               }}
               className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-4 text-sm font-extrabold uppercase tracking-wide text-black transition hover:bg-emerald-400"
             >
-              Register interest
+              {primaryCta.label}
             </Link>
           </div>
 

@@ -3,10 +3,8 @@
 // ========================================
 
 import "./globals.css";
-import SiteHeader from "../components/layout/SiteHeader";
-import SiteFooter from "../components/layout/SiteFooter";
+import type { ReactNode } from "react";
 import Providers from "./providers";
-
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -21,19 +19,12 @@ export const metadata = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#0b0f14] text-white">
-        <Providers>
-          <SiteHeader />
-          <main className="mx-auto max-w-6xl px-4 pt-6 pb-8">
-            {children}
-          </main>
-          <SiteFooter />
-        </Providers>
-
+        <Providers>{children}</Providers>
         <Analytics />
         <SpeedInsights />
       </body>

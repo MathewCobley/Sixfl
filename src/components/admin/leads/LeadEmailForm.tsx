@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
-import { sendLeadEmailAction } from "@/app/admin/leads/[id]/actions";
+import { sendLeadEmailAction } from "@/app/(admin)/admin/leads/[id]/actions";
 import {
   buildBaseEmailTemplateContext,
   mergeEmailTemplateContext,

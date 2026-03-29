@@ -4,7 +4,7 @@
 
 "use client";
 
-import { submitResultAction } from "@/app/admin/fixtures/actions";
+import { submitResultAction } from "@/app/(admin)/admin/fixtures/actions";
 
 type ResultMatch = {
   id: string;

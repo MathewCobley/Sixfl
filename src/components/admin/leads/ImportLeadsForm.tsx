@@ -11,7 +11,7 @@ import AdminSelect from "@/components/admin/AdminSelect";
 import {
   importLeadsAction,
   type ImportLeadsState,
-} from "@/app/admin/leads/import/actions";
+} from "@/app/(admin)/admin/leads/import/actions";
 
 const initialState: ImportLeadsState = {
   success: false,

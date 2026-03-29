@@ -17,9 +17,7 @@ import {
   appendSIXFLTextSignature,
   buildSIXFLEmailHtml,
 } from "@/lib/email/buildEmail";
-import {
-  getNotificationRecipientById,
-} from "./recipients";
+import { getNotificationRecipientById } from "./recipients";
 import {
   renderNotificationText,
   type NotificationTemplateVariables,
@@ -71,6 +69,13 @@ function resolveEmailCtaUrl(input: {
   return url || null;
 }
 
+function cleanPlainTextTemplateBody(body: string) {
+  return body
+    .replace(/\{\{\s*cta\s*\}\}/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function buildQueuedContentFromTemplate(input: {
   template: NotificationTemplate;
   variables?: NotificationTemplateVariables;
@@ -82,7 +87,8 @@ function buildQueuedContentFromTemplate(input: {
   const renderedBody = renderNotificationText(input.template.body, input.variables);
 
   if (input.template.channel === NotificationChannel.EMAIL) {
-    const signedTextBody = appendSIXFLTextSignature(renderedBody);
+    const cleanedBody = cleanPlainTextTemplateBody(renderedBody);
+    const signedTextBody = appendSIXFLTextSignature(cleanedBody);
     const ctaUrl = resolveEmailCtaUrl({
       ctaUrlKey: input.template.ctaUrlKey,
       variables: input.variables,
@@ -92,7 +98,7 @@ function buildQueuedContentFromTemplate(input: {
       subject: renderedSubject,
       bodyText: signedTextBody,
       bodyHtml: buildSIXFLEmailHtml({
-        body: signedTextBody,
+        body: cleanedBody,
         cta:
           input.template.ctaLabel && ctaUrl
             ? {
@@ -125,7 +131,7 @@ function buildQueuedContentDirect(input: {
       subject: input.subject?.trim() || null,
       bodyText: signedTextBody,
       bodyHtml: buildSIXFLEmailHtml({
-        body: signedTextBody,
+        body,
       }),
     };
   }
@@ -176,7 +182,10 @@ function canQueueForRecipient(input: {
 
     if (input.isTransactional) {
       if (!input.recipient.transactionalEmailOptIn) {
-        return { ok: false, reason: "Transactional email is disabled for recipient." };
+        return {
+          ok: false,
+          reason: "Transactional email is disabled for recipient.",
+        };
       }
     } else {
       if (
@@ -199,7 +208,10 @@ function canQueueForRecipient(input: {
 
     if (input.isTransactional) {
       if (!input.recipient.transactionalSmsOptIn) {
-        return { ok: false, reason: "Transactional SMS is disabled for recipient." };
+        return {
+          ok: false,
+          reason: "Transactional SMS is disabled for recipient.",
+        };
       }
     } else {
       if (
@@ -231,7 +243,8 @@ export async function queueNotificationFromTemplate(
     throw new Error("Notification recipient not found.");
   }
 
-  const isTransactional = template.kind === NotificationTemplateKind.TRANSACTIONAL;
+  const isTransactional =
+    template.kind === NotificationTemplateKind.TRANSACTIONAL;
 
   const allowed = canQueueForRecipient({
     recipient,

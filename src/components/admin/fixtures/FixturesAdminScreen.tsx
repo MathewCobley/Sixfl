@@ -12,9 +12,11 @@ import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
 import {
   createFixtureAction,
   deleteFixtureAction,
+  deleteLeagueFixturesAction,
   generateFixtures,
   submitResultAction,
-} from "@/app/admin/fixtures/actions";
+  updateFixtureAction,
+} from "@/app/(admin)/admin/fixtures/actions";
 
 type LeagueOption = {
   id: string;
@@ -50,11 +52,14 @@ type FixtureItem = {
   leagueId: string | null;
   homeTeamId: string | null;
   awayTeamId: string | null;
+  venueId: string | null;
+  refereeId: string | null;
   homeTeamName: string;
   awayTeamName: string;
   venueName: string | null;
   refereeName: string | null;
   kickoffLabel: string | null;
+  kickoffAtIso: string | null;
   round: number | null;
   position: number | null;
   pitch: string | null;
@@ -137,6 +142,26 @@ function getStatusTone(status: FixtureStatus) {
   }
 }
 
+function padNumber(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function getDateInputValue(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+
+  return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(
+    date.getDate(),
+  )}`;
+}
+
+function getTimeInputValue(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+
+  return `${padNumber(date.getHours())}:${padNumber(date.getMinutes())}`;
+}
+
 function SegmentedStatusField({
   name,
   value,
@@ -167,7 +192,7 @@ function SegmentedStatusField({
                 "hover:border-white/20 hover:bg-white/[0.07]",
                 "focus:outline-none focus:ring-2 focus:ring-emerald-400/40",
                 active ? "shadow-[0_0_0_1px_rgba(255,255,255,0.06)]" : "",
-                option.tone
+                option.tone,
               )}
             >
               <input
@@ -182,7 +207,7 @@ function SegmentedStatusField({
                 <span
                   className={cx(
                     "h-2.5 w-2.5 shrink-0 rounded-full transition",
-                    active ? "bg-current opacity-100" : "bg-white/25 opacity-70"
+                    active ? "bg-current opacity-100" : "bg-white/25 opacity-70",
                   )}
                 />
                 <span className="truncate text-sm font-medium">
@@ -248,15 +273,24 @@ export default function FixturesAdminScreen({
   fixtures,
 }: FixturesAdminScreenProps) {
   const [selectedCreateLeagueId, setSelectedCreateLeagueId] = useState(
-    leagues[0]?.id ?? ""
+    leagues[0]?.id ?? "",
   );
   const [selectedGenerateLeagueId, setSelectedGenerateLeagueId] = useState(
-    leagues[0]?.id ?? ""
+    leagues[0]?.id ?? "",
   );
   const [createStatus, setCreateStatus] =
     useState<FixtureStatus>("SCHEDULED");
   const [generateStatus, setGenerateStatus] =
     useState<FixtureStatus>("SCHEDULED");
+
+  const [editingFixtureId, setEditingFixtureId] = useState("");
+  const [editLeagueId, setEditLeagueId] = useState("");
+  const [editKickoffDate, setEditKickoffDate] = useState("");
+  const [editKickoffTime, setEditKickoffTime] = useState("");
+  const [editRound, setEditRound] = useState("");
+  const [editPosition, setEditPosition] = useState("");
+  const [editPitch, setEditPitch] = useState("");
+  const [editStatus, setEditStatus] = useState<FixtureStatus>("SCHEDULED");
 
   const createLeagueTeams = useMemo(() => {
     return teams
@@ -268,6 +302,16 @@ export default function FixturesAdminScreen({
       }));
   }, [teams, selectedCreateLeagueId]);
 
+  const editLeagueTeams = useMemo(() => {
+    return teams
+      .filter((team) => team.leagueId === editLeagueId)
+      .map((team) => ({
+        id: team.id,
+        value: team.id,
+        label: team.name,
+      }));
+  }, [teams, editLeagueId]);
+
   const generateLeague = useMemo(() => {
     return (
       leagues.find((league) => league.id === selectedGenerateLeagueId) ?? null
@@ -277,22 +321,22 @@ export default function FixturesAdminScreen({
   const filteredFixtures = useMemo(() => {
     if (!selectedGenerateLeagueId) return fixtures;
     return fixtures.filter(
-      (fixture) => fixture.leagueId === selectedGenerateLeagueId
+      (fixture) => fixture.leagueId === selectedGenerateLeagueId,
     );
   }, [fixtures, selectedGenerateLeagueId]);
 
   const fixtureSummary = useMemo(() => {
     const completed = filteredFixtures.filter(
-      (fixture) => fixture.status === "COMPLETED"
+      (fixture) => fixture.status === "COMPLETED",
     ).length;
     const scheduled = filteredFixtures.filter(
-      (fixture) => fixture.status === "SCHEDULED"
+      (fixture) => fixture.status === "SCHEDULED",
     ).length;
 
     const rounds = new Set(
       filteredFixtures
         .map((fixture) => fixture.round)
-        .filter((round): round is number => typeof round === "number")
+        .filter((round): round is number => typeof round === "number"),
     );
 
     return {
@@ -335,10 +379,32 @@ export default function FixturesAdminScreen({
     })),
   ];
 
+  function startEditingFixture(fixture: FixtureItem) {
+    setEditingFixtureId(fixture.id);
+    setEditLeagueId(fixture.leagueId ?? "");
+    setEditKickoffDate(getDateInputValue(fixture.kickoffAtIso));
+    setEditKickoffTime(getTimeInputValue(fixture.kickoffAtIso));
+    setEditRound(fixture.round?.toString() ?? "");
+    setEditPosition(fixture.position?.toString() ?? "");
+    setEditPitch(fixture.pitch ?? "");
+    setEditStatus(fixture.status);
+  }
+
+  function cancelEditingFixture() {
+    setEditingFixtureId("");
+    setEditLeagueId("");
+    setEditKickoffDate("");
+    setEditKickoffTime("");
+    setEditRound("");
+    setEditPosition("");
+    setEditPitch("");
+    setEditStatus("SCHEDULED");
+  }
+
   return (
     <div className="space-y-8">
       <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
-        <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
               Fixtures console
@@ -355,7 +421,7 @@ export default function FixturesAdminScreen({
             </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[520px] lg:grid-cols-4">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
             <MetricPill label="Leagues" value={leagues.length} />
             <MetricPill label="Teams" value={teams.length} />
             <MetricPill label="Fixtures" value={fixtureSummary.total} />
@@ -364,7 +430,7 @@ export default function FixturesAdminScreen({
         </div>
       </div>
 
-      <div className="grid gap-8 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
           <div className="border-b border-white/10 px-6 py-6 md:px-8">
             <SectionHeading
@@ -386,7 +452,9 @@ export default function FixturesAdminScreen({
                 <select
                   name="leagueId"
                   value={selectedCreateLeagueId}
-                  onChange={(event) => setSelectedCreateLeagueId(event.target.value)}
+                  onChange={(event) =>
+                    setSelectedCreateLeagueId(event.target.value)
+                  }
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 >
                   {leagueOptions.map((option) => (
@@ -466,7 +534,7 @@ export default function FixturesAdminScreen({
                 <input
                   type="number"
                   name="position"
-                  placeholder="e.g. 0"
+                  placeholder="e.g. 1"
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 />
               </div>
@@ -514,7 +582,10 @@ export default function FixturesAdminScreen({
             />
           </div>
 
-          <form action={generateFixtures} className="space-y-8 px-6 py-6 md:px-8">
+          <form
+            action={generateFixtures}
+            className="space-y-8 px-6 py-6 md:px-8"
+          >
             <div className="grid gap-6">
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
@@ -523,7 +594,9 @@ export default function FixturesAdminScreen({
                 <select
                   name="leagueId"
                   value={selectedGenerateLeagueId}
-                  onChange={(event) => setSelectedGenerateLeagueId(event.target.value)}
+                  onChange={(event) =>
+                    setSelectedGenerateLeagueId(event.target.value)
+                  }
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 >
                   {leagueOptions.map((option) => (
@@ -553,7 +626,7 @@ export default function FixturesAdminScreen({
                   <input
                     type="time"
                     name="startTime"
-                    defaultValue="18:30"
+                    defaultValue="20:00"
                     className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                   />
                 </div>
@@ -585,7 +658,7 @@ export default function FixturesAdminScreen({
                 </div>
               </div>
 
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid gap-6 xl:grid-cols-3">
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
                     Pitches
@@ -593,7 +666,19 @@ export default function FixturesAdminScreen({
                   <input
                     type="number"
                     name="pitches"
-                    defaultValue={2}
+                    defaultValue={1}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Max games per night
+                  </label>
+                  <input
+                    type="number"
+                    name="maxGamesPerNight"
+                    defaultValue={3}
                     className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                   />
                 </div>
@@ -687,18 +772,186 @@ export default function FixturesAdminScreen({
               Fixtures
             </h2>
             <p className="max-w-2xl text-sm leading-6 text-white/60">
-              Review generated matches, submit results, or remove incorrect
-              fixtures without leaving the page.
+              Review generated matches, edit details, submit results, or remove
+              incorrect fixtures without leaving the page.
             </p>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[520px] lg:grid-cols-4">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
             <MetricPill label="Total" value={fixtureSummary.total} />
             <MetricPill label="Scheduled" value={fixtureSummary.scheduled} />
             <MetricPill label="Completed" value={fixtureSummary.completed} />
             <MetricPill label="Rounds" value={fixtureSummary.rounds} />
           </div>
         </div>
+
+        {editingFixtureId ? (
+          <div className="border-b border-white/10 px-6 py-6 md:px-8">
+            <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+                  Edit fixture
+                </div>
+                <h3 className="text-2xl font-semibold tracking-tight text-white">
+                  Update selected match
+                </h3>
+                <p className="max-w-2xl text-sm leading-6 text-white/60">
+                  Adjust teams, venue, referee, kickoff, round, pitch and status
+                  without leaving the fixtures console.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={cancelEditingFixture}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+              >
+                Cancel edit
+              </button>
+            </div>
+
+            <form action={updateFixtureAction} className="space-y-8">
+              <input type="hidden" name="fixtureId" value={editingFixtureId} />
+              <input type="hidden" name="status" value={editStatus} />
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div className="xl:col-span-2">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    League
+                  </label>
+                  <select
+                    name="leagueId"
+                    value={editLeagueId}
+                    onChange={(event) => setEditLeagueId(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  >
+                    {leagueOptions.map((option) => (
+                      <option key={option.id} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <AdminComboboxField
+                  name="homeTeamId"
+                  label="Home team"
+                  placeholder="Search home team"
+                  options={editLeagueTeams}
+                />
+
+                <AdminComboboxField
+                  name="awayTeamId"
+                  label="Away team"
+                  placeholder="Search away team"
+                  options={editLeagueTeams}
+                />
+
+                <AdminComboboxField
+                  name="venueId"
+                  label="Venue"
+                  placeholder="Select venue"
+                  options={venueOptions}
+                />
+
+                <AdminComboboxField
+                  name="refereeId"
+                  label="Referee"
+                  placeholder="Select referee"
+                  options={refereeOptions}
+                />
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Kickoff date
+                  </label>
+                  <input
+                    type="date"
+                    name="kickoffDate"
+                    value={editKickoffDate}
+                    onChange={(event) => setEditKickoffDate(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Kickoff time
+                  </label>
+                  <input
+                    type="time"
+                    name="kickoffTime"
+                    value={editKickoffTime}
+                    onChange={(event) => setEditKickoffTime(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Round
+                  </label>
+                  <input
+                    type="number"
+                    name="round"
+                    value={editRound}
+                    onChange={(event) => setEditRound(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Position
+                  </label>
+                  <input
+                    type="number"
+                    name="position"
+                    value={editPosition}
+                    onChange={(event) => setEditPosition(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div className="xl:col-span-2">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Pitch
+                  </label>
+                  <input
+                    type="text"
+                    name="pitch"
+                    value={editPitch}
+                    onChange={(event) => setEditPitch(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+              </div>
+
+              <SegmentedStatusField
+                name="editStatus"
+                value={editStatus}
+                onChange={setEditStatus}
+              />
+
+              <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+                <button
+                  type="submit"
+                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"
+                >
+                  Save fixture changes
+                </button>
+
+                <button
+                  type="button"
+                  onClick={cancelEditingFixture}
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-6 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
 
         {filteredFixtures.length === 0 ? (
           <div className="px-6 py-10 md:px-8">
@@ -756,7 +1009,7 @@ export default function FixturesAdminScreen({
                       <div className="mt-1 text-sm text-white/45">
                         {fixture.pitch ? fixture.pitch : "Pitch not set"}
                         {fixture.position !== null
-                          ? ` • Slot ${fixture.position}`
+                          ? ` • Game ${fixture.position}`
                           : ""}
                       </div>
                     </td>
@@ -780,7 +1033,7 @@ export default function FixturesAdminScreen({
                       <span
                         className={cx(
                           "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
-                          getStatusTone(fixture.status)
+                          getStatusTone(fixture.status),
                         )}
                       >
                         {formatFixtureStatus(fixture.status)}
@@ -818,15 +1071,25 @@ export default function FixturesAdminScreen({
                     </td>
 
                     <td className="px-6 py-5 text-right">
-                      <form action={deleteFixtureAction}>
-                        <input type="hidden" name="fixtureId" value={fixture.id} />
+                      <div className="flex justify-end gap-2">
                         <button
-                          type="submit"
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15"
+                          type="button"
+                          onClick={() => startEditingFixture(fixture)}
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
                         >
-                          Delete
+                          Edit
                         </button>
-                      </form>
+
+                        <form action={deleteFixtureAction}>
+                          <input type="hidden" name="id" value={fixture.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15"
+                          >
+                            Delete
+                          </button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -11,7 +11,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { LeagueType, PreferredNight } from "@prisma/client";
-import type { LeagueFormState } from "@/app/admin/leagues/actions";
+import type { LeagueFormState } from "@/app/(admin)/admin/leagues/actions";
 
 // ========================================
 // Types

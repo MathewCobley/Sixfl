@@ -50,6 +50,11 @@ const navigation = [
     icon: CalendarDaysIcon,
   },
   {
+    name: "Referees",
+    href: "/admin/referees",
+    icon: ShieldCheckIcon,
+  },
+  {
     name: "Leads",
     href: "/admin/leads",
     icon: UsersIcon,
@@ -130,6 +135,7 @@ export default function AdminSidebar({ name, email }: AdminSidebarProps) {
                     {item.name === "Leagues" && "League setup"}
                     {item.name === "Venues" && "Match locations"}
                     {item.name === "Fixtures" && "Schedule and results"}
+                    {item.name === "Referees" && "Officials and assignments"}
                     {item.name === "Leads" && "Inbound enquiries"}
                     {item.name === "Email Templates" && "Reusable messaging"}
                   </div>
