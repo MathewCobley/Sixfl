@@ -521,6 +521,39 @@ export async function deleteFixtureAction(formData: FormData) {
   redirect("/admin/fixtures");
 }
 
+export async function deleteLeagueFixturesAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      id: true,
+      slug: true,
+    },
+  });
+
+  if (!league) {
+    throw new Error("League not found.");
+  }
+
+  await prisma.fixture.deleteMany({
+    where: { leagueId },
+  });
+
+  revalidatePath("/admin/fixtures");
+  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${leagueId}`);
+
+  if (league.slug) {
+    revalidatePath(`/leagues/${league.slug}`);
+    revalidatePath(`/leagues/${league.slug}/fixtures`);
+  }
+
+  redirect("/admin/fixtures");
+}
+
 export async function generateFixtures(formData: FormData) {
   await requireAdmin();
 
@@ -621,8 +654,15 @@ export async function generateFixtures(formData: FormData) {
   rounds.forEach((pairs, roundIndex) => {
     const roundNumber = startRound + roundIndex;
 
-    for (let chunkStart = 0; chunkStart < pairs.length; chunkStart += maxGamesPerNight) {
-      const nightlyPairs = pairs.slice(chunkStart, chunkStart + maxGamesPerNight);
+    for (
+      let chunkStart = 0;
+      chunkStart < pairs.length;
+      chunkStart += maxGamesPerNight
+    ) {
+      const nightlyPairs = pairs.slice(
+        chunkStart,
+        chunkStart + maxGamesPerNight,
+      );
       const roundBase = addDays(startDateTime, nightOffset * weekGapDays);
 
       nightlyPairs.forEach((pair, nightlyIndex) => {
