@@ -55,6 +55,11 @@ const navigation = [
     icon: UsersIcon,
   },
   {
+    name: "Messaging",
+    href: "/admin/messaging",
+    icon: DocumentTextIcon,
+  },
+  {
     name: "Email Templates",
     href: "/admin/email-templates",
     icon: DocumentTextIcon,
@@ -131,6 +136,7 @@ export default function AdminSidebar({ name, email }: AdminSidebarProps) {
                     {item.name === "Venues" && "Match locations"}
                     {item.name === "Fixtures" && "Schedule and results"}
                     {item.name === "Leads" && "Inbound enquiries"}
+                    {item.name === "Messaging" && "Campaigns and outreach"}
                     {item.name === "Email Templates" && "Reusable messaging"}
                   </div>
                 </div>
