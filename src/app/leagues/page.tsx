@@ -12,6 +12,13 @@ import TrackedLink from "@/components/analytics/TrackedLink";
 import { prisma } from "@/lib/prisma";
 
 // ========================================
+// Rendering
+// ========================================
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+// ========================================
 // Types
 // ========================================
 
