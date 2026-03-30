@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/teams/actions.ts
+// File: src/app/(admin)/admin/teams/actions.ts
 // ========================================
 
 "use server";
@@ -34,12 +34,40 @@ async function generateUniqueClaimCode() {
   throw new Error("Failed to generate unique claim code.");
 }
 
+function parseLatestKickoffTime(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return null;
+
+  if (!/^\d{2}:\d{2}$/.test(raw)) {
+    throw new Error("Latest kickoff time must be in HH:MM format.");
+  }
+
+  const [hours, minutes] = raw.split(":").map(Number);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    throw new Error("Latest kickoff time is invalid.");
+  }
+
+  return raw;
+}
+
 export async function createTeamAction(formData: FormData) {
   await requireAdmin();
 
   const name = String(formData.get("name") ?? "").trim();
   const leagueIdRaw = String(formData.get("leagueId") ?? "").trim();
   const logoUrlRaw = String(formData.get("logoUrl") ?? "").trim();
+  const latestKickoffTime = parseLatestKickoffTime(
+    formData.get("latestKickoffTime"),
+  );
 
   const leagueId = leagueIdRaw || null;
   const logoUrl = logoUrlRaw || null;
@@ -56,6 +84,7 @@ export async function createTeamAction(formData: FormData) {
       claimCode,
       leagueId,
       logoUrl,
+      latestKickoffTime,
     },
   });
 
@@ -68,6 +97,9 @@ export async function updateTeamDetailsAction(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
   const leagueIdRaw = String(formData.get("leagueId") ?? "").trim();
   const logoUrlRaw = String(formData.get("logoUrl") ?? "").trim();
+  const latestKickoffTime = parseLatestKickoffTime(
+    formData.get("latestKickoffTime"),
+  );
 
   if (!id) {
     redirect("/admin/teams?error=missing_id");
@@ -81,10 +113,11 @@ export async function updateTeamDetailsAction(formData: FormData) {
     data: {
       leagueId,
       logoUrl,
+      latestKickoffTime,
     },
   });
 
-  redirect(`/admin/teams/${id}/edit?saved=1`);
+  redirect(`/admin/teams/${id}?saved=1`);
 }
 
 export async function regenerateClaimCodeAction(formData: FormData) {

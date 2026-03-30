@@ -131,8 +131,17 @@ model Team {
   claimCode String  @unique
   logoUrl   String?
 
+  contactName           String?
+  contactEmail          String?
+  contactPhone          String?
+  secondaryContactName  String?
+  secondaryContactEmail String?
+  secondaryContactPhone String?
+
+  latestKickoffTime String?
+
   createdByUserId String?
-  createdByUser   User? @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUser   User?   @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
@@ -149,6 +158,8 @@ model Team {
   @@unique([name, leagueId])
   @@index([leagueId])
   @@index([createdByUserId])
+  @@index([contactEmail])
+  @@index([contactPhone])
 }
 
 model TeamMember {
@@ -307,8 +318,8 @@ model InterestLeadEmail {
 }
 
 model EmailTemplate {
-  id           String            @id @default(cuid())
-  key          String            @unique
+  id           String           @id @default(cuid())
+  key          String           @unique
   name         String
   description  String?
   audience     TemplateAudience
@@ -317,9 +328,9 @@ model EmailTemplate {
   body         String
   ctaLabel     String?
   ctaUrlKey    String?
-  isActive     Boolean           @default(true)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@index([audience])
   @@index([interestType])
@@ -474,7 +485,7 @@ model NotificationPreference {
 model NotificationTemplate {
   id String @id @default(cuid())
 
-  key         String @unique
+  key         String  @unique
   name        String
   description String?
 
@@ -525,7 +536,7 @@ model NotificationDispatch {
   variables Json?
   metadata  Json?
 
-  scheduledFor DateTime @default(now())
+  scheduledFor DateTime  @default(now())
   processedAt  DateTime?
   sentAt       DateTime?
   failedAt     DateTime?

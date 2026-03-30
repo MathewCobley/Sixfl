@@ -15,6 +15,12 @@ type Pair = {
   awayId: string;
 };
 
+type TeamSchedulingRule = {
+  id: string;
+  name: string;
+  latestKickoffTime: string | null;
+};
+
 function addDays(d: Date, days: number) {
   const out = new Date(d);
   out.setDate(out.getDate() + days);
@@ -127,6 +133,63 @@ function parseFixtureStatus(value: FormDataEntryValue | null) {
   return str as FixtureStatus;
 }
 
+function parseTimeToMinutes(value: string | null) {
+  if (!value) return null;
+
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function getKickoffMinutes(kickoffAt: Date) {
+  return kickoffAt.getHours() * 60 + kickoffAt.getMinutes();
+}
+
+function isKickoffAllowed(
+  kickoffAt: Date,
+  homeTeam: TeamSchedulingRule,
+  awayTeam: TeamSchedulingRule,
+) {
+  const kickoffMinutes = getKickoffMinutes(kickoffAt);
+  const homeLatest = parseTimeToMinutes(homeTeam.latestKickoffTime);
+  const awayLatest = parseTimeToMinutes(awayTeam.latestKickoffTime);
+
+  if (homeLatest !== null && kickoffMinutes > homeLatest) {
+    return {
+      allowed: false,
+      reason: `${homeTeam.name} cannot kick off later than ${homeTeam.latestKickoffTime}.`,
+    };
+  }
+
+  if (awayLatest !== null && kickoffMinutes > awayLatest) {
+    return {
+      allowed: false,
+      reason: `${awayTeam.name} cannot kick off later than ${awayTeam.latestKickoffTime}.`,
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: null,
+  };
+}
+
 /**
  * Circle method (round-robin)
  * - Teams are arranged in a list.
@@ -179,6 +242,34 @@ function mirrorRounds(rounds: Pair[][]): Pair[][] {
       awayId: p.homeId,
     })),
   );
+}
+
+function sortPairsByRestriction(
+  pairs: Pair[],
+  teamMap: Map<string, TeamSchedulingRule>,
+) {
+  return [...pairs].sort((a, b) => {
+    const aHome = teamMap.get(a.homeId);
+    const aAway = teamMap.get(a.awayId);
+    const bHome = teamMap.get(b.homeId);
+    const bAway = teamMap.get(b.awayId);
+
+    const aLimit = Math.min(
+      parseTimeToMinutes(aHome?.latestKickoffTime ?? null) ??
+        Number.MAX_SAFE_INTEGER,
+      parseTimeToMinutes(aAway?.latestKickoffTime ?? null) ??
+        Number.MAX_SAFE_INTEGER,
+    );
+
+    const bLimit = Math.min(
+      parseTimeToMinutes(bHome?.latestKickoffTime ?? null) ??
+        Number.MAX_SAFE_INTEGER,
+      parseTimeToMinutes(bAway?.latestKickoffTime ?? null) ??
+        Number.MAX_SAFE_INTEGER,
+    );
+
+    return aLimit - bLimit;
+  });
 }
 
 export async function submitResultAction(formData: FormData) {
@@ -599,7 +690,11 @@ export async function generateFixtures(formData: FormData) {
   const teams = await prisma.team.findMany({
     where: { leagueId },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      latestKickoffTime: true,
+    },
   });
 
   if (teams.length < 2) {
@@ -649,6 +744,10 @@ export async function generateFixtures(formData: FormData) {
     status: FixtureStatus;
   }[] = [];
 
+  const teamMap = new Map<string, TeamSchedulingRule>(
+    teams.map((team) => [team.id, team]),
+  );
+
   let nightOffset = 0;
 
   rounds.forEach((pairs, roundIndex) => {
@@ -659,16 +758,35 @@ export async function generateFixtures(formData: FormData) {
       chunkStart < pairs.length;
       chunkStart += maxGamesPerNight
     ) {
-      const nightlyPairs = pairs.slice(
-        chunkStart,
-        chunkStart + maxGamesPerNight,
+      const nightlyPairs = sortPairsByRestriction(
+        pairs.slice(chunkStart, chunkStart + maxGamesPerNight),
+        teamMap,
       );
+
       const roundBase = addDays(startDateTime, nightOffset * weekGapDays);
 
       nightlyPairs.forEach((pair, nightlyIndex) => {
         const batch = Math.floor(nightlyIndex / pitches);
         const pitchNumber = (nightlyIndex % pitches) + 1;
         const kickoffAt = addMinutes(roundBase, batch * slotMinutes);
+
+        const homeTeam = teamMap.get(pair.homeId);
+        const awayTeam = teamMap.get(pair.awayId);
+
+        if (!homeTeam || !awayTeam) {
+          throw new Error("Fixture generation failed because a team was missing.");
+        }
+
+        const allowed = isKickoffAllowed(kickoffAt, homeTeam, awayTeam);
+
+        if (!allowed.allowed) {
+          throw new Error(
+            `Unable to generate fixtures. Round ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${kickoffAt.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}, but ${allowed.reason}`,
+          );
+        }
 
         fixturesToCreate.push({
           leagueId,

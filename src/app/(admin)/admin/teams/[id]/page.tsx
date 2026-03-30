@@ -116,7 +116,7 @@ export default async function AdminTeamPage({
 
           <p className="text-sm text-white/60">
             Admin view for this team. Manage league assignment, branding,
-            captain claim status, and team access.
+            captain claim status, team access, and fixture timing preferences.
           </p>
         </div>
 
@@ -254,6 +254,35 @@ export default async function AdminTeamPage({
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <label
+                  htmlFor="latestKickoffTime"
+                  className="text-sm text-white/60"
+                >
+                  Latest kickoff time
+                </label>
+
+                <input
+                  id="latestKickoffTime"
+                  name="latestKickoffTime"
+                  type="time"
+                  defaultValue={team.latestKickoffTime ?? ""}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
+                />
+
+                <div className="text-xs text-white/50">
+                  Leave blank if this team can play any slot. Generated fixtures
+                  will avoid kick-off times later than this.
+                </div>
+
+                <div className="text-xs text-white/50">
+                  Current:{" "}
+                  <span className="font-mono text-white/70">
+                    {team.latestKickoffTime || "No restriction"}
+                  </span>
+                </div>
+              </div>
+
               <button
                 type="submit"
                 className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
@@ -277,6 +306,13 @@ export default async function AdminTeamPage({
                         team.league.season ? ` — ${team.league.season}` : ""
                       }`
                     : "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Latest kickoff</span>
+                <span className="text-right font-medium text-white">
+                  {team.latestKickoffTime ?? "—"}
                 </span>
               </div>
 
@@ -354,7 +390,11 @@ export default async function AdminTeamPage({
 
             <form action={regenerateClaimCodeAction} className="mt-5">
               <input type="hidden" name="id" value={team.id} />
-              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
+              <input
+                type="hidden"
+                name="from"
+                value={`/admin/teams/${team.id}`}
+              />
               <ConfirmDeleteButton
                 label="Regenerate claim code"
                 confirmText={`Regenerate claim code for "${team.name}" and unclaim the team?`}
@@ -372,7 +412,11 @@ export default async function AdminTeamPage({
 
             <form action={deleteTeamAction} className="mt-5">
               <input type="hidden" name="id" value={team.id} />
-              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
+              <input
+                type="hidden"
+                name="from"
+                value={`/admin/teams/${team.id}`}
+              />
               <ConfirmDeleteButton
                 label="Delete team"
                 confirmText={`Delete "${team.name}"? This cannot be undone.`}

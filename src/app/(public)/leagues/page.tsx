@@ -174,6 +174,7 @@ export default async function LeaguesPage() {
       leagueType: true,
       venueName: true,
       heroImageUrl: true,
+      badgeUrl: true,
       _count: {
         select: {
           teams: true,
@@ -194,7 +195,7 @@ export default async function LeaguesPage() {
         night: formatPreferredNight(league.dayOfWeek),
         type: formatLeagueType(league.leagueType),
         venue: league.venueName || "Venue TBC",
-        badge: DEFAULT_BADGE,
+        badge: normaliseImage(league.badgeUrl) || DEFAULT_BADGE,
         hero: normaliseImage(league.heroImageUrl),
         teams: league._count.teams,
         capacity: null,

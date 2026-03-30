@@ -88,6 +88,22 @@ export default async function AdminNewTeamPage() {
             </p>
           </div>
 
+          <div className="space-y-2">
+            <label htmlFor="latestKickoffTime" className="text-sm text-white/70">
+              Latest kickoff time
+            </label>
+            <input
+              id="latestKickoffTime"
+              name="latestKickoffTime"
+              type="time"
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0"
+            />
+            <p className="text-xs text-white/50">
+              Leave blank if this team can play any slot. If set, generated
+              fixtures will avoid kick-off times later than this.
+            </p>
+          </div>
+
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-white/70">
             Claim code will be generated automatically when the team is created.
           </div>
