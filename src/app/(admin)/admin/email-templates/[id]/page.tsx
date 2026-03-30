@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import EmailTemplateForm from "@/components/admin/email-templates/EmailTemplateForm";
-import { updateEmailTemplateAction } from "@/app/admin/email-templates/actions";
+import { updateEmailTemplateAction } from "@/app/(admin)/admin/email-templates/actions";
 
 type PageProps = {
   params: Promise<{

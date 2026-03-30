@@ -4,7 +4,7 @@
 
 "use client";
 
-import { updateMatchAction } from "@/app/admin/leagues/[id]/fixtures/actions";
+import { updateMatchAction } from "@/app/(admin)/admin/leagues/[id]/fixtures/actions";
 
 type TeamItem = {
   id: string;

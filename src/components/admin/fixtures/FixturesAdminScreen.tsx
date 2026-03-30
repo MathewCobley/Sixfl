@@ -12,9 +12,10 @@ import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
 import {
   createFixtureAction,
   deleteFixtureAction,
+  deleteLeagueFixturesAction,
   generateFixtures,
   submitResultAction,
-} from "@/app/admin/fixtures/actions";
+} from "@/app/(admin)/admin/fixtures/actions";
 
 type LeagueOption = {
   id: string;
@@ -386,7 +387,9 @@ export default function FixturesAdminScreen({
                 <select
                   name="leagueId"
                   value={selectedCreateLeagueId}
-                  onChange={(event) => setSelectedCreateLeagueId(event.target.value)}
+                  onChange={(event) =>
+                    setSelectedCreateLeagueId(event.target.value)
+                  }
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 >
                   {leagueOptions.map((option) => (
@@ -514,166 +517,199 @@ export default function FixturesAdminScreen({
             />
           </div>
 
-          <form action={generateFixtures} className="space-y-8 px-6 py-6 md:px-8">
-            <div className="grid gap-6">
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                  League
-                </label>
-                <select
-                  name="leagueId"
-                  value={selectedGenerateLeagueId}
-                  onChange={(event) => setSelectedGenerateLeagueId(event.target.value)}
-                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+          <div className="space-y-8 px-6 py-6 md:px-8">
+            <form action={generateFixtures} className="space-y-8">
+              <div className="grid gap-6">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    League
+                  </label>
+                  <select
+                    name="leagueId"
+                    value={selectedGenerateLeagueId}
+                    onChange={(event) =>
+                      setSelectedGenerateLeagueId(event.target.value)
+                    }
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  >
+                    {leagueOptions.map((option) => (
+                      <option key={option.id} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Start date
+                    </label>
+                    <input
+                      type="date"
+                      name="startDate"
+                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Start time
+                    </label>
+                    <input
+                      type="time"
+                      name="startTime"
+                      defaultValue="18:30"
+                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Week gap days
+                    </label>
+                    <input
+                      type="number"
+                      name="weekGapDays"
+                      defaultValue={7}
+                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Slot minutes
+                    </label>
+                    <input
+                      type="number"
+                      name="slotMinutes"
+                      defaultValue={40}
+                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Pitches
+                    </label>
+                    <input
+                      type="number"
+                      name="pitches"
+                      defaultValue={2}
+                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Start round
+                    </label>
+                    <input
+                      type="number"
+                      name="startRound"
+                      defaultValue={1}
+                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                    />
+                  </div>
+                </div>
+
+                <AdminComboboxField
+                  name="venueId"
+                  label="Venue"
+                  placeholder="Select venue"
+                  options={venueOptions}
+                />
+
+                <SegmentedStatusField
+                  name="generatedStatus"
+                  value={generateStatus}
+                  onChange={setGenerateStatus}
+                />
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
+                    <input
+                      type="checkbox"
+                      name="doubleRoundRobin"
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">
+                        Double round robin
+                      </div>
+                      <div className="mt-1 text-sm leading-6 text-white/50">
+                        Every team plays each opponent home and away.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
+                    <input
+                      type="checkbox"
+                      name="clearExisting"
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">
+                        Clear existing fixtures first
+                      </div>
+                      <div className="mt-1 text-sm leading-6 text-white/50">
+                        Use when regenerating a league schedule from scratch.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+                <input type="hidden" name="status" value={generateStatus} />
+
+                <button
+                  type="submit"
+                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90"
                 >
-                  {leagueOptions.map((option) => (
-                    <option key={option.id} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  Generate fixtures
+                </button>
+
+                <p className="text-sm text-white/45">
+                  {generateLeague
+                    ? `Generating for ${getLeagueLabel(generateLeague)}.`
+                    : "Choose a league to generate a schedule."}
+                </p>
               </div>
+            </form>
 
-              <div className="grid gap-6 xl:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Start date
-                  </label>
+            {selectedGenerateLeagueId ? (
+              <div className="border-t border-white/10 pt-6">
+                <form action={deleteLeagueFixturesAction}>
                   <input
-                    type="date"
-                    name="startDate"
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                    type="hidden"
+                    name="leagueId"
+                    value={selectedGenerateLeagueId}
                   />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Start time
-                  </label>
-                  <input
-                    type="time"
-                    name="startTime"
-                    defaultValue="18:30"
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-                  />
-                </div>
+                  <button
+                    type="submit"
+                    onClick={(event) => {
+                      if (
+                        !window.confirm(
+                          "Delete all fixtures for the selected league? This cannot be undone."
+                        )
+                      ) {
+                        event.preventDefault();
+                      }
+                    }}
+                    className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 px-6 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15"
+                  >
+                    Delete all fixtures for selected league
+                  </button>
+                </form>
               </div>
-
-              <div className="grid gap-6 xl:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Week gap days
-                  </label>
-                  <input
-                    type="number"
-                    name="weekGapDays"
-                    defaultValue={7}
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Slot minutes
-                  </label>
-                  <input
-                    type="number"
-                    name="slotMinutes"
-                    defaultValue={40}
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Pitches
-                  </label>
-                  <input
-                    type="number"
-                    name="pitches"
-                    defaultValue={2}
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Start round
-                  </label>
-                  <input
-                    type="number"
-                    name="startRound"
-                    defaultValue={1}
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-                  />
-                </div>
-              </div>
-
-              <AdminComboboxField
-                name="venueId"
-                label="Venue"
-                placeholder="Select venue"
-                options={venueOptions}
-              />
-
-              <SegmentedStatusField
-                name="generatedStatus"
-                value={generateStatus}
-                onChange={setGenerateStatus}
-              />
-
-              <div className="grid gap-4 xl:grid-cols-2">
-                <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
-                  <input
-                    type="checkbox"
-                    name="doubleRoundRobin"
-                    className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
-                      Double round robin
-                    </div>
-                    <div className="mt-1 text-sm leading-6 text-white/50">
-                      Every team plays each opponent home and away.
-                    </div>
-                  </div>
-                </label>
-
-                <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
-                  <input
-                    type="checkbox"
-                    name="clearExisting"
-                    className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">
-                      Clear existing fixtures first
-                    </div>
-                    <div className="mt-1 text-sm leading-6 text-white/50">
-                      Use when regenerating a league schedule from scratch.
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
-              <input type="hidden" name="status" value={generateStatus} />
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90"
-              >
-                Generate fixtures
-              </button>
-              <p className="text-sm text-white/45">
-                {generateLeague
-                  ? `Generating for ${getLeagueLabel(generateLeague)}.`
-                  : "Choose a league to generate a schedule."}
-              </p>
-            </div>
-          </form>
+            ) : null}
+          </div>
         </AdminCard>
       </div>
 
@@ -819,9 +855,18 @@ export default function FixturesAdminScreen({
 
                     <td className="px-6 py-5 text-right">
                       <form action={deleteFixtureAction}>
-                        <input type="hidden" name="fixtureId" value={fixture.id} />
+                        <input type="hidden" name="id" value={fixture.id} />
                         <button
                           type="submit"
+                          onClick={(event) => {
+                            if (
+                              !window.confirm(
+                                "Delete this fixture? This cannot be undone."
+                              )
+                            ) {
+                              event.preventDefault();
+                            }
+                          }}
                           className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15"
                         >
                           Delete

@@ -1,14 +1,14 @@
 // ========================================
-// File: src/app/admin/fixtures/actions.ts
+// File: src/app/(admin)/admin/fixtures/actions.ts
 // ========================================
 
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/admin";
+import { FixtureStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { FixtureStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 type Pair = {
   homeId: string;
@@ -32,7 +32,10 @@ function parseOptionalString(value: FormDataEntryValue | null) {
   return str.length > 0 ? str : null;
 }
 
-function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
+function parseRequiredString(
+  value: FormDataEntryValue | null,
+  fieldName: string
+) {
   const str = String(value ?? "").trim();
 
   if (!str) {
@@ -59,7 +62,7 @@ function parseOptionalInt(value: FormDataEntryValue | null, fieldName: string) {
 function parseOptionalPositiveInt(
   value: FormDataEntryValue | null,
   fieldName: string,
-  min = 0,
+  min = 0
 ) {
   const str = String(value ?? "").trim();
 
@@ -74,7 +77,11 @@ function parseOptionalPositiveInt(
   return num;
 }
 
-function parseRequiredPositiveInt(value: FormDataEntryValue | null, fieldName: string, min = 1) {
+function parseRequiredPositiveInt(
+  value: FormDataEntryValue | null,
+  fieldName: string,
+  min = 1
+) {
   const str = String(value ?? "").trim();
   const num = Number(str);
 
@@ -99,6 +106,30 @@ function parseKickoffAt(value: FormDataEntryValue | null) {
   }
 
   return date;
+}
+
+function parseKickoffAtFromParts(
+  dateValue: FormDataEntryValue | null,
+  timeValue: FormDataEntryValue | null
+) {
+  const kickoffDate = String(dateValue ?? "").trim();
+  const kickoffTime = String(timeValue ?? "").trim();
+
+  if (!kickoffDate) {
+    throw new Error("Kickoff date is required.");
+  }
+
+  if (!kickoffTime) {
+    throw new Error("Kickoff time is required.");
+  }
+
+  const kickoffAt = new Date(`${kickoffDate}T${kickoffTime}`);
+
+  if (Number.isNaN(kickoffAt.getTime())) {
+    throw new Error("Kickoff date/time is invalid.");
+  }
+
+  return kickoffAt;
 }
 
 function parseFixtureStatus(value: FormDataEntryValue | null) {
@@ -170,9 +201,20 @@ function mirrorRounds(rounds: Pair[][]): Pair[][] {
 export async function submitResultAction(formData: FormData) {
   await requireAdmin();
 
-  const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture ID");
-  const homeScore = parseRequiredPositiveInt(formData.get("homeScore"), "Home score", 0);
-  const awayScore = parseRequiredPositiveInt(formData.get("awayScore"), "Away score", 0);
+  const fixtureId = parseRequiredString(
+    formData.get("fixtureId"),
+    "Fixture ID"
+  );
+  const homeScore = parseRequiredPositiveInt(
+    formData.get("homeScore"),
+    "Home score",
+    0
+  );
+  const awayScore = parseRequiredPositiveInt(
+    formData.get("awayScore"),
+    "Away score",
+    0
+  );
 
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },
@@ -224,12 +266,27 @@ export async function createFixtureAction(formData: FormData) {
   await requireAdmin();
 
   const leagueId = parseRequiredString(formData.get("leagueId"), "League");
-  const homeTeamId = parseRequiredString(formData.get("homeTeamId"), "Home team");
-  const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Away team");
+  const homeTeamId = parseRequiredString(
+    formData.get("homeTeamId"),
+    "Home team"
+  );
+  const awayTeamId = parseRequiredString(
+    formData.get("awayTeamId"),
+    "Away team"
+  );
   const venueId = parseOptionalString(formData.get("venueId"));
-  const kickoffAt = parseKickoffAt(formData.get("kickoffAt"));
+  const kickoffAt = formData.get("kickoffAt")
+    ? parseKickoffAt(formData.get("kickoffAt"))
+    : parseKickoffAtFromParts(
+        formData.get("kickoffDate"),
+        formData.get("kickoffTime")
+      );
   const round = parseOptionalInt(formData.get("round"), "Round");
-  const position = parseOptionalPositiveInt(formData.get("position"), "Position", 0);
+  const position = parseOptionalPositiveInt(
+    formData.get("position"),
+    "Position",
+    0
+  );
   const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
 
@@ -240,7 +297,7 @@ export async function createFixtureAction(formData: FormData) {
   const [league, homeTeam, awayTeam, venue] = await Promise.all([
     prisma.league.findUnique({
       where: { id: leagueId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, slug: true },
     }),
     prisma.team.findUnique({
       where: { id: homeTeamId },
@@ -297,6 +354,10 @@ export async function createFixtureAction(formData: FormData) {
   });
 
   revalidatePath("/admin/fixtures");
+  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  revalidatePath(`/leagues/${league.slug}`);
+  revalidatePath(`/leagues/${league.slug}/fixtures`);
   redirect("/admin/fixtures");
 }
 
@@ -305,11 +366,61 @@ export async function deleteFixtureAction(formData: FormData) {
 
   const id = parseRequiredString(formData.get("id"), "Fixture ID");
 
+  const fixture = await prisma.fixture.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      leagueId: true,
+      league: {
+        select: {
+          slug: true,
+        },
+      },
+    },
+  });
+
+  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
   await prisma.fixture.delete({
     where: { id },
   });
 
   revalidatePath("/admin/fixtures");
+  revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${fixture.leagueId}`);
+  revalidatePath(`/leagues/${fixture.league.slug}`);
+  revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
+  redirect("/admin/fixtures");
+}
+
+export async function deleteLeagueFixturesAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      id: true,
+      slug: true,
+    },
+  });
+
+  if (!league) {
+    throw new Error("League not found.");
+  }
+
+  await prisma.fixture.deleteMany({
+    where: { leagueId },
+  });
+
+  revalidatePath("/admin/fixtures");
+  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  revalidatePath(`/leagues/${league.slug}`);
+  revalidatePath(`/leagues/${league.slug}/fixtures`);
   redirect("/admin/fixtures");
 }
 
@@ -319,18 +430,31 @@ export async function generateFixtures(formData: FormData) {
   const leagueId = parseRequiredString(formData.get("leagueId"), "League");
   const startDate = parseRequiredString(formData.get("startDate"), "Start date");
   const startTime = parseRequiredString(formData.get("startTime"), "Start time");
-  const weekGapDays = parseRequiredPositiveInt(formData.get("weekGapDays"), "Week gap days", 1);
-  const slotMinutes = parseRequiredPositiveInt(formData.get("slotMinutes"), "Slot minutes", 10);
+  const weekGapDays = parseRequiredPositiveInt(
+    formData.get("weekGapDays"),
+    "Week gap days",
+    1
+  );
+  const slotMinutes = parseRequiredPositiveInt(
+    formData.get("slotMinutes"),
+    "Slot minutes",
+    10
+  );
   const pitches = parseRequiredPositiveInt(formData.get("pitches"), "Pitches", 1);
-  const startRound = parseRequiredPositiveInt(formData.get("startRound"), "Start round", 1);
-  const doubleRoundRobin = String(formData.get("doubleRoundRobin") || "") === "on";
+  const startRound = parseRequiredPositiveInt(
+    formData.get("startRound"),
+    "Start round",
+    1
+  );
+  const doubleRoundRobin =
+    String(formData.get("doubleRoundRobin") || "") === "on";
   const clearExisting = String(formData.get("clearExisting") || "") === "on";
   const venueId = parseOptionalString(formData.get("venueId"));
   const status = parseFixtureStatus(formData.get("status"));
 
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
-    select: { id: true, name: true, season: true },
+    select: { id: true, name: true, season: true, slug: true },
   });
 
   if (!league) {
@@ -344,7 +468,9 @@ export async function generateFixtures(formData: FormData) {
   });
 
   if (teams.length < 2) {
-    throw new Error("This league needs at least 2 teams assigned before generating fixtures.");
+    throw new Error(
+      "This league needs at least 2 teams assigned before generating fixtures."
+    );
   }
 
   if (venueId) {
@@ -417,5 +543,9 @@ export async function generateFixtures(formData: FormData) {
 
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/generate");
+  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  revalidatePath(`/leagues/${league.slug}`);
+  revalidatePath(`/leagues/${league.slug}/fixtures`);
   redirect("/admin/fixtures");
 }

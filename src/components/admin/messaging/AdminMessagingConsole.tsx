@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import type { AdminMessagingActionState } from "@/app/admin/messaging/actions";
+import type { AdminMessagingActionState } from "@/app/(admin)/admin/messaging/actions";
 import MessagingTemplatePicker from "./MessagingTemplatePicker";
 import MessagingRecipientPreview from "./MessagingRecipientPreview";
 

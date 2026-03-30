@@ -6,7 +6,7 @@ import Link from "next/link";
 import AdminCard from "@/components/admin/AdminCard";
 import { requireAdmin } from "@/lib/requireAdmin";
 import EmailTemplateForm from "@/components/admin/email-templates/EmailTemplateForm";
-import { createEmailTemplateAction } from "@/app/admin/email-templates/actions";
+import { createEmailTemplateAction } from "@/app/(admin)/admin/email-templates/actions";
 
 export default async function NewEmailTemplatePage() {
   await requireAdmin();

@@ -5,7 +5,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { createVenueAction } from "@/app/admin/venues/actions";
+import { createVenueAction } from "@/app/(admin)/admin/venues/actions";
 
 type VenueFormState = {
   success?: boolean;

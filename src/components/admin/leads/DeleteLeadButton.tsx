@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { deleteLeadAction } from "@/app/admin/leads/[id]/actions";
+import { deleteLeadAction } from "@/app/(admin)/admin/leads/[id]/actions";
 
 type Props = {
   leadId: string;

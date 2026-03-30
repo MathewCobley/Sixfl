@@ -5,7 +5,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { regenerateFixtures } from "@/app/admin/leagues/[id]/fixtures/actions";
+import { regenerateFixtures } from "@/app/(admin)/admin/leagues/[id]/fixtures/actions";
 import MatchModal from "./MatchModal";
 
 type TeamItem = {

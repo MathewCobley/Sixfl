@@ -6,7 +6,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import LeagueForm from "@/components/admin/leagues/LeagueForm";
-import { createLeagueAction } from "@/app/admin/leagues/actions";
+import { createLeagueAction } from "@/app/(admin)/admin/leagues/actions";
 
 export default async function AdminLeaguesPage() {
   await requireAdmin();

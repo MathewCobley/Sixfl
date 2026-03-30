@@ -15,7 +15,7 @@ import TeamBadge from "@/components/admin/TeamBadge";
 import {
   deleteLeagueAction,
   updateLeagueAction,
-} from "@/app/admin/leagues/actions";
+} from "@/app/(admin)/admin/leagues/actions";
 
 // ========================================
 // Types
