@@ -27,6 +27,18 @@ type HeaderAction = {
   tone?: "primary" | "secondary";
 };
 
+type HeaderConfig = {
+  containerClassName: string;
+  desktopNavClassName: string;
+  mobilePanelTitle: string;
+  links: HeaderLink[];
+  actions: HeaderAction[];
+  logoHref: string;
+  logoSrc: string;
+  logoAlt: string;
+  navMode: "underline" | "pill";
+};
+
 const SUPER_ADMINS = [
   "hello@sixfl.co.uk",
   "mathew@sixfl.co.uk",
@@ -84,7 +96,10 @@ function NavLink({
   );
 }
 
-function getHeaderConfig(variant: HeaderVariant, isAdmin: boolean) {
+function getHeaderConfig(
+  variant: HeaderVariant,
+  isAdmin: boolean,
+): HeaderConfig {
   if (variant === "admin") {
     return {
       containerClassName:
@@ -98,7 +113,7 @@ function getHeaderConfig(variant: HeaderVariant, isAdmin: boolean) {
         { label: "Fixtures", href: "/admin/fixtures" },
         { label: "Leads", href: "/admin/leads" },
         { label: "Messaging", href: "/admin/messaging" },
-      ] satisfies HeaderLink[],
+      ],
       actions: [
         {
           label: "Public site",
@@ -106,11 +121,11 @@ function getHeaderConfig(variant: HeaderVariant, isAdmin: boolean) {
           eventLabel: "Public site",
           tone: "secondary",
         },
-      ] satisfies HeaderAction[],
+      ],
       logoHref: "/admin",
       logoSrc: "/logo2.png",
       logoAlt: "SIXFL Admin",
-      navMode: "pill" as const,
+      navMode: "pill",
     };
   }
 
@@ -138,11 +153,11 @@ function getHeaderConfig(variant: HeaderVariant, isAdmin: boolean) {
         eventLabel: "Register Interest",
         tone: "primary",
       },
-    ] satisfies HeaderAction[],
+    ],
     logoHref: "/",
     logoSrc: "/logo2.png",
     logoAlt: "SIXFL",
-    navMode: "underline" as const,
+    navMode: "underline",
   };
 }
 
@@ -162,7 +177,7 @@ export default function AppHeader({
 
   const config = useMemo(
     () => getHeaderConfig(variant, isAdmin),
-    [variant, isAdmin]
+    [variant, isAdmin],
   );
 
   useEffect(() => {
@@ -264,7 +279,7 @@ export default function AppHeader({
                 >
                   {link.label}
                 </NavLink>
-              )
+              ),
             )}
 
             {config.actions.map((action) => (
