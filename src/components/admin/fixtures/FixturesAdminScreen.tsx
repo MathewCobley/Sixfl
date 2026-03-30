@@ -285,6 +285,10 @@ export default function FixturesAdminScreen({
 
   const [editingFixtureId, setEditingFixtureId] = useState("");
   const [editLeagueId, setEditLeagueId] = useState("");
+  const [editHomeTeamId, setEditHomeTeamId] = useState("");
+  const [editAwayTeamId, setEditAwayTeamId] = useState("");
+  const [editVenueId, setEditVenueId] = useState("");
+  const [editRefereeId, setEditRefereeId] = useState("");
   const [editKickoffDate, setEditKickoffDate] = useState("");
   const [editKickoffTime, setEditKickoffTime] = useState("");
   const [editRound, setEditRound] = useState("");
@@ -382,6 +386,10 @@ export default function FixturesAdminScreen({
   function startEditingFixture(fixture: FixtureItem) {
     setEditingFixtureId(fixture.id);
     setEditLeagueId(fixture.leagueId ?? "");
+    setEditHomeTeamId(fixture.homeTeamId ?? "");
+    setEditAwayTeamId(fixture.awayTeamId ?? "");
+    setEditVenueId(fixture.venueId ?? "");
+    setEditRefereeId(fixture.refereeId ?? "");
     setEditKickoffDate(getDateInputValue(fixture.kickoffAtIso));
     setEditKickoffTime(getTimeInputValue(fixture.kickoffAtIso));
     setEditRound(fixture.round?.toString() ?? "");
@@ -393,6 +401,10 @@ export default function FixturesAdminScreen({
   function cancelEditingFixture() {
     setEditingFixtureId("");
     setEditLeagueId("");
+    setEditHomeTeamId("");
+    setEditAwayTeamId("");
+    setEditVenueId("");
+    setEditRefereeId("");
     setEditKickoffDate("");
     setEditKickoffTime("");
     setEditRound("");
@@ -574,232 +586,232 @@ export default function FixturesAdminScreen({
         </AdminCard>
 
         <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
-  <div className="border-b border-white/10 px-6 py-6 md:px-8">
-    <SectionHeading
-      eyebrow="Automated schedule"
-      title="Generate fixtures"
-      description="Build out a full league schedule with spacing, round controls, pitch count and optional reset handling."
-    />
-  </div>
+          <div className="border-b border-white/10 px-6 py-6 md:px-8">
+            <SectionHeading
+              eyebrow="Automated schedule"
+              title="Generate fixtures"
+              description="Build out a full league schedule with spacing, round controls, pitch count and optional reset handling."
+            />
+          </div>
 
-  <form
-    action={generateFixtures}
-    className="space-y-8 px-6 py-6 md:px-8"
-  >
-    <div className="grid gap-6">
-      <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-          League
-        </label>
-        <select
-          name="leagueId"
-          value={selectedGenerateLeagueId}
-          onChange={(event) =>
-            setSelectedGenerateLeagueId(event.target.value)
-          }
-          className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-        >
-          {leagueOptions.map((option) => (
-            <option key={option.id} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+          <form
+            action={generateFixtures}
+            className="space-y-8 px-6 py-6 md:px-8"
+          >
+            <div className="grid gap-6">
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  League
+                </label>
+                <select
+                  name="leagueId"
+                  value={selectedGenerateLeagueId}
+                  onChange={(event) =>
+                    setSelectedGenerateLeagueId(event.target.value)
+                  }
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                >
+                  {leagueOptions.map((option) => (
+                    <option key={option.id} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-            Start date
-          </label>
-          <input
-            type="date"
-            name="startDate"
-            className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-          />
-        </div>
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Start date
+                  </label>
+                  <input
+                    type="date"
+                    name="startDate"
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
 
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-            Start time
-          </label>
-          <input
-            type="time"
-            name="startTime"
-            defaultValue="20:00"
-            className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-          />
-        </div>
-      </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Start time
+                  </label>
+                  <input
+                    type="time"
+                    name="startTime"
+                    defaultValue="20:00"
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+              </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-            Week gap days
-          </label>
-          <input
-            type="number"
-            name="weekGapDays"
-            defaultValue={7}
-            className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-          />
-        </div>
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Week gap days
+                  </label>
+                  <input
+                    type="number"
+                    name="weekGapDays"
+                    defaultValue={7}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
 
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-            Slot minutes
-          </label>
-          <input
-            type="number"
-            name="slotMinutes"
-            defaultValue={40}
-            className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-          />
-        </div>
-      </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Slot minutes
+                  </label>
+                  <input
+                    type="number"
+                    name="slotMinutes"
+                    defaultValue={40}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+              </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-            Pitches
-          </label>
-          <input
-            type="number"
-            name="pitches"
-            defaultValue={1}
-            className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-          />
-        </div>
+              <div className="grid gap-6 xl:grid-cols-3">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Pitches
+                  </label>
+                  <input
+                    type="number"
+                    name="pitches"
+                    defaultValue={1}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
 
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-            Max games per night
-          </label>
-          <input
-            type="number"
-            name="maxGamesPerNight"
-            defaultValue={3}
-            className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-          />
-        </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Max games per night
+                  </label>
+                  <input
+                    type="number"
+                    name="maxGamesPerNight"
+                    defaultValue={3}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
 
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-            Start round
-          </label>
-          <input
-            type="number"
-            name="startRound"
-            defaultValue={1}
-            className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-          />
-        </div>
-      </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Start round
+                  </label>
+                  <input
+                    type="number"
+                    name="startRound"
+                    defaultValue={1}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+              </div>
 
-      <AdminComboboxField
-        name="venueId"
-        label="Venue"
-        placeholder="Select venue"
-        options={venueOptions}
-      />
+              <AdminComboboxField
+                name="venueId"
+                label="Venue"
+                placeholder="Select venue"
+                options={venueOptions}
+              />
 
-      <SegmentedStatusField
-        name="generatedStatus"
-        value={generateStatus}
-        onChange={setGenerateStatus}
-      />
+              <SegmentedStatusField
+                name="generatedStatus"
+                value={generateStatus}
+                onChange={setGenerateStatus}
+              />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
-          <input
-            type="checkbox"
-            name="doubleRoundRobin"
-            className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
-          />
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-white">
-              Double round robin
+              <div className="grid gap-4 xl:grid-cols-2">
+                <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
+                  <input
+                    type="checkbox"
+                    name="doubleRoundRobin"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">
+                      Double round robin
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-white/50">
+                      Every team plays each opponent home and away.
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
+                  <input
+                    type="checkbox"
+                    name="clearExisting"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">
+                      Clear existing fixtures first
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-white/50">
+                      Use when regenerating a league schedule from scratch.
+                    </div>
+                  </div>
+                </label>
+              </div>
             </div>
-            <div className="mt-1 text-sm leading-6 text-white/50">
-              Every team plays each opponent home and away.
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+              <input type="hidden" name="status" value={generateStatus} />
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                Generate fixtures
+              </button>
+              <p className="text-sm text-white/45">
+                {generateLeague
+                  ? `Generating for ${getLeagueLabel(generateLeague)}.`
+                  : "Choose a league to generate a schedule."}
+              </p>
+            </div>
+          </form>
+
+          <div className="border-t border-white/10 px-6 py-6 md:px-8">
+            <div className="space-y-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-300/80">
+                Bulk delete
+              </div>
+              <p className="text-sm leading-6 text-white/60">
+                Delete all fixtures for the currently selected league. Use this
+                when you want to wipe a schedule and regenerate it cleanly.
+              </p>
+              <form
+                action={deleteLeagueFixturesAction}
+                onSubmit={(event) => {
+                  const selectedLeague = leagues.find(
+                    (league) => league.id === selectedGenerateLeagueId,
+                  );
+                  const label = selectedLeague
+                    ? getLeagueLabel(selectedLeague)
+                    : "this league";
+
+                  const confirmed = window.confirm(
+                    `Delete all fixtures for ${label}? This cannot be undone.`,
+                  );
+
+                  if (!confirmed) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                <input type="hidden" name="leagueId" value={selectedGenerateLeagueId} />
+                <button
+                  type="submit"
+                  disabled={!selectedGenerateLeagueId}
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 px-6 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Delete all fixtures for selected league
+                </button>
+              </form>
             </div>
           </div>
-        </label>
-
-        <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
-          <input
-            type="checkbox"
-            name="clearExisting"
-            className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-emerald-400 focus:ring-emerald-400/30"
-          />
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-white">
-              Clear existing fixtures first
-            </div>
-            <div className="mt-1 text-sm leading-6 text-white/50">
-              Use when regenerating a league schedule from scratch.
-            </div>
-          </div>
-        </label>
-      </div>
-    </div>
-
-    <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
-      <input type="hidden" name="status" value={generateStatus} />
-      <button
-        type="submit"
-        className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90"
-      >
-        Generate fixtures
-      </button>
-      <p className="text-sm text-white/45">
-        {generateLeague
-          ? `Generating for ${getLeagueLabel(generateLeague)}.`
-          : "Choose a league to generate a schedule."}
-      </p>
-    </div>
-  </form>
-
-  <div className="border-t border-white/10 px-6 py-6 md:px-8">
-    <div className="space-y-3">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-300/80">
-        Bulk delete
-      </div>
-      <p className="text-sm leading-6 text-white/60">
-        Delete all fixtures for the currently selected league. Use this when you
-        want to wipe a schedule and regenerate it cleanly.
-      </p>
-      <form
-        action={deleteLeagueFixturesAction}
-        onSubmit={(event) => {
-          const selectedLeague = leagues.find(
-            (league) => league.id === selectedGenerateLeagueId,
-          );
-          const label = selectedLeague
-            ? getLeagueLabel(selectedLeague)
-            : "this league";
-
-          const confirmed = window.confirm(
-            `Delete all fixtures for ${label}? This cannot be undone.`,
-          );
-
-          if (!confirmed) {
-            event.preventDefault();
-          }
-        }}
-      >
-        <input type="hidden" name="leagueId" value={selectedGenerateLeagueId} />
-        <button
-          type="submit"
-          disabled={!selectedGenerateLeagueId}
-          className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 px-6 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Delete all fixtures for selected league
-        </button>
-      </form>
-    </div>
-  </div>
-</AdminCard>
+        </AdminCard>
       </div>
 
       <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
@@ -878,6 +890,7 @@ export default function FixturesAdminScreen({
                   label="Home team"
                   placeholder="Search home team"
                   options={editLeagueTeams}
+                  defaultValue={editHomeTeamId}
                 />
 
                 <AdminComboboxField
@@ -885,6 +898,7 @@ export default function FixturesAdminScreen({
                   label="Away team"
                   placeholder="Search away team"
                   options={editLeagueTeams}
+                  defaultValue={editAwayTeamId}
                 />
 
                 <AdminComboboxField
@@ -892,6 +906,7 @@ export default function FixturesAdminScreen({
                   label="Venue"
                   placeholder="Select venue"
                   options={venueOptions}
+                  defaultValue={editVenueId}
                 />
 
                 <AdminComboboxField
@@ -899,6 +914,7 @@ export default function FixturesAdminScreen({
                   label="Referee"
                   placeholder="Select referee"
                   options={refereeOptions}
+                  defaultValue={editRefereeId}
                 />
 
                 <div>

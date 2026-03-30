@@ -67,14 +67,9 @@ export default function AdminComboboxField({
     <div className="space-y-2">
       <label className="text-sm text-white/70">{label}</label>
 
-      <input
-        type="hidden"
-        name={name}
-        value={selected?.id ?? ""}
-        required={required}
-      />
+      <input type="hidden" name={name} value={selected?.id ?? ""} />
 
-      <Combobox value={selected} onChange={setSelected}>
+      <Combobox value={selected} onChange={setSelected} nullable>
         <div className="relative">
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400/60 focus-within:bg-black/40">
             <Combobox.Input
@@ -85,7 +80,10 @@ export default function AdminComboboxField({
               autoComplete="off"
             />
 
-            <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-3 text-white/40 hover:text-white/70">
+            <Combobox.Button
+              type="button"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-white/40 hover:text-white/70"
+            >
               <ChevronUpDownIcon className="h-5 w-5" />
             </Combobox.Button>
           </div>
@@ -145,6 +143,10 @@ export default function AdminComboboxField({
           </Transition>
         </div>
       </Combobox>
+
+      {required && !selected ? (
+        <p className="text-xs text-amber-300">Please select an option.</p>
+      ) : null}
     </div>
   );
 }
