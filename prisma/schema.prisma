@@ -96,6 +96,7 @@ model League {
   surface      String?
   description  String?
   heroImageUrl String?
+  badgeUrl     String?
   ctaText      String?
 
   teams         Team[]
