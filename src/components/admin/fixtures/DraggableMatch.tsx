@@ -4,10 +4,21 @@
 
 "use client";
 
+import type { ReactNode } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-export default function DraggableMatch({ match, children }) {
+type DraggableMatchProps = {
+  match: {
+    id: string;
+  };
+  children: ReactNode;
+};
+
+export default function DraggableMatch({
+  match,
+  children,
+}: DraggableMatchProps) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: match.id });
 
