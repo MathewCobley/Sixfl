@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/page.tsx
+// File: src/app/(admin)/admin/page.tsx
 // ========================================
 
 import Link from "next/link";
