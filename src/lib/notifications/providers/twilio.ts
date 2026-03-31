@@ -2,7 +2,7 @@
 // File: src/lib/notifications/providers/twilio.ts
 // ========================================
 
-import Twilio from "twilio";
+import twilio from "twilio";
 import type { Prisma } from "@prisma/client";
 
 export type SendSmsWithTwilioInput = {
@@ -19,7 +19,9 @@ export type SendSmsWithTwilioResult = {
   messagingServiceSid: string | null;
 };
 
-let cachedClient: Twilio | null = null;
+type TwilioClient = ReturnType<typeof twilio>;
+
+let cachedClient: TwilioClient | null = null;
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -36,7 +38,7 @@ function getOptionalEnv(name: string): string | null {
   return value ? value : null;
 }
 
-function getTwilioClient(): Twilio {
+function getTwilioClient(): TwilioClient {
   if (cachedClient) {
     return cachedClient;
   }
@@ -44,7 +46,7 @@ function getTwilioClient(): Twilio {
   const accountSid = getRequiredEnv("TWILIO_ACCOUNT_SID");
   const authToken = getRequiredEnv("TWILIO_AUTH_TOKEN");
 
-  cachedClient = Twilio(accountSid, authToken);
+  cachedClient = twilio(accountSid, authToken);
   return cachedClient;
 }
 
@@ -87,7 +89,7 @@ function buildMessageCreateInput(input: SendSmsWithTwilioInput) {
 }
 
 function sanitizeTwilioResponse(
-  message: Awaited<ReturnType<Twilio["messages"]["create"]>>,
+  message: Awaited<ReturnType<TwilioClient["messages"]["create"]>>,
 ): Prisma.InputJsonValue {
   return {
     sid: message.sid,
