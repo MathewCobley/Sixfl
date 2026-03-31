@@ -353,14 +353,15 @@ export default async function LeagueLandingPage({ params }: PageProps) {
           <div className="w-full rounded-[2rem] border border-white/10 bg-black/25 p-6 backdrop-blur-[3px] sm:p-8 lg:p-10">
             <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr] xl:items-end">
               <div className="max-w-4xl">
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/35 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                <div className="flex flex-wrap items-center gap-5">
+                  <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/35 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.35)] sm:h-32 sm:w-32">
                     <Image
                       src={leagueBadge}
                       alt={`${league.name} badge`}
                       fill
-                      sizes="80px"
+                      sizes="128px"
                       className="object-contain p-2"
+                      unoptimized
                     />
                   </div>
 
