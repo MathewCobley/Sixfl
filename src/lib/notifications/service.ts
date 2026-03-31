@@ -55,6 +55,22 @@ type ResolvedQueuedContent = {
   bodyHtml: string | null;
 };
 
+const SIXFL_SMS_SIGNATURE = "— SIXFL";
+
+function appendSIXFLSmsSignature(body: string) {
+  const trimmedBody = body.trim();
+
+  if (!trimmedBody) {
+    return SIXFL_SMS_SIGNATURE;
+  }
+
+  const withoutExistingSignature = trimmedBody
+    .replace(/\n?\n?—\s*SIXFL\s*$/i, "")
+    .trim();
+
+  return `${withoutExistingSignature}\n\n${SIXFL_SMS_SIGNATURE}`.trim();
+}
+
 function resolveEmailCtaUrl(input: {
   ctaUrlKey?: string | null;
   variables?: NotificationTemplateVariables;
@@ -112,7 +128,7 @@ function buildQueuedContentFromTemplate(input: {
 
   return {
     subject: null,
-    bodyText: renderedBody.trim(),
+    bodyText: appendSIXFLSmsSignature(renderedBody),
     bodyHtml: null,
   };
 }
@@ -138,7 +154,7 @@ function buildQueuedContentDirect(input: {
 
   return {
     subject: null,
-    bodyText: body,
+    bodyText: appendSIXFLSmsSignature(body),
     bodyHtml: null,
   };
 }
