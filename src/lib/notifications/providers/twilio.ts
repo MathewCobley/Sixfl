@@ -2,94 +2,123 @@
 // File: src/lib/notifications/providers/twilio.ts
 // ========================================
 
-import type { Prisma } from "@prisma/client";
-import { requireSmsReadyPhoneNumber } from "@/lib/notifications/phone";
+import Twilio from "twilio";
 
-export type SendNotificationSmsInput = {
+export type SendSmsWithTwilioInput = {
   to: string;
   body: string;
+  mediaUrl?: string[];
 };
 
-export type NotificationProviderSendResult = {
-  provider: string;
-  providerMessageId: string | null;
-  responsePayload?: Prisma.InputJsonValue;
+export type SendSmsWithTwilioResult = {
+  provider: "twilio";
+  providerMessageId: string;
+  responsePayload: Record<string, unknown>;
+  fromNumber: string | null;
+  messagingServiceSid: string | null;
 };
 
-function getTwilioCredentials() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
-  const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID?.trim();
-  const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER?.trim();
+let cachedClient: Twilio | null = null;
 
-  if (!accountSid) {
-    throw new Error("TWILIO_ACCOUNT_SID is missing.");
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
   }
 
-  if (!authToken) {
-    throw new Error("TWILIO_AUTH_TOKEN is missing.");
+  return value;
+}
+
+function getOptionalEnv(name: string): string | null {
+  const value = process.env[name]?.trim();
+  return value ? value : null;
+}
+
+function getTwilioClient(): Twilio {
+  if (cachedClient) {
+    return cachedClient;
   }
 
-  if (!messagingServiceSid && !fromNumberRaw) {
+  const accountSid = getRequiredEnv("TWILIO_ACCOUNT_SID");
+  const authToken = getRequiredEnv("TWILIO_AUTH_TOKEN");
+
+  cachedClient = Twilio(accountSid, authToken);
+  return cachedClient;
+}
+
+function buildMessageCreateInput(input: SendSmsWithTwilioInput) {
+  const messagingServiceSid = getOptionalEnv("TWILIO_MESSAGING_SERVICE_SID");
+  const fromNumber = getOptionalEnv("TWILIO_PHONE_NUMBER");
+
+  if (!messagingServiceSid && !fromNumber) {
     throw new Error(
-      "Either TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER must be set.",
+      "Twilio SMS sending requires either TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER.",
     );
   }
 
-  return {
-    accountSid,
-    authToken,
-    messagingServiceSid,
-    fromNumber: messagingServiceSid
-      ? null
-      : requireSmsReadyPhoneNumber(fromNumberRaw),
+  const payload: {
+    to: string;
+    body: string;
+    messagingServiceSid?: string;
+    from?: string;
+    mediaUrl?: string[];
+  } = {
+    to: input.to,
+    body: input.body,
   };
-}
 
-export async function sendSmsWithTwilio(
-  input: SendNotificationSmsInput,
-): Promise<NotificationProviderSendResult> {
-  const credentials = getTwilioCredentials();
-  const to = requireSmsReadyPhoneNumber(input.to);
+  if (messagingServiceSid) {
+    payload.messagingServiceSid = messagingServiceSid;
+  } else if (fromNumber) {
+    payload.from = fromNumber;
+  }
 
-  const body = new URLSearchParams({
-    To: to,
-    Body: input.body,
-    ...(credentials.messagingServiceSid
-      ? { MessagingServiceSid: credentials.messagingServiceSid }
-      : { From: credentials.fromNumber! }),
-  });
-
-  const response = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${credentials.accountSid}/Messages.json`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${Buffer.from(
-          `${credentials.accountSid}:${credentials.authToken}`,
-        ).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: body.toString(),
-      cache: "no-store",
-    },
-  );
-
-  const payload = (await response.json()) as Record<string, unknown>;
-
-  if (!response.ok) {
-    const message =
-      typeof payload.message === "string"
-        ? payload.message
-        : "Twilio SMS send failed.";
-
-    throw new Error(message);
+  if (input.mediaUrl?.length) {
+    payload.mediaUrl = input.mediaUrl;
   }
 
   return {
+    payload,
+    configuredFromNumber: fromNumber,
+    configuredMessagingServiceSid: messagingServiceSid,
+  };
+}
+
+function sanitizeTwilioResponse(message: Awaited<ReturnType<Twilio["messages"]["create"]>>) {
+  return {
+    sid: message.sid,
+    accountSid: message.accountSid,
+    messagingServiceSid: message.messagingServiceSid ?? null,
+    from: message.from ?? null,
+    to: message.to ?? null,
+    status: message.status ?? null,
+    errorCode: message.errorCode ?? null,
+    errorMessage: message.errorMessage ?? null,
+    direction: message.direction ?? null,
+    price: message.price ?? null,
+    priceUnit: message.priceUnit ?? null,
+    uri: message.uri ?? null,
+    dateCreated: message.dateCreated?.toISOString?.() ?? null,
+    dateSent: message.dateSent?.toISOString?.() ?? null,
+    dateUpdated: message.dateUpdated?.toISOString?.() ?? null,
+  } satisfies Record<string, unknown>;
+}
+
+export async function sendSmsWithTwilio(
+  input: SendSmsWithTwilioInput,
+): Promise<SendSmsWithTwilioResult> {
+  const client = getTwilioClient();
+  const { payload, configuredFromNumber, configuredMessagingServiceSid } =
+    buildMessageCreateInput(input);
+
+  const message = await client.messages.create(payload);
+
+  return {
     provider: "twilio",
-    providerMessageId:
-      typeof payload.sid === "string" ? payload.sid : null,
-    responsePayload: payload as Prisma.InputJsonValue,
+    providerMessageId: message.sid,
+    fromNumber: message.from ?? configuredFromNumber ?? null,
+    messagingServiceSid: message.messagingServiceSid ?? configuredMessagingServiceSid ?? null,
+    responsePayload: sanitizeTwilioResponse(message),
   };
 }

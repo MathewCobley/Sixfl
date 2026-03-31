@@ -9,6 +9,7 @@ import {
   requireValidTwilioSignature,
 } from "@/lib/twilio/validateTwilioSignature";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
+import { recordInboundSms } from "@/lib/messaging/service";
 
 function buildTwimlMessageResponse(message: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(
@@ -45,14 +46,7 @@ function normalizeIncomingBody(body: string | null): string {
 
 function isStopKeyword(body: string): boolean {
   const value = body.trim().toUpperCase();
-  return [
-    "STOP",
-    "STOPALL",
-    "UNSUBSCRIBE",
-    "CANCEL",
-    "END",
-    "QUIT",
-  ].includes(value);
+  return ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"].includes(value);
 }
 
 function isStartKeyword(body: string): boolean {
@@ -63,39 +57,6 @@ function isStartKeyword(body: string): boolean {
 function isHelpKeyword(body: string): boolean {
   const value = body.trim().toUpperCase();
   return ["HELP", "INFO"].includes(value);
-}
-
-async function upsertInboundSmsPlaceholder(params: {
-  fromNumber: string | null;
-  toNumber: string | null;
-  body: string;
-  messageSid: string | null;
-  accountSid: string | null;
-  rawPayload: Record<string, string | string[] | undefined>;
-}): Promise<void> {
-  /**
-   * TEMPORARY PHASE:
-   * This route is now ready and validated.
-   * The next file will replace this placeholder with real Prisma logic:
-   *
-   *   src/lib/messaging/service.ts
-   *
-   * That service will:
-   * - find NotificationRecipient by normalized phone
-   * - find or create MessageThread
-   * - create MessageEntry
-   * - increment unreadForAdminCount
-   * - create InboxAlert
-   * - handle suppression / opt-in changes
-   */
-
-  console.log("[twilio] inbound sms received", {
-    fromNumber: params.fromNumber,
-    toNumber: params.toNumber,
-    body: params.body,
-    messageSid: params.messageSid,
-    accountSid: params.accountSid,
-  });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -113,62 +74,11 @@ export async function POST(request: Request): Promise<Response> {
     const toNumber = normalizePhoneNumber(rawTo);
     const body = normalizeIncomingBody(rawBody);
 
-    if (!fromNumber) {
+    if (!fromNumber || !body) {
       return xmlResponse(buildEmptyTwimlResponse(), 200);
     }
 
-    if (isStopKeyword(body)) {
-      await upsertInboundSmsPlaceholder({
-        fromNumber,
-        toNumber,
-        body,
-        messageSid,
-        accountSid,
-        rawPayload: params,
-      });
-
-      return xmlResponse(
-        buildTwimlMessageResponse(
-          "You have been opted out of SMS messages from SIXFL. Reply START to opt back in.",
-        ),
-      );
-    }
-
-    if (isStartKeyword(body)) {
-      await upsertInboundSmsPlaceholder({
-        fromNumber,
-        toNumber,
-        body,
-        messageSid,
-        accountSid,
-        rawPayload: params,
-      });
-
-      return xmlResponse(
-        buildTwimlMessageResponse(
-          "You are opted back in to SMS messages from SIXFL.",
-        ),
-      );
-    }
-
-    if (isHelpKeyword(body)) {
-      await upsertInboundSmsPlaceholder({
-        fromNumber,
-        toNumber,
-        body,
-        messageSid,
-        accountSid,
-        rawPayload: params,
-      });
-
-      return xmlResponse(
-        buildTwimlMessageResponse(
-          "SIXFL support: hello@sixfl.co.uk. Reply STOP to opt out or START to opt back in.",
-        ),
-      );
-    }
-
-    await upsertInboundSmsPlaceholder({
+    await recordInboundSms({
       fromNumber,
       toNumber,
       body,
@@ -177,10 +87,33 @@ export async function POST(request: Request): Promise<Response> {
       rawPayload: params,
     });
 
+    if (isStopKeyword(body)) {
+      return xmlResponse(
+        buildTwimlMessageResponse(
+          "You have been opted out of SMS messages from SIXFL. Reply START to opt back in.",
+        ),
+      );
+    }
+
+    if (isStartKeyword(body)) {
+      return xmlResponse(
+        buildTwimlMessageResponse(
+          "You are opted back in to SMS messages from SIXFL.",
+        ),
+      );
+    }
+
+    if (isHelpKeyword(body)) {
+      return xmlResponse(
+        buildTwimlMessageResponse(
+          "SIXFL support: hello@sixfl.co.uk. Reply STOP to opt out or START to opt back in.",
+        ),
+      );
+    }
+
     return xmlResponse(buildEmptyTwimlResponse(), 200);
   } catch (error) {
     console.error("[twilio] inbound sms webhook failed", error);
-
     return xmlResponse(buildEmptyTwimlResponse(), 200);
   }
 }
