@@ -45,6 +45,16 @@ function formatChannel(channel: NotificationChannel) {
   return channel === "SMS" ? "SMS" : "Email";
 }
 
+function formatThreadStatus(status: string) {
+  if (status === "OPEN") return "Open";
+  if (status === "ARCHIVED") return "Archived";
+  return status;
+}
+
+function formatMessageDirection(direction: string) {
+  return direction === "INBOUND" ? "Reply received" : "Sent";
+}
+
 function getDispatchOriginLabel(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return "Sent to team";
@@ -172,30 +182,54 @@ export default async function AdminTeamPage({
   const { snapshot: contactSnapshot, recipient } =
     await upsertTeamNotificationRecipient(id);
 
-  const dispatches = await prisma.notificationDispatch.findMany({
-    where: {
-      OR: [
-        {
-          sourceType: "TEAM",
-          sourceId: id,
-        },
-        {
-          recipientId: recipient.id,
-        },
-      ],
-    },
-    include: {
-      recipient: true,
-      attempts: {
-        orderBy: {
-          attemptedAt: "desc",
-        },
-        take: 3,
+  const [dispatches, messageThreads] = await Promise.all([
+    prisma.notificationDispatch.findMany({
+      where: {
+        OR: [
+          {
+            sourceType: "TEAM",
+            sourceId: id,
+          },
+          {
+            recipientId: recipient.id,
+          },
+        ],
       },
-    },
-    orderBy: [{ createdAt: "desc" }],
-    take: 100,
-  });
+      include: {
+        recipient: true,
+        attempts: {
+          orderBy: {
+            attemptedAt: "desc",
+          },
+          take: 3,
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 100,
+    }),
+    prisma.messageThread.findMany({
+      where: {
+        OR: [{ teamId: id }, { recipientId: recipient.id }],
+      },
+      include: {
+        recipient: true,
+        league: {
+          select: {
+            id: true,
+            name: true,
+            season: true,
+            slug: true,
+          },
+        },
+        messages: {
+          orderBy: [{ createdAt: "desc" }],
+          take: 20,
+        },
+      },
+      orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+      take: 20,
+    }),
+  ]);
 
   const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
 
@@ -318,10 +352,6 @@ export default async function AdminTeamPage({
             </div>
           ) : null}
 
-          {sp.error === "missing_name" ? (
-            <div className="text-red-300">Team name is required.</div>
-          ) : null}
-
           {sp.composeError === "missing_subject" ? (
             <div className="text-red-300">Email subject is required.</div>
           ) : null}
@@ -374,26 +404,6 @@ export default async function AdminTeamPage({
 
             <form action={updateTeamDetailsAction} className="space-y-5">
               <input type="hidden" name="id" value={team.id} />
-
-              <div className="space-y-2">
-                <label htmlFor="name" className="text-sm text-white/60">
-                  Team name
-                </label>
-
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  defaultValue={team.name}
-                  placeholder="Enter team name"
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
-                />
-
-                <div className="text-xs text-white/50">
-                  This updates the public team name, admin listings, and team
-                  messaging label.
-                </div>
-              </div>
 
               <div className="space-y-2">
                 <label htmlFor="leagueId" className="text-sm text-white/60">
@@ -596,6 +606,129 @@ export default async function AdminTeamPage({
                 Save team details
               </button>
             </form>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  SMS inbox activity
+                </h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Inbound replies and outbound SMS linked to this team.
+                </p>
+              </div>
+
+              <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-medium text-white/70">
+                {messageThreads.length} thread{messageThreads.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            {messageThreads.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-white/55">
+                No SMS conversations are linked to this team yet.
+              </div>
+            ) : (
+              <div className="mt-6 space-y-5">
+                {messageThreads.map((thread) => (
+                  <div
+                    key={thread.id}
+                    className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                  >
+                    <div className="flex flex-col gap-4 border-b border-white/10 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
+                            {formatThreadStatus(thread.status)}
+                          </span>
+                          {thread.unreadForAdminCount > 0 ? (
+                            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                              {thread.unreadForAdminCount} unread
+                            </span>
+                          ) : null}
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
+                            {thread.contactPhone || thread.phoneNormalized || "No phone"}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="text-base font-semibold text-white">
+                            {thread.team?.name ||
+                              thread.contactName ||
+                              thread.recipient?.displayName ||
+                              "SMS conversation"}
+                          </div>
+
+                          <div className="mt-1 text-xs text-white/45">
+                            Latest activity:{" "}
+                            {thread.latestMessageAt?.toLocaleString() || "—"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <Link
+                          href={`/admin/messaging?thread=${thread.id}`}
+                          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                        >
+                          Open in inbox
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-white/10">
+                      {thread.messages.length === 0 ? (
+                        <div className="px-4 py-4 text-sm text-white/55">
+                          No messages recorded in this thread yet.
+                        </div>
+                      ) : (
+                        thread.messages.map((message) => (
+                          <div key={message.id} className="space-y-3 px-4 py-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
+                                {formatMessageDirection(message.direction)}
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
+                                {message.participantRole}
+                              </span>
+                              {message.direction === "INBOUND" &&
+                              !message.readAt ? (
+                                <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                                  Unread
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
+                              {message.body}
+                            </div>
+
+                            <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/45">
+                              <div>
+                                From: {message.fromNumber || "—"}
+                              </div>
+                              <div>
+                                To: {message.toNumber || "—"}
+                              </div>
+                              <div>
+                                Time:{" "}
+                                {(message.receivedAt ??
+                                  message.sentAt ??
+                                  message.createdAt
+                                ).toLocaleString()}
+                              </div>
+                              <div>
+                                Status: {message.providerStatus || "—"}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
@@ -836,6 +969,16 @@ export default async function AdminTeamPage({
                 <span>Primary phone</span>
                 <span className="text-right font-medium text-white">
                   {contactSnapshot.primaryContact.phone ?? "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Unread SMS replies</span>
+                <span className="text-right font-medium text-white">
+                  {messageThreads.reduce(
+                    (sum, thread) => sum + thread.unreadForAdminCount,
+                    0,
+                  )}
                 </span>
               </div>
 

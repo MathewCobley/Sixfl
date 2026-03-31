@@ -20,6 +20,7 @@ import {
 type AdminSidebarProps = {
   name?: string | null;
   email?: string | null;
+  unreadMessagingCount?: number;
 };
 
 const navigation = [
@@ -76,7 +77,11 @@ function isActivePath(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function AdminSidebar({ name, email }: AdminSidebarProps) {
+export default function AdminSidebar({
+  name,
+  email,
+  unreadMessagingCount = 0,
+}: AdminSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -109,6 +114,8 @@ export default function AdminSidebar({ name, email }: AdminSidebarProps) {
           {navigation.map((item) => {
             const active = isActivePath(pathname, item.href, item.exact);
             const Icon = item.icon;
+            const unreadCount =
+              item.name === "Messaging" ? unreadMessagingCount : 0;
 
             return (
               <Link
@@ -132,8 +139,17 @@ export default function AdminSidebar({ name, email }: AdminSidebarProps) {
                   <Icon className="h-5 w-5" />
                 </div>
 
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">{item.name}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold">{item.name}</div>
+
+                    {unreadCount > 0 ? (
+                      <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    ) : null}
+                  </div>
+
                   <div className="mt-0.5 text-xs text-white/35">
                     {item.name === "Overview" && "Admin dashboard"}
                     {item.name === "Teams" && "Squads and captains"}
@@ -142,7 +158,12 @@ export default function AdminSidebar({ name, email }: AdminSidebarProps) {
                     {item.name === "Fixtures" && "Schedule and results"}
                     {item.name === "Referees" && "Officials and assignments"}
                     {item.name === "Leads" && "Inbound enquiries"}
-                    {item.name === "Messaging" && "Campaigns and outreach"}
+                    {item.name === "Messaging" &&
+                      (unreadCount > 0
+                        ? `${unreadCount} unread thread${
+                            unreadCount === 1 ? "" : "s"
+                          }`
+                        : "Campaigns and outreach")}
                     {item.name === "Email Templates" && "Reusable messaging"}
                   </div>
                 </div>
