@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/teams/page.tsx
+// File: src/app/(admin)/admin/teams/page.tsx
 // ========================================
 
 import Link from "next/link";
@@ -10,6 +10,128 @@ import { deleteTeamAction } from "./actions";
 import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
 import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
+
+async function getAdminTeams() {
+  return prisma.team.findMany({
+    include: {
+      league: {
+        select: {
+          id: true,
+          name: true,
+          season: true,
+          badgeUrl: true,
+          isActive: true,
+        },
+      },
+      members: {
+        where: { role: "MANAGER" },
+        include: {
+          user: {
+            select: {
+              email: true,
+              name: true,
+              role: true,
+            },
+          },
+        },
+      },
+      convertedFromLead: {
+        select: {
+          contactName: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  });
+}
+
+type TeamListItem = Awaited<ReturnType<typeof getAdminTeams>>[number];
+
+type TeamGroup = {
+  key: string;
+  league: TeamListItem["league"] | null;
+  teams: TeamListItem[];
+};
+
+function getLeagueLabel(league: TeamListItem["league"]) {
+  if (!league) return "Unassigned teams";
+  return `${league.name}${league.season ? ` • ${league.season}` : ""}`;
+}
+
+function getLeagueInitials(name: string) {
+  const parts = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length === 0) return "LG";
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "LG";
+}
+
+function getContactName(team: TeamListItem) {
+  return (
+    team.contactName ||
+    team.members[0]?.user?.name ||
+    team.convertedFromLead?.contactName ||
+    "No contact name"
+  );
+}
+
+function getContactEmail(team: TeamListItem) {
+  return (
+    team.contactEmail ||
+    team.members[0]?.user?.email ||
+    team.convertedFromLead?.email ||
+    "—"
+  );
+}
+
+function getContactPhone(team: TeamListItem) {
+  return team.contactPhone || team.convertedFromLead?.phone || "—";
+}
+
+function groupTeamsByLeague(teams: TeamListItem[]) {
+  const sorted = [...teams].sort((a, b) => {
+    const aHasLeague = Boolean(a.league);
+    const bHasLeague = Boolean(b.league);
+
+    if (aHasLeague !== bHasLeague) {
+      return aHasLeague ? -1 : 1;
+    }
+
+    const aLeague = a.league ? getLeagueLabel(a.league) : "ZZZ";
+    const bLeague = b.league ? getLeagueLabel(b.league) : "ZZZ";
+    const leagueComparison = aLeague.localeCompare(bLeague);
+
+    if (leagueComparison !== 0) {
+      return leagueComparison;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
+
+  const groups = new Map<string, TeamGroup>();
+
+  for (const team of sorted) {
+    const key = team.league?.id ?? "__unassigned__";
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.teams.push(team);
+      continue;
+    }
+
+    groups.set(key, {
+      key,
+      league: team.league,
+      teams: [team],
+    });
+  }
+
+  return [...groups.values()];
+}
 
 export default async function AdminTeamsPage({
   searchParams,
@@ -29,157 +151,283 @@ export default async function AdminTeamsPage({
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
-  const teams = await prisma.team.findMany({
-    orderBy: { name: "asc" },
-    include: {
-      league: {
-        select: {
-          id: true,
-          name: true,
-          season: true,
-        },
-      },
-      members: {
-        where: { role: "MANAGER" },
-        include: {
-          user: {
-            select: {
-              email: true,
-              name: true,
-              role: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  const teams = await getAdminTeams();
+  const groups = groupTeamsByLeague(teams);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Teams</h1>
+    <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold text-white">Teams</h1>
+          <p className="text-sm text-white/60">
+            Manage teams by league, keep contact details tidy, and jump straight
+            into editing without one massive flat list.
+          </p>
+        </div>
 
         <Link
           href="/admin/teams/new"
-          className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-500"
+          className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
         >
           Add team
         </Link>
       </div>
 
       {(deleted || regenerated || error) && (
-        <div className="space-y-1 rounded-xl border border-white/10 bg-black/30 p-4 text-sm">
-          {deleted && <div className="text-emerald-300">Team deleted.</div>}
-          {regenerated && (
+        <div className="space-y-1 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm">
+          {deleted ? <div className="text-emerald-300">Team deleted.</div> : null}
+          {regenerated ? (
             <div className="text-emerald-300">Claim code regenerated.</div>
-          )}
+          ) : null}
 
-          {error === "missing_id" && (
+          {error === "missing_id" ? (
             <div className="text-red-300">Action failed (missing id).</div>
-          )}
-          {error === "has_fixtures" && (
+          ) : null}
+
+          {error === "has_fixtures" ? (
             <div className="text-red-300">
               Can’t delete this team because fixtures already exist for it.
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
-      <div className="divide-y divide-white/10 rounded-xl border border-white/10">
-        {teams.map((team) => {
-          const managerUser = team.members[0]?.user;
-          const hasManager = Boolean(managerUser?.email);
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+            Total teams
+          </div>
+          <div className="mt-3 text-3xl font-semibold text-white">
+            {teams.length}
+          </div>
+        </div>
 
-          const claimedByCaptain =
-            hasManager && managerUser?.role !== UserRole.ADMIN;
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+            League groups
+          </div>
+          <div className="mt-3 text-3xl font-semibold text-white">
+            {groups.length}
+          </div>
+        </div>
 
-          const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
-            team.claimCode
-          )}`;
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+            Claimed teams
+          </div>
+          <div className="mt-3 text-3xl font-semibold text-white">
+            {
+              teams.filter(
+                (team) =>
+                  team.members[0]?.user?.email &&
+                  team.members[0]?.user?.role !== UserRole.ADMIN,
+              ).length
+            }
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+            Unassigned teams
+          </div>
+          <div className="mt-3 text-3xl font-semibold text-white">
+            {teams.filter((team) => !team.leagueId).length}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {groups.map((group) => {
+          const leagueLabel = getLeagueLabel(group.league);
+          const subtitle = group.league
+            ? group.league.isActive
+              ? "Linked teams in this live league"
+              : "Linked teams in this inactive league"
+            : "Teams waiting to be assigned to a league";
 
           return (
-            <div
-              key={team.id}
-              className="flex items-center justify-between gap-4 p-4"
+            <section
+              key={group.key}
+              className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
             >
-              <div className="flex min-w-0 items-center gap-4">
-                <TeamBadge
-                  name={team.name}
-                  logoUrl={team.logoUrl}
-                  size="sm"
-                />
-
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="font-medium text-white">{team.name}</div>
-
-                    {team.league ? (
-                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">
-                        {team.league.name}
-                        {team.league.season ? ` • ${team.league.season}` : ""}
-                      </span>
+              <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-emerald-500/10 text-lg font-semibold text-emerald-200">
+                    {group.league?.badgeUrl ? (
+                      <img
+                        src={group.league.badgeUrl}
+                        alt={leagueLabel}
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/60">
-                        No league
-                      </span>
-                    )}
-
-                    {!hasManager && (
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/70">
-                        Unclaimed
-                      </span>
-                    )}
-
-                    {hasManager && !claimedByCaptain && (
-                      <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-xs text-yellow-200">
-                        Manager is admin
-                      </span>
-                    )}
-
-                    {claimedByCaptain && (
-                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">
-                        Claimed
-                        {managerUser?.email ? ` • ${managerUser.email}` : ""}
-                      </span>
+                      getLeagueInitials(group.league?.name ?? "No League")
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
-                    <span className="font-mono">{team.claimCode}</span>
-                    <CopyToClipboardButton
-                      text={claimLink}
-                      label="Copy claim link"
-                      className="rounded-md border border-white/10 px-3 py-1.5 text-white/80 hover:bg-white/5"
-                    />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className="truncate text-xl font-semibold text-white">
+                        {leagueLabel}
+                      </h2>
+
+                      {group.league ? (
+                        <Link
+                          href={`/admin/leagues/${group.league.id}`}
+                          className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15"
+                        >
+                          Open league
+                        </Link>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/60">
+                          No league assigned
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-sm text-white/55">{subtitle}</p>
                   </div>
+                </div>
+
+                <div className="inline-flex items-center rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm font-medium text-white/75">
+                  {group.teams.length} team{group.teams.length === 1 ? "" : "s"}
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-4">
-                <Link
-                  href={`/admin/teams/${team.id}`}
-                  className="text-sm text-emerald-400 hover:text-emerald-300"
-                >
-                  Open
-                </Link>
+              <div className="divide-y divide-white/10">
+                {group.teams.map((team) => {
+                  const managerUser = team.members[0]?.user;
+                  const hasManager = Boolean(managerUser?.email);
+                  const claimedByCaptain =
+                    hasManager && managerUser?.role !== UserRole.ADMIN;
+                  const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
+                    team.claimCode,
+                  )}`;
 
-                <form action={deleteTeamAction}>
-                  <input type="hidden" name="id" value={team.id} />
-                  <input type="hidden" name="from" value="/admin/teams" />
-                  <ConfirmDeleteButton
-                    label="Delete"
-                    confirmText={`Delete "${team.name}"? This cannot be undone.`}
-                    className="text-sm text-red-400 hover:text-red-300"
-                  />
-                </form>
+                  return (
+                    <div
+                      key={team.id}
+                      className="grid gap-5 px-6 py-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto] xl:items-center"
+                    >
+                      <div className="flex min-w-0 items-start gap-4">
+                        <TeamBadge
+                          name={team.name}
+                          logoUrl={team.logoUrl}
+                          size="sm"
+                        />
+
+                        <div className="min-w-0 space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="truncate text-base font-semibold text-white">
+                              {team.name}
+                            </div>
+
+                            {claimedByCaptain ? (
+                              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                                Claimed
+                              </span>
+                            ) : hasManager ? (
+                              <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-[11px] text-yellow-200">
+                                Manager is admin
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">
+                                Unclaimed
+                              </span>
+                            )}
+
+                            {team.latestKickoffTime ? (
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">
+                                Latest KO {team.latestKickoffTime}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="grid gap-2 text-sm text-white/70 md:grid-cols-2">
+                            <div>
+                              <span className="text-white/45">Contact:</span>{" "}
+                              {getContactName(team)}
+                            </div>
+                            <div>
+                              <span className="text-white/45">Email:</span>{" "}
+                              <span className="break-all">{getContactEmail(team)}</span>
+                            </div>
+                            <div>
+                              <span className="text-white/45">Phone:</span>{" "}
+                              {getContactPhone(team)}
+                            </div>
+                            <div>
+                              <span className="text-white/45">Created:</span>{" "}
+                              {team.createdAt.toLocaleDateString()}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-white/55">
+                            <span className="font-mono text-white/70">
+                              {team.claimCode}
+                            </span>
+                            <CopyToClipboardButton
+                              text={claimLink}
+                              label="Copy claim link"
+                              className="rounded-lg border border-white/10 px-3 py-1.5 text-white/80 hover:bg-white/5"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 text-sm text-white/65 xl:justify-self-start">
+                        <div>
+                          <span className="text-white/45">League:</span>{" "}
+                          {team.league
+                            ? `${team.league.name}${
+                                team.league.season ? ` • ${team.league.season}` : ""
+                              }`
+                            : "No league"}
+                        </div>
+                        <div>
+                          <span className="text-white/45">Captain email:</span>{" "}
+                          <span className="break-all">
+                            {managerUser?.email ?? "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-white/45">Team ID:</span>{" "}
+                          <span className="font-mono text-xs text-white/70">
+                            {team.id}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+                        <Link
+                          href={`/admin/teams/${team.id}`}
+                          className="inline-flex min-w-[92px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                        >
+                          Edit
+                        </Link>
+
+                        <form action={deleteTeamAction}>
+                          <input type="hidden" name="id" value={team.id} />
+                          <input type="hidden" name="from" value="/admin/teams" />
+                          <ConfirmDeleteButton
+                            label="Delete"
+                            confirmText={`Delete \"${team.name}\"? This cannot be undone.`}
+                            className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
+                          />
+                        </form>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            </section>
           );
         })}
 
-        {teams.length === 0 && (
-          <div className="p-4 text-white/60">No teams created yet</div>
-        )}
+        {groups.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 p-8 text-sm text-white/55">
+            No teams created yet.
+          </div>
+        ) : null}
       </div>
     </div>
   );
