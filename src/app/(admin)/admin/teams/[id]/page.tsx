@@ -207,11 +207,18 @@ export default async function AdminTeamPage({
       orderBy: [{ createdAt: "desc" }],
       take: 100,
     }),
-    prisma.messageThread.findMany({
+    prisma.messageThreads = await prisma.messageThread.findMany({
       where: {
         OR: [{ teamId: id }, { recipientId: recipient.id }],
       },
       include: {
+        team: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
+          },
+        },
         recipient: true,
         league: {
           select: {
@@ -228,8 +235,7 @@ export default async function AdminTeamPage({
       },
       orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
       take: 20,
-    }),
-  ]);
+    });
 
   const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
 
@@ -1122,7 +1128,7 @@ export default async function AdminTeamPage({
               Regenerate captain code
             </h2>
 
-            <p className="mt-2 text-sm text-white/60">
+            <p className="mt-2 text-sm text-white/60"
               Regenerating the claim code invalidates the old link and unclaims
               the team by removing the current manager assignment.
             </p>
