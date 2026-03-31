@@ -3,6 +3,7 @@
 // ========================================
 
 import Twilio from "twilio";
+import type { Prisma } from "@prisma/client";
 
 export type SendSmsWithTwilioInput = {
   to: string;
@@ -13,7 +14,7 @@ export type SendSmsWithTwilioInput = {
 export type SendSmsWithTwilioResult = {
   provider: "twilio";
   providerMessageId: string;
-  responsePayload: Record<string, unknown>;
+  responsePayload: Prisma.InputJsonValue;
   fromNumber: string | null;
   messagingServiceSid: string | null;
 };
@@ -85,7 +86,9 @@ function buildMessageCreateInput(input: SendSmsWithTwilioInput) {
   };
 }
 
-function sanitizeTwilioResponse(message: Awaited<ReturnType<Twilio["messages"]["create"]>>) {
+function sanitizeTwilioResponse(
+  message: Awaited<ReturnType<Twilio["messages"]["create"]>>,
+): Prisma.InputJsonValue {
   return {
     sid: message.sid,
     accountSid: message.accountSid,
@@ -102,7 +105,7 @@ function sanitizeTwilioResponse(message: Awaited<ReturnType<Twilio["messages"]["
     dateCreated: message.dateCreated?.toISOString?.() ?? null,
     dateSent: message.dateSent?.toISOString?.() ?? null,
     dateUpdated: message.dateUpdated?.toISOString?.() ?? null,
-  } satisfies Record<string, unknown>;
+  } as Prisma.InputJsonValue;
 }
 
 export async function sendSmsWithTwilio(
@@ -118,7 +121,8 @@ export async function sendSmsWithTwilio(
     provider: "twilio",
     providerMessageId: message.sid,
     fromNumber: message.from ?? configuredFromNumber ?? null,
-    messagingServiceSid: message.messagingServiceSid ?? configuredMessagingServiceSid ?? null,
+    messagingServiceSid:
+      message.messagingServiceSid ?? configuredMessagingServiceSid ?? null,
     responsePayload: sanitizeTwilioResponse(message),
   };
 }
