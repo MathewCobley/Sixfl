@@ -8,6 +8,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizePhoneNumber } from "@/lib/notifications/phone";
 
 export type UpsertNotificationRecipientInput = {
   sourceType: NotificationRecipientSourceType;
@@ -29,14 +30,15 @@ function normalizeEmail(email?: string | null) {
 }
 
 function normalizePhone(phone?: string | null) {
-  const value = phone?.trim().replace(/[^\d+]/g, "");
-  return value || null;
+  return normalizePhoneNumber(phone);
 }
 
 export async function upsertNotificationRecipient(
   input: UpsertNotificationRecipientInput,
 ) {
   const sourceId = input.sourceId?.trim() || null;
+  const displayName = input.displayName?.trim() || null;
+  const email = input.email?.trim() || null;
   const emailNormalized = normalizeEmail(input.email);
   const phoneNormalized = normalizePhone(input.phone);
 
@@ -50,23 +52,25 @@ export async function upsertNotificationRecipient(
     },
   });
 
+  const recipientData = {
+    audience: input.audience,
+    displayName,
+    email,
+    phone: phoneNormalized,
+    emailNormalized,
+    phoneNormalized,
+    marketingEmailOptIn: input.marketingEmailOptIn ?? false,
+    marketingSmsOptIn: input.marketingSmsOptIn ?? false,
+    transactionalEmailOptIn: input.transactionalEmailOptIn ?? true,
+    transactionalSmsOptIn: input.transactionalSmsOptIn ?? true,
+    metadata: input.metadata,
+    lastSyncedAt: new Date(),
+  };
+
   if (existing) {
     return prisma.notificationRecipient.update({
       where: { id: existing.id },
-      data: {
-        audience: input.audience,
-        displayName: input.displayName?.trim() || null,
-        email: input.email?.trim() || null,
-        phone: input.phone?.trim() || null,
-        emailNormalized,
-        phoneNormalized,
-        marketingEmailOptIn: input.marketingEmailOptIn ?? false,
-        marketingSmsOptIn: input.marketingSmsOptIn ?? false,
-        transactionalEmailOptIn: input.transactionalEmailOptIn ?? true,
-        transactionalSmsOptIn: input.transactionalSmsOptIn ?? true,
-        metadata: input.metadata,
-        lastSyncedAt: new Date(),
-      },
+      data: recipientData,
     });
   }
 
@@ -74,18 +78,7 @@ export async function upsertNotificationRecipient(
     data: {
       sourceType: input.sourceType,
       sourceId,
-      audience: input.audience,
-      displayName: input.displayName?.trim() || null,
-      email: input.email?.trim() || null,
-      phone: input.phone?.trim() || null,
-      emailNormalized,
-      phoneNormalized,
-      marketingEmailOptIn: input.marketingEmailOptIn ?? false,
-      marketingSmsOptIn: input.marketingSmsOptIn ?? false,
-      transactionalEmailOptIn: input.transactionalEmailOptIn ?? true,
-      transactionalSmsOptIn: input.transactionalSmsOptIn ?? true,
-      metadata: input.metadata,
-      lastSyncedAt: new Date(),
+      ...recipientData,
       preferences: {
         create: {},
       },

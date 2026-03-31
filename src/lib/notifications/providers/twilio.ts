@@ -3,6 +3,7 @@
 // ========================================
 
 import type { Prisma } from "@prisma/client";
+import { requireSmsReadyPhoneNumber } from "@/lib/notifications/phone";
 
 export type SendNotificationSmsInput = {
   to: string;
@@ -19,7 +20,7 @@ function getTwilioCredentials() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
   const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
   const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID?.trim();
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER?.trim();
+  const fromNumberRaw = process.env.TWILIO_PHONE_NUMBER?.trim();
 
   if (!accountSid) {
     throw new Error("TWILIO_ACCOUNT_SID is missing.");
@@ -29,7 +30,7 @@ function getTwilioCredentials() {
     throw new Error("TWILIO_AUTH_TOKEN is missing.");
   }
 
-  if (!messagingServiceSid && !fromNumber) {
+  if (!messagingServiceSid && !fromNumberRaw) {
     throw new Error(
       "Either TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER must be set.",
     );
@@ -39,7 +40,9 @@ function getTwilioCredentials() {
     accountSid,
     authToken,
     messagingServiceSid,
-    fromNumber,
+    fromNumber: messagingServiceSid
+      ? null
+      : requireSmsReadyPhoneNumber(fromNumberRaw),
   };
 }
 
@@ -47,9 +50,10 @@ export async function sendSmsWithTwilio(
   input: SendNotificationSmsInput,
 ): Promise<NotificationProviderSendResult> {
   const credentials = getTwilioCredentials();
+  const to = requireSmsReadyPhoneNumber(input.to);
 
   const body = new URLSearchParams({
-    To: input.to,
+    To: to,
     Body: input.body,
     ...(credentials.messagingServiceSid
       ? { MessagingServiceSid: credentials.messagingServiceSid }

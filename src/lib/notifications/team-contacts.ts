@@ -12,6 +12,10 @@ import {
   getNotificationRecipientBySource,
   upsertNotificationRecipient,
 } from "@/lib/notifications/recipients";
+import {
+  getPhoneDisplayValue,
+  normalizePhoneNumber,
+} from "@/lib/notifications/phone";
 
 export type TeamContactPoint = {
   key: string;
@@ -43,6 +47,23 @@ function cleanValue(value: string | null | undefined) {
   return text ? text : null;
 }
 
+function displayPhone(value: string | null | undefined) {
+  return getPhoneDisplayValue(value);
+}
+
+function getPreferredSmsPhone(
+  ...values: Array<string | null | undefined>
+): string | null {
+  for (const value of values) {
+    const normalized = normalizePhoneNumber(value);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
 function contactKey(input: {
   name?: string | null;
   email?: string | null;
@@ -52,7 +73,7 @@ function contactKey(input: {
   return [
     cleanValue(input.name) ?? "",
     cleanValue(input.email)?.toLowerCase() ?? "",
-    cleanValue(input.phone) ?? "",
+    displayPhone(input.phone) ?? "",
     input.source,
   ].join("::");
 }
@@ -160,7 +181,7 @@ export async function getTeamContactSnapshot(
       source: "Team record",
       name: cleanValue(team.contactName),
       email: cleanValue(team.contactEmail),
-      phone: cleanValue(team.contactPhone),
+      phone: displayPhone(team.contactPhone),
       isPrimary: true,
     });
   }
@@ -185,7 +206,7 @@ export async function getTeamContactSnapshot(
         source: "Team record",
         name: cleanValue(team.secondaryContactName),
         email: cleanValue(team.secondaryContactEmail),
-        phone: cleanValue(team.secondaryContactPhone),
+        phone: displayPhone(team.secondaryContactPhone),
         isPrimary: false,
       });
     }
@@ -228,7 +249,7 @@ export async function getTeamContactSnapshot(
         source: "Converted lead",
         name: cleanValue(team.convertedFromLead.contactName),
         email: cleanValue(team.convertedFromLead.email),
-        phone: cleanValue(team.convertedFromLead.phone),
+        phone: displayPhone(team.convertedFromLead.phone),
         isPrimary: contacts.length === 0,
       });
     }
@@ -271,7 +292,7 @@ export async function getTeamContactSnapshot(
         source: "Notification recipient",
         name: cleanValue(recipient.displayName),
         email: cleanValue(recipient.email),
-        phone: cleanValue(recipient.phone),
+        phone: displayPhone(recipient.phone),
         isPrimary: contacts.length === 0,
       });
     }
@@ -287,8 +308,13 @@ export async function getTeamContactSnapshot(
     primaryContact: {
       name: primary?.name ?? null,
       email: primary?.email ?? recipient?.email ?? null,
-      phone:
-        primary?.phone ?? recipient?.phone ?? team.convertedFromLead?.phone ?? null,
+      phone: getPreferredSmsPhone(
+        primary?.phone,
+        recipient?.phone,
+        team.contactPhone,
+        team.secondaryContactPhone,
+        team.convertedFromLead?.phone,
+      ),
       source: primary?.source ?? null,
     },
     contacts,

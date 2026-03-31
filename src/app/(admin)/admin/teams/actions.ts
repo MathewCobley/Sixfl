@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { getPhoneDisplayValue } from "@/lib/notifications/phone";
 
 function generateClaimCode(length = 8) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -75,6 +76,10 @@ function getTrimmedValue(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
 
+function getStoredPhoneValue(value: FormDataEntryValue | null) {
+  return getPhoneDisplayValue(getTrimmedValue(value)) || null;
+}
+
 export async function createTeamAction(formData: FormData) {
   await requireAdmin();
 
@@ -87,13 +92,14 @@ export async function createTeamAction(formData: FormData) {
 
   const contactName = getTrimmedValue(formData.get("contactName")) || null;
   const contactEmail = getTrimmedValue(formData.get("contactEmail")) || null;
-  const contactPhone = getTrimmedValue(formData.get("contactPhone")) || null;
+  const contactPhone = getStoredPhoneValue(formData.get("contactPhone"));
   const secondaryContactName =
     getTrimmedValue(formData.get("secondaryContactName")) || null;
   const secondaryContactEmail =
     getTrimmedValue(formData.get("secondaryContactEmail")) || null;
-  const secondaryContactPhone =
-    getTrimmedValue(formData.get("secondaryContactPhone")) || null;
+  const secondaryContactPhone = getStoredPhoneValue(
+    formData.get("secondaryContactPhone"),
+  );
 
   const leagueId = leagueIdRaw || null;
   const logoUrl = logoUrlRaw || null;
@@ -142,13 +148,14 @@ export async function updateTeamDetailsAction(formData: FormData) {
 
   const contactName = getTrimmedValue(formData.get("contactName")) || null;
   const contactEmail = getTrimmedValue(formData.get("contactEmail")) || null;
-  const contactPhone = getTrimmedValue(formData.get("contactPhone")) || null;
+  const contactPhone = getStoredPhoneValue(formData.get("contactPhone"));
   const secondaryContactName =
     getTrimmedValue(formData.get("secondaryContactName")) || null;
   const secondaryContactEmail =
     getTrimmedValue(formData.get("secondaryContactEmail")) || null;
-  const secondaryContactPhone =
-    getTrimmedValue(formData.get("secondaryContactPhone")) || null;
+  const secondaryContactPhone = getStoredPhoneValue(
+    formData.get("secondaryContactPhone"),
+  );
 
   if (!id) {
     redirect("/admin/teams?error=missing_id");
