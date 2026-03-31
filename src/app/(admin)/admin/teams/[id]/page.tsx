@@ -1128,9 +1128,8 @@ export default async function AdminTeamPage({
               Regenerate captain code
             </h2>
 
-            <p className="mt-2 text-sm text-white/60"
-              Regenerating the claim code invalidates the old link and unclaims
-              the team by removing the current manager assignment.
+            <p className="mt-2 text-sm text-white/60">
+              {`Regenerating the claim code invalidates the old link and unclaims the team by removing the current manager assignment.`}
             </p>
 
             <form action={regenerateClaimCodeAction} className="mt-5">
