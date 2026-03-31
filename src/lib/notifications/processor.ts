@@ -1,124 +1,151 @@
 // ========================================
-// File: src/lib/notifications/providers/twilio.ts
+// File: src/lib/notifications/processor.ts
 // ========================================
 
-import Twilio from "twilio";
+import { NotificationChannel } from "@prisma/client";
+import {
+  getDueNotificationDispatches,
+  markNotificationDispatchFailed,
+  markNotificationDispatchProcessing,
+  markNotificationDispatchSent,
+} from "./service";
+import { sendEmailWithResend } from "./providers/resend";
+import { sendSmsWithTwilio } from "./providers/twilio";
 
-export type SendSmsWithTwilioInput = {
-  to: string;
-  body: string;
-  mediaUrl?: string[];
+export type ProcessNotificationQueueResult = {
+  processed: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  items: Array<{
+    dispatchId: string;
+    status: "sent" | "failed" | "skipped";
+    channel: NotificationChannel;
+    provider?: string;
+    message?: string;
+  }>;
 };
 
-export type SendSmsWithTwilioResult = {
-  provider: "twilio";
-  providerMessageId: string;
-  responsePayload: Record<string, unknown>;
-  fromNumber: string | null;
-  messagingServiceSid: string | null;
-};
+export async function processNotificationQueue(limit = 25) {
+  const dueDispatches = await getDueNotificationDispatches(limit);
 
-let cachedClient: Twilio | null = null;
-
-function getRequiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
-}
-
-function getOptionalEnv(name: string): string | null {
-  const value = process.env[name]?.trim();
-  return value ? value : null;
-}
-
-function getTwilioClient(): Twilio {
-  if (cachedClient) {
-    return cachedClient;
-  }
-
-  const accountSid = getRequiredEnv("TWILIO_ACCOUNT_SID");
-  const authToken = getRequiredEnv("TWILIO_AUTH_TOKEN");
-
-  cachedClient = Twilio(accountSid, authToken);
-  return cachedClient;
-}
-
-function buildMessageCreateInput(input: SendSmsWithTwilioInput) {
-  const messagingServiceSid = getOptionalEnv("TWILIO_MESSAGING_SERVICE_SID");
-  const fromNumber = getOptionalEnv("TWILIO_PHONE_NUMBER");
-
-  if (!messagingServiceSid && !fromNumber) {
-    throw new Error(
-      "Twilio SMS sending requires either TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER.",
-    );
-  }
-
-  const payload: {
-    to: string;
-    body: string;
-    messagingServiceSid?: string;
-    from?: string;
-    mediaUrl?: string[];
-  } = {
-    to: input.to,
-    body: input.body,
+  const result: ProcessNotificationQueueResult = {
+    processed: dueDispatches.length,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    items: [],
   };
 
-  if (messagingServiceSid) {
-    payload.messagingServiceSid = messagingServiceSid;
-  } else if (fromNumber) {
-    payload.from = fromNumber;
+  for (const dispatch of dueDispatches) {
+    try {
+      if (dispatch.channel === NotificationChannel.EMAIL) {
+        if (!dispatch.recipient.email?.trim()) {
+          result.skipped += 1;
+          result.items.push({
+            dispatchId: dispatch.id,
+            status: "skipped",
+            channel: dispatch.channel,
+            message: "Recipient email missing.",
+          });
+          continue;
+        }
+
+        if (!dispatch.subject?.trim()) {
+          throw new Error("Email dispatch is missing a subject.");
+        }
+
+        await markNotificationDispatchProcessing(dispatch.id);
+
+        const sendResult = await sendEmailWithResend({
+          to: dispatch.recipient.email,
+          subject: dispatch.subject,
+          text: dispatch.bodyText,
+          html: dispatch.bodyHtml,
+        });
+
+        await markNotificationDispatchSent({
+          dispatchId: dispatch.id,
+          provider: sendResult.provider,
+          providerMessageId: sendResult.providerMessageId,
+          responsePayload: sendResult.responsePayload,
+        });
+
+        result.sent += 1;
+        result.items.push({
+          dispatchId: dispatch.id,
+          status: "sent",
+          channel: dispatch.channel,
+          provider: sendResult.provider,
+        });
+        continue;
+      }
+
+      if (dispatch.channel === NotificationChannel.SMS) {
+        if (!dispatch.recipient.phone?.trim()) {
+          result.skipped += 1;
+          result.items.push({
+            dispatchId: dispatch.id,
+            status: "skipped",
+            channel: dispatch.channel,
+            message: "Recipient phone missing.",
+          });
+          continue;
+        }
+
+        await markNotificationDispatchProcessing(dispatch.id);
+
+        const sendResult = await sendSmsWithTwilio({
+          to: dispatch.recipient.phone,
+          body: dispatch.bodyText,
+        });
+
+        await markNotificationDispatchSent({
+          dispatchId: dispatch.id,
+          provider: sendResult.provider,
+          providerMessageId: sendResult.providerMessageId,
+          responsePayload: sendResult.responsePayload,
+        });
+
+        result.sent += 1;
+        result.items.push({
+          dispatchId: dispatch.id,
+          status: "sent",
+          channel: dispatch.channel,
+          provider: sendResult.provider,
+        });
+        continue;
+      }
+
+      result.skipped += 1;
+      result.items.push({
+        dispatchId: dispatch.id,
+        status: "skipped",
+        channel: dispatch.channel,
+        message: "Unsupported notification channel.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Notification processing failed.";
+
+      await markNotificationDispatchFailed({
+        dispatchId: dispatch.id,
+        provider:
+          dispatch.channel === NotificationChannel.EMAIL ? "resend" : "twilio",
+        errorMessage: message,
+      });
+
+      result.failed += 1;
+      result.items.push({
+        dispatchId: dispatch.id,
+        status: "failed",
+        channel: dispatch.channel,
+        provider:
+          dispatch.channel === NotificationChannel.EMAIL ? "resend" : "twilio",
+        message,
+      });
+    }
   }
 
-  if (input.mediaUrl?.length) {
-    payload.mediaUrl = input.mediaUrl;
-  }
-
-  return {
-    payload,
-    configuredFromNumber: fromNumber,
-    configuredMessagingServiceSid: messagingServiceSid,
-  };
-}
-
-function sanitizeTwilioResponse(message: Awaited<ReturnType<Twilio["messages"]["create"]>>) {
-  return {
-    sid: message.sid,
-    accountSid: message.accountSid,
-    messagingServiceSid: message.messagingServiceSid ?? null,
-    from: message.from ?? null,
-    to: message.to ?? null,
-    status: message.status ?? null,
-    errorCode: message.errorCode ?? null,
-    errorMessage: message.errorMessage ?? null,
-    direction: message.direction ?? null,
-    price: message.price ?? null,
-    priceUnit: message.priceUnit ?? null,
-    uri: message.uri ?? null,
-    dateCreated: message.dateCreated?.toISOString?.() ?? null,
-    dateSent: message.dateSent?.toISOString?.() ?? null,
-    dateUpdated: message.dateUpdated?.toISOString?.() ?? null,
-  } satisfies Record<string, unknown>;
-}
-
-export async function sendSmsWithTwilio(
-  input: SendSmsWithTwilioInput,
-): Promise<SendSmsWithTwilioResult> {
-  const client = getTwilioClient();
-  const { payload, configuredFromNumber, configuredMessagingServiceSid } =
-    buildMessageCreateInput(input);
-
-  const message = await client.messages.create(payload);
-
-  return {
-    provider: "twilio",
-    providerMessageId: message.sid,
-    fromNumber: message.from ?? configuredFromNumber ?? null,
-    messagingServiceSid: message.messagingServiceSid ?? configuredMessagingServiceSid ?? null,
-    responsePayload: sanitizeTwilioResponse(message),
-  };
+  return result;
 }
