@@ -235,7 +235,7 @@ export default async function AdminTeamPage({
       },
       orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
       take: 20,
-    }),
+    })],);
 
   const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
 
