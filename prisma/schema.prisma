@@ -32,6 +32,9 @@ model User {
   createdTeams     Team[]        @relation("TeamCreatedBy")
   refereedFixtures Fixture[]     @relation("FixtureReferee")
   enteredResults   MatchResult[] @relation("ResultEnteredBy")
+
+  assignedMessageThreads MessageThread[] @relation("UserAssignedMessageThreads")
+  createdMessageEntries  MessageEntry[]  @relation("UserCreatedMessageEntries")
 }
 
 enum UserRole {
@@ -99,9 +102,10 @@ model League {
   badgeUrl     String?
   ctaText      String?
 
-  teams         Team[]
-  fixtures      Fixture[]
-  interestLeads InterestLead[]
+  teams          Team[]
+  fixtures       Fixture[]
+  interestLeads  InterestLead[]
+  messageThreads MessageThread[] @relation("LeagueMessageThreads")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -151,7 +155,8 @@ model Team {
   homeGames Fixture[]    @relation("HomeTeam")
   awayGames Fixture[]    @relation("AwayTeam")
 
-  convertedFromLead InterestLead? @relation("LeadConvertedTeam")
+  convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
+  messageThreads    MessageThread[] @relation("TeamMessageThreads")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -423,6 +428,39 @@ enum NotificationAttemptStatus {
   FAILED
 }
 
+/**
+ * SIXFL messaging system - stage 2 inbox
+ */
+
+enum MessageChannel {
+  SMS
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageThreadStatus {
+  OPEN
+  ARCHIVED
+  CLOSED
+}
+
+enum MessageParticipantRole {
+  ADMIN
+  CAPTAIN
+  CONTACT
+  SYSTEM
+}
+
+enum InboxAlertStatus {
+  PENDING
+  SENT
+  READ
+  DISMISSED
+}
+
 model NotificationRecipient {
   id String @id @default(cuid())
 
@@ -449,8 +487,9 @@ model NotificationRecipient {
   metadata     Json?
   lastSyncedAt DateTime?
 
-  preferences NotificationPreference?
-  dispatches  NotificationDispatch[]
+  preferences    NotificationPreference?
+  dispatches     NotificationDispatch[]
+  messageThreads MessageThread[]         @relation("NotificationRecipientMessageThreads")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -550,9 +589,10 @@ model NotificationDispatch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  recipient NotificationRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  template  NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  attempts  NotificationAttempt[]
+  recipient      NotificationRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  template       NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  attempts       NotificationAttempt[]
+  messageEntries MessageEntry[]        @relation("NotificationDispatchMessageEntries")
 
   @@index([recipientId])
   @@index([templateId])
@@ -582,4 +622,132 @@ model NotificationAttempt {
   @@index([dispatchId])
   @@index([status])
   @@index([attemptedAt])
+}
+
+model MessageThread {
+  id String @id @default(cuid())
+
+  channel MessageChannel      @default(SMS)
+  status  MessageThreadStatus @default(OPEN)
+
+  recipientId String?
+  teamId      String?
+  leagueId    String?
+
+  sourceType String?
+  sourceId   String?
+
+  contactName        String?
+  contactPhone       String?
+  phoneNormalized    String?
+  lastMessagePreview String?
+
+  assignedToUserId String?
+
+  latestMessageAt  DateTime?
+  latestInboundAt  DateTime?
+  latestOutboundAt DateTime?
+
+  unreadForAdminCount   Int @default(0)
+  unreadForCaptainCount Int @default(0)
+
+  lastInboundMessageId  String?
+  lastOutboundMessageId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipient      NotificationRecipient? @relation("NotificationRecipientMessageThreads", fields: [recipientId], references: [id], onDelete: SetNull)
+  team           Team?                  @relation("TeamMessageThreads", fields: [teamId], references: [id], onDelete: SetNull)
+  league         League?                @relation("LeagueMessageThreads", fields: [leagueId], references: [id], onDelete: SetNull)
+  assignedToUser User?                  @relation("UserAssignedMessageThreads", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  messages MessageEntry[]
+  alerts   InboxAlert[]
+
+  @@index([recipientId])
+  @@index([teamId])
+  @@index([leagueId])
+  @@index([assignedToUserId])
+  @@index([phoneNormalized])
+  @@index([status, latestMessageAt])
+  @@index([status, latestInboundAt])
+  @@index([unreadForAdminCount, latestInboundAt])
+  @@index([sourceType, sourceId])
+}
+
+model MessageEntry {
+  id String @id @default(cuid())
+
+  threadId String
+
+  channel         MessageChannel         @default(SMS)
+  direction       MessageDirection
+  participantRole MessageParticipantRole @default(CONTACT)
+
+  body String
+
+  fromNumber String?
+  toNumber   String?
+
+  provider          String?
+  providerMessageId String?
+  providerStatus    String?
+
+  twilioMessageSid String?
+  twilioAccountSid String?
+  twilioPayload    Json?
+
+  notificationDispatchId String?
+
+  createdByUserId String?
+
+  sentAt     DateTime?
+  receivedAt DateTime?
+  readAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  thread        MessageThread         @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  dispatch      NotificationDispatch? @relation("NotificationDispatchMessageEntries", fields: [notificationDispatchId], references: [id], onDelete: SetNull)
+  createdByUser User?                 @relation("UserCreatedMessageEntries", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  alert InboxAlert?
+
+  @@index([threadId, createdAt])
+  @@index([direction, createdAt])
+  @@index([participantRole, createdAt])
+  @@index([providerMessageId])
+  @@index([twilioMessageSid])
+  @@index([notificationDispatchId])
+  @@index([createdByUserId])
+  @@index([receivedAt])
+  @@index([sentAt])
+}
+
+model InboxAlert {
+  id String @id @default(cuid())
+
+  threadId  String
+  messageId String @unique
+
+  status InboxAlertStatus @default(PENDING)
+
+  type String
+
+  sentToEmail String?
+  emailedAt   DateTime?
+  readAt      DateTime?
+  dismissedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  thread  MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  message MessageEntry  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([threadId])
+  @@index([type, status])
 }

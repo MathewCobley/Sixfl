@@ -140,6 +140,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
   await requireAdmin();
 
   const id = getTrimmedValue(formData.get("id"));
+  const name = getTrimmedValue(formData.get("name"));
   const leagueIdRaw = getTrimmedValue(formData.get("leagueId"));
   const logoUrlRaw = getTrimmedValue(formData.get("logoUrl"));
   const latestKickoffTime = parseLatestKickoffTime(
@@ -161,12 +162,17 @@ export async function updateTeamDetailsAction(formData: FormData) {
     redirect("/admin/teams?error=missing_id");
   }
 
+  if (!name) {
+    redirect(`/admin/teams/${id}?error=missing_name`);
+  }
+
   const leagueId = leagueIdRaw || null;
   const logoUrl = logoUrlRaw || null;
 
   await prisma.team.update({
     where: { id },
     data: {
+      name,
       leagueId,
       logoUrl,
       latestKickoffTime,
