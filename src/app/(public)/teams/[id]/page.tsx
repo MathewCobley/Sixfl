@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/teams/[id]/page.tsx
+// File: src/app/(public)/teams/[id]/page.tsx
 // ========================================
 
 import Image from "next/image";
@@ -68,6 +68,7 @@ export default async function TeamPage({ params }: PageProps) {
         select: {
           name: true,
           slug: true,
+          badgeUrl: true,
           heroImageUrl: true,
           venueName: true,
           area: true,
@@ -84,7 +85,8 @@ export default async function TeamPage({ params }: PageProps) {
     normaliseLogoUrl(team.league?.heroImageUrl) ||
     "/venues/rossett_dark_trendy.jpg";
 
-  const leagueBadge = "/sixfl-badge.png";
+  const leagueBadge =
+    normaliseLogoUrl(team.league?.badgeUrl) || "/sixfl-badge.png";
 
   const nightLabel = formatPreferredNight(team.league?.dayOfWeek);
 
@@ -131,7 +133,7 @@ export default async function TeamPage({ params }: PageProps) {
               <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl" />
               <Image
                 src={leagueBadge}
-                alt="League badge"
+                alt={`${team.league?.name || "League"} badge`}
                 width={80}
                 height={80}
                 className="relative object-contain"

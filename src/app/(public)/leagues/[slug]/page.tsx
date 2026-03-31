@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/leagues/[slug]/page.tsx
+// File: src/app/(public)/leagues/[slug]/page.tsx
 // ========================================
 
 import Link from "next/link";
@@ -221,6 +221,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
       surface: true,
       description: true,
       heroImageUrl: true,
+      badgeUrl: true,
       ctaText: true,
       teams: {
         orderBy: {
@@ -273,6 +274,8 @@ export default async function LeagueLandingPage({ params }: PageProps) {
   const leagueTypeLabel = formatLeagueType(league.leagueType);
   const heroImageUrl =
     normaliseLogoUrl(league.heroImageUrl) || "/venues/rossett_dark_trendy.jpg";
+  const leagueBadge =
+    normaliseLogoUrl(league.badgeUrl) || "/sixfl-badge.png";
 
   const introText =
     league.description?.trim() ||
@@ -350,11 +353,30 @@ export default async function LeagueLandingPage({ params }: PageProps) {
           <div className="w-full rounded-[2rem] border border-white/10 bg-black/25 p-6 backdrop-blur-[3px] sm:p-8 lg:p-10">
             <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr] xl:items-end">
               <div className="max-w-4xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-400">
-                  SIXFL League
-                </p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/35 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                    <Image
+                      src={leagueBadge}
+                      alt={`${league.name} badge`}
+                      fill
+                      sizes="80px"
+                      className="object-contain p-2"
+                    />
+                  </div>
 
-                <h1 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-400">
+                      SIXFL League
+                    </p>
+                    {league.season ? (
+                      <p className="mt-2 text-sm text-white/55">
+                        {league.season}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
                   {league.name}
                 </h1>
 

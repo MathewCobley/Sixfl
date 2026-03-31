@@ -31,6 +31,7 @@ type LeagueFormValues = {
   surface: string;
   description: string;
   heroImageUrl: string;
+  badgeUrl: string;
   ctaText: string;
 };
 
@@ -232,6 +233,7 @@ export default function LeagueForm({
       surface: initialValues?.surface ?? "",
       description: initialValues?.description ?? "",
       heroImageUrl: initialValues?.heroImageUrl ?? "",
+      badgeUrl: initialValues?.badgeUrl ?? "",
       ctaText: initialValues?.ctaText ?? "",
     }),
     [initialValues],
@@ -423,6 +425,23 @@ export default function LeagueForm({
             hasError={Boolean(state.errors?.heroImageUrl)}
           />
           <FieldError errors={state.errors} name="heroImageUrl" />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="badgeUrl" className="block text-sm font-medium text-white">
+            League badge URL
+          </label>
+          <Input
+            id="badgeUrl"
+            name="badgeUrl"
+            defaultValue={values.badgeUrl}
+            placeholder="/leagues/harrogate-tuesday-mens-rossett-sports.png"
+            hasError={Boolean(state.errors?.badgeUrl)}
+          />
+          <p className="text-xs text-white/40">
+            Use a full URL or a site-relative path beginning with /.
+          </p>
+          <FieldError errors={state.errors} name="badgeUrl" />
         </div>
 
         <div className="space-y-2 md:col-span-2">

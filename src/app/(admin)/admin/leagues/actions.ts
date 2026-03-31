@@ -46,6 +46,7 @@ type ParsedLeagueInput = {
   surface: string | null;
   description: string | null;
   heroImageUrl: string | null;
+  badgeUrl: string | null;
   ctaText: string | null;
 };
 
@@ -93,6 +94,10 @@ function parseBoolean(value: FormDataEntryValue | null) {
   return text === "true" || text === "on" || text === "1";
 }
 
+function isValidImagePath(value: string) {
+  return /^https?:\/\//i.test(value) || value.startsWith("/");
+}
+
 function parseLeagueInput(formData: FormData): {
   data: ParsedLeagueInput;
   errors: Record<string, string[]>;
@@ -111,6 +116,7 @@ function parseLeagueInput(formData: FormData): {
   const surface = normaliseText(formData.get("surface"));
   const description = normaliseText(formData.get("description"));
   const heroImageUrl = normaliseText(formData.get("heroImageUrl"));
+  const badgeUrl = normaliseText(formData.get("badgeUrl"));
   const ctaText = normaliseText(formData.get("ctaText"));
 
   const isActive = parseBoolean(formData.get("isActive"));
@@ -152,13 +158,15 @@ function parseLeagueInput(formData: FormData): {
     errors.leagueType = ["Please choose a valid league type."];
   }
 
-  if (
-    heroImageUrl &&
-    !/^https?:\/\//i.test(heroImageUrl) &&
-    !heroImageUrl.startsWith("/")
-  ) {
+  if (heroImageUrl && !isValidImagePath(heroImageUrl)) {
     errors.heroImageUrl = [
       "Hero image must be a full URL or a site-relative path starting with /.",
+    ];
+  }
+
+  if (badgeUrl && !isValidImagePath(badgeUrl)) {
+    errors.badgeUrl = [
+      "League badge must be a full URL or a site-relative path starting with /.",
     ];
   }
 
@@ -181,6 +189,7 @@ function parseLeagueInput(formData: FormData): {
       surface,
       description,
       heroImageUrl,
+      badgeUrl,
       ctaText,
     },
     errors,
