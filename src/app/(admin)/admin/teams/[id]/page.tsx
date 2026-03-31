@@ -1,28 +1,63 @@
 // ========================================
-// File: src/app/admin/teams/[id]/page.tsx
-// ========================================
-
-// ========================================
-// Imports
+// File: src/app/(admin)/admin/teams/[id]/page.tsx
 // ========================================
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import {
+  NotificationChannel,
+  NotificationDispatchStatus,
+  UserRole,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import {
   deleteTeamAction,
   regenerateClaimCodeAction,
+  sendTeamMessageAction,
   updateTeamDetailsAction,
 } from "../actions";
 import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
 import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
 
-// ========================================
-// Types
-// ========================================
+function formatDispatchStatus(status: NotificationDispatchStatus) {
+  switch (status) {
+    case "QUEUED":
+      return "Queued";
+    case "PROCESSING":
+      return "Processing";
+    case "SENT":
+      return "Sent";
+    case "FAILED":
+      return "Failed";
+    case "CANCELLED":
+      return "Cancelled";
+    case "SKIPPED":
+      return "Skipped";
+    default:
+      return status;
+  }
+}
+
+function formatChannel(channel: NotificationChannel) {
+  return channel === "SMS" ? "SMS" : "Email";
+}
+
+function getDispatchOriginLabel(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return "Sent to team";
+  }
+
+  const value = (metadata as Record<string, unknown>).originLabel;
+
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  return "Sent to team";
+}
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -30,12 +65,12 @@ type Props = {
     error?: string;
     regenerated?: string;
     saved?: string;
+    deleted?: string;
+    messageQueued?: string;
+    channel?: string;
+    composeError?: string;
   }>;
 };
-
-// ========================================
-// Page
-// ========================================
 
 export default async function AdminTeamPage({
   params,
@@ -45,9 +80,6 @@ export default async function AdminTeamPage({
 
   const { id } = await params;
   const sp = (await searchParams) ?? {};
-  const error = sp.error;
-  const regenerated = sp.regenerated === "1";
-  const saved = sp.saved === "1";
 
   if (!id) {
     notFound();
@@ -77,6 +109,22 @@ export default async function AdminTeamPage({
             slug: true,
           },
         },
+        convertedFromLead: {
+          select: {
+            id: true,
+            contactName: true,
+            email: true,
+            phone: true,
+            area: true,
+          },
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     }),
     prisma.league.findMany({
@@ -94,6 +142,26 @@ export default async function AdminTeamPage({
     notFound();
   }
 
+  const { snapshot: contactSnapshot } = await upsertTeamNotificationRecipient(id);
+
+  const dispatches = await prisma.notificationDispatch.findMany({
+    where: {
+      sourceType: "TEAM",
+      sourceId: id,
+    },
+    include: {
+      recipient: true,
+      attempts: {
+        orderBy: {
+          attemptedAt: "desc",
+        },
+        take: 3,
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    take: 50,
+  });
+
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(team.claimCode)}`;
 
@@ -101,8 +169,11 @@ export default async function AdminTeamPage({
   const hasManager = Boolean(managerUser?.email);
   const claimedByCaptain = hasManager && managerUser?.role !== UserRole.ADMIN;
 
+  const queuedMessage = sp.messageQueued === "1";
+  const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
           <Link
@@ -116,7 +187,8 @@ export default async function AdminTeamPage({
 
           <p className="text-sm text-white/60">
             Admin view for this team. Manage league assignment, branding,
-            captain claim status, team access, and fixture timing preferences.
+            captain claim status, team access, fixture timing preferences, team
+            contacts, and email/SMS history.
           </p>
         </div>
 
@@ -139,21 +211,51 @@ export default async function AdminTeamPage({
         </div>
       </div>
 
-      {(saved || regenerated || error) && (
-        <div className="space-y-1 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm">
-          {saved ? (
+      {(sp.saved === "1" ||
+        sp.regenerated === "1" ||
+        sp.error ||
+        queuedMessage ||
+        sp.composeError) && (
+        <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm">
+          {sp.saved === "1" ? (
             <div className="text-emerald-300">Team details updated.</div>
           ) : null}
 
-          {regenerated ? (
+          {sp.regenerated === "1" ? (
             <div className="text-emerald-300">
               New claim code generated and the team was unclaimed.
             </div>
           ) : null}
 
-          {error === "has_fixtures" ? (
+          {queuedMessage ? (
+            <div className="text-emerald-300">
+              {queuedChannel} queued for this team.
+            </div>
+          ) : null}
+
+          {sp.error === "has_fixtures" ? (
             <div className="text-red-300">
               Can’t delete this team because fixtures already exist for it.
+            </div>
+          ) : null}
+
+          {sp.composeError === "missing_subject" ? (
+            <div className="text-red-300">Email subject is required.</div>
+          ) : null}
+
+          {sp.composeError === "missing_body" ? (
+            <div className="text-red-300">Message body is required.</div>
+          ) : null}
+
+          {sp.composeError === "missing_email" ? (
+            <div className="text-red-300">
+              No primary team email is available yet.
+            </div>
+          ) : null}
+
+          {sp.composeError === "missing_phone" ? (
+            <div className="text-red-300">
+              No primary team mobile number is available yet.
             </div>
           ) : null}
         </div>
@@ -283,6 +385,107 @@ export default async function AdminTeamPage({
                 </div>
               </div>
 
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-2">
+                  <label htmlFor="contactName" className="text-sm text-white/60">
+                    Primary contact name
+                  </label>
+                  <input
+                    id="contactName"
+                    name="contactName"
+                    type="text"
+                    defaultValue={
+                      team.contactName ?? contactSnapshot.primaryContact.name ?? ""
+                    }
+                    placeholder="John Smith"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="contactEmail" className="text-sm text-white/60">
+                    Primary contact email
+                  </label>
+                  <input
+                    id="contactEmail"
+                    name="contactEmail"
+                    type="email"
+                    defaultValue={
+                      team.contactEmail ?? contactSnapshot.primaryContact.email ?? ""
+                    }
+                    placeholder="captain@team.com"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="contactPhone" className="text-sm text-white/60">
+                    Primary contact mobile
+                  </label>
+                  <input
+                    id="contactPhone"
+                    name="contactPhone"
+                    type="text"
+                    defaultValue={
+                      team.contactPhone ?? contactSnapshot.primaryContact.phone ?? ""
+                    }
+                    placeholder="07700 900123"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="secondaryContactName"
+                    className="text-sm text-white/60"
+                  >
+                    Secondary contact name
+                  </label>
+                  <input
+                    id="secondaryContactName"
+                    name="secondaryContactName"
+                    type="text"
+                    defaultValue={team.secondaryContactName ?? ""}
+                    placeholder="Assistant manager"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="secondaryContactEmail"
+                    className="text-sm text-white/60"
+                  >
+                    Secondary contact email
+                  </label>
+                  <input
+                    id="secondaryContactEmail"
+                    name="secondaryContactEmail"
+                    type="email"
+                    defaultValue={team.secondaryContactEmail ?? ""}
+                    placeholder="assistant@team.com"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="secondaryContactPhone"
+                    className="text-sm text-white/60"
+                  >
+                    Secondary contact mobile
+                  </label>
+                  <input
+                    id="secondaryContactPhone"
+                    name="secondaryContactPhone"
+                    type="text"
+                    defaultValue={team.secondaryContactPhone ?? ""}
+                    placeholder="07700 900456"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+              </div>
+
               <button
                 type="submit"
                 className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
@@ -290,6 +493,196 @@ export default async function AdminTeamPage({
                 Save team details
               </button>
             </form>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Team contacts
+                </h2>
+                <p className="mt-1 text-sm text-white/60">
+                  All known contact points for this team, including email
+                  addresses and mobile numbers.
+                </p>
+              </div>
+
+              <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-medium text-white/70">
+                {contactSnapshot.contacts.length} contact
+                {contactSnapshot.contacts.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/90">
+                  Primary contact
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-white/80">
+                  <div>
+                    <span className="text-white/45">Name:</span>{" "}
+                    {contactSnapshot.primaryContact.name ?? "—"}
+                  </div>
+                  <div>
+                    <span className="text-white/45">Email:</span>{" "}
+                    {contactSnapshot.primaryContact.email ?? "—"}
+                  </div>
+                  <div>
+                    <span className="text-white/45">Phone:</span>{" "}
+                    {contactSnapshot.primaryContact.phone ?? "—"}
+                  </div>
+                  <div>
+                    <span className="text-white/45">Source:</span>{" "}
+                    {contactSnapshot.primaryContact.source ?? "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+                  Lead / origin details
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-white/80">
+                  <div>
+                    <span className="text-white/45">Converted from lead:</span>{" "}
+                    {team.convertedFromLead ? "Yes" : "No"}
+                  </div>
+                  <div>
+                    <span className="text-white/45">Lead name:</span>{" "}
+                    {team.convertedFromLead?.contactName ?? "—"}
+                  </div>
+                  <div>
+                    <span className="text-white/45">Lead email:</span>{" "}
+                    {team.convertedFromLead?.email ?? "—"}
+                  </div>
+                  <div>
+                    <span className="text-white/45">Lead phone:</span>{" "}
+                    {team.convertedFromLead?.phone ?? "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 overflow-hidden rounded-2xl border border-white/10">
+              <div className="divide-y divide-white/10">
+                {contactSnapshot.contacts.length === 0 ? (
+                  <div className="bg-black/20 px-4 py-5 text-sm text-white/55">
+                    No team contact details are available yet.
+                  </div>
+                ) : (
+                  contactSnapshot.contacts.map((contact) => (
+                    <div
+                      key={contact.key}
+                      className="grid gap-3 bg-black/20 px-4 py-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-center"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-white">
+                          {contact.name ?? "Unnamed contact"}
+                        </div>
+                        <div className="mt-1 text-xs text-white/45">
+                          {contact.label} · {contact.source}
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-white/80">
+                        {contact.email ?? "—"}
+                      </div>
+
+                      <div className="text-sm text-white/80">
+                        {contact.phone ?? "—"}
+                      </div>
+
+                      <div>
+                        {contact.isPrimary ? (
+                          <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                            Primary
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Team message history
+                </h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Everything sent to this team from team level or league level
+                  appears here.
+                </p>
+              </div>
+
+              <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-medium text-white/70">
+                {dispatches.length} item{dispatches.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            <div className="mt-6 overflow-hidden rounded-2xl border border-white/10">
+              <div className="divide-y divide-white/10">
+                {dispatches.length === 0 ? (
+                  <div className="bg-black/20 px-4 py-5 text-sm text-white/55">
+                    No email or SMS history for this team yet.
+                  </div>
+                ) : (
+                  dispatches.map((dispatch) => (
+                    <div key={dispatch.id} className="space-y-3 bg-black/20 px-4 py-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
+                              {formatChannel(dispatch.channel)}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
+                              {formatDispatchStatus(dispatch.status)}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
+                              {getDispatchOriginLabel(dispatch.metadata)}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 text-sm font-semibold text-white">
+                            {dispatch.subject ||
+                              (dispatch.channel === "SMS"
+                                ? "SMS message"
+                                : "Email")}
+                          </div>
+
+                          <div className="mt-1 text-xs text-white/45">
+                            To: {dispatch.recipient.displayName || team.name} ·{" "}
+                            {dispatch.channel === "SMS"
+                              ? dispatch.recipient.phone || "No phone"
+                              : dispatch.recipient.email || "No email"}
+                          </div>
+                        </div>
+
+                        <div className="text-right text-xs text-white/45">
+                          <div>Queued: {dispatch.createdAt.toLocaleString()}</div>
+                          {dispatch.sentAt ? (
+                            <div>Sent: {dispatch.sentAt.toLocaleString()}</div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
+                        {dispatch.bodyText}
+                      </div>
+
+                      {dispatch.failureReason ? (
+                        <div className="text-xs text-red-300">
+                          Failure: {dispatch.failureReason}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -328,9 +721,16 @@ export default async function AdminTeamPage({
               </div>
 
               <div className="flex items-center justify-between">
-                <span>Captain email</span>
+                <span>Primary email</span>
                 <span className="text-right font-medium text-white">
-                  {managerUser?.email ?? "—"}
+                  {contactSnapshot.primaryContact.email ?? "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Primary phone</span>
+                <span className="text-right font-medium text-white">
+                  {contactSnapshot.primaryContact.phone ?? "—"}
                 </span>
               </div>
 
@@ -339,6 +739,97 @@ export default async function AdminTeamPage({
                 <span className="font-mono text-xs text-white">{team.id}</span>
               </div>
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <h2 className="text-lg font-semibold text-white">Send email</h2>
+
+            <form action={sendTeamMessageAction} className="mt-4 space-y-4">
+              <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
+              <input type="hidden" name="channel" value="EMAIL" />
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">To</label>
+                <input
+                  value={contactSnapshot.primaryContact.email ?? ""}
+                  disabled
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">
+                  Subject
+                </label>
+                <input
+                  name="subject"
+                  placeholder="League update for your team"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">
+                  Message
+                </label>
+                <textarea
+                  name="body"
+                  rows={9}
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+                  placeholder={`Hi ${
+                    contactSnapshot.primaryContact.name || team.name
+                  },\n\nWe wanted to update you about your team.\n\nThanks,\nSIXFL`}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+              >
+                Queue email
+              </button>
+            </form>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <h2 className="text-lg font-semibold text-white">Send SMS</h2>
+
+            <form action={sendTeamMessageAction} className="mt-4 space-y-4">
+              <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
+              <input type="hidden" name="channel" value="SMS" />
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">
+                  Mobile
+                </label>
+                <input
+                  value={contactSnapshot.primaryContact.phone ?? ""}
+                  disabled
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">
+                  Message
+                </label>
+                <textarea
+                  name="body"
+                  rows={6}
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+                  placeholder="SIXFL: quick update for your team. Please check your email or reply if you need anything."
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white transition hover:bg-white/10"
+              >
+                Queue SMS
+              </button>
+            </form>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">

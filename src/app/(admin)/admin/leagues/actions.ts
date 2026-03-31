@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/leagues/actions.ts
+// File: src/app/(admin)/admin/leagues/actions.ts
 // ========================================
 
 "use server";
@@ -10,9 +10,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { LeagueType, PreferredNight } from "@prisma/client";
+import {
+  LeagueType,
+  NotificationAudience,
+  NotificationChannel,
+  PreferredNight,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { queueDirectNotification } from "@/lib/notifications/service";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 
 // ========================================
 // Types
@@ -331,6 +338,96 @@ export async function updateLeagueAction(
     success: true,
     message: "League updated successfully.",
   };
+}
+
+export async function sendLeagueTeamsMessageAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const leagueId = String(formData.get("leagueId") ?? "").trim();
+  const channel =
+    String(formData.get("channel") ?? "EMAIL").trim().toUpperCase() === "SMS"
+      ? NotificationChannel.SMS
+      : NotificationChannel.EMAIL;
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+
+  if (!leagueId) {
+    redirect("/admin/leagues");
+  }
+
+  if (!body) {
+    redirect(`/admin/leagues/${leagueId}?messageError=missing_body`);
+  }
+
+  if (channel === NotificationChannel.EMAIL && !subject) {
+    redirect(`/admin/leagues/${leagueId}?messageError=missing_subject`);
+  }
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      id: true,
+      name: true,
+      season: true,
+      teams: {
+        select: {
+          id: true,
+          name: true,
+        },
+        orderBy: { name: "asc" },
+      },
+    },
+  });
+
+  if (!league) {
+    redirect("/admin/leagues");
+  }
+
+  let sentCount = 0;
+
+  for (const team of league.teams) {
+    const { recipient } = await upsertTeamNotificationRecipient(team.id);
+
+    if (channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
+      continue;
+    }
+
+    if (channel === NotificationChannel.SMS && !recipient.phone?.trim()) {
+      continue;
+    }
+
+    await queueDirectNotification({
+      recipientId: recipient.id,
+      channel,
+      audience: NotificationAudience.TEAM,
+      subject: channel === NotificationChannel.EMAIL ? subject : null,
+      body,
+      isTransactional: true,
+      sourceType: "TEAM",
+      sourceId: team.id,
+      metadata: {
+        origin: "league_admin",
+        originLabel: `Sent from league page: ${league.name}`,
+        leagueId: league.id,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        teamId: team.id,
+        teamName: team.name,
+      },
+      createdByUserId: user?.id ?? null,
+    });
+
+    sentCount += 1;
+  }
+
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  for (const team of league.teams) {
+    revalidatePath(`/admin/teams/${team.id}`);
+  }
+
+  redirect(
+    `/admin/leagues/${leagueId}?messageQueued=1&messageCount=${sentCount}&channel=${channel.toLowerCase()}`,
+  );
 }
 
 export async function deleteLeagueAction(leagueId: string) {

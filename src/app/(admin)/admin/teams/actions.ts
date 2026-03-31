@@ -4,10 +4,17 @@
 
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  NotificationAudience,
+  NotificationChannel,
+  TeamRole,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { TeamRole } from "@prisma/client";
+import { queueDirectNotification } from "@/lib/notifications/service";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 
 function generateClaimCode(length = 8) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -59,15 +66,34 @@ function parseLatestKickoffTime(value: FormDataEntryValue | null) {
   return raw;
 }
 
+function getSafeRedirectPath(value: FormDataEntryValue | null, fallback: string) {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function getTrimmedValue(value: FormDataEntryValue | null) {
+  return String(value ?? "").trim();
+}
+
 export async function createTeamAction(formData: FormData) {
   await requireAdmin();
 
-  const name = String(formData.get("name") ?? "").trim();
-  const leagueIdRaw = String(formData.get("leagueId") ?? "").trim();
-  const logoUrlRaw = String(formData.get("logoUrl") ?? "").trim();
+  const name = getTrimmedValue(formData.get("name"));
+  const leagueIdRaw = getTrimmedValue(formData.get("leagueId"));
+  const logoUrlRaw = getTrimmedValue(formData.get("logoUrl"));
   const latestKickoffTime = parseLatestKickoffTime(
     formData.get("latestKickoffTime"),
   );
+
+  const contactName = getTrimmedValue(formData.get("contactName")) || null;
+  const contactEmail = getTrimmedValue(formData.get("contactEmail")) || null;
+  const contactPhone = getTrimmedValue(formData.get("contactPhone")) || null;
+  const secondaryContactName =
+    getTrimmedValue(formData.get("secondaryContactName")) || null;
+  const secondaryContactEmail =
+    getTrimmedValue(formData.get("secondaryContactEmail")) || null;
+  const secondaryContactPhone =
+    getTrimmedValue(formData.get("secondaryContactPhone")) || null;
 
   const leagueId = leagueIdRaw || null;
   const logoUrl = logoUrlRaw || null;
@@ -78,15 +104,28 @@ export async function createTeamAction(formData: FormData) {
 
   const claimCode = await generateUniqueClaimCode();
 
-  await prisma.team.create({
+  const team = await prisma.team.create({
     data: {
       name,
       claimCode,
       leagueId,
       logoUrl,
       latestKickoffTime,
+      contactName,
+      contactEmail,
+      contactPhone,
+      secondaryContactName,
+      secondaryContactEmail,
+      secondaryContactPhone,
     },
   });
+
+  await upsertTeamNotificationRecipient(team.id);
+
+  revalidatePath("/admin/teams");
+  if (leagueId) {
+    revalidatePath(`/admin/leagues/${leagueId}`);
+  }
 
   redirect("/admin/teams");
 }
@@ -94,12 +133,22 @@ export async function createTeamAction(formData: FormData) {
 export async function updateTeamDetailsAction(formData: FormData) {
   await requireAdmin();
 
-  const id = String(formData.get("id") ?? "").trim();
-  const leagueIdRaw = String(formData.get("leagueId") ?? "").trim();
-  const logoUrlRaw = String(formData.get("logoUrl") ?? "").trim();
+  const id = getTrimmedValue(formData.get("id"));
+  const leagueIdRaw = getTrimmedValue(formData.get("leagueId"));
+  const logoUrlRaw = getTrimmedValue(formData.get("logoUrl"));
   const latestKickoffTime = parseLatestKickoffTime(
     formData.get("latestKickoffTime"),
   );
+
+  const contactName = getTrimmedValue(formData.get("contactName")) || null;
+  const contactEmail = getTrimmedValue(formData.get("contactEmail")) || null;
+  const contactPhone = getTrimmedValue(formData.get("contactPhone")) || null;
+  const secondaryContactName =
+    getTrimmedValue(formData.get("secondaryContactName")) || null;
+  const secondaryContactEmail =
+    getTrimmedValue(formData.get("secondaryContactEmail")) || null;
+  const secondaryContactPhone =
+    getTrimmedValue(formData.get("secondaryContactPhone")) || null;
 
   if (!id) {
     redirect("/admin/teams?error=missing_id");
@@ -114,17 +163,111 @@ export async function updateTeamDetailsAction(formData: FormData) {
       leagueId,
       logoUrl,
       latestKickoffTime,
+      contactName,
+      contactEmail,
+      contactPhone,
+      secondaryContactName,
+      secondaryContactEmail,
+      secondaryContactPhone,
     },
   });
 
+  await upsertTeamNotificationRecipient(id);
+
+  revalidatePath("/admin/teams");
+  revalidatePath(`/admin/teams/${id}`);
+  if (leagueId) {
+    revalidatePath(`/admin/leagues/${leagueId}`);
+  }
+
   redirect(`/admin/teams/${id}?saved=1`);
+}
+
+export async function sendTeamMessageAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const teamId = getTrimmedValue(formData.get("teamId"));
+  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
+  const from = getSafeRedirectPath(
+    formData.get("from"),
+    `/admin/teams/${teamId}`,
+  );
+  const subject = getTrimmedValue(formData.get("subject"));
+  const body = getTrimmedValue(formData.get("body"));
+
+  if (!teamId) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  if (!body) {
+    redirect(`${from}?composeError=missing_body`);
+  }
+
+  const channel =
+    channelInput === "SMS"
+      ? NotificationChannel.SMS
+      : NotificationChannel.EMAIL;
+
+  if (channel === NotificationChannel.EMAIL && !subject) {
+    redirect(`${from}?composeError=missing_subject`);
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      leagueId: true,
+    },
+  });
+
+  if (!team) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
+
+  if (channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
+    redirect(`${from}?composeError=missing_email`);
+  }
+
+  if (channel === NotificationChannel.SMS && !recipient.phone?.trim()) {
+    redirect(`${from}?composeError=missing_phone`);
+  }
+
+  await queueDirectNotification({
+    recipientId: recipient.id,
+    channel,
+    audience: NotificationAudience.TEAM,
+    subject: channel === NotificationChannel.EMAIL ? subject : null,
+    body,
+    isTransactional: true,
+    sourceType: "TEAM",
+    sourceId: teamId,
+    metadata: {
+      origin: "team_admin",
+      originLabel: "Sent from team page",
+      teamId,
+      teamName: snapshot.teamName,
+      leagueId: snapshot.leagueId,
+      leagueName: snapshot.leagueName,
+    },
+    createdByUserId: user?.id ?? null,
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath("/admin/teams");
+  if (team.leagueId) {
+    revalidatePath(`/admin/leagues/${team.leagueId}`);
+  }
+
+  redirect(`${from}?messageQueued=1&channel=${channel.toLowerCase()}`);
 }
 
 export async function regenerateClaimCodeAction(formData: FormData) {
   await requireAdmin();
 
-  const id = String(formData.get("id") ?? "").trim();
-  const from = String(formData.get("from") ?? "/admin/teams").trim();
+  const id = getTrimmedValue(formData.get("id"));
+  const from = getSafeRedirectPath(formData.get("from"), "/admin/teams");
 
   if (!id) {
     redirect(`${from}?error=missing_id`);
@@ -147,14 +290,17 @@ export async function regenerateClaimCodeAction(formData: FormData) {
     }),
   ]);
 
+  revalidatePath("/admin/teams");
+  revalidatePath(`/admin/teams/${id}`);
+
   redirect(`${from}?regenerated=1`);
 }
 
 export async function deleteTeamAction(formData: FormData) {
   await requireAdmin();
 
-  const id = String(formData.get("id") ?? "").trim();
-  const from = String(formData.get("from") ?? "/admin/teams").trim();
+  const id = getTrimmedValue(formData.get("id"));
+  const from = getSafeRedirectPath(formData.get("from"), "/admin/teams");
 
   if (!id) {
     redirect(`${from}?error=missing_id`);
@@ -170,9 +316,21 @@ export async function deleteTeamAction(formData: FormData) {
     redirect(`${from}?error=has_fixtures`);
   }
 
+  const team = await prisma.team.findUnique({
+    where: { id },
+    select: {
+      leagueId: true,
+    },
+  });
+
   await prisma.team.delete({
     where: { id },
   });
+
+  revalidatePath("/admin/teams");
+  if (team?.leagueId) {
+    revalidatePath(`/admin/leagues/${team.leagueId}`);
+  }
 
   redirect(`${from}?deleted=1`);
 }

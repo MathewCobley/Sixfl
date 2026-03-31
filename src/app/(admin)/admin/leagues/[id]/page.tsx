@@ -1,34 +1,19 @@
 // ========================================
-// File: src/app/admin/leagues/[id]/page.tsx
-// ========================================
-
-// ========================================
-// Imports
+// File: src/app/(admin)/admin/leagues/[id]/page.tsx
 // ========================================
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
 import LeagueForm from "@/components/admin/leagues/LeagueForm";
 import TeamBadge from "@/components/admin/TeamBadge";
 import {
   deleteLeagueAction,
+  sendLeagueTeamsMessageAction,
   updateLeagueAction,
 } from "@/app/(admin)/admin/leagues/actions";
-
-// ========================================
-// Types
-// ========================================
-
-type Props = {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-};
-
-// ========================================
-// Helpers
-// ========================================
 
 function formatDay(dayOfWeek: string | null) {
   if (!dayOfWeek) {
@@ -74,9 +59,10 @@ function formatLeagueType(leagueType: string | null) {
   }
 }
 
-// ========================================
-// Page
-// ========================================
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
 export default async function EditLeaguePage({
   params,
@@ -124,11 +110,26 @@ export default async function EditLeaguePage({
     notFound();
   }
 
+  const teamContacts = await Promise.all(
+    league.teams.map((team) => getTeamContactSnapshot(team.id)),
+  );
+
+  const contactMap = new Map<string, NonNullable<(typeof teamContacts)[number]>>();
+  for (const snapshot of teamContacts) {
+    if (snapshot) {
+      contactMap.set(snapshot.teamId, snapshot);
+    }
+  }
+
   const boundUpdateAction = updateLeagueAction.bind(null, league.id);
   const boundDeleteAction = deleteLeagueAction.bind(null, league.id);
 
   const created = resolvedSearchParams?.created === "1";
   const deleteError = resolvedSearchParams?.deleteError === "linked-records";
+  const messageQueued = resolvedSearchParams?.messageQueued === "1";
+  const messageCount = Number(resolvedSearchParams?.messageCount ?? 0) || 0;
+  const channel = resolvedSearchParams?.channel === "sms" ? "SMS" : "Email";
+  const messageError = resolvedSearchParams?.messageError;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -179,6 +180,25 @@ export default async function EditLeaguePage({
         </div>
       ) : null}
 
+      {messageQueued ? (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          {channel} queued for {messageCount} team
+          {messageCount === 1 ? "" : "s"} in this league.
+        </div>
+      ) : null}
+
+      {messageError === "missing_subject" ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Email subject is required.
+        </div>
+      ) : null}
+
+      {messageError === "missing_body" ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Message body is required.
+        </div>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         <div className="space-y-6">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
@@ -209,13 +229,97 @@ export default async function EditLeaguePage({
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+            <h2 className="text-lg font-semibold text-white">
+              Message all teams in this league
+            </h2>
+            <p className="mt-1 text-sm text-white/60">
+              Each message is logged against the individual team, so it will
+              still be visible from inside that team page.
+            </p>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <form
+                action={sendLeagueTeamsMessageAction}
+                className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-5"
+              >
+                <input type="hidden" name="leagueId" value={league.id} />
+                <input type="hidden" name="channel" value="EMAIL" />
+
+                <div className="text-sm font-semibold text-white">
+                  Bulk email
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">
+                    Subject
+                  </label>
+                  <input
+                    name="subject"
+                    placeholder="Important update for all teams"
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">
+                    Message
+                  </label>
+                  <textarea
+                    name="body"
+                    rows={8}
+                    className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+                    placeholder="Hi all,\n\nHere is the latest league update for your team..."
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+                >
+                  Queue email to teams
+                </button>
+              </form>
+
+              <form
+                action={sendLeagueTeamsMessageAction}
+                className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-5"
+              >
+                <input type="hidden" name="leagueId" value={league.id} />
+                <input type="hidden" name="channel" value="SMS" />
+
+                <div className="text-sm font-semibold text-white">Bulk SMS</div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">
+                    Message
+                  </label>
+                  <textarea
+                    name="body"
+                    rows={8}
+                    className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+                    placeholder="SIXFL: please check your latest fixture / league update and reply if needed."
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white transition hover:bg-white/10"
+                >
+                  Queue SMS to teams
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">
                   Teams in this league
                 </h2>
                 <p className="mt-1 text-sm text-white/60">
-                  Real linked teams for this league.
+                  Real linked teams for this league, including the contact
+                  details you can message.
                 </p>
               </div>
 
@@ -233,6 +337,7 @@ export default async function EditLeaguePage({
                 <div className="divide-y divide-white/10">
                   {league.teams.map((team) => {
                     const isClaimed = team.members.length > 0;
+                    const snapshot = contactMap.get(team.id);
 
                     return (
                       <div
@@ -261,10 +366,13 @@ export default async function EditLeaguePage({
                             </div>
 
                             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/50">
-                              <span>Claim code: {team.claimCode}</span>
                               <span>
-                                Created: {team.createdAt.toLocaleDateString()}
+                                Email: {snapshot?.primaryContact.email ?? "—"}
                               </span>
+                              <span>
+                                Phone: {snapshot?.primaryContact.phone ?? "—"}
+                              </span>
+                              <span>Claim code: {team.claimCode}</span>
                             </div>
                           </div>
                         </div>

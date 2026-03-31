@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/teams/new/page.tsx
+// File: src/app/(admin)/admin/teams/new/page.tsx
 // ========================================
 
 import Link from "next/link";
@@ -86,6 +86,95 @@ export default async function AdminNewTeamPage() {
                 /team-logos/ripon-rovers.png
               </span>
             </p>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="contactName" className="text-sm text-white/70">
+                Primary contact name
+              </label>
+              <input
+                id="contactName"
+                name="contactName"
+                type="text"
+                placeholder="John Smith"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="contactEmail" className="text-sm text-white/70">
+                Primary contact email
+              </label>
+              <input
+                id="contactEmail"
+                name="contactEmail"
+                type="email"
+                placeholder="captain@team.com"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="contactPhone" className="text-sm text-white/70">
+                Primary contact mobile
+              </label>
+              <input
+                id="contactPhone"
+                name="contactPhone"
+                type="text"
+                placeholder="07700 900123"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="secondaryContactName"
+                className="text-sm text-white/70"
+              >
+                Secondary contact name
+              </label>
+              <input
+                id="secondaryContactName"
+                name="secondaryContactName"
+                type="text"
+                placeholder="Assistant manager"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="secondaryContactEmail"
+                className="text-sm text-white/70"
+              >
+                Secondary contact email
+              </label>
+              <input
+                id="secondaryContactEmail"
+                name="secondaryContactEmail"
+                type="email"
+                placeholder="assistant@team.com"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="secondaryContactPhone"
+                className="text-sm text-white/70"
+              >
+                Secondary contact mobile
+              </label>
+              <input
+                id="secondaryContactPhone"
+                name="secondaryContactPhone"
+                type="text"
+                placeholder="07700 900456"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
