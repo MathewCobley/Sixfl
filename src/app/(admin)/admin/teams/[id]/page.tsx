@@ -59,6 +59,21 @@ function getDispatchOriginLabel(metadata: unknown) {
   return "Sent to team";
 }
 
+type TeamMessageHistoryItem = {
+  id: string;
+  kind: "dispatch" | "legacyLeadEmail";
+  channel: NotificationChannel;
+  statusLabel: string;
+  originLabel: string;
+  subject: string;
+  bodyText: string;
+  recipientLabel: string;
+  recipientValue: string;
+  queuedAt: Date;
+  sentAt: Date | null;
+  failureReason: string | null;
+};
+
 type Props = {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{
@@ -116,6 +131,18 @@ export default async function AdminTeamPage({
             email: true,
             phone: true,
             area: true,
+            emails: {
+              orderBy: {
+                sentAt: "desc",
+              },
+              select: {
+                id: true,
+                subject: true,
+                body: true,
+                sentTo: true,
+                sentAt: true,
+              },
+            },
           },
         },
         createdByUser: {
@@ -142,12 +169,20 @@ export default async function AdminTeamPage({
     notFound();
   }
 
-  const { snapshot: contactSnapshot } = await upsertTeamNotificationRecipient(id);
+  const { snapshot: contactSnapshot, recipient } =
+    await upsertTeamNotificationRecipient(id);
 
   const dispatches = await prisma.notificationDispatch.findMany({
     where: {
-      sourceType: "TEAM",
-      sourceId: id,
+      OR: [
+        {
+          sourceType: "TEAM",
+          sourceId: id,
+        },
+        {
+          recipientId: recipient.id,
+        },
+      ],
     },
     include: {
       recipient: true,
@@ -159,7 +194,51 @@ export default async function AdminTeamPage({
       },
     },
     orderBy: [{ createdAt: "desc" }],
-    take: 50,
+    take: 100,
+  });
+
+  const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
+
+  const historyItems: TeamMessageHistoryItem[] = [
+    ...dispatches.map((dispatch) => ({
+      id: `dispatch-${dispatch.id}`,
+      kind: "dispatch" as const,
+      channel: dispatch.channel,
+      statusLabel: formatDispatchStatus(dispatch.status),
+      originLabel: getDispatchOriginLabel(dispatch.metadata),
+      subject:
+        dispatch.subject?.trim() ||
+        (dispatch.channel === NotificationChannel.SMS
+          ? "SMS message"
+          : "Email"),
+      bodyText: dispatch.bodyText,
+      recipientLabel: dispatch.recipient.displayName || team.name,
+      recipientValue:
+        dispatch.channel === NotificationChannel.SMS
+          ? dispatch.recipient.phone || "No phone"
+          : dispatch.recipient.email || "No email",
+      queuedAt: dispatch.createdAt,
+      sentAt: dispatch.sentAt,
+      failureReason: dispatch.failureReason,
+    })),
+    ...legacyLeadEmails.map((email) => ({
+      id: `lead-email-${email.id}`,
+      kind: "legacyLeadEmail" as const,
+      channel: NotificationChannel.EMAIL,
+      statusLabel: "Sent",
+      originLabel: "Converted lead history",
+      subject: email.subject?.trim() || "Email",
+      bodyText: email.body,
+      recipientLabel: team.convertedFromLead?.contactName || team.name,
+      recipientValue: email.sentTo,
+      queuedAt: email.sentAt,
+      sentAt: email.sentAt,
+      failureReason: null,
+    })),
+  ].sort((a, b) => {
+    const aTime = (a.sentAt ?? a.queuedAt).getTime();
+    const bTime = (b.sentAt ?? b.queuedAt).getTime();
+    return bTime - aTime;
   });
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -613,69 +692,71 @@ export default async function AdminTeamPage({
                   Team message history
                 </h2>
                 <p className="mt-1 text-sm text-white/60">
-                  Everything sent to this team from team level or league level
+                  Everything sent to this team from team level or league level,
+                  plus any legacy email history from the converted lead,
                   appears here.
                 </p>
               </div>
 
               <div className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-medium text-white/70">
-                {dispatches.length} item{dispatches.length === 1 ? "" : "s"}
+                {historyItems.length} item{historyItems.length === 1 ? "" : "s"}
               </div>
             </div>
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-white/10">
               <div className="divide-y divide-white/10">
-                {dispatches.length === 0 ? (
+                {historyItems.length === 0 ? (
                   <div className="bg-black/20 px-4 py-5 text-sm text-white/55">
-                    No email or SMS history for this team yet.
+                    No team, league, or converted lead email/SMS history for
+                    this team yet.
                   </div>
                 ) : (
-                  dispatches.map((dispatch) => (
-                    <div key={dispatch.id} className="space-y-3 bg-black/20 px-4 py-4">
+                  historyItems.map((item) => (
+                    <div key={item.id} className="space-y-3 bg-black/20 px-4 py-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
-                              {formatChannel(dispatch.channel)}
+                              {formatChannel(item.channel)}
                             </span>
                             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
-                              {formatDispatchStatus(dispatch.status)}
+                              {item.statusLabel}
                             </span>
                             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
-                              {getDispatchOriginLabel(dispatch.metadata)}
+                              {item.originLabel}
                             </span>
                           </div>
 
                           <div className="mt-3 text-sm font-semibold text-white">
-                            {dispatch.subject ||
-                              (dispatch.channel === "SMS"
-                                ? "SMS message"
-                                : "Email")}
+                            {item.subject}
                           </div>
 
                           <div className="mt-1 text-xs text-white/45">
-                            To: {dispatch.recipient.displayName || team.name} ·{" "}
-                            {dispatch.channel === "SMS"
-                              ? dispatch.recipient.phone || "No phone"
-                              : dispatch.recipient.email || "No email"}
+                            To: {item.recipientLabel} · {item.recipientValue}
                           </div>
                         </div>
 
                         <div className="text-right text-xs text-white/45">
-                          <div>Queued: {dispatch.createdAt.toLocaleString()}</div>
-                          {dispatch.sentAt ? (
-                            <div>Sent: {dispatch.sentAt.toLocaleString()}</div>
-                          ) : null}
+                          {item.kind === "legacyLeadEmail" ? (
+                            <div>Sent: {item.sentAt?.toLocaleString()}</div>
+                          ) : (
+                            <>
+                              <div>Queued: {item.queuedAt.toLocaleString()}</div>
+                              {item.sentAt ? (
+                                <div>Sent: {item.sentAt.toLocaleString()}</div>
+                              ) : null}
+                            </>
+                          )}
                         </div>
                       </div>
 
                       <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
-                        {dispatch.bodyText}
+                        {item.bodyText}
                       </div>
 
-                      {dispatch.failureReason ? (
+                      {item.failureReason ? (
                         <div className="text-xs text-red-300">
-                          Failure: {dispatch.failureReason}
+                          Failure: {item.failureReason}
                         </div>
                       ) : null}
                     </div>
