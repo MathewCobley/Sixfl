@@ -1,5 +1,6 @@
 // ========================================
 // File: prisma/schema.prisma
+// FULL FILE - email inbox schema steps 1 to 3 combined
 // ========================================
 
 generator client {
@@ -434,6 +435,7 @@ enum NotificationAttemptStatus {
 
 enum MessageChannel {
   SMS
+  EMAIL
 }
 
 enum MessageDirection {
@@ -640,6 +642,9 @@ model MessageThread {
   contactName        String?
   contactPhone       String?
   phoneNormalized    String?
+  contactEmail       String?
+  emailNormalized    String?
+  replyAddress       String?
   lastMessagePreview String?
 
   assignedToUserId String?
@@ -670,6 +675,7 @@ model MessageThread {
   @@index([leagueId])
   @@index([assignedToUserId])
   @@index([phoneNormalized])
+  @@index([emailNormalized])
   @@index([status, latestMessageAt])
   @@index([status, latestInboundAt])
   @@index([unreadForAdminCount, latestInboundAt])
@@ -685,10 +691,15 @@ model MessageEntry {
   direction       MessageDirection
   participantRole MessageParticipantRole @default(CONTACT)
 
-  body String
+  body     String
+  subject  String?
+  textBody String?
+  htmlBody String?
 
   fromNumber String?
   toNumber   String?
+  fromEmail  String?
+  toEmail    String?
 
   provider          String?
   providerMessageId String?
@@ -720,6 +731,8 @@ model MessageEntry {
   @@index([participantRole, createdAt])
   @@index([providerMessageId])
   @@index([twilioMessageSid])
+  @@index([fromEmail])
+  @@index([toEmail])
   @@index([notificationDispatchId])
   @@index([createdByUserId])
   @@index([receivedAt])

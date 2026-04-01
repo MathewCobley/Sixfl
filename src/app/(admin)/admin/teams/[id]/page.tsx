@@ -16,6 +16,7 @@ import {
   deleteTeamAction,
   regenerateClaimCodeAction,
   sendTeamMessageAction,
+  sendTeamPaymentRequestAction,
   updateTeamDetailsAction,
 } from "../actions";
 import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
@@ -92,6 +93,8 @@ type Props = {
     saved?: string;
     deleted?: string;
     messageQueued?: string;
+    paymentQueued?: string;
+    paymentError?: string;
     channel?: string;
     composeError?: string;
   }>;
@@ -182,61 +185,61 @@ export default async function AdminTeamPage({
   const { snapshot: contactSnapshot, recipient } =
     await upsertTeamNotificationRecipient(id);
 
-    const [dispatches, messageThreads] = await Promise.all([
-      prisma.notificationDispatch.findMany({
-        where: {
-          OR: [
-            {
-              sourceType: "TEAM",
-              sourceId: id,
-            },
-            {
-              recipientId: recipient.id,
-            },
-          ],
+  const [dispatches, messageThreads] = await Promise.all([
+    prisma.notificationDispatch.findMany({
+      where: {
+        OR: [
+          {
+            sourceType: "TEAM",
+            sourceId: id,
+          },
+          {
+            recipientId: recipient.id,
+          },
+        ],
+      },
+      include: {
+        recipient: true,
+        attempts: {
+          orderBy: {
+            attemptedAt: "desc",
+          },
+          take: 3,
         },
-        include: {
-          recipient: true,
-          attempts: {
-            orderBy: {
-              attemptedAt: "desc",
-            },
-            take: 3,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 100,
+    }),
+    prisma.messageThread.findMany({
+      where: {
+        OR: [{ teamId: id }, { recipientId: recipient.id }],
+      },
+      include: {
+        team: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
           },
         },
-        orderBy: [{ createdAt: "desc" }],
-        take: 100,
-      }),
-      prisma.messageThread.findMany({
-        where: {
-          OR: [{ teamId: id }, { recipientId: recipient.id }],
-        },
-        include: {
-          team: {
-            select: {
-              id: true,
-              name: true,
-              logoUrl: true,
-            },
-          },
-          recipient: true,
-          league: {
-            select: {
-              id: true,
-              name: true,
-              season: true,
-              slug: true,
-            },
-          },
-          messages: {
-            orderBy: [{ createdAt: "desc" }],
-            take: 20,
+        recipient: true,
+        league: {
+          select: {
+            id: true,
+            name: true,
+            season: true,
+            slug: true,
           },
         },
-        orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
-        take: 20,
-      }),
-    ]);
+        messages: {
+          orderBy: [{ createdAt: "desc" }],
+          take: 20,
+        },
+      },
+      orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+      take: 20,
+    }),
+  ]);
 
   const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
 
@@ -335,7 +338,9 @@ export default async function AdminTeamPage({
         sp.regenerated === "1" ||
         sp.error ||
         queuedMessage ||
-        sp.composeError) && (
+        sp.paymentQueued === "1" ||
+        sp.composeError ||
+        sp.paymentError) && (
         <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm">
           {sp.saved === "1" ? (
             <div className="text-emerald-300">Team details updated.</div>
@@ -350,6 +355,12 @@ export default async function AdminTeamPage({
           {queuedMessage ? (
             <div className="text-emerald-300">
               {queuedChannel} queued for this team.
+            </div>
+          ) : null}
+
+          {sp.paymentQueued === "1" ? (
+            <div className="text-emerald-300">
+              Payment request email queued for this team.
             </div>
           ) : null}
 
@@ -376,6 +387,16 @@ export default async function AdminTeamPage({
           {sp.composeError === "missing_phone" ? (
             <div className="text-red-300">
               No primary team mobile number is available yet.
+            </div>
+          ) : null}
+
+          {sp.paymentError === "missing_url" ? (
+            <div className="text-red-300">Payment link is required.</div>
+          ) : null}
+
+          {sp.paymentError === "missing_email" ? (
+            <div className="text-red-300">
+              This team does not have a primary email address yet.
             </div>
           ) : null}
         </div>
@@ -711,12 +732,8 @@ export default async function AdminTeamPage({
                             </div>
 
                             <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/45">
-                              <div>
-                                From: {message.fromNumber || "—"}
-                              </div>
-                              <div>
-                                To: {message.toNumber || "—"}
-                              </div>
+                              <div>From: {message.fromNumber || "—"}</div>
+                              <div>To: {message.toNumber || "—"}</div>
                               <div>
                                 Time:{" "}
                                 {(message.receivedAt ??
@@ -724,9 +741,7 @@ export default async function AdminTeamPage({
                                   message.createdAt
                                 ).toLocaleString()}
                               </div>
-                              <div>
-                                Status: {message.providerStatus || "—"}
-                              </div>
+                              <div>Status: {message.providerStatus || "—"}</div>
                             </div>
                           </div>
                         ))
@@ -994,6 +1009,80 @@ export default async function AdminTeamPage({
                 <span className="font-mono text-xs text-white">{team.id}</span>
               </div>
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <h2 className="text-lg font-semibold text-white">
+              Send payment request
+            </h2>
+
+            <form action={sendTeamPaymentRequestAction} className="mt-4 space-y-4">
+              <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">To</label>
+                <input
+                  value={contactSnapshot.primaryContact.email ?? ""}
+                  disabled
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">
+                  Payment link
+                </label>
+                <input
+                  name="paymentUrl"
+                  placeholder="https://buy.stripe.com/..."
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">
+                    Amount
+                  </label>
+                  <input
+                    name="paymentAmount"
+                    placeholder="£30.00"
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-white/70">
+                    Reason
+                  </label>
+                  <input
+                    name="paymentReason"
+                    placeholder="Match fee for last night's game"
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/70">
+                  Intro message
+                </label>
+                <textarea
+                  name="paymentIntro"
+                  rows={5}
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+                  placeholder="Please use the button below to make payment for your recent match."
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+              >
+                Queue payment email
+              </button>
+            </form>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">

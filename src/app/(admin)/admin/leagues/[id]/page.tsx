@@ -233,9 +233,36 @@ export default async function EditLeaguePage({
               Message all teams in this league
             </h2>
             <p className="mt-1 text-sm text-white/60">
-              Each message is logged against the individual team, so it will
-              still be visible from inside that team page.
+              Each message is queued per team, logged against that team, and can
+              render team-specific details automatically.
             </p>
+
+            <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200/90">
+                Available placeholders
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  "{{teamName}}",
+                  "{{leagueName}}",
+                  "{{leagueSeason}}",
+                  "{{contactName}}",
+                ].map((token) => (
+                  <span
+                    key={token}
+                    className="rounded-full border border-emerald-400/20 bg-black/20 px-3 py-1 text-xs font-mono text-emerald-100"
+                  >
+                    {token}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-xs leading-6 text-emerald-100/80">
+                Team branding such as the team logo and team name block can be
+                added automatically in the email layout. Use placeholders only
+                when you want the written subject or message itself to mention
+                the specific team, contact, or season.
+              </p>
+            </div>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <form
@@ -255,9 +282,15 @@ export default async function EditLeaguePage({
                   </label>
                   <input
                     name="subject"
-                    placeholder="Important update for all teams"
+                    placeholder="Update for {{teamName}}"
                     className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
                   />
+                  <div className="mt-2 text-xs text-white/45">
+                    Example:{" "}
+                    <span className="font-mono">
+                      Update for {"{{teamName}}"}
+                    </span>
+                  </div>
                 </div>
 
                 <div>
@@ -268,8 +301,12 @@ export default async function EditLeaguePage({
                     name="body"
                     rows={8}
                     className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                    placeholder="Hi all,\n\nHere is the latest league update for your team..."
+                    placeholder={`Hi {{contactName}},\n\nThis is an update for {{teamName}} in {{leagueName}} {{leagueSeason}}.\n\nThanks,\nSIXFL`}
                   />
+                  <div className="mt-2 text-xs text-white/45">
+                    Use placeholders only where you want personalised wording in
+                    the actual email text.
+                  </div>
                 </div>
 
                 <button
@@ -287,7 +324,9 @@ export default async function EditLeaguePage({
                 <input type="hidden" name="leagueId" value={league.id} />
                 <input type="hidden" name="channel" value="SMS" />
 
-                <div className="text-sm font-semibold text-white">Bulk SMS</div>
+                <div className="text-sm font-semibold text-white">
+                  Bulk SMS
+                </div>
 
                 <div>
                   <label className="mb-1 block text-sm text-white/70">
@@ -297,8 +336,14 @@ export default async function EditLeaguePage({
                     name="body"
                     rows={8}
                     className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                    placeholder="SIXFL: please check your latest fixture / league update and reply if needed."
+                    placeholder={`Hi {{contactName}}, SIXFL update for {{teamName}} in {{leagueName}}.`}
                   />
+                  <div className="mt-2 text-xs text-white/45">
+                    Available in SMS too:{" "}
+                    <span className="font-mono">
+                      {"{{teamName}} {{leagueName}} {{leagueSeason}} {{contactName}}"}
+                    </span>
+                  </div>
                 </div>
 
                 <button
@@ -401,12 +446,16 @@ export default async function EditLeaguePage({
             <div className="mt-4 space-y-4 text-sm text-white/70">
               <div className="flex items-center justify-between">
                 <span>Teams</span>
-                <span className="font-medium text-white">{league._count.teams}</span>
+                <span className="font-medium text-white">
+                  {league._count.teams}
+                </span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span>Fixtures</span>
-                <span className="font-medium text-white">{league._count.fixtures}</span>
+                <span className="font-medium text-white">
+                  {league._count.fixtures}
+                </span>
               </div>
 
               <div className="flex items-center justify-between">
@@ -418,7 +467,9 @@ export default async function EditLeaguePage({
 
               <div className="flex items-center justify-between">
                 <span>Area</span>
-                <span className="font-medium text-white">{league.area ?? "—"}</span>
+                <span className="font-medium text-white">
+                  {league.area ?? "—"}
+                </span>
               </div>
 
               <div className="flex items-center justify-between">

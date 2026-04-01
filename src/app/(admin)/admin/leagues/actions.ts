@@ -382,6 +382,7 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
         select: {
           id: true,
           name: true,
+          logoUrl: true,
         },
         orderBy: { name: "asc" },
       },
@@ -405,6 +406,13 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
       continue;
     }
 
+    const variables = {
+      teamName: team.name,
+      leagueName: league.name,
+      leagueSeason: league.season ?? "",
+      contactName: recipient.displayName ?? team.name,
+    };
+
     await queueDirectNotification({
       recipientId: recipient.id,
       channel,
@@ -414,6 +422,17 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
       isTransactional: true,
       sourceType: "TEAM",
       sourceId: team.id,
+      variables,
+      emailBranding:
+        channel === NotificationChannel.EMAIL
+          ? {
+              teamName: team.name,
+              teamLogoUrl: team.logoUrl ?? null,
+              leagueName: league.season
+                ? `${league.name} — ${league.season}`
+                : league.name,
+            }
+          : undefined,
       metadata: {
         origin: "league_admin",
         originLabel: `Sent from league page: ${league.name}`,

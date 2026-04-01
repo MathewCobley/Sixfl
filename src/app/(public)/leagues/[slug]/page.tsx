@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/app/(public)/leagues/[slug]/page.tsx
 // ========================================
@@ -8,16 +9,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createLeagueInterestLeadAction } from "./actions";
 
-// ========================================
-// Rendering
-// ========================================
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// ========================================
-// Types
-// ========================================
 
 type PageProps = {
   params: Promise<{
@@ -41,10 +34,6 @@ type TableRow = {
   points: number;
 };
 
-// ========================================
-// Helpers
-// ========================================
-
 function formatPreferredNight(value?: string | null) {
   if (!value) return null;
   if (value === "ANY") return "Any night";
@@ -60,6 +49,21 @@ function formatLeagueType(value?: string | null) {
       return "Men's";
     case "WOMENS":
       return "Women's";
+    case "YOUTH":
+      return "Youth";
+    default:
+      return value;
+  }
+}
+
+function formatLeagueTypeCompact(value?: string | null) {
+  if (!value) return null;
+
+  switch (value) {
+    case "MENS":
+      return "Mens";
+    case "WOMENS":
+      return "Womens";
     case "YOUTH":
       return "Youth";
     default:
@@ -112,6 +116,10 @@ function formatResultDate(date: Date) {
     day: "numeric",
     month: "short",
   });
+}
+
+function formatGoalDifference(value: number) {
+  return value > 0 ? `+${value}` : `${value}`;
 }
 
 function buildLeagueTable(
@@ -195,10 +203,6 @@ function buildLeagueTable(
   return table;
 }
 
-// ========================================
-// Page
-// ========================================
-
 export default async function LeagueLandingPage({ params }: PageProps) {
   const { slug } = await params;
 
@@ -272,6 +276,18 @@ export default async function LeagueLandingPage({ params }: PageProps) {
 
   const nightLabel = formatPreferredNight(league.dayOfWeek);
   const leagueTypeLabel = formatLeagueType(league.leagueType);
+  const leagueTypeCompact = formatLeagueTypeCompact(league.leagueType);
+
+  const heroEyebrow = [league.area?.trim(), nightLabel, leagueTypeCompact]
+    .filter(Boolean)
+    .join(" ");
+
+  const heroMeta = [
+    league.season,
+    league.venueName,
+    `${league.teams.length} team${league.teams.length === 1 ? "" : "s"}`,
+  ].filter(Boolean);
+
   const heroImageUrl =
     normaliseLogoUrl(league.heroImageUrl) || "/venues/rossett_dark_trendy.jpg";
   const leagueBadge =
@@ -333,7 +349,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* HERO */}
       <section className="relative isolate min-h-[76vh] overflow-hidden rounded-3xl border border-white/10">
         <div className="absolute inset-0">
           <Image
@@ -353,31 +368,42 @@ export default async function LeagueLandingPage({ params }: PageProps) {
           <div className="w-full rounded-[2rem] border border-white/10 bg-black/25 p-6 backdrop-blur-[3px] sm:p-8 lg:p-10">
             <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr] xl:items-end">
               <div className="max-w-4xl">
-                <div className="flex flex-wrap items-center gap-5">
-                  <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/35 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.35)] sm:h-32 sm:w-32">
-                    <Image
-                      src={leagueBadge}
-                      alt={`${league.name} badge`}
-                      fill
-                      sizes="128px"
-                      className="object-contain p-2"
-                      unoptimized
-                    />
+                <div className="flex flex-wrap items-center gap-6 lg:gap-7">
+                  <div className="relative">
+                    <div className="absolute inset-0 rounded-[2rem] bg-emerald-500/15 blur-2xl" />
+                    <div className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-black/55 p-3 shadow-[0_24px_55px_rgba(0,0,0,0.45)] sm:h-36 sm:w-36">
+                      <Image
+                        src={leagueBadge}
+                        alt={`${league.name} badge`}
+                        fill
+                        sizes="144px"
+                        className="object-contain p-2.5"
+                        unoptimized
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-400">
-                      SIXFL League
-                    </p>
-                    {league.season ? (
-                      <p className="mt-2 text-sm text-white/55">
-                        {league.season}
-                      </p>
+                  <div className="min-w-0">
+                    <div className="inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.28em] text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.12)] sm:text-xs">
+                      {heroEyebrow || "SIXFL League"}
+                    </div>
+
+                    {heroMeta.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap items-center gap-2.5 text-sm text-white/65">
+                        {heroMeta.map((item) => (
+                          <span
+                            key={item}
+                            className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
                     ) : null}
                   </div>
                 </div>
 
-                <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
+                <h1 className="mt-8 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
                   {league.name}
                 </h1>
 
@@ -474,15 +500,224 @@ export default async function LeagueLandingPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* MAIN */}
       <section
         id="details"
         className="mx-auto max-w-6xl border-x border-b border-white/10 bg-[#05070a]"
       >
-        <div className="grid gap-8 px-6 py-10 sm:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10 lg:py-16">
-          {/* LEFT */}
+        <div className="px-6 pt-10 sm:px-10 lg:pt-16">
+          <div
+            id="table"
+            className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]"
+          >
+            <div className="border-b border-white/10 px-6 py-6 sm:px-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
+                Standings
+              </p>
+              <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
+                League table
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60 sm:text-base">
+                Full standings with team names, goals scored, goals conceded and
+                goal difference.
+              </p>
+            </div>
+
+            {leagueTable.length > 0 ? (
+              <>
+                <div className="hidden grid-cols-[72px_minmax(260px,1.9fr)_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
+                  <div>Pos</div>
+                  <div>Team</div>
+                  <div className="text-center">P</div>
+                  <div className="text-center">W</div>
+                  <div className="text-center">D</div>
+                  <div className="text-center">L</div>
+                  <div className="text-center">GF</div>
+                  <div className="text-center">GA</div>
+                  <div className="text-center">GD</div>
+                  <div className="text-center">Pts</div>
+                </div>
+
+                <div className="divide-y divide-white/10">
+                  {leagueTable.map((row, index) => {
+                    const logoUrl = normaliseLogoUrl(row.team.logoUrl);
+                    const isTop = index === 0;
+
+                    const mobileTopStats = [
+                      { label: "P", value: row.played },
+                      { label: "W", value: row.wins },
+                      { label: "D", value: row.draws },
+                      { label: "L", value: row.losses },
+                    ];
+
+                    const mobileBottomStats = [
+                      { label: "GF", value: row.goalsFor },
+                      { label: "GA", value: row.goalsAgainst },
+                      {
+                        label: "GD",
+                        value: formatGoalDifference(row.goalDifference),
+                      },
+                      { label: "PTS", value: row.points },
+                    ];
+
+                    return (
+                      <div
+                        key={row.team.id}
+                        className="bg-black/20 px-4 py-5 sm:px-6 lg:px-8"
+                      >
+                        <div className="lg:hidden">
+                          <div className="flex items-start gap-4">
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-black ${
+                                isTop
+                                  ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                                  : "border-white/10 bg-white/[0.04] text-white/70"
+                              }`}
+                            >
+                              {index + 1}
+                            </div>
+
+                            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+                              {logoUrl ? (
+                                <Image
+                                  src={logoUrl}
+                                  alt={`${row.team.name} badge`}
+                                  fill
+                                  sizes="48px"
+                                  className="object-contain p-1.5"
+                                  unoptimized
+                                />
+                              ) : (
+                                <span className="text-sm font-black text-white/60">
+                                  {getInitials(row.team.name)}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <Link
+                                href={`/teams/${row.team.id}`}
+                                className="block truncate text-base font-semibold text-white hover:text-emerald-400"
+                              >
+                                {row.team.name}
+                              </Link>
+
+                              <div className="mt-3 grid grid-cols-4 gap-2">
+                                {mobileTopStats.map((stat) => (
+                                  <div
+                                    key={`${row.team.id}-${stat.label}`}
+                                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center"
+                                  >
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                                      {stat.label}
+                                    </div>
+                                    <div className="mt-1 text-sm font-bold text-white">
+                                      {stat.value}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="mt-2 grid grid-cols-4 gap-2">
+                                {mobileBottomStats.map((stat) => (
+                                  <div
+                                    key={`${row.team.id}-${stat.label}`}
+                                    className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center"
+                                  >
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                                      {stat.label}
+                                    </div>
+                                    <div className="mt-1 text-sm font-bold text-white">
+                                      {stat.value}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="hidden grid-cols-[72px_minmax(260px,1.9fr)_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
+                          <div>
+                            <div
+                              className={`flex h-11 w-11 items-center justify-center rounded-2xl border text-sm font-black ${
+                                isTop
+                                  ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                                  : "border-white/10 bg-white/[0.04] text-white/70"
+                              }`}
+                            >
+                              {index + 1}
+                            </div>
+                          </div>
+
+                          <div className="flex min-w-0 items-center gap-4">
+                            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+                              {logoUrl ? (
+                                <Image
+                                  src={logoUrl}
+                                  alt={`${row.team.name} badge`}
+                                  fill
+                                  sizes="56px"
+                                  className="object-contain p-2"
+                                  unoptimized
+                                />
+                              ) : (
+                                <span className="text-base font-black text-white/60">
+                                  {getInitials(row.team.name)}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <Link
+                                href={`/teams/${row.team.id}`}
+                                className="block min-w-0 truncate font-semibold text-white transition hover:text-emerald-400"
+                              >
+                                {row.team.name}
+                              </Link>
+                            </div>
+                          </div>
+
+                          <div className="text-center font-medium text-white/80">
+                            {row.played}
+                          </div>
+                          <div className="text-center font-medium text-white/80">
+                            {row.wins}
+                          </div>
+                          <div className="text-center font-medium text-white/80">
+                            {row.draws}
+                          </div>
+                          <div className="text-center font-medium text-white/80">
+                            {row.losses}
+                          </div>
+                          <div className="text-center font-medium text-white/80">
+                            {row.goalsFor}
+                          </div>
+                          <div className="text-center font-medium text-white/80">
+                            {row.goalsAgainst}
+                          </div>
+                          <div className="text-center font-medium text-white/80">
+                            {formatGoalDifference(row.goalDifference)}
+                          </div>
+                          <div className="text-center text-base font-black text-white">
+                            {row.points}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="px-6 py-8 text-white/60 sm:px-8">
+                The league table will appear here once results have been
+                entered.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-8 px-6 pb-10 pt-8 sm:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10 lg:pb-16 lg:pt-10">
           <div className="space-y-6">
-            {/* OVERVIEW */}
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
                 League Details
@@ -512,7 +747,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* VALUE BLOCKS */}
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                 <div className="text-sm font-semibold text-emerald-400">
@@ -544,164 +778,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* LEAGUE TABLE */}
-            <div
-              id="table"
-              className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]"
-            >
-              <div className="border-b border-white/10 px-6 py-6 sm:px-8">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
-                  Standings
-                </p>
-                <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
-                  League table
-                </h2>
-              </div>
-
-              {leagueTable.length > 0 ? (
-                <>
-                  <div className="hidden grid-cols-[56px_minmax(0,1.8fr)_64px_64px_64px_64px_72px_72px] gap-3 border-b border-white/10 bg-white/[0.02] px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 md:grid">
-                    <div>Pos</div>
-                    <div>Team</div>
-                    <div className="text-center">P</div>
-                    <div className="text-center">W</div>
-                    <div className="text-center">D</div>
-                    <div className="text-center">L</div>
-                    <div className="text-center">GD</div>
-                    <div className="text-center">Pts</div>
-                  </div>
-
-                  <div className="divide-y divide-white/10">
-                    {leagueTable.map((row, index) => {
-                      const logoUrl = normaliseLogoUrl(row.team.logoUrl);
-                      const isTop = index === 0;
-
-                      return (
-                        <div
-                          key={row.team.id}
-                          className="bg-black/20 px-4 py-4 sm:px-6"
-                        >
-                          <div className="md:hidden">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-sm font-black ${
-                                  isTop
-                                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-                                    : "border-white/10 bg-white/[0.04] text-white/70"
-                                }`}
-                              >
-                                {index + 1}
-                              </div>
-
-                              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
-                                {logoUrl ? (
-                                  <Image
-                                    src={logoUrl}
-                                    alt={`${row.team.name} badge`}
-                                    fill
-                                    sizes="44px"
-                                    className="object-contain p-1.5"
-                                    unoptimized
-                                  />
-                                ) : (
-                                  <span className="text-sm font-black text-white/60">
-                                    {getInitials(row.team.name)}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate font-semibold text-white">
-                                  {row.team.name}
-                                </div>
-                                <div className="mt-1 flex flex-wrap gap-3 text-xs text-white/55">
-                                  <span>P {row.played}</span>
-                                  <span>W {row.wins}</span>
-                                  <span>D {row.draws}</span>
-                                  <span>L {row.losses}</span>
-                                  <span>GD {row.goalDifference}</span>
-                                  <span className="font-bold text-white">
-                                    {row.points} pts
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="hidden grid-cols-[56px_minmax(0,1.8fr)_64px_64px_64px_64px_72px_72px] items-center gap-3 md:grid">
-                            <div>
-                              <div
-                                className={`flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-black ${
-                                  isTop
-                                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-                                    : "border-white/10 bg-white/[0.04] text-white/70"
-                                }`}
-                              >
-                                {index + 1}
-                              </div>
-                            </div>
-
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
-                                {logoUrl ? (
-                                  <Image
-                                    src={logoUrl}
-                                    alt={`${row.team.name} badge`}
-                                    fill
-                                    sizes="44px"
-                                    className="object-contain p-1.5"
-                                    unoptimized
-                                  />
-                                ) : (
-                                  <span className="text-sm font-black text-white/60">
-                                    {getInitials(row.team.name)}
-                                  </span>
-                                )}
-                              </div>
-
-                              <Link
-                                href={`/teams/${row.team.id}`}
-                                className="truncate font-semibold text-white hover:text-emerald-400"
-                              >
-                                {row.team.name}
-                              </Link>
-                            </div>
-
-                            <div className="text-center font-medium text-white/80">
-                              {row.played}
-                            </div>
-                            <div className="text-center font-medium text-white/80">
-                              {row.wins}
-                            </div>
-                            <div className="text-center font-medium text-white/80">
-                              {row.draws}
-                            </div>
-                            <div className="text-center font-medium text-white/80">
-                              {row.losses}
-                            </div>
-                            <div className="text-center font-medium text-white/80">
-                              {row.goalDifference > 0
-                                ? `+${row.goalDifference}`
-                                : row.goalDifference}
-                            </div>
-                            <div className="text-center text-base font-black text-white">
-                              {row.points}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="px-6 py-8 text-white/60 sm:px-8">
-                  The league table will appear here once results have been
-                  entered.
-                </div>
-              )}
-            </div>
-
-            {/* FIXTURES */}
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -750,7 +826,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
 
                             <Link
                               href={`/teams/${fixture.homeTeam.id}`}
-                              className="truncate font-semibold text-white hover:text-emerald-400"
+                              className="block min-w-0 truncate font-semibold text-white hover:text-emerald-400"
                             >
                               {fixture.homeTeam.name}
                             </Link>
@@ -765,7 +841,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                           <div className="flex min-w-0 items-center justify-end gap-3 text-right">
                             <Link
                               href={`/teams/${fixture.awayTeam.id}`}
-                              className="truncate font-semibold text-white hover:text-emerald-400"
+                              className="block min-w-0 truncate font-semibold text-white hover:text-emerald-400"
                             >
                               {fixture.awayTeam.name}
                             </Link>
@@ -803,7 +879,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               )}
             </div>
 
-            {/* RESULTS */}
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -852,7 +927,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
 
                             <Link
                               href={`/teams/${fixture.homeTeam.id}`}
-                              className="truncate font-semibold text-white hover:text-emerald-400"
+                              className="block min-w-0 truncate font-semibold text-white hover:text-emerald-400"
                             >
                               {fixture.homeTeam.name}
                             </Link>
@@ -866,9 +941,12 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                           </div>
 
                           <div className="flex min-w-0 items-center justify-end gap-3 text-right">
-                            <span className="truncate font-semibold text-white">
+                            <Link
+                              href={`/teams/${fixture.awayTeam.id}`}
+                              className="block min-w-0 truncate font-semibold text-white hover:text-emerald-400"
+                            >
                               {fixture.awayTeam.name}
-                            </span>
+                            </Link>
 
                             <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
                               {awayLogoUrl ? (
@@ -903,7 +981,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               )}
             </div>
 
-            {/* TEAMS GRID */}
             <div
               id="teams"
               className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8"
@@ -968,9 +1045,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* RIGHT */}
           <div className="space-y-6">
-            {/* REGISTRATION */}
             <div
               id="register"
               className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur sm:p-8"
@@ -1080,7 +1155,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               </p>
             </div>
 
-            {/* PRICING / VALUE */}
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
                 Team Entry
@@ -1116,7 +1190,6 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* LEAGUE SNAPSHOT */}
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
                 Snapshot

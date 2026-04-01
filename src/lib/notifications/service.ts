@@ -16,6 +16,8 @@ import { prisma } from "@/lib/prisma";
 import {
   appendSIXFLTextSignature,
   buildSIXFLEmailHtml,
+  type SIXFLEmailBranding,
+  type SIXFLPaymentSummary,
 } from "@/lib/email/buildEmail";
 import { getNotificationRecipientById } from "./recipients";
 import {
@@ -45,6 +47,12 @@ export type QueueDirectNotificationInput = {
   sourceId?: string | null;
   metadata?: Prisma.InputJsonValue;
   variables?: Prisma.InputJsonValue;
+  emailBranding?: SIXFLEmailBranding;
+  emailCta?: {
+    label: string;
+    url: string;
+  };
+  paymentSummary?: SIXFLPaymentSummary;
   scheduledFor?: Date;
   createdByUserId?: string | null;
 };
@@ -86,10 +94,17 @@ function resolveEmailCtaUrl(input: {
 }
 
 function cleanPlainTextTemplateBody(body: string) {
-  return body
-    .replace(/\{\{\s*cta\s*\}\}/gi, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return body.replace(/\{\{\s*cta\s*\}\}/gi, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function coerceVariables(
+  value?: Prisma.InputJsonValue | NotificationTemplateVariables,
+): NotificationTemplateVariables {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as NotificationTemplateVariables;
 }
 
 function buildQueuedContentFromTemplate(input: {
@@ -137,24 +152,38 @@ function buildQueuedContentDirect(input: {
   channel: NotificationChannel;
   subject?: string | null;
   body: string;
+  variables?: Prisma.InputJsonValue | NotificationTemplateVariables;
+  emailBranding?: SIXFLEmailBranding;
+  emailCta?: {
+    label: string;
+    url: string;
+  };
+  paymentSummary?: SIXFLPaymentSummary;
 }): ResolvedQueuedContent {
-  const body = input.body.trim();
+  const variables = coerceVariables(input.variables);
+  const renderedSubject = input.subject?.trim()
+    ? renderNotificationText(input.subject.trim(), variables)
+    : null;
+  const renderedBody = renderNotificationText(input.body.trim(), variables);
 
   if (input.channel === NotificationChannel.EMAIL) {
-    const signedTextBody = appendSIXFLTextSignature(body);
+    const signedTextBody = appendSIXFLTextSignature(renderedBody);
 
     return {
-      subject: input.subject?.trim() || null,
+      subject: renderedSubject,
       bodyText: signedTextBody,
       bodyHtml: buildSIXFLEmailHtml({
-        body,
+        body: renderedBody,
+        branding: input.emailBranding,
+        cta: input.emailCta,
+        payment: input.paymentSummary,
       }),
     };
   }
 
   return {
     subject: null,
-    bodyText: appendSIXFLSmsSignature(body),
+    bodyText: appendSIXFLSmsSignature(renderedBody),
     bodyHtml: null,
   };
 }
@@ -334,6 +363,10 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     channel: input.channel,
     subject: input.subject,
     body: input.body,
+    variables: input.variables,
+    emailBranding: input.emailBranding,
+    emailCta: input.emailCta,
+    paymentSummary: input.paymentSummary,
   });
 
   if (!allowed.ok) {

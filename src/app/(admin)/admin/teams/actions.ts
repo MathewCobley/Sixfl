@@ -229,7 +229,15 @@ export async function sendTeamMessageAction(formData: FormData) {
     where: { id: teamId },
     select: {
       id: true,
+      name: true,
+      logoUrl: true,
       leagueId: true,
+      league: {
+        select: {
+          name: true,
+          season: true,
+        },
+      },
     },
   });
 
@@ -256,6 +264,16 @@ export async function sendTeamMessageAction(formData: FormData) {
     isTransactional: true,
     sourceType: "TEAM",
     sourceId: teamId,
+    emailBranding:
+      channel === NotificationChannel.EMAIL
+        ? {
+            teamName: snapshot.teamName,
+            teamLogoUrl: team.logoUrl ?? null,
+            leagueName: team.league
+              ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+              : null,
+          }
+        : undefined,
     metadata: {
       origin: "team_admin",
       originLabel: "Sent from team page",
@@ -274,6 +292,113 @@ export async function sendTeamMessageAction(formData: FormData) {
   }
 
   redirect(`${from}?messageQueued=1&channel=${channel.toLowerCase()}`);
+}
+
+export async function sendTeamPaymentRequestAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const teamId = getTrimmedValue(formData.get("teamId"));
+  const from = getSafeRedirectPath(
+    formData.get("from"),
+    `/admin/teams/${teamId}`,
+  );
+  const paymentUrl = getTrimmedValue(formData.get("paymentUrl"));
+  const paymentAmount = getTrimmedValue(formData.get("paymentAmount")) || null;
+  const paymentReason = getTrimmedValue(formData.get("paymentReason")) || null;
+  const intro =
+    getTrimmedValue(formData.get("paymentIntro")) ||
+    "Please use the button below to make payment for your recent match.";
+
+  if (!teamId) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  if (!paymentUrl) {
+    redirect(`${from}?paymentError=missing_url`);
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      name: true,
+      logoUrl: true,
+      leagueId: true,
+      league: {
+        select: {
+          name: true,
+          season: true,
+        },
+      },
+    },
+  });
+
+  if (!team) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
+
+  if (!recipient.email?.trim()) {
+    redirect(`${from}?paymentError=missing_email`);
+  }
+
+  const body = [
+    `Hi ${recipient.displayName?.trim() || snapshot.teamName},`,
+    "",
+    intro,
+    "",
+    "If you have any questions, just reply to this email.",
+    "",
+    "Thanks,",
+    "SIXFL",
+  ].join("\n");
+
+  await queueDirectNotification({
+    recipientId: recipient.id,
+    channel: NotificationChannel.EMAIL,
+    audience: NotificationAudience.TEAM,
+    subject: `Payment request for ${snapshot.teamName}`,
+    body,
+    isTransactional: true,
+    sourceType: "TEAM",
+    sourceId: teamId,
+    emailBranding: {
+      teamName: snapshot.teamName,
+      teamLogoUrl: team.logoUrl ?? null,
+      leagueName: team.league
+        ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+        : null,
+    },
+    emailCta: {
+      label: "Pay now",
+      url: paymentUrl,
+    },
+    paymentSummary: {
+      amount: paymentAmount,
+      reason: paymentReason,
+    },
+    metadata: {
+      origin: "team_payment_request",
+      originLabel: "Payment request sent from team page",
+      teamId,
+      teamName: snapshot.teamName,
+      leagueId: snapshot.leagueId,
+      leagueName: snapshot.leagueName,
+      paymentUrl,
+      paymentAmount,
+      paymentReason,
+    },
+    createdByUserId: user?.id ?? null,
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath("/admin/teams");
+  if (team.leagueId) {
+    revalidatePath(`/admin/leagues/${team.leagueId}`);
+  }
+
+  redirect(`${from}?paymentQueued=1`);
 }
 
 export async function regenerateClaimCodeAction(formData: FormData) {

@@ -34,6 +34,17 @@ export type SIXFLEmailCta = {
   url: string;
 };
 
+export type SIXFLEmailBranding = {
+  teamName?: string | null;
+  teamLogoUrl?: string | null;
+  leagueName?: string | null;
+};
+
+export type SIXFLPaymentSummary = {
+  amount?: string | null;
+  reason?: string | null;
+};
+
 // ========================================
 // Helpers
 // ========================================
@@ -83,7 +94,6 @@ function convertTextToHtml(text: string) {
       const bulletLines = lines.filter((line) => line.startsWith("- "));
       const nonBulletLines = lines.filter((line) => !line.startsWith("- "));
 
-      // ✅ Handle mixed paragraph (heading + bullets without blank line)
       if (bulletLines.length > 0) {
         const normalHtml = nonBulletLines.length
           ? `
@@ -118,7 +128,6 @@ function convertTextToHtml(text: string) {
         return `${normalHtml}${listHtml}`;
       }
 
-      // ❌ Normal paragraph
       const paragraphHtml = escapeHtml(paragraph).replace(/\n/g, "<br />");
 
       return `
@@ -183,6 +192,128 @@ function buildCtaHtml(cta?: SIXFLEmailCta) {
   `.trim();
 }
 
+function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
+  const teamName = branding?.teamName?.trim();
+  const teamLogoUrl = branding?.teamLogoUrl?.trim();
+  const leagueName = branding?.leagueName?.trim();
+
+  if (!teamName && !teamLogoUrl && !leagueName) {
+    return "";
+  }
+
+  return `
+    <div
+      style="
+        margin:0 0 24px 0;
+        padding:16px 18px;
+        border:1px solid #e5e7eb;
+        border-radius:16px;
+        background:#f9fafb;
+      "
+    >
+      <table
+        role="presentation"
+        cellpadding="0"
+        cellspacing="0"
+        border="0"
+        width="100%"
+      >
+        <tr>
+          ${
+            teamLogoUrl
+              ? `
+            <td width="60" valign="middle" style="padding-right:14px;">
+              <img
+                src="${escapeHtml(teamLogoUrl)}"
+                alt="${escapeHtml(teamName || "Team logo")}"
+                width="48"
+                height="48"
+                style="display:block;width:48px;height:48px;object-fit:contain;border:0;"
+              />
+            </td>
+          `.trim()
+              : ""
+          }
+          <td valign="middle">
+            ${
+              teamName
+                ? `
+              <div style="color:#111827;font-size:16px;font-weight:700;line-height:1.3;">
+                ${escapeHtml(teamName)}
+              </div>
+            `.trim()
+                : ""
+            }
+            ${
+              leagueName
+                ? `
+              <div style="margin-top:4px;color:#6b7280;font-size:13px;line-height:1.4;">
+                ${escapeHtml(leagueName)}
+              </div>
+            `.trim()
+                : ""
+            }
+          </td>
+        </tr>
+      </table>
+    </div>
+  `.trim();
+}
+
+function buildPaymentSummaryHtml(payment?: SIXFLPaymentSummary) {
+  const amount = payment?.amount?.trim();
+  const reason = payment?.reason?.trim();
+
+  if (!amount && !reason) {
+    return "";
+  }
+
+  return `
+    <div
+      style="
+        margin:0 0 24px 0;
+        padding:16px 18px;
+        border:1px solid #d1fae5;
+        border-radius:16px;
+        background:#ecfdf5;
+      "
+    >
+      <div
+        style="
+          margin:0 0 10px 0;
+          color:#065f46;
+          font-size:12px;
+          font-weight:700;
+          letter-spacing:0.12em;
+          text-transform:uppercase;
+        "
+      >
+        Payment request
+      </div>
+
+      ${
+        amount
+          ? `
+        <div style="margin:0 0 8px 0;color:#111827;font-size:14px;line-height:1.6;">
+          <strong>Amount:</strong> ${escapeHtml(amount)}
+        </div>
+      `.trim()
+          : ""
+      }
+
+      ${
+        reason
+          ? `
+        <div style="margin:0;color:#111827;font-size:14px;line-height:1.6;">
+          <strong>Reason:</strong> ${escapeHtml(reason)}
+        </div>
+      `.trim()
+          : ""
+      }
+    </div>
+  `.trim();
+}
+
 function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
   const cleanedBody = stripTrailingSIXFLSignature(body);
   const ctaHtml = buildCtaHtml(cta);
@@ -239,8 +370,12 @@ export function appendSIXFLTextSignature(body: string) {
 export function buildSIXFLEmailHtml(input: {
   body: string;
   cta?: SIXFLEmailCta;
+  branding?: SIXFLEmailBranding;
+  payment?: SIXFLPaymentSummary;
 }) {
   const bodyHtml = buildBodyHtmlWithOptionalCta(input.body, input.cta);
+  const brandingHtml = buildBrandingBlockHtml(input.branding);
+  const paymentHtml = buildPaymentSummaryHtml(input.payment);
 
   return `
     <div style="background:#f3f4f6;padding:28px 12px;">
@@ -273,7 +408,18 @@ export function buildSIXFLEmailHtml(input: {
 
         <tr>
           <td style="padding:0 32px 30px 32px;">
+            ${brandingHtml}
+            ${paymentHtml}
             ${bodyHtml}
+            ${
+              input.cta
+                ? `
+              <div style="margin-top:12px;color:#6b7280;font-size:12px;line-height:1.6;">
+                Secure payment powered by Stripe.
+              </div>
+            `.trim()
+                : ""
+            }
           </td>
         </tr>
 
