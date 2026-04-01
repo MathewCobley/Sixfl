@@ -182,60 +182,61 @@ export default async function AdminTeamPage({
   const { snapshot: contactSnapshot, recipient } =
     await upsertTeamNotificationRecipient(id);
 
-  const [dispatches, messageThreads] = await Promise.all([
-    prisma.notificationDispatch.findMany({
-      where: {
-        OR: [
-          {
-            sourceType: "TEAM",
-            sourceId: id,
-          },
-          {
-            recipientId: recipient.id,
-          },
-        ],
-      },
-      include: {
-        recipient: true,
-        attempts: {
-          orderBy: {
-            attemptedAt: "desc",
-          },
-          take: 3,
+    const [dispatches, messageThreads] = await Promise.all([
+      prisma.notificationDispatch.findMany({
+        where: {
+          OR: [
+            {
+              sourceType: "TEAM",
+              sourceId: id,
+            },
+            {
+              recipientId: recipient.id,
+            },
+          ],
         },
-      },
-      orderBy: [{ createdAt: "desc" }],
-      take: 100,
-    }),
-    const messageThreads = await prisma.messageThread.findMany({
-      where: {
-        OR: [{ teamId: id }, { recipientId: recipient.id }],
-      },
-      include: {
-        team: {
-          select: {
-            id: true,
-            name: true,
-            logoUrl: true,
+        include: {
+          recipient: true,
+          attempts: {
+            orderBy: {
+              attemptedAt: "desc",
+            },
+            take: 3,
           },
         },
-        recipient: true,
-        league: {
-          select: {
-            id: true,
-            name: true,
-            season: true,
-            slug: true,
+        orderBy: [{ createdAt: "desc" }],
+        take: 100,
+      }),
+      prisma.messageThread.findMany({
+        where: {
+          OR: [{ teamId: id }, { recipientId: recipient.id }],
+        },
+        include: {
+          team: {
+            select: {
+              id: true,
+              name: true,
+              logoUrl: true,
+            },
+          },
+          recipient: true,
+          league: {
+            select: {
+              id: true,
+              name: true,
+              season: true,
+              slug: true,
+            },
+          },
+          messages: {
+            orderBy: [{ createdAt: "desc" }],
+            take: 20,
           },
         },
-        messages: {
-          orderBy: [{ createdAt: "desc" }],
-          take: 20,
-        },
-      },
-      orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
-      take: 20,
-    })],);
+        orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+        take: 20,
+      }),
+    ]);
 
   const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
 
