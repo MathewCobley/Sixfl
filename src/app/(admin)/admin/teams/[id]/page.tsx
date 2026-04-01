@@ -207,7 +207,7 @@ export default async function AdminTeamPage({
       orderBy: [{ createdAt: "desc" }],
       take: 100,
     }),
-    prisma.messageThreads = await prisma.messageThread.findMany({
+    const messageThreads = await prisma.messageThread.findMany({
       where: {
         OR: [{ teamId: id }, { recipientId: recipient.id }],
       },
