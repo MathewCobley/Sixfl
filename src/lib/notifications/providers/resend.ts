@@ -62,11 +62,6 @@ export async function sendEmailWithResend(
     data: {
       id: response.data?.id ?? null,
     },
-    error: response.error
-      ? {
-          message: response.error.message ?? null,
-        }
-      : null,
   };
 
   return {
