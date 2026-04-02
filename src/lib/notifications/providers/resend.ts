@@ -42,6 +42,7 @@ export async function sendEmailWithResend(
 ): Promise<NotificationProviderSendResult> {
   const resend = getResendClient();
   const fromEmail = getEmailFromAddress();
+  const sanitizedHeaders = sanitizeHeaders(input.headers);
 
   const response = await resend.emails.send({
     from: fromEmail,
@@ -50,17 +51,28 @@ export async function sendEmailWithResend(
     text: input.text,
     ...(input.html ? { html: input.html } : {}),
     ...(input.replyTo ? { replyTo: input.replyTo } : {}),
-    ...(sanitizeHeaders(input.headers) ? { headers: sanitizeHeaders(input.headers) } : {}),
+    ...(sanitizedHeaders ? { headers: sanitizedHeaders } : {}),
   });
 
   if (response.error) {
     throw new Error(response.error.message || "Failed to send email with Resend.");
   }
 
+  const responsePayload: Prisma.InputJsonValue = {
+    data: {
+      id: response.data?.id ?? null,
+    },
+    error: response.error
+      ? {
+          message: response.error.message ?? null,
+        }
+      : null,
+  };
+
   return {
     provider: "resend",
     providerMessageId: response.data?.id ?? null,
-    responsePayload: response as Prisma.InputJsonValue,
+    responsePayload,
     fromEmail,
   };
 }
