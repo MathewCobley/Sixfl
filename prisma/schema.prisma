@@ -705,9 +705,14 @@ model MessageEntry {
   providerMessageId String?
   providerStatus    String?
 
-  twilioMessageSid String?
-  twilioAccountSid String?
-  twilioPayload    Json?
+  twilioMessageSid  String?
+  twilioAccountSid  String?
+  twilioPayload     Json?
+  resendEmailId     String?
+  resendPayload     Json?
+  internetMessageId String?
+  inReplyTo         String?
+  referencesHeader  String?
 
   notificationDispatchId String?
 
@@ -727,10 +732,13 @@ model MessageEntry {
   alert InboxAlert?
 
   @@index([threadId, createdAt])
+  @@index([channel, createdAt])
   @@index([direction, createdAt])
   @@index([participantRole, createdAt])
   @@index([providerMessageId])
   @@index([twilioMessageSid])
+  @@index([resendEmailId])
+  @@index([internetMessageId])
   @@index([fromEmail])
   @@index([toEmail])
   @@index([notificationDispatchId])
