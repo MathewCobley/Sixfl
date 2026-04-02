@@ -644,7 +644,7 @@ model MessageThread {
   phoneNormalized    String?
   contactEmail       String?
   emailNormalized    String?
-  replyAddress       String?
+  replyAddress       String? @unique
   lastMessagePreview String?
 
   assignedToUserId String?

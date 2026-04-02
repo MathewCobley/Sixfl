@@ -370,6 +370,10 @@ export default async function AdminTeamPage({
             </div>
           ) : null}
 
+          {sp.error === "missing_name" ? (
+            <div className="text-red-300">Team name is required.</div>
+          ) : null}
+
           {sp.composeError === "missing_subject" ? (
             <div className="text-red-300">Email subject is required.</div>
           ) : null}
@@ -432,6 +436,26 @@ export default async function AdminTeamPage({
 
             <form action={updateTeamDetailsAction} className="space-y-5">
               <input type="hidden" name="id" value={team.id} />
+
+              <div className="space-y-2">
+                <label htmlFor="name" className="text-sm text-white/60">
+                  Team name
+                </label>
+
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  defaultValue={team.name}
+                  placeholder="Enter team name"
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                />
+
+                <div className="text-xs text-white/50">
+                  This updates the public team name, admin listings, and team
+                  messaging label.
+                </div>
+              </div>
 
               <div className="space-y-2">
                 <label htmlFor="leagueId" className="text-sm text-white/60">
@@ -1064,18 +1088,6 @@ export default async function AdminTeamPage({
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm text-white/70">
-                  Intro message
-                </label>
-                <textarea
-                  name="paymentIntro"
-                  rows={5}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                  placeholder="Please use the button below to make payment for your recent match."
-                />
-              </div>
-
               <button
                 type="submit"
                 className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
@@ -1262,4 +1274,4 @@ export default async function AdminTeamPage({
       </div>
     </div>
   );
-}
+} 

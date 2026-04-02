@@ -2,58 +2,65 @@
 // File: src/lib/notifications/providers/resend.ts
 // ========================================
 
-import { Resend } from "resend";
 import type { Prisma } from "@prisma/client";
+import { getEmailFromAddress, getResendClient } from "@/lib/resend/client";
 
 export type SendNotificationEmailInput = {
   to: string;
   subject: string;
   text: string;
   html?: string | null;
+  replyTo?: string | null;
+  headers?: Record<string, string> | null;
 };
 
 export type NotificationProviderSendResult = {
-  provider: string;
+  provider: "resend";
   providerMessageId: string | null;
   responsePayload?: Prisma.InputJsonValue;
+  fromEmail: string;
 };
 
-function getResendClient() {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
+function sanitizeHeaders(
+  input: Record<string, string> | null | undefined,
+): Record<string, string> | undefined {
+  if (!input) return undefined;
 
-  if (!apiKey) {
-    throw new Error("RESEND_API_KEY is missing.");
+  const entries = Object.entries(input)
+    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .filter(([key, value]) => key && value);
+
+  if (entries.length === 0) {
+    return undefined;
   }
 
-  return new Resend(apiKey);
-}
-
-function getEmailFromAddress() {
-  const value = process.env.EMAIL_FROM?.trim();
-
-  if (!value) {
-    throw new Error("EMAIL_FROM is missing.");
-  }
-
-  return value;
+  return Object.fromEntries(entries);
 }
 
 export async function sendEmailWithResend(
   input: SendNotificationEmailInput,
 ): Promise<NotificationProviderSendResult> {
   const resend = getResendClient();
+  const fromEmail = getEmailFromAddress();
 
   const response = await resend.emails.send({
-    from: getEmailFromAddress(),
+    from: fromEmail,
     to: input.to,
     subject: input.subject,
     text: input.text,
     ...(input.html ? { html: input.html } : {}),
+    ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+    ...(sanitizeHeaders(input.headers) ? { headers: sanitizeHeaders(input.headers) } : {}),
   });
+
+  if (response.error) {
+    throw new Error(response.error.message || "Failed to send email with Resend.");
+  }
 
   return {
     provider: "resend",
     providerMessageId: response.data?.id ?? null,
     responsePayload: response as Prisma.InputJsonValue,
+    fromEmail,
   };
 }

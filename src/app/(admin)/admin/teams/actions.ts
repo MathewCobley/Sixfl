@@ -305,9 +305,6 @@ export async function sendTeamPaymentRequestAction(formData: FormData) {
   const paymentUrl = getTrimmedValue(formData.get("paymentUrl"));
   const paymentAmount = getTrimmedValue(formData.get("paymentAmount")) || null;
   const paymentReason = getTrimmedValue(formData.get("paymentReason")) || null;
-  const intro =
-    getTrimmedValue(formData.get("paymentIntro")) ||
-    "Please use the button below to make payment for your recent match.";
 
   if (!teamId) {
     redirect("/admin/teams?error=missing_id");
@@ -346,12 +343,9 @@ export async function sendTeamPaymentRequestAction(formData: FormData) {
   const body = [
     `Hi ${recipient.displayName?.trim() || snapshot.teamName},`,
     "",
-    intro,
+    "Please use the button below to make payment for your recent match.",
     "",
     "If you have any questions, just reply to this email.",
-    "",
-    "Thanks,",
-    "SIXFL",
   ].join("\n");
 
   await queueDirectNotification({
