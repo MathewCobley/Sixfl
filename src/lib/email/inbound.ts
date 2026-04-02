@@ -4,7 +4,10 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { extractThreadIdFromReplyAddress, parseThreadReplyAddress } from "@/lib/email/reply-address";
+import {
+  extractThreadIdFromReplyAddress,
+  parseThreadReplyAddress,
+} from "@/lib/email/reply-address";
 import { getResendClient } from "@/lib/resend/client";
 import type { ResendWebhookEvent } from "@/lib/resend/verifyWebhook";
 
@@ -65,13 +68,12 @@ function buildLastMessagePreview(input: {
 }): string {
   const subject = input.subject?.trim();
   const text = input.text?.trim();
-  const html = input.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const html = input.html
+    ?.replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const base =
-    text ||
-    html ||
-    subject ||
-    "";
+  const base = text || html || subject || "";
 
   if (!base) return "";
 
@@ -114,12 +116,16 @@ function pickManagedReplyAddress(addresses: string[] | undefined): string | null
   return null;
 }
 
-async function fetchReceivedEmailContent(emailId: string): Promise<ReceivedEmailContent> {
+async function fetchReceivedEmailContent(
+  emailId: string,
+): Promise<ReceivedEmailContent> {
   const resend = getResendClient();
   const response = await resend.emails.receiving.get(emailId);
 
   if (response.error) {
-    throw new Error(response.error.message || "Failed to retrieve inbound email content.");
+    throw new Error(
+      response.error.message || "Failed to retrieve inbound email content.",
+    );
   }
 
   return (response.data ?? {}) as ReceivedEmailContent;
@@ -174,8 +180,10 @@ async function updateThreadSummary(threadId: string) {
         latestMessage?.sentAt ??
         latestMessage?.createdAt ??
         null,
-      latestInboundAt: latestInbound?.receivedAt ?? latestInbound?.createdAt ?? null,
-      latestOutboundAt: latestOutbound?.sentAt ?? latestOutbound?.createdAt ?? null,
+      latestInboundAt:
+        latestInbound?.receivedAt ?? latestInbound?.createdAt ?? null,
+      latestOutboundAt:
+        latestOutbound?.sentAt ?? latestOutbound?.createdAt ?? null,
       lastInboundMessageId: latestInbound?.id ?? null,
       lastOutboundMessageId: latestOutbound?.id ?? null,
       lastMessagePreview: latestMessage
@@ -313,8 +321,8 @@ export async function handleInboundEmailWebhook(
       providerMessageId: emailId,
       providerStatus: "received",
       receivedAt: new Date(),
-      resendPayload: event as Prisma.InputJsonValue,
-      internetMessageId: data.message_id?.trim() || getHeaderValue(email.headers, "message-id"),
+      internetMessageId:
+        data.message_id?.trim() || getHeaderValue(email.headers, "message-id"),
       inReplyTo: getHeaderValue(email.headers, "in-reply-to"),
       referencesHeader: getHeaderValue(email.headers, "references"),
       resendEmailId: emailId,
