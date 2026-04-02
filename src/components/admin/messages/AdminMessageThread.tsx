@@ -5,7 +5,14 @@
 "use client";
 
 import Link from "next/link";
-import { markMessageThreadReadAction } from "@/app/(admin)/admin/messages/actions";
+import { useSearchParams } from "next/navigation";
+import { useFormStatus } from "react-dom";
+import {
+  archiveMessageThreadAction,
+  markMessageThreadReadAction,
+  reopenMessageThreadAction,
+  sendAdminMessageReplyAction,
+} from "@/app/(admin)/admin/messages/actions";
 
 type SelectedThread = {
   id: string;
@@ -53,6 +60,13 @@ type SelectedThread = {
 type AdminMessageThreadProps = {
   selectedFilter: "unread" | "open" | "archived" | "all";
   thread: SelectedThread;
+};
+
+type NoticeTone = "success" | "error" | "info";
+
+type Notice = {
+  tone: NoticeTone;
+  message: string;
 };
 
 function formatDateTime(value: string | null): string {
@@ -133,10 +147,127 @@ function getMessageRoleLabel(
   }
 }
 
+function getNotice(searchParams: ReturnType<typeof useSearchParams>): Notice | null {
+  const error = searchParams.get("error");
+
+  if (error) {
+    switch (error) {
+      case "missing_thread":
+        return {
+          tone: "error",
+          message: "That conversation could not be found.",
+        };
+      case "empty_body":
+        return {
+          tone: "error",
+          message: "Type a reply before sending.",
+        };
+      case "missing_phone":
+        return {
+          tone: "error",
+          message: "This thread does not have a valid phone number.",
+        };
+      case "not_sms":
+        return {
+          tone: "error",
+          message: "Only SMS threads can be replied to from this inbox.",
+        };
+      case "thread_not_open":
+        return {
+          tone: "error",
+          message: "Reopen the thread before sending a new reply.",
+        };
+      case "send_failed":
+        return {
+          tone: "error",
+          message:
+            "The SMS reply could not be sent. Check Twilio settings and try again.",
+        };
+      default:
+        return {
+          tone: "error",
+          message: "Something went wrong. Please try again.",
+        };
+    }
+  }
+
+  if (searchParams.get("sent") === "1") {
+    return {
+      tone: "success",
+      message: "SMS reply sent successfully.",
+    };
+  }
+
+  if (searchParams.get("archived") === "1") {
+    return {
+      tone: "success",
+      message: "Thread archived.",
+    };
+  }
+
+  if (searchParams.get("reopened") === "1") {
+    return {
+      tone: "success",
+      message: "Thread reopened.",
+    };
+  }
+
+  if (searchParams.get("read") === "1") {
+    return {
+      tone: "success",
+      message: "Thread marked as read.",
+    };
+  }
+
+  return null;
+}
+
+function NoticeBanner({ notice }: { notice: Notice }) {
+  const toneClass =
+    notice.tone === "error"
+      ? "border-red-500/30 bg-red-500/10 text-red-100"
+      : notice.tone === "info"
+        ? "border-white/10 bg-white/[0.04] text-white/80"
+        : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
+
+  return (
+    <div className={`rounded-2xl border px-4 py-3 text-sm ${toneClass}`}>
+      {notice.message}
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  pendingLabel,
+  disabled = false,
+  className,
+}: {
+  label: string;
+  pendingLabel: string;
+  disabled?: boolean;
+  className: string;
+}) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={disabled || pending}
+      className={className}
+    >
+      {pending ? pendingLabel : label}
+    </button>
+  );
+}
+
 export default function AdminMessageThread({
   selectedFilter,
   thread,
 }: AdminMessageThreadProps) {
+  const searchParams = useSearchParams();
+  const notice = getNotice(searchParams);
+
   if (!thread) {
     return (
       <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
@@ -159,6 +290,15 @@ export default function AdminMessageThread({
   }
 
   const title = getThreadTitle(thread);
+  const replyPhoneRaw =
+    thread.phoneNormalized || thread.recipient?.phone || thread.contactPhone;
+  const replyPhoneLabel = formatPhone(replyPhoneRaw);
+  const canReply = Boolean(replyPhoneRaw) && thread.status === "OPEN";
+  const replyHelpText = !replyPhoneRaw
+    ? "This thread has no valid phone number yet, so SMS reply is unavailable."
+    : thread.status !== "OPEN"
+      ? "Reopen this thread before sending a new SMS reply."
+      : `Replying to ${replyPhoneLabel}. Replies are sent immediately by SMS.`;
 
   return (
     <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
@@ -265,16 +405,37 @@ export default function AdminMessageThread({
                 <form action={markMessageThreadReadAction}>
                   <input type="hidden" name="threadId" value={thread.id} />
                   <input type="hidden" name="filter" value={selectedFilter} />
-                  <button
-                    type="submit"
+                  <ActionButton
+                    label={
+                      thread.unreadForAdminCount > 0
+                        ? `Mark read (${thread.unreadForAdminCount})`
+                        : "Already read"
+                    }
+                    pendingLabel="Updating..."
                     disabled={thread.unreadForAdminCount === 0}
                     className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-white/40"
-                  >
-                    {thread.unreadForAdminCount > 0
-                      ? `Mark read (${thread.unreadForAdminCount})`
-                      : "Already read"}
-                  </button>
+                  />
                 </form>
+
+                {thread.status === "OPEN" ? (
+                  <form action={archiveMessageThreadAction}>
+                    <input type="hidden" name="threadId" value={thread.id} />
+                    <ActionButton
+                      label="Archive"
+                      pendingLabel="Archiving..."
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </form>
+                ) : (
+                  <form action={reopenMessageThreadAction}>
+                    <input type="hidden" name="threadId" value={thread.id} />
+                    <ActionButton
+                      label="Reopen"
+                      pendingLabel="Reopening..."
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </form>
+                )}
 
                 <Link
                   href={`/admin/messages?filter=${selectedFilter}&thread=${thread.id}`}
@@ -295,6 +456,8 @@ export default function AdminMessageThread({
             </div>
           </div>
         </div>
+
+        {notice ? <div className="mt-5"><NoticeBanner notice={notice} /></div> : null}
       </div>
 
       <div className="grid gap-6 p-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -402,6 +565,47 @@ export default function AdminMessageThread({
         </div>
 
         <div className="space-y-4">
+          <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
+            <h3 className="text-lg font-semibold text-white">Reply by SMS</h3>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Send a direct reply from the inbox and keep the full conversation
+              timeline together.
+            </p>
+
+            <form action={sendAdminMessageReplyAction} className="mt-4 space-y-4">
+              <input type="hidden" name="threadId" value={thread.id} />
+              <input type="hidden" name="filter" value={selectedFilter} />
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                {replyHelpText}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Reply message
+                </label>
+                <textarea
+                  name="body"
+                  rows={5}
+                  disabled={!canReply}
+                  placeholder={
+                    canReply
+                      ? "Type your SMS reply here..."
+                      : "Reply unavailable for this thread"
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 focus:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
+
+              <ActionButton
+                label="Send SMS reply"
+                pendingLabel="Sending reply..."
+                disabled={!canReply}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-white/40"
+              />
+            </form>
+          </div>
+
           <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
             <h3 className="text-lg font-semibold text-white">Contact details</h3>
             <div className="mt-4 space-y-3 text-sm">
