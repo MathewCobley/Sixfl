@@ -68,7 +68,7 @@ export function verifyResendWebhookPayload(
 ): ResendWebhookEvent {
   const resend = getResendClient();
 
-  const result = resend.webhooks.verify({
+  const raw = resend.webhooks.verify({
     payload,
     headers: {
       id: headers.id,
@@ -78,7 +78,7 @@ export function verifyResendWebhookPayload(
     webhookSecret: getResendWebhookSecret(),
   });
 
-  return result as ResendWebhookEvent;
+  return raw as unknown as ResendWebhookEvent;
 }
 
 export async function verifyResendWebhookRequest(request: Request): Promise<{
