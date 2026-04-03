@@ -62,6 +62,39 @@ function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n");
 }
 
+function getSiteUrl() {
+  const fallback = "https://www.sixfl.co.uk";
+
+  const value =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.SITE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim() ||
+    fallback;
+
+  return value.replace(/\/+$/, "");
+}
+
+function resolveEmailAssetUrl(value: string | null | undefined) {
+  const raw = value?.trim();
+  if (!raw) return null;
+
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+
+  if (raw.startsWith("/")) {
+    try {
+      return new URL(raw, `${getSiteUrl()}/`).toString();
+    } catch {
+      return `${getSiteUrl()}${raw}`;
+    }
+  }
+
+  return raw;
+}
+
 function stripTrailingSIXFLSignature(text: string) {
   let output = normalizeLineEndings(text).trim();
 
@@ -194,7 +227,7 @@ function buildCtaHtml(cta?: SIXFLEmailCta) {
 
 function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
   const teamName = branding?.teamName?.trim();
-  const teamLogoUrl = branding?.teamLogoUrl?.trim();
+  const teamLogoUrl = resolveEmailAssetUrl(branding?.teamLogoUrl);
   const leagueName = branding?.leagueName?.trim();
 
   if (!teamName && !teamLogoUrl && !leagueName) {
@@ -376,6 +409,7 @@ export function buildSIXFLEmailHtml(input: {
   const bodyHtml = buildBodyHtmlWithOptionalCta(input.body, input.cta);
   const brandingHtml = buildBrandingBlockHtml(input.branding);
   const paymentHtml = buildPaymentSummaryHtml(input.payment);
+  const showPaymentProviderNote = Boolean(input.payment);
 
   return `
     <div style="background:#f3f4f6;padding:28px 12px;">
@@ -412,7 +446,7 @@ export function buildSIXFLEmailHtml(input: {
             ${paymentHtml}
             ${bodyHtml}
             ${
-              input.cta
+              showPaymentProviderNote
                 ? `
               <div style="margin-top:12px;color:#6b7280;font-size:12px;line-height:1.6;">
                 Secure payment powered by Stripe.

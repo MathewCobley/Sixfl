@@ -1,4 +1,3 @@
-
 // ========================================
 // File: src/app/(admin)/admin/fixtures/publish-actions.ts
 // ========================================
@@ -83,20 +82,6 @@ function buildAdminFixturesHref(input: {
   return `/admin/fixtures?${searchParams.toString()}`;
 }
 
-function redirectIfEmailRepliesNotConfigured(leagueId: string) {
-  try {
-    getEmailReplyDomain();
-  } catch {
-    redirect(
-      buildAdminFixturesHref({
-        publish: "error",
-        leagueId,
-        publishError: "reply_not_configured",
-      }),
-    );
-  }
-}
-
 function formatKickoff(date: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
@@ -133,10 +118,36 @@ function isQueuedDispatch(status: NotificationDispatchStatus) {
   return status === NotificationDispatchStatus.QUEUED;
 }
 
+function getLeagueDisplayName(league: { name: string; season: string | null }) {
+  return league.season ? `${league.name} — ${league.season}` : league.name;
+}
+
+function getTeamDetailsForFixture(
+  fixture: {
+    homeTeam: { id: string; name: string; logoUrl: string | null };
+    awayTeam: { id: string; name: string; logoUrl: string | null };
+  },
+  teamId: string,
+) {
+  return fixture.homeTeam.id === teamId ? fixture.homeTeam : fixture.awayTeam;
+}
+
 export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
   await requireAdmin();
 
   const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+
+  try {
+    getEmailReplyDomain();
+  } catch {
+    redirect(
+      buildAdminFixturesHref({
+        publish: "error",
+        leagueId,
+        publishError: "reply_not_configured",
+      }),
+    );
+  }
 
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
@@ -168,12 +179,14 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
         select: {
           id: true,
           name: true,
+          logoUrl: true,
         },
       },
       awayTeam: {
         select: {
           id: true,
           name: true,
+          logoUrl: true,
         },
       },
       venue: {
@@ -202,8 +215,6 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     );
   }
 
-  redirectIfEmailRepliesNotConfigured(leagueId);
-
   const publishedAt = new Date();
 
   await prisma.fixture.updateMany({
@@ -221,6 +232,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
   );
 
   const fixturesUrl = buildAbsoluteUrl(`/leagues/${league.slug}/fixtures`);
+  const leagueDisplayName = getLeagueDisplayName(league);
 
   let digestQueued = 0;
   let digestSkipped = 0;
@@ -235,6 +247,8 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     );
 
     if (teamFixtures.length === 0) continue;
+
+    const teamDetails = getTeamDetailsForFixture(teamFixtures[0], teamId);
 
     const digestDispatch = await queueDirectNotification({
       recipientId: recipient.id,
@@ -258,6 +272,11 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
         teamId,
         leagueId: league.id,
       },
+      emailBranding: {
+        teamName: snapshot.teamName || teamDetails.name,
+        teamLogoUrl: teamDetails.logoUrl ?? null,
+        leagueName: leagueDisplayName,
+      },
       emailCta: {
         label: "View fixtures",
         url: fixturesUrl,
@@ -274,6 +293,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
   for (const fixture of unpublishedFixtures) {
     for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
       const { recipient } = await upsertTeamNotificationRecipient(teamId);
+      const teamDetails = getTeamDetailsForFixture(fixture, teamId);
 
       const reminderTimes = [
         new Date(fixture.kickoffAt.getTime() - 48 * 60 * 60 * 1000),
@@ -287,7 +307,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
           audience: NotificationAudience.TEAM,
           subject: `${league.name} fixture reminder`,
           body: [
-            "Hi,",
+            `Hi ${recipient.displayName?.trim() || teamDetails.name},`,
             "",
             `Reminder: ${buildFixtureLine(fixture, teamId)}`,
             "",
@@ -302,6 +322,11 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
             leagueId: league.id,
           },
           scheduledFor,
+          emailBranding: {
+            teamName: teamDetails.name,
+            teamLogoUrl: teamDetails.logoUrl ?? null,
+            leagueName: leagueDisplayName,
+          },
           emailCta: {
             label: "View fixtures",
             url: fixturesUrl,
