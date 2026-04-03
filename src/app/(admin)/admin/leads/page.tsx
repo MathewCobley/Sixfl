@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/leads/page.tsx
+// File: src/app/(admin)/admin/leads/page.tsx
 // ========================================
 
 import Link from "next/link";
@@ -585,8 +585,15 @@ export default async function AdminLeadsPage({
             </Link>
 
             <Link
-              href="/admin/leads/import"
+              href="/admin/leads/new"
               className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
+            >
+              Add lead
+            </Link>
+
+            <Link
+              href="/admin/leads/import"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
             >
               Import CSV
             </Link>

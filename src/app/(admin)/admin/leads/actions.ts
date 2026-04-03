@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/leads/actions.ts
+// File: src/app/(admin)/admin/leads/actions.ts
 // ========================================
 
 "use server";
@@ -10,7 +10,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { InterestType, LeadStatus, PreferredNight } from "@prisma/client";
+import {
+  InterestType,
+  LeadStatus,
+  LeagueType,
+  PreferredNight,
+} from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -29,6 +34,23 @@ type BulkEmailActionState = {
   error?: string;
   sentCount?: number;
   failedCount?: number;
+};
+
+export type ManualLeadFormState = {
+  ok?: boolean;
+  message?: string;
+  errors?: Partial<
+    Record<
+      | "interestType"
+      | "status"
+      | "contactName"
+      | "email"
+      | "phone"
+      | "leagueType"
+      | "preferredNights",
+      string
+    >
+  >;
 };
 
 // ========================================
@@ -91,6 +113,18 @@ function isPreferredNight(value: string): value is PreferredNight {
   );
 }
 
+function isLeagueType(value: string): value is LeagueType {
+  return value === "MENS" || value === "WOMENS" || value === "YOUTH";
+}
+
+function getTrimmedValue(formData: FormData, name: string) {
+  return String(formData.get(name) ?? "").trim();
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 // ========================================
 // Actions
 // ========================================
@@ -116,6 +150,115 @@ export async function updateLeadStatus(formData: FormData) {
   });
 
   redirect(returnTo || "/admin/leads");
+}
+
+export async function createManualLeadAction(
+  _prevState: ManualLeadFormState,
+  formData: FormData,
+): Promise<ManualLeadFormState> {
+  await requireAdmin();
+
+  const interestTypeRaw = getTrimmedValue(formData, "interestType").toUpperCase();
+  const statusRaw = getTrimmedValue(formData, "status").toUpperCase();
+  const contactName = getTrimmedValue(formData, "contactName");
+  const email = getTrimmedValue(formData, "email").toLowerCase();
+  const phone = getTrimmedValue(formData, "phone");
+  const teamName = getTrimmedValue(formData, "teamName");
+  const area = getTrimmedValue(formData, "area");
+  const leagueTypeRaw = getTrimmedValue(formData, "leagueType").toUpperCase();
+  const source = getTrimmedValue(formData, "source") || "Manual admin entry";
+  const message = getTrimmedValue(formData, "message");
+  const wantsFreeKit = formData.get("wantsFreeKit") === "on";
+  const marketingConsent = formData.get("marketingConsent") === "on";
+
+  const preferredNightsRaw = formData
+    .getAll("preferredNights")
+    .map((value) => String(value).trim().toUpperCase())
+    .filter(Boolean);
+
+  const errors: NonNullable<ManualLeadFormState["errors"]> = {};
+
+  if (!isInterestType(interestTypeRaw)) {
+    errors.interestType = "Please choose a valid lead type.";
+  }
+
+  if (!isLeadStatus(statusRaw)) {
+    errors.status = "Please choose a valid status.";
+  }
+
+  if (contactName.length < 2) {
+    errors.contactName = "Please enter the contact name.";
+  }
+
+  if (!email) {
+    errors.email = "Please enter an email address.";
+  } else if (!isValidEmail(email)) {
+    errors.email = "Please enter a valid email address.";
+  }
+
+  if (leagueTypeRaw && !isLeagueType(leagueTypeRaw)) {
+    errors.leagueType = "Please choose a valid league type.";
+  }
+
+  const invalidNight = preferredNightsRaw.find((value) => !isPreferredNight(value));
+  if (invalidNight) {
+    errors.preferredNights = "One or more selected nights were invalid.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return {
+      ok: false,
+      message: "Please fix the highlighted fields.",
+      errors,
+    };
+  }
+
+  const preferredNights = Array.from(
+    new Set(
+      preferredNightsRaw.filter((value): value is PreferredNight =>
+        isPreferredNight(value),
+      ),
+    ),
+  );
+
+  const finalPreferredNights = preferredNights.includes("ANY")
+    ? ["ANY" as PreferredNight]
+    : preferredNights;
+
+  const status = statusRaw as LeadStatus;
+
+  await prisma.interestLead.create({
+    data: {
+      interestType: interestTypeRaw as InterestType,
+      status,
+      contactName,
+      email,
+      phone: phone || null,
+      teamName: teamName || null,
+      area: area || null,
+      leagueType: leagueTypeRaw && isLeagueType(leagueTypeRaw) ? leagueTypeRaw : null,
+      message: message || null,
+      source,
+      wantsFreeKit,
+      marketingConsent,
+      ...(status !== "NEW" ? { contactedAt: new Date() } : {}),
+      ...(status === "CLOSED" ? { closedAt: new Date() } : {}),
+      ...(finalPreferredNights.length > 0
+        ? {
+            preferredNights: {
+              create: finalPreferredNights.map((night) => ({
+                night,
+              })),
+            },
+          }
+        : {}),
+    },
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin");
+
+  redirect("/admin/leads?created=1");
 }
 
 export async function sendBulkLeadEmailAction(
