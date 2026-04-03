@@ -238,6 +238,11 @@ export default async function LeagueLandingPage({ params }: PageProps) {
         },
       },
       fixtures: {
+        where: {
+          publishedAt: {
+            not: null,
+          },
+        },
         orderBy: {
           kickoffAt: "asc",
         },

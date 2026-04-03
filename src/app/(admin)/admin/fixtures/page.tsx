@@ -9,6 +9,15 @@ import { publishAndEmailLeagueFixturesAction } from "@/app/(admin)/admin/fixture
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
+type AdminFixturesPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+type PublishNotice = {
+  tone: "success" | "info";
+  message: string;
+};
+
 function formatKickoffLabel(date: Date | null) {
   if (!date) return null;
 
@@ -21,8 +30,75 @@ function formatKickoffLabel(date: Date | null) {
   }).format(date);
 }
 
-export default async function AdminFixturesPage() {
+function getSearchParamValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+function formatCount(value: number, singular: string, plural = `${singular}s`) {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function buildPublishNotice(input: {
+  searchParams: Record<string, string | string[] | undefined>;
+  leagues: Array<{ id: string; name: string }>;
+}): PublishNotice | null {
+  const publish = getSearchParamValue(input.searchParams.publish);
+  if (!publish) return null;
+
+  const leagueId = getSearchParamValue(input.searchParams.leagueId);
+  const leagueName =
+    input.leagues.find((league) => league.id === leagueId)?.name ?? "this league";
+
+  const published = Number(getSearchParamValue(input.searchParams.published) ?? 0);
+  const digestQueued = Number(
+    getSearchParamValue(input.searchParams.digestQueued) ?? 0,
+  );
+  const digestSkipped = Number(
+    getSearchParamValue(input.searchParams.digestSkipped) ?? 0,
+  );
+  const reminderQueued = Number(
+    getSearchParamValue(input.searchParams.reminderQueued) ?? 0,
+  );
+  const reminderSkipped = Number(
+    getSearchParamValue(input.searchParams.reminderSkipped) ?? 0,
+  );
+
+  if (publish === "success") {
+    const summaryParts = [
+      `${formatCount(published, "fixture")} published for ${leagueName}`,
+      `${formatCount(digestQueued, "digest email")} queued`,
+      `${formatCount(reminderQueued, "reminder email")} queued`,
+    ];
+
+    const skipped = digestSkipped + reminderSkipped;
+    if (skipped > 0) {
+      summaryParts.push(
+        `${formatCount(skipped, "notification")} skipped because team email details were missing or disabled`,
+      );
+    }
+
+    return {
+      tone: "success",
+      message: `${summaryParts.join(". ")}.`,
+    };
+  }
+
+  if (publish === "none") {
+    return {
+      tone: "info",
+      message: `No draft fixtures were waiting to be published for ${leagueName}.`,
+    };
+  }
+
+  return null;
+}
+
+export default async function AdminFixturesPage({
+  searchParams,
+}: AdminFixturesPageProps) {
   await requireAdmin();
+
+  const resolvedSearchParams = searchParams ? await searchParams : {};
 
   const [leagues, teams, venues, referees, fixtures] = await Promise.all([
     prisma.league.findMany({
@@ -85,6 +161,7 @@ export default async function AdminFixturesPage() {
         pitch: true,
         status: true,
         kickoffAt: true,
+        publishedAt: true,
         venue: {
           select: {
             id: true,
@@ -120,13 +197,24 @@ export default async function AdminFixturesPage() {
 
   const publishSummary = leagues.map((league) => {
     const leagueFixtures = fixtures.filter((fixture) => fixture.leagueId === league.id);
-    const scheduled = leagueFixtures.filter((fixture) => fixture.status === "SCHEDULED").length;
+    const drafts = leagueFixtures.filter((fixture) => fixture.publishedAt === null).length;
+    const published = leagueFixtures.length - drafts;
+    const scheduled = leagueFixtures.filter(
+      (fixture) => fixture.status === "SCHEDULED",
+    ).length;
 
     return {
       league,
       total: leagueFixtures.length,
+      drafts,
+      published,
       scheduled,
     };
+  });
+
+  const publishNotice = buildPublishNotice({
+    searchParams: resolvedSearchParams,
+    leagues: leagues.map((league) => ({ id: league.id, name: league.name })),
   });
 
   const screenData = {
@@ -168,18 +256,41 @@ export default async function AdminFixturesPage() {
               Send fixtures to teams
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-white/60">
-              Publish the next batch of fixtures for a league and automatically queue team emails plus pre-match reminders.
+              Draft fixtures stay private until you publish them. Publishing sends the
+              fixture digest to team contacts and queues reminder emails before kickoff.
             </p>
           </div>
         </div>
 
+        {publishNotice ? (
+          <div className="px-6 pt-6 md:px-8">
+            <div
+              className={[
+                "rounded-2xl border px-4 py-3 text-sm",
+                publishNotice.tone === "success"
+                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                  : "border-white/10 bg-white/[0.05] text-white/75",
+              ].join(" ")}
+            >
+              {publishNotice.message}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-4 px-6 py-6 md:grid-cols-2 md:px-8 xl:grid-cols-3">
           {publishSummary.map((item) => (
-            <div key={item.league.id} className="rounded-3xl border border-white/10 bg-black/30 p-5">
+            <div
+              key={item.league.id}
+              className="rounded-3xl border border-white/10 bg-black/30 p-5"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="truncate text-lg font-semibold text-white">{item.league.name}</div>
-                  <div className="mt-1 text-sm text-white/45">{item.league.season || "No season set"}</div>
+                  <div className="truncate text-lg font-semibold text-white">
+                    {item.league.name}
+                  </div>
+                  <div className="mt-1 text-sm text-white/45">
+                    {item.league.season || "No season set"}
+                  </div>
                 </div>
                 <Link
                   href={`/leagues/${item.league.slug}`}
@@ -190,14 +301,36 @@ export default async function AdminFixturesPage() {
                 </Link>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Total</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Total
+                  </div>
                   <div className="mt-1 text-lg font-semibold text-white">{item.total}</div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Scheduled</div>
-                  <div className="mt-1 text-lg font-semibold text-white">{item.scheduled}</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Draft
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-amber-300">
+                    {item.drafts}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Published
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-emerald-300">
+                    {item.published}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Scheduled
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-white">
+                    {item.scheduled}
+                  </div>
                 </div>
               </div>
 
@@ -205,10 +338,12 @@ export default async function AdminFixturesPage() {
                 <input type="hidden" name="leagueId" value={item.league.id} />
                 <button
                   type="submit"
-                  disabled={item.total === 0}
+                  disabled={item.drafts === 0}
                   className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Publish fixtures & email teams
+                  {item.drafts > 0
+                    ? `Publish ${formatCount(item.drafts, "draft fixture")} & email teams`
+                    : "No draft fixtures to publish"}
                 </button>
               </form>
             </div>

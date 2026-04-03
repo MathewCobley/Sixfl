@@ -4,7 +4,11 @@
 
 "use server";
 
-import { NotificationAudience, NotificationChannel } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationChannel,
+  NotificationDispatchStatus,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -36,6 +40,42 @@ function buildAbsoluteUrl(path: string) {
   return new URL(path, getSiteUrl()).toString();
 }
 
+function buildAdminFixturesHref(input: {
+  publish: "success" | "none";
+  leagueId: string;
+  published?: number;
+  digestQueued?: number;
+  digestSkipped?: number;
+  reminderQueued?: number;
+  reminderSkipped?: number;
+}) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("publish", input.publish);
+  searchParams.set("leagueId", input.leagueId);
+
+  if (typeof input.published === "number") {
+    searchParams.set("published", String(input.published));
+  }
+
+  if (typeof input.digestQueued === "number") {
+    searchParams.set("digestQueued", String(input.digestQueued));
+  }
+
+  if (typeof input.digestSkipped === "number") {
+    searchParams.set("digestSkipped", String(input.digestSkipped));
+  }
+
+  if (typeof input.reminderQueued === "number") {
+    searchParams.set("reminderQueued", String(input.reminderQueued));
+  }
+
+  if (typeof input.reminderSkipped === "number") {
+    searchParams.set("reminderSkipped", String(input.reminderSkipped));
+  }
+
+  return `/admin/fixtures?${searchParams.toString()}`;
+}
+
 function formatKickoff(date: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
@@ -49,10 +89,6 @@ function formatKickoff(date: Date) {
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
-
-type UnpublishedFixtureRow = {
-  id: string;
-};
 
 function buildFixtureLine(
   fixture: {
@@ -70,6 +106,10 @@ function buildFixtureLine(
   return `${formatKickoff(fixture.kickoffAt)} — ${
     isHome ? `Home vs ${opponent}` : `Away at ${opponent}`
   } — ${fixture.pitch ?? "Pitch TBC"} — ${fixture.venue?.name ?? "Venue TBC"}`;
+}
+
+function isQueuedDispatch(status: NotificationDispatchStatus) {
+  return status === NotificationDispatchStatus.QUEUED;
 }
 
 export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
@@ -91,35 +131,10 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     throw new Error("League not found.");
   }
 
-  const unpublishedFixtures = await prisma.$queryRaw<UnpublishedFixtureRow[]>`
-    SELECT "id"
-    FROM "Fixture"
-    WHERE "leagueId" = ${leagueId}
-      AND "publishedAt" IS NULL
-    ORDER BY "kickoffAt" ASC
-  `;
-
-  const fixtureIds = unpublishedFixtures.map((row) => row.id);
-
-  if (fixtureIds.length === 0) {
-    revalidatePath("/admin/fixtures");
-    revalidatePath(`/admin/leagues/${leagueId}`);
-    revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
-    redirect("/admin/fixtures");
-  }
-
-  await prisma.$executeRaw`
-    UPDATE "Fixture"
-    SET "publishedAt" = NOW()
-    WHERE "leagueId" = ${leagueId}
-      AND "publishedAt" IS NULL
-  `;
-
-  const fixtures = await prisma.fixture.findMany({
+  const unpublishedFixtures = await prisma.fixture.findMany({
     where: {
-      id: {
-        in: fixtureIds,
-      },
+      leagueId,
+      publishedAt: null,
     },
     orderBy: {
       kickoffAt: "asc",
@@ -148,21 +163,62 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     },
   });
 
+  if (unpublishedFixtures.length === 0) {
+    revalidatePath("/admin/fixtures");
+    revalidatePath(`/admin/leagues/${leagueId}`);
+    revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+
+    if (league.slug) {
+      revalidatePath(`/leagues/${league.slug}`);
+      revalidatePath(`/leagues/${league.slug}/fixtures`);
+    }
+
+    redirect(
+      buildAdminFixturesHref({
+        publish: "none",
+        leagueId,
+      }),
+    );
+  }
+
+  const publishedAt = new Date();
+
+  await prisma.fixture.updateMany({
+    where: {
+      leagueId,
+      publishedAt: null,
+    },
+    data: {
+      publishedAt,
+    },
+  });
+
   const teamIds = unique(
-    fixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]),
+    unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]),
   );
 
   const fixturesUrl = buildAbsoluteUrl(`/leagues/${league.slug}/fixtures`);
 
+  let digestQueued = 0;
+  let digestSkipped = 0;
+  let reminderQueued = 0;
+  let reminderSkipped = 0;
+
   for (const teamId of teamIds) {
     const { snapshot, recipient } = await upsertTeamNotificationRecipient(teamId);
-    const teamFixtures = fixtures.filter(
+    const teamFixtures = unpublishedFixtures.filter(
       (fixture) =>
         fixture.homeTeam.id === teamId || fixture.awayTeam.id === teamId,
     );
 
-    if (teamFixtures.length > 0) {
-      const body = [
+    if (teamFixtures.length === 0) continue;
+
+    const digestDispatch = await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.TEAM,
+      subject: `${league.name} fixtures are live`,
+      body: [
         `Hi ${snapshot.primaryContact.name ?? snapshot.teamName},`,
         "",
         `Your fixtures for ${league.name}${league.season ? ` (${league.season})` : ""} are now live.`,
@@ -170,31 +226,29 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
         ...teamFixtures.map((fixture) => buildFixtureLine(fixture, teamId)),
         "",
         "You will also receive automatic reminders before kickoff.",
-      ].join("\n");
+      ].join("\n"),
+      isTransactional: true,
+      sourceType: "LEAGUE_FIXTURE_DIGEST",
+      sourceId: league.id,
+      metadata: {
+        kind: "fixture_publish_digest",
+        teamId,
+        leagueId: league.id,
+      },
+      emailCta: {
+        label: "View fixtures",
+        url: fixturesUrl,
+      },
+    });
 
-      await queueDirectNotification({
-        recipientId: recipient.id,
-        channel: NotificationChannel.EMAIL,
-        audience: NotificationAudience.TEAM,
-        subject: `${league.name} fixtures are live`,
-        body,
-        isTransactional: true,
-        sourceType: "LEAGUE_FIXTURE_DIGEST",
-        sourceId: league.id,
-        metadata: {
-          kind: "fixture_publish_digest",
-          teamId,
-          leagueId: league.id,
-        },
-        emailCta: {
-          label: "View fixtures",
-          url: fixturesUrl,
-        },
-      });
+    if (isQueuedDispatch(digestDispatch.status)) {
+      digestQueued += 1;
+    } else {
+      digestSkipped += 1;
     }
   }
 
-  for (const fixture of fixtures) {
+  for (const fixture of unpublishedFixtures) {
     for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
       const { recipient } = await upsertTeamNotificationRecipient(teamId);
 
@@ -204,13 +258,13 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       ].filter((date) => date.getTime() > Date.now());
 
       for (const scheduledFor of reminderTimes) {
-        await queueDirectNotification({
+        const reminderDispatch = await queueDirectNotification({
           recipientId: recipient.id,
           channel: NotificationChannel.EMAIL,
           audience: NotificationAudience.TEAM,
           subject: `${league.name} fixture reminder`,
           body: [
-            `Hi,`,
+            "Hi,",
             "",
             `Reminder: ${buildFixtureLine(fixture, teamId)}`,
             "",
@@ -230,6 +284,12 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
             url: fixturesUrl,
           },
         });
+
+        if (isQueuedDispatch(reminderDispatch.status)) {
+          reminderQueued += 1;
+        } else {
+          reminderSkipped += 1;
+        }
       }
     }
   }
@@ -238,5 +298,20 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
   revalidatePath(`/admin/leagues/${leagueId}`);
   revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
 
-  redirect("/admin/fixtures");
+  if (league.slug) {
+    revalidatePath(`/leagues/${league.slug}`);
+    revalidatePath(`/leagues/${league.slug}/fixtures`);
+  }
+
+  redirect(
+    buildAdminFixturesHref({
+      publish: "success",
+      leagueId,
+      published: unpublishedFixtures.length,
+      digestQueued,
+      digestSkipped,
+      reminderQueued,
+      reminderSkipped,
+    }),
+  );
 }

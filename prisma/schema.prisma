@@ -200,6 +200,7 @@ model Fixture {
   awayTeamId String
   venueId    String?
   kickoffAt  DateTime
+  publishedAt DateTime?
 
   round    Int?
   position Int?
@@ -220,6 +221,7 @@ model Fixture {
   updatedAt DateTime @updatedAt
 
   @@index([leagueId, kickoffAt])
+ @@index([leagueId, publishedAt, kickoffAt])
   @@index([leagueId, round])
   @@index([homeTeamId])
   @@index([awayTeamId])

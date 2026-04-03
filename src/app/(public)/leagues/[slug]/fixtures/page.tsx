@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/leagues/[slug]/fixtures/page.tsx
+// File: src/app/(public)/leagues/[slug]/fixtures/page.tsx
 // ========================================
 
 import { notFound } from "next/navigation";
@@ -16,6 +16,11 @@ export default async function LeagueFixturesPublic({
     where: { slug },
     include: {
       fixtures: {
+        where: {
+          publishedAt: {
+            not: null,
+          },
+        },
         orderBy: [{ round: "asc" }, { position: "asc" }, { kickoffAt: "asc" }],
         include: {
           homeTeam: true,
@@ -40,14 +45,18 @@ export default async function LeagueFixturesPublic({
       acc[roundKey].push(fixture);
       return acc;
     },
-    {} as Record<number, typeof league.fixtures>
+    {} as Record<number, typeof league.fixtures>,
   );
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 py-10">
-      <h1 className="text-3xl font-semibold text-white">
-        {league.name} Fixtures
-      </h1>
+      <h1 className="text-3xl font-semibold text-white">{league.name} Fixtures</h1>
+
+      {Object.keys(rounds).length === 0 ? (
+        <div className="rounded-xl bg-white/5 px-4 py-6 text-white/65">
+          Fixtures will appear here once they have been published.
+        </div>
+      ) : null}
 
       {Object.entries(rounds).map(([round, fixtures]) => (
         <div key={round} className="space-y-3">
