@@ -5,7 +5,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FixtureStatus } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
@@ -60,6 +60,7 @@ type FixtureItem = {
   refereeName: string | null;
   kickoffLabel: string | null;
   kickoffAtIso: string | null;
+  publishedAtIso: string | null;
   round: number | null;
   position: number | null;
   pitch: string | null;
@@ -74,6 +75,7 @@ type FixturesAdminScreenProps = {
   venues: VenueOption[];
   referees: RefereeOption[];
   fixtures: FixtureItem[];
+  initialLeagueId?: string;
 };
 
 const STATUS_OPTIONS: Array<{
@@ -140,6 +142,16 @@ function getStatusTone(status: FixtureStatus) {
     default:
       return "border-white/10 bg-white/5 text-white/70";
   }
+}
+
+function getPublishTone(publishedAtIso: string | null) {
+  return publishedAtIso
+    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+    : "border-amber-400/20 bg-amber-400/10 text-amber-200";
+}
+
+function formatPublishState(publishedAtIso: string | null) {
+  return publishedAtIso ? "Published" : "Draft";
 }
 
 function padNumber(value: number) {
@@ -271,13 +283,18 @@ export default function FixturesAdminScreen({
   venues,
   referees,
   fixtures,
+  initialLeagueId,
 }: FixturesAdminScreenProps) {
-  const [selectedCreateLeagueId, setSelectedCreateLeagueId] = useState(
-    leagues[0]?.id ?? "",
-  );
-  const [selectedGenerateLeagueId, setSelectedGenerateLeagueId] = useState(
-    leagues[0]?.id ?? "",
-  );
+  const resolvedInitialLeagueId = useMemo(() => {
+    const preferred = initialLeagueId?.trim();
+    if (preferred && leagues.some((league) => league.id === preferred)) {
+      return preferred;
+    }
+
+    return leagues[0]?.id ?? "";
+  }, [initialLeagueId, leagues]);
+
+  const [selectedLeagueId, setSelectedLeagueId] = useState(resolvedInitialLeagueId);
   const [createStatus, setCreateStatus] =
     useState<FixtureStatus>("SCHEDULED");
   const [generateStatus, setGenerateStatus] =
@@ -296,15 +313,33 @@ export default function FixturesAdminScreen({
   const [editPitch, setEditPitch] = useState("");
   const [editStatus, setEditStatus] = useState<FixtureStatus>("SCHEDULED");
 
+  useEffect(() => {
+    setSelectedLeagueId(resolvedInitialLeagueId);
+  }, [resolvedInitialLeagueId]);
+
+  const leagueOptions = useMemo(
+    () =>
+      leagues.map((league) => ({
+        id: league.id,
+        value: league.id,
+        label: getLeagueLabel(league),
+      })),
+    [leagues],
+  );
+
+  const selectedLeague = useMemo(() => {
+    return leagues.find((league) => league.id === selectedLeagueId) ?? null;
+  }, [leagues, selectedLeagueId]);
+
   const createLeagueTeams = useMemo(() => {
     return teams
-      .filter((team) => team.leagueId === selectedCreateLeagueId)
+      .filter((team) => team.leagueId === selectedLeagueId)
       .map((team) => ({
         id: team.id,
         value: team.id,
         label: team.name,
       }));
-  }, [teams, selectedCreateLeagueId]);
+  }, [teams, selectedLeagueId]);
 
   const editLeagueTeams = useMemo(() => {
     return teams
@@ -316,18 +351,10 @@ export default function FixturesAdminScreen({
       }));
   }, [teams, editLeagueId]);
 
-  const generateLeague = useMemo(() => {
-    return (
-      leagues.find((league) => league.id === selectedGenerateLeagueId) ?? null
-    );
-  }, [leagues, selectedGenerateLeagueId]);
-
   const filteredFixtures = useMemo(() => {
-    if (!selectedGenerateLeagueId) return fixtures;
-    return fixtures.filter(
-      (fixture) => fixture.leagueId === selectedGenerateLeagueId,
-    );
-  }, [fixtures, selectedGenerateLeagueId]);
+    if (!selectedLeagueId) return fixtures;
+    return fixtures.filter((fixture) => fixture.leagueId === selectedLeagueId);
+  }, [fixtures, selectedLeagueId]);
 
   const fixtureSummary = useMemo(() => {
     const completed = filteredFixtures.filter(
@@ -336,6 +363,10 @@ export default function FixturesAdminScreen({
     const scheduled = filteredFixtures.filter(
       (fixture) => fixture.status === "SCHEDULED",
     ).length;
+    const published = filteredFixtures.filter(
+      (fixture) => fixture.publishedAtIso,
+    ).length;
+    const drafts = filteredFixtures.length - published;
 
     const rounds = new Set(
       filteredFixtures
@@ -347,15 +378,11 @@ export default function FixturesAdminScreen({
       total: filteredFixtures.length,
       completed,
       scheduled,
+      published,
+      drafts,
       rounds: rounds.size,
     };
   }, [filteredFixtures]);
-
-  const leagueOptions = leagues.map((league) => ({
-    id: league.id,
-    value: league.id,
-    label: getLeagueLabel(league),
-  }));
 
   const venueOptions = [
     {
@@ -385,6 +412,7 @@ export default function FixturesAdminScreen({
 
   function startEditingFixture(fixture: FixtureItem) {
     setEditingFixtureId(fixture.id);
+    setSelectedLeagueId(fixture.leagueId ?? resolvedInitialLeagueId);
     setEditLeagueId(fixture.leagueId ?? "");
     setEditHomeTeamId(fixture.homeTeamId ?? "");
     setEditAwayTeamId(fixture.awayTeamId ?? "");
@@ -433,10 +461,12 @@ export default function FixturesAdminScreen({
             </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-6">
             <MetricPill label="Leagues" value={leagues.length} />
             <MetricPill label="Teams" value={teams.length} />
             <MetricPill label="Fixtures" value={fixtureSummary.total} />
+            <MetricPill label="Draft" value={fixtureSummary.drafts} />
+            <MetricPill label="Published" value={fixtureSummary.published} />
             <MetricPill label="Rounds" value={fixtureSummary.rounds} />
           </div>
         </div>
@@ -463,10 +493,8 @@ export default function FixturesAdminScreen({
                 </label>
                 <select
                   name="leagueId"
-                  value={selectedCreateLeagueId}
-                  onChange={(event) =>
-                    setSelectedCreateLeagueId(event.target.value)
-                  }
+                  value={selectedLeagueId}
+                  onChange={(event) => setSelectedLeagueId(event.target.value)}
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 >
                   {leagueOptions.map((option) => (
@@ -478,6 +506,7 @@ export default function FixturesAdminScreen({
               </div>
 
               <AdminComboboxField
+                key={`create-home-${selectedLeagueId}`}
                 name="homeTeamId"
                 label="Home team"
                 placeholder="Search home team"
@@ -485,6 +514,7 @@ export default function FixturesAdminScreen({
               />
 
               <AdminComboboxField
+                key={`create-away-${selectedLeagueId}`}
                 name="awayTeamId"
                 label="Away team"
                 placeholder="Search away team"
@@ -605,10 +635,8 @@ export default function FixturesAdminScreen({
                 </label>
                 <select
                   name="leagueId"
-                  value={selectedGenerateLeagueId}
-                  onChange={(event) =>
-                    setSelectedGenerateLeagueId(event.target.value)
-                  }
+                  value={selectedLeagueId}
+                  onChange={(event) => setSelectedLeagueId(event.target.value)}
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 >
                   {leagueOptions.map((option) => (
@@ -765,8 +793,8 @@ export default function FixturesAdminScreen({
                 Generate fixtures
               </button>
               <p className="text-sm text-white/45">
-                {generateLeague
-                  ? `Generating for ${getLeagueLabel(generateLeague)}.`
+                {selectedLeague
+                  ? `Generating for ${getLeagueLabel(selectedLeague)}.`
                   : "Choose a league to generate a schedule."}
               </p>
             </div>
@@ -784,9 +812,6 @@ export default function FixturesAdminScreen({
               <form
                 action={deleteLeagueFixturesAction}
                 onSubmit={(event) => {
-                  const selectedLeague = leagues.find(
-                    (league) => league.id === selectedGenerateLeagueId,
-                  );
                   const label = selectedLeague
                     ? getLeagueLabel(selectedLeague)
                     : "this league";
@@ -800,10 +825,10 @@ export default function FixturesAdminScreen({
                   }
                 }}
               >
-                <input type="hidden" name="leagueId" value={selectedGenerateLeagueId} />
+                <input type="hidden" name="leagueId" value={selectedLeagueId} />
                 <button
                   type="submit"
-                  disabled={!selectedGenerateLeagueId}
+                  disabled={!selectedLeagueId}
                   className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 px-6 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Delete all fixtures for selected league
@@ -815,22 +840,43 @@ export default function FixturesAdminScreen({
       </div>
 
       <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
-        <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:flex-row md:items-end md:justify-between md:px-8">
-          <div className="space-y-2">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              League schedule
+        <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:px-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+                League schedule
+              </div>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
+                Fixtures
+              </h2>
+              <p className="max-w-2xl text-sm leading-6 text-white/60">
+                Review generated matches, edit details, submit results, or remove
+                incorrect fixtures without leaving the page.
+              </p>
             </div>
-            <h2 className="text-2xl font-semibold tracking-tight text-white">
-              Fixtures
-            </h2>
-            <p className="max-w-2xl text-sm leading-6 text-white/60">
-              Review generated matches, edit details, submit results, or remove
-              incorrect fixtures without leaving the page.
-            </p>
+
+            <div className="w-full max-w-md">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                Viewing league
+              </label>
+              <select
+                value={selectedLeagueId}
+                onChange={(event) => setSelectedLeagueId(event.target.value)}
+                className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+              >
+                {leagueOptions.map((option) => (
+                  <option key={option.id} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-6">
             <MetricPill label="Total" value={fixtureSummary.total} />
+            <MetricPill label="Draft" value={fixtureSummary.drafts} />
+            <MetricPill label="Published" value={fixtureSummary.published} />
             <MetricPill label="Scheduled" value={fixtureSummary.scheduled} />
             <MetricPill label="Completed" value={fixtureSummary.completed} />
             <MetricPill label="Rounds" value={fixtureSummary.rounds} />
@@ -1086,14 +1132,24 @@ export default function FixturesAdminScreen({
                     </td>
 
                     <td className="px-6 py-5">
-                      <span
-                        className={cx(
-                          "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
-                          getStatusTone(fixture.status),
-                        )}
-                      >
-                        {formatFixtureStatus(fixture.status)}
-                      </span>
+                      <div className="flex flex-col gap-2">
+                        <span
+                          className={cx(
+                            "inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold",
+                            getStatusTone(fixture.status),
+                          )}
+                        >
+                          {formatFixtureStatus(fixture.status)}
+                        </span>
+                        <span
+                          className={cx(
+                            "inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold",
+                            getPublishTone(fixture.publishedAtIso),
+                          )}
+                        >
+                          {formatPublishState(fixture.publishedAtIso)}
+                        </span>
+                      </div>
                     </td>
 
                     <td className="px-6 py-5">

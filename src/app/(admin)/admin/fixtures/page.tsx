@@ -195,6 +195,11 @@ export default async function AdminFixturesPage({
     }),
   ]);
 
+  const activeLeagueParam = getSearchParamValue(resolvedSearchParams.leagueId);
+  const activeLeagueId = leagues.some((league) => league.id === activeLeagueParam)
+    ? activeLeagueParam ?? ""
+    : leagues[0]?.id ?? "";
+
   const publishSummary = leagues.map((league) => {
     const leagueFixtures = fixtures.filter((fixture) => fixture.leagueId === league.id);
     const drafts = leagueFixtures.filter((fixture) => fixture.publishedAt === null).length;
@@ -209,6 +214,7 @@ export default async function AdminFixturesPage({
       drafts,
       published,
       scheduled,
+      isActive: league.id === activeLeagueId,
     };
   });
 
@@ -222,6 +228,7 @@ export default async function AdminFixturesPage({
     teams,
     venues,
     referees,
+    initialLeagueId: activeLeagueId,
     fixtures: fixtures.map((fixture) => ({
       id: fixture.id,
       leagueId: fixture.leagueId,
@@ -235,6 +242,7 @@ export default async function AdminFixturesPage({
       refereeName: fixture.referee?.name ?? fixture.referee?.email ?? null,
       kickoffLabel: formatKickoffLabel(fixture.kickoffAt),
       kickoffAtIso: fixture.kickoffAt ? fixture.kickoffAt.toISOString() : null,
+      publishedAtIso: fixture.publishedAt ? fixture.publishedAt.toISOString() : null,
       round: fixture.round,
       position: fixture.position,
       pitch: fixture.pitch,
@@ -281,7 +289,12 @@ export default async function AdminFixturesPage({
           {publishSummary.map((item) => (
             <div
               key={item.league.id}
-              className="rounded-3xl border border-white/10 bg-black/30 p-5"
+              className={[
+                "rounded-3xl border bg-black/30 p-5 transition",
+                item.isActive
+                  ? "border-emerald-400/30 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
+                  : "border-white/10",
+              ].join(" ")}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -292,13 +305,20 @@ export default async function AdminFixturesPage({
                     {item.league.season || "No season set"}
                   </div>
                 </div>
-                <Link
-                  href={`/leagues/${item.league.slug}`}
-                  target="_blank"
-                  className="inline-flex shrink-0 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
-                >
-                  Public
-                </Link>
+                <div className="flex shrink-0 items-center gap-2">
+                  {item.isActive ? (
+                    <span className="inline-flex rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">
+                      Active
+                    </span>
+                  ) : null}
+                  <Link
+                    href={`/leagues/${item.league.slug}`}
+                    target="_blank"
+                    className="inline-flex rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+                  >
+                    Public
+                  </Link>
+                </div>
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -334,18 +354,27 @@ export default async function AdminFixturesPage({
                 </div>
               </div>
 
-              <form action={publishAndEmailLeagueFixturesAction} className="mt-5">
-                <input type="hidden" name="leagueId" value={item.league.id} />
-                <button
-                  type="submit"
-                  disabled={item.drafts === 0}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+              <div className="mt-5 space-y-3">
+                <form action={publishAndEmailLeagueFixturesAction}>
+                  <input type="hidden" name="leagueId" value={item.league.id} />
+                  <button
+                    type="submit"
+                    disabled={item.drafts === 0}
+                    className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {item.drafts > 0
+                      ? `Publish ${formatCount(item.drafts, "draft fixture")} & email teams`
+                      : "No draft fixtures to publish"}
+                  </button>
+                </form>
+
+                <Link
+                  href={`/admin/fixtures?leagueId=${item.league.id}`}
+                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
                 >
-                  {item.drafts > 0
-                    ? `Publish ${formatCount(item.drafts, "draft fixture")} & email teams`
-                    : "No draft fixtures to publish"}
-                </button>
-              </form>
+                  View in fixtures table
+                </Link>
+              </div>
             </div>
           ))}
         </div>
