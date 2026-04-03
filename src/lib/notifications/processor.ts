@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/lib/notifications/processor.ts
 // ========================================
@@ -248,12 +249,18 @@ export async function processNotificationQueue(limit = 25) {
           contactEmail: dispatch.recipient.email,
         });
 
+        const replyTo = thread.replyAddress?.trim();
+
+        if (!replyTo) {
+          throw new Error("Email thread reply address is missing.");
+        }
+
         const sendResult = await sendEmailWithResend({
           to: dispatch.recipient.email,
           subject: dispatch.subject,
           text: dispatch.bodyText,
           html: dispatch.bodyHtml,
-          replyTo: thread.replyAddress,
+          replyTo,
         });
 
         await markNotificationDispatchSent({

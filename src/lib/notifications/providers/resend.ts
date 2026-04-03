@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/lib/notifications/providers/resend.ts
 // ========================================
@@ -10,7 +11,7 @@ export type SendNotificationEmailInput = {
   subject: string;
   text: string;
   html?: string | null;
-  replyTo?: string | null;
+  replyTo: string;
   headers?: Record<string, string> | null;
 };
 
@@ -43,6 +44,11 @@ export async function sendEmailWithResend(
   const resend = getResendClient();
   const fromEmail = getEmailFromAddress();
   const sanitizedHeaders = sanitizeHeaders(input.headers);
+  const replyTo = input.replyTo.trim();
+
+  if (!replyTo) {
+    throw new Error("Notification email reply-to is missing.");
+  }
 
   const response = await resend.emails.send({
     from: fromEmail,
@@ -50,7 +56,7 @@ export async function sendEmailWithResend(
     subject: input.subject,
     text: input.text,
     ...(input.html ? { html: input.html } : {}),
-    ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+    replyTo,
     ...(sanitizedHeaders ? { headers: sanitizedHeaders } : {}),
   });
 

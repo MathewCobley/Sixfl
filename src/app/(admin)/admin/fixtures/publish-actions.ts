@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/app/(admin)/admin/fixtures/publish-actions.ts
 // ========================================
@@ -15,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { getEmailReplyDomain } from "@/lib/resend/client";
 
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
   const str = String(value ?? "").trim();
@@ -41,13 +43,14 @@ function buildAbsoluteUrl(path: string) {
 }
 
 function buildAdminFixturesHref(input: {
-  publish: "success" | "none";
+  publish: "success" | "none" | "error";
   leagueId: string;
   published?: number;
   digestQueued?: number;
   digestSkipped?: number;
   reminderQueued?: number;
   reminderSkipped?: number;
+  publishError?: string;
 }) {
   const searchParams = new URLSearchParams();
   searchParams.set("publish", input.publish);
@@ -73,7 +76,25 @@ function buildAdminFixturesHref(input: {
     searchParams.set("reminderSkipped", String(input.reminderSkipped));
   }
 
+  if (input.publishError?.trim()) {
+    searchParams.set("publishError", input.publishError.trim());
+  }
+
   return `/admin/fixtures?${searchParams.toString()}`;
+}
+
+function redirectIfEmailRepliesNotConfigured(leagueId: string) {
+  try {
+    getEmailReplyDomain();
+  } catch {
+    redirect(
+      buildAdminFixturesHref({
+        publish: "error",
+        leagueId,
+        publishError: "reply_not_configured",
+      }),
+    );
+  }
 }
 
 function formatKickoff(date: Date) {
@@ -180,6 +201,8 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       }),
     );
   }
+
+  redirectIfEmailRepliesNotConfigured(leagueId);
 
   const publishedAt = new Date();
 

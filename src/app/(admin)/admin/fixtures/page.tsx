@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/app/(admin)/admin/fixtures/page.tsx
 // ========================================
@@ -14,7 +15,7 @@ type AdminFixturesPageProps = {
 };
 
 type PublishNotice = {
-  tone: "success" | "info";
+  tone: "success" | "info" | "error";
   message: string;
 };
 
@@ -62,6 +63,7 @@ function buildPublishNotice(input: {
   const reminderSkipped = Number(
     getSearchParamValue(input.searchParams.reminderSkipped) ?? 0,
   );
+  const publishError = getSearchParamValue(input.searchParams.publishError);
 
   if (publish === "success") {
     const summaryParts = [
@@ -87,6 +89,20 @@ function buildPublishNotice(input: {
     return {
       tone: "info",
       message: `No draft fixtures were waiting to be published for ${leagueName}.`,
+    };
+  }
+
+  if (publish === "error" && publishError === "reply_not_configured") {
+    return {
+      tone: "error",
+      message: `Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the deployed environment before publishing fixtures for ${leagueName}.`,
+    };
+  }
+
+  if (publish === "error") {
+    return {
+      tone: "error",
+      message: `Publishing fixtures for ${leagueName} could not be completed.`,
     };
   }
 
@@ -223,6 +239,8 @@ export default async function AdminFixturesPage({
     leagues: leagues.map((league) => ({ id: league.id, name: league.name })),
   });
 
+  const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
+
   const screenData = {
     leagues,
     teams,
@@ -270,6 +288,18 @@ export default async function AdminFixturesPage({
           </div>
         </div>
 
+        {!emailReplyConfigured ? (
+          <div className="px-6 pt-6 md:px-8">
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              Reply-by-email is not configured yet. Add{" "}
+              <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the
+              deployed environment, for example{" "}
+              <span className="font-mono">replies.sixfl.co.uk</span>, before
+              publishing fixtures because this flow emails teams and queues reminder emails.
+            </div>
+          </div>
+        ) : null}
+
         {publishNotice ? (
           <div className="px-6 pt-6 md:px-8">
             <div
@@ -277,7 +307,9 @@ export default async function AdminFixturesPage({
                 "rounded-2xl border px-4 py-3 text-sm",
                 publishNotice.tone === "success"
                   ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                  : "border-white/10 bg-white/[0.05] text-white/75",
+                  : publishNotice.tone === "error"
+                    ? "border-red-500/30 bg-red-500/10 text-red-100"
+                    : "border-white/10 bg-white/[0.05] text-white/75",
               ].join(" ")}
             >
               {publishNotice.message}
@@ -286,97 +318,105 @@ export default async function AdminFixturesPage({
         ) : null}
 
         <div className="grid gap-4 px-6 py-6 md:grid-cols-2 md:px-8 xl:grid-cols-3">
-          {publishSummary.map((item) => (
-            <div
-              key={item.league.id}
-              className={[
-                "rounded-3xl border bg-black/30 p-5 transition",
-                item.isActive
-                  ? "border-emerald-400/30 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
-                  : "border-white/10",
-              ].join(" ")}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="truncate text-lg font-semibold text-white">
-                    {item.league.name}
+          {publishSummary.map((item) => {
+            const publishDisabled = item.drafts === 0 || !emailReplyConfigured;
+            const publishLabel =
+              item.drafts === 0
+                ? "No draft fixtures to publish"
+                : !emailReplyConfigured
+                  ? "Configure reply email before publishing"
+                  : `Publish ${formatCount(item.drafts, "draft fixture")} & email teams`;
+
+            return (
+              <div
+                key={item.league.id}
+                className={[
+                  "rounded-3xl border bg-black/30 p-5 transition",
+                  item.isActive
+                    ? "border-emerald-400/30 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
+                    : "border-white/10",
+                ].join(" ")}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="truncate text-lg font-semibold text-white">
+                      {item.league.name}
+                    </div>
+                    <div className="mt-1 text-sm text-white/45">
+                      {item.league.season || "No season set"}
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-white/45">
-                    {item.league.season || "No season set"}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {item.isActive ? (
+                      <span className="inline-flex rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">
+                        Active
+                      </span>
+                    ) : null}
+                    <Link
+                      href={`/leagues/${item.league.slug}`}
+                      target="_blank"
+                      className="inline-flex rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+                    >
+                      Public
+                    </Link>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {item.isActive ? (
-                    <span className="inline-flex rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">
-                      Active
-                    </span>
-                  ) : null}
+
+                <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Total
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-white">{item.total}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Draft
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-amber-300">
+                      {item.drafts}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Published
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-emerald-300">
+                      {item.published}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Scheduled
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-white">
+                      {item.scheduled}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  <form action={publishAndEmailLeagueFixturesAction}>
+                    <input type="hidden" name="leagueId" value={item.league.id} />
+                    <button
+                      type="submit"
+                      disabled={publishDisabled}
+                      className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {publishLabel}
+                    </button>
+                  </form>
+
                   <Link
-                    href={`/leagues/${item.league.slug}`}
-                    target="_blank"
-                    className="inline-flex rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+                    href={`/admin/fixtures?leagueId=${item.league.id}`}
+                    className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
                   >
-                    Public
+                    View in fixtures table
                   </Link>
                 </div>
               </div>
-
-              <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Total
-                  </div>
-                  <div className="mt-1 text-lg font-semibold text-white">{item.total}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Draft
-                  </div>
-                  <div className="mt-1 text-lg font-semibold text-amber-300">
-                    {item.drafts}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Published
-                  </div>
-                  <div className="mt-1 text-lg font-semibold text-emerald-300">
-                    {item.published}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Scheduled
-                  </div>
-                  <div className="mt-1 text-lg font-semibold text-white">
-                    {item.scheduled}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                <form action={publishAndEmailLeagueFixturesAction}>
-                  <input type="hidden" name="leagueId" value={item.league.id} />
-                  <button
-                    type="submit"
-                    disabled={item.drafts === 0}
-                    className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {item.drafts > 0
-                      ? `Publish ${formatCount(item.drafts, "draft fixture")} & email teams`
-                      : "No draft fixtures to publish"}
-                  </button>
-                </form>
-
-                <Link
-                  href={`/admin/fixtures?leagueId=${item.league.id}`}
-                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
-                >
-                  View in fixtures table
-                </Link>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </AdminCard>
 

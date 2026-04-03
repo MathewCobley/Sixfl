@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/lib/notifications/service.ts
 // ========================================
@@ -19,6 +20,7 @@ import {
   type SIXFLEmailBranding,
   type SIXFLPaymentSummary,
 } from "@/lib/email/buildEmail";
+import { getEmailReplyDomain } from "@/lib/resend/client";
 import { getNotificationRecipientById } from "./recipients";
 import {
   renderNotificationText,
@@ -105,6 +107,10 @@ function coerceVariables(
   }
 
   return value as NotificationTemplateVariables;
+}
+
+function ensureEmailRepliesConfigured() {
+  getEmailReplyDomain();
 }
 
 function buildQueuedContentFromTemplate(input: {
@@ -325,6 +331,10 @@ export async function queueNotificationFromTemplate(
     });
   }
 
+  if (template.channel === NotificationChannel.EMAIL) {
+    ensureEmailRepliesConfigured();
+  }
+
   return prisma.notificationDispatch.create({
     data: {
       recipientId: recipient.id,
@@ -389,6 +399,10 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
         createdByUserId: input.createdByUserId?.trim() || null,
       },
     });
+  }
+
+  if (input.channel === NotificationChannel.EMAIL) {
+    ensureEmailRepliesConfigured();
   }
 
   return prisma.notificationDispatch.create({

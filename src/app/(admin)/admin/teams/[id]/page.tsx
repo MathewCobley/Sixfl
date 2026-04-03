@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/app/(admin)/admin/teams/[id]/page.tsx
 // ========================================
@@ -68,6 +69,12 @@ function getDispatchOriginLabel(metadata: unknown) {
   }
 
   return "Sent to team";
+}
+
+function getPrimaryActionButtonClass(enabled: boolean) {
+  return enabled
+    ? "rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+    : "cursor-not-allowed rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white/40";
 }
 
 type TeamMessageHistoryItem = {
@@ -294,6 +301,7 @@ export default async function AdminTeamPage({
 
   const queuedMessage = sp.messageQueued === "1";
   const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
+  const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -394,6 +402,13 @@ export default async function AdminTeamPage({
             </div>
           ) : null}
 
+          {sp.composeError === "reply_not_configured" ? (
+            <div className="text-red-300">
+              Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in
+              the deployed environment before sending queued team emails.
+            </div>
+          ) : null}
+
           {sp.paymentError === "missing_url" ? (
             <div className="text-red-300">Payment link is required.</div>
           ) : null}
@@ -401,6 +416,13 @@ export default async function AdminTeamPage({
           {sp.paymentError === "missing_email" ? (
             <div className="text-red-300">
               This team does not have a primary email address yet.
+            </div>
+          ) : null}
+
+          {sp.paymentError === "reply_not_configured" ? (
+            <div className="text-red-300">
+              Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in
+              the deployed environment before sending payment emails.
             </div>
           ) : null}
         </div>
@@ -1040,6 +1062,16 @@ export default async function AdminTeamPage({
               Send payment request
             </h2>
 
+            {!emailReplyConfigured ? (
+              <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                Reply-by-email is not configured yet. Add{" "}
+                <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the
+                deployed environment, for example{" "}
+                <span className="font-mono">replies.sixfl.co.uk</span>, before
+                queueing payment emails.
+              </div>
+            ) : null}
+
             <form action={sendTeamPaymentRequestAction} className="mt-4 space-y-4">
               <input type="hidden" name="teamId" value={team.id} />
               <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
@@ -1090,7 +1122,8 @@ export default async function AdminTeamPage({
 
               <button
                 type="submit"
-                className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+                disabled={!emailReplyConfigured}
+                className={getPrimaryActionButtonClass(emailReplyConfigured)}
               >
                 Queue payment email
               </button>
@@ -1099,6 +1132,16 @@ export default async function AdminTeamPage({
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
             <h2 className="text-lg font-semibold text-white">Send email</h2>
+
+            {!emailReplyConfigured ? (
+              <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                Reply-by-email is not configured yet. Add{" "}
+                <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the
+                deployed environment, for example{" "}
+                <span className="font-mono">replies.sixfl.co.uk</span>, before
+                queueing team emails.
+              </div>
+            ) : null}
 
             <form action={sendTeamMessageAction} className="mt-4 space-y-4">
               <input type="hidden" name="teamId" value={team.id} />
@@ -1141,7 +1184,8 @@ export default async function AdminTeamPage({
 
               <button
                 type="submit"
-                className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+                disabled={!emailReplyConfigured}
+                className={getPrimaryActionButtonClass(emailReplyConfigured)}
               >
                 Queue email
               </button>
@@ -1274,4 +1318,4 @@ export default async function AdminTeamPage({
       </div>
     </div>
   );
-} 
+}

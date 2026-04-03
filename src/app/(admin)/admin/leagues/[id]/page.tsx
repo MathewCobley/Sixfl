@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/app/(admin)/admin/leagues/[id]/page.tsx
 // ========================================
@@ -57,6 +58,12 @@ function formatLeagueType(leagueType: string | null) {
     default:
       return leagueType;
   }
+}
+
+function getPrimaryActionButtonClass(enabled: boolean) {
+  return enabled
+    ? "rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+    : "cursor-not-allowed rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white/40";
 }
 
 type Props = {
@@ -130,6 +137,7 @@ export default async function EditLeaguePage({
   const messageCount = Number(resolvedSearchParams?.messageCount ?? 0) || 0;
   const channel = resolvedSearchParams?.channel === "sms" ? "SMS" : "Email";
   const messageError = resolvedSearchParams?.messageError;
+  const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -196,6 +204,13 @@ export default async function EditLeaguePage({
       {messageError === "missing_body" ? (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           Message body is required.
+        </div>
+      ) : null}
+
+      {messageError === "reply_not_configured" ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the
+          deployed environment before queueing league emails.
         </div>
       ) : null}
 
@@ -276,6 +291,16 @@ export default async function EditLeaguePage({
                   Bulk email
                 </div>
 
+                {!emailReplyConfigured ? (
+                  <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    Reply-by-email is not configured yet. Add{" "}
+                    <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the
+                    deployed environment, for example{" "}
+                    <span className="font-mono">replies.sixfl.co.uk</span>,
+                    before queueing bulk team emails.
+                  </div>
+                ) : null}
+
                 <div>
                   <label className="mb-1 block text-sm text-white/70">
                     Subject
@@ -311,7 +336,8 @@ export default async function EditLeaguePage({
 
                 <button
                   type="submit"
-                  className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
+                  disabled={!emailReplyConfigured}
+                  className={getPrimaryActionButtonClass(emailReplyConfigured)}
                 >
                   Queue email to teams
                 </button>

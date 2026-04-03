@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/app/(admin)/admin/teams/actions.ts
 // ========================================
@@ -16,6 +17,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { getPhoneDisplayValue } from "@/lib/notifications/phone";
+import { getEmailReplyDomain } from "@/lib/resend/client";
 
 function generateClaimCode(length = 8) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -78,6 +80,14 @@ function getTrimmedValue(value: FormDataEntryValue | null) {
 
 function getStoredPhoneValue(value: FormDataEntryValue | null) {
   return getPhoneDisplayValue(getTrimmedValue(value)) || null;
+}
+
+function redirectIfEmailRepliesNotConfigured(path: string) {
+  try {
+    getEmailReplyDomain();
+  } catch {
+    redirect(path);
+  }
 }
 
 export async function createTeamAction(formData: FormData) {
@@ -255,6 +265,12 @@ export async function sendTeamMessageAction(formData: FormData) {
     redirect(`${from}?composeError=missing_phone`);
   }
 
+  if (channel === NotificationChannel.EMAIL) {
+    redirectIfEmailRepliesNotConfigured(
+      `${from}?composeError=reply_not_configured`,
+    );
+  }
+
   await queueDirectNotification({
     recipientId: recipient.id,
     channel,
@@ -339,6 +355,10 @@ export async function sendTeamPaymentRequestAction(formData: FormData) {
   if (!recipient.email?.trim()) {
     redirect(`${from}?paymentError=missing_email`);
   }
+
+  redirectIfEmailRepliesNotConfigured(
+    `${from}?paymentError=reply_not_configured`,
+  );
 
   const body = [
     `Hi ${recipient.displayName?.trim() || snapshot.teamName},`,

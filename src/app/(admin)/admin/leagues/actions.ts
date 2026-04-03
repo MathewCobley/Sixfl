@@ -1,3 +1,4 @@
+
 // ========================================
 // File: src/app/(admin)/admin/leagues/actions.ts
 // ========================================
@@ -20,6 +21,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { getEmailReplyDomain } from "@/lib/resend/client";
 
 // ========================================
 // Types
@@ -96,6 +98,14 @@ function parseBoolean(value: FormDataEntryValue | null) {
 
 function isValidImagePath(value: string) {
   return /^https?:\/\//i.test(value) || value.startsWith("/");
+}
+
+function redirectIfEmailRepliesNotConfigured(path: string) {
+  try {
+    getEmailReplyDomain();
+  } catch {
+    redirect(path);
+  }
 }
 
 function parseLeagueInput(formData: FormData): {
@@ -370,6 +380,12 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
 
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`/admin/leagues/${leagueId}?messageError=missing_subject`);
+  }
+
+  if (channel === NotificationChannel.EMAIL) {
+    redirectIfEmailRepliesNotConfigured(
+      `/admin/leagues/${leagueId}?messageError=reply_not_configured`,
+    );
   }
 
   const league = await prisma.league.findUnique({
