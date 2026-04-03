@@ -1,12 +1,13 @@
 // ========================================
-// File: src/app/admin/fixtures/page.tsx
-// If you already moved route groups, this is:
-// src/app/(admin)/admin/fixtures/page.tsx
+// File: src/app/(admin)/admin/fixtures/page.tsx
 // ========================================
 
+import Link from "next/link";
+import AdminCard from "@/components/admin/AdminCard";
+import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
+import { publishAndEmailLeagueFixturesAction } from "@/app/(admin)/admin/fixtures/publish-actions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
 
 function formatKickoffLabel(date: Date | null) {
   if (!date) return null;
@@ -117,6 +118,17 @@ export default async function AdminFixturesPage() {
     }),
   ]);
 
+  const publishSummary = leagues.map((league) => {
+    const leagueFixtures = fixtures.filter((fixture) => fixture.leagueId === league.id);
+    const scheduled = leagueFixtures.filter((fixture) => fixture.status === "SCHEDULED").length;
+
+    return {
+      league,
+      total: leagueFixtures.length,
+      scheduled,
+    };
+  });
+
   const screenData = {
     leagues,
     teams,
@@ -145,7 +157,65 @@ export default async function AdminFixturesPage() {
   };
 
   return (
-    <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+    <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+      <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+        <div className="border-b border-white/10 px-6 py-6 md:px-8">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+              Publish & notify
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-white">
+              Send fixtures to teams
+            </h2>
+            <p className="max-w-3xl text-sm leading-6 text-white/60">
+              Publish the next batch of fixtures for a league and automatically queue team emails plus pre-match reminders.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 px-6 py-6 md:grid-cols-2 md:px-8 xl:grid-cols-3">
+          {publishSummary.map((item) => (
+            <div key={item.league.id} className="rounded-3xl border border-white/10 bg-black/30 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="truncate text-lg font-semibold text-white">{item.league.name}</div>
+                  <div className="mt-1 text-sm text-white/45">{item.league.season || "No season set"}</div>
+                </div>
+                <Link
+                  href={`/leagues/${item.league.slug}`}
+                  target="_blank"
+                  className="inline-flex shrink-0 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+                >
+                  Public
+                </Link>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Total</div>
+                  <div className="mt-1 text-lg font-semibold text-white">{item.total}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Scheduled</div>
+                  <div className="mt-1 text-lg font-semibold text-white">{item.scheduled}</div>
+                </div>
+              </div>
+
+              <form action={publishAndEmailLeagueFixturesAction} className="mt-5">
+                <input type="hidden" name="leagueId" value={item.league.id} />
+                <button
+                  type="submit"
+                  disabled={item.total === 0}
+                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Publish fixtures & email teams
+                </button>
+              </form>
+            </div>
+          ))}
+        </div>
+      </AdminCard>
+
       <FixturesAdminScreen {...screenData} />
     </div>
   );
