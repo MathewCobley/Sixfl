@@ -11,21 +11,40 @@ import {
 import { getResendClient } from "@/lib/resend/client";
 import type { ResendWebhookEvent } from "@/lib/resend/verifyWebhook";
 
+type ReceivedEmailHeader = {
+  name?: string;
+  value?: string;
+};
+
+type ReceivedEmailHeaderMapValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | Array<string | number | boolean | null | undefined>;
+
 type ReceivedEmailContent = {
   html?: string | null;
   text?: string | null;
-  headers?: Array<{
-    name?: string;
-    value?: string;
-  }> | null;
+  headers?: ReceivedEmailHeader[] | Record<string, ReceivedEmailHeaderMapValue> | null;
 };
+
+type EmailAddressLike =
+  | string
+  | {
+      email?: string;
+      address?: string;
+      value?: string;
+      original?: string;
+    };
 
 type EmailReceivedEventData = {
   email_id?: string;
-  from?: string;
-  to?: string[];
-  cc?: string[];
-  bcc?: string[];
+  from?: EmailAddressLike;
+  to?: EmailAddressLike | EmailAddressLike[];
+  cc?: EmailAddressLike | EmailAddressLike[];
+  bcc?: EmailAddressLike | EmailAddressLike[];
   message_id?: string;
   subject?: string;
   created_at?: string;
@@ -61,6 +80,61 @@ function normaliseEmailAddress(input: string | null | undefined): string | null 
   return candidate;
 }
 
+function normaliseEmailAddressList(input: unknown): string[] {
+  if (!input) return [];
+
+  if (Array.isArray(input)) {
+    return input.flatMap((item) => normaliseEmailAddressList(item));
+  }
+
+  if (typeof input === "string") {
+    return input
+      .split(",")
+      .map((part) => normaliseEmailAddress(part))
+      .filter((value): value is string => Boolean(value));
+  }
+
+  if (typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    const candidate =
+      typeof record.email === "string"
+        ? record.email
+        : typeof record.address === "string"
+          ? record.address
+          : typeof record.value === "string"
+            ? record.value
+            : typeof record.original === "string"
+              ? record.original
+              : null;
+
+    return candidate ? normaliseEmailAddressList(candidate) : [];
+  }
+
+  return [];
+}
+
+function normaliseReceivedHeaders(
+  headers: ReceivedEmailContent["headers"],
+): ReceivedEmailHeader[] {
+  if (!headers) return [];
+
+  if (Array.isArray(headers)) {
+    return headers;
+  }
+
+  return Object.entries(headers).map(([name, value]) => ({
+    name,
+    value: Array.isArray(value)
+      ? value
+          .filter((item) => item !== null && item !== undefined)
+          .map((item) => String(item))
+          .join(", ")
+      : value === null || value === undefined
+        ? ""
+        : String(value),
+  }));
+}
+
 function buildLastMessagePreview(input: {
   subject?: string | null;
   text?: string | null;
@@ -84,7 +158,9 @@ function getHeaderValue(
   headers: ReceivedEmailContent["headers"],
   name: string,
 ): string | null {
-  const match = headers?.find(
+  const normalisedHeaders = normaliseReceivedHeaders(headers);
+
+  const match = normalisedHeaders.find(
     (header) => header.name?.toLowerCase() === name.toLowerCase(),
   );
 
@@ -103,10 +179,10 @@ function getEventData(event: ResendWebhookEvent): EmailReceivedEventData | null 
   return event.data as EmailReceivedEventData;
 }
 
-function pickManagedReplyAddress(addresses: string[] | undefined): string | null {
-  if (!addresses?.length) return null;
+function pickManagedReplyAddress(addresses: unknown): string | null {
+  const normalisedAddresses = normaliseEmailAddressList(addresses);
 
-  for (const address of addresses) {
+  for (const address of normalisedAddresses) {
     const parsed = parseThreadReplyAddress(address);
     if (parsed?.threadId) {
       return parsed.normalized;
@@ -293,7 +369,7 @@ export async function handleInboundEmailWebhook(
 
   const email = await fetchReceivedEmailContent(emailId);
 
-  const fromEmail = normaliseEmailAddress(data.from);
+  const fromEmail = normaliseEmailAddressList(data.from)[0] ?? null;
   const toEmail = replyAddress;
   const textBody = email.text?.trim() || null;
   const htmlBody = email.html?.trim() || null;
