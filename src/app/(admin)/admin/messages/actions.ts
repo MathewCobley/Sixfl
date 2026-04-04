@@ -17,6 +17,8 @@ import {
 } from "@/lib/messaging/service";
 import { sendSmsWithTwilio } from "@/lib/notifications/providers/twilio";
 
+const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
+
 function getTrimmedValue(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -48,7 +50,7 @@ function buildMessagesHref(params: {
   }
 
   const query = search.toString();
-  return query ? `/admin/messages?${query}` : "/admin/messages";
+  return query ? `${ADMIN_MESSAGES_BASE_PATH}?${query}` : ADMIN_MESSAGES_BASE_PATH;
 }
 
 async function revalidateMessageViews(threadId: string) {
@@ -56,6 +58,7 @@ async function revalidateMessageViews(threadId: string) {
 
   revalidatePath("/admin");
   revalidatePath("/admin/messages");
+  revalidatePath("/admin/messaging");
 
   if (thread?.teamId) {
     revalidatePath(`/admin/teams/${thread.teamId}`);

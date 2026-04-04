@@ -6,6 +6,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 import { useFormStatus } from "react-dom";
 import {
   archiveMessageThreadAction,
@@ -14,12 +15,18 @@ import {
   sendAdminMessageReplyAction,
 } from "@/app/(admin)/admin/messages/actions";
 
+const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
+
 type SelectedThread = {
   id: string;
+  channel: "SMS" | "EMAIL";
   status: "OPEN" | "ARCHIVED" | "CLOSED";
   contactName: string | null;
   contactPhone: string | null;
   phoneNormalized: string | null;
+  contactEmail: string | null;
+  emailNormalized: string | null;
+  replyAddress: string | null;
   unreadForAdminCount: number;
   latestMessageAt: string | null;
   latestInboundAt: string | null;
@@ -39,16 +46,21 @@ type SelectedThread = {
     id: string;
     displayName: string | null;
     phone: string | null;
+    email: string | null;
     audience: string;
     sourceType: string;
   } | null;
   messages: Array<{
     id: string;
+    channel: "SMS" | "EMAIL";
     direction: "INBOUND" | "OUTBOUND";
     participantRole: "ADMIN" | "CAPTAIN" | "CONTACT" | "SYSTEM";
     body: string;
+    subject: string | null;
     fromNumber: string | null;
     toNumber: string | null;
+    fromEmail: string | null;
+    toEmail: string | null;
     providerStatus: string | null;
     sentAt: string | null;
     receivedAt: string | null;
@@ -96,7 +108,9 @@ function getThreadTitle(thread: NonNullable<SelectedThread>): string {
   return (
     thread.team?.name ||
     thread.contactName ||
+    thread.contactEmail ||
     thread.recipient?.displayName ||
+    thread.recipient?.email ||
     thread.contactPhone ||
     thread.phoneNormalized ||
     "Unknown contact"
@@ -104,9 +118,15 @@ function getThreadTitle(thread: NonNullable<SelectedThread>): string {
 }
 
 function getAudienceLabel(thread: NonNullable<SelectedThread>): string {
-  if (thread.team) return "Team thread";
-  if (thread.recipient?.audience) return `${thread.recipient.audience} contact`;
-  return "General contact";
+  if (thread.team) {
+    return thread.channel === "EMAIL" ? "Team email thread" : "Team SMS thread";
+  }
+
+  if (thread.recipient?.audience) {
+    return `${thread.recipient.audience} ${thread.channel === "EMAIL" ? "email" : "SMS"} contact`;
+  }
+
+  return thread.channel === "EMAIL" ? "General email contact" : "General SMS contact";
 }
 
 function getStatusTone(status: NonNullable<SelectedThread>["status"]): string {
@@ -169,8 +189,8 @@ function getNotice(searchParams: ReturnType<typeof useSearchParams>): Notice | n
         };
       case "not_sms":
         return {
-          tone: "error",
-          message: "Only SMS threads can be replied to from this inbox.",
+          tone: "info",
+          message: "This is an email thread. Replying from the inbox is not wired yet, so use your email client for now.",
         };
       case "thread_not_open":
         return {
@@ -290,15 +310,34 @@ export default function AdminMessageThread({
   }
 
   const title = getThreadTitle(thread);
+  const isSmsThread = thread.channel === "SMS";
   const replyPhoneRaw =
     thread.phoneNormalized || thread.recipient?.phone || thread.contactPhone;
   const replyPhoneLabel = formatPhone(replyPhoneRaw);
-  const canReply = Boolean(replyPhoneRaw) && thread.status === "OPEN";
-  const replyHelpText = !replyPhoneRaw
-    ? "This thread has no valid phone number yet, so SMS reply is unavailable."
-    : thread.status !== "OPEN"
-      ? "Reopen this thread before sending a new SMS reply."
-      : `Replying to ${replyPhoneLabel}. Replies are sent immediately by SMS.`;
+  const replyEmail =
+    thread.contactEmail ||
+    thread.recipient?.email ||
+    thread.emailNormalized ||
+    thread.replyAddress;
+  const canReply = isSmsThread && Boolean(replyPhoneRaw) && thread.status === "OPEN";
+
+  const replyHelpText = !isSmsThread
+    ? `This is an email thread. Incoming replies appear here, but replying from the admin inbox is not wired yet. Reply from your email client for now.`
+    : !replyPhoneRaw
+      ? "This thread has no valid phone number yet, so SMS reply is unavailable."
+      : thread.status !== "OPEN"
+        ? "Reopen this thread before sending a new SMS reply."
+        : `Replying to ${replyPhoneLabel}. Replies are sent immediately by SMS.`;
+
+  const orderedMessages = useMemo(
+    () =>
+      [...thread.messages].sort(
+        (a, b) =>
+          new Date(b.receivedAt || b.sentAt || b.createdAt).getTime() -
+          new Date(a.receivedAt || a.sentAt || a.createdAt).getTime(),
+      ),
+    [thread.messages],
+  );
 
   return (
     <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
@@ -320,6 +359,9 @@ export default function AdminMessageThread({
 
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">
+                  {thread.channel}
+                </span>
                 <span
                   className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${getStatusTone(
                     thread.status,
@@ -347,9 +389,21 @@ export default function AdminMessageThread({
               </div>
 
               <div className="flex flex-wrap gap-2 text-xs text-white/45">
-                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-                  Phone: {formatPhone(thread.contactPhone || thread.recipient?.phone || thread.phoneNormalized)}
-                </span>
+                {thread.channel === "SMS" ? (
+                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                    Phone: {formatPhone(thread.contactPhone || thread.recipient?.phone || thread.phoneNormalized)}
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                    Email: {replyEmail || "—"}
+                  </span>
+                )}
+
+                {thread.replyAddress ? (
+                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                    Reply-to: {thread.replyAddress}
+                  </span>
+                ) : null}
 
                 {thread.league ? (
                   <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
@@ -438,7 +492,7 @@ export default function AdminMessageThread({
                 )}
 
                 <Link
-                  href={`/admin/messages?filter=${selectedFilter}&thread=${thread.id}`}
+                  href={`${ADMIN_MESSAGES_BASE_PATH}?filter=${selectedFilter}&thread=${thread.id}`}
                   className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-white transition hover:bg-white/[0.08]"
                 >
                   Refresh
@@ -466,22 +520,22 @@ export default function AdminMessageThread({
             <div>
               <h3 className="text-lg font-semibold text-white">Conversation timeline</h3>
               <p className="mt-1 text-sm text-white/50">
-                Full inbound and outbound SMS history for this contact.
+                Newest messages first across SMS and email.
               </p>
             </div>
 
             <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/55">
-              {thread.messages.length} messages
+              {orderedMessages.length} messages
             </div>
           </div>
 
-          {thread.messages.length === 0 ? (
+          {orderedMessages.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-white/55">
               No messages have been saved to this thread yet.
             </div>
           ) : (
             <div className="space-y-4">
-              {thread.messages.map((message) => {
+              {orderedMessages.map((message) => {
                 const isInbound = message.direction === "INBOUND";
 
                 return (
@@ -505,9 +559,21 @@ export default function AdminMessageThread({
                           •
                         </span>
                         <span className={isInbound ? "text-white/45" : "text-emerald-200/80"}>
+                          {message.channel}
+                        </span>
+                        <span className={isInbound ? "text-white/25" : "text-emerald-200/50"}>
+                          •
+                        </span>
+                        <span className={isInbound ? "text-white/45" : "text-emerald-200/80"}>
                           {getMessageMeta(message)}
                         </span>
                       </div>
+
+                      {message.subject ? (
+                        <div className="mb-3 text-sm font-semibold text-white/90">
+                          {message.subject}
+                        </div>
+                      ) : null}
 
                       <div className="whitespace-pre-wrap text-sm leading-6">
                         {message.body}
@@ -535,6 +601,30 @@ export default function AdminMessageThread({
                             }`}
                           >
                             To: {formatPhone(message.toNumber)}
+                          </span>
+                        ) : null}
+
+                        {message.fromEmail ? (
+                          <span
+                            className={`rounded-full px-2 py-1 ${
+                              isInbound
+                                ? "bg-black/20 text-white/45"
+                                : "bg-emerald-950/40 text-emerald-100/80"
+                            }`}
+                          >
+                            From: {message.fromEmail}
+                          </span>
+                        ) : null}
+
+                        {message.toEmail ? (
+                          <span
+                            className={`rounded-full px-2 py-1 ${
+                              isInbound
+                                ? "bg-black/20 text-white/45"
+                                : "bg-emerald-950/40 text-emerald-100/80"
+                            }`}
+                          >
+                            To: {message.toEmail}
                           </span>
                         ) : null}
 
@@ -566,10 +656,13 @@ export default function AdminMessageThread({
 
         <div className="space-y-4">
           <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
-            <h3 className="text-lg font-semibold text-white">Reply by SMS</h3>
+            <h3 className="text-lg font-semibold text-white">
+              {isSmsThread ? "Reply by SMS" : "Email replies"}
+            </h3>
             <p className="mt-2 text-sm leading-6 text-white/55">
-              Send a direct reply from the inbox and keep the full conversation
-              timeline together.
+              {isSmsThread
+                ? "Send a direct reply from the inbox and keep the full conversation timeline together."
+                : "Incoming email replies appear here. Reply from your normal email client for now."}
             </p>
 
             <form action={sendAdminMessageReplyAction} className="mt-4 space-y-4">
@@ -582,7 +675,7 @@ export default function AdminMessageThread({
 
               <div>
                 <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  Reply message
+                  {isSmsThread ? "Reply message" : "Inbox reply"}
                 </label>
                 <textarea
                   name="body"
@@ -591,14 +684,16 @@ export default function AdminMessageThread({
                   placeholder={
                     canReply
                       ? "Type your SMS reply here..."
-                      : "Reply unavailable for this thread"
+                      : isSmsThread
+                        ? "Reply unavailable for this thread"
+                        : "Email reply sending is not wired here yet"
                   }
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 focus:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
 
               <ActionButton
-                label="Send SMS reply"
+                label={isSmsThread ? "Send SMS reply" : "Email reply unavailable"}
                 pendingLabel="Sending reply..."
                 disabled={!canReply}
                 className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-white/40"
@@ -614,7 +709,16 @@ export default function AdminMessageThread({
                   Display name
                 </div>
                 <div className="mt-1 text-white/80">
-                  {thread.contactName || thread.recipient?.displayName || "—"}
+                  {thread.contactName || thread.recipient?.displayName || title}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Email
+                </div>
+                <div className="mt-1 text-white/80">
+                  {thread.contactEmail || thread.recipient?.email || thread.emailNormalized || "—"}
                 </div>
               </div>
 
