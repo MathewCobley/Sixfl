@@ -1,6 +1,5 @@
 // ========================================
 // File: prisma/schema.prisma
-// FULL FILE - email inbox schema steps 1 to 3 combined
 // ========================================
 
 generator client {
@@ -156,8 +155,12 @@ model Team {
   homeGames Fixture[]    @relation("HomeTeam")
   awayGames Fixture[]    @relation("AwayTeam")
 
-  convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
-  messageThreads    MessageThread[] @relation("TeamMessageThreads")
+  convertedFromLead   InterestLead?         @relation("LeadConvertedTeam")
+  messageThreads      MessageThread[]       @relation("TeamMessageThreads")
+  resultMetadata      MatchResultTeamMeta[]
+  resultDisputes      ResultDispute[]
+  paymentCharges      PaymentCharge[]
+  paymentTransactions PaymentTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -170,10 +173,12 @@ model Team {
 }
 
 model TeamMember {
-  id     String   @id @default(cuid())
-  userId String
-  teamId String
-  role   TeamRole @default(MANAGER)
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  role      TeamRole @default(MANAGER)
+  isActive  Boolean  @default(true)
+  isPayable Boolean  @default(true)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -184,6 +189,8 @@ model TeamMember {
   @@index([teamId])
   @@index([userId])
   @@index([role])
+  @@index([isActive])
+  @@index([isPayable])
 }
 
 enum TeamRole {
@@ -194,12 +201,12 @@ enum TeamRole {
 }
 
 model Fixture {
-  id         String   @id @default(cuid())
-  leagueId   String
-  homeTeamId String
-  awayTeamId String
-  venueId    String?
-  kickoffAt  DateTime
+  id          String    @id @default(cuid())
+  leagueId    String
+  homeTeamId  String
+  awayTeamId  String
+  venueId     String?
+  kickoffAt   DateTime
   publishedAt DateTime?
 
   round    Int?
@@ -221,7 +228,7 @@ model Fixture {
   updatedAt DateTime @updatedAt
 
   @@index([leagueId, kickoffAt])
- @@index([leagueId, publishedAt, kickoffAt])
+  @@index([leagueId, publishedAt, kickoffAt])
   @@index([leagueId, round])
   @@index([homeTeamId])
   @@index([awayTeamId])
@@ -248,13 +255,163 @@ model MatchResult {
   isDisputed  Boolean @default(false)
   disputeNote String?
 
-  fixture       Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
-  enteredByUser User?   @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+  fixture       Fixture               @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  enteredByUser User?                 @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+  teamMetadata  MatchResultTeamMeta[]
+  disputes      ResultDispute[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([fixtureId])
+}
+
+enum ResultDisputeType {
+  WRONG_SCORE
+  WRONG_FIXTURE_DETAILS
+  WRONG_OPPONENT
+  ELIGIBILITY
+  DUPLICATE_OR_MISSING
+  OTHER
+}
+
+enum ResultDisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum PaymentChargeType {
+  REGISTRATION
+  SUBS
+  MATCH_FEE
+  FINE
+  OTHER
+}
+
+enum PaymentChargeStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  WAIVED
+  VOID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+enum PaymentTransactionStatus {
+  RECORDED
+  VOID
+}
+
+model MatchResultTeamMeta {
+  id                  String   @id @default(cuid())
+  matchResultId       String
+  teamId              String
+  scorers             Json?
+  goalsRecorded       Int      @default(0)
+  playerOfMatchName   String?
+  playerOfMatchUserId String?
+  createdByUserId     String?
+  updatedByUserId     String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  matchResult MatchResult @relation(fields: [matchResultId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([matchResultId, teamId])
+  @@index([teamId])
+}
+
+model ResultDispute {
+  id                String              @id @default(cuid())
+  matchResultId     String
+  teamId            String
+  submittedByUserId String?
+  disputeType       ResultDisputeType
+  description       String
+  status            ResultDisputeStatus @default(OPEN)
+  adminNote         String?
+  reviewedAt        DateTime?
+  reviewedByUserId  String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  matchResult MatchResult @relation(fields: [matchResultId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, status])
+  @@index([matchResultId, status])
+}
+
+model PaymentCharge {
+  id                 String              @id @default(cuid())
+  teamId             String
+  playerUserId       String?
+  playerNameSnapshot String
+  seasonLabel        String?
+  description        String
+  chargeType         PaymentChargeType
+  amountPence        Int
+  dueAt              DateTime?
+  status             PaymentChargeStatus @default(UNPAID)
+  batchId            String?
+  note               String?
+  createdByUserId    String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  team        Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+
+  @@index([teamId, status])
+  @@index([playerUserId])
+  @@index([dueAt])
+  @@index([batchId])
+}
+
+model PaymentTransaction {
+  id                 String                   @id @default(cuid())
+  teamId             String
+  playerUserId       String?
+  playerNameSnapshot String
+  seasonLabel        String?
+  amountPence        Int
+  paidAt             DateTime                 @default(now())
+  method             PaymentMethod            @default(BANK_TRANSFER)
+  note               String?
+  status             PaymentTransactionStatus @default(RECORDED)
+  recordedByUserId   String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  team        Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+
+  @@index([teamId, paidAt])
+  @@index([playerUserId, paidAt])
+}
+
+model PaymentAllocation {
+  id                   String   @id @default(cuid())
+  paymentTransactionId String
+  paymentChargeId      String
+  amountPence          Int
+  createdAt            DateTime @default(now())
+
+  paymentTransaction PaymentTransaction @relation(fields: [paymentTransactionId], references: [id], onDelete: Cascade)
+  paymentCharge      PaymentCharge      @relation(fields: [paymentChargeId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentTransactionId, paymentChargeId])
+  @@index([paymentTransactionId])
+  @@index([paymentChargeId])
 }
 
 model InterestLead {
