@@ -20,6 +20,17 @@ function normaliseFilter(value?: string) {
   return "unread";
 }
 
+function getLatestInboundTitle(summary: Awaited<ReturnType<typeof getAdminInboxSummary>>) {
+  return (
+    summary.latestInbound?.thread.team?.name ||
+    summary.latestInbound?.thread.recipient?.displayName ||
+    summary.latestInbound?.thread.contactName ||
+    summary.latestInbound?.thread.contactEmail ||
+    summary.latestInbound?.thread.contactPhone ||
+    "No replies yet"
+  );
+}
+
 export default async function AdminMessagesPage({
   searchParams,
 }: {
@@ -69,7 +80,7 @@ export default async function AdminMessagesPage({
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
-                SMS inbox
+                Team inbox
               </div>
 
               <div>
@@ -78,8 +89,8 @@ export default async function AdminMessagesPage({
                 </h1>
 
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-                  View inbound SMS replies, track unread conversations, and keep
-                  team communications in one proper SIXFL inbox.
+                  View inbound SMS and email replies, track unread conversations,
+                  and keep team communications in one proper SIXFL inbox.
                 </p>
               </div>
             </div>
@@ -122,7 +133,7 @@ export default async function AdminMessagesPage({
                 {summary.openThreads}
               </div>
               <div className="mt-2 text-sm text-white/55">
-                Active SMS conversations across teams and contacts.
+                Active team conversations across SMS and email.
               </div>
             </div>
 
@@ -143,9 +154,7 @@ export default async function AdminMessagesPage({
                 Latest inbound
               </div>
               <div className="mt-2 text-base font-semibold text-white">
-                {summary.latestInbound?.thread.team?.name ||
-                  summary.latestInbound?.thread.recipient?.displayName ||
-                  "No replies yet"}
+                {getLatestInboundTitle(summary)}
               </div>
               <div className="mt-2 text-sm text-white/55">
                 {summary.latestInbound?.body
@@ -161,10 +170,14 @@ export default async function AdminMessagesPage({
         <AdminMessagesInbox
           threads={threads.map((thread) => ({
             id: thread.id,
+            channel: thread.channel ?? "SMS",
             status: thread.status,
             contactName: thread.contactName,
             contactPhone: thread.contactPhone,
             phoneNormalized: thread.phoneNormalized,
+            contactEmail: thread.contactEmail ?? null,
+            emailNormalized: thread.emailNormalized ?? null,
+            replyAddress: thread.replyAddress ?? null,
             lastMessagePreview: thread.lastMessagePreview,
             unreadForAdminCount: thread.unreadForAdminCount,
             latestMessageAt: thread.latestMessageAt?.toISOString() ?? null,
@@ -201,10 +214,14 @@ export default async function AdminMessagesPage({
             fallbackThread
               ? {
                   id: fallbackThread.id,
+                  channel: fallbackThread.channel ?? "SMS",
                   status: fallbackThread.status,
                   contactName: fallbackThread.contactName,
                   contactPhone: fallbackThread.contactPhone,
                   phoneNormalized: fallbackThread.phoneNormalized,
+                  contactEmail: fallbackThread.contactEmail ?? null,
+                  emailNormalized: fallbackThread.emailNormalized ?? null,
+                  replyAddress: fallbackThread.replyAddress ?? null,
                   unreadForAdminCount: fallbackThread.unreadForAdminCount,
                   latestMessageAt: fallbackThread.latestMessageAt?.toISOString() ?? null,
                   latestInboundAt: fallbackThread.latestInboundAt?.toISOString() ?? null,
@@ -230,17 +247,22 @@ export default async function AdminMessagesPage({
                         id: fallbackThread.recipient.id,
                         displayName: fallbackThread.recipient.displayName,
                         phone: fallbackThread.recipient.phone,
+                        email: fallbackThread.recipient.email,
                         audience: fallbackThread.recipient.audience,
                         sourceType: fallbackThread.recipient.sourceType,
                       }
                     : null,
                   messages: fallbackThread.messages.map((message) => ({
                     id: message.id,
+                    channel: message.channel ?? "SMS",
                     direction: message.direction,
                     participantRole: message.participantRole,
                     body: message.body,
+                    subject: message.subject ?? null,
                     fromNumber: message.fromNumber,
                     toNumber: message.toNumber,
+                    fromEmail: message.fromEmail,
+                    toEmail: message.toEmail,
                     providerStatus: message.providerStatus,
                     sentAt: message.sentAt?.toISOString() ?? null,
                     receivedAt: message.receivedAt?.toISOString() ?? null,

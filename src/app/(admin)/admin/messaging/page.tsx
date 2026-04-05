@@ -31,7 +31,7 @@ function getLatestInboundTitle(summary: Awaited<ReturnType<typeof getAdminInboxS
   );
 }
 
-export default async function AdminMessagingPage({
+export default async function AdminMessagesPage({
   searchParams,
 }: {
   searchParams?: Promise<{
@@ -170,14 +170,14 @@ export default async function AdminMessagingPage({
         <AdminMessagesInbox
           threads={threads.map((thread) => ({
             id: thread.id,
-            channel: thread.channel,
+            channel: thread.channel ?? "SMS",
             status: thread.status,
             contactName: thread.contactName,
             contactPhone: thread.contactPhone,
             phoneNormalized: thread.phoneNormalized,
-            contactEmail: thread.contactEmail,
-            emailNormalized: thread.emailNormalized,
-            replyAddress: thread.replyAddress,
+            contactEmail: thread.contactEmail ?? null,
+            emailNormalized: thread.emailNormalized ?? null,
+            replyAddress: thread.replyAddress ?? null,
             lastMessagePreview: thread.lastMessagePreview,
             unreadForAdminCount: thread.unreadForAdminCount,
             latestMessageAt: thread.latestMessageAt?.toISOString() ?? null,
@@ -214,14 +214,14 @@ export default async function AdminMessagingPage({
             fallbackThread
               ? {
                   id: fallbackThread.id,
-                  channel: fallbackThread.channel,
+                  channel: fallbackThread.channel ?? "SMS",
                   status: fallbackThread.status,
                   contactName: fallbackThread.contactName,
                   contactPhone: fallbackThread.contactPhone,
                   phoneNormalized: fallbackThread.phoneNormalized,
-                  contactEmail: fallbackThread.contactEmail,
-                  emailNormalized: fallbackThread.emailNormalized,
-                  replyAddress: fallbackThread.replyAddress,
+                  contactEmail: fallbackThread.contactEmail ?? null,
+                  emailNormalized: fallbackThread.emailNormalized ?? null,
+                  replyAddress: fallbackThread.replyAddress ?? null,
                   unreadForAdminCount: fallbackThread.unreadForAdminCount,
                   latestMessageAt: fallbackThread.latestMessageAt?.toISOString() ?? null,
                   latestInboundAt: fallbackThread.latestInboundAt?.toISOString() ?? null,
@@ -254,11 +254,11 @@ export default async function AdminMessagingPage({
                     : null,
                   messages: fallbackThread.messages.map((message) => ({
                     id: message.id,
-                    channel: message.channel,
+                    channel: message.channel ?? "SMS",
                     direction: message.direction,
                     participantRole: message.participantRole,
                     body: message.body,
-                    subject: message.subject,
+                    subject: message.subject ?? null,
                     fromNumber: message.fromNumber,
                     toNumber: message.toNumber,
                     fromEmail: message.fromEmail,
