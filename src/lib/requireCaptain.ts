@@ -79,12 +79,11 @@ export async function requireCaptain(teamId: string): Promise<RequireCaptainResu
             userId: user.id,
             role: TeamRole.CAPTAIN,
           },
-        select: {
-          id: true,
-          teamId: true,
-          role: true,
-          isActive: true,
-        },
+          select: {
+            id: true,
+            teamId: true,
+            role: true,
+          },
       })
     : null;
 
