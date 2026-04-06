@@ -101,7 +101,6 @@ export default async function CaptainOverviewPage({
       where: {
         teamId: teamid,
         role: "CAPTAIN",
-        isActive: true,
       },
     }),
   ]);
