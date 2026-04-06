@@ -66,9 +66,9 @@ export default async function CaptainTeamLayout({
               </div>
 
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-                <div className="font-medium text-white">
-                  {access.isAdmin ? "Admin preview" : "Captain access"}
-                </div>
+              <div className="font-medium text-white">
+{"Captain access"}
+</div>
                 <div className="mt-1 text-emerald-100/70">
                   Claim code: {team.claimCode}
                 </div>
