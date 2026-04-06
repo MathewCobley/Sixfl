@@ -10,21 +10,22 @@ import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 type RequireCaptainResult = {
-  session: Awaited<ReturnType<typeof getServerSession>>;
-  user: {
-    id: string;
-    email: string | null;
-    name: string | null;
-    role: UserRole;
-  } | null;
-  membership: {
-    id: string;
-    teamId: string;
-    role: TeamRole;
-    isActive: boolean;
-  } | null;
-  isAdmin: boolean;
-};
+    membership: {
+      id: string;
+      teamId: string;
+      role: TeamRole;
+    };
+    team: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+    user: {
+      id: string;
+      name: string | null;
+      email: string | null;
+    };
+  };
 
 const SUPER_ADMINS = [
   "hello@sixfl.co.uk",
