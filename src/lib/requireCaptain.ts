@@ -75,11 +75,10 @@ export async function requireCaptain(teamId: string): Promise<RequireCaptainResu
   const membership = user
     ? await prisma.teamMember.findFirst({
         where: {
-          teamId,
-          userId: user.id,
-          role: TeamRole.CAPTAIN,
-          isActive: true,
-        },
+            teamId,
+            userId: user.id,
+            role: TeamRole.CAPTAIN,
+          },
         select: {
           id: true,
           teamId: true,
