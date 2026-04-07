@@ -15,6 +15,11 @@ export const metadata = {
   title: "Captain Overview | SIXFL",
 };
 
+type ScorerRow = {
+  name: string;
+  goals: number;
+};
+
 function formatDateTime(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
@@ -47,66 +52,90 @@ export default async function CaptainOverviewPage({
   const { teamid } = await params;
   await requireCaptain(teamid);
 
-  const [team, upcomingFixtures, recentResults, activeCaptainCount] =
-    await Promise.all([
-      prisma.team.findUnique({
-        where: { id: teamid },
-        select: {
-          id: true,
-          name: true,
-          leagueId: true,
-          league: {
-            select: {
-              id: true,
-              name: true,
-              season: true,
-              venueName: true,
-              dayOfWeek: true,
+  const [
+    team,
+    upcomingFixtures,
+    recentResults,
+    activeCaptainCount,
+    completionResults,
+  ] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: {
+        id: true,
+        name: true,
+        leagueId: true,
+        league: {
+          select: {
+            id: true,
+            name: true,
+            season: true,
+            venueName: true,
+            dayOfWeek: true,
+          },
+        },
+      },
+    }),
+    prisma.fixture.findMany({
+      where: {
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        kickoffAt: { gte: new Date() },
+        result: null,
+        status: "SCHEDULED",
+      },
+      orderBy: [{ kickoffAt: "asc" }],
+      take: 5,
+      include: {
+        homeTeam: { select: { id: true, name: true } },
+        awayTeam: { select: { id: true, name: true } },
+        venue: { select: { name: true } },
+      },
+    }),
+    prisma.fixture.findMany({
+      where: {
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        result: { isNot: null },
+      },
+      orderBy: [{ kickoffAt: "desc" }],
+      take: 5,
+      include: {
+        homeTeam: { select: { id: true, name: true } },
+        awayTeam: { select: { id: true, name: true } },
+        result: {
+          select: {
+            id: true,
+            homeScore: true,
+            awayScore: true,
+            isDisputed: true,
+          },
+        },
+      },
+    }),
+    prisma.teamMember.count({
+      where: {
+        teamId: teamid,
+        role: "CAPTAIN",
+      },
+    }),
+    prisma.fixture.findMany({
+      where: {
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        result: { isNot: null },
+      },
+      orderBy: [{ kickoffAt: "desc" }],
+      include: {
+        result: {
+          include: {
+            teamMetadata: {
+              where: {
+                teamId: teamid,
+              },
             },
           },
         },
-      }),
-      prisma.fixture.findMany({
-        where: {
-          OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
-          kickoffAt: { gte: new Date() },
-          result: null,
-          status: "SCHEDULED",
-        },
-        orderBy: [{ kickoffAt: "asc" }],
-        take: 5,
-        include: {
-          homeTeam: { select: { id: true, name: true } },
-          awayTeam: { select: { id: true, name: true } },
-          venue: { select: { name: true } },
-        },
-      }),
-      prisma.fixture.findMany({
-        where: {
-          OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
-          result: { isNot: null },
-        },
-        orderBy: [{ kickoffAt: "desc" }],
-        take: 5,
-        include: {
-          homeTeam: { select: { id: true, name: true } },
-          awayTeam: { select: { id: true, name: true } },
-          result: {
-            select: {
-              homeScore: true,
-              awayScore: true,
-              isDisputed: true,
-            },
-          },
-        },
-      }),
-      prisma.teamMember.count({
-        where: {
-          teamId: teamid,
-          role: "CAPTAIN",
-        },
-      }),
-    ]);
+      },
+    }),
+  ]);
 
   if (!team) {
     notFound();
@@ -114,9 +143,27 @@ export default async function CaptainOverviewPage({
 
   const nextFixture = upcomingFixtures[0] ?? null;
 
+  const needsCompletionCount = completionResults.filter((fixture) => {
+    if (!fixture.result) return false;
+
+    const isHome = fixture.homeTeamId === teamid;
+    const goalsFor = isHome
+      ? fixture.result.homeScore
+      : fixture.result.awayScore;
+
+    const metadata = fixture.result.teamMetadata[0] ?? null;
+    const goalsRecorded = metadata?.goalsRecorded ?? 0;
+    const playerOfMatchName = metadata?.playerOfMatchName ?? null;
+
+    const needsScorers = goalsRecorded < goalsFor;
+    const needsPom = !playerOfMatchName;
+
+    return needsScorers || needsPom;
+  }).length;
+
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Next fixture
@@ -155,6 +202,21 @@ export default async function CaptainOverviewPage({
           <p className="mt-2 text-sm text-white/60">
             Active captain membership
             {activeCaptainCount === 1 ? "" : "s"} linked to this team.
+          </p>
+        </div>
+
+        <div className="rounded-[1.75rem] border border-amber-400/20 bg-amber-500/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+            Needs completion
+          </p>
+
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {needsCompletionCount}
+          </p>
+
+          <p className="mt-2 text-sm text-amber-100/75">
+            Result{needsCompletionCount === 1 ? "" : "s"} still missing scorers
+            or Player of the Match.
           </p>
         </div>
 
@@ -238,13 +300,22 @@ export default async function CaptainOverviewPage({
         </div>
 
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
-          <div className="border-b border-white/10 px-6 py-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Recent results
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
-              Latest scores
-            </h2>
+          <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Recent results
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Latest scores
+              </h2>
+            </div>
+
+            <Link
+              href={`/captain/team/${teamid}/results`}
+              className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+            >
+              Open results
+            </Link>
           </div>
 
           <div className="divide-y divide-white/10">

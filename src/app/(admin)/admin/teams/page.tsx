@@ -399,6 +399,13 @@ export default async function AdminTeamsPage({
 
                       <div className="flex flex-wrap items-center gap-3 xl:justify-end">
                         <Link
+                          href={`/captain/team/${team.id}`}
+                          className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
+                        >
+                          Captain view
+                        </Link>
+
+                        <Link
                           href={`/admin/teams/${team.id}`}
                           className="inline-flex min-w-[92px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
                         >
@@ -410,7 +417,7 @@ export default async function AdminTeamsPage({
                           <input type="hidden" name="from" value="/admin/teams" />
                           <ConfirmDeleteButton
                             label="Delete"
-                            confirmText={`Delete \"${team.name}\"? This cannot be undone.`}
+                            confirmText={`Delete "${team.name}"? This cannot be undone.`}
                             className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
                           />
                         </form>
