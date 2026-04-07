@@ -34,11 +34,17 @@ function formatDate(date: Date) {
   });
 }
 
-function getGoalsFor(result: { homeScore: number; awayScore: number }, isHome: boolean) {
+function getGoalsFor(
+  result: { homeScore: number; awayScore: number },
+  isHome: boolean,
+) {
   return isHome ? result.homeScore : result.awayScore;
 }
 
-function getGoalsAgainst(result: { homeScore: number; awayScore: number }, isHome: boolean) {
+function getGoalsAgainst(
+  result: { homeScore: number; awayScore: number },
+  isHome: boolean,
+) {
   return isHome ? result.awayScore : result.homeScore;
 }
 
@@ -50,22 +56,24 @@ function getOutcome(goalsFor: number, goalsAgainst: number) {
 
 function parseScorers(input: string) {
   return input
-    .split(/
-?
-/)
+    .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
       const parts = line.split(/[|,]/).map((part) => part.trim());
 
       if (parts.length < 2 || !parts[0]) {
-        throw new Error(`Scorer line must look like Name|2. Invalid line: ${line}`);
+        throw new Error(
+          `Scorer line must look like Name|2. Invalid line: ${line}`,
+        );
       }
 
       const goals = Number(parts[1]);
 
       if (!Number.isInteger(goals) || goals < 1) {
-        throw new Error(`Goals must be a whole number. Invalid line: ${line}`);
+        throw new Error(
+          `Goals must be a whole number. Invalid line: ${line}`,
+        );
       }
 
       return {
@@ -81,7 +89,9 @@ async function saveTeamMetadata(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "");
   const resultId = String(formData.get("resultId") ?? "");
   const scorerText = String(formData.get("scorers") ?? "");
-  const playerOfMatchName = String(formData.get("playerOfMatchName") ?? "").trim();
+  const playerOfMatchName = String(
+    formData.get("playerOfMatchName") ?? "",
+  ).trim();
 
   await requireCaptain(teamid);
 
@@ -102,7 +112,10 @@ async function saveTeamMetadata(formData: FormData) {
     throw new Error("Result not found.");
   }
 
-  if (result.fixture.homeTeamId !== teamid && result.fixture.awayTeamId !== teamid) {
+  if (
+    result.fixture.homeTeamId !== teamid &&
+    result.fixture.awayTeamId !== teamid
+  ) {
     throw new Error("This result does not belong to the selected team.");
   }
 
@@ -112,7 +125,9 @@ async function saveTeamMetadata(formData: FormData) {
   const goalsRecorded = scorers.reduce((sum, row) => sum + row.goals, 0);
 
   if (goalsRecorded > goalsExpected) {
-    throw new Error("Recorded scorer goals cannot exceed the official result.");
+    throw new Error(
+      "Recorded scorer goals cannot exceed the official result.",
+    );
   }
 
   await prisma.matchResultTeamMeta.upsert({
@@ -187,7 +202,9 @@ export default async function CaptainResultsPage({
       const goalsAgainst = getGoalsAgainst(fixture.result!, isHome);
       const outcome = getOutcome(goalsFor, goalsAgainst);
       const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
-      const metadata = fixture.result!.teamMetadata.find((item) => item.teamId === teamid) ?? null;
+      const metadata =
+        fixture.result!.teamMetadata.find((item) => item.teamId === teamid) ??
+        null;
       const scorers = Array.isArray(metadata?.scorers)
         ? (metadata!.scorers as ScorerRow[])
         : [];
@@ -208,7 +225,12 @@ export default async function CaptainResultsPage({
     })
     .filter((row) => {
       if (filters.outcome && row.outcome !== filters.outcome) return false;
-      if (filters.needsCompletion === "1" && !(row.needsScorers || row.needsPom)) return false;
+      if (
+        filters.needsCompletion === "1" &&
+        !(row.needsScorers || row.needsPom)
+      ) {
+        return false;
+      }
       if (!query) return true;
 
       return [
@@ -229,7 +251,8 @@ export default async function CaptainResultsPage({
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Results</h1>
         <p className="mt-2 text-sm text-white/65">
-          Complete scorers and Player of the Match safely. Official scores remain admin-owned in this phase.
+          Complete scorers and Player of the Match safely. Official scores
+          remain admin-owned in this phase.
         </p>
       </section>
 
@@ -286,18 +309,28 @@ export default async function CaptainResultsPage({
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="text-sm text-white/55">{formatDate(row.fixture.kickoffAt)}</p>
+                  <p className="text-sm text-white/55">
+                    {formatDate(row.fixture.kickoffAt)}
+                  </p>
                   <h3 className="mt-1 text-2xl font-semibold">
-                    {row.fixture.homeTeam.name} {row.fixture.result!.homeScore}-{row.fixture.result!.awayScore} {row.fixture.awayTeam.name}
+                    {row.fixture.homeTeam.name}{" "}
+                    {row.fixture.result!.homeScore}-
+                    {row.fixture.result!.awayScore}{" "}
+                    {row.fixture.awayTeam.name}
                   </h3>
-                  <p className="mt-2 text-sm text-white/65">Your opponent: {row.opponent}</p>
+                  <p className="mt-2 text-sm text-white/65">
+                    Your opponent: {row.opponent}
+                  </p>
                 </div>
+
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-200">
                     {row.outcome}
                   </span>
                   <span className="rounded-full border border-white/10 px-3 py-1 text-sm text-white/70">
-                    {row.needsScorers || row.needsPom ? "Needs completion" : "Complete"}
+                    {row.needsScorers || row.needsPom
+                      ? "Needs completion"
+                      : "Complete"}
                   </span>
                 </div>
               </div>
@@ -310,31 +343,44 @@ export default async function CaptainResultsPage({
                   <p className="mt-3 text-sm text-white/70">
                     Scorers:{" "}
                     {row.scorers.length > 0
-                      ? row.scorers.map((item) => `${item.name} x${item.goals}`).join(", ")
+                      ? row.scorers
+                          .map((item) => `${item.name} x${item.goals}`)
+                          .join(", ")
                       : "Not recorded"}
                   </p>
                   <p className="mt-2 text-sm text-white/70">
-                    Player of the Match: {row.metadata?.playerOfMatchName ?? "Not recorded"}
+                    Player of the Match:{" "}
+                    {row.metadata?.playerOfMatchName ?? "Not recorded"}
                   </p>
                   <p className="mt-2 text-sm text-white/50">
-                    Recorded {row.metadata?.goalsRecorded ?? 0} of {row.goalsFor} goals.
+                    Recorded {row.metadata?.goalsRecorded ?? 0} of{" "}
+                    {row.goalsFor} goals.
                   </p>
                 </div>
 
-                <form action={saveTeamMetadata} className="rounded-xl border border-white/10 bg-[#0d1428] p-4">
+                <form
+                  action={saveTeamMetadata}
+                  className="rounded-xl border border-white/10 bg-[#0d1428] p-4"
+                >
                   <input type="hidden" name="teamid" value={team.id} />
-                  <input type="hidden" name="resultId" value={row.fixture.result!.id} />
+                  <input
+                    type="hidden"
+                    name="resultId"
+                    value={row.fixture.result!.id}
+                  />
                   <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300/80">
                     Edit scorers & POM
                   </h4>
                   <p className="mt-2 text-xs text-white/50">
-                    Enter one scorer per line as Name|Goals, for example A. Smith|2
+                    Enter one scorer per line as Name|Goals, for example A.
+                    Smith|2
                   </p>
                   <textarea
                     name="scorers"
                     rows={4}
-                    defaultValue={row.scorers.map((item) => `${item.name}|${item.goals}`).join("
-")}
+                    defaultValue={row.scorers
+                      .map((item) => `${item.name}|${item.goals}`)
+                      .join("\n")}
                     className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
                   />
                   <input
