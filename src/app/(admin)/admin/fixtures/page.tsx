@@ -1,4 +1,3 @@
-
 // ========================================
 // File: src/app/(admin)/admin/fixtures/page.tsx
 // ========================================
@@ -7,6 +6,7 @@ import Link from "next/link";
 import AdminCard from "@/components/admin/AdminCard";
 import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
 import { publishAndEmailLeagueFixturesAction } from "@/app/(admin)/admin/fixtures/publish-actions";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -22,13 +22,13 @@ type PublishNotice = {
 function formatKickoffLabel(date: Date | null) {
   if (!date) return null;
 
-  return new Intl.DateTimeFormat("en-GB", {
+  return formatDateTimeInLondon(date, {
     weekday: "short",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  });
 }
 
 function getSearchParamValue(value: string | string[] | undefined) {

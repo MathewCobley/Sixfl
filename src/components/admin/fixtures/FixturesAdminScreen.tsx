@@ -17,6 +17,10 @@ import {
   submitResultAction,
   updateFixtureAction,
 } from "@/app/(admin)/admin/fixtures/actions";
+import {
+  toLondonDateInputValue,
+  toLondonTimeInputValue,
+} from "@/lib/datetime/london";
 
 type LeagueOption = {
   id: string;
@@ -152,26 +156,6 @@ function getPublishTone(publishedAtIso: string | null) {
 
 function formatPublishState(publishedAtIso: string | null) {
   return publishedAtIso ? "Published" : "Draft";
-}
-
-function padNumber(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-function getDateInputValue(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-
-  return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(
-    date.getDate(),
-  )}`;
-}
-
-function getTimeInputValue(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-
-  return `${padNumber(date.getHours())}:${padNumber(date.getMinutes())}`;
 }
 
 function SegmentedStatusField({
@@ -418,8 +402,8 @@ export default function FixturesAdminScreen({
     setEditAwayTeamId(fixture.awayTeamId ?? "");
     setEditVenueId(fixture.venueId ?? "");
     setEditRefereeId(fixture.refereeId ?? "");
-    setEditKickoffDate(getDateInputValue(fixture.kickoffAtIso));
-    setEditKickoffTime(getTimeInputValue(fixture.kickoffAtIso));
+    setEditKickoffDate(toLondonDateInputValue(fixture.kickoffAtIso));
+    setEditKickoffTime(toLondonTimeInputValue(fixture.kickoffAtIso));
     setEditRound(fixture.round?.toString() ?? "");
     setEditPosition(fixture.position?.toString() ?? "");
     setEditPitch(fixture.pitch ?? "");

@@ -324,22 +324,29 @@ export default async function AdminTeamPage({
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {team.league ? (
-            <Link
-              href={`/admin/leagues/${team.league.id}`}
-              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-            >
-              Open league
-            </Link>
-          ) : null}
+  <Link
+    href={`/captain/team/${team.id}`}
+    className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
+  >
+    Captain view
+  </Link>
 
-          <Link
-            href="/admin/teams"
-            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-          >
-            All teams
-          </Link>
-        </div>
+  {team.league ? (
+    <Link
+      href={`/admin/leagues/${team.league.id}`}
+      className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+    >
+      Open league
+    </Link>
+  ) : null}
+
+  <Link
+    href="/admin/teams"
+    className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+  >
+    All teams
+  </Link>
+</div>
       </div>
 
       {(sp.saved === "1" ||

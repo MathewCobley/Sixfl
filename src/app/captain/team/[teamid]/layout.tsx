@@ -9,10 +9,6 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
-export const metadata = {
-  title: "Captain Dashboard | SIXFL",
-};
-
 export default async function CaptainTeamLayout({
   children,
   params,
@@ -58,6 +54,7 @@ export default async function CaptainTeamLayout({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               Captain Dashboard
             </p>
+
             <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white">
@@ -70,12 +67,39 @@ export default async function CaptainTeamLayout({
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-                <div className="font-medium text-white">
-                  {access.membership ? "Captain access" : "Admin preview"}
-                </div>
-                <div className="mt-1 text-emerald-100/70">
-                  Claim code: {team.claimCode}
+              <div className="flex flex-wrap gap-3">
+                {access.isAdmin ? (
+                  <Link
+                    href={`/admin/teams/${team.id}`}
+                    className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+                  >
+                    Back to admin team
+                  </Link>
+                ) : null}
+
+                <div
+                  className={
+                    access.accessMode === "admin-preview"
+                      ? "rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90"
+                      : "rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90"
+                  }
+                >
+                  <div className="font-medium text-white">
+                    {access.accessMode === "admin-preview"
+                      ? "Admin preview"
+                      : "Captain access"}
+                  </div>
+                  <div
+                    className={
+                      access.accessMode === "admin-preview"
+                        ? "mt-1 text-amber-100/75"
+                        : "mt-1 text-emerald-100/70"
+                    }
+                  >
+                    {access.accessMode === "admin-preview"
+                      ? "Viewing this captain dashboard as admin."
+                      : `Claim code: ${team.claimCode}`}
+                  </div>
                 </div>
               </div>
             </div>

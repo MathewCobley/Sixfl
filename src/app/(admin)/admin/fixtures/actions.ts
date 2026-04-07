@@ -7,6 +7,11 @@
 import { FixtureStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  formatTimeInLondon,
+  getLondonMinutesSinceMidnight,
+  parseLondonDateTime,
+} from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -112,13 +117,7 @@ function parseKickoffAtFromFields(
     throw new Error("Kickoff date and time are required.");
   }
 
-  const kickoffAt = new Date(`${dateStr}T${timeStr}`);
-
-  if (Number.isNaN(kickoffAt.getTime())) {
-    throw new Error("Kickoff date/time is invalid.");
-  }
-
-  return kickoffAt;
+  return parseLondonDateTime(dateStr, timeStr);
 }
 
 function parseFixtureStatus(value: FormDataEntryValue | null) {
@@ -158,7 +157,7 @@ function parseTimeToMinutes(value: string | null) {
 }
 
 function getKickoffMinutes(kickoffAt: Date) {
-  return kickoffAt.getHours() * 60 + kickoffAt.getMinutes();
+  return getLondonMinutesSinceMidnight(kickoffAt);
 }
 
 function isKickoffAllowed(
@@ -726,11 +725,7 @@ export async function generateFixtures(formData: FormData) {
     rounds = [...rounds, ...mirrorRounds(rounds)];
   }
 
-  const startDateTime = new Date(`${startDate}T${startTime}`);
-
-  if (Number.isNaN(startDateTime.getTime())) {
-    throw new Error("Start date/time is invalid.");
-  }
+  const startDateTime = parseLondonDateTime(startDate, startTime);
 
   const fixturesToCreate: {
     leagueId: string;
@@ -781,10 +776,7 @@ export async function generateFixtures(formData: FormData) {
 
         if (!allowed.allowed) {
           throw new Error(
-            `Unable to generate fixtures. Round ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${kickoffAt.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}, but ${allowed.reason}`,
+            `Unable to generate fixtures. Round ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${formatTimeInLondon(kickoffAt)}, but ${allowed.reason}`,
           );
         }
 
