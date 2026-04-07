@@ -47,63 +47,64 @@ export default async function CaptainOverviewPage({
   const { teamid } = await params;
   await requireCaptain(teamid);
 
-  const [team, upcomingFixtures, recentResults, activeCaptainCount] = await Promise.all([
-    prisma.team.findUnique({
-      where: { id: teamid },
-      select: {
-        id: true,
-        name: true,
-        leagueId: true,
-        league: {
-          select: {
-            id: true,
-            name: true,
-            season: true,
-            venueName: true,
-            dayOfWeek: true,
+  const [team, upcomingFixtures, recentResults, activeCaptainCount] =
+    await Promise.all([
+      prisma.team.findUnique({
+        where: { id: teamid },
+        select: {
+          id: true,
+          name: true,
+          leagueId: true,
+          league: {
+            select: {
+              id: true,
+              name: true,
+              season: true,
+              venueName: true,
+              dayOfWeek: true,
+            },
           },
         },
-      },
-    }),
-    prisma.fixture.findMany({
-      where: {
-        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
-        kickoffAt: { gte: new Date() },
-      },
-      orderBy: [{ kickoffAt: "asc" }],
-      take: 5,
-      include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
-        venue: { select: { name: true } },
-      },
-    }),
-    prisma.fixture.findMany({
-      where: {
-        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
-        result: { isNot: null },
-      },
-      orderBy: [{ kickoffAt: "desc" }],
-      take: 5,
-      include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
-        result: {
-          select: {
-            homeScore: true,
-            awayScore: true,
-            isDisputed: true,
+      }),
+      prisma.fixture.findMany({
+        where: {
+          OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+          kickoffAt: { gte: new Date() },
+        },
+        orderBy: [{ kickoffAt: "asc" }],
+        take: 5,
+        include: {
+          homeTeam: { select: { id: true, name: true } },
+          awayTeam: { select: { id: true, name: true } },
+          venue: { select: { name: true } },
+        },
+      }),
+      prisma.fixture.findMany({
+        where: {
+          OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+          result: { isNot: null },
+        },
+        orderBy: [{ kickoffAt: "desc" }],
+        take: 5,
+        include: {
+          homeTeam: { select: { id: true, name: true } },
+          awayTeam: { select: { id: true, name: true } },
+          result: {
+            select: {
+              homeScore: true,
+              awayScore: true,
+              isDisputed: true,
+            },
           },
         },
-      },
-    }),
-    prisma.teamMember.count({
-      where: {
-        teamId: teamid,
-        role: "CAPTAIN",
-      },
-    }),
-  ]);
+      }),
+      prisma.teamMember.count({
+        where: {
+          teamId: teamid,
+          role: "CAPTAIN",
+        },
+      }),
+    ]);
 
   if (!team) {
     notFound();
@@ -118,6 +119,7 @@ export default async function CaptainOverviewPage({
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Next fixture
           </p>
+
           <p className="mt-3 text-lg font-semibold text-white">
             {nextFixture
               ? getFixtureLabel({
@@ -127,9 +129,14 @@ export default async function CaptainOverviewPage({
                 })
               : "No upcoming fixture"}
           </p>
+
           <p className="mt-2 text-sm text-white/60">
             {nextFixture
-              ? `${formatDateTime(nextFixture.kickoffAt)} · ${nextFixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}`
+              ? `${formatDateTime(nextFixture.kickoffAt)} · ${
+                  nextFixture.venue?.name ??
+                  team.league?.venueName ??
+                  "Venue TBC"
+                }`
               : "As soon as fixtures are scheduled they will show here."}
           </p>
         </div>
@@ -138,19 +145,29 @@ export default async function CaptainOverviewPage({
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Captain records
           </p>
-          <p className="mt-3 text-3xl font-semibold text-white">{activeCaptainCount}</p>
+
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {activeCaptainCount}
+          </p>
+
           <p className="mt-2 text-sm text-white/60">
-            Active captain membership{activeCaptainCount === 1 ? "" : "s"} linked to this team.
+            Active captain membership
+            {activeCaptainCount === 1 ? "" : "s"} linked to this team.
           </p>
         </div>
 
         <div className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
-            Step 1 status
+            Step 2 status
           </p>
-          <p className="mt-3 text-lg font-semibold text-white">Captain shell live</p>
+
+          <p className="mt-3 text-lg font-semibold text-white">
+            Overview live
+          </p>
+
           <p className="mt-2 text-sm text-emerald-100/75">
-            Safe phase one only. No Prisma changes, no payments tables, no scorer metadata.
+            Safe captain dashboard using existing fixtures, results, and team
+            membership only.
           </p>
         </div>
       </section>
@@ -162,7 +179,9 @@ export default async function CaptainOverviewPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Upcoming fixtures
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Match schedule</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Match schedule
+              </h2>
             </div>
 
             <Link
@@ -181,10 +200,15 @@ export default async function CaptainOverviewPage({
             ) : (
               upcomingFixtures.map((fixture) => {
                 const isHome = fixture.homeTeamId === teamid;
-                const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
+                const opponent = isHome
+                  ? fixture.awayTeam.name
+                  : fixture.homeTeam.name;
 
                 return (
-                  <div key={fixture.id} className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    key={fixture.id}
+                    className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div>
                       <div className="text-base font-semibold text-white">
                         {isHome ? `vs ${opponent}` : `at ${opponent}`}
@@ -195,7 +219,11 @@ export default async function CaptainOverviewPage({
                     </div>
 
                     <div className="text-sm text-white/65 sm:text-right">
-                      <div>{fixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}</div>
+                      <div>
+                        {fixture.venue?.name ??
+                          team.league?.venueName ??
+                          "Venue TBC"}
+                      </div>
                       <div className="mt-1 text-white/45">
                         {team.league?.dayOfWeek ?? "Night TBC"}
                       </div>
@@ -212,26 +240,40 @@ export default async function CaptainOverviewPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Recent results
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Latest scores</h2>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              Latest scores
+            </h2>
           </div>
 
           <div className="divide-y divide-white/10">
             {recentResults.length === 0 ? (
-              <div className="px-6 py-10 text-sm text-white/55">No results recorded yet.</div>
+              <div className="px-6 py-10 text-sm text-white/55">
+                No results recorded yet.
+              </div>
             ) : (
               recentResults.map((fixture) => {
                 const isHome = fixture.homeTeamId === teamid;
-                const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
-                const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
-                const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
+                const opponent = isHome
+                  ? fixture.awayTeam.name
+                  : fixture.homeTeam.name;
+                const goalsFor = isHome
+                  ? fixture.result!.homeScore
+                  : fixture.result!.awayScore;
+                const goalsAgainst = isHome
+                  ? fixture.result!.awayScore
+                  : fixture.result!.homeScore;
                 const resultLabel = getResultLabel(goalsFor, goalsAgainst);
 
                 return (
                   <div key={fixture.id} className="px-6 py-5">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <div className="text-base font-semibold text-white">{opponent}</div>
-                        <div className="mt-1 text-sm text-white/60">{formatDateTime(fixture.kickoffAt)}</div>
+                        <div className="text-base font-semibold text-white">
+                          {opponent}
+                        </div>
+                        <div className="mt-1 text-sm text-white/60">
+                          {formatDateTime(fixture.kickoffAt)}
+                        </div>
                       </div>
 
                       <div className="text-right">
