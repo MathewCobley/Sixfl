@@ -9,6 +9,10 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
+export const metadata = {
+  title: "Captain Dashboard | SIXFL",
+};
+
 export default async function CaptainTeamLayout({
   children,
   params,
@@ -43,6 +47,7 @@ export default async function CaptainTeamLayout({
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
+    { href: `/captain/team/${teamid}/results`, label: "Results" },
   ];
 
   return (
@@ -66,9 +71,9 @@ export default async function CaptainTeamLayout({
               </div>
 
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-              <div className="font-medium text-white">
-{"Captain access"}
-</div>
+                <div className="font-medium text-white">
+                  {access.membership ? "Captain access" : "Admin preview"}
+                </div>
                 <div className="mt-1 text-emerald-100/70">
                   Claim code: {team.claimCode}
                 </div>

@@ -1,6 +1,6 @@
 // ========================================
 // File: prisma/schema.prisma
-// FULL FILE - email inbox schema steps 1 to 3 combined
+// FULL FILE - captain phase 1A (results metadata only)
 // ========================================
 
 generator client {
@@ -152,9 +152,10 @@ model Team {
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
-  members   TeamMember[]
-  homeGames Fixture[]    @relation("HomeTeam")
-  awayGames Fixture[]    @relation("AwayTeam")
+  members         TeamMember[]
+  homeGames       Fixture[]             @relation("HomeTeam")
+  awayGames       Fixture[]             @relation("AwayTeam")
+  resultMetadata  MatchResultTeamMeta[]
 
   convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
   messageThreads    MessageThread[] @relation("TeamMessageThreads")
@@ -194,12 +195,12 @@ enum TeamRole {
 }
 
 model Fixture {
-  id         String   @id @default(cuid())
-  leagueId   String
-  homeTeamId String
-  awayTeamId String
-  venueId    String?
-  kickoffAt  DateTime
+  id          String    @id @default(cuid())
+  leagueId    String
+  homeTeamId  String
+  awayTeamId  String
+  venueId     String?
+  kickoffAt   DateTime
   publishedAt DateTime?
 
   round    Int?
@@ -221,7 +222,7 @@ model Fixture {
   updatedAt DateTime @updatedAt
 
   @@index([leagueId, kickoffAt])
- @@index([leagueId, publishedAt, kickoffAt])
+  @@index([leagueId, publishedAt, kickoffAt])
   @@index([leagueId, round])
   @@index([homeTeamId])
   @@index([awayTeamId])
@@ -248,13 +249,31 @@ model MatchResult {
   isDisputed  Boolean @default(false)
   disputeNote String?
 
-  fixture       Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
-  enteredByUser User?   @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+  fixture       Fixture               @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  enteredByUser User?                 @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+  teamMetadata  MatchResultTeamMeta[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([fixtureId])
+}
+
+model MatchResultTeamMeta {
+  id                String   @id @default(cuid())
+  matchResultId     String
+  teamId            String
+  scorers           Json?
+  goalsRecorded     Int      @default(0)
+  playerOfMatchName String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  matchResult MatchResult @relation(fields: [matchResultId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([matchResultId, teamId])
+  @@index([teamId])
 }
 
 model InterestLead {
