@@ -70,6 +70,8 @@ export default async function CaptainOverviewPage({
         where: {
           OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
           kickoffAt: { gte: new Date() },
+          result: null,
+          status: "SCHEDULED",
         },
         orderBy: [{ kickoffAt: "asc" }],
         take: 5,
