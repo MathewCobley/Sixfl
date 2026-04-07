@@ -3,7 +3,7 @@
 // ========================================
 
 import { revalidatePath } from "next/cache";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -18,6 +18,8 @@ type SearchParams = {
   q?: string;
   outcome?: "W" | "D" | "L";
   needsCompletion?: string;
+  saved?: string;
+  error?: string;
 };
 
 type ScorerRow = {
@@ -83,6 +85,34 @@ function parseScorers(input: string) {
     });
 }
 
+function getFriendlyErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    if (error.message.includes("Scorer line must look like")) {
+      return "Enter scorers one per line in the format Name|Goals.";
+    }
+
+    if (error.message.includes("Goals must be a whole number")) {
+      return "Scorer goals must be whole numbers such as 1, 2, or 3.";
+    }
+
+    if (error.message.includes("cannot exceed the official result")) {
+      return "Scorer goals cannot be higher than your team’s official score.";
+    }
+
+    if (error.message.includes("Result not found")) {
+      return "That result could not be found.";
+    }
+
+    if (error.message.includes("does not belong to the selected team")) {
+      return "That result is not linked to this team.";
+    }
+
+    return error.message;
+  }
+
+  return "Something went wrong while saving the result metadata.";
+}
+
 async function saveTeamMetadata(formData: FormData) {
   "use server";
 
@@ -95,64 +125,70 @@ async function saveTeamMetadata(formData: FormData) {
 
   await requireCaptain(teamid);
 
-  const result = await prisma.matchResult.findUnique({
-    where: { id: resultId },
-    include: {
-      fixture: {
-        select: {
-          id: true,
-          homeTeamId: true,
-          awayTeamId: true,
+  try {
+    const result = await prisma.matchResult.findUnique({
+      where: { id: resultId },
+      include: {
+        fixture: {
+          select: {
+            id: true,
+            homeTeamId: true,
+            awayTeamId: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!result) {
-    throw new Error("Result not found.");
-  }
+    if (!result) {
+      throw new Error("Result not found.");
+    }
 
-  if (
-    result.fixture.homeTeamId !== teamid &&
-    result.fixture.awayTeamId !== teamid
-  ) {
-    throw new Error("This result does not belong to the selected team.");
-  }
+    if (
+      result.fixture.homeTeamId !== teamid &&
+      result.fixture.awayTeamId !== teamid
+    ) {
+      throw new Error("This result does not belong to the selected team.");
+    }
 
-  const isHome = result.fixture.homeTeamId === teamid;
-  const goalsExpected = isHome ? result.homeScore : result.awayScore;
-  const scorers = scorerText.trim() ? parseScorers(scorerText) : [];
-  const goalsRecorded = scorers.reduce((sum, row) => sum + row.goals, 0);
+    const isHome = result.fixture.homeTeamId === teamid;
+    const goalsExpected = isHome ? result.homeScore : result.awayScore;
+    const scorers = scorerText.trim() ? parseScorers(scorerText) : [];
+    const goalsRecorded = scorers.reduce((sum, row) => sum + row.goals, 0);
 
-  if (goalsRecorded > goalsExpected) {
-    throw new Error(
-      "Recorded scorer goals cannot exceed the official result.",
-    );
-  }
+    if (goalsRecorded > goalsExpected) {
+      throw new Error(
+        "Recorded scorer goals cannot exceed the official result.",
+      );
+    }
 
-  await prisma.matchResultTeamMeta.upsert({
-    where: {
-      matchResultId_teamId: {
+    await prisma.matchResultTeamMeta.upsert({
+      where: {
+        matchResultId_teamId: {
+          matchResultId: resultId,
+          teamId: teamid,
+        },
+      },
+      update: {
+        scorers,
+        goalsRecorded,
+        playerOfMatchName: playerOfMatchName || null,
+      },
+      create: {
         matchResultId: resultId,
         teamId: teamid,
+        scorers,
+        goalsRecorded,
+        playerOfMatchName: playerOfMatchName || null,
       },
-    },
-    update: {
-      scorers,
-      goalsRecorded,
-      playerOfMatchName: playerOfMatchName || null,
-    },
-    create: {
-      matchResultId: resultId,
-      teamId: teamid,
-      scorers,
-      goalsRecorded,
-      playerOfMatchName: playerOfMatchName || null,
-    },
-  });
+    });
 
-  revalidatePath(`/captain/team/${teamid}`);
-  revalidatePath(`/captain/team/${teamid}/results`);
+    revalidatePath(`/captain/team/${teamid}`);
+    revalidatePath(`/captain/team/${teamid}/results`);
+    redirect(`/captain/team/${teamid}/results?saved=1`);
+  } catch (error) {
+    const message = encodeURIComponent(getFriendlyErrorMessage(error));
+    redirect(`/captain/team/${teamid}/results?error=${message}`);
+  }
 }
 
 export default async function CaptainResultsPage({
@@ -256,6 +292,18 @@ export default async function CaptainResultsPage({
         </p>
       </section>
 
+      {filters.saved === "1" ? (
+        <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          Result metadata saved successfully.
+        </section>
+      ) : null}
+
+      {filters.error ? (
+        <section className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
+          {filters.error}
+        </section>
+      ) : null}
+
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <h2 className="text-xl font-semibold">Results filters</h2>
         <form className="mt-4 grid gap-3 md:grid-cols-4">
@@ -313,10 +361,8 @@ export default async function CaptainResultsPage({
                     {formatDate(row.fixture.kickoffAt)}
                   </p>
                   <h3 className="mt-1 text-2xl font-semibold">
-                    {row.fixture.homeTeam.name}{" "}
-                    {row.fixture.result!.homeScore}-
-                    {row.fixture.result!.awayScore}{" "}
-                    {row.fixture.awayTeam.name}
+                    {row.fixture.homeTeam.name} {row.fixture.result!.homeScore}-
+                    {row.fixture.result!.awayScore} {row.fixture.awayTeam.name}
                   </h3>
                   <p className="mt-2 text-sm text-white/65">
                     Your opponent: {row.opponent}
