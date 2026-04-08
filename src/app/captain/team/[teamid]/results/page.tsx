@@ -8,6 +8,7 @@ import { ResultDisputeStatus, ResultDisputeType } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import FormListboxField from "@/components/ui/FormListboxField";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,19 @@ type ScorerRow = {
   name: string;
   goals: number;
 };
+
+const outcomeOptions = [
+  { value: "", label: "All outcomes" },
+  { value: "W", label: "Wins" },
+  { value: "D", label: "Draws" },
+  { value: "L", label: "Losses" },
+];
+
+const disputeTypeOptions = [
+  { value: "GENERAL", label: "General issue" },
+  { value: "SCORE", label: "Score issue" },
+  { value: "PLAYER", label: "Player / scorer issue" },
+];
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("en-GB", {
@@ -417,16 +431,14 @@ export default async function CaptainResultsPage({
             placeholder="Search opponent, scorer, POM"
             className="rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none"
           />
-          <select
+
+          <FormListboxField
             name="outcome"
-            defaultValue={filters.outcome ?? ""}
-            className="rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none"
-          >
-            <option value="">All outcomes</option>
-            <option value="W">Wins</option>
-            <option value="D">Draws</option>
-            <option value="L">Losses</option>
-          </select>
+            value={filters.outcome ?? ""}
+            options={outcomeOptions}
+            placeholder="All outcomes"
+          />
+
           <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white/80">
             <input
               type="checkbox"
@@ -436,6 +448,7 @@ export default async function CaptainResultsPage({
             />
             Needs completion
           </label>
+
           <div className="md:col-span-4">
             <button
               type="submit"
@@ -548,15 +561,12 @@ export default async function CaptainResultsPage({
                           value={row.fixture.result!.id}
                         />
 
-                        <select
+                        <FormListboxField
                           name="type"
-                          defaultValue="GENERAL"
-                          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
-                        >
-                          <option value="GENERAL">General issue</option>
-                          <option value="SCORE">Score issue</option>
-                          <option value="PLAYER">Player/scorer issue</option>
-                        </select>
+                          value="GENERAL"
+                          options={disputeTypeOptions}
+                          placeholder="Select dispute type"
+                        />
 
                         <textarea
                           name="description"

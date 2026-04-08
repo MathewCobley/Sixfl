@@ -4,19 +4,24 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  ResultDisputeStatus,
-  ResultDisputeType,
-} from "@prisma/client";
+import { ResultDisputeStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import FormListboxField from "@/components/ui/FormListboxField";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Admin Results | SIXFL",
 };
+
+const disputeStatusOptions = [
+  { value: "OPEN", label: "Open" },
+  { value: "REVIEW", label: "In review" },
+  { value: "RESOLVED", label: "Resolved" },
+  { value: "REJECTED", label: "Rejected" },
+];
 
 async function updateDisputeAction(formData: FormData) {
   "use server";
@@ -251,16 +256,14 @@ export default async function AdminResultsPage({
                     Review dispute
                   </h3>
 
-                  <select
-                    name="status"
-                    defaultValue={dispute.status}
-                    className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
-                  >
-                    <option value="OPEN">Open</option>
-                    <option value="REVIEW">In review</option>
-                    <option value="RESOLVED">Resolved</option>
-                    <option value="REJECTED">Rejected</option>
-                  </select>
+                  <div className="mt-3">
+                    <FormListboxField
+                      name="status"
+                      value={dispute.status}
+                      options={disputeStatusOptions}
+                      placeholder="Select status"
+                    />
+                  </div>
 
                   <textarea
                     name="adminNote"
