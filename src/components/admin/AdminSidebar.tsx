@@ -10,6 +10,7 @@ import {
   CalendarDaysIcon,
   Cog6ToothIcon,
   DocumentTextIcon,
+  ExclamationTriangleIcon,
   MapPinIcon,
   ShieldCheckIcon,
   TrophyIcon,
@@ -49,6 +50,11 @@ const navigation = [
     name: "Fixtures",
     href: "/admin/fixtures",
     icon: CalendarDaysIcon,
+  },
+  {
+    name: "Result Disputes",
+    href: "/admin/results",
+    icon: ExclamationTriangleIcon,
   },
   {
     name: "Referees",
@@ -156,6 +162,7 @@ export default function AdminSidebar({
                     {item.name === "Leagues" && "League setup"}
                     {item.name === "Venues" && "Match locations"}
                     {item.name === "Fixtures" && "Schedule and results"}
+                    {item.name === "Result Disputes" && "Captain-raised issues"}
                     {item.name === "Referees" && "Officials and assignments"}
                     {item.name === "Leads" && "Inbound enquiries"}
                     {item.name === "Messaging" &&

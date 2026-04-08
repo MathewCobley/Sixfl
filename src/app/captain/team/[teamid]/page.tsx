@@ -58,6 +58,7 @@ export default async function CaptainOverviewPage({
     recentResults,
     activeCaptainCount,
     completionResults,
+    activeDisputeCount,
   ] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
@@ -107,6 +108,18 @@ export default async function CaptainOverviewPage({
             homeScore: true,
             awayScore: true,
             isDisputed: true,
+            disputes: {
+              where: {
+                teamId: teamid,
+                status: {
+                  in: ["OPEN", "REVIEW"],
+                },
+              },
+              select: {
+                id: true,
+                status: true,
+              },
+            },
           },
         },
       },
@@ -132,6 +145,14 @@ export default async function CaptainOverviewPage({
               },
             },
           },
+        },
+      },
+    }),
+    prisma.resultDispute.count({
+      where: {
+        teamId: teamid,
+        status: {
+          in: ["OPEN", "REVIEW"],
         },
       },
     }),
@@ -220,18 +241,18 @@ export default async function CaptainOverviewPage({
           </p>
         </div>
 
-        <div className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
-            Step 2 status
+        <div className="rounded-[1.75rem] border border-red-400/20 bg-red-500/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">
+            Active disputes
           </p>
 
-          <p className="mt-3 text-lg font-semibold text-white">
-            Overview live
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {activeDisputeCount}
           </p>
 
-          <p className="mt-2 text-sm text-emerald-100/75">
-            Safe captain dashboard using existing fixtures, results, and team
-            membership only.
+          <p className="mt-2 text-sm text-red-100/75">
+            Result dispute{activeDisputeCount === 1 ? "" : "s"} currently open
+            or under review.
           </p>
         </div>
       </section>
@@ -336,14 +357,25 @@ export default async function CaptainOverviewPage({
                   ? fixture.result!.awayScore
                   : fixture.result!.homeScore;
                 const resultLabel = getResultLabel(goalsFor, goalsAgainst);
+                const hasActiveDispute =
+                  (fixture.result?.disputes?.length ?? 0) > 0;
 
                 return (
                   <div key={fixture.id} className="px-6 py-5">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <div className="text-base font-semibold text-white">
-                          {opponent}
+                        <div className="flex items-center gap-2">
+                          <div className="text-base font-semibold text-white">
+                            {opponent}
+                          </div>
+
+                          {hasActiveDispute ? (
+                            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">
+                              Disputed
+                            </span>
+                          ) : null}
                         </div>
+
                         <div className="mt-1 text-sm text-white/60">
                           {formatDateTime(fixture.kickoffAt)}
                         </div>
