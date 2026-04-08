@@ -57,6 +57,11 @@ const navigation = [
     icon: ExclamationTriangleIcon,
   },
   {
+    name: "Payments",
+    href: "/admin/payments",
+    icon: DocumentTextIcon,
+  },
+  {
     name: "Referees",
     href: "/admin/referees",
     icon: ShieldCheckIcon,
@@ -163,6 +168,7 @@ export default function AdminSidebar({
                     {item.name === "Venues" && "Match locations"}
                     {item.name === "Fixtures" && "Schedule and results"}
                     {item.name === "Result Disputes" && "Captain-raised issues"}
+                    {item.name === "Payments" && "Charges and payments"}
                     {item.name === "Referees" && "Officials and assignments"}
                     {item.name === "Leads" && "Inbound enquiries"}
                     {item.name === "Messaging" &&
