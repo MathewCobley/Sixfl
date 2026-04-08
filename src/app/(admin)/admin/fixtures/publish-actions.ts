@@ -96,22 +96,14 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function buildFixtureLine(
-  fixture: {
-    kickoffAt: Date;
-    pitch: string | null;
-    homeTeam: { id: string; name: string };
-    awayTeam: { id: string; name: string };
-    venue: { name: string } | null;
-  },
-  teamId: string,
-) {
-  const isHome = fixture.homeTeam.id === teamId;
-  const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
-
-  return `${formatKickoff(fixture.kickoffAt)} — ${
-    isHome ? `Home vs ${opponent}` : `Away at ${opponent}`
-  } — ${fixture.pitch ?? "Pitch TBC"} — ${fixture.venue?.name ?? "Venue TBC"}`;
+function buildFixtureLine(fixture: {
+  kickoffAt: Date;
+  pitch: string | null;
+  homeTeam: { id: string; name: string };
+  awayTeam: { id: string; name: string };
+  venue: { name: string } | null;
+}) {
+  return `${formatKickoff(fixture.kickoffAt)} — ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} — ${fixture.pitch ?? "Pitch TBC"} — ${fixture.venue?.name ?? "Venue TBC"}`;
 }
 
 function isQueuedDispatch(status: NotificationDispatchStatus) {
@@ -260,7 +252,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
         "",
         `Your fixtures for ${league.name}${league.season ? ` (${league.season})` : ""} are now live.`,
         "",
-        ...teamFixtures.map((fixture) => buildFixtureLine(fixture, teamId)),
+        ...teamFixtures.map((fixture) => buildFixtureLine(fixture)),
         "",
         "You will also receive automatic reminders before kickoff.",
       ].join("\n"),
@@ -309,7 +301,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
           body: [
             `Hi ${recipient.displayName?.trim() || teamDetails.name},`,
             "",
-            `Reminder: ${buildFixtureLine(fixture, teamId)}`,
+            `Reminder: ${buildFixtureLine(fixture)}`,
             "",
             "Please make sure your team is ready for kickoff.",
           ].join("\n"),

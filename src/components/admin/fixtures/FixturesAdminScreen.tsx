@@ -490,20 +490,20 @@ export default function FixturesAdminScreen({
               </div>
 
               <AdminComboboxField
-                key={`create-home-${selectedLeagueId}`}
-                name="homeTeamId"
-                label="Home team"
-                placeholder="Search home team"
-                options={createLeagueTeams}
-              />
+  key={`create-home-${selectedLeagueId}`}
+  name="homeTeamId"
+  label="Team 1"
+  placeholder="Search team 1"
+  options={createLeagueTeams}
+/>
 
-              <AdminComboboxField
-                key={`create-away-${selectedLeagueId}`}
-                name="awayTeamId"
-                label="Away team"
-                placeholder="Search away team"
-                options={createLeagueTeams}
-              />
+<AdminComboboxField
+  key={`create-away-${selectedLeagueId}`}
+  name="awayTeamId"
+  label="Team 2"
+  placeholder="Search team 2"
+  options={createLeagueTeams}
+/>
 
               <AdminComboboxField
                 name="venueId"
@@ -745,7 +745,7 @@ export default function FixturesAdminScreen({
                       Double round robin
                     </div>
                     <div className="mt-1 text-sm leading-6 text-white/50">
-                      Every team plays each opponent home and away.
+                      Every team plays each opponent twice.
                     </div>
                   </div>
                 </label>
@@ -916,20 +916,20 @@ export default function FixturesAdminScreen({
                 </div>
 
                 <AdminComboboxField
-                  name="homeTeamId"
-                  label="Home team"
-                  placeholder="Search home team"
-                  options={editLeagueTeams}
-                  defaultValue={editHomeTeamId}
-                />
+  name="homeTeamId"
+  label="Team 1"
+  placeholder="Search team 1"
+  options={editLeagueTeams}
+  defaultValue={editHomeTeamId}
+/>
 
-                <AdminComboboxField
-                  name="awayTeamId"
-                  label="Away team"
-                  placeholder="Search away team"
-                  options={editLeagueTeams}
-                  defaultValue={editAwayTeamId}
-                />
+<AdminComboboxField
+  name="awayTeamId"
+  label="Team 2"
+  placeholder="Search team 2"
+  options={editLeagueTeams}
+  defaultValue={editAwayTeamId}
+/>
 
                 <AdminComboboxField
                   name="venueId"
@@ -1090,7 +1090,7 @@ export default function FixturesAdminScreen({
                   >
                     <td className="px-6 py-5">
                       <div className="font-medium text-white">
-                        {fixture.homeTeamName} v {fixture.awayTeamName}
+                        {fixture.homeTeamName} vs {fixture.awayTeamName}
                       </div>
                       <div className="mt-1 text-sm text-white/45">
                         {fixture.pitch ? fixture.pitch : "Pitch not set"}

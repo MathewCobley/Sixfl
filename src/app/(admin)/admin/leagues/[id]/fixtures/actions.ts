@@ -57,7 +57,7 @@ export async function updateMatchAction(formData: FormData) {
   }
 
   if (!homeTeamId || !awayTeamId) {
-    throw new Error("Both home and away teams are required.");
+    throw new Error("Both teams are required.");
   }
 
   if (!kickoffAtValue) {

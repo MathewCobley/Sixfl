@@ -277,12 +277,12 @@ export async function submitResultAction(formData: FormData) {
   const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture ID");
   const homeScore = parseRequiredPositiveInt(
     formData.get("homeScore"),
-    "Home score",
+    "Team 1 score",
     0,
   );
   const awayScore = parseRequiredPositiveInt(
     formData.get("awayScore"),
-    "Away score",
+    "Team 2 score",
     0,
   );
 
@@ -339,8 +339,8 @@ export async function createFixtureAction(formData: FormData) {
   await requireAdmin();
 
   const leagueId = parseRequiredString(formData.get("leagueId"), "League");
-  const homeTeamId = parseRequiredString(formData.get("homeTeamId"), "Home team");
-  const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Away team");
+  const homeTeamId = parseRequiredString(formData.get("homeTeamId"), "Team 1");
+  const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
   const venueId = parseOptionalString(formData.get("venueId"));
   const refereeId = parseOptionalString(formData.get("refereeId"));
   const kickoffAt = parseKickoffAtFromFields(
@@ -357,7 +357,7 @@ export async function createFixtureAction(formData: FormData) {
   const status = parseFixtureStatus(formData.get("status"));
 
   if (homeTeamId === awayTeamId) {
-    throw new Error("Home team and away team cannot be the same.");
+    throw new Error("Team 1 and Team 2 cannot be the same team.");
   }
 
   const [league, homeTeam, awayTeam, venue, referee] = await Promise.all([
@@ -392,11 +392,11 @@ export async function createFixtureAction(formData: FormData) {
   }
 
   if (!homeTeam) {
-    throw new Error("Selected home team was not found.");
+    throw new Error("Selected Team 1 was not found.");
   }
 
   if (!awayTeam) {
-    throw new Error("Selected away team was not found.");
+    throw new Error("Selected Team 2 was not found.");
   }
 
   if (venueId && !venue) {
@@ -408,11 +408,11 @@ export async function createFixtureAction(formData: FormData) {
   }
 
   if (homeTeam.leagueId !== leagueId) {
-    throw new Error("Home team does not belong to the selected league.");
+    throw new Error("Team 1 does not belong to the selected league.");
   }
 
   if (awayTeam.leagueId !== leagueId) {
-    throw new Error("Away team does not belong to the selected league.");
+    throw new Error("Team 2 does not belong to the selected league.");
   }
 
   await prisma.fixture.create({
@@ -447,8 +447,8 @@ export async function updateFixtureAction(formData: FormData) {
 
   const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture ID");
   const leagueId = parseRequiredString(formData.get("leagueId"), "League");
-  const homeTeamId = parseRequiredString(formData.get("homeTeamId"), "Home team");
-  const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Away team");
+  const homeTeamId = parseRequiredString(formData.get("homeTeamId"), "Team 1");
+const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
   const venueId = parseOptionalString(formData.get("venueId"));
   const refereeId = parseOptionalString(formData.get("refereeId"));
   const kickoffAt = parseKickoffAtFromFields(
@@ -465,7 +465,7 @@ export async function updateFixtureAction(formData: FormData) {
   const status = parseFixtureStatus(formData.get("status"));
 
   if (homeTeamId === awayTeamId) {
-    throw new Error("Home team and away team cannot be the same.");
+    throw new Error("Team 1 and Team 2 cannot be the same team.");
   }
 
   const [fixture, league, homeTeam, awayTeam, venue, referee] =
@@ -517,11 +517,11 @@ export async function updateFixtureAction(formData: FormData) {
   }
 
   if (!homeTeam) {
-    throw new Error("Selected home team was not found.");
+    throw new Error("Selected Team 1 was not found.");
   }
 
   if (!awayTeam) {
-    throw new Error("Selected away team was not found.");
+    throw new Error("Selected Team 2 was not found.");
   }
 
   if (venueId && !venue) {
@@ -533,11 +533,11 @@ export async function updateFixtureAction(formData: FormData) {
   }
 
   if (homeTeam.leagueId !== leagueId) {
-    throw new Error("Home team does not belong to the selected league.");
+    throw new Error("Team 1 does not belong to the selected league.");
   }
 
   if (awayTeam.leagueId !== leagueId) {
-    throw new Error("Away team does not belong to the selected league.");
+    throw new Error("Team 2 does not belong to the selected league.");
   }
 
   await prisma.fixture.update({

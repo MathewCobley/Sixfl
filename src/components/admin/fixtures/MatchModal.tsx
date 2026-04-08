@@ -76,7 +76,7 @@ export default function MatchModal({
         <div className="grid gap-5 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-              Home team
+              Team 1
             </label>
             <select
               name="homeTeamId"
@@ -93,7 +93,7 @@ export default function MatchModal({
 
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-              Away team
+              Team 2
             </label>
             <select
               name="awayTeamId"

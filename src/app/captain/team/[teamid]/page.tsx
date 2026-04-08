@@ -35,9 +35,8 @@ function formatMoney(amountPence: number) {
 function getFixtureLabel(input: {
   homeTeamName: string;
   awayTeamName: string;
-  isHome: boolean;
 }) {
-  return input.isHome ? `vs ${input.awayTeamName}` : `at ${input.homeTeamName}`;
+  return `${input.homeTeamName} vs ${input.awayTeamName}`;
 }
 
 function getResultLabel(goalsFor: number, goalsAgainst: number) {
@@ -205,6 +204,7 @@ export default async function CaptainOverviewPage({
       (txSum, tx) => txSum + tx.amountPence,
       0,
     );
+
     return sum + Math.max(charge.amountPence - paid, 0);
   }, 0);
 
@@ -223,7 +223,6 @@ export default async function CaptainOverviewPage({
               ? getFixtureLabel({
                   homeTeamName: nextFixture.homeTeam.name,
                   awayTeamName: nextFixture.awayTeam.name,
-                  isHome: nextFixture.homeTeamId === teamid,
                 })
               : "No upcoming fixture"}
           </p>
@@ -329,39 +328,35 @@ export default async function CaptainOverviewPage({
                 No upcoming fixtures yet.
               </div>
             ) : (
-              upcomingFixtures.map((fixture) => {
-                const isHome = fixture.homeTeamId === teamid;
-                const opponent = isHome
-                  ? fixture.awayTeam.name
-                  : fixture.homeTeam.name;
-
-                return (
-                  <div
-                    key={fixture.id}
-                    className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <div className="text-base font-semibold text-white">
-                        {isHome ? `vs ${opponent}` : `at ${opponent}`}
-                      </div>
-                      <div className="mt-1 text-sm text-white/60">
-                        {formatDateTime(fixture.kickoffAt)}
-                      </div>
+              upcomingFixtures.map((fixture) => (
+                <div
+                  key={fixture.id}
+                  className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="text-base font-semibold text-white">
+                      {getFixtureLabel({
+                        homeTeamName: fixture.homeTeam.name,
+                        awayTeamName: fixture.awayTeam.name,
+                      })}
                     </div>
-
-                    <div className="text-sm text-white/65 sm:text-right">
-                      <div>
-                        {fixture.venue?.name ??
-                          team.league?.venueName ??
-                          "Venue TBC"}
-                      </div>
-                      <div className="mt-1 text-white/45">
-                        {team.league?.dayOfWeek ?? "Night TBC"}
-                      </div>
+                    <div className="mt-1 text-sm text-white/60">
+                      {formatDateTime(fixture.kickoffAt)}
                     </div>
                   </div>
-                );
-              })
+
+                  <div className="text-sm text-white/65 sm:text-right">
+                    <div>
+                      {fixture.venue?.name ??
+                        team.league?.venueName ??
+                        "Venue TBC"}
+                    </div>
+                    <div className="mt-1 text-white/45">
+                      {team.league?.dayOfWeek ?? "Night TBC"}
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
