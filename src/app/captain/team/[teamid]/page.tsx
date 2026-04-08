@@ -15,11 +15,6 @@ export const metadata = {
   title: "Captain Overview | SIXFL",
 };
 
-type ScorerRow = {
-  name: string;
-  goals: number;
-};
-
 function formatDateTime(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
@@ -28,6 +23,13 @@ function formatDateTime(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(value);
+}
+
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
 }
 
 function getFixtureLabel(input: {
@@ -59,6 +61,7 @@ export default async function CaptainOverviewPage({
     activeCaptainCount,
     completionResults,
     activeDisputeCount,
+    paymentCharges,
   ] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
@@ -156,6 +159,21 @@ export default async function CaptainOverviewPage({
         },
       },
     }),
+    prisma.paymentCharge.findMany({
+      where: {
+        teamId: teamid,
+        status: {
+          notIn: ["PAID", "VOID"],
+        },
+      },
+      include: {
+        transactions: {
+          select: {
+            amountPence: true,
+          },
+        },
+      },
+    }),
   ]);
 
   if (!team) {
@@ -182,9 +200,19 @@ export default async function CaptainOverviewPage({
     return needsScorers || needsPom;
   }).length;
 
+  const outstandingBalance = paymentCharges.reduce((sum, charge) => {
+    const paid = charge.transactions.reduce(
+      (txSum, tx) => txSum + tx.amountPence,
+      0,
+    );
+    return sum + Math.max(charge.amountPence - paid, 0);
+  }, 0);
+
+  const openChargeCount = paymentCharges.length;
+
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Next fixture
@@ -255,6 +283,24 @@ export default async function CaptainOverviewPage({
             or under review.
           </p>
         </div>
+
+        <Link
+          href={`/captain/team/${teamid}/payments`}
+          className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+            Outstanding balance
+          </p>
+
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {formatMoney(outstandingBalance)}
+          </p>
+
+          <p className="mt-2 text-sm text-emerald-100/75">
+            {openChargeCount} open charge{openChargeCount === 1 ? "" : "s"}.
+            Open payments
+          </p>
+        </Link>
       </section>
 
       <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
