@@ -1,6 +1,6 @@
 // ========================================
 // File: prisma/schema.prisma
-// FULL FILE - captain phase 2 (results disputes)
+// FULL FILE - captain phase 3A (team payments ledger)
 // ========================================
 
 generator client {
@@ -107,6 +107,7 @@ model League {
   teams          Team[]
   fixtures       Fixture[]
   interestLeads  InterestLead[]
+  paymentCharges PaymentCharge[]
   messageThreads MessageThread[] @relation("LeagueMessageThreads")
 
   createdAt DateTime @default(now())
@@ -153,11 +154,13 @@ model Team {
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
-  members         TeamMember[]
-  homeGames       Fixture[]              @relation("HomeTeam")
-  awayGames       Fixture[]              @relation("AwayTeam")
-  resultMetadata  MatchResultTeamMeta[]
-  resultDisputes  ResultDispute[]
+  members             TeamMember[]
+  homeGames           Fixture[]              @relation("HomeTeam")
+  awayGames           Fixture[]              @relation("AwayTeam")
+  resultMetadata      MatchResultTeamMeta[]
+  resultDisputes      ResultDispute[]
+  paymentCharges      PaymentCharge[]
+  paymentTransactions PaymentTransaction[]
 
   convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
   messageThreads    MessageThread[] @relation("TeamMessageThreads")
@@ -197,7 +200,7 @@ enum TeamRole {
 }
 
 model Fixture {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   leagueId    String
   homeTeamId  String
   awayTeamId  String
@@ -319,6 +322,72 @@ model ResultDispute {
   @@index([createdByUserId])
 }
 
+enum PaymentChargeStatus {
+  OPEN
+  PART_PAID
+  PAID
+  VOID
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  CARD
+  OTHER
+}
+
+model PaymentCharge {
+  id String @id @default(cuid())
+
+  teamId   String
+  leagueId String?
+
+  title       String
+  description String?
+  amountPence Int
+  dueDate     DateTime?
+
+  status PaymentChargeStatus @default(OPEN)
+
+  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  league League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+
+  transactions PaymentTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([leagueId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model PaymentTransaction {
+  id String @id @default(cuid())
+
+  teamId   String
+  chargeId String?
+
+  amountPence Int
+  method      PaymentMethod @default(BANK_TRANSFER)
+
+  reference String?
+  notes     String?
+  paidAt    DateTime
+
+  team   Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  charge PaymentCharge? @relation(fields: [chargeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([chargeId])
+  @@index([paidAt])
+  @@index([method])
+}
+
 model InterestLead {
   id           String       @id @default(cuid())
   interestType InterestType
@@ -343,9 +412,9 @@ model InterestLead {
   contactedAt DateTime?
   closedAt    DateTime?
 
-  convertedAt   DateTime?
+  convertedAt     DateTime?
   convertedTeamId String? @unique
-  convertedTeam Team?     @relation("LeadConvertedTeam", fields: [convertedTeamId], references: [id], onDelete: SetNull)
+  convertedTeam   Team?   @relation("LeadConvertedTeam", fields: [convertedTeamId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
