@@ -1,6 +1,6 @@
 // ========================================
 // File: prisma/schema.prisma
-// FULL FILE - captain phase 1A (results metadata only)
+// FULL FILE - captain phase 2 (results disputes)
 // ========================================
 
 generator client {
@@ -27,12 +27,13 @@ model User {
 
   createdFromLeadId String?
 
-  accounts         Account[]
-  sessions         Session[]
-  teamMembers      TeamMember[]
-  createdTeams     Team[]        @relation("TeamCreatedBy")
-  refereedFixtures Fixture[]     @relation("FixtureReferee")
-  enteredResults   MatchResult[] @relation("ResultEnteredBy")
+  accounts               Account[]
+  sessions               Session[]
+  teamMembers            TeamMember[]
+  createdTeams           Team[]          @relation("TeamCreatedBy")
+  refereedFixtures       Fixture[]       @relation("FixtureReferee")
+  enteredResults         MatchResult[]   @relation("ResultEnteredBy")
+  createdResultDisputes  ResultDispute[] @relation("ResultDisputeCreatedBy")
 
   assignedMessageThreads MessageThread[] @relation("UserAssignedMessageThreads")
   createdMessageEntries  MessageEntry[]  @relation("UserCreatedMessageEntries")
@@ -45,7 +46,7 @@ enum UserRole {
 }
 
 model Account {
-  id                String  @id @default(cuid())
+  id                String @id @default(cuid())
   userId            String
   type              String
   provider          String
@@ -147,15 +148,16 @@ model Team {
   latestKickoffTime String?
 
   createdByUserId String?
-  createdByUser   User?   @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUser   User? @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
   members         TeamMember[]
-  homeGames       Fixture[]             @relation("HomeTeam")
-  awayGames       Fixture[]             @relation("AwayTeam")
+  homeGames       Fixture[]              @relation("HomeTeam")
+  awayGames       Fixture[]              @relation("AwayTeam")
   resultMetadata  MatchResultTeamMeta[]
+  resultDisputes  ResultDispute[]
 
   convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
   messageThreads    MessageThread[] @relation("TeamMessageThreads")
@@ -252,6 +254,7 @@ model MatchResult {
   fixture       Fixture               @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
   enteredByUser User?                 @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
   teamMetadata  MatchResultTeamMeta[]
+  disputes      ResultDispute[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -274,6 +277,46 @@ model MatchResultTeamMeta {
 
   @@unique([matchResultId, teamId])
   @@index([teamId])
+}
+
+enum ResultDisputeType {
+  SCORE
+  PLAYER
+  GENERAL
+}
+
+enum ResultDisputeStatus {
+  OPEN
+  REVIEW
+  RESOLVED
+  REJECTED
+}
+
+model ResultDispute {
+  id String @id @default(cuid())
+
+  matchResultId String
+  teamId        String
+
+  type   ResultDisputeType
+  status ResultDisputeStatus @default(OPEN)
+
+  description String
+  adminNote   String?
+
+  createdByUserId String?
+
+  matchResult   MatchResult @relation(fields: [matchResultId], references: [id], onDelete: Cascade)
+  team          Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdByUser User?       @relation("ResultDisputeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([matchResultId])
+  @@index([teamId])
+  @@index([status])
+  @@index([createdByUserId])
 }
 
 model InterestLead {
@@ -300,9 +343,9 @@ model InterestLead {
   contactedAt DateTime?
   closedAt    DateTime?
 
-  convertedAt     DateTime?
-  convertedTeamId String?   @unique
-  convertedTeam   Team?     @relation("LeadConvertedTeam", fields: [convertedTeamId], references: [id], onDelete: SetNull)
+  convertedAt   DateTime?
+  convertedTeamId String? @unique
+  convertedTeam Team?     @relation("LeadConvertedTeam", fields: [convertedTeamId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -512,7 +555,7 @@ model NotificationRecipient {
 
   preferences    NotificationPreference?
   dispatches     NotificationDispatch[]
-  messageThreads MessageThread[]         @relation("NotificationRecipientMessageThreads")
+  messageThreads MessageThread[] @relation("NotificationRecipientMessageThreads")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -548,7 +591,7 @@ model NotificationPreference {
 model NotificationTemplate {
   id String @id @default(cuid())
 
-  key         String  @unique
+  key         String @unique
   name        String
   description String?
 
@@ -599,7 +642,7 @@ model NotificationDispatch {
   variables Json?
   metadata  Json?
 
-  scheduledFor DateTime  @default(now())
+  scheduledFor DateTime @default(now())
   processedAt  DateTime?
   sentAt       DateTime?
   failedAt     DateTime?
