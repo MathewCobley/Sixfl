@@ -1,4 +1,3 @@
-
 // ========================================
 // File: src/app/(admin)/admin/teams/[id]/page.tsx
 // ========================================
@@ -23,6 +22,7 @@ import {
 import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
 import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
+import TeamEmailForm from "@/components/admin/teams/TeamEmailForm";
 
 function formatDispatchStatus(status: NotificationDispatchStatus) {
   switch (status) {
@@ -120,7 +120,7 @@ export default async function AdminTeamPage({
     notFound();
   }
 
-  const [team, leagues] = await Promise.all([
+  const [team, leagues, emailTemplates] = await Promise.all([
     prisma.team.findUnique({
       where: { id },
       include: {
@@ -181,6 +181,25 @@ export default async function AdminTeamPage({
         name: true,
         season: true,
         isActive: true,
+      },
+    }),
+    prisma.emailTemplate.findMany({
+      where: {
+        isActive: true,
+        audience: {
+          in: ["TEAM", "GENERAL"],
+        },
+      },
+      orderBy: [{ audience: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        subject: true,
+        body: true,
+        description: true,
+        ctaLabel: true,
+        ctaUrlKey: true,
       },
     }),
   ]);
@@ -303,6 +322,30 @@ export default async function AdminTeamPage({
   const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
   const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
+  const teamLeagueName = team.league
+    ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+    : null;
+
+  const teamEmailTemplates = emailTemplates.map((template) => {
+    const ctaUrl =
+      template.ctaUrlKey === "signupUrl"
+        ? `${baseUrl}/register-interest`
+        : template.ctaUrlKey === "manageTeamUrl"
+          ? claimLink
+          : null;
+
+    return {
+      id: template.id,
+      key: template.key,
+      name: template.name,
+      subject: template.subject,
+      body: template.body,
+      description: template.description,
+      ctaLabel: template.ctaLabel,
+      ctaUrl,
+    };
+  });
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -324,29 +367,29 @@ export default async function AdminTeamPage({
         </div>
 
         <div className="flex flex-wrap gap-3">
-  <Link
-    href={`/captain/team/${team.id}`}
-    className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
-  >
-    Captain view
-  </Link>
+          <Link
+            href={`/captain/team/${team.id}`}
+            className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
+          >
+            Captain view
+          </Link>
 
-  {team.league ? (
-    <Link
-      href={`/admin/leagues/${team.league.id}`}
-      className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-    >
-      Open league
-    </Link>
-  ) : null}
+          {team.league ? (
+            <Link
+              href={`/admin/leagues/${team.league.id}`}
+              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+            >
+              Open league
+            </Link>
+          ) : null}
 
-  <Link
-    href="/admin/teams"
-    className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-  >
-    All teams
-  </Link>
-</div>
+          <Link
+            href="/admin/teams"
+            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+          >
+            All teams
+          </Link>
+        </div>
       </div>
 
       {(sp.saved === "1" ||
@@ -728,7 +771,9 @@ export default async function AdminTeamPage({
                             </span>
                           ) : null}
                           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
-                            {thread.contactPhone || thread.phoneNormalized || "No phone"}
+                            {thread.contactPhone ||
+                              thread.phoneNormalized ||
+                              "No phone"}
                           </span>
                         </div>
 
@@ -789,7 +834,8 @@ export default async function AdminTeamPage({
                               <div>To: {message.toNumber || "—"}</div>
                               <div>
                                 Time:{" "}
-                                {(message.receivedAt ??
+                                {(
+                                  message.receivedAt ??
                                   message.sentAt ??
                                   message.createdAt
                                 ).toLocaleString()}
@@ -1079,9 +1125,16 @@ export default async function AdminTeamPage({
               </div>
             ) : null}
 
-            <form action={sendTeamPaymentRequestAction} className="mt-4 space-y-4">
+            <form
+              action={sendTeamPaymentRequestAction}
+              className="mt-4 space-y-4"
+            >
               <input type="hidden" name="teamId" value={team.id} />
-              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
+              <input
+                type="hidden"
+                name="from"
+                value={`/admin/teams/${team.id}`}
+              />
 
               <div>
                 <label className="mb-1 block text-sm text-white/70">To</label>
@@ -1150,53 +1203,16 @@ export default async function AdminTeamPage({
               </div>
             ) : null}
 
-            <form action={sendTeamMessageAction} className="mt-4 space-y-4">
-              <input type="hidden" name="teamId" value={team.id} />
-              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
-              <input type="hidden" name="channel" value="EMAIL" />
-
-              <div>
-                <label className="mb-1 block text-sm text-white/70">To</label>
-                <input
-                  value={contactSnapshot.primaryContact.email ?? ""}
-                  disabled
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/70">
-                  Subject
-                </label>
-                <input
-                  name="subject"
-                  placeholder="League update for your team"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/70">
-                  Message
-                </label>
-                <textarea
-                  name="body"
-                  rows={9}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                  placeholder={`Hi ${
-                    contactSnapshot.primaryContact.name || team.name
-                  },\n\nWe wanted to update you about your team.\n\nThanks,\nSIXFL`}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={!emailReplyConfigured}
-                className={getPrimaryActionButtonClass(emailReplyConfigured)}
-              >
-                Queue email
-              </button>
-            </form>
+            <TeamEmailForm
+              teamId={team.id}
+              toEmail={contactSnapshot.primaryContact.email ?? null}
+              contactName={contactSnapshot.primaryContact.name ?? null}
+              teamName={contactSnapshot.teamName}
+              leagueName={teamLeagueName}
+              fromPath={`/admin/teams/${team.id}`}
+              templates={teamEmailTemplates}
+              emailReplyConfigured={emailReplyConfigured}
+            />
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
@@ -1204,7 +1220,11 @@ export default async function AdminTeamPage({
 
             <form action={sendTeamMessageAction} className="mt-4 space-y-4">
               <input type="hidden" name="teamId" value={team.id} />
-              <input type="hidden" name="from" value={`/admin/teams/${team.id}`} />
+              <input
+                type="hidden"
+                name="from"
+                value={`/admin/teams/${team.id}`}
+              />
               <input type="hidden" name="channel" value="SMS" />
 
               <div>

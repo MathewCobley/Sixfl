@@ -1,4 +1,3 @@
-
 // ========================================
 // File: src/app/(admin)/admin/teams/actions.ts
 // ========================================
@@ -217,6 +216,10 @@ export async function sendTeamMessageAction(formData: FormData) {
   );
   const subject = getTrimmedValue(formData.get("subject"));
   const body = getTrimmedValue(formData.get("body"));
+  const ctaLabel = getTrimmedValue(formData.get("ctaLabel"));
+  const ctaUrl = getTrimmedValue(formData.get("ctaUrl"));
+  const templateId = getTrimmedValue(formData.get("templateId")) || null;
+  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
 
   if (!teamId) {
     redirect("/admin/teams?error=missing_id");
@@ -290,6 +293,13 @@ export async function sendTeamMessageAction(formData: FormData) {
               : null,
           }
         : undefined,
+    emailCta:
+      channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
+        ? {
+            label: ctaLabel,
+            url: ctaUrl,
+          }
+        : undefined,
     metadata: {
       origin: "team_admin",
       originLabel: "Sent from team page",
@@ -297,6 +307,10 @@ export async function sendTeamMessageAction(formData: FormData) {
       teamName: snapshot.teamName,
       leagueId: snapshot.leagueId,
       leagueName: snapshot.leagueName,
+      templateId,
+      templateKey,
+      ctaLabel: ctaLabel || null,
+      ctaUrl: ctaUrl || null,
     },
     createdByUserId: user?.id ?? null,
   });
