@@ -10,6 +10,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { buildSIXFLFooterHtml } from "@/lib/email/footer";
 
 // ========================================
 // Types
@@ -47,9 +48,7 @@ type EmailTemplateFormProps = {
   initialValues?: Partial<EmailTemplateFormValues>;
 };
 
-type PreviewBlock =
-  | { type: "paragraph"; content: string }
-  | { type: "cta" };
+type PreviewBlock = { type: "paragraph"; content: string } | { type: "cta" };
 
 // ========================================
 // Constants
@@ -231,7 +230,9 @@ export default function EmailTemplateForm({
 
   const [key, setKey] = useState(initialValues?.key ?? "");
   const [name, setName] = useState(initialValues?.name ?? "");
-  const [description, setDescription] = useState(initialValues?.description ?? "");
+  const [description, setDescription] = useState(
+    initialValues?.description ?? "",
+  );
   const [audience, setAudience] = useState<TemplateAudience>(
     initialValues?.audience ?? "LEAD",
   );
@@ -257,7 +258,8 @@ export default function EmailTemplateForm({
   const previewSubject = useMemo(() => previewReplace(subject), [subject]);
 
   const selectedCtaOption = useMemo(
-    () => CTA_OPTIONS.find((option) => option.value === ctaUrlKey) ?? CTA_OPTIONS[0],
+    () =>
+      CTA_OPTIONS.find((option) => option.value === ctaUrlKey) ?? CTA_OPTIONS[0],
     [ctaUrlKey],
   );
 
@@ -273,6 +275,8 @@ export default function EmailTemplateForm({
 
     return blocks;
   }, [body, hasSelectedCta, ctaPlaceholderCount]);
+
+  const previewFooterHtml = useMemo(() => buildSIXFLFooterHtml(), []);
 
   const bodyError = state?.errors?.body?.[0];
   const keyError = state?.errors?.key?.[0];
@@ -357,7 +361,9 @@ export default function EmailTemplateForm({
 
   return (
     <form action={formAction} className="space-y-8">
-      {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
+      {initialValues?.id ? (
+        <input type="hidden" name="id" value={initialValues.id} />
+      ) : null}
 
       <input type="hidden" name="audience" value={audience} />
       <input type="hidden" name="interestType" value={interestType} />
@@ -368,7 +374,9 @@ export default function EmailTemplateForm({
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
-              <h2 className="text-lg font-semibold text-white">Template details</h2>
+              <h2 className="text-lg font-semibold text-white">
+                Template details
+              </h2>
               <p className="mt-1 text-sm text-neutral-400">
                 Keep this clean and reusable. Keys should stay stable once used.
               </p>
@@ -387,7 +395,9 @@ export default function EmailTemplateForm({
                   placeholder="Team follow-up"
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
                 />
-                {nameError ? <p className="text-sm text-red-400">{nameError}</p> : null}
+                {nameError ? (
+                  <p className="text-sm text-red-400">{nameError}</p>
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -398,15 +408,22 @@ export default function EmailTemplateForm({
                   id="key"
                   name="key"
                   value={key}
-                  onChange={(event) => setKey(slugifyTemplateKey(event.target.value))}
+                  onChange={(event) =>
+                    setKey(slugifyTemplateKey(event.target.value))
+                  }
                   placeholder="team-follow-up"
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
                 />
-                {keyError ? <p className="text-sm text-red-400">{keyError}</p> : null}
+                {keyError ? (
+                  <p className="text-sm text-red-400">{keyError}</p>
+                ) : null}
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <label htmlFor="description" className="text-sm font-medium text-white">
+                <label
+                  htmlFor="description"
+                  className="text-sm font-medium text-white"
+                >
                   Description
                 </label>
                 <textarea
@@ -424,7 +441,9 @@ export default function EmailTemplateForm({
 
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
-              <h2 className="text-lg font-semibold text-white">Template status</h2>
+              <h2 className="text-lg font-semibold text-white">
+                Template status
+              </h2>
               <p className="mt-1 text-sm text-neutral-400">
                 Control whether this template is available in admin email flows.
               </p>
@@ -437,7 +456,9 @@ export default function EmailTemplateForm({
                 onChange={(event) => setIsActive(event.target.checked)}
                 className="h-5 w-5 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500"
               />
-              <span className="text-sm font-medium text-white">Template is active</span>
+              <span className="text-sm font-medium text-white">
+                Template is active
+              </span>
             </label>
           </section>
         </div>
@@ -446,7 +467,8 @@ export default function EmailTemplateForm({
           <div className="mb-5">
             <h2 className="text-lg font-semibold text-white">Audience</h2>
             <p className="mt-1 text-sm text-neutral-400">
-              Pick who this is for. This drives filtering and keeps templates organised.
+              Pick who this is for. This drives filtering and keeps templates
+              organised.
             </p>
           </div>
 
@@ -466,7 +488,9 @@ export default function EmailTemplateForm({
                       : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
                   ].join(" ")}
                 >
-                  <div className="text-sm font-semibold text-white">{option.label}</div>
+                  <div className="text-sm font-semibold text-white">
+                    {option.label}
+                  </div>
                   <div className="mt-2 text-sm leading-6 text-neutral-400">
                     {option.description}
                   </div>
@@ -475,10 +499,14 @@ export default function EmailTemplateForm({
             })}
           </div>
 
-          {audienceError ? <p className="mt-3 text-sm text-red-400">{audienceError}</p> : null}
+          {audienceError ? (
+            <p className="mt-3 text-sm text-red-400">{audienceError}</p>
+          ) : null}
 
           <div className="mt-6">
-            <div className="mb-2 text-sm font-medium text-white">Interest type</div>
+            <div className="mb-2 text-sm font-medium text-white">
+              Interest type
+            </div>
             <div className="flex flex-wrap gap-2">
               {INTEREST_TYPE_OPTIONS.map((option) => {
                 const selected = interestType === option.value;
@@ -510,14 +538,18 @@ export default function EmailTemplateForm({
           <div className="mb-5">
             <h2 className="text-lg font-semibold text-white">Email content</h2>
             <p className="mt-1 text-sm text-neutral-400">
-              Write the message body normally. Paste <span className="text-white">{"{{cta}}"}</span> where
-              you want the button to appear.
+              Write the message body normally. Paste{" "}
+              <span className="text-white">{"{{cta}}"}</span> where you want the
+              button to appear.
             </p>
           </div>
 
           <div className="space-y-5">
             <div className="space-y-2">
-              <label htmlFor="subject" className="text-sm font-medium text-white">
+              <label
+                htmlFor="subject"
+                className="text-sm font-medium text-white"
+              >
                 Subject
               </label>
               <input
@@ -528,7 +560,9 @@ export default function EmailTemplateForm({
                 placeholder="Your SIXFL follow-up"
                 className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
               />
-              {subjectError ? <p className="text-sm text-red-400">{subjectError}</p> : null}
+              {subjectError ? (
+                <p className="text-sm text-red-400">{subjectError}</p>
+              ) : null}
             </div>
 
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
@@ -548,15 +582,17 @@ export default function EmailTemplateForm({
                 ))}
               </div>
               <p className="mt-3 text-sm leading-6 text-neutral-300">
-                Use <span className="text-white">{"{{cta}}"}</span> once to place the CTA. If you do not
-                include it, the button will appear at the end.
+                Use <span className="text-white">{"{{cta}}"}</span> once to
+                place the CTA. If you do not include it, the button will appear
+                at the end.
               </p>
             </div>
 
             {ctaPlaceholderCount > 1 ? (
               <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-                Only one <span className="font-semibold text-white">{"{{cta}}"}</span> should be used in a
-                template.
+                Only one{" "}
+                <span className="font-semibold text-white">{"{{cta}}"}</span>{" "}
+                should be used in a template.
               </div>
             ) : null}
 
@@ -574,14 +610,18 @@ export default function EmailTemplateForm({
                 placeholder="Write the email body here..."
                 className="min-h-[420px] w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-7 text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
               />
-              {bodyError ? <p className="text-sm text-red-400">{bodyError}</p> : null}
+              {bodyError ? (
+                <p className="text-sm text-red-400">{bodyError}</p>
+              ) : null}
             </div>
           </div>
         </section>
 
         <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
           <div className="mb-5">
-            <h2 className="text-lg font-semibold text-white">Call to action</h2>
+            <h2 className="text-lg font-semibold text-white">
+              Call to action
+            </h2>
             <p className="mt-1 text-sm text-neutral-400">
               Set the button text and destination. Place it in the message with{" "}
               <span className="text-white">{"{{cta}}"}</span>.
@@ -598,7 +638,9 @@ export default function EmailTemplateForm({
             </p>
 
             <div className="mt-3 flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3">
-              <code className="text-sm font-mono text-emerald-300">{"{{cta}}"}</code>
+              <code className="text-sm font-mono text-emerald-300">
+                {"{{cta}}"}
+              </code>
 
               <div className="flex gap-2">
                 <button
@@ -623,7 +665,10 @@ export default function EmailTemplateForm({
           <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div className="space-y-5">
               <div className="space-y-2">
-                <label htmlFor="ctaLabel" className="text-sm font-medium text-white">
+                <label
+                  htmlFor="ctaLabel"
+                  className="text-sm font-medium text-white"
+                >
                   CTA button text
                 </label>
                 <input
@@ -634,7 +679,9 @@ export default function EmailTemplateForm({
                   placeholder="Register your interest"
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
                 />
-                {ctaLabelError ? <p className="text-sm text-red-400">{ctaLabelError}</p> : null}
+                {ctaLabelError ? (
+                  <p className="text-sm text-red-400">{ctaLabelError}</p>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-neutral-300">
@@ -648,7 +695,9 @@ export default function EmailTemplateForm({
             </div>
 
             <div>
-              <div className="mb-2 text-sm font-medium text-white">CTA destination</div>
+              <div className="mb-2 text-sm font-medium text-white">
+                CTA destination
+              </div>
               <div className="grid gap-3 md:grid-cols-3">
                 {CTA_OPTIONS.map((option) => {
                   const selected = ctaUrlKey === option.value;
@@ -665,7 +714,9 @@ export default function EmailTemplateForm({
                           : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
                       ].join(" ")}
                     >
-                      <div className="text-sm font-semibold text-white">{option.label}</div>
+                      <div className="text-sm font-semibold text-white">
+                        {option.label}
+                      </div>
                       <div className="mt-1 text-xs leading-5 text-neutral-400">
                         {option.description}
                       </div>
@@ -678,12 +729,14 @@ export default function EmailTemplateForm({
                   );
                 })}
               </div>
-              {ctaUrlKeyError ? <p className="mt-3 text-sm text-red-400">{ctaUrlKeyError}</p> : null}
+              {ctaUrlKeyError ? (
+                <p className="mt-3 text-sm text-red-400">{ctaUrlKeyError}</p>
+              ) : null}
             </div>
           </div>
         </section>
 
-        {(state?.message || state?.error) && (
+        {state?.message || state?.error ? (
           <div
             className={[
               "rounded-2xl border px-4 py-3 text-sm",
@@ -694,7 +747,7 @@ export default function EmailTemplateForm({
           >
             {state?.error || state?.message}
           </div>
-        )}
+        ) : null}
 
         <div className="flex items-center gap-3">
           <SubmitButton mode={mode} />
@@ -702,54 +755,70 @@ export default function EmailTemplateForm({
 
         <aside className="rounded-3xl border border-emerald-500/20 bg-[#04120d] p-6 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
           <div className="mb-5">
-            <div className="text-sm font-medium text-white/70">Live preview</div>
+            <div className="text-sm font-medium text-white/70">
+              Live preview
+            </div>
             <p className="mt-2 text-sm leading-6 text-neutral-400">
-              Preview uses sample SIXFL values and renders the CTA where{" "}
-              <span className="text-white">{"{{cta}}"}</span> appears.
+              Preview uses sample SIXFL values, renders the CTA where{" "}
+              <span className="text-white">{"{{cta}}"}</span> appears, and shows
+              the automatic SIXFL footer exactly as it will appear when sent.
             </p>
           </div>
 
-          <div className="mx-auto max-w-3xl rounded-[28px] border border-white/10 bg-[#07110d] p-6 md:p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="text-xl font-semibold leading-tight text-white">
-              {previewSubject || "Your email subject preview"}
-            </div>
+          <div className="mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_12px_50px_rgba(0,0,0,0.18)]">
+            <div className="px-6 pt-6 md:px-8 md:pt-8">
+              <div className="text-xl font-semibold leading-tight text-[#111827]">
+                {previewSubject || "Your email subject preview"}
+              </div>
 
-            <div className="mt-8 space-y-6 text-[15px] leading-8 text-neutral-200">
-              {previewBlocks.length > 0 ? (
-                previewBlocks.map((block, index) => {
-                  if (block.type === "cta") {
-                    return hasSelectedCta ? (
-                      <div key={`cta-${index}`} className="pt-1">
-                        <div className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black">
-                          {ctaLabel}
-                        </div>
-                        {selectedCtaOption.previewUrl ? (
-                          <div className="mt-3 break-all text-sm text-emerald-300">
-                            {selectedCtaOption.previewUrl}
+              <div className="mt-8 space-y-6 text-[15px] leading-8 text-[#111827]">
+                {previewBlocks.length > 0 ? (
+                  previewBlocks.map((block, index) => {
+                    if (block.type === "cta") {
+                      return hasSelectedCta ? (
+                        <div key={`cta-${index}`} className="pt-1">
+                          <div className="inline-flex items-center justify-center rounded-xl bg-[#1E5A43] px-5 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                            {ctaLabel}
                           </div>
-                        ) : null}
-                      </div>
-                    ) : null;
-                  }
+                          {selectedCtaOption.previewUrl ? (
+                            <div className="mt-3 break-all text-sm text-[#1E5A43]">
+                              {selectedCtaOption.previewUrl}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null;
+                    }
 
-                  return (
-                    <p key={`p-${index}`} className="whitespace-pre-wrap">
-                      {block.content}
-                    </p>
-                  );
-                })
-              ) : (
-                <p className="text-neutral-500">Your email body preview will appear here.</p>
-              )}
+                    return (
+                      <p key={`p-${index}`} className="whitespace-pre-wrap">
+                        {block.content}
+                      </p>
+                    );
+                  })
+                ) : (
+                  <p className="text-neutral-500">
+                    Your email body preview will appear here.
+                  </p>
+                )}
+              </div>
             </div>
+
+            <div
+              className="px-6 pb-6 pt-8 md:px-8 md:pb-8"
+              dangerouslySetInnerHTML={{ __html: previewFooterHtml }}
+            />
           </div>
 
           <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
-            <div className="text-sm font-medium text-white/70">Preview rules</div>
+            <div className="text-sm font-medium text-white/70">
+              Preview rules
+            </div>
             <p className="mt-3 text-sm leading-6 text-neutral-300">
               Blank lines create separate paragraphs. Use{" "}
-              <span className="text-white">{"{{cta}}"}</span> once to place the CTA. If omitted,
-              the CTA appears at the end.
+              <span className="text-white">{"{{cta}}"}</span> once to place the
+              CTA. If omitted, the CTA appears at the end. The SIXFL footer is
+              added automatically, so admins do not need to type it into the
+              template body.
             </p>
           </div>
         </aside>
