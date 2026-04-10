@@ -69,6 +69,7 @@ type FixtureItem = {
   position: number | null;
   pitch: string | null;
   status: FixtureStatus;
+  matchFeePence: number | null;
   homeScore: number | null;
   awayScore: number | null;
 };
@@ -131,6 +132,21 @@ function getRefereeLabel(referee: RefereeOption) {
 
 function formatFixtureStatus(status: FixtureStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
+}
+
+function formatMoneyInputValue(amountPence: number | null) {
+  if (amountPence === null || Number.isNaN(amountPence)) {
+    return "";
+  }
+
+  return (amountPence / 100).toFixed(2);
 }
 
 function getStatusTone(status: FixtureStatus) {
@@ -295,6 +311,7 @@ export default function FixturesAdminScreen({
   const [editRound, setEditRound] = useState("");
   const [editPosition, setEditPosition] = useState("");
   const [editPitch, setEditPitch] = useState("");
+  const [editMatchFee, setEditMatchFee] = useState("");
   const [editStatus, setEditStatus] = useState<FixtureStatus>("SCHEDULED");
 
   useEffect(() => {
@@ -407,6 +424,7 @@ export default function FixturesAdminScreen({
     setEditRound(fixture.round?.toString() ?? "");
     setEditPosition(fixture.position?.toString() ?? "");
     setEditPitch(fixture.pitch ?? "");
+    setEditMatchFee(formatMoneyInputValue(fixture.matchFeePence));
     setEditStatus(fixture.status);
   }
 
@@ -422,6 +440,7 @@ export default function FixturesAdminScreen({
     setEditRound("");
     setEditPosition("");
     setEditPitch("");
+    setEditMatchFee("");
     setEditStatus("SCHEDULED");
   }
 
@@ -462,7 +481,7 @@ export default function FixturesAdminScreen({
             <SectionHeading
               eyebrow="Manual match"
               title="Create fixture"
-              description="Add a specific match with full control over teams, venue, referee, round, pitch and status."
+              description="Add a specific match with full control over teams, venue, referee, round, pitch, status and the per-team match fee."
             />
           </div>
 
@@ -490,20 +509,20 @@ export default function FixturesAdminScreen({
               </div>
 
               <AdminComboboxField
-  key={`create-home-${selectedLeagueId}`}
-  name="homeTeamId"
-  label="Team 1"
-  placeholder="Search team 1"
-  options={createLeagueTeams}
-/>
+                key={`create-home-${selectedLeagueId}`}
+                name="homeTeamId"
+                label="Team 1"
+                placeholder="Search team 1"
+                options={createLeagueTeams}
+              />
 
-<AdminComboboxField
-  key={`create-away-${selectedLeagueId}`}
-  name="awayTeamId"
-  label="Team 2"
-  placeholder="Search team 2"
-  options={createLeagueTeams}
-/>
+              <AdminComboboxField
+                key={`create-away-${selectedLeagueId}`}
+                name="awayTeamId"
+                label="Team 2"
+                placeholder="Search team 2"
+                options={createLeagueTeams}
+              />
 
               <AdminComboboxField
                 name="venueId"
@@ -575,6 +594,23 @@ export default function FixturesAdminScreen({
                   placeholder="e.g. Pitch 1"
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  Match fee per team (£)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  name="matchFeePounds"
+                  placeholder="e.g. 30.00"
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                />
+                <p className="mt-2 text-xs text-white/40">
+                  When set, SIXFL will create one charge per team and email payment links immediately.
+                </p>
               </div>
             </div>
 
@@ -878,8 +914,8 @@ export default function FixturesAdminScreen({
                   Update selected match
                 </h3>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                  Adjust teams, venue, referee, kickoff, round, pitch and status
-                  without leaving the fixtures console.
+                  Adjust teams, venue, referee, kickoff, round, pitch, match fee
+                  and status without leaving the fixtures console.
                 </p>
               </div>
 
@@ -916,20 +952,20 @@ export default function FixturesAdminScreen({
                 </div>
 
                 <AdminComboboxField
-  name="homeTeamId"
-  label="Team 1"
-  placeholder="Search team 1"
-  options={editLeagueTeams}
-  defaultValue={editHomeTeamId}
-/>
+                  name="homeTeamId"
+                  label="Team 1"
+                  placeholder="Search team 1"
+                  options={editLeagueTeams}
+                  defaultValue={editHomeTeamId}
+                />
 
-<AdminComboboxField
-  name="awayTeamId"
-  label="Team 2"
-  placeholder="Search team 2"
-  options={editLeagueTeams}
-  defaultValue={editAwayTeamId}
-/>
+                <AdminComboboxField
+                  name="awayTeamId"
+                  label="Team 2"
+                  placeholder="Search team 2"
+                  options={editLeagueTeams}
+                  defaultValue={editAwayTeamId}
+                />
 
                 <AdminComboboxField
                   name="venueId"
@@ -999,7 +1035,7 @@ export default function FixturesAdminScreen({
                   />
                 </div>
 
-                <div className="xl:col-span-2">
+                <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
                     Pitch
                   </label>
@@ -1008,6 +1044,21 @@ export default function FixturesAdminScreen({
                     name="pitch"
                     value={editPitch}
                     onChange={(event) => setEditPitch(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Match fee per team (£)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    name="matchFeePounds"
+                    value={editMatchFee}
+                    onChange={(event) => setEditMatchFee(event.target.value)}
                     className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                   />
                 </div>
@@ -1098,6 +1149,11 @@ export default function FixturesAdminScreen({
                           ? ` • Game ${fixture.position}`
                           : ""}
                       </div>
+                      {fixture.matchFeePence !== null && fixture.matchFeePence > 0 ? (
+                        <div className="mt-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+                          Match fee {formatMoney(fixture.matchFeePence)} per team
+                        </div>
+                      ) : null}
                     </td>
 
                     <td className="px-6 py-5 text-sm text-white/70">

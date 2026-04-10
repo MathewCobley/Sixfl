@@ -12,6 +12,11 @@ import {
   getLondonMinutesSinceMidnight,
   parseLondonDateTime,
 } from "@/lib/datetime/london";
+import {
+  queueFixtureMatchFeeEmails,
+  syncFixtureMatchFeeCharges,
+  voidFixtureMatchFeeChargesOrThrow,
+} from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -104,6 +109,28 @@ function parseRequiredPositiveInt(
   }
 
   return num;
+}
+
+function parseOptionalMoneyToPence(
+  value: FormDataEntryValue | null,
+  fieldName: string,
+) {
+  const str = String(value ?? "").trim();
+
+  if (!str) return null;
+
+  const normalised = str.replace(/,/g, "");
+  const amount = Number(normalised);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error(`${fieldName} must be 0 or more.`);
+  }
+
+  if (amount === 0) {
+    return null;
+  }
+
+  return Math.round(amount * 100);
 }
 
 function parseKickoffAtFromFields(
@@ -355,6 +382,10 @@ export async function createFixtureAction(formData: FormData) {
   );
   const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
+  const matchFeePence = parseOptionalMoneyToPence(
+    formData.get("matchFeePounds"),
+    "Match fee",
+  );
 
   if (homeTeamId === awayTeamId) {
     throw new Error("Team 1 and Team 2 cannot be the same team.");
@@ -363,15 +394,15 @@ export async function createFixtureAction(formData: FormData) {
   const [league, homeTeam, awayTeam, venue, referee] = await Promise.all([
     prisma.league.findUnique({
       where: { id: leagueId },
-      select: { id: true, name: true, slug: true },
+      select: { id: true, name: true, season: true, slug: true },
     }),
     prisma.team.findUnique({
       where: { id: homeTeamId },
-      select: { id: true, name: true, leagueId: true },
+      select: { id: true, name: true, leagueId: true, logoUrl: true },
     }),
     prisma.team.findUnique({
       where: { id: awayTeamId },
-      select: { id: true, name: true, leagueId: true },
+      select: { id: true, name: true, leagueId: true, logoUrl: true },
     }),
     venueId
       ? prisma.venue.findUnique({
@@ -415,20 +446,58 @@ export async function createFixtureAction(formData: FormData) {
     throw new Error("Team 2 does not belong to the selected league.");
   }
 
-  await prisma.fixture.create({
-    data: {
+  const created = await prisma.$transaction(async (tx) => {
+    const fixture = await tx.fixture.create({
+      data: {
+        leagueId,
+        homeTeamId,
+        awayTeamId,
+        venueId,
+        refereeId,
+        kickoffAt,
+        round,
+        position,
+        pitch,
+        status,
+        matchFeePence,
+      },
+    });
+
+    const chargeSync = await syncFixtureMatchFeeCharges({
+      db: tx,
+      fixtureId: fixture.id,
       leagueId,
-      homeTeamId,
-      awayTeamId,
-      venueId,
-      refereeId,
+      leagueName: league.name,
+      leagueSeason: league.season,
       kickoffAt,
-      round,
-      position,
-      pitch,
-      status,
-    },
+      homeTeam,
+      awayTeam,
+      matchFeePence,
+    });
+
+    return {
+      fixture,
+      activeCharges: chargeSync.activeCharges,
+    };
   });
+
+  if ((matchFeePence ?? 0) > 0 && created.activeCharges.length > 0) {
+    try {
+      await queueFixtureMatchFeeEmails({
+        fixtureId: created.fixture.id,
+        leagueId,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt,
+        homeTeam,
+        awayTeam,
+        matchFeePence,
+        charges: created.activeCharges,
+      });
+    } catch (error) {
+      console.error("Failed to queue fixture match fee emails", error);
+    }
+  }
 
   revalidatePath("/admin/fixtures");
   revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
@@ -448,7 +517,7 @@ export async function updateFixtureAction(formData: FormData) {
   const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture ID");
   const leagueId = parseRequiredString(formData.get("leagueId"), "League");
   const homeTeamId = parseRequiredString(formData.get("homeTeamId"), "Team 1");
-const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
+  const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
   const venueId = parseOptionalString(formData.get("venueId"));
   const refereeId = parseOptionalString(formData.get("refereeId"));
   const kickoffAt = parseKickoffAtFromFields(
@@ -463,6 +532,10 @@ const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
   );
   const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
+  const matchFeePence = parseOptionalMoneyToPence(
+    formData.get("matchFeePounds"),
+    "Match fee",
+  );
 
   if (homeTeamId === awayTeamId) {
     throw new Error("Team 1 and Team 2 cannot be the same team.");
@@ -475,6 +548,7 @@ const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
         select: {
           id: true,
           leagueId: true,
+          matchFeePence: true,
           league: {
             select: {
               slug: true,
@@ -484,15 +558,15 @@ const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
       }),
       prisma.league.findUnique({
         where: { id: leagueId },
-        select: { id: true, name: true, slug: true },
+        select: { id: true, name: true, season: true, slug: true },
       }),
       prisma.team.findUnique({
         where: { id: homeTeamId },
-        select: { id: true, name: true, leagueId: true },
+        select: { id: true, name: true, leagueId: true, logoUrl: true },
       }),
       prisma.team.findUnique({
         where: { id: awayTeamId },
-        select: { id: true, name: true, leagueId: true },
+        select: { id: true, name: true, leagueId: true, logoUrl: true },
       }),
       venueId
         ? prisma.venue.findUnique({
@@ -540,21 +614,59 @@ const awayTeamId = parseRequiredString(formData.get("awayTeamId"), "Team 2");
     throw new Error("Team 2 does not belong to the selected league.");
   }
 
-  await prisma.fixture.update({
-    where: { id: fixtureId },
-    data: {
+  const updated = await prisma.$transaction(async (tx) => {
+    const chargeSync = await syncFixtureMatchFeeCharges({
+      db: tx,
+      fixtureId,
       leagueId,
-      homeTeamId,
-      awayTeamId,
-      venueId,
-      refereeId,
+      leagueName: league.name,
+      leagueSeason: league.season,
       kickoffAt,
-      round,
-      position,
-      pitch,
-      status,
-    },
+      homeTeam,
+      awayTeam,
+      matchFeePence,
+    });
+
+    const updatedFixture = await tx.fixture.update({
+      where: { id: fixtureId },
+      data: {
+        leagueId,
+        homeTeamId,
+        awayTeamId,
+        venueId,
+        refereeId,
+        kickoffAt,
+        round,
+        position,
+        pitch,
+        status,
+        matchFeePence,
+      },
+    });
+
+    return {
+      fixture: updatedFixture,
+      activeCharges: chargeSync.activeCharges,
+    };
   });
+
+  if ((fixture.matchFeePence ?? 0) <= 0 && (matchFeePence ?? 0) > 0) {
+    try {
+      await queueFixtureMatchFeeEmails({
+        fixtureId,
+        leagueId,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt,
+        homeTeam,
+        awayTeam,
+        matchFeePence,
+        charges: updated.activeCharges,
+      });
+    } catch (error) {
+      console.error("Failed to queue fixture match fee emails", error);
+    }
+  }
 
   revalidatePath("/admin/fixtures");
   revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
@@ -595,8 +707,12 @@ export async function deleteFixtureAction(formData: FormData) {
     throw new Error("Fixture not found.");
   }
 
-  await prisma.fixture.delete({
-    where: { id },
+  await prisma.$transaction(async (tx) => {
+    await voidFixtureMatchFeeChargesOrThrow([id], tx);
+
+    await tx.fixture.delete({
+      where: { id },
+    });
   });
 
   revalidatePath("/admin/fixtures");
@@ -628,8 +744,22 @@ export async function deleteLeagueFixturesAction(formData: FormData) {
     throw new Error("League not found.");
   }
 
-  await prisma.fixture.deleteMany({
+  const fixtureIds = await prisma.fixture.findMany({
     where: { leagueId },
+    select: {
+      id: true,
+    },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await voidFixtureMatchFeeChargesOrThrow(
+      fixtureIds.map((fixture) => fixture.id),
+      tx,
+    );
+
+    await tx.fixture.deleteMany({
+      where: { leagueId },
+    });
   });
 
   revalidatePath("/admin/fixtures");
@@ -714,8 +844,22 @@ export async function generateFixtures(formData: FormData) {
   }
 
   if (clearExisting) {
-    await prisma.fixture.deleteMany({
+    const existingFixtureIds = await prisma.fixture.findMany({
       where: { leagueId },
+      select: {
+        id: true,
+      },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await voidFixtureMatchFeeChargesOrThrow(
+        existingFixtureIds.map((fixture) => fixture.id),
+        tx,
+      );
+
+      await tx.fixture.deleteMany({
+        where: { leagueId },
+      });
     });
   }
 

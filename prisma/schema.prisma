@@ -1,6 +1,6 @@
 // ========================================
 // File: prisma/schema.prisma
-// FULL FILE - captain phase 3A (team payments ledger)
+// FULL FILE - fixture match fees + Stripe checkout foundation
 // ========================================
 
 generator client {
@@ -200,13 +200,14 @@ enum TeamRole {
 }
 
 model Fixture {
-  id          String   @id @default(cuid())
-  leagueId    String
-  homeTeamId  String
-  awayTeamId  String
-  venueId     String?
-  kickoffAt   DateTime
-  publishedAt DateTime?
+  id            String   @id @default(cuid())
+  leagueId      String
+  homeTeamId    String
+  awayTeamId    String
+  venueId       String?
+  kickoffAt     DateTime
+  publishedAt   DateTime?
+  matchFeePence Int?
 
   round    Int?
   position Int?
@@ -215,13 +216,13 @@ model Fixture {
 
   refereeId String?
 
-  league   League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  homeTeam Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
-  awayTeam Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
-  venue    Venue? @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  referee  User?  @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
-
-  result MatchResult?
+  league         League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeTeam       Team            @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam       Team            @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  venue          Venue?          @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  referee        User?           @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
+  result         MatchResult?
+  paymentCharges PaymentCharge[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -339,8 +340,9 @@ enum PaymentMethod {
 model PaymentCharge {
   id String @id @default(cuid())
 
-  teamId   String
-  leagueId String?
+  teamId    String
+  leagueId  String?
+  fixtureId String?
 
   title       String
   description String?
@@ -349,16 +351,25 @@ model PaymentCharge {
 
   status PaymentChargeStatus @default(OPEN)
 
-  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  league League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+  paymentToken                  String?   @unique
+  lastStripeCheckoutUrl         String?
+  lastStripeCheckoutSessionId   String?   @unique
+  lastStripeCheckoutCreatedAt   DateTime?
+  lastStripeCheckoutAmountPence Int?
+
+  team    Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  league  League?  @relation(fields: [leagueId], references: [id], onDelete: SetNull)
+  fixture Fixture? @relation(fields: [fixtureId], references: [id], onDelete: SetNull)
 
   transactions PaymentTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([fixtureId, teamId])
   @@index([teamId])
   @@index([leagueId])
+  @@index([fixtureId])
   @@index([status])
   @@index([dueDate])
 }
@@ -375,6 +386,10 @@ model PaymentTransaction {
   reference String?
   notes     String?
   paidAt    DateTime
+
+  stripeCheckoutSessionId String? @unique
+  stripePaymentIntentId   String?
+  stripeChargeId          String?
 
   team   Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
   charge PaymentCharge? @relation(fields: [chargeId], references: [id], onDelete: SetNull)

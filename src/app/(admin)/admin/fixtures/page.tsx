@@ -178,6 +178,7 @@ export default async function AdminFixturesPage({
         status: true,
         kickoffAt: true,
         publishedAt: true,
+        matchFeePence: true,
         venue: {
           select: {
             id: true,
@@ -265,6 +266,7 @@ export default async function AdminFixturesPage({
       position: fixture.position,
       pitch: fixture.pitch,
       status: fixture.status,
+      matchFeePence: fixture.matchFeePence,
       homeScore: fixture.result?.homeScore ?? null,
       awayScore: fixture.result?.awayScore ?? null,
     })),
