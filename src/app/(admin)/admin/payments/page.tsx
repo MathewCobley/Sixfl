@@ -2,18 +2,25 @@
 // File: src/app/(admin)/admin/payments/page.tsx
 // ========================================
 
+import { PaymentMethod } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import FormListboxField from "@/components/ui/FormListboxField";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import FormListboxField from "@/components/ui/FormListboxField";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Admin Payments | SIXFL",
 };
+
+const paymentMethodValues = new Set<PaymentMethod>(Object.values(PaymentMethod));
+
+function isPaymentMethod(value: string): value is PaymentMethod {
+  return paymentMethodValues.has(value as PaymentMethod);
+}
 
 function formatMoney(amountPence: number) {
   return new Intl.NumberFormat("en-GB", {
@@ -22,11 +29,29 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
+function formatPaymentMethodLabel(method: PaymentMethod) {
+  switch (method) {
+    case PaymentMethod.BANK_TRANSFER:
+      return "Bank transfer";
+    case PaymentMethod.STRIPE:
+      return "Stripe";
+    case PaymentMethod.CASH:
+      return "Cash";
+    case PaymentMethod.CARD:
+      return "Card";
+    case PaymentMethod.OTHER:
+      return "Other";
+    default:
+      return method.replaceAll("_", " ");
+  }
+}
+
 const methodOptions = [
-  { value: "BANK_TRANSFER", label: "Bank transfer" },
-  { value: "CASH", label: "Cash" },
-  { value: "CARD", label: "Card" },
-  { value: "OTHER", label: "Other" },
+  { value: PaymentMethod.BANK_TRANSFER, label: "Bank transfer" },
+  { value: PaymentMethod.STRIPE, label: "Stripe" },
+  { value: PaymentMethod.CASH, label: "Cash" },
+  { value: PaymentMethod.CARD, label: "Card" },
+  { value: PaymentMethod.OTHER, label: "Other" },
 ];
 
 async function createChargeAction(formData: FormData) {
@@ -76,7 +101,10 @@ async function recordPaymentAction(formData: FormData) {
   const teamId = String(formData.get("teamId") ?? "");
   const chargeId = String(formData.get("chargeId") ?? "").trim();
   const amountPounds = Number(formData.get("amountPounds") ?? "0");
-  const method = String(formData.get("method") ?? "BANK_TRANSFER");
+  const methodValue = String(formData.get("method") ?? PaymentMethod.BANK_TRANSFER);
+  const method = isPaymentMethod(methodValue)
+    ? methodValue
+    : PaymentMethod.BANK_TRANSFER;
   const reference = String(formData.get("reference") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const paidAtValue = String(formData.get("paidAt") ?? "").trim();
@@ -90,11 +118,7 @@ async function recordPaymentAction(formData: FormData) {
       teamId,
       chargeId: chargeId || null,
       amountPence: Math.round(amountPounds * 100),
-      method: method as
-        | "BANK_TRANSFER"
-        | "CASH"
-        | "CARD"
-        | "OTHER",
+      method,
       reference: reference || null,
       notes: notes || null,
       paidAt: new Date(paidAtValue),
@@ -359,7 +383,7 @@ export default async function AdminPaymentsPage({
 
             <FormListboxField
               name="method"
-              value="BANK_TRANSFER"
+              value={PaymentMethod.BANK_TRANSFER}
               options={methodOptions}
               placeholder="Select payment method"
             />
@@ -470,7 +494,7 @@ export default async function AdminPaymentsPage({
                       {formatMoney(tx.amountPence)}
                     </div>
                     <div className="mt-1 text-sm text-white/55">
-                      {tx.method.replaceAll("_", " ")} ·{" "}
+                      {formatPaymentMethodLabel(tx.method)} ·{" "}
                       {tx.paidAt.toLocaleString("en-GB")}
                     </div>
                   </div>
