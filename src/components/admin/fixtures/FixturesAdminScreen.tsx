@@ -458,7 +458,7 @@ export default function FixturesAdminScreen({
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
                 Create one-off matches, generate full schedules, and manage
-                rounds from one premium control surface built for SIXFL league
+                weeks from one premium control surface built for SIXFL league
                 operations.
               </p>
             </div>
@@ -470,7 +470,7 @@ export default function FixturesAdminScreen({
             <MetricPill label="Fixtures" value={fixtureSummary.total} />
             <MetricPill label="Draft" value={fixtureSummary.drafts} />
             <MetricPill label="Published" value={fixtureSummary.published} />
-            <MetricPill label="Rounds" value={fixtureSummary.rounds} />
+            <MetricPill label="Weeks" value={fixtureSummary.rounds} />
           </div>
         </div>
       </div>
@@ -481,7 +481,7 @@ export default function FixturesAdminScreen({
             <SectionHeading
               eyebrow="Manual match"
               title="Create fixture"
-              description="Add a specific match with full control over teams, venue, referee, round, pitch, status and the per-team match fee."
+              description="Add a specific match with full control over teams, venue, referee, week, pitch, status and the per-team match fee."
             />
           </div>
 
@@ -562,12 +562,12 @@ export default function FixturesAdminScreen({
 
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                  Round
+                  Week
                 </label>
                 <input
                   type="number"
                   name="round"
-                  placeholder="e.g. 1"
+                  placeholder="e.g. 3"
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 />
               </div>
@@ -640,7 +640,7 @@ export default function FixturesAdminScreen({
             <SectionHeading
               eyebrow="Automated schedule"
               title="Generate fixtures"
-              description="Build out a full league schedule with spacing, round controls, pitch count and optional reset handling."
+              description="Build out a full league schedule with spacing, week controls, pitch count and optional reset handling."
             />
           </div>
 
@@ -745,7 +745,7 @@ export default function FixturesAdminScreen({
 
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Start round
+                    Start week
                   </label>
                   <input
                     type="number"
@@ -899,7 +899,7 @@ export default function FixturesAdminScreen({
             <MetricPill label="Published" value={fixtureSummary.published} />
             <MetricPill label="Scheduled" value={fixtureSummary.scheduled} />
             <MetricPill label="Completed" value={fixtureSummary.completed} />
-            <MetricPill label="Rounds" value={fixtureSummary.rounds} />
+            <MetricPill label="Weeks" value={fixtureSummary.rounds} />
           </div>
         </div>
 
@@ -914,7 +914,7 @@ export default function FixturesAdminScreen({
                   Update selected match
                 </h3>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                  Adjust teams, venue, referee, kickoff, round, pitch, match fee
+                  Adjust teams, venue, referee, kickoff, week, pitch, match fee
                   and status without leaving the fixtures console.
                 </p>
               </div>
@@ -1011,7 +1011,7 @@ export default function FixturesAdminScreen({
 
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Round
+                    Week
                   </label>
                   <input
                     type="number"
@@ -1120,7 +1120,7 @@ export default function FixturesAdminScreen({
                     Venue
                   </th>
                   <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
-                    Round
+                    Week
                   </th>
                   <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
                     Status

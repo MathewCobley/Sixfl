@@ -26,7 +26,7 @@ type FormState = {
 
 type TemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "REFEREE" | "GENERAL";
 type InterestTypeValue = "" | "TEAM" | "PLAYER" | "REFEREE";
-type CtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl";
+type CtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "paymentUrl";
 
 type EmailTemplateFormValues = {
   id?: string;
@@ -135,6 +135,11 @@ const CTA_OPTIONS: Array<{
     label: "Manage team",
     description: "Links to the team management / claim flow.",
     previewUrl: "https://www.sixfl.co.uk/manage-team",
+  },
+  {
+    value: "paymentUrl",
+    label: "Payment link",
+    description: "Use a payment link supplied when the email is sent.",
   },
 ];
 
@@ -698,7 +703,7 @@ export default function EmailTemplateForm({
               <div className="mb-2 text-sm font-medium text-white">
                 CTA destination
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 {CTA_OPTIONS.map((option) => {
                   const selected = ctaUrlKey === option.value;
 

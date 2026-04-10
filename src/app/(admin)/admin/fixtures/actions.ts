@@ -374,7 +374,7 @@ export async function createFixtureAction(formData: FormData) {
     formData.get("kickoffDate"),
     formData.get("kickoffTime"),
   );
-  const round = parseOptionalInt(formData.get("round"), "Round");
+  const round = parseOptionalInt(formData.get("round"), "Week");
   const position = parseOptionalPositiveInt(
     formData.get("position"),
     "Position",
@@ -524,7 +524,7 @@ export async function updateFixtureAction(formData: FormData) {
     formData.get("kickoffDate"),
     formData.get("kickoffTime"),
   );
-  const round = parseOptionalInt(formData.get("round"), "Round");
+  const round = parseOptionalInt(formData.get("round"), "Week");
   const position = parseOptionalPositiveInt(
     formData.get("position"),
     "Position",
@@ -798,7 +798,7 @@ export async function generateFixtures(formData: FormData) {
   );
   const startRound = parseRequiredPositiveInt(
     formData.get("startRound"),
-    "Start round",
+    "Start week",
     1,
   );
   const doubleRoundRobin =
@@ -920,7 +920,7 @@ export async function generateFixtures(formData: FormData) {
 
         if (!allowed.allowed) {
           throw new Error(
-            `Unable to generate fixtures. Round ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${formatTimeInLondon(kickoffAt)}, but ${allowed.reason}`,
+            `Unable to generate fixtures. Week ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${formatTimeInLondon(kickoffAt)}, but ${allowed.reason}`,
           );
         }
 

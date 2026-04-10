@@ -313,6 +313,8 @@ export default async function AdminTeamPage({
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(team.claimCode)}`;
+  const FIXED_TEAM_PAYMENT_URL =
+  "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
   const managerUser = team.members[0]?.user;
   const hasManager = Boolean(managerUser?.email);
@@ -328,10 +330,12 @@ export default async function AdminTeamPage({
 
   const teamEmailTemplates = emailTemplates.map((template) => {
     const ctaUrl =
-      template.ctaUrlKey === "signupUrl"
-        ? `${baseUrl}/register-interest`
-        : template.ctaUrlKey === "manageTeamUrl"
-          ? claimLink
+    template.ctaUrlKey === "signupUrl"
+      ? `${baseUrl}/register-interest`
+      : template.ctaUrlKey === "manageTeamUrl"
+        ? claimLink
+        : template.ctaUrlKey === "paymentUrl"
+          ? FIXED_TEAM_PAYMENT_URL
           : null;
 
     return {

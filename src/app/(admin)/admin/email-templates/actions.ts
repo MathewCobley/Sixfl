@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/email-templates/actions.ts
+// File: src/app/(admin)/admin/email-templates/actions.ts
 // ========================================
 
 "use server";
@@ -30,7 +30,11 @@ type EmailTemplateActionState = {
 // Constants
 // ========================================
 
-const ALLOWED_CTA_URL_KEYS = ["signupUrl", "manageTeamUrl"] as const;
+const ALLOWED_CTA_URL_KEYS = [
+  "signupUrl",
+  "manageTeamUrl",
+  "paymentUrl",
+] as const;
 
 type AllowedCtaUrlKey = (typeof ALLOWED_CTA_URL_KEYS)[number];
 

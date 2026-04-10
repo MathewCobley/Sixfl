@@ -81,6 +81,7 @@ export default function TeamEmailForm({
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState("");
 
   const templateOptions = useMemo(
     () =>
@@ -106,26 +107,44 @@ export default function TeamEmailForm({
     [contactName, teamName, leagueName],
   );
 
+  const selectedTemplateNeedsDynamicCtaUrl = Boolean(
+    selectedTemplate?.ctaLabel?.trim() && !selectedTemplate?.ctaUrl?.trim(),
+  );
+
+  const resolvedCtaUrl = selectedTemplateNeedsDynamicCtaUrl
+    ? paymentUrl.trim()
+    : selectedTemplate?.ctaUrl?.trim() || "";
+
+  const canSubmit = Boolean(
+    emailReplyConfigured &&
+      toEmail &&
+      (!selectedTemplateNeedsDynamicCtaUrl || paymentUrl.trim()),
+  );
+
   useEffect(() => {
     if (!selectedTemplate) {
       setSubject("");
       setBody("");
+      setPaymentUrl("");
       return;
     }
 
     setSubject(resolveTeamTemplateText(selectedTemplate.subject, templateContext));
     setBody(resolveTeamTemplateText(selectedTemplate.body, templateContext));
+    setPaymentUrl("");
   }, [selectedTemplate, templateContext]);
 
   function resetTemplate() {
     if (!selectedTemplate) {
       setSubject("");
       setBody("");
+      setPaymentUrl("");
       return;
     }
 
     setSubject(resolveTeamTemplateText(selectedTemplate.subject, templateContext));
     setBody(resolveTeamTemplateText(selectedTemplate.body, templateContext));
+    setPaymentUrl("");
   }
 
   return (
@@ -138,11 +157,7 @@ export default function TeamEmailForm({
         name="ctaLabel"
         value={selectedTemplate?.ctaLabel?.trim() || ""}
       />
-      <input
-        type="hidden"
-        name="ctaUrl"
-        value={selectedTemplate?.ctaUrl?.trim() || ""}
-      />
+      <input type="hidden" name="ctaUrl" value={resolvedCtaUrl} />
       <input
         type="hidden"
         name="templateId"
@@ -225,8 +240,50 @@ If you have any questions, just reply to this email.`}
         </div>
       </div>
 
+      {selectedTemplate?.ctaLabel?.trim() ? (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
+            Template button
+          </div>
+
+          <div className="mt-2 text-sm text-white/80">
+            Button label:{" "}
+            <span className="font-medium text-white">
+              {selectedTemplate.ctaLabel.trim()}
+            </span>
+          </div>
+
+          {selectedTemplateNeedsDynamicCtaUrl ? (
+            <div className="mt-4 space-y-2">
+              <label className="block text-sm text-white/70">
+                Payment link
+              </label>
+              <input
+                type="url"
+                value={paymentUrl}
+                onChange={(event) => setPaymentUrl(event.target.value)}
+                disabled={!emailReplyConfigured}
+                placeholder="https://buy.stripe.com/..."
+                className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <div className="text-xs text-white/45">
+                This template needs a payment link when you send it. Paste the
+                Stripe payment URL here.
+              </div>
+            </div>
+          ) : selectedTemplate.ctaUrl?.trim() ? (
+            <div className="mt-3 text-xs text-white/45">
+              This template button will use:{" "}
+              <span className="break-all text-emerald-300">
+                {selectedTemplate.ctaUrl.trim()}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex gap-3">
-        <SubmitButton disabled={!emailReplyConfigured || !toEmail} />
+        <SubmitButton disabled={!canSubmit} />
 
         <button
           type="button"

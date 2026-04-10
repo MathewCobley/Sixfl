@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/email-templates/[id]/page.tsx
+// File: src/app/(admin)/admin/email-templates/[id]/page.tsx
 // ========================================
 
 import { notFound } from "next/navigation";
@@ -14,7 +14,7 @@ type PageProps = {
   }>;
 };
 
-const CTA_URL_KEYS = ["signupUrl", "manageTeamUrl"] as const;
+const CTA_URL_KEYS = ["signupUrl", "manageTeamUrl", "paymentUrl"] as const;
 
 type CtaUrlKeyValue = (typeof CTA_URL_KEYS)[number];
 
