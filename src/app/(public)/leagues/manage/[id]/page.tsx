@@ -3,9 +3,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getLeagueTable } from "@/lib/leagueTable";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString("en-GB", {
+  return formatDateTimeInLondon(d, {
     weekday: "short",
     day: "2-digit",
     month: "short",
@@ -14,7 +15,7 @@ function formatDate(d: Date) {
 }
 
 function formatTime(d: Date) {
-  return d.toLocaleTimeString("en-GB", {
+  return formatDateTimeInLondon(d, {
     hour: "2-digit",
     minute: "2-digit",
   });

@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -16,13 +17,13 @@ export const metadata = {
 };
 
 function formatDateTime(value: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return formatDateTimeInLondon(value, {
     weekday: "short",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(value);
+  });
 }
 
 function formatMoney(amountPence: number) {
