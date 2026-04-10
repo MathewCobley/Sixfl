@@ -332,6 +332,7 @@ enum PaymentChargeStatus {
 
 enum PaymentMethod {
   BANK_TRANSFER
+  STRIPE
   CASH
   CARD
   OTHER
