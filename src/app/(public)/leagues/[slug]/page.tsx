@@ -8,6 +8,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createLeagueInterestLeadAction } from "./actions";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -101,7 +102,7 @@ function normaliseLogoUrl(value?: string | null) {
 }
 
 function formatFixtureDate(date: Date) {
-  return new Date(date).toLocaleString("en-GB", {
+  return formatDateTimeInLondon(date, {
     weekday: "short",
     day: "numeric",
     month: "short",
