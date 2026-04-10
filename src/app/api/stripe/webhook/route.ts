@@ -70,7 +70,7 @@ async function handleCompletedCheckoutSession(session: Stripe.Checkout.Session) 
       teamId: charge.teamId,
       chargeId: charge.id,
       amountPence,
-      method: "CARD",
+      method: "STRIPE",
       reference: paymentIntentId || session.id,
       notes: "Paid online via Stripe Checkout.",
       paidAt: new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000),

@@ -30,20 +30,15 @@ function formatMoney(amountPence: number) {
 }
 
 function formatPaymentMethodLabel(method: PaymentMethod) {
-  switch (method) {
-    case PaymentMethod.BANK_TRANSFER:
-      return "Bank transfer";
-    case PaymentMethod.STRIPE:
-      return "Stripe";
-    case PaymentMethod.CASH:
-      return "Cash";
-    case PaymentMethod.CARD:
-      return "Card";
-    case PaymentMethod.OTHER:
-      return "Other";
-    default:
-      return method.replaceAll("_", " ");
-  }
+  const labels: Record<PaymentMethod, string> = {
+    [PaymentMethod.BANK_TRANSFER]: "Bank transfer",
+    [PaymentMethod.STRIPE]: "Stripe",
+    [PaymentMethod.CASH]: "Cash",
+    [PaymentMethod.CARD]: "Card",
+    [PaymentMethod.OTHER]: "Other",
+  };
+
+  return labels[method];
 }
 
 const methodOptions = [
