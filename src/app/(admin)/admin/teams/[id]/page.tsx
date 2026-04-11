@@ -12,6 +12,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { buildChargePaymentUrl } from "@/lib/payments/fixture-match-fees";
 import {
   deleteTeamAction,
   regenerateClaimCodeAction,
@@ -70,7 +71,77 @@ function getDispatchOriginLabel(metadata: unknown) {
 
   return "Sent to team";
 }
+function getMetadataRecord(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
 
+  return metadata as Record<string, unknown>;
+}
+
+function getDispatchCta(input: {
+  metadata: unknown;
+  matchFeeCtaUrl?: string | null;
+}) {
+  const metadata = getMetadataRecord(input.metadata);
+
+  const ctaLabel =
+    typeof metadata?.ctaLabel === "string" && metadata.ctaLabel.trim()
+      ? metadata.ctaLabel.trim()
+      : null;
+
+  const ctaUrl =
+    typeof metadata?.ctaUrl === "string" && metadata.ctaUrl.trim()
+      ? metadata.ctaUrl.trim()
+      : null;
+
+  if (ctaLabel && ctaUrl) {
+    return { label: ctaLabel, url: ctaUrl };
+  }
+
+  const paymentUrl =
+    typeof metadata?.paymentUrl === "string" && metadata.paymentUrl.trim()
+      ? metadata.paymentUrl.trim()
+      : null;
+
+  if (paymentUrl) {
+    return { label: "Pay now", url: paymentUrl };
+  }
+
+  if (input.matchFeeCtaUrl) {
+    return {
+      label: "Review & pay match fee",
+      url: input.matchFeeCtaUrl,
+    };
+  }
+
+  return null;
+}
+
+function formatHistoryBodyText(
+  bodyText: string,
+  cta: { label: string; url: string } | null,
+) {
+  const filteredLines = bodyText
+    .trim()
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => {
+      const trimmed = line.trim();
+
+      if (trimmed === "{{cta}}") {
+        return false;
+      }
+
+      if (cta && (trimmed === `${cta.label}: ${cta.url}` || trimmed === cta.url)) {
+        return false;
+      }
+
+      return true;
+    });
+
+  return filteredLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
 function getDispatchCta(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
@@ -305,12 +376,58 @@ export default async function AdminTeamPage({
     }),
   ]);
 
-  const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
+  const matchFeeChargeIds = Array.from(
+    new Set(
+      dispatches
+        .filter(
+          (dispatch) =>
+            dispatch.sourceType === "FIXTURE_MATCH_FEE" ||
+            dispatch.sourceType === "FIXTURE_MATCH_FEE_REMINDER",
+        )
+        .map((dispatch) => dispatch.sourceId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
 
+  const matchFeeCharges = matchFeeChargeIds.length
+    ? await prisma.paymentCharge.findMany({
+        where: {
+          id: {
+            in: matchFeeChargeIds,
+          },
+        },
+        select: {
+          id: true,
+          paymentToken: true,
+        },
+      })
+    : [];
+
+  const matchFeeCtaUrlByChargeId = new Map(
+    matchFeeCharges
+      .filter((charge) => Boolean(charge.paymentToken))
+      .map((charge) => [
+        charge.id,
+        buildChargePaymentUrl(charge.paymentToken as string),
+      ]),
+  );
+
+  const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
   const historyItems: TeamMessageHistoryItem[] = [
     ...dispatches.map((dispatch) => {
-      const cta = getDispatchCta(dispatch.metadata);
-
+      const matchFeeCtaUrl =
+        dispatch.sourceType === "FIXTURE_MATCH_FEE" ||
+        dispatch.sourceType === "FIXTURE_MATCH_FEE_REMINDER"
+          ? dispatch.sourceId
+            ? matchFeeCtaUrlByChargeId.get(dispatch.sourceId) ?? null
+            : null
+          : null;
+  
+      const cta = getDispatchCta({
+        metadata: dispatch.metadata,
+        matchFeeCtaUrl,
+      });
+  
       return {
         id: `dispatch-${dispatch.id}`,
         kind: "dispatch" as const,
@@ -1081,24 +1198,30 @@ export default async function AdminTeamPage({
                       </div>
 
                       <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
-                        {item.bodyText}
-                      </div>
+  {item.bodyText}
+</div>
 
-                      {item.cta ? (
-                        <div className="mt-3">
-                          <a
-                            href={item.cta.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-                          >
-                            {item.cta.label}
-                          </a>
-                          <div className="mt-2 break-all text-xs text-emerald-300">
-                            {item.cta.url}
-                          </div>
-                        </div>
-                      ) : null}
+{item.cta ? (
+  <div className="mt-3">
+    <a
+      href={item.cta.url}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+    >
+      {item.cta.label}
+    </a>
+    <div className="mt-2 break-all text-xs text-emerald-300">
+      {item.cta.url}
+    </div>
+  </div>
+) : null}
+
+{item.failureReason ? (
+  <div className="text-xs text-red-300">
+    Failure: {item.failureReason}
+  </div>
+) : null}
 
                       {item.failureReason ? (
                         <div className="text-xs text-red-300">

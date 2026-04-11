@@ -258,6 +258,7 @@ export default async function AdminMessagesPage({
                     direction: message.direction,
                     participantRole: message.participantRole,
                     body: message.body,
+                    htmlBody: message.htmlBody ?? null,
                     subject: message.subject ?? null,
                     fromNumber: message.fromNumber,
                     toNumber: message.toNumber,

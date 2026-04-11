@@ -56,6 +56,7 @@ type SelectedThread = {
     direction: "INBOUND" | "OUTBOUND";
     participantRole: "ADMIN" | "CAPTAIN" | "CONTACT" | "SYSTEM";
     body: string;
+    htmlBody: string | null;
     subject: string | null;
     fromNumber: string | null;
     toNumber: string | null;
@@ -570,14 +571,22 @@ export default function AdminMessageThread({
                       </div>
 
                       {message.subject ? (
-                        <div className="mb-3 text-sm font-semibold text-white/90">
-                          {message.subject}
-                        </div>
-                      ) : null}
+  <div className="mb-3 text-sm font-semibold text-white/90">
+    {message.subject}
+  </div>
+) : null}
 
-                      <div className="whitespace-pre-wrap text-sm leading-6">
-                        {message.body}
-                      </div>
+{message.direction === "OUTBOUND" &&
+message.channel === "EMAIL" &&
+message.htmlBody ? (
+  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+    <div dangerouslySetInnerHTML={{ __html: message.htmlBody }} />
+  </div>
+) : (
+  <div className="whitespace-pre-wrap text-sm leading-6">
+    {message.body}
+  </div>
+)}
 
                       <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
                         {message.fromNumber ? (

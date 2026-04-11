@@ -176,17 +176,13 @@ function buildQueuedContentDirect(input: {
     const ctaLabel = input.emailCta?.label?.trim();
     const ctaUrl = input.emailCta?.url?.trim();
     const ctaText =
-      ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : "";
+      ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : null;
 
-    const plainTextBody = (
-      ctaText
-        ? /\{\{\s*cta\s*\}\}/i.test(renderedBody)
-          ? renderedBody.replace(/\{\{\s*cta\s*\}\}/gi, ctaText)
-          : `${renderedBody}\n\n${ctaText}`
-        : renderedBody.replace(/\{\{\s*cta\s*\}\}/gi, "")
-    )
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    const plainTextBody = ctaText
+      ? /\{\{\s*cta\s*\}\}/i.test(renderedBody)
+        ? renderedBody.replace(/\{\{\s*cta\s*\}\}/gi, ctaText).replace(/\n{3,}/g, "\n\n").trim()
+        : `${renderedBody}\n\n${ctaText}`.replace(/\n{3,}/g, "\n\n").trim()
+      : cleanPlainTextTemplateBody(renderedBody);
 
     const signedTextBody = appendSIXFLTextSignature(plainTextBody);
 
