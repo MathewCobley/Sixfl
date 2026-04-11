@@ -312,8 +312,10 @@ export default async function AdminTeamPage({
   });
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(team.claimCode)}`;
-  const FIXED_TEAM_PAYMENT_URL =
+const claimPath = `/claim?code=${encodeURIComponent(team.claimCode)}`;
+const claimLink = `${baseUrl}${claimPath}`;
+const captainDashboardUrl = claimLink;
+const FIXED_TEAM_PAYMENT_URL =
   "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
   const managerUser = team.members[0]?.user;
@@ -328,11 +330,13 @@ export default async function AdminTeamPage({
     ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
     : null;
 
-  const teamEmailTemplates = emailTemplates.map((template) => {
-    const ctaUrl =
-    template.ctaUrlKey === "signupUrl"
-      ? `${baseUrl}/register-interest`
-      : template.ctaUrlKey === "manageTeamUrl"
+    const teamEmailTemplates = emailTemplates.map((template) => {
+      const ctaUrl =
+  template.ctaUrlKey === "signupUrl"
+    ? `${baseUrl}/register-interest`
+    : template.ctaUrlKey === "manageTeamUrl"
+      ? claimLink
+      : template.ctaUrlKey === "captainDashboardUrl"
         ? claimLink
         : template.ctaUrlKey === "paymentUrl"
           ? FIXED_TEAM_PAYMENT_URL
@@ -1207,16 +1211,19 @@ export default async function AdminTeamPage({
               </div>
             ) : null}
 
-            <TeamEmailForm
-              teamId={team.id}
-              toEmail={contactSnapshot.primaryContact.email ?? null}
-              contactName={contactSnapshot.primaryContact.name ?? null}
-              teamName={contactSnapshot.teamName}
-              leagueName={teamLeagueName}
-              fromPath={`/admin/teams/${team.id}`}
-              templates={teamEmailTemplates}
-              emailReplyConfigured={emailReplyConfigured}
-            />
+<TeamEmailForm
+  teamId={team.id}
+  toEmail={contactSnapshot.primaryContact.email ?? null}
+  contactName={contactSnapshot.primaryContact.name ?? null}
+  teamName={contactSnapshot.teamName}
+  leagueName={teamLeagueName}
+  claimCode={team.claimCode}
+  claimLink={claimLink}
+  captainDashboardUrl={claimLink}
+  fromPath={`/admin/teams/${team.id}`}
+  templates={teamEmailTemplates}
+  emailReplyConfigured={emailReplyConfigured}
+/>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
