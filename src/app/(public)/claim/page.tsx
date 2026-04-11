@@ -1,10 +1,11 @@
 // ========================================
-// File: src/app/claim/page.tsx
+// File: src/app/(public)/claim/page.tsx
 // ========================================
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { TeamRole } from "@prisma/client";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -29,7 +30,7 @@ export default async function ClaimTeamPage({
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) redirect("/login");
 
-    const email = session.user.email;
+    const email = session.user.email.toLowerCase().trim();
 
     const code = String(formData.get("code") ?? "")
       .trim()
@@ -46,10 +47,12 @@ export default async function ClaimTeamPage({
 
     const team = await prisma.team.findUnique({
       where: { claimCode: code },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
-    if (!team) redirect(`/claim?error=invalid&code=${encodeURIComponent(code)}`);
+    if (!team) {
+      redirect(`/claim?error=invalid&code=${encodeURIComponent(code)}`);
+    }
 
     await prisma.teamMember.upsert({
       where: {
@@ -58,11 +61,15 @@ export default async function ClaimTeamPage({
           teamId: team.id,
         },
       },
-      update: { role: "MANAGER" },
-      create: { userId: user.id, teamId: team.id, role: "MANAGER" },
+      update: { role: TeamRole.CAPTAIN },
+      create: {
+        userId: user.id,
+        teamId: team.id,
+        role: TeamRole.CAPTAIN,
+      },
     });
 
-    redirect("/dashboard?claimed=1");
+    redirect(`/captain/team/${team.id}?claimed=1`);
   }
 
   return (
@@ -70,7 +77,7 @@ export default async function ClaimTeamPage({
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Claim your team</h1>
         <p className="text-white/60">
-          Enter your claim code to become the team manager.
+          Enter your claim code to become the team captain.
         </p>
       </div>
 

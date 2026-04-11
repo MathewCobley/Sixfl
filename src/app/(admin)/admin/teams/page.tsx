@@ -24,7 +24,7 @@ async function getAdminTeams() {
         },
       },
       members: {
-        where: { role: "MANAGER" },
+        where: { role: "CAPTAIN" },
         include: {
           user: {
             select: {
@@ -295,10 +295,10 @@ export default async function AdminTeamsPage({
 
               <div className="divide-y divide-white/10">
                 {group.teams.map((team) => {
-                  const managerUser = team.members[0]?.user;
-                  const hasManager = Boolean(managerUser?.email);
+                  const captainUser = team.members[0]?.user;
+                  const hasCaptain = Boolean(captainUser?.email);
                   const claimedByCaptain =
-                    hasManager && managerUser?.role !== UserRole.ADMIN;
+                    hasCaptain && captainUser?.role !== UserRole.ADMIN;
                   const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
                     team.claimCode,
                   )}`;
@@ -325,9 +325,9 @@ export default async function AdminTeamsPage({
                               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">
                                 Claimed
                               </span>
-                            ) : hasManager ? (
+                            ) : hasCaptain ? (
                               <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-[11px] text-yellow-200">
-                                Manager is admin
+                                Captain is admin
                               </span>
                             ) : (
                               <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">
@@ -386,7 +386,7 @@ export default async function AdminTeamsPage({
                         <div>
                           <span className="text-white/45">Captain email:</span>{" "}
                           <span className="break-all">
-                            {managerUser?.email ?? "—"}
+                            {captainUser?.email ?? "—"}
                           </span>
                         </div>
                         <div>

@@ -163,7 +163,7 @@ export default async function AdminTeamPage({
       where: { id },
       include: {
         members: {
-          where: { role: "MANAGER" },
+          where: { role: "CAPTAIN" },
           include: {
             user: {
               select: {
@@ -310,7 +310,7 @@ export default async function AdminTeamPage({
   const historyItems: TeamMessageHistoryItem[] = [
     ...dispatches.map((dispatch) => {
       const cta = getDispatchCta(dispatch.metadata);
-  
+
       return {
         id: `dispatch-${dispatch.id}`,
         kind: "dispatch" as const,
@@ -356,15 +356,15 @@ export default async function AdminTeamPage({
   });
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-const claimPath = `/claim?code=${encodeURIComponent(team.claimCode)}`;
-const claimLink = `${baseUrl}${claimPath}`;
-const captainDashboardUrl = claimLink;
-const FIXED_TEAM_PAYMENT_URL =
-  "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
+  const claimPath = `/claim?code=${encodeURIComponent(team.claimCode)}`;
+  const claimLink = `${baseUrl}${claimPath}`;
+  const captainDashboardUrl = claimLink;
+  const FIXED_TEAM_PAYMENT_URL =
+    "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
-  const managerUser = team.members[0]?.user;
-  const hasManager = Boolean(managerUser?.email);
-  const claimedByCaptain = hasManager && managerUser?.role !== UserRole.ADMIN;
+  const captainUser = team.members[0]?.user;
+  const hasCaptain = Boolean(captainUser?.email);
+  const claimedByCaptain = hasCaptain && captainUser?.role !== UserRole.ADMIN;
 
   const queuedMessage = sp.messageQueued === "1";
   const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
@@ -374,17 +374,17 @@ const FIXED_TEAM_PAYMENT_URL =
     ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
     : null;
 
-    const teamEmailTemplates = emailTemplates.map((template) => {
-      const ctaUrl =
-  template.ctaUrlKey === "signupUrl"
-    ? `${baseUrl}/register-interest`
-    : template.ctaUrlKey === "manageTeamUrl"
-      ? claimLink
-      : template.ctaUrlKey === "captainDashboardUrl"
-        ? claimLink
-        : template.ctaUrlKey === "paymentUrl"
-          ? FIXED_TEAM_PAYMENT_URL
-          : null;
+  const teamEmailTemplates = emailTemplates.map((template) => {
+    const ctaUrl =
+      template.ctaUrlKey === "signupUrl"
+        ? `${baseUrl}/register-interest`
+        : template.ctaUrlKey === "manageTeamUrl"
+          ? claimLink
+          : template.ctaUrlKey === "captainDashboardUrl"
+            ? claimLink
+            : template.ctaUrlKey === "paymentUrl"
+              ? FIXED_TEAM_PAYMENT_URL
+              : null;
 
     return {
       id: template.id,
@@ -1081,30 +1081,30 @@ const FIXED_TEAM_PAYMENT_URL =
                       </div>
 
                       <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
-  {item.bodyText}
-</div>
+                        {item.bodyText}
+                      </div>
 
-{item.cta ? (
-  <div className="mt-3">
-    <a
-      href={item.cta.url}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-    >
-      {item.cta.label}
-    </a>
-    <div className="mt-2 break-all text-xs text-emerald-300">
-      {item.cta.url}
-    </div>
-  </div>
-) : null}
+                      {item.cta ? (
+                        <div className="mt-3">
+                          <a
+                            href={item.cta.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                          >
+                            {item.cta.label}
+                          </a>
+                          <div className="mt-2 break-all text-xs text-emerald-300">
+                            {item.cta.url}
+                          </div>
+                        </div>
+                      ) : null}
 
-{item.failureReason ? (
-  <div className="text-xs text-red-300">
-    Failure: {item.failureReason}
-  </div>
-) : null}
+                      {item.failureReason ? (
+                        <div className="text-xs text-red-300">
+                          Failure: {item.failureReason}
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 )}
@@ -1139,7 +1139,7 @@ const FIXED_TEAM_PAYMENT_URL =
               <div className="flex items-center justify-between">
                 <span>Captain status</span>
                 <span className="font-medium text-white">
-                  {!hasManager
+                  {!hasCaptain
                     ? "Unclaimed"
                     : claimedByCaptain
                       ? "Claimed"
@@ -1271,19 +1271,19 @@ const FIXED_TEAM_PAYMENT_URL =
               </div>
             ) : null}
 
-<TeamEmailForm
-  teamId={team.id}
-  toEmail={contactSnapshot.primaryContact.email ?? null}
-  contactName={contactSnapshot.primaryContact.name ?? null}
-  teamName={contactSnapshot.teamName}
-  leagueName={teamLeagueName}
-  claimCode={team.claimCode}
-  claimLink={claimLink}
-  captainDashboardUrl={claimLink}
-  fromPath={`/admin/teams/${team.id}`}
-  templates={teamEmailTemplates}
-  emailReplyConfigured={emailReplyConfigured}
-/>
+            <TeamEmailForm
+              teamId={team.id}
+              toEmail={contactSnapshot.primaryContact.email ?? null}
+              contactName={contactSnapshot.primaryContact.name ?? null}
+              teamName={contactSnapshot.teamName}
+              leagueName={teamLeagueName}
+              claimCode={team.claimCode}
+              claimLink={claimLink}
+              captainDashboardUrl={captainDashboardUrl}
+              fromPath={`/admin/teams/${team.id}`}
+              templates={teamEmailTemplates}
+              emailReplyConfigured={emailReplyConfigured}
+            />
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
@@ -1373,7 +1373,8 @@ const FIXED_TEAM_PAYMENT_URL =
             </h2>
 
             <p className="mt-2 text-sm text-white/60">
-              {`Regenerating the claim code invalidates the old link and unclaims the team by removing the current manager assignment.`}
+              Regenerating the claim code invalidates the old link and unclaims
+              the team by removing the current captain assignment.
             </p>
 
             <form action={regenerateClaimCodeAction} className="mt-5">

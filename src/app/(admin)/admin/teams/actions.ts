@@ -445,7 +445,7 @@ export async function regenerateClaimCodeAction(formData: FormData) {
     prisma.teamMember.deleteMany({
       where: {
         teamId: id,
-        role: TeamRole.MANAGER,
+        role: TeamRole.CAPTAIN,
       },
     }),
     prisma.team.update({
