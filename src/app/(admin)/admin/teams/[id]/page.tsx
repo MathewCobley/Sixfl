@@ -71,6 +71,43 @@ function getDispatchOriginLabel(metadata: unknown) {
   return "Sent to team";
 }
 
+function getDispatchCta(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const record = metadata as Record<string, unknown>;
+
+  const label =
+    typeof record.ctaLabel === "string" && record.ctaLabel.trim()
+      ? record.ctaLabel.trim()
+      : null;
+
+  const url =
+    typeof record.ctaUrl === "string" && record.ctaUrl.trim()
+      ? record.ctaUrl.trim()
+      : null;
+
+  if (!label || !url) {
+    return null;
+  }
+
+  return { label, url };
+}
+
+function formatHistoryBodyText(
+  bodyText: string,
+  cta: { label: string; url: string } | null,
+) {
+  let output = bodyText.trim().replace(/\{\{\s*cta\s*\}\}/gi, "");
+
+  if (cta) {
+    output = output.replaceAll(`${cta.label}: ${cta.url}`, "");
+  }
+
+  return output.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function getPrimaryActionButtonClass(enabled: boolean) {
   return enabled
     ? "rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
@@ -90,6 +127,7 @@ type TeamMessageHistoryItem = {
   queuedAt: Date;
   sentAt: Date | null;
   failureReason: string | null;
+  cta: { label: string; url: string } | null;
 };
 
 type Props = {
@@ -270,27 +308,32 @@ export default async function AdminTeamPage({
   const legacyLeadEmails = team.convertedFromLead?.emails ?? [];
 
   const historyItems: TeamMessageHistoryItem[] = [
-    ...dispatches.map((dispatch) => ({
-      id: `dispatch-${dispatch.id}`,
-      kind: "dispatch" as const,
-      channel: dispatch.channel,
-      statusLabel: formatDispatchStatus(dispatch.status),
-      originLabel: getDispatchOriginLabel(dispatch.metadata),
-      subject:
-        dispatch.subject?.trim() ||
-        (dispatch.channel === NotificationChannel.SMS
-          ? "SMS message"
-          : "Email"),
-      bodyText: dispatch.bodyText,
-      recipientLabel: dispatch.recipient.displayName || team.name,
-      recipientValue:
-        dispatch.channel === NotificationChannel.SMS
-          ? dispatch.recipient.phone || "No phone"
-          : dispatch.recipient.email || "No email",
-      queuedAt: dispatch.createdAt,
-      sentAt: dispatch.sentAt,
-      failureReason: dispatch.failureReason,
-    })),
+    ...dispatches.map((dispatch) => {
+      const cta = getDispatchCta(dispatch.metadata);
+  
+      return {
+        id: `dispatch-${dispatch.id}`,
+        kind: "dispatch" as const,
+        channel: dispatch.channel,
+        statusLabel: formatDispatchStatus(dispatch.status),
+        originLabel: getDispatchOriginLabel(dispatch.metadata),
+        subject:
+          dispatch.subject?.trim() ||
+          (dispatch.channel === NotificationChannel.SMS
+            ? "SMS message"
+            : "Email"),
+        bodyText: formatHistoryBodyText(dispatch.bodyText, cta),
+        recipientLabel: dispatch.recipient.displayName || team.name,
+        recipientValue:
+          dispatch.channel === NotificationChannel.SMS
+            ? dispatch.recipient.phone || "No phone"
+            : dispatch.recipient.email || "No email",
+        queuedAt: dispatch.createdAt,
+        sentAt: dispatch.sentAt,
+        failureReason: dispatch.failureReason,
+        cta,
+      };
+    }),
     ...legacyLeadEmails.map((email) => ({
       id: `lead-email-${email.id}`,
       kind: "legacyLeadEmail" as const,
@@ -304,6 +347,7 @@ export default async function AdminTeamPage({
       queuedAt: email.sentAt,
       sentAt: email.sentAt,
       failureReason: null,
+      cta: null,
     })),
   ].sort((a, b) => {
     const aTime = (a.sentAt ?? a.queuedAt).getTime();
@@ -1037,14 +1081,30 @@ const FIXED_TEAM_PAYMENT_URL =
                       </div>
 
                       <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
-                        {item.bodyText}
-                      </div>
+  {item.bodyText}
+</div>
 
-                      {item.failureReason ? (
-                        <div className="text-xs text-red-300">
-                          Failure: {item.failureReason}
-                        </div>
-                      ) : null}
+{item.cta ? (
+  <div className="mt-3">
+    <a
+      href={item.cta.url}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+    >
+      {item.cta.label}
+    </a>
+    <div className="mt-2 break-all text-xs text-emerald-300">
+      {item.cta.url}
+    </div>
+  </div>
+) : null}
+
+{item.failureReason ? (
+  <div className="text-xs text-red-300">
+    Failure: {item.failureReason}
+  </div>
+) : null}
                     </div>
                   ))
                 )}

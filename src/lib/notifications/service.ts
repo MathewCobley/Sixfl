@@ -173,7 +173,22 @@ function buildQueuedContentDirect(input: {
   const renderedBody = renderNotificationText(input.body.trim(), variables);
 
   if (input.channel === NotificationChannel.EMAIL) {
-    const signedTextBody = appendSIXFLTextSignature(renderedBody);
+    const ctaLabel = input.emailCta?.label?.trim();
+    const ctaUrl = input.emailCta?.url?.trim();
+    const ctaText =
+      ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : "";
+
+    const plainTextBody = (
+      ctaText
+        ? /\{\{\s*cta\s*\}\}/i.test(renderedBody)
+          ? renderedBody.replace(/\{\{\s*cta\s*\}\}/gi, ctaText)
+          : `${renderedBody}\n\n${ctaText}`
+        : renderedBody.replace(/\{\{\s*cta\s*\}\}/gi, "")
+    )
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    const signedTextBody = appendSIXFLTextSignature(plainTextBody);
 
     return {
       subject: renderedSubject,
