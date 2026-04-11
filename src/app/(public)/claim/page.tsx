@@ -32,9 +32,7 @@ export default async function ClaimTeamPage({
 
     const email = session.user.email.toLowerCase().trim();
 
-    const code = String(formData.get("code") ?? "")
-      .trim()
-      .toUpperCase();
+    const code = String(formData.get("code") ?? "").trim().toUpperCase();
 
     if (!code) redirect("/claim?error=missing_code");
 
@@ -54,20 +52,32 @@ export default async function ClaimTeamPage({
       redirect(`/claim?error=invalid&code=${encodeURIComponent(code)}`);
     }
 
-    await prisma.teamMember.upsert({
-      where: {
-        userId_teamId: {
+    await prisma.$transaction([
+      prisma.teamMember.upsert({
+        where: {
+          userId_teamId: {
+            userId: user.id,
+            teamId: team.id,
+          },
+        },
+        update: { role: TeamRole.CAPTAIN },
+        create: {
           userId: user.id,
           teamId: team.id,
+          role: TeamRole.CAPTAIN,
         },
-      },
-      update: { role: TeamRole.CAPTAIN },
-      create: {
-        userId: user.id,
-        teamId: team.id,
-        role: TeamRole.CAPTAIN,
-      },
-    });
+      }),
+      prisma.team.update({
+        where: { id: team.id },
+        data: {
+          captainUserId: user.id,
+          captainLinkedAt: new Date(),
+          captainLinkedSource: "CLAIM_LINK",
+          captainClaimedAt: new Date(),
+          captainClaimSource: "CLAIM_LINK",
+        },
+      }),
+    ]);
 
     redirect(`/captain/team/${team.id}?claimed=1`);
   }
@@ -77,7 +87,7 @@ export default async function ClaimTeamPage({
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Claim your team</h1>
         <p className="text-white/60">
-          Enter your claim code to become the team captain.
+          Enter your claim code to activate captain access for your team.
         </p>
       </div>
 

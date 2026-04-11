@@ -154,6 +154,14 @@ model Team {
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
+  captainUserId      String?
+  captainLinkedAt    DateTime?
+  captainLinkedSource String?
+  captainInviteSentAt DateTime?
+  captainInviteSentTo String?
+  captainClaimedAt   DateTime?
+  captainClaimSource String?
+
   members             TeamMember[]
   homeGames           Fixture[]              @relation("HomeTeam")
   awayGames           Fixture[]              @relation("AwayTeam")
@@ -173,6 +181,10 @@ model Team {
   @@index([createdByUserId])
   @@index([contactEmail])
   @@index([contactPhone])
+  @@index([captainUserId])
+  @@index([captainLinkedAt])
+  @@index([captainInviteSentAt])
+  @@index([captainClaimedAt])
 }
 
 model TeamMember {

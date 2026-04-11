@@ -444,9 +444,19 @@ export default async function AdminTeamPage({
   const FIXED_TEAM_PAYMENT_URL =
     "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
-  const captainUser = team.members[0]?.user;
-  const hasCaptain = Boolean(captainUser?.email);
-  const claimedByCaptain = hasCaptain && captainUser?.role !== UserRole.ADMIN;
+    const captainUser = team.members[0]?.user;
+    const hasCaptain = Boolean(captainUser?.email);
+    const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
+  
+    const captainAccessLabel = team.captainClaimedAt && hasCaptain && !isAdminCaptain
+      ? "Claimed"
+      : team.captainInviteSentAt
+        ? "Invite sent"
+        : hasCaptain && !isAdminCaptain
+          ? "Captain linked"
+          : hasCaptain && isAdminCaptain
+            ? "Admin linked"
+            : "Unlinked";
 
   const queuedMessage = sp.messageQueued === "1";
   const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
@@ -1200,21 +1210,58 @@ export default async function AdminTeamPage({
             <h2 className="text-lg font-semibold text-white">Team snapshot</h2>
 
             <div className="mt-4 space-y-4 text-sm text-white/70">
+            <div className="flex items-center justify-between">
+                <span>Captain status</span>
+                <span className="font-medium text-white">
+                  {captainAccessLabel}
+                </span>
+              </div>
+
               <div className="flex items-center justify-between">
-                <span>League</span>
+                <span>Captain linked</span>
                 <span className="text-right font-medium text-white">
-                  {team.league
-                    ? `${team.league.name}${
-                        team.league.season ? ` — ${team.league.season}` : ""
-                      }`
+                  {team.captainLinkedAt
+                    ? team.captainLinkedAt.toLocaleString()
                     : "—"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span>Latest kickoff</span>
+                <span>Linked source</span>
                 <span className="text-right font-medium text-white">
-                  {team.latestKickoffTime ?? "—"}
+                  {team.captainLinkedSource ?? "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Invite sent</span>
+                <span className="text-right font-medium text-white">
+                  {team.captainInviteSentAt
+                    ? team.captainInviteSentAt.toLocaleString()
+                    : "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Invite email</span>
+                <span className="text-right font-medium text-white">
+                  {team.captainInviteSentTo ?? "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Claimed at</span>
+                <span className="text-right font-medium text-white">
+                  {team.captainClaimedAt
+                    ? team.captainClaimedAt.toLocaleString()
+                    : "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Claim source</span>
+                <span className="text-right font-medium text-white">
+                  {team.captainClaimSource ?? "—"}
                 </span>
               </div>
 
@@ -1455,8 +1502,7 @@ export default async function AdminTeamPage({
             </h2>
 
             <p className="mt-2 text-sm text-white/60">
-              Regenerating the claim code invalidates the old link and unclaims
-              the team by removing the current captain assignment.
+            Regenerating the claim code invalidates the old link, clears invite/claim tracking, and removes the current captain assignment.
             </p>
 
             <form action={regenerateClaimCodeAction} className="mt-5">

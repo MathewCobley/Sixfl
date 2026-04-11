@@ -92,6 +92,50 @@ function getContactPhone(team: TeamListItem) {
   return team.contactPhone || team.convertedFromLead?.phone || "—";
 }
 
+function getCaptainAccessState(team: TeamListItem) {
+  const captainUser = team.members[0]?.user;
+  const hasCaptain = Boolean(captainUser?.email);
+  const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
+
+  if (team.captainClaimedAt && hasCaptain && !isAdminCaptain) {
+    return {
+      label: "Claimed",
+      className:
+        "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200",
+    };
+  }
+
+  if (team.captainInviteSentAt) {
+    return {
+      label: "Invite sent",
+      className:
+        "rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] text-sky-200",
+    };
+  }
+
+  if (hasCaptain && !isAdminCaptain) {
+    return {
+      label: "Captain linked",
+      className:
+        "rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200",
+    };
+  }
+
+  if (hasCaptain && isAdminCaptain) {
+    return {
+      label: "Admin linked",
+      className:
+        "rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-[11px] text-yellow-200",
+    };
+  }
+
+  return {
+    label: "Unlinked",
+    className:
+      "rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65",
+  };
+}
+
 function groupTeamsByLeague(teams: TeamListItem[]) {
   const sorted = [...teams].sort((a, b) => {
     const aHasLeague = Boolean(a.league);
@@ -216,13 +260,7 @@ export default async function AdminTeamsPage({
             Claimed teams
           </div>
           <div className="mt-3 text-3xl font-semibold text-white">
-            {
-              teams.filter(
-                (team) =>
-                  team.members[0]?.user?.email &&
-                  team.members[0]?.user?.role !== UserRole.ADMIN,
-              ).length
-            }
+            {teams.filter((team) => Boolean(team.captainClaimedAt)).length}
           </div>
         </div>
 
@@ -296,9 +334,7 @@ export default async function AdminTeamsPage({
               <div className="divide-y divide-white/10">
                 {group.teams.map((team) => {
                   const captainUser = team.members[0]?.user;
-                  const hasCaptain = Boolean(captainUser?.email);
-                  const claimedByCaptain =
-                    hasCaptain && captainUser?.role !== UserRole.ADMIN;
+                  const accessState = getCaptainAccessState(team);
                   const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
                     team.claimCode,
                   )}`;
@@ -321,19 +357,9 @@ export default async function AdminTeamsPage({
                               {team.name}
                             </div>
 
-                            {claimedByCaptain ? (
-                              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">
-                                Claimed
-                              </span>
-                            ) : hasCaptain ? (
-                              <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-[11px] text-yellow-200">
-                                Captain is admin
-                              </span>
-                            ) : (
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">
-                                Unclaimed
-                              </span>
-                            )}
+                            <span className={accessState.className}>
+                              {accessState.label}
+                            </span>
 
                             {team.latestKickoffTime ? (
                               <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">

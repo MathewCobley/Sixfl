@@ -43,6 +43,26 @@ async function generateUniqueClaimCode() {
   throw new Error("Failed to generate unique claim code.");
 }
 
+function shouldMarkCaptainInvite(input: {
+  channel: NotificationChannel;
+  templateKey: string | null;
+  body: string;
+  ctaUrl: string;
+}) {
+  if (input.channel !== NotificationChannel.EMAIL) return false;
+
+  const templateKey = input.templateKey?.trim().toLowerCase() || "";
+  const body = input.body.toLowerCase();
+  const ctaUrl = input.ctaUrl.toLowerCase();
+
+  return (
+    templateKey.includes("captain") ||
+    body.includes("/claim?code=") ||
+    body.includes("captains dashboard") ||
+    ctaUrl.includes("/claim?code=")
+  );
+}
+
 function parseLatestKickoffTime(value: FormDataEntryValue | null) {
   const raw = String(value ?? "").trim();
 
@@ -315,6 +335,23 @@ export async function sendTeamMessageAction(formData: FormData) {
     createdByUserId: user?.id ?? null,
   });
 
+  if (
+    shouldMarkCaptainInvite({
+      channel,
+      templateKey,
+      body,
+      ctaUrl,
+    })
+  ) {
+    await prisma.team.update({
+      where: { id: teamId },
+      data: {
+        captainInviteSentAt: new Date(),
+        captainInviteSentTo: recipient.email?.trim() || null,
+      },
+    });
+  }
+
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath("/admin/teams");
   if (team.leagueId) {
@@ -452,6 +489,10 @@ export async function regenerateClaimCodeAction(formData: FormData) {
       where: { id },
       data: {
         claimCode: newClaimCode,
+        captainInviteSentAt: null,
+        captainInviteSentTo: null,
+        captainClaimedAt: null,
+        captainClaimSource: null,
       },
     }),
   ]);

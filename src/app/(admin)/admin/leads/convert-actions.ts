@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/leads/convert-actions.ts
+// File: src/app/(admin)/admin/leads/convert-actions.ts
 // ========================================
 
 "use server";
@@ -48,7 +48,7 @@ async function generateUniqueClaimCode(tx: Prisma.TransactionClient) {
 
 export async function convertLeadToTeamAction(
   _prevState: ConvertLeadToTeamState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ConvertLeadToTeamState> {
   await requireAdmin();
 
@@ -136,7 +136,7 @@ export async function convertLeadToTeamAction(
       if (freshLead.convertedAt || freshLead.convertedTeamId) {
         if (!freshLead.convertedTeamId) {
           throw new Error(
-            "This lead appears to be converted already, but no converted team is linked."
+            "This lead appears to be converted already, but no converted team is linked.",
           );
         }
 
@@ -200,6 +200,11 @@ export async function convertLeadToTeamAction(
           name: teamName,
           claimCode,
           createdByUserId: captainUserId,
+          captainUserId,
+          captainLinkedAt: new Date(),
+          captainLinkedSource: "LEAD_CONVERSION",
+          contactName: freshLead.contactName?.trim() || null,
+          contactEmail: email,
         },
         select: {
           id: true,
