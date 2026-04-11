@@ -7,6 +7,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import FormListboxField from "@/components/ui/FormListboxField";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { summariseCharge } from "@/lib/payments/charge-status";
+import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -17,6 +20,7 @@ export const metadata = {
 };
 
 const paymentMethodValues = new Set<PaymentMethod>(Object.values(PaymentMethod));
+const ADMIN_CHASE_THRESHOLD_MS = 72 * 60 * 60 * 1000;
 
 function isPaymentMethod(value: string): value is PaymentMethod {
   return paymentMethodValues.has(value as PaymentMethod);
@@ -39,6 +43,36 @@ function formatPaymentMethodLabel(method: PaymentMethod) {
   };
 
   return labels[method];
+}
+
+function formatDateTimeLabel(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDueLabel(value: Date | null) {
+  if (!value) return "No due date";
+
+  if (
+    value.getUTCHours() === 0 &&
+    value.getUTCMinutes() === 0 &&
+    value.getUTCSeconds() === 0 &&
+    value.getUTCMilliseconds() === 0
+  ) {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(value);
+  }
+
+  return formatDateTimeLabel(value);
 }
 
 const methodOptions = [
@@ -96,7 +130,9 @@ async function recordPaymentAction(formData: FormData) {
   const teamId = String(formData.get("teamId") ?? "");
   const chargeId = String(formData.get("chargeId") ?? "").trim();
   const amountPounds = Number(formData.get("amountPounds") ?? "0");
-  const methodValue = String(formData.get("method") ?? PaymentMethod.BANK_TRANSFER);
+  const methodValue = String(
+    formData.get("method") ?? PaymentMethod.BANK_TRANSFER,
+  );
   const method = isPaymentMethod(methodValue)
     ? methodValue
     : PaymentMethod.BANK_TRANSFER;
@@ -121,31 +157,33 @@ async function recordPaymentAction(formData: FormData) {
   });
 
   if (chargeId) {
-    const [charge, transactions] = await Promise.all([
-      prisma.paymentCharge.findUnique({
-        where: { id: chargeId },
-        select: { id: true, amountPence: true },
-      }),
-      prisma.paymentTransaction.findMany({
-        where: { chargeId },
-        select: { amountPence: true },
-      }),
-    ]);
+    const charge = await prisma.paymentCharge.findUnique({
+      where: { id: chargeId },
+      include: {
+        transactions: {
+          select: {
+            amountPence: true,
+          },
+        },
+      },
+    });
 
     if (charge) {
-      const paidTotal = transactions.reduce((sum, tx) => sum + tx.amountPence, 0);
+      const summary = summariseCharge({
+        amountPence: charge.amountPence,
+        transactions: charge.transactions,
+      });
 
       await prisma.paymentCharge.update({
         where: { id: chargeId },
         data: {
-          status:
-            paidTotal >= charge.amountPence
-              ? "PAID"
-              : paidTotal > 0
-                ? "PART_PAID"
-                : "OPEN",
+          status: summary.status,
         },
       });
+
+      if (summary.status === "PAID") {
+        await cancelQueuedMatchFeeNotificationDispatches([chargeId]);
+      }
     }
   }
 
@@ -215,6 +253,41 @@ export default async function AdminPaymentsPage({
     }),
   ]);
 
+  const nowMs = Date.now();
+
+  const chargeRows = charges
+    .map((charge) => {
+      const summary = summariseCharge({
+        amountPence: charge.amountPence,
+        transactions: charge.transactions,
+      });
+
+      const isClosed = charge.status === "PAID" || charge.status === "VOID";
+
+      const needsAdminChase =
+        !isClosed &&
+        summary.outstandingPence > 0 &&
+        !!charge.dueDate &&
+        charge.dueDate.getTime() + ADMIN_CHASE_THRESHOLD_MS <= nowMs;
+
+      return {
+        charge,
+        summary,
+        needsAdminChase,
+      };
+    })
+    .sort((a, b) => {
+      if (a.needsAdminChase !== b.needsAdminChase) {
+        return a.needsAdminChase ? -1 : 1;
+      }
+
+      if (a.summary.outstandingPence !== b.summary.outstandingPence) {
+        return b.summary.outstandingPence - a.summary.outstandingPence;
+      }
+
+      return b.charge.createdAt.getTime() - a.charge.createdAt.getTime();
+    });
+
   const teamOptions = teams.map((team) => ({
     value: team.id,
     label: team.league?.name
@@ -222,27 +295,36 @@ export default async function AdminPaymentsPage({
       : team.name,
   }));
 
-  const openChargeOptions = charges
-    .filter((charge) => charge.status !== "PAID" && charge.status !== "VOID")
-    .map((charge) => ({
-      value: charge.id,
-      label: `${charge.team.name} · ${charge.title} · ${formatMoney(charge.amountPence)}`,
+  const openChargeOptions = chargeRows
+    .filter(
+      (row) => row.charge.status !== "PAID" && row.charge.status !== "VOID",
+    )
+    .map((row) => ({
+      value: row.charge.id,
+      label: `${row.charge.team.name} · ${row.charge.title} · ${formatMoney(row.charge.amountPence)}`,
     }));
 
-  const totalOutstanding = charges
-    .filter((charge) => charge.status !== "PAID" && charge.status !== "VOID")
-    .reduce((sum, charge) => {
-      const paid = charge.transactions.reduce((txSum, tx) => txSum + tx.amountPence, 0);
-      return sum + Math.max(charge.amountPence - paid, 0);
-    }, 0);
+  const openChargesCount = chargeRows.filter(
+    (row) => row.charge.status !== "PAID" && row.charge.status !== "VOID",
+  ).length;
+
+  const totalOutstanding = chargeRows
+    .filter((row) => row.charge.status !== "PAID" && row.charge.status !== "VOID")
+    .reduce((sum, row) => sum + row.summary.outstandingPence, 0);
+
+  const needsAdminChaseCount = chargeRows.filter(
+    (row) => row.needsAdminChase,
+  ).length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
       <div className="space-y-2">
         <h1 className="text-3xl font-semibold text-white">Payments</h1>
         <p className="text-sm text-white/60">
-          Create team charges, record payments, and track balances safely before
-          introducing payment links or automation.
+          Create charges, record payments, and keep on top of unpaid balances.
+          Fixture match fees now queue automatic post-match chases 24 hours and
+          72 hours after kickoff, with anything still unpaid after that showing
+          here for manual follow-up.
         </p>
       </div>
 
@@ -266,13 +348,13 @@ export default async function AdminPaymentsPage({
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
             Open charges
           </div>
           <div className="mt-3 text-3xl font-semibold text-white">
-            {charges.filter((charge) => charge.status !== "PAID" && charge.status !== "VOID").length}
+            {openChargesCount}
           </div>
         </div>
 
@@ -285,6 +367,15 @@ export default async function AdminPaymentsPage({
           </div>
         </div>
 
+        <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-100/70">
+            Needs admin chase
+          </div>
+          <div className="mt-3 text-3xl font-semibold text-white">
+            {needsAdminChaseCount}
+          </div>
+        </div>
+
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
             Recent payments
@@ -294,6 +385,20 @@ export default async function AdminPaymentsPage({
           </div>
         </div>
       </div>
+
+      {needsAdminChaseCount > 0 ? (
+        <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
+          <div className="text-sm font-semibold text-red-100">
+            {needsAdminChaseCount} unpaid charge
+            {needsAdminChaseCount === 1 ? "" : "s"} now need manual admin
+            follow-up.
+          </div>
+          <div className="mt-1 text-sm text-red-100/75">
+            These are still unpaid 72 hours after the due time, even after the
+            automatic post-match chase window.
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <form
@@ -363,7 +468,10 @@ export default async function AdminPaymentsPage({
             <FormListboxField
               name="chargeId"
               value=""
-              options={[{ value: "", label: "No linked charge" }, ...openChargeOptions]}
+              options={[
+                { value: "", label: "No linked charge" },
+                ...openChargeOptions,
+              ]}
               placeholder="Optional linked charge"
             />
 
@@ -414,48 +522,86 @@ export default async function AdminPaymentsPage({
       </div>
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-        <h2 className="text-xl font-semibold text-white">Charges</h2>
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-white">Charges</h2>
+          <p className="text-sm text-white/55">
+            Red items are still unpaid after the automatic 24-hour and 72-hour
+            post-match chase window.
+          </p>
+        </div>
 
         <div className="mt-4 space-y-3">
-          {charges.length === 0 ? (
+          {chargeRows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">
               No charges yet.
             </div>
           ) : (
-            charges.map((charge) => {
-              const paid = charge.transactions.reduce((sum, tx) => sum + tx.amountPence, 0);
-              const outstanding = Math.max(charge.amountPence - paid, 0);
-
-              return (
-                <div
-                  key={charge.id}
-                  className="rounded-2xl border border-white/10 bg-[#0d1428] p-4"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <div className="text-base font-semibold text-white">
-                        {charge.team.name} · {charge.title}
-                      </div>
-                      <div className="mt-1 text-sm text-white/55">
-                        {charge.description || "No description"}
-                      </div>
+            chargeRows.map((row) => (
+              <div
+                key={row.charge.id}
+                className={[
+                  "rounded-2xl border bg-[#0d1428] p-4",
+                  row.needsAdminChase
+                    ? "border-red-500/30"
+                    : "border-white/10",
+                ].join(" ")}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="text-base font-semibold text-white">
+                      {row.charge.team.name} · {row.charge.title}
+                    </div>
+                    <div className="mt-1 text-sm text-white/55">
+                      {row.charge.description || "No description"}
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-base font-semibold text-white">
-                        {formatMoney(charge.amountPence)}
-                      </div>
-                      <div className="mt-1 text-sm text-white/55">
-                        Paid {formatMoney(paid)} · Outstanding {formatMoney(outstanding)}
-                      </div>
-                      <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
-                        {charge.status}
-                      </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {row.charge.dueDate ? (
+                        <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                          Due {formatDueLabel(row.charge.dueDate)}
+                        </span>
+                      ) : null}
+
+                      {row.needsAdminChase ? (
+                        <span className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-red-200">
+                          Needs admin chase
+                        </span>
+                      ) : row.summary.outstandingPence > 0 &&
+                        row.charge.status !== "VOID" ? (
+                        <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">
+                          Awaiting payment
+                        </span>
+                      ) : null}
+
+                      {row.charge.status === "PAID" ? (
+                        <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                          Paid
+                        </span>
+                      ) : null}
+
+                      {row.charge.status === "VOID" ? (
+                        <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Void
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-base font-semibold text-white">
+                      {formatMoney(row.charge.amountPence)}
+                    </div>
+                    <div className="mt-1 text-sm text-white/55">
+                      Paid {formatMoney(row.summary.paidTotalPence)} · Outstanding{" "}
+                      {formatMoney(row.summary.outstandingPence)}
+                    </div>
+                    <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
+                      {row.charge.status}
                     </div>
                   </div>
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
         </div>
       </section>
@@ -490,7 +636,7 @@ export default async function AdminPaymentsPage({
                     </div>
                     <div className="mt-1 text-sm text-white/55">
                       {formatPaymentMethodLabel(tx.method)} ·{" "}
-                      {tx.paidAt.toLocaleString("en-GB")}
+                      {formatDateTimeLabel(tx.paidAt)}
                     </div>
                   </div>
                 </div>
