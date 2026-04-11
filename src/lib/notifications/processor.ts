@@ -1,9 +1,12 @@
-
 // ========================================
 // File: src/lib/notifications/processor.ts
 // ========================================
 
 import { NotificationChannel } from "@prisma/client";
+import {
+  getChargeOutstandingPence,
+  getChargePaidTotal,
+} from "@/lib/payments/charge-status";
 import { prisma } from "@/lib/prisma";
 import { buildThreadReplyAddress } from "@/lib/email/reply-address";
 import { linkDispatchToThread } from "@/lib/messaging/service";
@@ -11,6 +14,7 @@ import { sendEmailWithResend } from "./providers/resend";
 import { sendSmsWithTwilio } from "./providers/twilio";
 import {
   getDueNotificationDispatches,
+  markNotificationDispatchCancelled,
   markNotificationDispatchFailed,
   markNotificationDispatchProcessing,
   markNotificationDispatchSent,
@@ -66,6 +70,57 @@ function buildLastMessagePreview(body: string): string {
   const trimmed = body.trim().replace(/\s+/g, " ");
   if (!trimmed) return "";
   return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
+}
+
+function isQueuedMatchFeeNotification(
+  sourceType: string | null | undefined,
+) {
+  return (
+    sourceType === "FIXTURE_MATCH_FEE" ||
+    sourceType === "FIXTURE_MATCH_FEE_REMINDER"
+  );
+}
+
+async function getQueuedMatchFeeCancellationReason(input: {
+  sourceType: string | null;
+  sourceId: string | null;
+}) {
+  if (!isQueuedMatchFeeNotification(input.sourceType) || !input.sourceId) {
+    return null;
+  }
+
+  const charge = await prisma.paymentCharge.findUnique({
+    where: {
+      id: input.sourceId,
+    },
+    include: {
+      transactions: {
+        select: {
+          amountPence: true,
+        },
+      },
+    },
+  });
+
+  if (!charge) {
+    return "Match fee charge no longer exists.";
+  }
+
+  if (charge.status === "VOID") {
+    return "Match fee charge was voided before queued payment email was sent.";
+  }
+
+  const paidTotalPence = getChargePaidTotal(charge.transactions);
+  const outstandingPence = getChargeOutstandingPence(
+    charge.amountPence,
+    paidTotalPence,
+  );
+
+  if (outstandingPence <= 0) {
+    return "Match fee charge was paid before queued payment email was sent.";
+  }
+
+  return null;
 }
 
 async function findOrCreateEmailThread(params: {
@@ -216,6 +271,28 @@ export async function processNotificationQueue(limit = 25) {
 
   for (const dispatch of dueDispatches) {
     try {
+      const queuedMatchFeeCancellationReason =
+        await getQueuedMatchFeeCancellationReason({
+          sourceType: dispatch.sourceType,
+          sourceId: dispatch.sourceId,
+        });
+
+      if (queuedMatchFeeCancellationReason) {
+        await markNotificationDispatchCancelled(
+          dispatch.id,
+          queuedMatchFeeCancellationReason,
+        );
+
+        result.skipped += 1;
+        result.items.push({
+          dispatchId: dispatch.id,
+          status: "skipped",
+          channel: dispatch.channel,
+          message: queuedMatchFeeCancellationReason,
+        });
+        continue;
+      }
+
       if (dispatch.channel === NotificationChannel.EMAIL) {
         if (!dispatch.recipient.email?.trim()) {
           result.skipped += 1;

@@ -26,7 +26,12 @@ type FormState = {
 
 type TemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "REFEREE" | "GENERAL";
 type InterestTypeValue = "" | "TEAM" | "PLAYER" | "REFEREE";
-type CtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "paymentUrl";
+type CtaUrlKeyValue =
+  | ""
+  | "signupUrl"
+  | "manageTeamUrl"
+  | "paymentUrl"
+  | "captainDashboardUrl";
 
 type EmailTemplateFormValues = {
   id?: string;
@@ -61,6 +66,9 @@ const INITIAL_STATE: FormState = {
   error: "",
   errors: {},
 };
+
+const PREVIEW_CLAIM_CODE = "H862NY";
+const PREVIEW_CLAIM_LINK = `https://www.sixfl.co.uk/claim?code=${PREVIEW_CLAIM_CODE}`;
 
 const AUDIENCE_OPTIONS: Array<{
   value: TemplateAudience;
@@ -106,8 +114,12 @@ const INTEREST_TYPE_OPTIONS: Array<{
 
 const QUICK_INSERT_TOKENS = [
   "{{firstName}}",
+  "{{fullName}}",
   "{{teamName}}",
   "{{leagueName}}",
+  "{{claimCode}}",
+  "{{claimLink}}",
+  "{{captainDashboardUrl}}",
   "{{area}}",
   "{{preferredNight}}",
   "{{cta}}",
@@ -133,8 +145,15 @@ const CTA_OPTIONS: Array<{
   {
     value: "manageTeamUrl",
     label: "Manage team",
-    description: "Links to the team management / claim flow.",
-    previewUrl: "https://www.sixfl.co.uk/manage-team",
+    description: "Links to the team claim / management flow.",
+    previewUrl: PREVIEW_CLAIM_LINK,
+  },
+  {
+    value: "captainDashboardUrl",
+    label: "Captain dashboard sign-in",
+    description:
+      "Links captains into the claim and dashboard access flow for their team.",
+    previewUrl: PREVIEW_CLAIM_LINK,
   },
   {
     value: "paymentUrl",
@@ -179,8 +198,12 @@ function slugifyTemplateKey(value: string) {
 function previewReplace(text: string) {
   return text
     .replaceAll("{{firstName}}", "Jordan")
+    .replaceAll("{{fullName}}", "Jordan Smith")
     .replaceAll("{{teamName}}", "Harrogate Athletic")
     .replaceAll("{{leagueName}}", "Rossett Mens Tuesday")
+    .replaceAll("{{claimCode}}", PREVIEW_CLAIM_CODE)
+    .replaceAll("{{claimLink}}", PREVIEW_CLAIM_LINK)
+    .replaceAll("{{captainDashboardUrl}}", PREVIEW_CLAIM_LINK)
     .replaceAll("{{area}}", "Harrogate")
     .replaceAll("{{preferredNight}}", "Tuesday");
 }
@@ -587,6 +610,10 @@ export default function EmailTemplateForm({
                 ))}
               </div>
               <p className="mt-3 text-sm leading-6 text-neutral-300">
+                Team access emails can use{" "}
+                <span className="text-white">{"{{claimCode}}"}</span>,{" "}
+                <span className="text-white">{"{{claimLink}}"}</span>, and{" "}
+                <span className="text-white">{"{{captainDashboardUrl}}"}</span>.
                 Use <span className="text-white">{"{{cta}}"}</span> once to
                 place the CTA. If you do not include it, the button will appear
                 at the end.
@@ -703,7 +730,7 @@ export default function EmailTemplateForm({
               <div className="mb-2 text-sm font-medium text-white">
                 CTA destination
               </div>
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-5">
                 {CTA_OPTIONS.map((option) => {
                   const selected = ctaUrlKey === option.value;
 

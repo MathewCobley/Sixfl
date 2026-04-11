@@ -26,6 +26,9 @@ type Props = {
   contactName?: string | null;
   teamName: string;
   leagueName?: string | null;
+  claimCode: string;
+  claimLink: string;
+  captainDashboardUrl: string;
   fromPath: string;
   templates: TeamEmailTemplateOption[];
   emailReplyConfigured: boolean;
@@ -44,6 +47,9 @@ function resolveTeamTemplateText(
     fullName: string;
     teamName: string;
     leagueName: string;
+    claimCode: string;
+    claimLink: string;
+    captainDashboardUrl: string;
   },
 ) {
   return text
@@ -51,6 +57,9 @@ function resolveTeamTemplateText(
     .replaceAll("{{fullName}}", context.fullName)
     .replaceAll("{{teamName}}", context.teamName)
     .replaceAll("{{leagueName}}", context.leagueName)
+    .replaceAll("{{claimCode}}", context.claimCode)
+    .replaceAll("{{claimLink}}", context.claimLink)
+    .replaceAll("{{captainDashboardUrl}}", context.captainDashboardUrl)
     .replaceAll("{{cta}}", "{{cta}}");
 }
 
@@ -74,6 +83,9 @@ export default function TeamEmailForm({
   contactName,
   teamName,
   leagueName,
+  claimCode,
+  claimLink,
+  captainDashboardUrl,
   fromPath,
   templates,
   emailReplyConfigured,
@@ -103,8 +115,18 @@ export default function TeamEmailForm({
       fullName: contactName?.trim() || "",
       teamName: teamName.trim(),
       leagueName: leagueName?.trim() || "",
+      claimCode: claimCode.trim(),
+      claimLink: claimLink.trim(),
+      captainDashboardUrl: captainDashboardUrl.trim(),
     }),
-    [contactName, teamName, leagueName],
+    [
+      captainDashboardUrl,
+      claimCode,
+      claimLink,
+      contactName,
+      leagueName,
+      teamName,
+    ],
   );
 
   const selectedTemplateNeedsDynamicCtaUrl = Boolean(
@@ -237,6 +259,17 @@ If you have any questions, just reply to this email.`}
 
         <div className="mt-2 text-xs text-white/40">
           The SIXFL footer is added automatically when the email is sent.
+        </div>
+
+        <div className="mt-1 text-xs text-white/35">
+          Captain access templates can use{" "}
+          <span className="font-mono text-white/60">{"{{claimCode}}"}</span>,{" "}
+          <span className="font-mono text-white/60">{"{{claimLink}}"}</span>,
+          and{" "}
+          <span className="font-mono text-white/60">
+            {"{{captainDashboardUrl}}"}
+          </span>
+          .
         </div>
       </div>
 

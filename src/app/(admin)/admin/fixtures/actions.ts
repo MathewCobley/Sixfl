@@ -4,7 +4,10 @@
 
 "use server";
 
-import { FixtureStatus } from "@prisma/client";
+import {
+  FixtureStatus,
+  NotificationDispatchStatus,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -13,6 +16,7 @@ import {
   parseLondonDateTime,
 } from "@/lib/datetime/london";
 import {
+  cancelQueuedMatchFeeNotificationDispatches,
   queueFixtureMatchFeeEmails,
   syncFixtureMatchFeeCharges,
   voidFixtureMatchFeeChargesOrThrow,
@@ -30,6 +34,11 @@ type TeamSchedulingRule = {
   name: string;
   latestKickoffTime: string | null;
 };
+
+type FixtureNotificationDbClient = Pick<
+  typeof prisma,
+  "notificationDispatch" | "paymentCharge"
+>;
 
 function addDays(d: Date, days: number) {
   const out = new Date(d);
@@ -214,6 +223,60 @@ function isKickoffAllowed(
     allowed: true,
     reason: null,
   };
+}
+
+async function cancelQueuedFixtureReminderDispatches(
+  fixtureIds: string[],
+  db: FixtureNotificationDbClient = prisma,
+) {
+  if (fixtureIds.length === 0) {
+    return;
+  }
+
+  await db.notificationDispatch.updateMany({
+    where: {
+      sourceType: "FIXTURE_REMINDER",
+      sourceId: {
+        in: fixtureIds,
+      },
+      status: NotificationDispatchStatus.QUEUED,
+    },
+    data: {
+      status: NotificationDispatchStatus.CANCELLED,
+      cancelledAt: new Date(),
+      failureReason: "Fixture deleted before reminder was sent.",
+    },
+  });
+}
+
+async function cancelQueuedFixtureNotificationDispatches(
+  fixtureIds: string[],
+  db: FixtureNotificationDbClient = prisma,
+) {
+  if (fixtureIds.length === 0) {
+    return;
+  }
+
+  await cancelQueuedFixtureReminderDispatches(fixtureIds, db);
+
+  const charges = await db.paymentCharge.findMany({
+    where: {
+      fixtureId: {
+        in: fixtureIds,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  await cancelQueuedMatchFeeNotificationDispatches(
+    charges.map((charge) => charge.id),
+    db,
+    {
+      reason: "Fixture deleted before queued match fee emails were sent.",
+    },
+  );
 }
 
 /**
@@ -493,6 +556,7 @@ export async function createFixtureAction(formData: FormData) {
         awayTeam,
         matchFeePence,
         charges: created.activeCharges,
+        mode: "all",
       });
     } catch (error) {
       console.error("Failed to queue fixture match fee emails", error);
@@ -548,6 +612,8 @@ export async function updateFixtureAction(formData: FormData) {
         select: {
           id: true,
           leagueId: true,
+          homeTeamId: true,
+          awayTeamId: true,
           matchFeePence: true,
           league: {
             select: {
@@ -650,7 +716,32 @@ export async function updateFixtureAction(formData: FormData) {
     };
   });
 
-  if ((fixture.matchFeePence ?? 0) <= 0 && (matchFeePence ?? 0) > 0) {
+  const hadExistingFee = (fixture.matchFeePence ?? 0) > 0;
+  const hasMatchFee = (matchFeePence ?? 0) > 0;
+  const teamsChanged =
+    fixture.homeTeamId !== homeTeamId || fixture.awayTeamId !== awayTeamId;
+  const feeAmountChanged =
+    (fixture.matchFeePence ?? 0) !== (matchFeePence ?? 0);
+
+  const shouldSendInitialFeeEmail =
+    !hadExistingFee || teamsChanged || feeAmountChanged;
+
+  if (hasMatchFee && updated.activeCharges.length > 0) {
+    await cancelQueuedMatchFeeNotificationDispatches(
+      updated.activeCharges.map((charge) => charge.id),
+      prisma,
+      shouldSendInitialFeeEmail
+        ? {
+            reason:
+              "Fixture payment details changed before queued match fee emails were sent.",
+          }
+        : {
+            includeInitialRequest: false,
+            reason:
+              "Fixture reminder schedule changed before queued reminder emails were sent.",
+          },
+    );
+
     try {
       await queueFixtureMatchFeeEmails({
         fixtureId,
@@ -662,6 +753,7 @@ export async function updateFixtureAction(formData: FormData) {
         awayTeam,
         matchFeePence,
         charges: updated.activeCharges,
+        mode: shouldSendInitialFeeEmail ? "all" : "reminders_only",
       });
     } catch (error) {
       console.error("Failed to queue fixture match fee emails", error);
@@ -708,7 +800,10 @@ export async function deleteFixtureAction(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
-    await voidFixtureMatchFeeChargesOrThrow([id], tx);
+    const fixtureIdsToDelete = [id];
+
+    await voidFixtureMatchFeeChargesOrThrow(fixtureIdsToDelete, tx);
+    await cancelQueuedFixtureNotificationDispatches(fixtureIdsToDelete, tx);
 
     await tx.fixture.delete({
       where: { id },
@@ -751,11 +846,11 @@ export async function deleteLeagueFixturesAction(formData: FormData) {
     },
   });
 
+  const fixtureIdsToDelete = fixtureIds.map((fixture) => fixture.id);
+
   await prisma.$transaction(async (tx) => {
-    await voidFixtureMatchFeeChargesOrThrow(
-      fixtureIds.map((fixture) => fixture.id),
-      tx,
-    );
+    await voidFixtureMatchFeeChargesOrThrow(fixtureIdsToDelete, tx);
+    await cancelQueuedFixtureNotificationDispatches(fixtureIdsToDelete, tx);
 
     await tx.fixture.deleteMany({
       where: { leagueId },
@@ -851,11 +946,11 @@ export async function generateFixtures(formData: FormData) {
       },
     });
 
+    const fixtureIdsToClear = existingFixtureIds.map((fixture) => fixture.id);
+
     await prisma.$transaction(async (tx) => {
-      await voidFixtureMatchFeeChargesOrThrow(
-        existingFixtureIds.map((fixture) => fixture.id),
-        tx,
-      );
+      await voidFixtureMatchFeeChargesOrThrow(fixtureIdsToClear, tx);
+      await cancelQueuedFixtureNotificationDispatches(fixtureIdsToClear, tx);
 
       await tx.fixture.deleteMany({
         where: { leagueId },

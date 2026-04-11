@@ -11,6 +11,7 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
@@ -83,13 +84,13 @@ function buildAdminFixturesHref(input: {
 }
 
 function formatKickoff(date: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return formatDateTimeInLondon(date, {
     weekday: "short",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(date));
+  });
 }
 
 function unique(values: string[]) {

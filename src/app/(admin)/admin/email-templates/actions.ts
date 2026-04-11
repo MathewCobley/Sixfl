@@ -34,6 +34,7 @@ const ALLOWED_CTA_URL_KEYS = [
   "signupUrl",
   "manageTeamUrl",
   "paymentUrl",
+  "captainDashboardUrl",
 ] as const;
 
 type AllowedCtaUrlKey = (typeof ALLOWED_CTA_URL_KEYS)[number];
@@ -91,7 +92,9 @@ function getTemplateValues(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const keyInput = String(formData.get("key") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const audienceRaw = String(formData.get("audience") ?? "").trim().toUpperCase();
+  const audienceRaw = String(formData.get("audience") ?? "")
+    .trim()
+    .toUpperCase();
   const interestTypeRaw = String(formData.get("interestType") ?? "")
     .trim()
     .toUpperCase();
@@ -140,9 +143,14 @@ function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
     errors.interestType = ["Please select a valid interest type."];
   }
 
-  if ((values.ctaLabel && !values.ctaUrlKey) || (!values.ctaLabel && values.ctaUrlKey)) {
+  if (
+    (values.ctaLabel && !values.ctaUrlKey) ||
+    (!values.ctaLabel && values.ctaUrlKey)
+  ) {
     errors.ctaLabel = ["CTA text and CTA destination must be used together."];
-    errors.ctaUrlKey = ["CTA text and CTA destination must be used together."];
+    errors.ctaUrlKey = [
+      "CTA text and CTA destination must be used together.",
+    ];
   }
 
   if (values.ctaUrlKey && !isAllowedCtaUrlKey(values.ctaUrlKey)) {
@@ -197,7 +205,9 @@ export async function createEmailTemplateAction(
 
   if (existing) {
     return buildValidationError({
-      key: ["A template with that key already exists. Please use a different key."],
+      key: [
+        "A template with that key already exists. Please use a different key.",
+      ],
     });
   }
 
@@ -251,7 +261,9 @@ export async function updateEmailTemplateAction(
 
   if (existing && existing.id !== values.id) {
     return buildValidationError({
-      key: ["Another template already uses that key. Please use a different key."],
+      key: [
+        "Another template already uses that key. Please use a different key.",
+      ],
     });
   }
 

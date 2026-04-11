@@ -9,6 +9,7 @@ import {
   getChargeStatusFromAmounts,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
+import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import {
   getStripeServerClient,
@@ -79,17 +80,21 @@ async function handleCompletedCheckoutSession(session: Stripe.Checkout.Session) 
     },
   });
 
-  const paidTotalPence =
-    getChargePaidTotal(charge.transactions) + amountPence;
+  const paidTotalPence = getChargePaidTotal(charge.transactions) + amountPence;
+  const nextStatus = getChargeStatusFromAmounts(charge.amountPence, paidTotalPence);
 
   await prisma.paymentCharge.update({
     where: {
       id: charge.id,
     },
     data: {
-      status: getChargeStatusFromAmounts(charge.amountPence, paidTotalPence),
+      status: nextStatus,
     },
   });
+
+  if (nextStatus === "PAID") {
+    await cancelQueuedMatchFeeNotificationDispatches([charge.id]);
+  }
 }
 
 export async function POST(request: Request) {
