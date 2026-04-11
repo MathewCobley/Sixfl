@@ -71,6 +71,7 @@ function getDispatchOriginLabel(metadata: unknown) {
 
   return "Sent to team";
 }
+
 function getMetadataRecord(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
@@ -141,42 +142,6 @@ function formatHistoryBodyText(
     });
 
   return filteredLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-function getDispatchCta(metadata: unknown) {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return null;
-  }
-
-  const record = metadata as Record<string, unknown>;
-
-  const label =
-    typeof record.ctaLabel === "string" && record.ctaLabel.trim()
-      ? record.ctaLabel.trim()
-      : null;
-
-  const url =
-    typeof record.ctaUrl === "string" && record.ctaUrl.trim()
-      ? record.ctaUrl.trim()
-      : null;
-
-  if (!label || !url) {
-    return null;
-  }
-
-  return { label, url };
-}
-
-function formatHistoryBodyText(
-  bodyText: string,
-  cta: { label: string; url: string } | null,
-) {
-  let output = bodyText.trim().replace(/\{\{\s*cta\s*\}\}/gi, "");
-
-  if (cta) {
-    output = output.replaceAll(`${cta.label}: ${cta.url}`, "");
-  }
-
-  return output.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function getPrimaryActionButtonClass(enabled: boolean) {
@@ -1222,12 +1187,6 @@ export default async function AdminTeamPage({
     Failure: {item.failureReason}
   </div>
 ) : null}
-
-                      {item.failureReason ? (
-                        <div className="text-xs text-red-300">
-                          Failure: {item.failureReason}
-                        </div>
-                      ) : null}
                     </div>
                   ))
                 )}
