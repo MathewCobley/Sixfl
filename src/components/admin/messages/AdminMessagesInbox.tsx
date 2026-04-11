@@ -90,6 +90,7 @@ type SelectedThread = {
     direction: "INBOUND" | "OUTBOUND";
     participantRole: "ADMIN" | "CAPTAIN" | "CONTACT" | "SYSTEM";
     body: string;
+    htmlBody: string | null;
     subject: string | null;
     fromNumber: string | null;
     toNumber: string | null;
