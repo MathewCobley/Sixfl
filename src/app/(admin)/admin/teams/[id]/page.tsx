@@ -448,15 +448,16 @@ export default async function AdminTeamPage({
     const hasCaptain = Boolean(captainUser?.email);
     const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
   
-    const captainAccessLabel = team.captainClaimedAt && hasCaptain && !isAdminCaptain
-      ? "Claimed"
-      : team.captainInviteSentAt
-        ? "Invite sent"
-        : hasCaptain && !isAdminCaptain
-          ? "Captain linked"
-          : hasCaptain && isAdminCaptain
-            ? "Admin linked"
-            : "Unlinked";
+    const captainAccessLabel =
+  team.captainClaimedAt && hasCaptain && !isAdminCaptain
+    ? "Claimed"
+    : team.captainInviteSentAt
+      ? "Invite sent"
+      : hasCaptain && !isAdminCaptain
+        ? "Captain linked"
+        : hasCaptain && isAdminCaptain
+          ? "Admin linked"
+          : "Unlinked";
 
   const queuedMessage = sp.messageQueued === "1";
   const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
@@ -1265,16 +1266,7 @@ export default async function AdminTeamPage({
                 </span>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span>Captain status</span>
-                <span className="font-medium text-white">
-                  {!hasCaptain
-                    ? "Unclaimed"
-                    : claimedByCaptain
-                      ? "Claimed"
-                      : "Managed by admin"}
-                </span>
-              </div>
+              
 
               <div className="flex items-center justify-between">
                 <span>Primary email</span>
