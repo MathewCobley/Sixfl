@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -19,6 +20,15 @@ export const metadata = {
 function formatDateTime(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatShortDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -70,6 +80,87 @@ function getFixtureCountdownLabel(kickoffAt: Date) {
   return "Today";
 }
 
+function getFixtureConfirmationSummary(input: {
+  confirmation:
+    | {
+        status: FixtureCaptainConfirmationStatus;
+        confirmedAt: Date | null;
+        issueRaisedAt: Date | null;
+        lastChasedAt: Date | null;
+      }
+    | null
+    | undefined;
+  kickoffAt: Date;
+}) {
+  const confirmation = input.confirmation ?? null;
+  const diffMs = input.kickoffAt.getTime() - Date.now();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  if (confirmation?.status === "CONFIRMED") {
+    return {
+      label: "Fixture confirmed",
+      tone: "emerald" as const,
+      helper: confirmation.confirmedAt
+        ? `Confirmed ${formatShortDateTime(confirmation.confirmedAt)}`
+        : "Confirmed",
+    };
+  }
+
+  if (confirmation?.status === "ISSUE_RAISED") {
+    return {
+      label: "Issue raised",
+      tone: "amber" as const,
+      helper: confirmation.issueRaisedAt
+        ? `Raised ${formatShortDateTime(confirmation.issueRaisedAt)}`
+        : "Awaiting review",
+    };
+  }
+
+  if (diffHours <= 24) {
+    return {
+      label: "Overdue",
+      tone: "red" as const,
+      helper:
+        confirmation?.lastChasedAt != null
+          ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}`
+          : "Confirmation needed urgently",
+    };
+  }
+
+  if (diffHours <= 72) {
+    return {
+      label: "Awaiting confirmation",
+      tone: "amber" as const,
+      helper:
+        confirmation?.lastChasedAt != null
+          ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}`
+          : "Please confirm before matchday",
+    };
+  }
+
+  return {
+    label: "Awaiting confirmation",
+    tone: "neutral" as const,
+    helper:
+      confirmation?.lastChasedAt != null
+        ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}`
+        : "Confirmation window open",
+  };
+}
+
+function getToneClasses(tone: "emerald" | "amber" | "red" | "neutral") {
+  switch (tone) {
+    case "emerald":
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+    case "amber":
+      return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+    case "red":
+      return "border-red-400/20 bg-red-500/10 text-red-100";
+    default:
+      return "border-white/10 bg-white/5 text-white/75";
+  }
+}
+
 export default async function CaptainOverviewPage({
   params,
 }: {
@@ -116,6 +207,16 @@ export default async function CaptainOverviewPage({
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
         venue: { select: { name: true } },
+        captainConfirmations: {
+          where: { teamId: teamid },
+          select: {
+            status: true,
+            confirmedAt: true,
+            issueRaisedAt: true,
+            lastChasedAt: true,
+          },
+          take: 1,
+        },
       },
     }),
     prisma.fixture.findMany({
@@ -198,6 +299,13 @@ export default async function CaptainOverviewPage({
   }
 
   const nextFixture = upcomingFixtures[0] ?? null;
+  const nextFixtureConfirmation = nextFixture?.captainConfirmations[0] ?? null;
+  const nextFixtureStatus = nextFixture
+    ? getFixtureConfirmationSummary({
+        confirmation: nextFixtureConfirmation,
+        kickoffAt: nextFixture.kickoffAt,
+      })
+    : null;
 
   const needsCompletionCount = completionResults.filter((fixture) => {
     if (!fixture.result) return false;
@@ -256,10 +364,14 @@ export default async function CaptainOverviewPage({
                 : "As soon as your next match is scheduled, it will appear here."}
             </p>
 
-            {nextFixture ? (
+            {nextFixture && nextFixtureStatus ? (
               <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                  Awaiting fixture confirmation
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${getToneClasses(
+                    nextFixtureStatus.tone,
+                  )}`}
+                >
+                  {nextFixtureStatus.label}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
                   {getFixtureCountdownLabel(nextFixture.kickoffAt)}
@@ -268,6 +380,10 @@ export default async function CaptainOverviewPage({
                   {team.league?.dayOfWeek ?? "Night TBC"}
                 </span>
               </div>
+            ) : null}
+
+            {nextFixtureStatus?.helper ? (
+              <p className="mt-4 text-sm text-white/55">{nextFixtureStatus.helper}</p>
             ) : null}
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -358,44 +474,58 @@ export default async function CaptainOverviewPage({
                 No upcoming fixtures yet.
               </div>
             ) : (
-              upcomingFixtures.map((fixture, index) => (
-                <div
-                  key={fixture.id}
-                  className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-base font-semibold text-white">
-                        {getFixtureLabel({
-                          homeTeamName: fixture.homeTeam.name,
-                          awayTeamName: fixture.awayTeam.name,
-                        })}
+              upcomingFixtures.map((fixture, index) => {
+                const confirmation = fixture.captainConfirmations[0] ?? null;
+                const status = getFixtureConfirmationSummary({
+                  confirmation,
+                  kickoffAt: fixture.kickoffAt,
+                });
+
+                return (
+                  <div
+                    key={fixture.id}
+                    className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-white">
+                          {getFixtureLabel({
+                            homeTeamName: fixture.homeTeam.name,
+                            awayTeamName: fixture.awayTeam.name,
+                          })}
+                        </div>
+
+                        {index === 0 ? (
+                          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                            Next up
+                          </span>
+                        ) : null}
                       </div>
 
-                      {index === 0 ? (
-                        <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
-                          Next up
+                      <div className="mt-1 text-sm text-white/60">
+                        {formatDateTime(fixture.kickoffAt)}
+                      </div>
+                    </div>
+
+                    <div className="text-sm sm:text-right">
+                      <div className="text-white/65">
+                        {fixture.venue?.name ??
+                          team.league?.venueName ??
+                          "Venue TBC"}
+                      </div>
+                      <div className="mt-2">
+                        <span
+                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getToneClasses(
+                            status.tone,
+                          )}`}
+                        >
+                          {status.label}
                         </span>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-1 text-sm text-white/60">
-                      {formatDateTime(fixture.kickoffAt)}
+                      </div>
                     </div>
                   </div>
-
-                  <div className="text-sm text-white/65 sm:text-right">
-                    <div>
-                      {fixture.venue?.name ??
-                        team.league?.venueName ??
-                        "Venue TBC"}
-                    </div>
-                    <div className="mt-1 text-white/45">
-                      Awaiting confirmation
-                    </div>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

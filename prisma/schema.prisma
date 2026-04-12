@@ -1,6 +1,6 @@
 // ========================================
 // File: prisma/schema.prisma
-// FULL FILE - fixture match fees + Stripe checkout foundation
+// FULL FILE - fixture captain confirmation added
 // ========================================
 
 generator client {
@@ -27,13 +27,14 @@ model User {
 
   createdFromLeadId String?
 
-  accounts               Account[]
-  sessions               Session[]
-  teamMembers            TeamMember[]
-  createdTeams           Team[]          @relation("TeamCreatedBy")
-  refereedFixtures       Fixture[]       @relation("FixtureReferee")
-  enteredResults         MatchResult[]   @relation("ResultEnteredBy")
-  createdResultDisputes  ResultDispute[] @relation("ResultDisputeCreatedBy")
+  accounts                Account[]
+  sessions                Session[]
+  teamMembers             TeamMember[]
+  createdTeams            Team[]                       @relation("TeamCreatedBy")
+  refereedFixtures        Fixture[]                    @relation("FixtureReferee")
+  enteredResults          MatchResult[]                @relation("ResultEnteredBy")
+  createdResultDisputes   ResultDispute[]              @relation("ResultDisputeCreatedBy")
+  fixtureConfirmations    FixtureCaptainConfirmation[] @relation("FixtureCaptainConfirmationUser")
 
   assignedMessageThreads MessageThread[] @relation("UserAssignedMessageThreads")
   createdMessageEntries  MessageEntry[]  @relation("UserCreatedMessageEntries")
@@ -154,21 +155,22 @@ model Team {
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
-  captainUserId      String?
-  captainLinkedAt    DateTime?
+  captainUserId       String?
+  captainLinkedAt     DateTime?
   captainLinkedSource String?
   captainInviteSentAt DateTime?
   captainInviteSentTo String?
-  captainClaimedAt   DateTime?
-  captainClaimSource String?
+  captainClaimedAt    DateTime?
+  captainClaimSource  String?
 
-  members             TeamMember[]
-  homeGames           Fixture[]              @relation("HomeTeam")
-  awayGames           Fixture[]              @relation("AwayTeam")
-  resultMetadata      MatchResultTeamMeta[]
-  resultDisputes      ResultDispute[]
-  paymentCharges      PaymentCharge[]
-  paymentTransactions PaymentTransaction[]
+  members              TeamMember[]
+  homeGames            Fixture[]                    @relation("HomeTeam")
+  awayGames            Fixture[]                    @relation("AwayTeam")
+  resultMetadata       MatchResultTeamMeta[]
+  resultDisputes       ResultDispute[]
+  paymentCharges       PaymentCharge[]
+  paymentTransactions  PaymentTransaction[]
+  fixtureConfirmations FixtureCaptainConfirmation[]
 
   convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
   messageThreads    MessageThread[] @relation("TeamMessageThreads")
@@ -228,13 +230,14 @@ model Fixture {
 
   refereeId String?
 
-  league         League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  homeTeam       Team            @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
-  awayTeam       Team            @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
-  venue          Venue?          @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  referee        User?           @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
-  result         MatchResult?
-  paymentCharges PaymentCharge[]
+  league               League                       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeTeam             Team                         @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam             Team                         @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  venue                Venue?                       @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  referee              User?                        @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
+  result               MatchResult?
+  paymentCharges       PaymentCharge[]
+  captainConfirmations FixtureCaptainConfirmation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -252,6 +255,42 @@ enum FixtureStatus {
   COMPLETED
   POSTPONED
   CANCELLED
+}
+
+enum FixtureCaptainConfirmationStatus {
+  PENDING
+  CONFIRMED
+  ISSUE_RAISED
+}
+
+model FixtureCaptainConfirmation {
+  id String @id @default(cuid())
+
+  fixtureId String
+  teamId    String
+
+  status FixtureCaptainConfirmationStatus @default(PENDING)
+
+  note String?
+
+  confirmedAt   DateTime?
+  issueRaisedAt DateTime?
+  lastChasedAt  DateTime?
+
+  confirmedByUserId String?
+
+  fixture         Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  team            Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  confirmedByUser User?   @relation("FixtureCaptainConfirmationUser", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([fixtureId, teamId])
+  @@index([fixtureId, status])
+  @@index([teamId, status])
+  @@index([confirmedByUserId])
+  @@index([lastChasedAt])
 }
 
 model MatchResult {
