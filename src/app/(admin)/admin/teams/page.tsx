@@ -3,7 +3,11 @@
 // ========================================
 
 import Link from "next/link";
-import { UserRole } from "@prisma/client";
+import {
+  NotificationDispatchStatus,
+  type Prisma,
+  UserRole,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { deleteTeamAction } from "./actions";
@@ -54,6 +58,13 @@ type TeamGroup = {
   teams: TeamListItem[];
 };
 
+type InviteDispatchStatusSnapshot = {
+  status: NotificationDispatchStatus;
+  failureReason: string | null;
+  sentAt: Date | null;
+  createdAt: Date;
+};
+
 function getLeagueLabel(league: TeamListItem["league"]) {
   if (!league) return "Unassigned teams";
   return `${league.name}${league.season ? ` • ${league.season}` : ""}`;
@@ -92,7 +103,65 @@ function getContactPhone(team: TeamListItem) {
   return team.contactPhone || team.convertedFromLead?.phone || "—";
 }
 
-function getCaptainAccessState(team: TeamListItem) {
+function getMetadataRecord(metadata: Prisma.JsonValue | null) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  return metadata as Record<string, unknown>;
+}
+
+function isCaptainInviteDispatch(input: {
+  metadata: Prisma.JsonValue | null;
+  bodyText: string;
+  subject: string | null;
+}) {
+  const metadata = getMetadataRecord(input.metadata);
+
+  const templateKey =
+    typeof metadata?.templateKey === "string"
+      ? metadata.templateKey.trim().toLowerCase()
+      : "";
+
+  const ctaUrl =
+    typeof metadata?.ctaUrl === "string"
+      ? metadata.ctaUrl.trim().toLowerCase()
+      : "";
+
+  const subject = input.subject?.trim().toLowerCase() || "";
+  const body = input.bodyText.toLowerCase();
+
+  return (
+    templateKey.includes("captain") ||
+    subject.includes("captain") ||
+    subject.includes("dashboard") ||
+    body.includes("/claim?code=") ||
+    body.includes("captains dashboard") ||
+    ctaUrl.includes("/claim?code=")
+  );
+}
+
+function looksLikeBounceFailure(reason: string | null) {
+  const value = reason?.trim().toLowerCase() || "";
+
+  if (!value) return false;
+
+  return (
+    value.includes("bounce") ||
+    value.includes("bounced") ||
+    value.includes("mailbox") ||
+    value.includes("recipient rejected") ||
+    value.includes("user unknown") ||
+    value.includes("does not exist") ||
+    value.includes("invalid recipient") ||
+    value.includes("550")
+  );
+}
+
+function getCaptainAccessState(
+  team: TeamListItem,
+  latestInvite: InviteDispatchStatusSnapshot | null,
+) {
   const captainUser = team.members[0]?.user;
   const hasCaptain = Boolean(captainUser?.email);
   const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
@@ -102,6 +171,33 @@ function getCaptainAccessState(team: TeamListItem) {
       label: "Claimed",
       className:
         "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200",
+    };
+  }
+
+  if (latestInvite?.status === "FAILED") {
+    if (looksLikeBounceFailure(latestInvite.failureReason)) {
+      return {
+        label: "Invite bounced",
+        className:
+          "rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] text-rose-200",
+      };
+    }
+
+    return {
+      label: "Invite failed",
+      className:
+        "rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-200",
+    };
+  }
+
+  if (
+    latestInvite &&
+    ["QUEUED", "PROCESSING", "SENT"].includes(latestInvite.status)
+  ) {
+    return {
+      label: "Invite sent",
+      className:
+        "rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] text-sky-200",
     };
   }
 
@@ -197,6 +293,55 @@ export default async function AdminTeamsPage({
 
   const teams = await getAdminTeams();
   const groups = groupTeamsByLeague(teams);
+
+  const teamIds = teams.map((team) => team.id);
+
+  const recentDispatches = teamIds.length
+    ? await prisma.notificationDispatch.findMany({
+        where: {
+          sourceType: "TEAM",
+          sourceId: {
+            in: teamIds,
+          },
+          channel: "EMAIL",
+        },
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          sourceId: true,
+          status: true,
+          failureReason: true,
+          sentAt: true,
+          createdAt: true,
+          subject: true,
+          bodyText: true,
+          metadata: true,
+        },
+      })
+    : [];
+
+  const latestCaptainInviteByTeamId = new Map<string, InviteDispatchStatusSnapshot>();
+
+  for (const dispatch of recentDispatches) {
+    if (!dispatch.sourceId) continue;
+    if (latestCaptainInviteByTeamId.has(dispatch.sourceId)) continue;
+
+    if (
+      !isCaptainInviteDispatch({
+        metadata: dispatch.metadata,
+        bodyText: dispatch.bodyText,
+        subject: dispatch.subject,
+      })
+    ) {
+      continue;
+    }
+
+    latestCaptainInviteByTeamId.set(dispatch.sourceId, {
+      status: dispatch.status,
+      failureReason: dispatch.failureReason,
+      sentAt: dispatch.sentAt,
+      createdAt: dispatch.createdAt,
+    });
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
@@ -334,7 +479,9 @@ export default async function AdminTeamsPage({
               <div className="divide-y divide-white/10">
                 {group.teams.map((team) => {
                   const captainUser = team.members[0]?.user;
-                  const accessState = getCaptainAccessState(team);
+                  const latestInvite =
+                    latestCaptainInviteByTeamId.get(team.id) ?? null;
+                  const accessState = getCaptainAccessState(team, latestInvite);
                   const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
                     team.claimCode,
                   )}`;
