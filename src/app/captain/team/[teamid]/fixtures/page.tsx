@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/captain/team/[teamid]/page.tsx
+// File: src/app/captain/team/[teamid]/fixtures/page.tsx
 // ========================================
 
 import Link from "next/link";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Captain Overview | SIXFL",
+  title: "Captain Fixtures | SIXFL",
 };
 
 function formatDateTime(value: Date) {
@@ -26,7 +26,14 @@ function formatDateTime(value: Date) {
   });
 }
 
-function getFixtureLabel(input: {
+function getFixtureSummary(input: {
+  homeTeamName: string;
+  awayTeamName: string;
+}) {
+  return `${input.homeTeamName} vs ${input.awayTeamName}`;
+}
+
+function getCaptainFixtureLabel(input: {
   homeTeamName: string;
   awayTeamName: string;
   isHome: boolean;
@@ -40,7 +47,52 @@ function getResultLabel(goalsFor: number, goalsAgainst: number) {
   return "Draw";
 }
 
-export default async function CaptainOverviewPage({
+function getCountdownLabel(kickoffAt: Date) {
+  const now = new Date();
+  const diffMs = kickoffAt.getTime() - now.getTime();
+
+  if (diffMs <= 0) return "Kick-off time reached";
+
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays >= 2) return `${diffDays} days to go`;
+  if (diffHours >= 24) return "Tomorrow";
+  if (diffHours >= 1) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} to go`;
+  }
+
+  return "Today";
+}
+
+function getConfirmationUrgency(kickoffAt: Date) {
+  const now = new Date();
+  const diffMs = kickoffAt.getTime() - now.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  if (diffHours <= 24) {
+    return {
+      label: "Urgent confirmation needed",
+      className:
+        "border-amber-400/20 bg-amber-500/10 text-amber-100/75",
+    };
+  }
+
+  if (diffHours <= 72) {
+    return {
+      label: "Please confirm this fixture",
+      className:
+        "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/75",
+    };
+  }
+
+  return {
+    label: "Confirmation window open",
+    className: "border-white/10 bg-white/5 text-white/70",
+  };
+}
+
+export default async function CaptainFixturesPage({
   params,
 }: {
   params: Promise<{ teamid: string }>;
@@ -48,7 +100,7 @@ export default async function CaptainOverviewPage({
   const { teamid } = await params;
   await requireCaptain(teamid);
 
-  const [team, upcomingFixtures, recentResults, activeCaptainCount] = await Promise.all([
+  const [team, upcomingFixtures, recentResults] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
       select: {
@@ -72,7 +124,7 @@ export default async function CaptainOverviewPage({
         kickoffAt: { gte: new Date() },
       },
       orderBy: [{ kickoffAt: "asc" }],
-      take: 5,
+      take: 12,
       include: {
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
@@ -85,7 +137,7 @@ export default async function CaptainOverviewPage({
         result: { isNot: null },
       },
       orderBy: [{ kickoffAt: "desc" }],
-      take: 5,
+      take: 6,
       include: {
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
@@ -96,12 +148,6 @@ export default async function CaptainOverviewPage({
         },
       },
     }),
-    prisma.teamMember.count({
-      where: {
-        teamId: teamid,
-        role: "CAPTAIN",
-      },
-    }),
   ]);
 
   if (!team) {
@@ -110,79 +156,109 @@ export default async function CaptainOverviewPage({
 
   const nextFixture = upcomingFixtures[0] ?? null;
 
-  const resultsMissingScorers = recentResults.filter((fixture) => {
-    const isHome = fixture.homeTeamId === teamid;
-    const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
-    const metadata = fixture.result!.teamMetadata.find((item) => item.teamId === teamid);
-
-    return (metadata?.goalsRecorded ?? 0) < goalsFor;
-  }).length;
-
-  const resultsMissingPom = recentResults.filter((fixture) => {
-    const metadata = fixture.result!.teamMetadata.find((item) => item.teamId === teamid);
-    return !metadata?.playerOfMatchName;
-  }).length;
-
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Next fixture
-          </p>
+      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+              Fixture confirmation
+            </p>
 
-          <p className="mt-3 text-lg font-semibold text-white">
-            {nextFixture
-              ? getFixtureLabel({
-                  homeTeamName: nextFixture.homeTeam.name,
-                  awayTeamName: nextFixture.awayTeam.name,
-                  isHome: nextFixture.homeTeamId === teamid,
-                })
-              : "No upcoming fixture"}
-          </p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+              {nextFixture
+                ? getFixtureSummary({
+                    homeTeamName: nextFixture.homeTeam.name,
+                    awayTeamName: nextFixture.awayTeam.name,
+                  })
+                : "No upcoming fixture"}
+            </h2>
 
-          <p className="mt-2 text-sm text-white/60">
-            {nextFixture
-              ? `${formatDateTime(nextFixture.kickoffAt)} · ${
-                  nextFixture.venue?.name ??
-                  team.league?.venueName ??
-                  "Venue TBC"
-                }`
-              : "As soon as fixtures are scheduled they will show here."}
-          </p>
-        </div>
+            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
+              {nextFixture
+                ? `${formatDateTime(nextFixture.kickoffAt)} · ${
+                    nextFixture.venue?.name ??
+                    team.league?.venueName ??
+                    "Venue TBC"
+                  }`
+                : "Your next match will appear here as soon as it is scheduled."}
+            </p>
 
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Captain records
-          </p>
+            {nextFixture ? (
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                  Awaiting confirmation
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
+                  {getCountdownLabel(nextFixture.kickoffAt)}
+                </span>
+              </div>
+            ) : null}
 
-          <p className="mt-3 text-3xl font-semibold text-white">
-            {activeCaptainCount}
-          </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled
+                className="inline-flex cursor-not-allowed items-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-5 py-3 text-sm font-medium text-emerald-100/70"
+              >
+                Confirm fixture
+              </button>
 
-          <p className="mt-2 text-sm text-white/60">
-            Active captain membership
-            {activeCaptainCount === 1 ? "" : "s"} linked to this team.
-          </p>
-        </div>
+              <button
+                type="button"
+                disabled
+                className="inline-flex cursor-not-allowed items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/60"
+              >
+                Raise an issue
+              </button>
+            </div>
 
-        <div className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
-            Phase 1A status
-          </p>
+            <p className="mt-4 text-sm text-white/50">
+              These actions are now positioned in the captain flow and ready to
+              be wired into the fixture confirmation backend.
+            </p>
+          </div>
 
-          <p className="mt-3 text-lg font-semibold text-white">
-            Results metadata ready
-          </p>
+          <div className="space-y-3">
+            <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Before matchday
+              </p>
 
-          <p className="mt-2 text-sm text-emerald-100/75">
-            Safe release: captains can complete scorers and Player of the Match without changing official scores.
-          </p>
+              <div className="mt-4 space-y-3 text-sm text-white/70">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  Confirm your team can fulfil the fixture
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  Chase any missing player replies
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  Raise issues early if availability or attendance is a problem
+                </div>
+              </div>
+            </div>
+
+            {nextFixture ? (
+              <div
+                className={`rounded-[1.5rem] border p-5 ${getConfirmationUrgency(nextFixture.kickoffAt).className}`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                  Current focus
+                </p>
+                <p className="mt-3 text-lg font-semibold text-white">
+                  {getConfirmationUrgency(nextFixture.kickoffAt).label}
+                </p>
+                <p className="mt-2 text-sm">
+                  Keep this confirmed early so the fixture is settled well before
+                  kick-off.
+                </p>
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
@@ -190,15 +266,15 @@ export default async function CaptainOverviewPage({
                 Upcoming fixtures
               </p>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                Match schedule
+                Match list
               </h2>
             </div>
 
             <Link
-              href={`/captain/team/${teamid}/fixtures`}
-              className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+              href={`/captain/team/${teamid}`}
+              className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
             >
-              Open fixtures
+              Back to overview
             </Link>
           </div>
 
@@ -208,31 +284,49 @@ export default async function CaptainOverviewPage({
                 No upcoming fixtures yet.
               </div>
             ) : (
-              upcomingFixtures.map((fixture) => {
+              upcomingFixtures.map((fixture, index) => {
                 const isHome = fixture.homeTeamId === teamid;
-                const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
 
                 return (
                   <div
                     key={fixture.id}
-                    className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between"
                   >
                     <div>
-                      <div className="text-base font-semibold text-white">
-                        {isHome ? `vs ${opponent}` : `at ${opponent}`}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-white">
+                          {getCaptainFixtureLabel({
+                            homeTeamName: fixture.homeTeam.name,
+                            awayTeamName: fixture.awayTeam.name,
+                            isHome,
+                          })}
+                        </div>
+
+                        {index === 0 ? (
+                          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                            Next up
+                          </span>
+                        ) : null}
                       </div>
+
                       <div className="mt-1 text-sm text-white/60">
                         {formatDateTime(fixture.kickoffAt)}
                       </div>
+
+                      <div className="mt-2 text-sm text-white/50">
+                        {fixture.venue?.name ??
+                          team.league?.venueName ??
+                          "Venue TBC"}
+                      </div>
                     </div>
 
-                    <div className="text-sm text-white/65 sm:text-right">
-                      <div>
-                        {fixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}
-                      </div>
-                      <div className="mt-1 text-white/45">
-                        {team.league?.dayOfWeek ?? "Night TBC"}
-                      </div>
+                    <div className="flex flex-col items-start gap-2 lg:items-end">
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                        Awaiting confirmation
+                      </span>
+                      <span className="text-xs uppercase tracking-[0.14em] text-white/45">
+                        {getCountdownLabel(fixture.kickoffAt)}
+                      </span>
                     </div>
                   </div>
                 );
@@ -260,11 +354,19 @@ export default async function CaptainOverviewPage({
               ) : (
                 recentResults.map((fixture) => {
                   const isHome = fixture.homeTeamId === teamid;
-                  const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
-                  const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
-                  const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
+                  const opponent = isHome
+                    ? fixture.awayTeam.name
+                    : fixture.homeTeam.name;
+                  const goalsFor = isHome
+                    ? fixture.result!.homeScore
+                    : fixture.result!.awayScore;
+                  const goalsAgainst = isHome
+                    ? fixture.result!.awayScore
+                    : fixture.result!.homeScore;
                   const resultLabel = getResultLabel(goalsFor, goalsAgainst);
-                  const metadata = fixture.result!.teamMetadata.find((item) => item.teamId === teamid);
+                  const teamMeta = fixture.result!.teamMetadata.find(
+                    (item) => item.teamId === teamid,
+                  );
 
                   return (
                     <div key={fixture.id} className="px-6 py-5">
@@ -289,12 +391,12 @@ export default async function CaptainOverviewPage({
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        {(metadata?.goalsRecorded ?? 0) < goalsFor ? (
+                        {(teamMeta?.goalsRecorded ?? 0) < goalsFor ? (
                           <span className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-200">
                             Needs scorers
                           </span>
                         ) : null}
-                        {!metadata?.playerOfMatchName ? (
+                        {!teamMeta?.playerOfMatchName ? (
                           <span className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-200">
                             Needs POM
                           </span>
@@ -309,34 +411,24 @@ export default async function CaptainOverviewPage({
 
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Result actions
+              What is coming next
             </p>
             <h2 className="mt-2 text-xl font-semibold text-white">
-              Completion queue
+              Captain confirmation flow
             </h2>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-[#0d1428] p-4">
-                <p className="text-sm text-white/55">Missing scorers</p>
-                <p className="mt-2 text-3xl font-semibold text-white">
-                  {resultsMissingScorers}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-[#0d1428] p-4">
-                <p className="text-sm text-white/55">Missing POM</p>
-                <p className="mt-2 text-3xl font-semibold text-white">
-                  {resultsMissingPom}
-                </p>
-              </div>
+            <div className="mt-4 space-y-3 text-sm text-white/65">
+              <p>
+                The next step is to wire this page into persistent fixture
+                confirmation states:
+              </p>
+              <ul className="space-y-2 pl-5 text-white/60">
+                <li>Awaiting confirmation</li>
+                <li>Confirmed</li>
+                <li>Issue raised</li>
+                <li>Overdue</li>
+              </ul>
             </div>
-
-            <Link
-              href={`/captain/team/${teamid}/results`}
-              className="mt-4 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-            >
-              Manage results
-            </Link>
           </div>
         </div>
       </section>

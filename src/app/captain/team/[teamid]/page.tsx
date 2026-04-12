@@ -46,6 +46,30 @@ function getResultLabel(goalsFor: number, goalsAgainst: number) {
   return "Draw";
 }
 
+function getFixtureCountdownLabel(kickoffAt: Date) {
+  const now = new Date();
+  const diffMs = kickoffAt.getTime() - now.getTime();
+
+  if (diffMs <= 0) return "Kick-off time reached";
+
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays >= 2) {
+    return `${diffDays} days to go`;
+  }
+
+  if (diffHours >= 24) {
+    return "Tomorrow";
+  }
+
+  if (diffHours >= 1) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} to go`;
+  }
+
+  return "Today";
+}
+
 export default async function CaptainOverviewPage({
   params,
 }: {
@@ -58,7 +82,6 @@ export default async function CaptainOverviewPage({
     team,
     upcomingFixtures,
     recentResults,
-    activeCaptainCount,
     completionResults,
     activeDisputeCount,
     paymentCharges,
@@ -127,12 +150,6 @@ export default async function CaptainOverviewPage({
         },
       },
     }),
-    prisma.teamMember.count({
-      where: {
-        teamId: teamid,
-        role: "CAPTAIN",
-      },
-    }),
     prisma.fixture.findMany({
       where: {
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
@@ -190,9 +207,9 @@ export default async function CaptainOverviewPage({
       ? fixture.result.homeScore
       : fixture.result.awayScore;
 
-    const metadata = fixture.result.teamMetadata[0] ?? null;
-    const goalsRecorded = metadata?.goalsRecorded ?? 0;
-    const playerOfMatchName = metadata?.playerOfMatchName ?? null;
+    const teamMeta = fixture.result.teamMetadata[0] ?? null;
+    const goalsRecorded = teamMeta?.goalsRecorded ?? 0;
+    const playerOfMatchName = teamMeta?.playerOfMatchName ?? null;
 
     const needsScorers = goalsRecorded < goalsFor;
     const needsPom = !playerOfMatchName;
@@ -213,97 +230,109 @@ export default async function CaptainOverviewPage({
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Next fixture
-          </p>
+      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8 lg:py-8">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+              Next fixture
+            </p>
 
-          <p className="mt-3 text-lg font-semibold text-white">
-            {nextFixture
-              ? getFixtureLabel({
-                  homeTeamName: nextFixture.homeTeam.name,
-                  awayTeamName: nextFixture.awayTeam.name,
-                })
-              : "No upcoming fixture"}
-          </p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+              {nextFixture
+                ? getFixtureLabel({
+                    homeTeamName: nextFixture.homeTeam.name,
+                    awayTeamName: nextFixture.awayTeam.name,
+                  })
+                : "No upcoming fixture"}
+            </h2>
 
-          <p className="mt-2 text-sm text-white/60">
-            {nextFixture
-              ? `${formatDateTime(nextFixture.kickoffAt)} · ${
-                  nextFixture.venue?.name ??
-                  team.league?.venueName ??
-                  "Venue TBC"
-                }`
-              : "As soon as fixtures are scheduled they will show here."}
-          </p>
+            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
+              {nextFixture
+                ? `${formatDateTime(nextFixture.kickoffAt)} · ${
+                    nextFixture.venue?.name ??
+                    team.league?.venueName ??
+                    "Venue TBC"
+                  }`
+                : "As soon as your next match is scheduled, it will appear here."}
+            </p>
+
+            {nextFixture ? (
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                  Awaiting fixture confirmation
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
+                  {getFixtureCountdownLabel(nextFixture.kickoffAt)}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
+                  {team.league?.dayOfWeek ?? "Night TBC"}
+                </span>
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={`/captain/team/${teamid}/fixtures`}
+                className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+              >
+                Open fixtures
+              </Link>
+
+              <Link
+                href={`/captain/team/${teamid}/results`}
+                className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+              >
+                Manage results
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+                Action needed
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-white">
+                {needsCompletionCount}
+              </p>
+              <p className="mt-2 text-sm text-amber-100/75">
+                Result{needsCompletionCount === 1 ? "" : "s"} still need scorers
+                or Player of the Match.
+              </p>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">
+                Open issues
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-white">
+                {activeDisputeCount}
+              </p>
+              <p className="mt-2 text-sm text-red-100/75">
+                Dispute{activeDisputeCount === 1 ? "" : "s"} open or under
+                review.
+              </p>
+            </div>
+
+            <Link
+              href={`/captain/team/${teamid}/payments`}
+              className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+                Outstanding balance
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-white">
+                {formatMoney(outstandingBalance)}
+              </p>
+              <p className="mt-2 text-sm text-emerald-100/75">
+                {openChargeCount} open charge{openChargeCount === 1 ? "" : "s"}.
+              </p>
+            </Link>
+          </div>
         </div>
-
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Captain records
-          </p>
-
-          <p className="mt-3 text-3xl font-semibold text-white">
-            {activeCaptainCount}
-          </p>
-
-          <p className="mt-2 text-sm text-white/60">
-            Active captain membership
-            {activeCaptainCount === 1 ? "" : "s"} linked to this team.
-          </p>
-        </div>
-
-        <div className="rounded-[1.75rem] border border-amber-400/20 bg-amber-500/10 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-            Needs completion
-          </p>
-
-          <p className="mt-3 text-3xl font-semibold text-white">
-            {needsCompletionCount}
-          </p>
-
-          <p className="mt-2 text-sm text-amber-100/75">
-            Result{needsCompletionCount === 1 ? "" : "s"} still missing scorers
-            or Player of the Match.
-          </p>
-        </div>
-
-        <div className="rounded-[1.75rem] border border-red-400/20 bg-red-500/10 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">
-            Active disputes
-          </p>
-
-          <p className="mt-3 text-3xl font-semibold text-white">
-            {activeDisputeCount}
-          </p>
-
-          <p className="mt-2 text-sm text-red-100/75">
-            Result dispute{activeDisputeCount === 1 ? "" : "s"} currently open
-            or under review.
-          </p>
-        </div>
-
-        <Link
-          href={`/captain/team/${teamid}/payments`}
-          className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15"
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
-            Outstanding balance
-          </p>
-
-          <p className="mt-3 text-3xl font-semibold text-white">
-            {formatMoney(outstandingBalance)}
-          </p>
-
-          <p className="mt-2 text-sm text-emerald-100/75">
-            {openChargeCount} open charge{openChargeCount === 1 ? "" : "s"}.
-            Open payments
-          </p>
-        </Link>
       </section>
 
-      <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
@@ -319,7 +348,7 @@ export default async function CaptainOverviewPage({
               href={`/captain/team/${teamid}/fixtures`}
               className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
             >
-              Open fixtures
+              View all
             </Link>
           </div>
 
@@ -329,18 +358,27 @@ export default async function CaptainOverviewPage({
                 No upcoming fixtures yet.
               </div>
             ) : (
-              upcomingFixtures.map((fixture) => (
+              upcomingFixtures.map((fixture, index) => (
                 <div
                   key={fixture.id}
                   className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
-                    <div className="text-base font-semibold text-white">
-                      {getFixtureLabel({
-                        homeTeamName: fixture.homeTeam.name,
-                        awayTeamName: fixture.awayTeam.name,
-                      })}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-base font-semibold text-white">
+                        {getFixtureLabel({
+                          homeTeamName: fixture.homeTeam.name,
+                          awayTeamName: fixture.awayTeam.name,
+                        })}
+                      </div>
+
+                      {index === 0 ? (
+                        <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                          Next up
+                        </span>
+                      ) : null}
                     </div>
+
                     <div className="mt-1 text-sm text-white/60">
                       {formatDateTime(fixture.kickoffAt)}
                     </div>
@@ -353,7 +391,7 @@ export default async function CaptainOverviewPage({
                         "Venue TBC"}
                     </div>
                     <div className="mt-1 text-white/45">
-                      {team.league?.dayOfWeek ?? "Night TBC"}
+                      Awaiting confirmation
                     </div>
                   </div>
                 </div>
@@ -413,7 +451,7 @@ export default async function CaptainOverviewPage({
 
                           {hasActiveDispute ? (
                             <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">
-                              Disputed
+                              Under review
                             </span>
                           ) : null}
                         </div>
@@ -429,7 +467,6 @@ export default async function CaptainOverviewPage({
                         </div>
                         <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
                           {resultLabel}
-                          {fixture.result?.isDisputed ? " · Disputed" : ""}
                         </div>
                       </div>
                     </div>

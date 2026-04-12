@@ -24,7 +24,6 @@ export default async function CaptainTeamLayout({
     select: {
       id: true,
       name: true,
-      claimCode: true,
       league: {
         select: {
           id: true,
@@ -50,21 +49,26 @@ export default async function CaptainTeamLayout({
   return (
     <div className="min-h-screen bg-[#07130f] text-white">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
-        <header className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
-          <div className="border-b border-white/10 px-6 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              Captain Dashboard
-            </p>
-
-            <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <header className="overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
+          <div className="border-b border-white/10 px-6 py-5">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-white">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+                  SIXFL Captain Hub
+                </p>
+
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   {team.name}
                 </h1>
-                <p className="mt-2 text-sm text-white/60">
+
+                <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
+                  Matchday control, fixtures, results and payments for your team.
+                </p>
+
+                <p className="mt-3 text-sm text-white/55">
                   {team.league?.name ?? "No league assigned"}
                   {team.league?.season ? ` · ${team.league.season}` : ""}
-                  {team.league?.isActive ? " · Active" : ""}
+                  {team.league?.isActive ? " · Live season" : ""}
                 </p>
               </div>
 
@@ -78,30 +82,21 @@ export default async function CaptainTeamLayout({
                   </Link>
                 ) : null}
 
-                <div
-                  className={
-                    access.accessMode === "admin-preview"
-                      ? "rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90"
-                      : "rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90"
-                  }
-                >
-                  <div className="font-medium text-white">
-                    {access.accessMode === "admin-preview"
-                      ? "Admin preview"
-                      : "Captain access"}
+                {access.accessMode === "admin-preview" ? (
+                  <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
+                    <div className="font-medium text-white">Admin preview</div>
+                    <div className="mt-1 text-amber-100/75">
+                      Viewing the captain area as admin.
+                    </div>
                   </div>
-                  <div
-                    className={
-                      access.accessMode === "admin-preview"
-                        ? "mt-1 text-amber-100/75"
-                        : "mt-1 text-emerald-100/70"
-                    }
-                  >
-                    {access.accessMode === "admin-preview"
-                      ? "Viewing this captain dashboard as admin."
-                      : `Claim code: ${team.claimCode}`}
+                ) : (
+                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
+                    <div className="font-medium text-white">Captain access</div>
+                    <div className="mt-1 text-emerald-100/70">
+                      You are signed in to manage this team.
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
