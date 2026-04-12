@@ -158,6 +158,7 @@ type TeamMessageHistoryItem = {
   originLabel: string;
   subject: string;
   bodyText: string;
+  bodyHtml: string | null;
   recipientLabel: string;
   recipientValue: string;
   queuedAt: Date;
@@ -405,6 +406,10 @@ export default async function AdminTeamPage({
             ? "SMS message"
             : "Email"),
         bodyText: formatHistoryBodyText(dispatch.bodyText, cta),
+        bodyHtml:
+          dispatch.channel === NotificationChannel.EMAIL
+            ? dispatch.bodyHtml ?? null
+            : null,
         recipientLabel: dispatch.recipient.displayName || team.name,
         recipientValue:
           dispatch.channel === NotificationChannel.SMS
@@ -424,6 +429,7 @@ export default async function AdminTeamPage({
       originLabel: "Converted lead history",
       subject: email.subject?.trim() || "Email",
       bodyText: email.body,
+      bodyHtml: null,
       recipientLabel: team.convertedFromLead?.contactName || team.name,
       recipientValue: email.sentTo,
       queuedAt: email.sentAt,
@@ -1173,25 +1179,33 @@ export default async function AdminTeamPage({
                         </div>
                       </div>
 
-                      <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
-  {item.bodyText}
-</div>
-
-{item.cta ? (
-  <div className="mt-3">
-    <a
-      href={item.cta.url}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-    >
-      {item.cta.label}
-    </a>
-    <div className="mt-2 break-all text-xs text-emerald-300">
-      {item.cta.url}
-    </div>
+                      {item.channel === NotificationChannel.EMAIL && item.bodyHtml ? (
+  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+    <div dangerouslySetInnerHTML={{ __html: item.bodyHtml }} />
   </div>
-) : null}
+) : (
+  <>
+    <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
+      {item.bodyText}
+    </div>
+
+    {item.cta ? (
+      <div className="mt-3">
+        <a
+          href={item.cta.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+        >
+          {item.cta.label}
+        </a>
+        <div className="mt-2 break-all text-xs text-emerald-300">
+          {item.cta.url}
+        </div>
+      </div>
+    ) : null}
+  </>
+)}
 
 {item.failureReason ? (
   <div className="text-xs text-red-300">
