@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
 import { publishAndEmailLeagueFixturesAction } from "@/app/(admin)/admin/fixtures/publish-actions";
@@ -109,6 +110,17 @@ function buildPublishNotice(input: {
   return null;
 }
 
+function getFallbackConfirmationStatus(kickoffAt: Date) {
+  const diffMs = kickoffAt.getTime() - Date.now();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  if (diffHours <= 24) {
+    return "OVERDUE" as const;
+  }
+
+  return "PENDING" as const;
+}
+
 export default async function AdminFixturesPage({
   searchParams,
 }: AdminFixturesPageProps) {
@@ -194,11 +206,13 @@ export default async function AdminFixturesPage({
         },
         homeTeam: {
           select: {
+            id: true,
             name: true,
           },
         },
         awayTeam: {
           select: {
+            id: true,
             name: true,
           },
         },
@@ -206,6 +220,16 @@ export default async function AdminFixturesPage({
           select: {
             homeScore: true,
             awayScore: true,
+          },
+        },
+        captainConfirmations: {
+          select: {
+            teamId: true,
+            status: true,
+            note: true,
+            confirmedAt: true,
+            issueRaisedAt: true,
+            lastChasedAt: true,
           },
         },
       },
@@ -248,28 +272,70 @@ export default async function AdminFixturesPage({
     venues,
     referees,
     initialLeagueId: activeLeagueId,
-    fixtures: fixtures.map((fixture) => ({
-      id: fixture.id,
-      leagueId: fixture.leagueId,
-      homeTeamId: fixture.homeTeamId,
-      awayTeamId: fixture.awayTeamId,
-      venueId: fixture.venueId,
-      refereeId: fixture.refereeId,
-      homeTeamName: fixture.homeTeam?.name ?? "Unknown home team",
-      awayTeamName: fixture.awayTeam?.name ?? "Unknown away team",
-      venueName: fixture.venue?.name ?? null,
-      refereeName: fixture.referee?.name ?? fixture.referee?.email ?? null,
-      kickoffLabel: formatKickoffLabel(fixture.kickoffAt),
-      kickoffAtIso: fixture.kickoffAt ? fixture.kickoffAt.toISOString() : null,
-      publishedAtIso: fixture.publishedAt ? fixture.publishedAt.toISOString() : null,
-      round: fixture.round,
-      position: fixture.position,
-      pitch: fixture.pitch,
-      status: fixture.status,
-      matchFeePence: fixture.matchFeePence,
-      homeScore: fixture.result?.homeScore ?? null,
-      awayScore: fixture.result?.awayScore ?? null,
-    })),
+    fixtures: fixtures.map((fixture) => {
+      const homeConfirmation =
+        fixture.captainConfirmations.find(
+          (item) => item.teamId === fixture.homeTeamId,
+        ) ?? null;
+
+      const awayConfirmation =
+        fixture.captainConfirmations.find(
+          (item) => item.teamId === fixture.awayTeamId,
+        ) ?? null;
+
+      const homeConfirmationStatus =
+        homeConfirmation?.status ??
+        (fixture.status === "SCHEDULED" && fixture.kickoffAt > new Date()
+          ? getFallbackConfirmationStatus(fixture.kickoffAt)
+          : null);
+
+      const awayConfirmationStatus =
+        awayConfirmation?.status ??
+        (fixture.status === "SCHEDULED" && fixture.kickoffAt > new Date()
+          ? getFallbackConfirmationStatus(fixture.kickoffAt)
+          : null);
+
+      return {
+        id: fixture.id,
+        leagueId: fixture.leagueId,
+        homeTeamId: fixture.homeTeamId,
+        awayTeamId: fixture.awayTeamId,
+        venueId: fixture.venueId,
+        refereeId: fixture.refereeId,
+        homeTeamName: fixture.homeTeam?.name ?? "Unknown home team",
+        awayTeamName: fixture.awayTeam?.name ?? "Unknown away team",
+        venueName: fixture.venue?.name ?? null,
+        refereeName: fixture.referee?.name ?? fixture.referee?.email ?? null,
+        kickoffLabel: formatKickoffLabel(fixture.kickoffAt),
+        kickoffAtIso: fixture.kickoffAt ? fixture.kickoffAt.toISOString() : null,
+        publishedAtIso: fixture.publishedAt ? fixture.publishedAt.toISOString() : null,
+        round: fixture.round,
+        position: fixture.position,
+        pitch: fixture.pitch,
+        status: fixture.status,
+        matchFeePence: fixture.matchFeePence,
+        homeScore: fixture.result?.homeScore ?? null,
+        awayScore: fixture.result?.awayScore ?? null,
+
+        homeConfirmationStatus: homeConfirmationStatus as
+          | FixtureCaptainConfirmationStatus
+          | "OVERDUE"
+          | null,
+        homeConfirmationNote: homeConfirmation?.note ?? null,
+        homeConfirmedAtIso: homeConfirmation?.confirmedAt?.toISOString() ?? null,
+        homeIssueRaisedAtIso: homeConfirmation?.issueRaisedAt?.toISOString() ?? null,
+        homeLastChasedAtIso: homeConfirmation?.lastChasedAt?.toISOString() ?? null,
+
+        awayConfirmationStatus: awayConfirmationStatus as
+          | FixtureCaptainConfirmationStatus
+          | "OVERDUE"
+          | null,
+        awayConfirmationNote: awayConfirmation?.note ?? null,
+        awayConfirmedAtIso: awayConfirmation?.confirmedAt?.toISOString() ?? null,
+        awayIssueRaisedAtIso: awayConfirmation?.issueRaisedAt?.toISOString() ?? null,
+        awayLastChasedAtIso: awayConfirmation?.lastChasedAt?.toISOString() ?? null,
+      };
+    }),
   };
 
   return (

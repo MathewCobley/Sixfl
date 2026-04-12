@@ -6,7 +6,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { FixtureStatus } from "@prisma/client";
+import type {
+  FixtureCaptainConfirmationStatus,
+  FixtureStatus,
+} from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
 import {
@@ -72,6 +75,24 @@ type FixtureItem = {
   matchFeePence: number | null;
   homeScore: number | null;
   awayScore: number | null;
+
+  homeConfirmationStatus:
+    | FixtureCaptainConfirmationStatus
+    | "OVERDUE"
+    | null;
+  homeConfirmationNote: string | null;
+  homeConfirmedAtIso: string | null;
+  homeIssueRaisedAtIso: string | null;
+  homeLastChasedAtIso: string | null;
+
+  awayConfirmationStatus:
+    | FixtureCaptainConfirmationStatus
+    | "OVERDUE"
+    | null;
+  awayConfirmationNote: string | null;
+  awayConfirmedAtIso: string | null;
+  awayIssueRaisedAtIso: string | null;
+  awayLastChasedAtIso: string | null;
 };
 
 type FixturesAdminScreenProps = {
@@ -149,6 +170,17 @@ function formatMoneyInputValue(amountPence: number | null) {
   return (amountPence / 100).toFixed(2);
 }
 
+function formatTimestamp(value: string | null) {
+  if (!value) return null;
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function getStatusTone(status: FixtureStatus) {
   switch (status) {
     case "SCHEDULED":
@@ -172,6 +204,73 @@ function getPublishTone(publishedAtIso: string | null) {
 
 function formatPublishState(publishedAtIso: string | null) {
   return publishedAtIso ? "Published" : "Draft";
+}
+
+function getConfirmationTone(
+  status: FixtureCaptainConfirmationStatus | "OVERDUE" | null,
+) {
+  switch (status) {
+    case "CONFIRMED":
+      return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+    case "ISSUE_RAISED":
+      return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+    case "OVERDUE":
+      return "border-red-400/20 bg-red-500/10 text-red-200";
+    case "PENDING":
+      return "border-white/10 bg-white/5 text-white/75";
+    default:
+      return "border-white/10 bg-white/5 text-white/45";
+  }
+}
+
+function formatConfirmationState(
+  status: FixtureCaptainConfirmationStatus | "OVERDUE" | null,
+) {
+  switch (status) {
+    case "CONFIRMED":
+      return "Confirmed";
+    case "ISSUE_RAISED":
+      return "Issue raised";
+    case "OVERDUE":
+      return "Overdue";
+    case "PENDING":
+      return "Awaiting confirmation";
+    default:
+      return "—";
+  }
+}
+
+function getConfirmationHelper(input: {
+  status: FixtureCaptainConfirmationStatus | "OVERDUE" | null;
+  confirmedAtIso: string | null;
+  issueRaisedAtIso: string | null;
+  lastChasedAtIso: string | null;
+}) {
+  if (input.status === "CONFIRMED") {
+    return input.confirmedAtIso
+      ? `Confirmed ${formatTimestamp(input.confirmedAtIso)}`
+      : "Confirmed";
+  }
+
+  if (input.status === "ISSUE_RAISED") {
+    return input.issueRaisedAtIso
+      ? `Raised ${formatTimestamp(input.issueRaisedAtIso)}`
+      : "Issue logged";
+  }
+
+  if (input.lastChasedAtIso) {
+    return `Chased ${formatTimestamp(input.lastChasedAtIso)}`;
+  }
+
+  if (input.status === "OVERDUE") {
+    return "Needs chasing";
+  }
+
+  if (input.status === "PENDING") {
+    return "Awaiting captain action";
+  }
+
+  return null;
 }
 
 function SegmentedStatusField({
@@ -277,6 +376,52 @@ function MetricPill({
   );
 }
 
+function ConfirmationCell({
+  teamName,
+  status,
+  note,
+  confirmedAtIso,
+  issueRaisedAtIso,
+  lastChasedAtIso,
+}: {
+  teamName: string;
+  status: FixtureCaptainConfirmationStatus | "OVERDUE" | null;
+  note: string | null;
+  confirmedAtIso: string | null;
+  issueRaisedAtIso: string | null;
+  lastChasedAtIso: string | null;
+}) {
+  const helper = getConfirmationHelper({
+    status,
+    confirmedAtIso,
+    issueRaisedAtIso,
+    lastChasedAtIso,
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-medium text-white">{teamName}</div>
+
+      <span
+        className={cx(
+          "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
+          getConfirmationTone(status),
+        )}
+      >
+        {formatConfirmationState(status)}
+      </span>
+
+      {helper ? <div className="text-xs text-white/45">{helper}</div> : null}
+
+      {note ? (
+        <div className="rounded-xl border border-amber-400/15 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-100/85">
+          {note}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function FixturesAdminScreen({
   leagues,
   teams,
@@ -375,6 +520,30 @@ export default function FixturesAdminScreen({
         .filter((round): round is number => typeof round === "number"),
     );
 
+    const confirmedSides = filteredFixtures.reduce((sum, fixture) => {
+      return (
+        sum +
+        (fixture.homeConfirmationStatus === "CONFIRMED" ? 1 : 0) +
+        (fixture.awayConfirmationStatus === "CONFIRMED" ? 1 : 0)
+      );
+    }, 0);
+
+    const issueRaisedSides = filteredFixtures.reduce((sum, fixture) => {
+      return (
+        sum +
+        (fixture.homeConfirmationStatus === "ISSUE_RAISED" ? 1 : 0) +
+        (fixture.awayConfirmationStatus === "ISSUE_RAISED" ? 1 : 0)
+      );
+    }, 0);
+
+    const overdueSides = filteredFixtures.reduce((sum, fixture) => {
+      return (
+        sum +
+        (fixture.homeConfirmationStatus === "OVERDUE" ? 1 : 0) +
+        (fixture.awayConfirmationStatus === "OVERDUE" ? 1 : 0)
+      );
+    }, 0);
+
     return {
       total: filteredFixtures.length,
       completed,
@@ -382,6 +551,9 @@ export default function FixturesAdminScreen({
       published,
       drafts,
       rounds: rounds.size,
+      confirmedSides,
+      issueRaisedSides,
+      overdueSides,
     };
   }, [filteredFixtures]);
 
@@ -457,9 +629,8 @@ export default function FixturesAdminScreen({
                 Manage league fixtures properly
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-                Create one-off matches, generate full schedules, and manage
-                weeks from one premium control surface built for SIXFL league
-                operations.
+                Create one-off matches, generate full schedules, manage weeks,
+                and now review captain confirmation status from the same control surface.
               </p>
             </div>
           </div>
@@ -870,8 +1041,7 @@ export default function FixturesAdminScreen({
                 Fixtures
               </h2>
               <p className="max-w-2xl text-sm leading-6 text-white/60">
-                Review generated matches, edit details, submit results, or remove
-                incorrect fixtures without leaving the page.
+                Review generated matches, edit details, submit results, and see exactly which teams have confirmed their fixtures.
               </p>
             </div>
 
@@ -893,13 +1063,15 @@ export default function FixturesAdminScreen({
             </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-6">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-8">
             <MetricPill label="Total" value={fixtureSummary.total} />
             <MetricPill label="Draft" value={fixtureSummary.drafts} />
             <MetricPill label="Published" value={fixtureSummary.published} />
             <MetricPill label="Scheduled" value={fixtureSummary.scheduled} />
             <MetricPill label="Completed" value={fixtureSummary.completed} />
-            <MetricPill label="Weeks" value={fixtureSummary.rounds} />
+            <MetricPill label="Confirmed" value={fixtureSummary.confirmedSides} />
+            <MetricPill label="Issues" value={fixtureSummary.issueRaisedSides} />
+            <MetricPill label="Overdue" value={fixtureSummary.overdueSides} />
           </div>
         </div>
 
@@ -1126,6 +1298,9 @@ export default function FixturesAdminScreen({
                     Status
                   </th>
                   <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Confirmations
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
                     Result
                   </th>
                   <th className="px-6 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
@@ -1137,7 +1312,7 @@ export default function FixturesAdminScreen({
                 {filteredFixtures.map((fixture) => (
                   <tr
                     key={fixture.id}
-                    className="border-b border-white/5 transition hover:bg-white/[0.025]"
+                    className="border-b border-white/5 align-top transition hover:bg-white/[0.025]"
                   >
                     <td className="px-6 py-5">
                       <div className="font-medium text-white">
@@ -1189,6 +1364,28 @@ export default function FixturesAdminScreen({
                         >
                           {formatPublishState(fixture.publishedAtIso)}
                         </span>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-5">
+                      <div className="grid gap-3 xl:min-w-[320px]">
+                        <ConfirmationCell
+                          teamName={fixture.homeTeamName}
+                          status={fixture.homeConfirmationStatus}
+                          note={fixture.homeConfirmationNote}
+                          confirmedAtIso={fixture.homeConfirmedAtIso}
+                          issueRaisedAtIso={fixture.homeIssueRaisedAtIso}
+                          lastChasedAtIso={fixture.homeLastChasedAtIso}
+                        />
+
+                        <ConfirmationCell
+                          teamName={fixture.awayTeamName}
+                          status={fixture.awayConfirmationStatus}
+                          note={fixture.awayConfirmationNote}
+                          confirmedAtIso={fixture.awayConfirmedAtIso}
+                          issueRaisedAtIso={fixture.awayIssueRaisedAtIso}
+                          lastChasedAtIso={fixture.awayLastChasedAtIso}
+                        />
                       </div>
                     </td>
 
