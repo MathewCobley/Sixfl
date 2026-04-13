@@ -46,13 +46,15 @@ export async function GET(request: NextRequest) {
     },
   ];
 
-  const minStart = windows.reduce((lowest, window) =>
-    window.start < lowest ? window.start : lowest,
-  , windows[0].start);
+  const minStart = windows.reduce(
+    (lowest, window) => (window.start < lowest ? window.start : lowest),
+    windows[0].start,
+  );
 
-  const maxEnd = windows.reduce((highest, window) =>
-    window.end > highest ? window.end : highest,
-  , windows[0].end);
+  const maxEnd = windows.reduce(
+    (highest, window) => (window.end > highest ? window.end : highest),
+    windows[0].end,
+  );
 
   const fixtures = await prisma.fixture.findMany({
     where: {
