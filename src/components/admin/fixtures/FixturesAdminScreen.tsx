@@ -12,6 +12,7 @@ import type {
 } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
+import FixtureConfirmationChaseButton from "@/components/admin/fixtures/FixtureConfirmationChaseButton";
 import {
   createFixtureAction,
   deleteFixtureAction,
@@ -377,6 +378,8 @@ function MetricPill({
 }
 
 function ConfirmationCell({
+  fixtureId,
+  teamId,
   teamName,
   status,
   note,
@@ -384,6 +387,8 @@ function ConfirmationCell({
   issueRaisedAtIso,
   lastChasedAtIso,
 }: {
+  fixtureId: string;
+  teamId: string | null;
   teamName: string;
   status: FixtureCaptainConfirmationStatus | "OVERDUE" | null;
   note: string | null;
@@ -397,6 +402,9 @@ function ConfirmationCell({
     issueRaisedAtIso,
     lastChasedAtIso,
   });
+
+  const canChase =
+    Boolean(teamId) && status !== "CONFIRMED" && status !== "ISSUE_RAISED";
 
   return (
     <div className="space-y-2">
@@ -417,6 +425,13 @@ function ConfirmationCell({
         <div className="rounded-xl border border-amber-400/15 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-100/85">
           {note}
         </div>
+      ) : null}
+
+      {canChase && teamId ? (
+        <FixtureConfirmationChaseButton
+          fixtureId={fixtureId}
+          teamId={teamId}
+        />
       ) : null}
     </div>
   );
@@ -1370,6 +1385,8 @@ export default function FixturesAdminScreen({
                     <td className="px-6 py-5">
                       <div className="grid gap-3 xl:min-w-[320px]">
                         <ConfirmationCell
+                          fixtureId={fixture.id}
+                          teamId={fixture.homeTeamId}
                           teamName={fixture.homeTeamName}
                           status={fixture.homeConfirmationStatus}
                           note={fixture.homeConfirmationNote}
@@ -1379,6 +1396,8 @@ export default function FixturesAdminScreen({
                         />
 
                         <ConfirmationCell
+                          fixtureId={fixture.id}
+                          teamId={fixture.awayTeamId}
                           teamName={fixture.awayTeamName}
                           status={fixture.awayConfirmationStatus}
                           note={fixture.awayConfirmationNote}
