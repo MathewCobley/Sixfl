@@ -1,198 +1,30 @@
 // ========================================
-// File: src/app/(admin)/admin/fixtures/confirmation-actions.ts
+// File: src/components/admin/fixtures/FixtureConfirmationChaseButton.tsx
 // ========================================
 
-"use server";
+"use client";
 
-import {
-  FixtureCaptainConfirmationStatus,
-  NotificationAudience,
-  NotificationChannel,
-  NotificationDispatchStatus,
-} from "@prisma/client";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { formatDateTimeInLondon } from "@/lib/datetime/london";
-import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/requireAdmin";
-import { queueDirectNotification } from "@/lib/notifications/service";
-import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { chaseFixtureConfirmationSmsAction } from "@/app/(admin)/admin/fixtures/confirmation-actions";
 
-function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
-  const str = String(value ?? "").trim();
+type FixtureConfirmationChaseButtonProps = {
+  fixtureId: string;
+  teamId: string;
+};
 
-  if (!str) {
-    throw new Error(`${fieldName} is required.`);
-  }
-
-  return str;
-}
-
-function getSiteUrl() {
+export function FixtureConfirmationChaseButton({
+  fixtureId,
+  teamId,
+}: FixtureConfirmationChaseButtonProps) {
   return (
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    process.env.SITE_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.APP_URL?.trim() ||
-    "https://www.sixfl.co.uk"
+    <form action={chaseFixtureConfirmationSmsAction}>
+      <input type="hidden" name="fixtureId" value={fixtureId} />
+      <input type="hidden" name="teamId" value={teamId} />
+      <button
+        type="submit"
+        className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-100 transition hover:border-emerald-400/30 hover:bg-emerald-500/15"
+      >
+        Chase SMS
+      </button>
+    </form>
   );
-}
-
-function buildAbsoluteUrl(path: string) {
-  return new URL(path, getSiteUrl()).toString();
-}
-
-function formatKickoff(date: Date) {
-  return formatDateTimeInLondon(date, {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function buildAdminFixturesHref() {
-  return "/admin/fixtures";
-}
-
-function isQueuedDispatch(status: NotificationDispatchStatus) {
-  return status === NotificationDispatchStatus.QUEUED;
-}
-
-export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
-  await requireAdmin();
-
-  const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture");
-  const teamId = parseRequiredString(formData.get("teamId"), "Team");
-
-  const fixture = await prisma.fixture.findUnique({
-    where: { id: fixtureId },
-    select: {
-      id: true,
-      kickoffAt: true,
-      status: true,
-      leagueId: true,
-      league: {
-        select: {
-          id: true,
-          name: true,
-          season: true,
-          slug: true,
-        },
-      },
-      homeTeam: {
-        select: {
-          id: true,
-          name: true,
-          logoUrl: true,
-        },
-      },
-      awayTeam: {
-        select: {
-          id: true,
-          name: true,
-          logoUrl: true,
-        },
-      },
-      captainConfirmations: {
-        where: {
-          teamId,
-        },
-        select: {
-          id: true,
-          status: true,
-        },
-        take: 1,
-      },
-    },
-  });
-
-  if (!fixture) {
-    throw new Error("Fixture not found.");
-  }
-
-  const isHome = fixture.homeTeam.id === teamId;
-  const isAway = fixture.awayTeam.id === teamId;
-
-  if (!isHome && !isAway) {
-    throw new Error("Selected team is not linked to this fixture.");
-  }
-
-  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
-    redirect(buildAdminFixturesHref());
-  }
-
-  const existingConfirmation = fixture.captainConfirmations[0] ?? null;
-
-  if (existingConfirmation?.status === FixtureCaptainConfirmationStatus.CONFIRMED) {
-    redirect(buildAdminFixturesHref());
-  }
-
-  if (existingConfirmation?.status === FixtureCaptainConfirmationStatus.ISSUE_RAISED) {
-    redirect(buildAdminFixturesHref());
-  }
-
-  const team = isHome ? fixture.homeTeam : fixture.awayTeam;
-  const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
-
-  const { recipient } = await upsertTeamNotificationRecipient(teamId);
-
-  const captainFixturesUrl = buildAbsoluteUrl(`/captain/team/${teamId}/fixtures`);
-
-  const dispatch = await queueDirectNotification({
-    recipientId: recipient.id,
-    channel: NotificationChannel.SMS,
-    audience: NotificationAudience.TEAM,
-    body: [
-      `SIXFL: Please confirm your fixture.`,
-      `${team.name} vs ${opponent.name}`,
-      `${formatKickoff(fixture.kickoffAt)}`,
-      `Confirm here: ${captainFixturesUrl}`,
-    ].join("\n"),
-    isTransactional: true,
-    sourceType: "FIXTURE_CONFIRMATION_CHASE_SMS",
-    sourceId: fixture.id,
-    metadata: {
-      kind: "fixture_confirmation_chase_sms",
-      fixtureId: fixture.id,
-      leagueId: fixture.leagueId,
-      teamId,
-      teamName: team.name,
-      opponentName: opponent.name,
-    },
-  });
-
-  if (isQueuedDispatch(dispatch.status)) {
-    await prisma.fixtureCaptainConfirmation.upsert({
-      where: {
-        fixtureId_teamId: {
-          fixtureId: fixture.id,
-          teamId,
-        },
-      },
-      update: {
-        lastChasedAt: new Date(),
-      },
-      create: {
-        fixtureId: fixture.id,
-        teamId,
-        status: FixtureCaptainConfirmationStatus.PENDING,
-        lastChasedAt: new Date(),
-      },
-    });
-  }
-
-  revalidatePath("/admin/fixtures");
-  revalidatePath(`/admin/leagues/${fixture.leagueId}`);
-  revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
-  revalidatePath(`/captain/team/${teamId}`);
-  revalidatePath(`/captain/team/${teamId}/fixtures`);
-
-  if (fixture.league.slug) {
-    revalidatePath(`/leagues/${fixture.league.slug}`);
-    revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
-  }
-
-  redirect(buildAdminFixturesHref());
 }
