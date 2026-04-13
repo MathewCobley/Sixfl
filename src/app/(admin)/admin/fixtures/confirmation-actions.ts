@@ -52,8 +52,22 @@ function formatKickoff(date: Date) {
   });
 }
 
-function buildAdminFixturesHref() {
-  return "/admin/fixtures";
+function buildAdminFixturesHref(input?: {
+  notice?: "sms_queued" | "sms_skipped" | "sms_not_available" | "sms_error";
+  teamName?: string;
+}) {
+  const searchParams = new URLSearchParams();
+
+  if (input?.notice) {
+    searchParams.set("notice", input.notice);
+  }
+
+  if (input?.teamName?.trim()) {
+    searchParams.set("teamName", input.teamName.trim());
+  }
+
+  const query = searchParams.toString();
+  return query ? `/admin/fixtures?${query}` : "/admin/fixtures";
 }
 
 function isQueuedDispatch(status: NotificationDispatchStatus) {
@@ -109,34 +123,58 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
   });
 
   if (!fixture) {
-    throw new Error("Fixture not found.");
+    redirect(buildAdminFixturesHref({ notice: "sms_error" }));
   }
 
   const isHome = fixture.homeTeam.id === teamId;
   const isAway = fixture.awayTeam.id === teamId;
 
   if (!isHome && !isAway) {
-    throw new Error("Selected team is not linked to this fixture.");
-  }
-
-  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
-    redirect(buildAdminFixturesHref());
-  }
-
-  const existingConfirmation = fixture.captainConfirmations[0] ?? null;
-
-  if (existingConfirmation?.status === FixtureCaptainConfirmationStatus.CONFIRMED) {
-    redirect(buildAdminFixturesHref());
-  }
-
-  if (existingConfirmation?.status === FixtureCaptainConfirmationStatus.ISSUE_RAISED) {
-    redirect(buildAdminFixturesHref());
+    redirect(buildAdminFixturesHref({ notice: "sms_error" }));
   }
 
   const team = isHome ? fixture.homeTeam : fixture.awayTeam;
   const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
 
+  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
+    redirect(
+      buildAdminFixturesHref({
+        notice: "sms_not_available",
+        teamName: team.name,
+      }),
+    );
+  }
+
+  const existingConfirmation = fixture.captainConfirmations[0] ?? null;
+
+  if (existingConfirmation?.status === FixtureCaptainConfirmationStatus.CONFIRMED) {
+    redirect(
+      buildAdminFixturesHref({
+        notice: "sms_not_available",
+        teamName: team.name,
+      }),
+    );
+  }
+
+  if (existingConfirmation?.status === FixtureCaptainConfirmationStatus.ISSUE_RAISED) {
+    redirect(
+      buildAdminFixturesHref({
+        notice: "sms_not_available",
+        teamName: team.name,
+      }),
+    );
+  }
+
   const { recipient } = await upsertTeamNotificationRecipient(teamId);
+
+  if (!recipient.phone?.trim()) {
+    redirect(
+      buildAdminFixturesHref({
+        notice: "sms_skipped",
+        teamName: team.name,
+      }),
+    );
+  }
 
   const captainFixturesUrl = buildAbsoluteUrl(`/captain/team/${teamId}/fixtures`);
 
@@ -181,18 +219,30 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
         lastChasedAt: new Date(),
       },
     });
+
+    revalidatePath("/admin/fixtures");
+    revalidatePath(`/admin/leagues/${fixture.leagueId}`);
+    revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
+    revalidatePath(`/captain/team/${teamId}`);
+    revalidatePath(`/captain/team/${teamId}/fixtures`);
+
+    if (fixture.league.slug) {
+      revalidatePath(`/leagues/${fixture.league.slug}`);
+      revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
+    }
+
+    redirect(
+      buildAdminFixturesHref({
+        notice: "sms_queued",
+        teamName: team.name,
+      }),
+    );
   }
 
-  revalidatePath("/admin/fixtures");
-  revalidatePath(`/admin/leagues/${fixture.leagueId}`);
-  revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
-  revalidatePath(`/captain/team/${teamId}`);
-  revalidatePath(`/captain/team/${teamId}/fixtures`);
-
-  if (fixture.league.slug) {
-    revalidatePath(`/leagues/${fixture.league.slug}`);
-    revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
-  }
-
-  redirect(buildAdminFixturesHref());
+  redirect(
+    buildAdminFixturesHref({
+      notice: "sms_skipped",
+      teamName: team.name,
+    }),
+  );
 }

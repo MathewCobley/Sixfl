@@ -20,6 +20,11 @@ type PublishNotice = {
   message: string;
 };
 
+type ChaseNotice = {
+  tone: "success" | "info" | "error";
+  message: string;
+};
+
 function formatKickoffLabel(date: Date | null) {
   if (!date) return null;
 
@@ -104,6 +109,45 @@ function buildPublishNotice(input: {
     return {
       tone: "error",
       message: `Publishing fixtures for ${leagueName} could not be completed.`,
+    };
+  }
+
+  return null;
+}
+
+function buildChaseNotice(
+  searchParams: Record<string, string | string[] | undefined>,
+): ChaseNotice | null {
+  const notice = getSearchParamValue(searchParams.notice);
+  const teamName = getSearchParamValue(searchParams.teamName) ?? "that team";
+
+  if (!notice) return null;
+
+  if (notice === "sms_queued") {
+    return {
+      tone: "success",
+      message: `Chase SMS queued for ${teamName}.`,
+    };
+  }
+
+  if (notice === "sms_skipped") {
+    return {
+      tone: "info",
+      message: `SMS could not be queued for ${teamName}. Check that the team has a usable mobile number and SMS is enabled.`,
+    };
+  }
+
+  if (notice === "sms_not_available") {
+    return {
+      tone: "info",
+      message: `A chase SMS is not available for ${teamName} on this fixture.`,
+    };
+  }
+
+  if (notice === "sms_error") {
+    return {
+      tone: "error",
+      message: `Something went wrong while trying to queue the chase SMS.`,
     };
   }
 
@@ -264,6 +308,8 @@ export default async function AdminFixturesPage({
     leagues: leagues.map((league) => ({ id: league.id, name: league.name })),
   });
 
+  const chaseNotice = buildChaseNotice(resolvedSearchParams);
+
   const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
   const screenData = {
@@ -381,6 +427,23 @@ export default async function AdminFixturesPage({
               ].join(" ")}
             >
               {publishNotice.message}
+            </div>
+          </div>
+        ) : null}
+
+        {chaseNotice ? (
+          <div className="px-6 pt-6 md:px-8">
+            <div
+              className={[
+                "rounded-2xl border px-4 py-3 text-sm",
+                chaseNotice.tone === "success"
+                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                  : chaseNotice.tone === "error"
+                    ? "border-red-500/30 bg-red-500/10 text-red-100"
+                    : "border-white/10 bg-white/[0.05] text-white/75",
+              ].join(" ")}
+            >
+              {chaseNotice.message}
             </div>
           </div>
         ) : null}
