@@ -1,10 +1,13 @@
-// src/lib/leagueTable.ts
+// ========================================
+// File: src/lib/leagueTable.ts
+// ========================================
 
 import { prisma } from "@/lib/prisma";
 
 export type LeagueTableRow = {
   teamId: string;
   teamName: string;
+  teamLogoUrl: string | null;
   played: number;
   won: number;
   drawn: number;
@@ -15,73 +18,114 @@ export type LeagueTableRow = {
   points: number;
 };
 
+function createRow(input: {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+}): LeagueTableRow {
+  return {
+    teamId: input.id,
+    teamName: input.name,
+    teamLogoUrl: input.logoUrl,
+    played: 0,
+    won: 0,
+    drawn: 0,
+    lost: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    goalDifference: 0,
+    points: 0,
+  };
+}
+
+function getOrCreateRow(
+  table: Map<string, LeagueTableRow>,
+  input: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+  },
+): LeagueTableRow {
+  const existing = table.get(input.id);
+
+  if (existing) {
+    existing.teamName = input.name;
+    if (!existing.teamLogoUrl && input.logoUrl) {
+      existing.teamLogoUrl = input.logoUrl;
+    }
+    return existing;
+  }
+
+  const created = createRow(input);
+  table.set(input.id, created);
+  return created;
+}
+
 export async function getLeagueTable(leagueId: string): Promise<LeagueTableRow[]> {
-  const fixtures = await prisma.fixture.findMany({
-    where: {
-      leagueId,
-      status: "COMPLETED",
-      result: {
-        isNot: null,
+  const [teams, fixtures] = await Promise.all([
+    prisma.team.findMany({
+      where: {
+        leagueId,
       },
-    },
-    include: {
-      homeTeam: {
-        select: {
-          id: true,
-          name: true,
+      orderBy: {
+        name: "asc",
+      },
+      select: {
+        id: true,
+        name: true,
+        logoUrl: true,
+      },
+    }),
+    prisma.fixture.findMany({
+      where: {
+        leagueId,
+        status: "COMPLETED",
+        result: {
+          isNot: null,
         },
       },
-      awayTeam: {
-        select: {
-          id: true,
-          name: true,
+      include: {
+        homeTeam: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
+          },
+        },
+        awayTeam: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
+          },
+        },
+        result: {
+          select: {
+            homeScore: true,
+            awayScore: true,
+          },
         },
       },
-      result: {
-        select: {
-          homeScore: true,
-          awayScore: true,
-        },
-      },
-    },
-  });
+    }),
+  ]);
 
   const table = new Map<string, LeagueTableRow>();
 
-  function getRow(teamId: string, teamName: string): LeagueTableRow {
-    let row = table.get(teamId);
-
-    if (!row) {
-      row = {
-        teamId,
-        teamName,
-        played: 0,
-        won: 0,
-        drawn: 0,
-        lost: 0,
-        goalsFor: 0,
-        goalsAgainst: 0,
-        goalDifference: 0,
-        points: 0,
-      };
-
-      table.set(teamId, row);
-    }
-
-    return row;
+  for (const team of teams) {
+    table.set(team.id, createRow(team));
   }
 
   for (const fixture of fixtures) {
     if (!fixture.result) continue;
 
-    const home = getRow(fixture.homeTeam.id, fixture.homeTeam.name);
-    const away = getRow(fixture.awayTeam.id, fixture.awayTeam.name);
+    const home = getOrCreateRow(table, fixture.homeTeam);
+    const away = getOrCreateRow(table, fixture.awayTeam);
 
     const homeScore = fixture.result.homeScore;
     const awayScore = fixture.result.awayScore;
 
-    home.played++;
-    away.played++;
+    home.played += 1;
+    away.played += 1;
 
     home.goalsFor += homeScore;
     home.goalsAgainst += awayScore;
@@ -90,31 +134,31 @@ export async function getLeagueTable(leagueId: string): Promise<LeagueTableRow[]
     away.goalsAgainst += homeScore;
 
     if (homeScore > awayScore) {
-      home.won++;
+      home.won += 1;
       home.points += 3;
-      away.lost++;
+      away.lost += 1;
     } else if (awayScore > homeScore) {
-      away.won++;
+      away.won += 1;
       away.points += 3;
-      home.lost++;
+      home.lost += 1;
     } else {
-      home.drawn++;
-      away.drawn++;
+      home.drawn += 1;
+      away.drawn += 1;
       home.points += 1;
       away.points += 1;
     }
   }
 
-  const rows = Array.from(table.values());
-
-  for (const row of rows) {
-    row.goalDifference = row.goalsFor - row.goalsAgainst;
-  }
+  const rows = Array.from(table.values()).map((row) => ({
+    ...row,
+    goalDifference: row.goalsFor - row.goalsAgainst,
+  }));
 
   rows.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference)
+    if (b.goalDifference !== a.goalDifference) {
       return b.goalDifference - a.goalDifference;
+    }
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
     return a.teamName.localeCompare(b.teamName);
   });

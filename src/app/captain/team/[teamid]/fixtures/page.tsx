@@ -7,9 +7,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { formatDateTimeInLondon } from "@/lib/datetime/london";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -388,8 +388,9 @@ export default async function CaptainFixturesPage({
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
         result: {
-          include: {
-            teamMetadata: true,
+          select: {
+            homeScore: true,
+            awayScore: true,
           },
         },
       },
@@ -464,7 +465,7 @@ export default async function CaptainFixturesPage({
 
             {filters.saved === "issue" ? (
               <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-                Fixture issue raised successfully. Admin can now review it.
+                Fixture issue raised successfully. SIXFL will review it.
               </div>
             ) : null}
 
@@ -508,7 +509,11 @@ export default async function CaptainFixturesPage({
                     name="note"
                     rows={4}
                     placeholder="Example: We may not have enough players available and need help reviewing this fixture."
-                    defaultValue={nextConfirmation?.status === "ISSUE_RAISED" ? nextConfirmation.note ?? "" : ""}
+                    defaultValue={
+                      nextConfirmation?.status === "ISSUE_RAISED"
+                        ? nextConfirmation.note ?? ""
+                        : ""
+                    }
                     className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
                   />
 
@@ -615,9 +620,9 @@ export default async function CaptainFixturesPage({
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
-            <div className="border-b border-white/10 px-6 py-5">
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+          <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+            <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Recent results
               </p>
@@ -626,90 +631,58 @@ export default async function CaptainFixturesPage({
               </h2>
             </div>
 
-            <div className="divide-y divide-white/10">
-              {recentResults.length === 0 ? (
-                <div className="px-6 py-10 text-sm text-white/55">
-                  No results recorded yet.
-                </div>
-              ) : (
-                recentResults.map((fixture) => {
-                  const isHome = fixture.homeTeamId === teamid;
-                  const opponent = isHome
-                    ? fixture.awayTeam.name
-                    : fixture.homeTeam.name;
-                  const goalsFor = isHome
-                    ? fixture.result!.homeScore
-                    : fixture.result!.awayScore;
-                  const goalsAgainst = isHome
-                    ? fixture.result!.awayScore
-                    : fixture.result!.homeScore;
-                  const resultLabel = getResultLabel(goalsFor, goalsAgainst);
-                  const teamMeta = fixture.result!.teamMetadata.find(
-                    (item) => item.teamId === teamid,
-                  );
-
-                  return (
-                    <div key={fixture.id} className="px-6 py-5">
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <div className="text-base font-semibold text-white">
-                            {opponent}
-                          </div>
-                          <div className="mt-1 text-sm text-white/60">
-                            {formatDateTime(fixture.kickoffAt)}
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <div className="text-lg font-semibold text-white">
-                            {goalsFor} - {goalsAgainst}
-                          </div>
-                          <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
-                            {resultLabel}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        {(teamMeta?.goalsRecorded ?? 0) < goalsFor ? (
-                          <span className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-200">
-                            Needs scorers
-                          </span>
-                        ) : null}
-                        {!teamMeta?.playerOfMatchName ? (
-                          <span className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-200">
-                            Needs POM
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <Link
+              href={`/captain/team/${teamid}/results`}
+              className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+            >
+              Open results
+            </Link>
           </div>
 
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Before matchday
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
-              Confirmation flow
-            </h2>
+          <div className="divide-y divide-white/10">
+            {recentResults.length === 0 ? (
+              <div className="px-6 py-10 text-sm text-white/55">
+                No results recorded yet.
+              </div>
+            ) : (
+              recentResults.map((fixture) => {
+                const isHome = fixture.homeTeamId === teamid;
+                const opponent = isHome
+                  ? fixture.awayTeam.name
+                  : fixture.homeTeam.name;
+                const goalsFor = isHome
+                  ? fixture.result!.homeScore
+                  : fixture.result!.awayScore;
+                const goalsAgainst = isHome
+                  ? fixture.result!.awayScore
+                  : fixture.result!.homeScore;
+                const resultLabel = getResultLabel(goalsFor, goalsAgainst);
 
-            <div className="mt-4 space-y-3 text-sm text-white/65">
-              <p>Captains can now move fixtures through these states:</p>
-              <ul className="space-y-2 pl-5 text-white/60">
-                <li>Awaiting confirmation</li>
-                <li>Confirmed</li>
-                <li>Issue raised</li>
-                <li>Overdue</li>
-              </ul>
-              <p className="pt-1 text-white/50">
-                The last step after this is wiring automated chase reminders into
-                your messaging layer.
-              </p>
-            </div>
+                return (
+                  <div key={fixture.id} className="px-6 py-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-base font-semibold text-white">
+                          {opponent}
+                        </div>
+                        <div className="mt-1 text-sm text-white/60">
+                          {formatDateTime(fixture.kickoffAt)}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-lg font-semibold text-white">
+                          {goalsFor} - {goalsAgainst}
+                        </div>
+                        <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
+                          {resultLabel}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </section>
