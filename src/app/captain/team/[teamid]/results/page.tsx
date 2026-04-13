@@ -6,9 +6,10 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { ResultDisputeStatus, ResultDisputeType } from "@prisma/client";
 
+import FormListboxField from "@/components/ui/FormListboxField";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import FormListboxField from "@/components/ui/FormListboxField";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,10 @@ type ScorerRow = {
   goals: number;
 };
 
+const RESULT_DISPUTE_WINDOW_HOURS = 72;
+const RESULT_DISPUTE_WINDOW_MS =
+  RESULT_DISPUTE_WINDOW_HOURS * 60 * 60 * 1000;
+
 const outcomeOptions = [
   { value: "", label: "All outcomes" },
   { value: "W", label: "Wins" },
@@ -43,12 +48,30 @@ const disputeTypeOptions = [
 ];
 
 function formatDate(date: Date) {
-  return date.toLocaleDateString("en-GB", {
+  return formatDateTimeInLondon(date, {
     weekday: "short",
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
+}
+
+function formatDateTime(date: Date) {
+  return formatDateTimeInLondon(date, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getResultDisputeDeadline(enteredAt: Date) {
+  return new Date(enteredAt.getTime() + RESULT_DISPUTE_WINDOW_MS);
+}
+
+function isResultDisputeWindowOpen(enteredAt: Date, now = new Date()) {
+  return now.getTime() <= getResultDisputeDeadline(enteredAt).getTime();
 }
 
 function getGoalsFor(
@@ -128,6 +151,10 @@ function getFriendlyErrorMessage(error: unknown) {
 
     if (error.message.includes("An active dispute already exists")) {
       return "There is already an open dispute for this result from your team.";
+    }
+
+    if (error.message.includes("Dispute window has closed")) {
+      return "This result can only be disputed within 72 hours of being entered.";
     }
 
     return error.message;
@@ -225,10 +252,6 @@ async function createResultDispute(formData: FormData) {
   const access = await requireCaptain(teamid);
 
   try {
-    if (description.length < 10) {
-      throw new Error("Dispute reason must be at least 10 characters.");
-    }
-
     const result = await prisma.matchResult.findUnique({
       where: { id: resultId },
       include: {
@@ -250,6 +273,14 @@ async function createResultDispute(formData: FormData) {
       result.fixture.awayTeamId !== teamid
     ) {
       throw new Error("This result does not belong to the selected team.");
+    }
+
+    if (!isResultDisputeWindowOpen(result.enteredAt)) {
+      throw new Error("Dispute window has closed for this result.");
+    }
+
+    if (description.length < 10) {
+      throw new Error("Dispute reason must be at least 10 characters.");
     }
 
     const existing = await prisma.resultDispute.findFirst({
@@ -356,6 +387,12 @@ export default async function CaptainResultsPage({
         : [];
       const needsScorers = (metadata?.goalsRecorded ?? 0) < goalsFor;
       const needsPom = !metadata?.playerOfMatchName;
+      const disputeDeadlineAt = getResultDisputeDeadline(
+        fixture.result!.enteredAt,
+      );
+      const isDisputeWindowOpenNow = isResultDisputeWindowOpen(
+        fixture.result!.enteredAt,
+      );
 
       return {
         fixture,
@@ -368,6 +405,8 @@ export default async function CaptainResultsPage({
         needsScorers,
         needsPom,
         latestDispute,
+        disputeDeadlineAt,
+        isDisputeWindowOpenNow,
       };
     })
     .filter((row) => {
@@ -394,12 +433,13 @@ export default async function CaptainResultsPage({
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <p className="text-sm uppercase tracking-[0.2em] text-emerald-300/80">
-          Page title
+          Results
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Results</h1>
         <p className="mt-2 text-sm text-white/65">
           Complete scorers and Player of the Match safely. Official scores
-          remain admin-owned in this phase.
+          remain admin-owned, and disputes must be raised within 72 hours of
+          result entry.
         </p>
       </section>
 
@@ -498,7 +538,15 @@ export default async function CaptainResultsPage({
                     <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-sm text-amber-100">
                       Dispute: {row.latestDispute.status}
                     </span>
-                  ) : null}
+                  ) : row.isDisputeWindowOpenNow ? (
+                    <span className="rounded-full border border-white/10 px-3 py-1 text-sm text-white/70">
+                      Dispute open
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-white/10 px-3 py-1 text-sm text-white/45">
+                      Dispute closed
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -545,6 +593,10 @@ export default async function CaptainResultsPage({
                           <span className="text-white/45">Reason:</span>{" "}
                           {row.latestDispute.description}
                         </p>
+                        <p>
+                          <span className="text-white/45">Raised:</span>{" "}
+                          {formatDateTime(row.latestDispute.createdAt)}
+                        </p>
                         {row.latestDispute.adminNote ? (
                           <p>
                             <span className="text-white/45">Admin note:</span>{" "}
@@ -552,36 +604,49 @@ export default async function CaptainResultsPage({
                           </p>
                         ) : null}
                       </div>
+                    ) : row.isDisputeWindowOpenNow ? (
+                      <>
+                        <p className="mt-3 text-sm text-white/60">
+                          You can raise a dispute until{" "}
+                          {formatDateTime(row.disputeDeadlineAt)}.
+                        </p>
+
+                        <form action={createResultDispute} className="mt-3">
+                          <input type="hidden" name="teamid" value={team.id} />
+                          <input
+                            type="hidden"
+                            name="resultId"
+                            value={row.fixture.result!.id}
+                          />
+
+                          <FormListboxField
+                            name="type"
+                            value="GENERAL"
+                            options={disputeTypeOptions}
+                            placeholder="Select dispute type"
+                          />
+
+                          <textarea
+                            name="description"
+                            rows={4}
+                            placeholder="Explain what is wrong with this result or why it needs review."
+                            className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
+                          />
+
+                          <button
+                            type="submit"
+                            className="mt-3 rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100"
+                          >
+                            Raise dispute
+                          </button>
+                        </form>
+                      </>
                     ) : (
-                      <form action={createResultDispute} className="mt-3">
-                        <input type="hidden" name="teamid" value={team.id} />
-                        <input
-                          type="hidden"
-                          name="resultId"
-                          value={row.fixture.result!.id}
-                        />
-
-                        <FormListboxField
-                          name="type"
-                          value="GENERAL"
-                          options={disputeTypeOptions}
-                          placeholder="Select dispute type"
-                        />
-
-                        <textarea
-                          name="description"
-                          rows={4}
-                          placeholder="Explain what is wrong with this result or why it needs review."
-                          className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
-                        />
-
-                        <button
-                          type="submit"
-                          className="mt-3 rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100"
-                        >
-                          Raise dispute
-                        </button>
-                      </form>
+                      <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/65">
+                        This result can no longer be disputed. The 72-hour
+                        dispute window closed on{" "}
+                        {formatDateTime(row.disputeDeadlineAt)}.
+                      </div>
                     )}
                   </div>
                 </div>
