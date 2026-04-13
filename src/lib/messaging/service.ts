@@ -2,7 +2,11 @@
 // File: src/lib/messaging/service.ts
 // ========================================
 
-import { Prisma, type InboxAlertStatus, type MessageThreadStatus } from "@prisma/client";
+import {
+  Prisma,
+  type InboxAlertStatus,
+  type MessageThreadStatus,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 
@@ -152,7 +156,9 @@ async function createThreadFromRecipient(params: {
   const metadataLeagueId =
     metadata && typeof metadata.leagueId === "string" ? metadata.leagueId : null;
   const metadataContactName =
-    metadata && typeof metadata.contactName === "string" ? metadata.contactName : null;
+    metadata && typeof metadata.contactName === "string"
+      ? metadata.contactName
+      : null;
 
   return prisma.messageThread.create({
     data: {
@@ -164,7 +170,8 @@ async function createThreadFromRecipient(params: {
       contactName: params.recipient?.displayName ?? metadataContactName ?? null,
       contactPhone: params.recipient?.phone ?? params.fallbackPhone,
       phoneNormalized:
-        params.recipient?.phoneNormalized ?? normalizePhoneNumber(params.fallbackPhone),
+        params.recipient?.phoneNormalized ??
+        normalizePhoneNumber(params.fallbackPhone),
       status: "OPEN",
     },
   });
@@ -257,12 +264,18 @@ async function updateThreadSummary({ threadId }: UpdateThreadSummaryInput) {
   await prisma.messageThread.update({
     where: { id: threadId },
     data: {
-      latestMessageAt: latestMessage?.receivedAt ?? latestMessage?.sentAt ?? latestMessage?.createdAt ?? null,
+      latestMessageAt:
+        latestMessage?.receivedAt ??
+        latestMessage?.sentAt ??
+        latestMessage?.createdAt ??
+        null,
       latestInboundAt: latestInbound?.receivedAt ?? latestInbound?.createdAt ?? null,
       latestOutboundAt: latestOutbound?.sentAt ?? latestOutbound?.createdAt ?? null,
       lastInboundMessageId: latestInbound?.id ?? null,
       lastOutboundMessageId: latestOutbound?.id ?? null,
-      lastMessagePreview: latestMessage?.body ? buildLastMessagePreview(latestMessage.body) : null,
+      lastMessagePreview: latestMessage?.body
+        ? buildLastMessagePreview(latestMessage.body)
+        : null,
       unreadForAdminCount: unreadInboundCount,
     },
   });
@@ -343,7 +356,7 @@ export async function recordInboundSms(input: InboundSmsInput) {
       channel: "SMS",
       direction: "INBOUND",
       participantRole: "CONTACT",
-      body: input.body.trim(),
+      body: input.body,
       fromNumber: normalizedFrom,
       toNumber: normalizedTo,
       provider: "twilio",
@@ -434,7 +447,7 @@ export async function recordOutboundSms(input: RecordOutboundSmsInput) {
       channel: "SMS",
       direction: "OUTBOUND",
       participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
-      body: input.body.trim(),
+      body: input.body,
       fromNumber: normalizePhoneNumber(input.fromNumber),
       toNumber: normalizePhoneNumber(input.toNumber ?? input.phone),
       provider: input.provider ?? "twilio",
@@ -526,41 +539,42 @@ export async function reopenMessageThread(threadId: string) {
 }
 
 export async function getAdminInboxSummary() {
-  const [unreadThreads, openThreads, unreadMessages, latestInbound] = await Promise.all([
-    prisma.messageThread.count({
-      where: {
-        unreadForAdminCount: {
-          gt: 0,
-        },
-      },
-    }),
-    prisma.messageThread.count({
-      where: {
-        status: "OPEN",
-      },
-    }),
-    prisma.messageEntry.count({
-      where: {
-        direction: "INBOUND",
-        readAt: null,
-      },
-    }),
-    prisma.messageEntry.findFirst({
-      where: {
-        direction: "INBOUND",
-      },
-      orderBy: [{ createdAt: "desc" }],
-      include: {
-        thread: {
-          include: {
-            team: true,
-            league: true,
-            recipient: true,
+  const [unreadThreads, openThreads, unreadMessages, latestInbound] =
+    await Promise.all([
+      prisma.messageThread.count({
+        where: {
+          unreadForAdminCount: {
+            gt: 0,
           },
         },
-      },
-    }),
-  ]);
+      }),
+      prisma.messageThread.count({
+        where: {
+          status: "OPEN",
+        },
+      }),
+      prisma.messageEntry.count({
+        where: {
+          direction: "INBOUND",
+          readAt: null,
+        },
+      }),
+      prisma.messageEntry.findFirst({
+        where: {
+          direction: "INBOUND",
+        },
+        orderBy: [{ createdAt: "desc" }],
+        include: {
+          thread: {
+            include: {
+              team: true,
+              league: true,
+              recipient: true,
+            },
+          },
+        },
+      }),
+    ]);
 
   return {
     unreadThreads,
@@ -609,7 +623,11 @@ export async function getAdminInboxThreads(filters: InboxThreadListFilters = {})
         take: 1,
       },
     },
-    orderBy: [{ unreadForAdminCount: "desc" }, { latestMessageAt: "desc" }, { updatedAt: "desc" }],
+    orderBy: [
+      { unreadForAdminCount: "desc" },
+      { latestMessageAt: "desc" },
+      { updatedAt: "desc" },
+    ],
     take: limit,
   });
 }

@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { useFormStatus } from "react-dom";
 import {
   archiveMessageThreadAction,
@@ -16,6 +16,8 @@ import {
 } from "@/app/(admin)/admin/messages/actions";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+const TRAILING_URL_PUNCTUATION_REGEX = /[),.!?]+$/;
 
 type SelectedThread = {
   id: string;
@@ -82,6 +84,76 @@ type Notice = {
   message: string;
 };
 
+function splitTrailingUrlPunctuation(url: string): {
+  href: string;
+  trailing: string;
+} {
+  const match = url.match(TRAILING_URL_PUNCTUATION_REGEX);
+  const trailing = match?.[0] ?? "";
+  const href = trailing ? url.slice(0, -trailing.length) : url;
+
+  return {
+    href,
+    trailing,
+  };
+}
+
+function renderLinkedText(body: string, linkClassName: string) {
+  return body.split(URL_REGEX).map((part, index) => {
+    if (part.startsWith("http://") || part.startsWith("https://")) {
+      const { href, trailing } = splitTrailingUrlPunctuation(part);
+
+      if (!href) {
+        return <Fragment key={`text-${index}`}>{part}</Fragment>;
+      }
+
+      return (
+        <Fragment key={`link-${index}`}>
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={linkClassName}
+          >
+            {href}
+          </a>
+          {trailing}
+        </Fragment>
+      );
+    }
+
+    return <Fragment key={`text-${index}`}>{part}</Fragment>;
+  });
+}
+
+function PlainTextBody({
+  body,
+  className,
+  linkClassName,
+}: {
+  body: string;
+  className: string;
+  linkClassName: string;
+}) {
+  return (
+    <div className={className}>
+      {renderLinkedText(body, linkClassName)}
+    </div>
+  );
+}
+
+function SmsTranscriptPreview({ body }: { body: string }) {
+  return (
+    <div className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-black/40 px-4 py-4 sm:px-5">
+      <PlainTextBody
+        body={body}
+        className="whitespace-pre-wrap break-words text-[15px] leading-7 text-white"
+        linkClassName="font-medium text-white underline underline-offset-4 transition hover:opacity-80"
+      />
+    </div>
+  );
+}
+
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
 
@@ -141,7 +213,9 @@ function getStatusTone(status: NonNullable<SelectedThread>["status"]): string {
   }
 }
 
-function getMessageMeta(message: NonNullable<SelectedThread>["messages"][number]): string {
+function getMessageMeta(
+  message: NonNullable<SelectedThread>["messages"][number],
+): string {
   if (message.direction === "INBOUND") {
     return `Received ${formatDateTime(message.receivedAt || message.createdAt)}`;
   }
@@ -168,7 +242,9 @@ function getMessageRoleLabel(
   }
 }
 
-function getNotice(searchParams: ReturnType<typeof useSearchParams>): Notice | null {
+function getNotice(
+  searchParams: ReturnType<typeof useSearchParams>,
+): Notice | null {
   const error = searchParams.get("error");
 
   if (error) {
@@ -191,7 +267,8 @@ function getNotice(searchParams: ReturnType<typeof useSearchParams>): Notice | n
       case "not_sms":
         return {
           tone: "info",
-          message: "This is an email thread. Replying from the inbox is not wired yet, so use your email client for now.",
+          message:
+            "This is an email thread. Replying from the inbox is not wired yet, so use your email client for now.",
         };
       case "thread_not_open":
         return {
@@ -320,10 +397,11 @@ export default function AdminMessageThread({
     thread.recipient?.email ||
     thread.emailNormalized ||
     thread.replyAddress;
-  const canReply = isSmsThread && Boolean(replyPhoneRaw) && thread.status === "OPEN";
+  const canReply =
+    isSmsThread && Boolean(replyPhoneRaw) && thread.status === "OPEN";
 
   const replyHelpText = !isSmsThread
-    ? `This is an email thread. Incoming replies appear here, but replying from the admin inbox is not wired yet. Reply from your email client for now.`
+    ? "This is an email thread. Incoming replies appear here, but replying from the admin inbox is not wired yet. Reply from your email client for now."
     : !replyPhoneRaw
       ? "This thread has no valid phone number yet, so SMS reply is unavailable."
       : thread.status !== "OPEN"
@@ -386,13 +464,20 @@ export default function AdminMessageThread({
                 <h2 className="text-2xl font-semibold tracking-tight text-white">
                   {title}
                 </h2>
-                <p className="mt-2 text-sm text-white/55">{getAudienceLabel(thread)}</p>
+                <p className="mt-2 text-sm text-white/55">
+                  {getAudienceLabel(thread)}
+                </p>
               </div>
 
               <div className="flex flex-wrap gap-2 text-xs text-white/45">
                 {thread.channel === "SMS" ? (
                   <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-                    Phone: {formatPhone(thread.contactPhone || thread.recipient?.phone || thread.phoneNormalized)}
+                    Phone:{" "}
+                    {formatPhone(
+                      thread.contactPhone ||
+                        thread.recipient?.phone ||
+                        thread.phoneNormalized,
+                    )}
                   </span>
                 ) : (
                   <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
@@ -512,14 +597,20 @@ export default function AdminMessageThread({
           </div>
         </div>
 
-        {notice ? <div className="mt-5"><NoticeBanner notice={notice} /></div> : null}
+        {notice ? (
+          <div className="mt-5">
+            <NoticeBanner notice={notice} />
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-6 p-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-white">Conversation timeline</h3>
+              <h3 className="text-lg font-semibold text-white">
+                Conversation timeline
+              </h3>
               <p className="mt-1 text-sm text-white/50">
                 Newest messages first across SMS and email.
               </p>
@@ -538,6 +629,11 @@ export default function AdminMessageThread({
             <div className="space-y-4">
               {orderedMessages.map((message) => {
                 const isInbound = message.direction === "INBOUND";
+                const isHtmlEmailPreview =
+                  message.direction === "OUTBOUND" &&
+                  message.channel === "EMAIL" &&
+                  Boolean(message.htmlBody);
+                const isSmsPreview = message.channel === "SMS";
 
                 return (
                   <div
@@ -553,40 +649,70 @@ export default function AdminMessageThread({
                       ].join(" ")}
                     >
                       <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
-                        <span className={isInbound ? "text-white/45" : "text-emerald-200/80"}>
+                        <span
+                          className={
+                            isInbound ? "text-white/45" : "text-emerald-200/80"
+                          }
+                        >
                           {getMessageRoleLabel(message)}
                         </span>
-                        <span className={isInbound ? "text-white/25" : "text-emerald-200/50"}>
+                        <span
+                          className={
+                            isInbound ? "text-white/25" : "text-emerald-200/50"
+                          }
+                        >
                           •
                         </span>
-                        <span className={isInbound ? "text-white/45" : "text-emerald-200/80"}>
+                        <span
+                          className={
+                            isInbound ? "text-white/45" : "text-emerald-200/80"
+                          }
+                        >
                           {message.channel}
                         </span>
-                        <span className={isInbound ? "text-white/25" : "text-emerald-200/50"}>
+                        <span
+                          className={
+                            isInbound ? "text-white/25" : "text-emerald-200/50"
+                          }
+                        >
                           •
                         </span>
-                        <span className={isInbound ? "text-white/45" : "text-emerald-200/80"}>
+                        <span
+                          className={
+                            isInbound ? "text-white/45" : "text-emerald-200/80"
+                          }
+                        >
                           {getMessageMeta(message)}
                         </span>
                       </div>
 
                       {message.subject ? (
-  <div className="mb-3 text-sm font-semibold text-white/90">
-    {message.subject}
-  </div>
-) : null}
+                        <div className="mb-3 text-sm font-semibold text-white/90">
+                          {message.subject}
+                        </div>
+                      ) : null}
 
-{message.direction === "OUTBOUND" &&
-message.channel === "EMAIL" &&
-message.htmlBody ? (
-  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-    <div dangerouslySetInnerHTML={{ __html: message.htmlBody }} />
-  </div>
-) : (
-  <div className="whitespace-pre-wrap text-sm leading-6">
-    {message.body}
-  </div>
-)}
+                      {isHtmlEmailPreview ? (
+                        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+                          <div
+                            dangerouslySetInnerHTML={{
+                              __html: message.htmlBody ?? "",
+                            }}
+                          />
+                        </div>
+                      ) : isSmsPreview ? (
+                        <SmsTranscriptPreview body={message.body} />
+                      ) : (
+                        <PlainTextBody
+                          body={message.body}
+                          className="whitespace-pre-wrap break-words text-sm leading-6"
+                          linkClassName={
+                            isInbound
+                              ? "font-medium text-white underline underline-offset-4 transition hover:opacity-80"
+                              : "font-medium text-emerald-50 underline underline-offset-4 transition hover:opacity-80"
+                          }
+                        />
+                      )}
 
                       <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
                         {message.fromNumber ? (
@@ -727,7 +853,10 @@ message.htmlBody ? (
                   Email
                 </div>
                 <div className="mt-1 text-white/80">
-                  {thread.contactEmail || thread.recipient?.email || thread.emailNormalized || "—"}
+                  {thread.contactEmail ||
+                    thread.recipient?.email ||
+                    thread.emailNormalized ||
+                    "—"}
                 </div>
               </div>
 
@@ -736,7 +865,11 @@ message.htmlBody ? (
                   Phone
                 </div>
                 <div className="mt-1 text-white/80">
-                  {formatPhone(thread.contactPhone || thread.recipient?.phone || thread.phoneNormalized)}
+                  {formatPhone(
+                    thread.contactPhone ||
+                      thread.recipient?.phone ||
+                      thread.phoneNormalized,
+                  )}
                 </div>
               </div>
 

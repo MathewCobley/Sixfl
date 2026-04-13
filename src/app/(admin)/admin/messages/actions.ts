@@ -19,8 +19,12 @@ import { sendSmsWithTwilio } from "@/lib/notifications/providers/twilio";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
 
+function getStringValue(value: FormDataEntryValue | null): string {
+  return typeof value === "string" ? value : "";
+}
+
 function getTrimmedValue(value: FormDataEntryValue | null): string {
-  return typeof value === "string" ? value.trim() : "";
+  return getStringValue(value).trim();
 }
 
 function buildMessagesHref(params: {
@@ -98,13 +102,13 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
 
   const threadId = getTrimmedValue(formData.get("threadId"));
   const filter = getTrimmedValue(formData.get("filter")) || "open";
-  const body = getTrimmedValue(formData.get("body"));
+  const body = getStringValue(formData.get("body"));
 
   if (!threadId) {
     redirect(buildMessagesHref({ extras: { error: "missing_thread" } }));
   }
 
-  if (!body) {
+  if (!body.trim()) {
     redirect(
       buildMessagesHref({
         filter,
