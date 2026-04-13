@@ -12,7 +12,7 @@ import type {
 } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
-import FixtureConfirmationChaseButton from "@/components/admin/fixtures/FixtureConfirmationChaseButton";
+import { FixtureConfirmationChaseButton } from "@/components/admin/fixtures/FixtureConfirmationChaseButton";
 import {
   createFixtureAction,
   deleteFixtureAction,
