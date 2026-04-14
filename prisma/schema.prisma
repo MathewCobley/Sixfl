@@ -230,6 +230,17 @@ model Fixture {
 
   refereeId String?
 
+  socialPostType        SocialPostType   @default(NONE)
+  socialPostStatus      SocialPostStatus @default(NONE)
+  socialCaption         String?
+  socialImageUrl        String?
+  socialDraftExternalId String?
+  socialLastError       String?
+  socialNeedsApproval   Boolean          @default(true)
+  socialQueuedAt        DateTime?
+  socialApprovedAt      DateTime?
+  socialPublishedAt     DateTime?
+
   league               League                       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   homeTeam             Team                         @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
   awayTeam             Team                         @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
@@ -248,6 +259,8 @@ model Fixture {
   @@index([homeTeamId])
   @@index([awayTeamId])
   @@index([refereeId])
+  @@index([socialPostStatus])
+  @@index([socialPostType])
 }
 
 enum FixtureStatus {
@@ -255,6 +268,22 @@ enum FixtureStatus {
   COMPLETED
   POSTPONED
   CANCELLED
+}
+
+enum SocialPostType {
+  NONE
+  RESULT
+  FIXTURE
+  UPDATE
+}
+
+enum SocialPostStatus {
+  NONE
+  QUEUED
+  DRAFTED
+  APPROVED
+  PUBLISHED
+  FAILED
 }
 
 enum FixtureCaptainConfirmationStatus {

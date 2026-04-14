@@ -9,6 +9,8 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   FixtureCaptainConfirmationStatus,
   FixtureStatus,
+  SocialPostStatus,
+  SocialPostType,
 } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
@@ -21,6 +23,11 @@ import {
   submitResultAction,
   updateFixtureAction,
 } from "@/app/(admin)/admin/fixtures/actions";
+import {
+  approveFixtureSocialPostAction,
+  generateFixtureSocialDraftAction,
+  resetFixtureSocialPostAction,
+} from "@/app/(admin)/admin/fixtures/social-actions";
 import {
   toLondonDateInputValue,
   toLondonTimeInputValue,
@@ -76,6 +83,16 @@ type FixtureItem = {
   matchFeePence: number | null;
   homeScore: number | null;
   awayScore: number | null;
+  resultIsDisputed: boolean;
+
+  socialPostType: SocialPostType;
+  socialPostStatus: SocialPostStatus;
+  socialNeedsApproval: boolean;
+  socialCaption: string | null;
+  socialImageUrl: string | null;
+  socialQueuedAtIso: string | null;
+  socialApprovedAtIso: string | null;
+  socialPublishedAtIso: string | null;
 
   homeConfirmationStatus:
     | FixtureCaptainConfirmationStatus
@@ -239,6 +256,98 @@ function formatConfirmationState(
     default:
       return "—";
   }
+}
+function getSocialStatusTone(status: SocialPostStatus) {
+  switch (status) {
+    case "PUBLISHED":
+      return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+    case "APPROVED":
+      return "border-sky-400/20 bg-sky-400/10 text-sky-200";
+    case "DRAFTED":
+      return "border-violet-400/20 bg-violet-400/10 text-violet-200";
+    case "QUEUED":
+      return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+    case "FAILED":
+      return "border-rose-400/20 bg-rose-500/10 text-rose-200";
+    case "NONE":
+    default:
+      return "border-white/10 bg-white/5 text-white/70";
+  }
+}
+
+function formatSocialStatus(status: SocialPostStatus) {
+  switch (status) {
+    case "NONE":
+      return "Not drafted";
+    case "QUEUED":
+      return "Queued";
+    case "DRAFTED":
+      return "Draft ready";
+    case "APPROVED":
+      return "Approved";
+    case "PUBLISHED":
+      return "Published";
+    case "FAILED":
+      return "Failed";
+    default:
+      return status;
+  }
+}
+
+function formatSocialType(type: SocialPostType) {
+  switch (type) {
+    case "RESULT":
+      return "Result";
+    case "FIXTURE":
+      return "Fixture";
+    case "UPDATE":
+      return "Update";
+    case "NONE":
+    default:
+      return "Not set";
+  }
+}
+
+function getSocialReadiness(fixture: FixtureItem) {
+  if (fixture.resultIsDisputed) {
+    return {
+      canDraft: false,
+      reason: "Blocked because the result is disputed.",
+    };
+  }
+
+  if (fixture.status === "COMPLETED") {
+    if (fixture.homeScore === null || fixture.awayScore === null) {
+      return {
+        canDraft: false,
+        reason: "Completed fixtures need a score before creating a result draft.",
+      };
+    }
+
+    return {
+      canDraft: true,
+      reason: "Ready for a result post draft.",
+    };
+  }
+
+  if (fixture.status === "SCHEDULED") {
+    return {
+      canDraft: true,
+      reason: "Ready for a fixture post draft.",
+    };
+  }
+
+  if (fixture.status === "POSTPONED" || fixture.status === "CANCELLED") {
+    return {
+      canDraft: true,
+      reason: "Ready for an update post draft.",
+    };
+  }
+
+  return {
+    canDraft: false,
+    reason: "This fixture is not ready for a social draft.",
+  };
 }
 
 function getConfirmationHelper(input: {
@@ -436,7 +545,110 @@ function ConfirmationCell({
     </div>
   );
 }
+function SocialCell({ fixture }: { fixture: FixtureItem }) {
+  const readiness = getSocialReadiness(fixture);
+  const hasDraft = fixture.socialPostStatus !== "NONE";
+  const canApprove =
+    fixture.socialNeedsApproval &&
+    (fixture.socialPostStatus === "DRAFTED" || fixture.socialPostStatus === "QUEUED");
 
+  return (
+    <div className="min-w-[320px] space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <span
+          className={cx(
+            "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
+            getSocialStatusTone(fixture.socialPostStatus),
+          )}
+        >
+          {formatSocialStatus(fixture.socialPostStatus)}
+        </span>
+
+        <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/70">
+          {formatSocialType(fixture.socialPostType)}
+        </span>
+
+        <span
+          className={cx(
+            "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
+            fixture.socialNeedsApproval
+              ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+              : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+          )}
+        >
+          {fixture.socialNeedsApproval ? "Needs approval" : "Auto publish"}
+        </span>
+      </div>
+
+      <div className="text-xs leading-5 text-white/55">{readiness.reason}</div>
+
+      {fixture.socialCaption ? (
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-xs leading-5 text-white/75">
+          {fixture.socialCaption}
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2 text-xs text-white/45">
+        {fixture.socialQueuedAtIso ? (
+          <span>Queued {formatTimestamp(fixture.socialQueuedAtIso)}</span>
+        ) : null}
+        {fixture.socialApprovedAtIso ? (
+          <span>Approved {formatTimestamp(fixture.socialApprovedAtIso)}</span>
+        ) : null}
+        {fixture.socialPublishedAtIso ? (
+          <span>Published {formatTimestamp(fixture.socialPublishedAtIso)}</span>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <form action={generateFixtureSocialDraftAction}>
+          <input type="hidden" name="fixtureId" value={fixture.id} />
+          <button
+            type="submit"
+            disabled={!readiness.canDraft}
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/30 hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {hasDraft ? "Regenerate draft" : "Generate draft"}
+          </button>
+        </form>
+
+        {canApprove ? (
+          <form action={approveFixtureSocialPostAction}>
+            <input type="hidden" name="fixtureId" value={fixture.id} />
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 text-xs font-semibold text-sky-200 transition hover:border-sky-300/30 hover:bg-sky-400/15"
+            >
+              Approve
+            </button>
+          </form>
+        ) : null}
+
+        {hasDraft ? (
+          <form action={resetFixtureSocialPostAction}>
+            <input type="hidden" name="fixtureId" value={fixture.id} />
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+            >
+              Reset
+            </button>
+          </form>
+        ) : null}
+
+        {fixture.socialImageUrl ? (
+          <Link
+            href={fixture.socialImageUrl}
+            target="_blank"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+          >
+            Open image
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 export default function FixturesAdminScreen({
   leagues,
   teams,
@@ -528,6 +740,12 @@ export default function FixturesAdminScreen({
       (fixture) => fixture.publishedAtIso,
     ).length;
     const drafts = filteredFixtures.length - published;
+    const socialDrafted = filteredFixtures.filter(
+      (fixture) => fixture.socialPostStatus === "DRAFTED",
+    ).length;
+    const socialPublished = filteredFixtures.filter(
+      (fixture) => fixture.socialPostStatus === "PUBLISHED",
+    ).length;
 
     const rounds = new Set(
       filteredFixtures
@@ -565,6 +783,8 @@ export default function FixturesAdminScreen({
       scheduled,
       published,
       drafts,
+      socialDrafted,
+      socialPublished,
       rounds: rounds.size,
       confirmedSides,
       issueRaisedSides,
@@ -650,12 +870,14 @@ export default function FixturesAdminScreen({
             </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-6">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-8">
             <MetricPill label="Leagues" value={leagues.length} />
             <MetricPill label="Teams" value={teams.length} />
             <MetricPill label="Fixtures" value={fixtureSummary.total} />
             <MetricPill label="Draft" value={fixtureSummary.drafts} />
             <MetricPill label="Published" value={fixtureSummary.published} />
+            <MetricPill label="Social drafts" value={fixtureSummary.socialDrafted} />
+            <MetricPill label="Social live" value={fixtureSummary.socialPublished} />
             <MetricPill label="Weeks" value={fixtureSummary.rounds} />
           </div>
         </div>
@@ -1078,12 +1300,14 @@ export default function FixturesAdminScreen({
             </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-8">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-10">
             <MetricPill label="Total" value={fixtureSummary.total} />
             <MetricPill label="Draft" value={fixtureSummary.drafts} />
             <MetricPill label="Published" value={fixtureSummary.published} />
             <MetricPill label="Scheduled" value={fixtureSummary.scheduled} />
             <MetricPill label="Completed" value={fixtureSummary.completed} />
+            <MetricPill label="Social drafts" value={fixtureSummary.socialDrafted} />
+            <MetricPill label="Social live" value={fixtureSummary.socialPublished} />
             <MetricPill label="Confirmed" value={fixtureSummary.confirmedSides} />
             <MetricPill label="Issues" value={fixtureSummary.issueRaisedSides} />
             <MetricPill label="Overdue" value={fixtureSummary.overdueSides} />
@@ -1101,9 +1325,8 @@ export default function FixturesAdminScreen({
                   Update selected match
                 </h3>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                  Adjust teams, venue, referee, kickoff, week, pitch, match fee
-                  and status without leaving the fixtures console.
-                </p>
+                Review generated matches, edit details, submit results, prep social drafts, and see exactly which teams have confirmed their fixtures.
+              </p>
               </div>
 
               <button
@@ -1409,33 +1632,45 @@ export default function FixturesAdminScreen({
                     </td>
 
                     <td className="px-6 py-5">
-                      <form
-                        action={submitResultAction}
-                        className="flex items-center gap-2"
-                      >
-                        <input type="hidden" name="fixtureId" value={fixture.id} />
-                        <input
-                          type="number"
-                          name="homeScore"
-                          min={0}
-                          defaultValue={fixture.homeScore ?? undefined}
-                          className="h-10 w-16 rounded-xl border border-white/10 bg-black/40 px-3 text-center text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-                        />
-                        <span className="text-white/35">-</span>
-                        <input
-                          type="number"
-                          name="awayScore"
-                          min={0}
-                          defaultValue={fixture.awayScore ?? undefined}
-                          className="h-10 w-16 rounded-xl border border-white/10 bg-black/40 px-3 text-center text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-                        />
-                        <button
-                          type="submit"
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+                      <div className="space-y-3">
+                        <form
+                          action={submitResultAction}
+                          className="flex items-center gap-2"
                         >
-                          Save
-                        </button>
-                      </form>
+                          <input type="hidden" name="fixtureId" value={fixture.id} />
+                          <input
+                            type="number"
+                            name="homeScore"
+                            min={0}
+                            defaultValue={fixture.homeScore ?? undefined}
+                            className="h-10 w-16 rounded-xl border border-white/10 bg-black/40 px-3 text-center text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                          />
+                          <span className="text-white/35">-</span>
+                          <input
+                            type="number"
+                            name="awayScore"
+                            min={0}
+                            defaultValue={fixture.awayScore ?? undefined}
+                            className="h-10 w-16 rounded-xl border border-white/10 bg-black/40 px-3 text-center text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                          />
+                          <button
+                            type="submit"
+                            className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+                          >
+                            Save
+                          </button>
+                        </form>
+
+                        {fixture.resultIsDisputed ? (
+                          <span className="inline-flex rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-200">
+                            Result disputed
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-5">
+                      <SocialCell fixture={fixture} />
                     </td>
 
                     <td className="px-6 py-5 text-right">

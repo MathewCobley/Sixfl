@@ -235,6 +235,16 @@ export default async function AdminFixturesPage({
         kickoffAt: true,
         publishedAt: true,
         matchFeePence: true,
+
+        socialPostType: true,
+        socialPostStatus: true,
+        socialNeedsApproval: true,
+        socialCaption: true,
+        socialImageUrl: true,
+        socialQueuedAt: true,
+        socialApprovedAt: true,
+        socialPublishedAt: true,
+
         venue: {
           select: {
             id: true,
@@ -264,6 +274,7 @@ export default async function AdminFixturesPage({
           select: {
             homeScore: true,
             awayScore: true,
+            isDisputed: true,
           },
         },
         captainConfirmations: {
@@ -348,8 +359,8 @@ export default async function AdminFixturesPage({
         awayTeamId: fixture.awayTeamId,
         venueId: fixture.venueId,
         refereeId: fixture.refereeId,
-        homeTeamName: fixture.homeTeam?.name ?? "Unknown home team",
-        awayTeamName: fixture.awayTeam?.name ?? "Unknown away team",
+        homeTeamName: fixture.homeTeam?.name ?? "Unknown team 1",
+        awayTeamName: fixture.awayTeam?.name ?? "Unknown team 2",
         venueName: fixture.venue?.name ?? null,
         refereeName: fixture.referee?.name ?? fixture.referee?.email ?? null,
         kickoffLabel: formatKickoffLabel(fixture.kickoffAt),
@@ -362,6 +373,16 @@ export default async function AdminFixturesPage({
         matchFeePence: fixture.matchFeePence,
         homeScore: fixture.result?.homeScore ?? null,
         awayScore: fixture.result?.awayScore ?? null,
+        resultIsDisputed: fixture.result?.isDisputed ?? false,
+
+        socialPostType: fixture.socialPostType,
+        socialPostStatus: fixture.socialPostStatus,
+        socialNeedsApproval: fixture.socialNeedsApproval,
+        socialCaption: fixture.socialCaption,
+        socialImageUrl: fixture.socialImageUrl,
+        socialQueuedAtIso: fixture.socialQueuedAt?.toISOString() ?? null,
+        socialApprovedAtIso: fixture.socialApprovedAt?.toISOString() ?? null,
+        socialPublishedAtIso: fixture.socialPublishedAt?.toISOString() ?? null,
 
         homeConfirmationStatus: homeConfirmationStatus as
           | FixtureCaptainConfirmationStatus
@@ -409,7 +430,8 @@ export default async function AdminFixturesPage({
               <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the
               deployed environment, for example{" "}
               <span className="font-mono">replies.sixfl.co.uk</span>, before
-              publishing fixtures because this flow emails teams and queues reminder emails.
+              publishing fixtures because this flow emails teams and queues reminder
+              emails.
             </div>
           </div>
         ) : null}
