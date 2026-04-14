@@ -1,6 +1,5 @@
 // ========================================
 // File: src/app/captain/team/[teamid]/payments/page.tsx
-// FULL FILE - patched current file with Stripe pay-now support
 // ========================================
 
 import Link from "next/link";
@@ -281,7 +280,7 @@ export default async function CaptainPaymentsPage({
 
                       {canPayOnline ? (
                         <Link
-                          href={`/pay/${charge.paymentToken}`}
+                          href={`/pay/charge/${charge.paymentToken}`}
                           className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-500/15"
                         >
                           Pay now
