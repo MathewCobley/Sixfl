@@ -6,7 +6,7 @@ import { ImageResponse } from "next/og";
 import { SocialPostType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 function getScoreLabel(homeScore: number | null, awayScore: number | null) {
   if (homeScore === null || awayScore === null) {
