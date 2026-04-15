@@ -636,14 +636,15 @@ function SocialCell({ fixture }: { fixture: FixtureItem }) {
           </form>
         ) : null}
 
-        {fixture.socialImageUrl ? (
-          <Link
+{fixture.socialImageUrl ? (
+          <a
             href={fixture.socialImageUrl}
             target="_blank"
+            rel="noreferrer"
             className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
           >
             Open image
-          </Link>
+          </a>
         ) : null}
       </div>
     </div>
