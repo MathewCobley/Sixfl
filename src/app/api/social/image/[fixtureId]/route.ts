@@ -23,11 +23,23 @@ function escapeXml(value: string) {
 
 function fitText(value: string, max = 26) {
   if (value.length <= max) return value;
-  return `${value.slice(0, max - 1)}…`;
+  return `${value.slice(0, max - 3)}...`;
+}
+
+function normaliseText(value: string) {
+  return value
+    .replaceAll("’", "'")
+    .replaceAll("‘", "'")
+    .replaceAll("“", '"')
+    .replaceAll("”", '"')
+    .replaceAll("•", "-")
+    .replaceAll("–", "-")
+    .replaceAll("—", "-")
+    .trim();
 }
 
 function formatKickoff(date: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
+  const formatted = new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -35,11 +47,11 @@ function formatKickoff(date: Date) {
     minute: "2-digit",
     hour12: true,
     timeZone: "Europe/London",
-  })
-    .format(date)
-    .replace(",", " •")
-    .replace("am", "AM")
-    .replace("pm", "PM");
+  }).format(date);
+
+  return normaliseText(
+    formatted.replace(",", "").replace("am", "AM").replace("pm", "PM"),
+  );
 }
 
 async function loadImageBuffer(src: string | null | undefined) {
@@ -58,6 +70,35 @@ async function loadImageBuffer(src: string | null | undefined) {
     : path.join(process.cwd(), src);
 
   return readFile(localPath);
+}
+
+async function makeBadgeBox(input: Buffer, boxSize = 260) {
+  const trimmed = await sharp(input).trim().png().toBuffer();
+
+  const resized = await sharp(trimmed)
+    .resize(boxSize - 40, boxSize - 40, {
+      fit: "contain",
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer();
+
+  return sharp({
+    create: {
+      width: boxSize,
+      height: boxSize,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: resized,
+        gravity: "center",
+      },
+    ])
+    .png()
+    .toBuffer();
 }
 
 function textSvg(input: {
@@ -83,20 +124,31 @@ function textSvg(input: {
     letterSpacing = 0,
   } = input;
 
+  const safeText = escapeXml(normaliseText(text));
+
   const x = align === "left" ? 0 : align === "right" ? width : width / 2;
-  const y = valign === "top" ? fontSize : valign === "bottom" ? height : height / 2;
+  const y =
+    valign === "top"
+      ? fontSize
+      : valign === "bottom"
+        ? height
+        : height / 2;
 
   const anchor =
     align === "left" ? "start" : align === "right" ? "end" : "middle";
 
   const baseline =
-    valign === "top" ? "hanging" : valign === "bottom" ? "text-after-edge" : "middle";
+    valign === "top"
+      ? "hanging"
+      : valign === "bottom"
+        ? "text-after-edge"
+        : "middle";
 
   return Buffer.from(`
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <style>
         .t {
-          font-family: Arial, Helvetica, sans-serif;
+          font-family: sans-serif;
           font-size: ${fontSize}px;
           font-weight: ${fontWeight};
           fill: ${color};
@@ -109,7 +161,7 @@ function textSvg(input: {
         text-anchor="${anchor}"
         dominant-baseline="${baseline}"
         class="t"
-      >${escapeXml(text)}</text>
+      >${safeText}</text>
     </svg>
   `.trim());
 }
@@ -167,37 +219,36 @@ export async function GET(
   const homeLogoBuffer = await loadImageBuffer(fixture.homeTeam.logoUrl);
   const awayLogoBuffer = await loadImageBuffer(fixture.awayTeam.logoUrl);
 
-  const homeName = fitText(fixture.homeTeam.name, 22);
-  const awayName = fitText(fixture.awayTeam.name, 22);
-  const leagueName = fitText(fixture.league.name, 42);
-  const venueName = fitText(fixture.venue?.name ?? "Venue TBC", 36);
+  const homeBadge = homeLogoBuffer
+    ? await makeBadgeBox(homeLogoBuffer, 260)
+    : null;
+  const awayBadge = awayLogoBuffer
+    ? await makeBadgeBox(awayLogoBuffer, 260)
+    : null;
+
+  const homeName = normaliseText(fitText(fixture.homeTeam.name, 22));
+  const awayName = normaliseText(fitText(fixture.awayTeam.name, 22));
+  const leagueName = normaliseText(fitText(fixture.league.name, 42));
+  const venueName = normaliseText(
+    fitText(fixture.venue?.name ?? "Venue TBC", 36),
+  );
   const kickoffText = formatKickoff(fixture.kickoffAt);
 
   const composites: sharp.OverlayOptions[] = [];
 
-  if (homeLogoBuffer) {
-    const homeLogo = await sharp(homeLogoBuffer)
-      .resize(220, 220, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .png()
-      .toBuffer();
-
+  if (homeBadge) {
     composites.push({
-      input: homeLogo,
-      left: 135,
-      top: 355,
+      input: homeBadge,
+      left: 150,
+      top: 350,
     });
   }
 
-  if (awayLogoBuffer) {
-    const awayLogo = await sharp(awayLogoBuffer)
-      .resize(220, 220, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .png()
-      .toBuffer();
-
+  if (awayBadge) {
     composites.push({
-      input: awayLogo,
-      left: 725,
-      top: 355,
+      input: awayBadge,
+      left: 670,
+      top: 350,
     });
   }
 
@@ -205,61 +256,61 @@ export async function GET(
     {
       input: textSvg({
         width: 760,
-        height: 50,
+        height: 52,
         text: leagueName,
         fontSize: 28,
         fontWeight: 700,
         color: "#F4F7FA",
       }),
       left: 160,
-      top: 238,
+      top: 240,
     },
     {
       input: textSvg({
-        width: 280,
+        width: 300,
         height: 60,
         text: homeName,
-        fontSize: 32,
+        fontSize: 30,
         fontWeight: 800,
         color: "#FFFFFF",
       }),
-      left: 105,
-      top: 685,
+      left: 130,
+      top: 690,
     },
     {
       input: textSvg({
-        width: 280,
+        width: 300,
         height: 60,
         text: awayName,
-        fontSize: 32,
+        fontSize: 30,
         fontWeight: 800,
         color: "#FFFFFF",
       }),
-      left: 695,
-      top: 685,
+      left: 650,
+      top: 690,
     },
     {
       input: textSvg({
-        width: 420,
+        width: 500,
         height: 64,
         text: venueName,
         fontSize: 34,
         fontWeight: 800,
         color: "#FFFFFF",
       }),
-      left: 330,
+      left: 290,
       top: 810,
     },
     {
       input: textSvg({
-        width: 420,
+        width: 500,
         height: 48,
         text: kickoffText,
         fontSize: 24,
         fontWeight: 700,
         color: "#F4F7FA",
       }),
-      left: 330,
+      left: 290,
       top: 875,
     },
   );
@@ -268,10 +319,10 @@ export async function GET(
   const body = new Uint8Array(output);
 
   return new Response(body, {
-  status: 200,
-  headers: {
-    "Content-Type": "image/png",
-    "Cache-Control": "public, max-age=60, s-maxage=60",
-  },
-});
+    status: 200,
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=60, s-maxage=60",
+    },
+  });
 }
