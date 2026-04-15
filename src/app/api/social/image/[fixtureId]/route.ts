@@ -39,10 +39,11 @@ function ensureFontsRegistered() {
   try {
     registerFont(FONT_REGULAR, { family: "Inter" });
     registerFont(FONT_BOLD, { family: "Inter", weight: "700" });
-    fontsRegistered = true;
   } catch {
-    fontsRegistered = true;
+    // fallback to system fonts
   }
+
+  fontsRegistered = true;
 }
 
 function fitText(value: string, max = 26) {
@@ -115,12 +116,7 @@ async function makeBadgeBox(input: Buffer, boxSize = 260) {
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
   })
-    .composite([
-      {
-        input: resized,
-        gravity: "center",
-      },
-    ])
+    .composite([{ input: resized, gravity: "center" }])
     .png()
     .toBuffer();
 }
@@ -160,6 +156,32 @@ function drawCenteredTextBlock(input: {
   ctx.fillText(text, x, y);
 }
 
+function getTemplateName(input: {
+  socialPostType: string | null;
+  status: string;
+  homeScore: number | null;
+  awayScore: number | null;
+}) {
+  if (
+    input.socialPostType === "RESULT" ||
+    (input.status === "COMPLETED" &&
+      input.homeScore !== null &&
+      input.awayScore !== null)
+  ) {
+    return "result-card-master.png";
+  }
+
+  if (
+    input.socialPostType === "UPDATE" ||
+    input.status === "POSTPONED" ||
+    input.status === "CANCELLED"
+  ) {
+    return "update-card-master.png";
+  }
+
+  return "fixture-card-master.png";
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ fixtureId: string }> },
@@ -173,6 +195,8 @@ export async function GET(
     select: {
       id: true,
       kickoffAt: true,
+      status: true,
+      socialPostType: true,
       league: {
         select: {
           name: true,
@@ -195,6 +219,12 @@ export async function GET(
           logoUrl: true,
         },
       },
+      result: {
+        select: {
+          homeScore: true,
+          awayScore: true,
+        },
+      },
     },
   });
 
@@ -202,12 +232,19 @@ export async function GET(
     return new Response("Fixture not found", { status: 404 });
   }
 
+  const templateName = getTemplateName({
+    socialPostType: fixture.socialPostType,
+    status: fixture.status,
+    homeScore: fixture.result?.homeScore ?? null,
+    awayScore: fixture.result?.awayScore ?? null,
+  });
+
   const templatePath = path.join(
     process.cwd(),
     "public",
     "social",
     "templates",
-    "fixture-card-master.png",
+    templateName,
   );
 
   const base = sharp(templatePath).resize(WIDTH, HEIGHT);
@@ -229,11 +266,17 @@ export async function GET(
     fitText(fixture.venue?.name ?? "Venue TBC", 36),
   );
   const kickoffText = formatKickoff(fixture.kickoffAt);
+  const scoreText =
+    fixture.result?.homeScore !== null && fixture.result?.awayScore !== null
+      ? `${fixture.result.homeScore} - ${fixture.result.awayScore}`
+      : null;
 
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
-
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+  const isResult = templateName === "result-card-master.png";
+  const isUpdate = templateName === "update-card-master.png";
 
   drawCenteredTextBlock({
     ctx,
@@ -246,49 +289,157 @@ export async function GET(
     color: "#F4F7FA",
   });
 
-  drawCenteredTextBlock({
-    ctx,
-    text: homeName,
-    x: 280,
-    y: 645,
-    maxWidth: 340,
-    fontSize: 40,
-    weight: 800,
-    color: "#FFFFFF",
-  });
+  if (homeBadge) {
+    // badge positions handled by sharp below
+  }
+  if (awayBadge) {
+    // badge positions handled by sharp below
+  }
 
-  drawCenteredTextBlock({
-    ctx,
-    text: awayName,
-    x: 800,
-    y: 646,
-    maxWidth: 340,
-    fontSize: 40,
-    weight: 800,
-    color: "#FFFFFF",
-  });
+  if (isResult) {
+    drawCenteredTextBlock({
+      ctx,
+      text: homeName,
+      x: 280,
+      y: 650,
+      maxWidth: 340,
+      fontSize: 38,
+      weight: 800,
+      color: "#FFFFFF",
+    });
 
-  drawCenteredTextBlock({
-    ctx,
-    text: venueName,
-    x: 540,
-    y: 842,
-    maxWidth: 500,
-    fontSize: 34,
-    weight: 800,
-    color: "#FFFFFF",
-  });
+    drawCenteredTextBlock({
+      ctx,
+      text: awayName,
+      x: 800,
+      y: 650,
+      maxWidth: 340,
+      fontSize: 38,
+      weight: 800,
+      color: "#FFFFFF",
+    });
 
-  drawCenteredTextBlock({
-    ctx,
-    text: kickoffText,
-    x: 540,
-    y: 905,
-    maxWidth: 500,
-    fontSize: 24,
-    weight: 700,
-    color: "#F4F7FA",
-  });
+    drawCenteredTextBlock({
+      ctx,
+      text: scoreText ?? "0 - 0",
+      x: 540,
+      y: 520,
+      maxWidth: 280,
+      fontSize: 86,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: venueName,
+      x: 540,
+      y: 842,
+      maxWidth: 500,
+      fontSize: 34,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: kickoffText,
+      x: 540,
+      y: 905,
+      maxWidth: 500,
+      fontSize: 24,
+      weight: 700,
+      color: "#F4F7FA",
+    });
+  } else if (isUpdate) {
+    drawCenteredTextBlock({
+      ctx,
+      text: homeName,
+      x: 280,
+      y: 660,
+      maxWidth: 340,
+      fontSize: 38,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: awayName,
+      x: 800,
+      y: 660,
+      maxWidth: 340,
+      fontSize: 38,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: venueName,
+      x: 540,
+      y: 842,
+      maxWidth: 500,
+      fontSize: 34,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: kickoffText,
+      x: 540,
+      y: 905,
+      maxWidth: 500,
+      fontSize: 24,
+      weight: 700,
+      color: "#F4F7FA",
+    });
+  } else {
+    drawCenteredTextBlock({
+      ctx,
+      text: homeName,
+      x: 280,
+      y: 660,
+      maxWidth: 340,
+      fontSize: 40,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: awayName,
+      x: 800,
+      y: 660,
+      maxWidth: 340,
+      fontSize: 40,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: venueName,
+      x: 540,
+      y: 842,
+      maxWidth: 500,
+      fontSize: 34,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
+    drawCenteredTextBlock({
+      ctx,
+      text: kickoffText,
+      x: 540,
+      y: 905,
+      maxWidth: 500,
+      fontSize: 24,
+      weight: 700,
+      color: "#F4F7FA",
+    });
+  }
 
   const textLayer = canvas.toBuffer("image/png");
 
@@ -298,7 +449,7 @@ export async function GET(
     composites.push({
       input: homeBadge,
       left: 150,
-      top: 350,
+      top: isResult ? 320 : 350,
     });
   }
 
@@ -306,7 +457,7 @@ export async function GET(
     composites.push({
       input: awayBadge,
       left: 670,
-      top: 350,
+      top: isResult ? 320 : 350,
     });
   }
 
