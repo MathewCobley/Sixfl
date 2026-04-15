@@ -489,9 +489,10 @@ model InterestLead {
   interestType InterestType
   status       LeadStatus   @default(NEW)
 
-  contactName String
-  email       String
-  phone       String?
+  contactName     String
+  email           String?
+  phone           String?
+  phoneNormalized String?
 
   teamName   String?
   area       String?
@@ -524,6 +525,7 @@ model InterestLead {
   @@index([leagueType])
   @@index([createdAt])
   @@index([leagueId])
+  @@index([phoneNormalized])
 }
 
 model InterestLeadPreferredNight {

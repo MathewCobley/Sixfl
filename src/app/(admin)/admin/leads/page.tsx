@@ -335,9 +335,18 @@ export default async function AdminLeadsPage({
 
   const recipientWhere = {
     ...where,
-    email: {
-      not: "",
-    },
+    AND: [
+      {
+        email: {
+          not: null,
+        },
+      },
+      {
+        email: {
+          not: "",
+        },
+      },
+    ],
   };
 
   const returnTo = buildHref({
@@ -544,13 +553,15 @@ export default async function AdminLeadsPage({
     }),
   );
 
-  const previewRecipients: RecipientPreviewItem[] = recipientPreview.map(
-    (recipient) => ({
+  const previewRecipients: RecipientPreviewItem[] = recipientPreview
+    .filter((recipient): recipient is typeof recipient & { email: string } =>
+      Boolean(recipient.email),
+    )
+    .map((recipient) => ({
       id: recipient.id,
       contactName: recipient.contactName,
       email: recipient.email,
-    }),
-  );
+    }));
 
   return (
     <AdminCard title="Leads">
@@ -596,6 +607,13 @@ export default async function AdminLeadsPage({
               className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
             >
               Import CSV
+            </Link>
+
+            <Link
+              href="/admin/leads/import-sms"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
+            >
+              Import SMS CSV
             </Link>
           </div>
         </div>
@@ -1038,12 +1056,16 @@ export default async function AdminLeadsPage({
 
                       <td className="px-4 py-3">
                         <div className="flex flex-col">
-                          <a
-                            href={`mailto:${lead.email}`}
-                            className="break-all text-emerald-300 hover:text-emerald-200"
-                          >
-                            {lead.email}
-                          </a>
+                          {lead.email ? (
+                            <a
+                              href={`mailto:${lead.email}`}
+                              className="break-all text-emerald-300 hover:text-emerald-200"
+                            >
+                              {lead.email}
+                            </a>
+                          ) : (
+                            <span className="text-white/40">No email</span>
+                          )}
 
                           {lead.phone ? (
                             <a
@@ -1154,7 +1176,7 @@ export default async function AdminLeadsPage({
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <Detail label="Email" value={lead.email} />
+                    <Detail label="Email" value={lead.email ?? "—"} />
                     <Detail label="Phone" value={lead.phone ?? "—"} />
                     <Detail label="Team name" value={lead.teamName ?? "—"} />
                     <Detail label="Area" value={lead.area ?? "—"} />

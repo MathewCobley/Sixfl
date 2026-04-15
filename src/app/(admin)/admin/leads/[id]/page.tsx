@@ -57,10 +57,10 @@ function formatPreferredNight(night: PreferredNight) {
 }
 
 function formatPreferredNights(
-  values: Array<{ night: PreferredNight }> | PreferredNight[]
+  values: Array<{ night: PreferredNight }> | PreferredNight[],
 ) {
   const nights = values.map((value) =>
-    typeof value === "string" ? value : value.night
+    typeof value === "string" ? value : value.night,
   );
 
   if (!nights.length) return "—";
@@ -213,6 +213,8 @@ export default async function LeadPage({ params }: PageProps) {
   const alreadyConverted = Boolean(lead.convertedAt || lead.convertedTeamId);
   const canConvertToTeam = lead.interestType === "TEAM";
   const canConvertToReferee = lead.interestType === "REFEREE";
+  const hasEmail = Boolean(lead.email?.trim());
+  const hasPhone = Boolean(lead.phone?.trim());
 
   const signupUrl = lead.league?.slug
     ? `https://www.sixfl.co.uk/leagues/${lead.league.slug}`
@@ -231,7 +233,7 @@ export default async function LeadPage({ params }: PageProps) {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
-                lead.interestType
+                lead.interestType,
               )}`}
             >
               {formatInterestType(lead.interestType)}
@@ -239,7 +241,7 @@ export default async function LeadPage({ params }: PageProps) {
 
             <span
               className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
-                lead.status
+                lead.status,
               )}`}
             >
               {formatLeadStatus(lead.status)}
@@ -250,10 +252,17 @@ export default async function LeadPage({ params }: PageProps) {
                 Converted
               </span>
             ) : null}
+
+            {hasPhone && !hasEmail ? (
+              <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-300">
+                SMS only
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-3 space-y-1 text-sm text-white/70">
             <div>{lead.email || "No email address"}</div>
+            <div>{lead.phone || "No phone number"}</div>
             <div>{lead.area || "No area set"}</div>
           </div>
         </div>
@@ -457,7 +466,8 @@ export default async function LeadPage({ params }: PageProps) {
                       </Link>
                       {lead.convertedAt
                         ? ` on ${formatDate(lead.convertedAt)}`
-                        : ""}.
+                        : ""}
+                      .
                     </div>
                   ) : null}
                 </ActionCard>
@@ -478,17 +488,29 @@ export default async function LeadPage({ params }: PageProps) {
 
               <ActionCard
                 title="Send email"
-                description="Use a saved template or write a direct reply to this lead from the admin console."
+                description={
+                  hasEmail
+                    ? "Use a saved template or write a direct reply to this lead from the admin console."
+                    : "This lead does not currently have an email address, so email sending is unavailable."
+                }
               >
-                <LeadEmailForm
-                  leadId={lead.id}
-                  email={lead.email}
-                  firstName={lead.contactName}
-                  fullName={lead.contactName}
-                  area={lead.area}
-                  signupUrl={signupUrl}
-                  templates={emailTemplates}
-                />
+                {hasEmail ? (
+                  <LeadEmailForm
+                    leadId={lead.id}
+                    email={lead.email}
+                    firstName={lead.contactName}
+                    fullName={lead.contactName}
+                    area={lead.area}
+                    signupUrl={signupUrl}
+                    templates={emailTemplates}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
+                    No email address is stored for this lead yet. Use the phone
+                    number for SMS or add an email address before sending an
+                    email from this screen.
+                  </div>
+                )}
               </ActionCard>
 
               <ActionCard

@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/leads/import/actions.ts
+// File: src/app/(admin)/admin/leads/import-sms/actions.ts
 // ========================================
 
 "use server";
@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
-export type ImportLeadsState = {
+export type ImportSmsLeadsState = {
   success: boolean;
   message: string;
   created: number;
@@ -19,7 +19,7 @@ export type ImportLeadsState = {
   errors: string[];
 };
 
-const INITIAL_STATE: ImportLeadsState = {
+const INITIAL_STATE: ImportSmsLeadsState = {
   success: false,
   message: "",
   created: 0,
@@ -98,23 +98,35 @@ function getFirstNonEmpty(row: Record<string, string>, keys: string[]) {
       return value.trim();
     }
   }
+
   return "";
 }
 
-function buildContactName(row: Record<string, string>) {
-  const explicitContactName = getFirstNonEmpty(row, ["contactName", "name", "fullName"]);
-  if (explicitContactName) return explicitContactName;
+function buildContactName(row: Record<string, string>, fallbackPhone: string) {
+  const explicitContactName = getFirstNonEmpty(row, [
+    "contactName",
+    "name",
+    "fullName",
+  ]);
+
+  if (explicitContactName) {
+    return explicitContactName;
+  }
 
   const firstName = getFirstNonEmpty(row, ["firstName", "firstname", "first"]);
   const lastName = getFirstNonEmpty(row, ["lastName", "lastname", "surname", "last"]);
-
   const combined = `${firstName} ${lastName}`.trim();
-  if (combined) return combined;
 
-  const email = getFirstNonEmpty(row, ["email"]);
-  if (!email) return "";
+  if (combined) {
+    return combined;
+  }
 
-  return email.split("@")[0];
+  const teamName = getFirstNonEmpty(row, ["teamName", "teamname", "team"]);
+  if (teamName) {
+    return teamName;
+  }
+
+  return fallbackPhone;
 }
 
 function toInterestType(value: FormDataEntryValue | null): InterestType {
@@ -125,24 +137,29 @@ function toInterestType(value: FormDataEntryValue | null): InterestType {
   return InterestType.TEAM;
 }
 
-function isTruthy(value: FormDataEntryValue | null) {
-  return value === "on" || value === "true" || value === "1";
+function isTruthy(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "yes" ||
+    normalized === "y" ||
+    normalized === "on"
+  );
 }
 
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
-}
-
-export async function importLeadsAction(
-  _prevState: ImportLeadsState,
-  formData: FormData
-): Promise<ImportLeadsState> {
+export async function importSmsLeadsAction(
+  _prevState: ImportSmsLeadsState,
+  formData: FormData,
+): Promise<ImportSmsLeadsState> {
   await requireAdmin();
 
   const file = formData.get("file");
   const defaultInterestType = toInterestType(formData.get("defaultInterestType"));
-  const defaultSource = String(formData.get("defaultSource") ?? "Legacy import").trim() || "Legacy import";
-  const skipExisting = isTruthy(formData.get("skipExisting"));
+  const defaultSource =
+    String(formData.get("defaultSource") ?? "SMS lead import").trim() ||
+    "SMS lead import";
+  const skipExisting = formData.get("skipExisting") === "on";
 
   if (!(file instanceof File) || file.size === 0) {
     return {
@@ -169,22 +186,40 @@ export async function importLeadsAction(
   }
 
   const parsedRows = rows.map((row, index) => {
-    const email = normalizeEmail(getFirstNonEmpty(row, ["email"]));
-    const contactName = buildContactName(row);
+    const rawPhone = getFirstNonEmpty(row, [
+      "phone",
+      "mobile",
+      "mobilenumber",
+      "sms",
+      "smsnumber",
+      "telephone",
+      "tel",
+    ]);
+
+    const phoneNormalized = normalizeUkMobileNumber(rawPhone);
+    const contactName = buildContactName(row, rawPhone || `Row ${index + 2}`);
     const teamName = getFirstNonEmpty(row, ["teamName", "teamname", "team"]);
-    const phone = getFirstNonEmpty(row, ["phone", "mobile", "telephone"]);
     const area = getFirstNonEmpty(row, ["area", "location"]);
     const source = getFirstNonEmpty(row, ["source"]) || defaultSource;
+    const message = getFirstNonEmpty(row, ["message", "notes", "note"]);
+    const marketingConsentRaw = getFirstNonEmpty(row, [
+      "marketingConsent",
+      "smsConsent",
+      "consent",
+      "optIn",
+      "optin",
+    ]);
 
     return {
       rowNumber: index + 2,
-      email,
+      rawPhone,
+      phoneNormalized,
       contactName,
       teamName,
-      phone,
-      phoneNormalized: normalizeUkMobileNumber(phone),
       area,
       source,
+      message,
+      marketingConsent: marketingConsentRaw ? isTruthy(marketingConsentRaw) : false,
     };
   });
 
@@ -192,13 +227,15 @@ export async function importLeadsAction(
   const seenInCsv = new Set<string>();
 
   const validRows = parsedRows.filter((row) => {
-    if (!row.email) {
-      errors.push(`Row ${row.rowNumber}: missing email.`);
+    if (!row.rawPhone) {
+      errors.push(`Row ${row.rowNumber}: missing mobile number.`);
       return false;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
-      errors.push(`Row ${row.rowNumber}: invalid email "${row.email}".`);
+    if (!row.phoneNormalized) {
+      errors.push(
+        `Row ${row.rowNumber}: invalid UK mobile number "${row.rawPhone}".`,
+      );
       return false;
     }
 
@@ -207,12 +244,14 @@ export async function importLeadsAction(
       return false;
     }
 
-    if (seenInCsv.has(row.email)) {
-      errors.push(`Row ${row.rowNumber}: duplicate email "${row.email}" within CSV.`);
+    if (seenInCsv.has(row.phoneNormalized)) {
+      errors.push(
+        `Row ${row.rowNumber}: duplicate mobile number "${row.rawPhone}" within CSV.`,
+      );
       return false;
     }
 
-    seenInCsv.add(row.email);
+    seenInCsv.add(row.phoneNormalized);
     return true;
   });
 
@@ -228,22 +267,28 @@ export async function importLeadsAction(
 
   const existingLeads = await prisma.interestLead.findMany({
     where: {
-      email: {
-        in: validRows.map((row) => row.email),
-        mode: "insensitive",
+      phoneNormalized: {
+        in: validRows
+          .map((row) => row.phoneNormalized)
+          .filter((value): value is string => Boolean(value)),
       },
     },
     select: {
-      email: true,
+      phoneNormalized: true,
     },
   });
 
-  const existingEmailSet = new Set(existingLeads.map((lead) => lead.email?.trim().toLowerCase()).filter(Boolean));
+  const existingPhoneSet = new Set(
+    existingLeads
+      .map((lead) => lead.phoneNormalized)
+      .filter((value): value is string => Boolean(value)),
+  );
 
   const rowsToCreate = validRows.filter((row) => {
-    if (skipExisting && existingEmailSet.has(row.email)) {
+    if (skipExisting && row.phoneNormalized && existingPhoneSet.has(row.phoneNormalized)) {
       return false;
     }
+
     return true;
   });
 
@@ -263,12 +308,14 @@ export async function importLeadsAction(
     interestType: defaultInterestType,
     status: LeadStatus.NEW,
     contactName: row.contactName,
-    email: row.email,
-    phone: row.phone || null,
+    email: null,
+    phone: row.rawPhone || null,
     phoneNormalized: row.phoneNormalized,
     teamName: row.teamName || null,
     area: row.area || null,
     source: row.source || defaultSource,
+    message: row.message || null,
+    marketingConsent: row.marketingConsent,
   }));
 
   const result = await prisma.interestLead.createMany({
@@ -276,11 +323,11 @@ export async function importLeadsAction(
   });
 
   revalidatePath("/admin/leads");
-  revalidatePath("/admin/leads/import");
+  revalidatePath("/admin/leads/import-sms");
 
   return {
     success: true,
-    message: `Import complete. Created ${result.count} lead${result.count === 1 ? "" : "s"}.`,
+    message: `SMS import complete. Created ${result.count} lead${result.count === 1 ? "" : "s"}.`,
     created: result.count,
     skipped,
     errors,
