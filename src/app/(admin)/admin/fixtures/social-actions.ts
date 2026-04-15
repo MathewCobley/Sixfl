@@ -4,14 +4,14 @@
 
 "use server";
 
-import {
-  FixtureStatus,
-  SocialPostStatus,
-  SocialPostType,
-} from "@prisma/client";
+import { SocialPostStatus, SocialPostType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import {
+  buildFixtureSocialCaption,
+  getFixtureSocialPostType,
+} from "@/lib/social/fixture-social";
 
 function parseRequiredString(
   value: FormDataEntryValue | null,
@@ -26,69 +26,6 @@ function parseRequiredString(
   return str;
 }
 
-function getSocialPostTypeForFixture(input: {
-  status: FixtureStatus;
-  homeScore: number | null;
-  awayScore: number | null;
-}) {
-  if (input.status === "COMPLETED") {
-    if (input.homeScore === null || input.awayScore === null) {
-      throw new Error("Completed fixtures need a saved result before creating a social draft.");
-    }
-
-    return SocialPostType.RESULT;
-  }
-
-  if (input.status === "SCHEDULED") {
-    return SocialPostType.FIXTURE;
-  }
-
-  if (input.status === "POSTPONED" || input.status === "CANCELLED") {
-    return SocialPostType.UPDATE;
-  }
-
-  return SocialPostType.NONE;
-}
-
-function buildFixtureSocialCaption(input: {
-  postType: SocialPostType;
-  leagueName: string;
-  venueName: string | null;
-  homeTeamName: string;
-  awayTeamName: string;
-  kickoffAt: Date;
-  homeScore: number | null;
-  awayScore: number | null;
-  status: FixtureStatus;
-}) {
-  const kickoffLabel = new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/London",
-  }).format(input.kickoffAt);
-
-  if (input.postType === "RESULT") {
-    const venuePrefix = input.venueName ? ` at ${input.venueName}` : "";
-    return `Full-time${venuePrefix}. ${input.homeTeamName} ${input.homeScore}-${input.awayScore} ${input.awayTeamName}. ${input.leagueName}. #SIXFL`;
-  }
-
-  if (input.postType === "FIXTURE") {
-    const venueLabel = input.venueName ? ` at ${input.venueName}` : "";
-    return `${input.homeTeamName} vs ${input.awayTeamName}. ${kickoffLabel}${venueLabel}. ${input.leagueName}. #SIXFL`;
-  }
-
-  if (input.postType === "UPDATE") {
-    const venueLabel = input.venueName ? ` at ${input.venueName}` : "";
-    const updateWord = input.status === "POSTPONED" ? "postponed" : "cancelled";
-    return `${input.homeTeamName} vs ${input.awayTeamName}${venueLabel} has been ${updateWord}. ${input.leagueName}. #SIXFL`;
-  }
-
-  return `${input.homeTeamName} vs ${input.awayTeamName}. ${input.leagueName}. #SIXFL`;
-}
-
 function getBaseUrl() {
   return (
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
@@ -97,11 +34,16 @@ function getBaseUrl() {
   );
 }
 
+function getFixtureImageUrl(fixtureId: string) {
+  return `${getBaseUrl()}/api/social/image/${fixtureId}`;
+}
+
 async function postDraftWebhook(input: {
   fixtureId: string;
   postType: SocialPostType;
   caption: string;
   needsApproval: boolean;
+  imageUrl: string;
   league: {
     id: string;
     name: string;
@@ -112,7 +54,7 @@ async function postDraftWebhook(input: {
     id: string;
     kickoffAt: Date;
     venueName: string | null;
-    status: FixtureStatus;
+    status: "SCHEDULED" | "COMPLETED" | "POSTPONED" | "CANCELLED";
   };
   teams: {
     home: {
@@ -160,6 +102,7 @@ async function postDraftWebhook(input: {
       teams: input.teams,
       draft: {
         caption: input.caption,
+        imageUrl: input.imageUrl,
       },
       branding: {
         name: "SIXFL",
@@ -259,7 +202,7 @@ export async function generateFixtureSocialDraftAction(formData: FormData) {
     throw new Error("Disputed results cannot be turned into social drafts.");
   }
 
-  const postType = getSocialPostTypeForFixture({
+  const postType = getFixtureSocialPostType({
     status: fixture.status,
     homeScore: fixture.result?.homeScore ?? null,
     awayScore: fixture.result?.awayScore ?? null,
@@ -281,12 +224,15 @@ export async function generateFixtureSocialDraftAction(formData: FormData) {
     status: fixture.status,
   });
 
+  const imageUrl = getFixtureImageUrl(fixture.id);
+
   await prisma.fixture.update({
     where: { id: fixture.id },
     data: {
       socialPostType: postType,
       socialPostStatus: SocialPostStatus.QUEUED,
       socialCaption: caption,
+      socialImageUrl: imageUrl,
       socialQueuedAt: new Date(),
       socialApprovedAt: null,
       socialPublishedAt: null,
@@ -299,6 +245,7 @@ export async function generateFixtureSocialDraftAction(formData: FormData) {
     postType,
     caption,
     needsApproval: fixture.socialNeedsApproval,
+    imageUrl,
     league: {
       id: fixture.league.id,
       name: fixture.league.name,
