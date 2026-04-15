@@ -104,6 +104,13 @@ export default async function AdminMessagesPage({
               </Link>
 
               <Link
+                href="/admin/sms-templates"
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+              >
+                SMS templates
+              </Link>
+
+              <Link
                 href="/admin/teams"
                 className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
               >

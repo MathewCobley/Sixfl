@@ -1,0 +1,357 @@
+// ========================================
+// File: src/components/admin/sms-templates/SmsTemplateForm.tsx
+// ========================================
+
+"use client";
+
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
+import SmsTemplatePreview from "./SmsTemplatePreview";
+
+type FormState = {
+  ok?: boolean;
+  success?: boolean;
+  message?: string;
+  error?: string;
+  errors?: Record<string, string[]>;
+};
+
+type SmsTemplateAudience = "LEAD" | "TEAM";
+
+type SmsTemplateFormValues = {
+  id?: string;
+  key: string;
+  name: string;
+  description: string;
+  audience: SmsTemplateAudience;
+  body: string;
+  isActive: boolean;
+};
+
+type SmsTemplateFormProps = {
+  mode: "create" | "edit";
+  action: (formData: FormData) => Promise<FormState>;
+  initialValues?: Partial<SmsTemplateFormValues>;
+};
+
+const INITIAL_STATE: FormState = {
+  ok: false,
+  success: false,
+  message: "",
+  error: "",
+  errors: {},
+};
+
+const AUDIENCE_OPTIONS: Array<{
+  value: SmsTemplateAudience;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "LEAD",
+    label: "Lead",
+    description: "Lead campaigns, follow-up, and launch outreach.",
+  },
+  {
+    value: "TEAM",
+    label: "Team",
+    description: "Team communication, captain updates, and operational texts.",
+  },
+];
+
+const LEAD_TOKENS = ["{{firstName}}", "{{fullName}}", "{{teamName}}", "{{area}}"] as const;
+const TEAM_TOKENS = ["{{teamName}}", "{{captainName}}", "{{leagueName}}", "{{area}}"] as const;
+
+function SubmitButton({ mode }: { mode: "create" | "edit" }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex items-center rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {pending
+        ? mode === "create"
+          ? "Creating template..."
+          : "Saving changes..."
+        : mode === "create"
+          ? "Create template"
+          : "Save changes"}
+    </button>
+  );
+}
+
+function slugifyTemplateKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function estimateSegments(text: string) {
+  const length = text.length;
+  if (length === 0) {
+    return 0;
+  }
+  if (length <= 160) {
+    return 1;
+  }
+  return Math.ceil(length / 153);
+}
+
+export default function SmsTemplateForm({
+  mode,
+  action,
+  initialValues,
+}: SmsTemplateFormProps) {
+  async function submitTemplateAction(
+    _prevState: FormState,
+    formData: FormData,
+  ): Promise<FormState> {
+    return action(formData);
+  }
+
+  const [state, formAction] = useActionState(submitTemplateAction, INITIAL_STATE);
+
+  const [key, setKey] = useState(initialValues?.key ?? "");
+  const [name, setName] = useState(initialValues?.name ?? "");
+  const [description, setDescription] = useState(initialValues?.description ?? "");
+  const [audience, setAudience] = useState<SmsTemplateAudience>(
+    initialValues?.audience ?? "LEAD",
+  );
+  const [body, setBody] = useState(initialValues?.body ?? "");
+  const [isActive, setIsActive] = useState(initialValues?.isActive ?? true);
+
+  useEffect(() => {
+    if (mode === "create" && !key.trim() && name.trim()) {
+      setKey(slugifyTemplateKey(name));
+    }
+  }, [mode, name, key]);
+
+  const availableTokens = useMemo(
+    () => (audience === "LEAD" ? LEAD_TOKENS : TEAM_TOKENS),
+    [audience],
+  );
+
+  const bodyLength = body.length;
+  const bodySegments = estimateSegments(body);
+
+  const keyError = state?.errors?.key?.[0];
+  const nameError = state?.errors?.name?.[0];
+  const audienceError = state?.errors?.audience?.[0];
+  const bodyError = state?.errors?.body?.[0];
+
+  function insertToken(token: string) {
+    setBody((current) => {
+      if (!current) {
+        return token;
+      }
+
+      const spacer = current.endsWith(" ") || current.endsWith("\n") ? "" : " ";
+      return `${current}${spacer}${token}`;
+    });
+  }
+
+  return (
+    <form action={formAction} className="space-y-8">
+      {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
+
+      <input type="hidden" name="audience" value={audience} />
+      <input type="hidden" name="isActive" value={String(isActive)} />
+
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <div className="space-y-8">
+          <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-white">Template details</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                Keep SMS templates short, clear, and reusable.
+              </p>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <label htmlFor="name" className="text-sm font-medium text-white">
+                  Template name
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Lead launch follow-up"
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
+                />
+                {nameError ? <p className="text-sm text-red-400">{nameError}</p> : null}
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="key" className="text-sm font-medium text-white">
+                  Template key
+                </label>
+                <input
+                  id="key"
+                  name="key"
+                  value={key}
+                  onChange={(event) => setKey(slugifyTemplateKey(event.target.value))}
+                  placeholder="lead-launch-follow-up"
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
+                />
+                {keyError ? <p className="text-sm text-red-400">{keyError}</p> : null}
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label htmlFor="description" className="text-sm font-medium text-white">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={4}
+                  placeholder="Explain when this SMS should be used."
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-white">Audience</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                Choose whether this SMS is for leads or teams.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {AUDIENCE_OPTIONS.map((option) => {
+                const selected = audience === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setAudience(option.value)}
+                    className={[
+                      "min-h-[138px] rounded-2xl border px-4 py-4 text-left transition",
+                      selected
+                        ? "border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
+                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
+                    ].join(" ")}
+                  >
+                    <div className="text-sm font-semibold text-white">{option.label}</div>
+                    <div className="mt-2 text-sm leading-6 text-neutral-400">
+                      {option.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {audienceError ? <p className="mt-3 text-sm text-red-400">{audienceError}</p> : null}
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-white">SMS content</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                Write the actual text message. Keep it concise and easy to scan.
+              </p>
+            </div>
+
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">
+                  Quick insert
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {availableTokens.map((token) => (
+                    <button
+                      key={token}
+                      type="button"
+                      onClick={() => insertToken(token)}
+                      className="rounded-full border border-emerald-500/25 bg-black/30 px-3 py-1.5 text-sm text-emerald-300 transition hover:border-emerald-400/40 hover:bg-emerald-500/10"
+                    >
+                      {token}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="body" className="text-sm font-medium text-white">
+                  SMS body
+                </label>
+                <textarea
+                  id="body"
+                  name="body"
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  rows={12}
+                  placeholder="Write the SMS body here..."
+                  className="min-h-[320px] w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-7 text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
+                />
+                {bodyError ? <p className="text-sm text-red-400">{bodyError}</p> : null}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                    Characters
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{bodyLength}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                    Segments
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{bodySegments}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                    Status
+                  </div>
+                  <div className="mt-2">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(event) => setIsActive(event.target.checked)}
+                        className="h-5 w-5 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm font-medium text-white">Template is active</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {state?.message || state?.error ? (
+            <div
+              className={[
+                "rounded-2xl border px-4 py-3 text-sm",
+                state?.success || state?.ok
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                  : "border-red-500/25 bg-red-500/10 text-red-300",
+              ].join(" ")}
+            >
+              {state?.error || state?.message}
+            </div>
+          ) : null}
+
+          <div className="flex items-center gap-3">
+            <SubmitButton mode={mode} />
+          </div>
+        </div>
+
+        <SmsTemplatePreview body={body} audience={audience} />
+      </div>
+    </form>
+  );
+}

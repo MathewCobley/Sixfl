@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
@@ -80,6 +81,11 @@ const navigation = [
     name: "Email Templates",
     href: "/admin/email-templates",
     icon: DocumentTextIcon,
+  },
+  {
+    name: "SMS Templates",
+    href: "/admin/sms-templates",
+    icon: ChatBubbleLeftRightIcon,
   },
 ];
 
@@ -177,7 +183,8 @@ export default function AdminSidebar({
                             unreadCount === 1 ? "" : "s"
                           }`
                         : "Campaigns and outreach")}
-                    {item.name === "Email Templates" && "Reusable messaging"}
+                    {item.name === "Email Templates" && "Reusable email messaging"}
+                    {item.name === "SMS Templates" && "Reusable text messaging"}
                   </div>
                 </div>
               </Link>

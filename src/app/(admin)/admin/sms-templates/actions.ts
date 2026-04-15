@@ -1,0 +1,202 @@
+// ========================================
+// File: src/app/(admin)/admin/sms-templates/actions.ts
+// ========================================
+
+"use server";
+
+import { NotificationAudience, NotificationChannel, NotificationTemplateKind } from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/requireAdmin";
+
+type SmsTemplateActionState = {
+  ok?: boolean;
+  success?: boolean;
+  message?: string;
+  error?: string;
+  errors?: Record<string, string[]>;
+};
+
+function buildValidationError(
+  errors: Record<string, string[]>,
+  message = "Please fix the highlighted fields.",
+): SmsTemplateActionState {
+  return {
+    ok: false,
+    success: false,
+    message,
+    error: message,
+    errors,
+  };
+}
+
+function slugifyTemplateKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function isAllowedAudience(value: string): value is "LEAD" | "TEAM" {
+  return value === "LEAD" || value === "TEAM";
+}
+
+function getTemplateValues(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const keyInput = String(formData.get("key") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const audienceRaw = String(formData.get("audience") ?? "").trim().toUpperCase();
+  const body = String(formData.get("body") ?? "").trim();
+  const isActive =
+    formData.get("isActive") === "true" || formData.get("isActive") === "on";
+
+  return {
+    id,
+    name,
+    keyInput,
+    description,
+    audienceRaw,
+    body,
+    isActive,
+  };
+}
+
+function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
+  const errors: Record<string, string[]> = {};
+
+  if (!values.name) {
+    errors.name = ["Please enter a template name."];
+  }
+
+  if (!values.body) {
+    errors.body = ["Please enter an SMS body."];
+  }
+
+  if (!isAllowedAudience(values.audienceRaw)) {
+    errors.audience = ["Please select a valid SMS audience."];
+  }
+
+  const key = slugifyTemplateKey(values.keyInput || values.name);
+
+  if (!key) {
+    errors.key = ["Please enter a valid template key."];
+  }
+
+  return {
+    errors,
+    key,
+    audience: isAllowedAudience(values.audienceRaw)
+      ? (values.audienceRaw as "LEAD" | "TEAM")
+      : undefined,
+  };
+}
+
+export async function createSmsTemplateAction(
+  formData: FormData,
+): Promise<SmsTemplateActionState> {
+  await requireAdmin();
+
+  const values = getTemplateValues(formData);
+  const validated = validateTemplateInput(values);
+
+  if (Object.keys(validated.errors).length > 0) {
+    return buildValidationError(validated.errors);
+  }
+
+  const existing = await prisma.notificationTemplate.findUnique({
+    where: { key: validated.key },
+    select: { id: true },
+  });
+
+  if (existing) {
+    return buildValidationError({
+      key: ["A template with that key already exists. Please use a different key."],
+    });
+  }
+
+  const created = await prisma.notificationTemplate.create({
+    data: {
+      key: validated.key,
+      name: values.name,
+      description: values.description || null,
+      kind: NotificationTemplateKind.CAMPAIGN,
+      channel: NotificationChannel.SMS,
+      audience: validated.audience as NotificationAudience,
+      subject: null,
+      body: values.body,
+      ctaLabel: null,
+      ctaUrlKey: null,
+      isActive: values.isActive,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  revalidatePath("/admin/sms-templates");
+  revalidatePath("/admin/messaging");
+
+  redirect(`/admin/sms-templates/${created.id}`);
+}
+
+export async function updateSmsTemplateAction(
+  formData: FormData,
+): Promise<SmsTemplateActionState> {
+  await requireAdmin();
+
+  const values = getTemplateValues(formData);
+
+  if (!values.id) {
+    return buildValidationError({
+      id: ["Missing template ID."],
+    });
+  }
+
+  const validated = validateTemplateInput(values);
+
+  if (Object.keys(validated.errors).length > 0) {
+    return buildValidationError(validated.errors);
+  }
+
+  const existing = await prisma.notificationTemplate.findUnique({
+    where: { key: validated.key },
+    select: { id: true },
+  });
+
+  if (existing && existing.id !== values.id) {
+    return buildValidationError({
+      key: ["Another template already uses that key. Please use a different key."],
+    });
+  }
+
+  await prisma.notificationTemplate.update({
+    where: { id: values.id },
+    data: {
+      key: validated.key,
+      name: values.name,
+      description: values.description || null,
+      kind: NotificationTemplateKind.CAMPAIGN,
+      channel: NotificationChannel.SMS,
+      audience: validated.audience as NotificationAudience,
+      subject: null,
+      body: values.body,
+      ctaLabel: null,
+      ctaUrlKey: null,
+      isActive: values.isActive,
+    },
+  });
+
+  revalidatePath("/admin/sms-templates");
+  revalidatePath(`/admin/sms-templates/${values.id}`);
+  revalidatePath("/admin/messaging");
+
+  return {
+    ok: true,
+    success: true,
+    message: "SMS template saved successfully.",
+  };
+}
