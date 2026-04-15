@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/messaging/actions.ts
+// File: src/app/(admin)/admin/messaging/actions.ts
 // ========================================
 
 "use server";
@@ -45,7 +45,7 @@ function buildLeadEmailContext(input: {
       area: input.area,
       signupUrl: input.signupUrl,
       teamName: input.teamName,
-    })
+    }),
   );
 }
 
@@ -79,7 +79,7 @@ function resolveLeadEmailCta(input: {
 
 export async function sendAdminLeadCampaignAction(
   _prevState: AdminMessagingActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<AdminMessagingActionState> {
   await requireAdmin();
 
@@ -145,6 +145,13 @@ export async function sendAdminLeadCampaignAction(
   let failedCount = 0;
 
   for (const lead of leads) {
+    const leadEmail = lead.email?.trim() || "";
+
+    if (!leadEmail) {
+      failedCount += 1;
+      continue;
+    }
+
     try {
       const signupUrl = lead.league?.slug
         ? `https://www.sixfl.co.uk/leagues/${lead.league.slug}`
@@ -160,7 +167,7 @@ export async function sendAdminLeadCampaignAction(
       const resolvedSubject = resolveTemplateText(subjectInput, context);
       const resolvedBody = resolveTemplateText(
         bodyInput.replaceAll("{{cta}}", CTA_PLACEHOLDER_TOKEN),
-        context
+        context,
       ).replaceAll(CTA_PLACEHOLDER_TOKEN, "{{cta}}");
 
       const resolvedCta = resolveLeadEmailCta({
@@ -177,7 +184,7 @@ export async function sendAdminLeadCampaignAction(
 
       await resend.emails.send({
         from: fromEmail,
-        to: lead.email,
+        to: leadEmail,
         subject: resolvedSubject,
         text: signedTextBody,
         html: signedHtmlBody,
@@ -188,7 +195,7 @@ export async function sendAdminLeadCampaignAction(
           interestLeadId: lead.id,
           subject: resolvedSubject,
           body: signedTextBody,
-          sentTo: lead.email,
+          sentTo: leadEmail,
         },
       });
 
