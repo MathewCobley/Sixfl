@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/api/social/image/[fixtureId]/route.ts
+// File: src/app/api/social/image/[fixtureId]/route.tsx
 // ========================================
 
 import { ImageResponse } from "next/og";
