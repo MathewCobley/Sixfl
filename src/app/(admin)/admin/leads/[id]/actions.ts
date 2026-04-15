@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/(admin)/admin/leads/actions.ts
+// File: src/app/(admin)/admin/leads/[id]/actions.ts
 // ========================================
 
 "use server";
@@ -8,303 +8,153 @@
 // Imports
 // ========================================
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import {
-  InterestType,
-  LeadStatus,
-  LeagueType,
-  PreferredNight,
-} from "@prisma/client";
 import { Resend } from "resend";
+import { LeadStatus, TeamRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   appendSIXFLTextSignature,
   buildSIXFLEmailHtml,
-  type SIXFLEmailCta,
 } from "@/lib/email/buildEmail";
-import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
-
-// ========================================
-// Types
-// ========================================
-
-type BulkEmailActionState = {
-  ok?: boolean;
-  error?: string;
-  sentCount?: number;
-  failedCount?: number;
-};
-
-export type ManualLeadFormState = {
-  ok?: boolean;
-  message?: string;
-  errors?: Partial<
-    Record<
-      | "interestType"
-      | "status"
-      | "contactName"
-      | "email"
-      | "phone"
-      | "leagueType"
-      | "preferredNights",
-      string
-    >
-  >;
-};
+import {
+  buildBaseEmailTemplateContext,
+  mergeEmailTemplateContext,
+  resolveTemplateText,
+} from "@/lib/email/template-context";
 
 // ========================================
 // Constants
 // ========================================
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-const DEFAULT_BULK_EMAIL_CTA: SIXFLEmailCta = {
-  url: "https://www.sixfl.co.uk/register-interest",
-  label: "Register your interest",
-};
+const CTA_PLACEHOLDER_TOKEN = "__SIXFL_CTA__";
 
 // ========================================
 // Helpers
 // ========================================
 
-function getPersonalisationValues(contactName?: string | null) {
-  const fullName = contactName?.trim() || "";
+function slugifyTeamName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+async function generateUniqueClaimCode(teamName: string) {
+  const base = slugifyTeamName(teamName) || "team";
+
+  for (let i = 0; i < 10; i += 1) {
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const claimCode = `${base}-${suffix}`;
+
+    const existing = await prisma.team.findUnique({
+      where: { claimCode },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return claimCode;
+    }
+  }
+
+  throw new Error("Unable to generate a unique team claim code.");
+}
+
+function buildTeamNameFromLead(lead: {
+  teamName: string | null;
+  contactName: string;
+}) {
+  const explicitTeamName = lead.teamName?.trim();
+
+  if (explicitTeamName) {
+    return explicitTeamName;
+  }
+
+  const contactName = lead.contactName.trim();
+
+  if (contactName) {
+    return `${contactName}'s Team`;
+  }
+
+  return "New Team";
+}
+
+function buildLeadEmailContext(input: {
+  contactName?: string | null;
+  area?: string | null;
+  signupUrl?: string | null;
+  teamName?: string | null;
+}) {
+  const fullName = input.contactName?.trim() || "";
   const firstName = fullName.split(/\s+/)[0] || "there";
 
-  return {
-    fullName,
-    firstName,
-  };
-}
-
-function personaliseTemplateText(text: string, contactName?: string | null) {
-  const { fullName, firstName } = getPersonalisationValues(contactName);
-
-  return text
-    .replace(/{{firstName}}/gi, firstName)
-    .replace(/{{name}}/gi, fullName || firstName)
-    .replace(/Hi there/gi, `Hi ${firstName}`);
-}
-
-function isLeadStatus(value: string): value is LeadStatus {
-  return (
-    value === "NEW" ||
-    value === "CONTACTED" ||
-    value === "QUALIFIED" ||
-    value === "CLOSED"
+  return mergeEmailTemplateContext(
+    buildBaseEmailTemplateContext({
+      firstName,
+      fullName,
+      area: input.area,
+      signupUrl: input.signupUrl,
+      teamName: input.teamName,
+    }),
   );
 }
 
-function isInterestType(value: string): value is InterestType {
-  return value === "TEAM" || value === "PLAYER" || value === "REFEREE";
-}
+function resolveLeadEmailCta(input: {
+  ctaLabel?: string | null;
+  ctaUrlKey?: string | null;
+  signupUrl?: string | null;
+}) {
+  const label = input.ctaLabel?.trim() || "";
+  const urlKey = input.ctaUrlKey?.trim() || "";
 
-function isPreferredNight(value: string): value is PreferredNight {
-  return (
-    value === "MONDAY" ||
-    value === "TUESDAY" ||
-    value === "WEDNESDAY" ||
-    value === "THURSDAY" ||
-    value === "FRIDAY" ||
-    value === "SATURDAY" ||
-    value === "SUNDAY" ||
-    value === "ANY"
-  );
-}
+  if (!label || !urlKey) {
+    return undefined;
+  }
 
-function isLeagueType(value: string): value is LeagueType {
-  return value === "MENS" || value === "WOMENS" || value === "YOUTH";
-}
+  if (urlKey === "signupUrl") {
+    const url = input.signupUrl?.trim() || "";
 
-function getTrimmedValue(formData: FormData, name: string) {
-  return String(formData.get(name) ?? "").trim();
-}
+    if (!url) {
+      return undefined;
+    }
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    return {
+      label,
+      url,
+    };
+  }
+
+  return undefined;
 }
 
 // ========================================
 // Actions
 // ========================================
 
-export async function updateLeadStatus(formData: FormData) {
+export async function sendLeadEmailAction(formData: FormData) {
   await requireAdmin();
 
-  const id = String(formData.get("id") ?? "").trim();
-  const statusRaw = String(formData.get("status") ?? "").trim().toUpperCase();
-  const returnTo = String(formData.get("returnTo") ?? "/admin/leads").trim();
+  const leadId = String(formData.get("leadId") ?? "").trim();
+  const subjectInput = String(formData.get("subject") ?? "").trim();
+  const bodyInput = String(formData.get("body") ?? "").trim();
 
-  if (!id || !isLeadStatus(statusRaw)) {
-    redirect(returnTo || "/admin/leads");
+  const signupUrl = String(formData.get("signupUrl") ?? "").trim();
+  const ctaLabelInput = String(formData.get("ctaLabel") ?? "").trim();
+  const ctaUrlKeyInput = String(formData.get("ctaUrlKey") ?? "").trim();
+
+  if (!leadId) {
+    return { ok: false, error: "Missing lead id." };
   }
 
-  await prisma.interestLead.update({
-    where: { id },
-    data: {
-      status: statusRaw,
-      ...(statusRaw === "CONTACTED" ? { contactedAt: new Date() } : {}),
-      ...(statusRaw === "CLOSED" ? { closedAt: new Date() } : {}),
-    },
-  });
-
-  redirect(returnTo || "/admin/leads");
-}
-
-export async function createManualLeadAction(
-  _prevState: ManualLeadFormState,
-  formData: FormData,
-): Promise<ManualLeadFormState> {
-  await requireAdmin();
-
-  const interestTypeRaw = getTrimmedValue(formData, "interestType").toUpperCase();
-  const statusRaw = getTrimmedValue(formData, "status").toUpperCase();
-  const contactName = getTrimmedValue(formData, "contactName");
-  const email = getTrimmedValue(formData, "email").toLowerCase();
-  const phone = getTrimmedValue(formData, "phone");
-  const teamName = getTrimmedValue(formData, "teamName");
-  const area = getTrimmedValue(formData, "area");
-  const leagueTypeRaw = getTrimmedValue(formData, "leagueType").toUpperCase();
-  const source = getTrimmedValue(formData, "source") || "Manual admin entry";
-  const message = getTrimmedValue(formData, "message");
-  const wantsFreeKit = formData.get("wantsFreeKit") === "on";
-  const marketingConsent = formData.get("marketingConsent") === "on";
-
-  const preferredNightsRaw = formData
-    .getAll("preferredNights")
-    .map((value) => String(value).trim().toUpperCase())
-    .filter(Boolean);
-
-  const errors: NonNullable<ManualLeadFormState["errors"]> = {};
-
-  if (!isInterestType(interestTypeRaw)) {
-    errors.interestType = "Please choose a valid lead type.";
+  if (!subjectInput) {
+    return { ok: false, error: "Please enter a subject." };
   }
 
-  if (!isLeadStatus(statusRaw)) {
-    errors.status = "Please choose a valid status.";
-  }
-
-  if (contactName.length < 2) {
-    errors.contactName = "Please enter the contact name.";
-  }
-
-  if (email && !isValidEmail(email)) {
-    errors.email = "Please enter a valid email address.";
-  }
-
-  if (!email && !phone) {
-    errors.email = "Please enter at least an email address or phone number.";
-    errors.phone = "Please enter at least a phone number or email address.";
-  }
-
-  if (leagueTypeRaw && !isLeagueType(leagueTypeRaw)) {
-    errors.leagueType = "Please choose a valid league type.";
-  }
-
-  const invalidNight = preferredNightsRaw.find((value) => !isPreferredNight(value));
-  if (invalidNight) {
-    errors.preferredNights = "One or more selected nights were invalid.";
-  }
-
-  if (Object.keys(errors).length > 0) {
-    return {
-      ok: false,
-      message: "Please fix the highlighted fields.",
-      errors,
-    };
-  }
-
-  const preferredNights = Array.from(
-    new Set(
-      preferredNightsRaw.filter((value): value is PreferredNight =>
-        isPreferredNight(value),
-      ),
-    ),
-  );
-
-  const finalPreferredNights = preferredNights.includes("ANY")
-    ? ["ANY" as PreferredNight]
-    : preferredNights;
-
-  const status = statusRaw as LeadStatus;
-  const phoneNormalized = normalizeUkMobileNumber(phone);
-
-  await prisma.interestLead.create({
-    data: {
-      interestType: interestTypeRaw as InterestType,
-      status,
-      contactName,
-      email: email || null,
-      phone: phone || null,
-      phoneNormalized,
-      teamName: teamName || null,
-      area: area || null,
-      leagueType:
-        leagueTypeRaw && isLeagueType(leagueTypeRaw) ? leagueTypeRaw : null,
-      message: message || null,
-      source,
-      wantsFreeKit,
-      marketingConsent,
-      ...(status !== "NEW" ? { contactedAt: new Date() } : {}),
-      ...(status === "CLOSED" ? { closedAt: new Date() } : {}),
-      ...(finalPreferredNights.length > 0
-        ? {
-            preferredNights: {
-              create: finalPreferredNights.map((night) => ({
-                night,
-              })),
-            },
-          }
-        : {}),
-    },
-  });
-
-  revalidatePath("/admin/leads");
-  revalidatePath("/admin");
-
-  redirect("/admin/leads?created=1");
-}
-
-export async function sendBulkLeadEmailAction(
-  _prevState: BulkEmailActionState,
-  formData: FormData,
-): Promise<BulkEmailActionState> {
-  await requireAdmin();
-
-  const subject = String(formData.get("subject") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
-
-  const selectedTypeRaw = String(formData.get("selectedType") ?? "")
-    .trim()
-    .toUpperCase();
-  const selectedStatusRaw = String(formData.get("selectedStatus") ?? "")
-    .trim()
-    .toUpperCase();
-  const selectedArea = String(formData.get("selectedArea") ?? "").trim();
-  const selectedNightRaw = String(formData.get("selectedNight") ?? "")
-    .trim()
-    .toUpperCase();
-
-  const includedLeadIds = formData
-    .getAll("includedLeadIds")
-    .map((value) => String(value).trim())
-    .filter(Boolean);
-
-  if (!subject) {
-    return {
-      ok: false,
-      error: "Please enter a subject.",
-    };
-  }
-
-  if (!body) {
-    return {
-      ok: false,
-      error: "Please enter a message.",
-    };
+  if (!bodyInput) {
+    return { ok: false, error: "Please enter an email message." };
   }
 
   if (!process.env.RESEND_API_KEY) {
@@ -314,133 +164,250 @@ export async function sendBulkLeadEmailAction(
     };
   }
 
-  if (!process.env.EMAIL_FROM) {
+  const fromEmail = process.env.EMAIL_FROM;
+
+  if (!fromEmail) {
     return {
       ok: false,
       error: "EMAIL_FROM is missing from your environment variables.",
     };
   }
 
-  const where = {
-    ...(selectedTypeRaw && isInterestType(selectedTypeRaw)
-      ? { interestType: selectedTypeRaw as InterestType }
-      : {}),
-    ...(selectedStatusRaw && isLeadStatus(selectedStatusRaw)
-      ? { status: selectedStatusRaw as LeadStatus }
-      : {}),
-    ...(selectedArea ? { area: selectedArea } : {}),
-    ...(selectedNightRaw && isPreferredNight(selectedNightRaw)
-      ? {
-          preferredNights: {
-            some: {
-              night: selectedNightRaw as PreferredNight,
-            },
-          },
-        }
-      : {}),
-    AND: [
-      {
-        email: {
-          not: null,
-        },
-      },
-      {
-        email: {
-          not: "",
-        },
-      },
-    ],
-    ...(includedLeadIds.length > 0
-      ? {
-          id: {
-            in: includedLeadIds,
-          },
-        }
-      : {}),
-  };
-
-  const leads = await prisma.interestLead.findMany({
-    where,
-    select: {
-      id: true,
-      email: true,
-      status: true,
-      contactName: true,
-    },
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
   });
 
-  const validLeads = leads.filter((lead) => lead.email?.trim());
+  if (!lead) {
+    return { ok: false, error: "Lead not found." };
+  }
 
-  if (validLeads.length === 0) {
+  const leadEmail = lead.email?.trim() || "";
+
+  if (!leadEmail) {
     return {
       ok: false,
-      error: "No matching recipients were found for this bulk email.",
+      error: "This lead does not have an email address.",
     };
   }
 
-  let sentCount = 0;
-  let failedCount = 0;
+  const context = buildLeadEmailContext({
+    contactName: lead.contactName,
+    area: lead.area ?? null,
+    signupUrl,
+    teamName: lead.teamName ?? null,
+  });
 
-  for (const lead of validLeads) {
-    try {
-      const email = lead.email?.trim();
+  const resolvedSubject = resolveTemplateText(subjectInput, context);
 
-      if (!email) {
-        failedCount += 1;
-        continue;
-      }
+  const resolvedBody = resolveTemplateText(
+    bodyInput.replaceAll("{{cta}}", CTA_PLACEHOLDER_TOKEN),
+    context,
+  ).replaceAll(CTA_PLACEHOLDER_TOKEN, "{{cta}}");
 
-      const personalisedSubject = personaliseTemplateText(
-        subject,
-        lead.contactName,
-      );
-      const personalisedBody = personaliseTemplateText(body, lead.contactName);
+  const resolvedCta = resolveLeadEmailCta({
+    ctaLabel: ctaLabelInput,
+    ctaUrlKey: ctaUrlKeyInput,
+    signupUrl,
+  });
 
-      const signedTextBody = appendSIXFLTextSignature(personalisedBody);
-      const signedHtmlBody = buildSIXFLEmailHtml({
+  const signedTextBody = appendSIXFLTextSignature(resolvedBody);
+
+  const signedHtmlBody = buildSIXFLEmailHtml({
+    body: signedTextBody,
+    cta: resolvedCta,
+  });
+
+  try {
+    await resend.emails.send({
+      from: fromEmail,
+      to: leadEmail,
+      subject: resolvedSubject,
+      text: signedTextBody,
+      html: signedHtmlBody,
+    });
+
+    await prisma.interestLeadEmail.create({
+      data: {
+        interestLeadId: lead.id,
+        subject: resolvedSubject,
         body: signedTextBody,
-        cta: DEFAULT_BULK_EMAIL_CTA,
-      });
+        sentTo: leadEmail,
+      },
+    });
 
-      await resend.emails.send({
-        from: process.env.EMAIL_FROM,
-        to: email,
-        subject: personalisedSubject,
-        text: signedTextBody,
-        html: signedHtmlBody,
-      });
-
-      await prisma.interestLeadEmail.create({
+    if (lead.status === LeadStatus.NEW) {
+      await prisma.interestLead.update({
+        where: { id: lead.id },
         data: {
-          interestLeadId: lead.id,
-          subject: personalisedSubject,
-          body: signedTextBody,
-          sentTo: email,
+          status: LeadStatus.CONTACTED,
+          contactedAt: new Date(),
+        },
+      });
+    }
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${lead.id}`);
+
+    return { ok: true };
+  } catch (error) {
+    console.error("sendLeadEmailAction error", error);
+
+    return {
+      ok: false,
+      error:
+        "The email could not be sent. Please check your Resend domain and email settings.",
+    };
+  }
+}
+
+export async function deleteLeadAction(formData: FormData) {
+  await requireAdmin();
+
+  const leadId = String(formData.get("leadId") ?? "").trim();
+
+  if (!leadId) {
+    return { ok: false, error: "Missing lead id." };
+  }
+
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
+    select: { id: true },
+  });
+
+  if (!lead) {
+    return { ok: false, error: "Lead not found." };
+  }
+
+  try {
+    await prisma.interestLead.delete({
+      where: { id: leadId },
+    });
+
+    revalidatePath("/admin/leads");
+
+    return { ok: true };
+  } catch (error) {
+    console.error("deleteLeadAction error", error);
+
+    return {
+      ok: false,
+      error: "Failed to delete lead.",
+    };
+  }
+}
+
+export async function convertLeadToTeamAction(formData: FormData) {
+  await requireAdmin();
+
+  const leadId = String(formData.get("leadId") ?? "").trim();
+
+  if (!leadId) {
+    return { ok: false, error: "Missing lead id." };
+  }
+
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
+  });
+
+  if (!lead) {
+    return { ok: false, error: "Lead not found." };
+  }
+
+  if (lead.interestType !== "TEAM") {
+    return {
+      ok: false,
+      error: "Only team leads can be converted into teams.",
+    };
+  }
+
+  if (lead.convertedTeamId) {
+    return { ok: true, teamId: lead.convertedTeamId };
+  }
+
+  try {
+    const teamName = buildTeamNameFromLead({
+      teamName: lead.teamName,
+      contactName: lead.contactName,
+    });
+
+    const claimCode = await generateUniqueClaimCode(teamName);
+
+    const createdTeam = await prisma.team.create({
+      data: {
+        name: teamName,
+        claimCode,
+        contactName: lead.contactName || null,
+        contactEmail: lead.email?.trim() || null,
+        contactPhone: lead.phone?.trim() || null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await prisma.interestLead.update({
+      where: { id: lead.id },
+      data: {
+        status: LeadStatus.CLOSED,
+        closedAt: new Date(),
+        convertedAt: new Date(),
+        convertedTeamId: createdTeam.id,
+      },
+    });
+
+    if (lead.email?.trim()) {
+      const existingUser = await prisma.user.findUnique({
+        where: {
+          email: lead.email.trim().toLowerCase(),
+        },
+        select: {
+          id: true,
         },
       });
 
-      if (lead.status === "NEW") {
-        await prisma.interestLead.update({
-          where: { id: lead.id },
+      if (existingUser) {
+        await prisma.teamMember.upsert({
+          where: {
+            userId_teamId: {
+              userId: existingUser.id,
+              teamId: createdTeam.id,
+            },
+          },
+          update: {
+            role: TeamRole.CAPTAIN,
+          },
+          create: {
+            userId: existingUser.id,
+            teamId: createdTeam.id,
+            role: TeamRole.CAPTAIN,
+          },
+        });
+
+        await prisma.team.update({
+          where: { id: createdTeam.id },
           data: {
-            status: "CONTACTED",
-            contactedAt: new Date(),
+            captainUserId: existingUser.id,
+            captainLinkedAt: new Date(),
+            captainLinkedSource: "lead_conversion",
+            captainClaimedAt: new Date(),
+            captainClaimSource: "lead_conversion",
           },
         });
       }
-
-      sentCount += 1;
-    } catch (error) {
-      console.error("sendBulkLeadEmailAction item error", lead.id, error);
-      failedCount += 1;
     }
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${lead.id}`);
+    revalidatePath(`/admin/teams/${createdTeam.id}`);
+    revalidatePath("/admin/teams");
+
+    return { ok: true, teamId: createdTeam.id };
+  } catch (error) {
+    console.error("convertLeadToTeamAction error", error);
+
+    return {
+      ok: false,
+      error: "Failed to convert lead into a team.",
+    };
   }
-
-  revalidatePath("/admin/leads");
-
-  return {
-    ok: true,
-    sentCount,
-    failedCount,
-  };
 }

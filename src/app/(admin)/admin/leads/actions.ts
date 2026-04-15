@@ -24,6 +24,7 @@ import {
   buildSIXFLEmailHtml,
   type SIXFLEmailCta,
 } from "@/lib/email/buildEmail";
+import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
 // ========================================
 // Types
@@ -190,10 +191,13 @@ export async function createManualLeadAction(
     errors.contactName = "Please enter the contact name.";
   }
 
-  if (!email) {
-    errors.email = "Please enter an email address.";
-  } else if (!isValidEmail(email)) {
+  if (email && !isValidEmail(email)) {
     errors.email = "Please enter a valid email address.";
+  }
+
+  if (!email && !phone) {
+    errors.email = "Please enter at least an email address or phone number.";
+    errors.phone = "Please enter at least a phone number or email address.";
   }
 
   if (leagueTypeRaw && !isLeagueType(leagueTypeRaw)) {
@@ -226,17 +230,20 @@ export async function createManualLeadAction(
     : preferredNights;
 
   const status = statusRaw as LeadStatus;
+  const phoneNormalized = normalizeUkMobileNumber(phone);
 
   await prisma.interestLead.create({
     data: {
       interestType: interestTypeRaw as InterestType,
       status,
       contactName,
-      email,
+      email: email || null,
       phone: phone || null,
+      phoneNormalized,
       teamName: teamName || null,
       area: area || null,
-      leagueType: leagueTypeRaw && isLeagueType(leagueTypeRaw) ? leagueTypeRaw : null,
+      leagueType:
+        leagueTypeRaw && isLeagueType(leagueTypeRaw) ? leagueTypeRaw : null,
       message: message || null,
       source,
       wantsFreeKit,
@@ -331,9 +338,18 @@ export async function sendBulkLeadEmailAction(
           },
         }
       : {}),
-    email: {
-      not: "",
-    },
+    AND: [
+      {
+        email: {
+          not: null,
+        },
+      },
+      {
+        email: {
+          not: "",
+        },
+      },
+    ],
     ...(includedLeadIds.length > 0
       ? {
           id: {
