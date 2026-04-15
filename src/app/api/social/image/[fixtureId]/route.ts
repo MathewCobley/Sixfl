@@ -5,6 +5,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { createCanvas, loadImage, registerFont } from "canvas";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -12,13 +13,33 @@ export const runtime = "nodejs";
 const WIDTH = 1080;
 const HEIGHT = 1080;
 
-function escapeXml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
+const FONT_REGULAR = path.join(
+  process.cwd(),
+  "public",
+  "fonts",
+  "Inter-Regular.ttf",
+);
+
+const FONT_BOLD = path.join(
+  process.cwd(),
+  "public",
+  "fonts",
+  "Inter-Bold.ttf",
+);
+
+let fontsRegistered = false;
+
+function ensureFontsRegistered() {
+  if (fontsRegistered) return;
+
+  try {
+    registerFont(FONT_REGULAR, { family: "Inter" });
+    registerFont(FONT_BOLD, { family: "Inter", weight: "700" });
+    fontsRegistered = true;
+  } catch {
+    // Fallback to system sans-serif if custom fonts are not present.
+    fontsRegistered = true;
+  }
 }
 
 function fitText(value: string, max = 26) {
@@ -101,75 +122,47 @@ async function makeBadgeBox(input: Buffer, boxSize = 260) {
     .toBuffer();
 }
 
-function textSvg(input: {
-  width: number;
-  height: number;
+function drawCenteredTextBlock(input: {
+  ctx: ReturnType<typeof createCanvas>["getContext"];
   text: string;
+  x: number;
+  y: number;
+  maxWidth: number;
   fontSize: number;
-  fontWeight?: number;
+  weight?: number;
   color?: string;
-  align?: "left" | "center" | "right";
-  valign?: "top" | "middle" | "bottom";
-  letterSpacing?: number;
 }) {
   const {
-    width,
-    height,
+    ctx,
     text,
+    x,
+    y,
+    maxWidth,
     fontSize,
-    fontWeight = 700,
+    weight = 700,
     color = "#FFFFFF",
-    align = "center",
-    valign = "middle",
-    letterSpacing = 0,
   } = input;
 
-  const safeText = escapeXml(normaliseText(text));
+  let size = fontSize;
+  while (size > 16) {
+    ctx.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+    if (ctx.measureText(text).width <= maxWidth) break;
+    size -= 2;
+  }
 
-  const x = align === "left" ? 0 : align === "right" ? width : width / 2;
-  const y =
-    valign === "top"
-      ? fontSize
-      : valign === "bottom"
-        ? height
-        : height / 2;
-
-  const anchor =
-    align === "left" ? "start" : align === "right" ? "end" : "middle";
-
-  const baseline =
-    valign === "top"
-      ? "hanging"
-      : valign === "bottom"
-        ? "text-after-edge"
-        : "middle";
-
-  return Buffer.from(`
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <style>
-        .t {
-          font-family: sans-serif;
-          font-size: ${fontSize}px;
-          font-weight: ${fontWeight};
-          fill: ${color};
-          letter-spacing: ${letterSpacing}px;
-        }
-      </style>
-      <text
-        x="${x}"
-        y="${y}"
-        text-anchor="${anchor}"
-        dominant-baseline="${baseline}"
-        class="t"
-      >${safeText}</text>
-    </svg>
-  `.trim());
+  ctx.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x, y);
 }
 
 export async function GET(
   _request: Request,
   context: { params: Promise<{ fixtureId: string }> },
 ) {
+  ensureFontsRegistered();
+
   const { fixtureId } = await context.params;
 
   const fixture = await prisma.fixture.findUnique({
@@ -234,6 +227,70 @@ export async function GET(
   );
   const kickoffText = formatKickoff(fixture.kickoffAt);
 
+  // Build reliable text layer with node-canvas
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0, 0, WIDTH, HEIGHT);
+  ctx.fillStyle = "#FFFFFF";
+
+  drawCenteredTextBlock({
+    ctx,
+    text: leagueName,
+    x: 540,
+    y: 267,
+    maxWidth: 760,
+    fontSize: 28,
+    weight: 700,
+    color: "#F4F7FA",
+  });
+
+  drawCenteredTextBlock({
+    ctx,
+    text: homeName,
+    x: 280,
+    y: 720,
+    maxWidth: 300,
+    fontSize: 32,
+    weight: 800,
+    color: "#FFFFFF",
+  });
+
+  drawCenteredTextBlock({
+    ctx,
+    text: awayName,
+    x: 800,
+    y: 720,
+    maxWidth: 300,
+    fontSize: 32,
+    weight: 800,
+    color: "#FFFFFF",
+  });
+
+  drawCenteredTextBlock({
+    ctx,
+    text: venueName,
+    x: 540,
+    y: 842,
+    maxWidth: 500,
+    fontSize: 34,
+    weight: 800,
+    color: "#FFFFFF",
+  });
+
+  drawCenteredTextBlock({
+    ctx,
+    text: kickoffText,
+    x: 540,
+    y: 905,
+    maxWidth: 500,
+    fontSize: 24,
+    weight: 700,
+    color: "#F4F7FA",
+  });
+
+  const textLayer = canvas.toBuffer("image/png");
+
   const composites: sharp.OverlayOptions[] = [];
 
   if (homeBadge) {
@@ -252,68 +309,11 @@ export async function GET(
     });
   }
 
-  composites.push(
-    {
-      input: textSvg({
-        width: 760,
-        height: 52,
-        text: leagueName,
-        fontSize: 28,
-        fontWeight: 700,
-        color: "#F4F7FA",
-      }),
-      left: 160,
-      top: 240,
-    },
-    {
-      input: textSvg({
-        width: 300,
-        height: 60,
-        text: homeName,
-        fontSize: 30,
-        fontWeight: 800,
-        color: "#FFFFFF",
-      }),
-      left: 130,
-      top: 690,
-    },
-    {
-      input: textSvg({
-        width: 300,
-        height: 60,
-        text: awayName,
-        fontSize: 30,
-        fontWeight: 800,
-        color: "#FFFFFF",
-      }),
-      left: 650,
-      top: 690,
-    },
-    {
-      input: textSvg({
-        width: 500,
-        height: 64,
-        text: venueName,
-        fontSize: 34,
-        fontWeight: 800,
-        color: "#FFFFFF",
-      }),
-      left: 290,
-      top: 810,
-    },
-    {
-      input: textSvg({
-        width: 500,
-        height: 48,
-        text: kickoffText,
-        fontSize: 24,
-        fontWeight: 700,
-        color: "#F4F7FA",
-      }),
-      left: 290,
-      top: 875,
-    },
-  );
+  composites.push({
+    input: textLayer,
+    left: 0,
+    top: 0,
+  });
 
   const output = await base.composite(composites).png().toBuffer();
   const body = new Uint8Array(output);
