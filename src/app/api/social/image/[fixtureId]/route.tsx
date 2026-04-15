@@ -2,11 +2,19 @@
 // File: src/app/api/social/image/[fixtureId]/route.tsx
 // ========================================
 
-import { ImageResponse } from "next/og";
 import { SocialPostType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
+
+function escapeXml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
 
 function getScoreLabel(homeScore: number | null, awayScore: number | null) {
   if (homeScore === null || awayScore === null) {
@@ -26,6 +34,11 @@ function getPostTypeLabel(postType: SocialPostType, fixtureStatus: string) {
   }
 
   return "SIXFL";
+}
+
+function fitText(input: string, max = 26) {
+  if (input.length <= max) return input;
+  return `${input.slice(0, max - 1)}…`;
 }
 
 export async function GET(
@@ -97,6 +110,14 @@ export async function GET(
   const venueLabel = fixture.venue?.name ?? "SIXFL";
   const headerLabel = getPostTypeLabel(postType, fixture.status);
 
+  const homeName = escapeXml(fitText(fixture.homeTeam.name, 24));
+  const awayName = escapeXml(fitText(fixture.awayTeam.name, 24));
+  const header = escapeXml(headerLabel);
+  const league = escapeXml(fitText(leagueLabel, 56));
+  const venue = escapeXml(fitText(venueLabel, 56));
+  const kickoff = escapeXml(kickoffLabel);
+  const score = escapeXml(scoreLabel ?? "VS");
+
   const showScore = postType === "RESULT" && scoreLabel;
 
   const footerLabel =
@@ -104,199 +125,49 @@ export async function GET(
       ? `${kickoffLabel} • ${venueLabel}`
       : venueLabel;
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "1080px",
-          height: "1080px",
-          display: "flex",
-          position: "relative",
-          fontFamily: "Arial, sans-serif",
-          background:
-            "radial-gradient(circle at top, rgba(30,90,67,0.35), rgba(6,10,14,1) 55%)",
-          color: "#ffffff",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            padding: "64px",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                fontSize: 30,
-                letterSpacing: "0.28em",
-                fontWeight: 700,
-                color: "rgba(110,231,183,0.92)",
-              }}
-            >
-              {headerLabel}
-            </div>
+  const footer = escapeXml(fitText(footerLabel, 72));
 
-            <div
-              style={{
-                display: "flex",
-                fontSize: 34,
-                fontWeight: 800,
-                letterSpacing: "0.18em",
-              }}
-            >
-              SIXFL
-            </div>
-          </div>
+  const svg = `
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1080" y2="1080">
+      <stop offset="0%" stop-color="#0F2C22" />
+      <stop offset="55%" stop-color="#071018" />
+      <stop offset="100%" stop-color="#04070B" />
+    </linearGradient>
+  </defs>
 
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "24px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                fontSize: 34,
-                color: "rgba(255,255,255,0.75)",
-              }}
-            >
-              {leagueLabel}
-            </div>
+  <rect width="1080" height="1080" fill="url(#bg)" />
+  <rect x="40" y="40" width="1000" height="1000" rx="40" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "18px",
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(255,255,255,0.04)",
-                borderRadius: "32px",
-                padding: "40px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    fontSize: 62,
-                    fontWeight: 800,
-                    maxWidth: "42%",
-                  }}
-                >
-                  {fixture.homeTeam.name}
-                </div>
+  <text x="70" y="110" fill="#6EE7B7" font-size="28" font-family="Arial, sans-serif" font-weight="700" letter-spacing="6">${header}</text>
+  <text x="930" y="110" fill="#FFFFFF" font-size="30" text-anchor="end" font-family="Arial, sans-serif" font-weight="800" letter-spacing="4">SIXFL</text>
 
-                <div
-                  style={{
-                    display: "flex",
-                    fontSize: showScore ? 110 : 64,
-                    fontWeight: 900,
-                    color: showScore ? "#ffffff" : "rgba(255,255,255,0.84)",
-                    textAlign: "center",
-                  }}
-                >
-                  {showScore ? scoreLabel : "VS"}
-                </div>
+  <text x="70" y="190" fill="rgba(255,255,255,0.8)" font-size="30" font-family="Arial, sans-serif" font-weight="600">${league}</text>
 
-                <div
-                  style={{
-                    display: "flex",
-                    fontSize: 62,
-                    fontWeight: 800,
-                    maxWidth: "42%",
-                    textAlign: "right",
-                    justifyContent: "flex-end",
-                  }}
-                >
-                  {fixture.awayTeam.name}
-                </div>
-              </div>
+  <rect x="70" y="250" width="940" height="390" rx="34" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)" />
 
-              {!showScore ? (
-                <div
-                  style={{
-                    display: "flex",
-                    fontSize: 28,
-                    color: "rgba(255,255,255,0.62)",
-                  }}
-                >
-                  {kickoffLabel}
-                </div>
-              ) : null}
-            </div>
-          </div>
+  <text x="120" y="390" fill="#FFFFFF" font-size="54" font-family="Arial, sans-serif" font-weight="800">${homeName}</text>
+  <text x="960" y="390" fill="#FFFFFF" font-size="54" text-anchor="end" font-family="Arial, sans-serif" font-weight="800">${awayName}</text>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "end",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: 26,
-                  color: "rgba(255,255,255,0.72)",
-                }}
-              >
-                {footerLabel}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: 22,
-                  color: "rgba(255,255,255,0.46)",
-                  letterSpacing: "0.12em",
-                }}
-              >
-                6-A-SIDE FOOTBALL. DONE PROPERLY.
-              </div>
-            </div>
+  <text x="540" y="${showScore ? "470" : "455"}" fill="#FFFFFF" font-size="${showScore ? "110" : "70"}" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900">${score}</text>
 
-            <div
-              style={{
-                display: "flex",
-                fontSize: 24,
-                color: "rgba(110,231,183,0.92)",
-                fontWeight: 700,
-              }}
-            >
-              #SIXFL
-            </div>
-          </div>
-        </div>
-      </div>
-    ),
-    {
-      width: 1080,
-      height: 1080,
+  ${
+    showScore
+      ? ""
+      : `<text x="540" y="545" fill="rgba(255,255,255,0.65)" font-size="26" text-anchor="middle" font-family="Arial, sans-serif" font-weight="600">${kickoff}</text>`
+  }
+
+  <text x="70" y="930" fill="rgba(255,255,255,0.78)" font-size="26" font-family="Arial, sans-serif" font-weight="600">${footer}</text>
+  <text x="70" y="970" fill="rgba(255,255,255,0.42)" font-size="20" font-family="Arial, sans-serif" font-weight="700" letter-spacing="3">6-A-SIDE FOOTBALL. DONE PROPERLY.</text>
+  <text x="1000" y="970" fill="#6EE7B7" font-size="24" text-anchor="end" font-family="Arial, sans-serif" font-weight="800">#SIXFL</text>
+</svg>`.trim();
+
+  return new Response(svg, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": "public, max-age=60, s-maxage=60",
     },
-  );
+  });
 }
