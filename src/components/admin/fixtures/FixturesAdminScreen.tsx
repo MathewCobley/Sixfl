@@ -1278,7 +1278,7 @@ export default function FixturesAdminScreen({
                 Fixtures
               </h2>
               <p className="max-w-2xl text-sm leading-6 text-white/60">
-                Review generated matches, edit details, submit results, and see exactly which teams have confirmed their fixtures.
+                Review generated matches, edit details, submit results, prep social drafts, and see exactly which teams have confirmed their fixtures.
               </p>
             </div>
 
@@ -1540,6 +1540,9 @@ export default function FixturesAdminScreen({
                   </th>
                   <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
                     Result
+                  </th>
+                  <th className="px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Social
                   </th>
                   <th className="px-6 py-4 text-right text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
                     Actions
