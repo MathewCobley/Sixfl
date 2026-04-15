@@ -5,7 +5,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { createCanvas, loadImage, registerFont } from "canvas";
+import {
+  createCanvas,
+  registerFont,
+  type CanvasRenderingContext2D,
+} from "canvas";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -123,7 +127,7 @@ async function makeBadgeBox(input: Buffer, boxSize = 260) {
 }
 
 function drawCenteredTextBlock(input: {
-  ctx: ReturnType<typeof createCanvas>["getContext"];
+  ctx: CanvasRenderingContext2D;
   text: string;
   x: number;
   y: number;
