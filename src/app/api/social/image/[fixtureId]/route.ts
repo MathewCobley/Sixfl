@@ -265,12 +265,13 @@ export async function GET(
   );
 
   const output = await base.composite(composites).png().toBuffer();
+  const body = new Uint8Array(output);
 
-  return new Response(output, {
-    status: 200,
-    headers: {
-      "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=60, s-maxage=60",
-    },
-  });
+  return new Response(body, {
+  status: 200,
+  headers: {
+    "Content-Type": "image/png",
+    "Cache-Control": "public, max-age=60, s-maxage=60",
+  },
+});
 }
