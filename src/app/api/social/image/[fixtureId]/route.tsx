@@ -36,9 +36,20 @@ function getPostTypeLabel(postType: SocialPostType, fixtureStatus: string) {
   return "SIXFL";
 }
 
-function fitText(input: string, max = 26) {
+function truncate(input: string, max = 28) {
   if (input.length <= max) return input;
   return `${input.slice(0, max - 1)}…`;
+}
+
+function formatKickoffLabel(date: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/London",
+  }).format(date);
 }
 
 export async function GET(
@@ -93,74 +104,74 @@ export async function GET(
     fixture.result?.homeScore ?? null,
     fixture.result?.awayScore ?? null,
   );
+  const showScore = postType === "RESULT" && scoreLabel !== null;
 
-  const kickoffLabel = new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/London",
-  }).format(new Date(fixture.kickoffAt));
+  const headerLabel = getPostTypeLabel(postType, fixture.status);
+  const kickoffLabel = formatKickoffLabel(new Date(fixture.kickoffAt));
 
   const leagueLabel = fixture.league.season
     ? `${fixture.league.name} • ${fixture.league.season}`
     : fixture.league.name;
 
   const venueLabel = fixture.venue?.name ?? "SIXFL";
-  const headerLabel = getPostTypeLabel(postType, fixture.status);
 
-  const homeName = escapeXml(fitText(fixture.homeTeam.name, 24));
-  const awayName = escapeXml(fitText(fixture.awayTeam.name, 24));
-  const header = escapeXml(headerLabel);
-  const league = escapeXml(fitText(leagueLabel, 56));
-  const venue = escapeXml(fitText(venueLabel, 56));
-  const kickoff = escapeXml(kickoffLabel);
-  const score = escapeXml(scoreLabel ?? "VS");
-
-  const showScore = postType === "RESULT" && scoreLabel;
+  const homeTeamName = escapeXml(truncate(fixture.homeTeam.name, 24));
+  const awayTeamName = escapeXml(truncate(fixture.awayTeam.name, 24));
+  const safeLeagueLabel = escapeXml(truncate(leagueLabel, 54));
+  const safeVenueLabel = escapeXml(truncate(venueLabel, 42));
+  const safeKickoffLabel = escapeXml(kickoffLabel);
+  const safeHeaderLabel = escapeXml(headerLabel);
+  const safeScoreLabel = escapeXml(scoreLabel ?? "VS");
 
   const footerLabel =
     postType === "FIXTURE"
       ? `${kickoffLabel} • ${venueLabel}`
       : venueLabel;
 
-  const footer = escapeXml(fitText(footerLabel, 72));
+  const safeFooterLabel = escapeXml(truncate(footerLabel, 64));
 
   const svg = `
 <svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1080" y2="1080">
-      <stop offset="0%" stop-color="#0F2C22" />
-      <stop offset="55%" stop-color="#071018" />
-      <stop offset="100%" stop-color="#04070B" />
+      <stop offset="0%" stop-color="#0F3A2D" />
+      <stop offset="42%" stop-color="#0A1A14" />
+      <stop offset="100%" stop-color="#05080D" />
     </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(540 120) rotate(90) scale(420 860)">
+      <stop offset="0%" stop-color="rgba(30,90,67,0.55)" />
+      <stop offset="100%" stop-color="rgba(30,90,67,0)" />
+    </radialGradient>
   </defs>
 
   <rect width="1080" height="1080" fill="url(#bg)" />
-  <rect x="40" y="40" width="1000" height="1000" rx="40" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
+  <rect width="1080" height="1080" fill="url(#glow)" />
 
-  <text x="70" y="110" fill="#6EE7B7" font-size="28" font-family="Arial, sans-serif" font-weight="700" letter-spacing="6">${header}</text>
-  <text x="930" y="110" fill="#FFFFFF" font-size="30" text-anchor="end" font-family="Arial, sans-serif" font-weight="800" letter-spacing="4">SIXFL</text>
+  <rect x="34" y="34" width="1012" height="1012" rx="34" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
 
-  <text x="70" y="190" fill="rgba(255,255,255,0.8)" font-size="30" font-family="Arial, sans-serif" font-weight="600">${league}</text>
+  <text x="72" y="114" fill="#6EE7B7" font-size="30" font-family="Arial, sans-serif" font-weight="800" letter-spacing="8">${safeHeaderLabel}</text>
+  <text x="955" y="114" fill="#FFFFFF" font-size="32" text-anchor="end" font-family="Arial, sans-serif" font-weight="900" letter-spacing="6">SIXFL</text>
 
-  <rect x="70" y="250" width="940" height="390" rx="34" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)" />
+  <text x="72" y="190" fill="rgba(255,255,255,0.82)" font-size="28" font-family="Arial, sans-serif" font-weight="700">${safeLeagueLabel}</text>
 
-  <text x="120" y="390" fill="#FFFFFF" font-size="54" font-family="Arial, sans-serif" font-weight="800">${homeName}</text>
-  <text x="960" y="390" fill="#FFFFFF" font-size="54" text-anchor="end" font-family="Arial, sans-serif" font-weight="800">${awayName}</text>
+  <rect x="72" y="248" width="936" height="438" rx="30" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.10)" />
 
-  <text x="540" y="${showScore ? "470" : "455"}" fill="#FFFFFF" font-size="${showScore ? "110" : "70"}" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900">${score}</text>
+  <text x="150" y="388" fill="#FFFFFF" font-size="56" font-family="Arial, sans-serif" font-weight="900">${homeTeamName}</text>
+  <text x="930" y="388" fill="#FFFFFF" font-size="56" text-anchor="end" font-family="Arial, sans-serif" font-weight="900">${awayTeamName}</text>
+
+  <line x1="222" y1="432" x2="858" y2="432" stroke="rgba(255,255,255,0.06)" />
+
+  <text x="540" y="${showScore ? "548" : "534"}" fill="#FFFFFF" font-size="${showScore ? "126" : "76"}" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900">${safeScoreLabel}</text>
 
   ${
     showScore
-      ? ""
-      : `<text x="540" y="545" fill="rgba(255,255,255,0.65)" font-size="26" text-anchor="middle" font-family="Arial, sans-serif" font-weight="600">${kickoff}</text>`
+      ? `<text x="540" y="616" fill="rgba(255,255,255,0.40)" font-size="22" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" letter-spacing="4">FINAL SCORE</text>`
+      : `<text x="540" y="604" fill="rgba(255,255,255,0.68)" font-size="26" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700">${safeKickoffLabel}</text>`
   }
 
-  <text x="70" y="930" fill="rgba(255,255,255,0.78)" font-size="26" font-family="Arial, sans-serif" font-weight="600">${footer}</text>
-  <text x="70" y="970" fill="rgba(255,255,255,0.42)" font-size="20" font-family="Arial, sans-serif" font-weight="700" letter-spacing="3">6-A-SIDE FOOTBALL. DONE PROPERLY.</text>
-  <text x="1000" y="970" fill="#6EE7B7" font-size="24" text-anchor="end" font-family="Arial, sans-serif" font-weight="800">#SIXFL</text>
+  <text x="72" y="930" fill="rgba(255,255,255,0.84)" font-size="24" font-family="Arial, sans-serif" font-weight="700">${safeFooterLabel}</text>
+  <text x="72" y="972" fill="rgba(255,255,255,0.38)" font-size="20" font-family="Arial, sans-serif" font-weight="800" letter-spacing="3">6-A-SIDE FOOTBALL. DONE PROPERLY.</text>
+  <text x="972" y="972" fill="#6EE7B7" font-size="24" text-anchor="end" font-family="Arial, sans-serif" font-weight="900">#SIXFL</text>
 </svg>`.trim();
 
   return new Response(svg, {
