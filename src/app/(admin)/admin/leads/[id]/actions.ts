@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/leads/[id]/actions.ts
+// File: src/app/(admin)/admin/leads/[id]/actions.ts
 // ========================================
 
 "use server";
@@ -98,7 +98,7 @@ function buildLeadEmailContext(input: {
       area: input.area,
       signupUrl: input.signupUrl,
       teamName: input.teamName,
-    })
+    }),
   );
 }
 
@@ -181,6 +181,15 @@ export async function sendLeadEmailAction(formData: FormData) {
     return { ok: false, error: "Lead not found." };
   }
 
+  const leadEmail = lead.email?.trim() || "";
+
+  if (!leadEmail) {
+    return {
+      ok: false,
+      error: "This lead does not have an email address.",
+    };
+  }
+
   const leadData = lead as typeof lead & {
     area?: string | null;
     teamName?: string | null;
@@ -197,7 +206,7 @@ export async function sendLeadEmailAction(formData: FormData) {
 
   const resolvedBody = resolveTemplateText(
     bodyInput.replaceAll("{{cta}}", CTA_PLACEHOLDER_TOKEN),
-    context
+    context,
   ).replaceAll(CTA_PLACEHOLDER_TOKEN, "{{cta}}");
 
   const resolvedCta = resolveLeadEmailCta({
@@ -216,7 +225,7 @@ export async function sendLeadEmailAction(formData: FormData) {
   try {
     await resend.emails.send({
       from: fromEmail,
-      to: lead.email,
+      to: leadEmail,
       subject: resolvedSubject,
       text: signedTextBody,
       html: signedHtmlBody,
@@ -227,7 +236,7 @@ export async function sendLeadEmailAction(formData: FormData) {
         interestLeadId: lead.id,
         subject: resolvedSubject,
         body: signedTextBody,
-        sentTo: lead.email,
+        sentTo: leadEmail,
       },
     });
 
@@ -288,6 +297,122 @@ export async function deleteLeadAction(formData: FormData) {
     return {
       ok: false,
       error: "Failed to delete lead.",
+    };
+  }
+}
+
+export async function convertLeadToTeamAction(formData: FormData) {
+  await requireAdmin();
+
+  const leadId = String(formData.get("leadId") ?? "").trim();
+
+  if (!leadId) {
+    return { ok: false, error: "Missing lead id." };
+  }
+
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
+  });
+
+  if (!lead) {
+    return { ok: false, error: "Lead not found." };
+  }
+
+  if (lead.interestType !== "TEAM") {
+    return {
+      ok: false,
+      error: "Only team leads can be converted into teams.",
+    };
+  }
+
+  if (lead.convertedTeamId) {
+    return { ok: true, teamId: lead.convertedTeamId };
+  }
+
+  try {
+    const teamName = buildTeamNameFromLead({
+      teamName: lead.teamName,
+      contactName: lead.contactName,
+    });
+
+    const claimCode = await generateUniqueClaimCode(teamName);
+
+    const createdTeam = await prisma.team.create({
+      data: {
+        name: teamName,
+        claimCode,
+        contactName: lead.contactName || null,
+        contactEmail: lead.email?.trim() || null,
+        contactPhone: lead.phone?.trim() || null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await prisma.interestLead.update({
+      where: { id: lead.id },
+      data: {
+        status: LeadStatus.CLOSED,
+        closedAt: new Date(),
+        convertedAt: new Date(),
+        convertedTeamId: createdTeam.id,
+      },
+    });
+
+    if (lead.email?.trim()) {
+      const existingUser = await prisma.user.findUnique({
+        where: {
+          email: lead.email.trim().toLowerCase(),
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (existingUser) {
+        await prisma.teamMember.upsert({
+          where: {
+            userId_teamId: {
+              userId: existingUser.id,
+              teamId: createdTeam.id,
+            },
+          },
+          update: {
+            role: TeamRole.CAPTAIN,
+          },
+          create: {
+            userId: existingUser.id,
+            teamId: createdTeam.id,
+            role: TeamRole.CAPTAIN,
+          },
+        });
+
+        await prisma.team.update({
+          where: { id: createdTeam.id },
+          data: {
+            captainUserId: existingUser.id,
+            captainLinkedAt: new Date(),
+            captainLinkedSource: "lead_conversion",
+            captainClaimedAt: new Date(),
+            captainClaimSource: "lead_conversion",
+          },
+        });
+      }
+    }
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${lead.id}`);
+    revalidatePath(`/admin/teams/${createdTeam.id}`);
+    revalidatePath("/admin/teams");
+
+    return { ok: true, teamId: createdTeam.id };
+  } catch (error) {
+    console.error("convertLeadToTeamAction error", error);
+
+    return {
+      ok: false,
+      error: "Failed to convert lead into a team.",
     };
   }
 }
