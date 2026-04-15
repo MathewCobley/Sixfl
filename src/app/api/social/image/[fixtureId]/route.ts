@@ -41,7 +41,6 @@ function ensureFontsRegistered() {
     registerFont(FONT_BOLD, { family: "Inter", weight: "700" });
     fontsRegistered = true;
   } catch {
-    // Fallback to system sans-serif if custom fonts are not present.
     fontsRegistered = true;
   }
 }
@@ -225,26 +224,24 @@ export async function GET(
 
   const homeName = normaliseText(fitText(fixture.homeTeam.name, 22));
   const awayName = normaliseText(fitText(fixture.awayTeam.name, 22));
-  const leagueName = normaliseText(fitText(fixture.league.name, 42));
+  const leagueName = normaliseText(fitText(fixture.league.name, 58));
   const venueName = normaliseText(
     fitText(fixture.venue?.name ?? "Venue TBC", 36),
   );
   const kickoffText = formatKickoff(fixture.kickoffAt);
 
-  // Build reliable text layer with node-canvas
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
 
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
-  ctx.fillStyle = "#FFFFFF";
 
   drawCenteredTextBlock({
     ctx,
     text: leagueName,
     x: 540,
     y: 267,
-    maxWidth: 760,
-    fontSize: 28,
+    maxWidth: 860,
+    fontSize: 24,
     weight: 700,
     color: "#F4F7FA",
   });
@@ -253,9 +250,9 @@ export async function GET(
     ctx,
     text: homeName,
     x: 280,
-    y: 720,
-    maxWidth: 300,
-    fontSize: 32,
+    y: 710,
+    maxWidth: 340,
+    fontSize: 40,
     weight: 800,
     color: "#FFFFFF",
   });
@@ -264,9 +261,9 @@ export async function GET(
     ctx,
     text: awayName,
     x: 800,
-    y: 720,
-    maxWidth: 300,
-    fontSize: 32,
+    y: 710,
+    maxWidth: 340,
+    fontSize: 40,
     weight: 800,
     color: "#FFFFFF",
   });
