@@ -266,10 +266,13 @@ export async function GET(
     fitText(fixture.venue?.name ?? "Venue TBC", 36),
   );
   const kickoffText = formatKickoff(fixture.kickoffAt);
-  const scoreText =
-    fixture.result?.homeScore !== null && fixture.result?.awayScore !== null
-      ? `${fixture.result.homeScore} - ${fixture.result.awayScore}`
-      : null;
+  const homeScore = fixture.result?.homeScore ?? null;
+const awayScore = fixture.result?.awayScore ?? null;
+
+const scoreText =
+  homeScore !== null && awayScore !== null
+    ? `${homeScore} - ${awayScore}`
+    : null;
 
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
