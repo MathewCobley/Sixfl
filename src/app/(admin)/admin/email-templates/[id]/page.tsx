@@ -14,8 +14,13 @@ type PageProps = {
   }>;
 };
 
-const CTA_URL_KEYS = ["signupUrl", "manageTeamUrl", "paymentUrl"] as const;
-
+const CTA_URL_KEYS = [
+  "signupUrl",
+  "manageTeamUrl",
+  "paymentUrl",
+  "captainDashboardUrl",
+  "teamJoinUrl",
+] as const;
 type CtaUrlKeyValue = (typeof CTA_URL_KEYS)[number];
 
 function isCtaUrlKeyValue(value: string | null): value is CtaUrlKeyValue {

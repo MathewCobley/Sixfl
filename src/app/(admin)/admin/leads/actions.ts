@@ -121,7 +121,12 @@ function isLeagueType(value: string): value is LeagueType {
 function getTrimmedValue(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
 }
-
+function getBaseUrl() {
+  return (process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk").replace(
+    /\/+$/,
+    "",
+  );
+}
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -276,6 +281,9 @@ export async function sendBulkLeadEmailAction(
 
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
+  const ctaLabel = String(formData.get("ctaLabel") ?? "").trim();
+  const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
+  const targetTeamId = String(formData.get("targetTeamId") ?? "").trim();
 
   const selectedTypeRaw = String(formData.get("selectedType") ?? "")
     .trim()
@@ -320,6 +328,51 @@ export async function sendBulkLeadEmailAction(
       error: "EMAIL_FROM is missing from your environment variables.",
     };
   }
+
+  const baseUrl = getBaseUrl();
+
+  const targetManagedTeam =
+    ctaUrlKey === "teamJoinUrl" && targetTeamId
+      ? await prisma.team.findFirst({
+          where: {
+            id: targetTeamId,
+            teamMode: "MANAGED",
+            isRecruiting: true,
+            joinSlug: {
+              not: null,
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+            joinSlug: true,
+          },
+        })
+      : null;
+
+  if (ctaUrlKey === "teamJoinUrl" && !targetManagedTeam) {
+    return {
+      ok: false,
+      error: "Please select which managed team this email should link to.",
+    };
+  }
+
+  const resolvedCta: SIXFLEmailCta | undefined =
+    ctaUrlKey === "teamJoinUrl"
+      ? targetManagedTeam?.joinSlug
+        ? {
+            label: ctaLabel || "Register to join",
+            url: `${baseUrl}/teams/join/${targetManagedTeam.joinSlug}`,
+          }
+        : undefined
+      : ctaUrlKey === "signupUrl"
+        ? {
+            label: ctaLabel || DEFAULT_BULK_EMAIL_CTA.label,
+            url: `${baseUrl}/register-interest`,
+          }
+        : ctaLabel
+          ? DEFAULT_BULK_EMAIL_CTA
+          : undefined;
 
   const where = {
     ...(selectedTypeRaw && isInterestType(selectedTypeRaw)
@@ -399,7 +452,7 @@ export async function sendBulkLeadEmailAction(
       const signedTextBody = appendSIXFLTextSignature(personalisedBody);
       const signedHtmlBody = buildSIXFLEmailHtml({
         body: signedTextBody,
-        cta: DEFAULT_BULK_EMAIL_CTA,
+        cta: resolvedCta,
       });
 
       await resend.emails.send({

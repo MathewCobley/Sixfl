@@ -408,8 +408,22 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
     throw new Error("Fixture not found.");
   }
 
-  if (fixture.socialPostStatus !== SocialPostStatus.APPROVED) {
-    throw new Error("Only approved social posts can be published.");
+  const currentStatus = String(fixture.socialPostStatus ?? "");
+
+  if (currentStatus !== "APPROVED") {
+    await prisma.fixture.update({
+      where: { id: fixture.id },
+      data: {
+        socialLastError: `Publish blocked because status was ${currentStatus || "UNKNOWN"}`,
+      },
+    });
+
+    revalidateFixturePaths({
+      leagueId: fixture.leagueId,
+      leagueSlug: fixture.league.slug ?? null,
+    });
+
+    return;
   }
 
   if (!fixture.socialCaption) {
@@ -419,12 +433,13 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
   if (!fixture.socialImageUrl) {
     throw new Error("No social image found for this fixture.");
   }
+
   console.error("Publish to Meta debug", {
     fixtureId: fixture.id,
     webhookUrl: process.env.SOCIAL_PUBLISH_WEBHOOK_URL,
     status: fixture.socialPostStatus,
   });
-  
+
   const publishResult = await postPublishWebhook({
     fixtureId: fixture.id,
     postType: fixture.socialPostType,
@@ -433,6 +448,8 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
     platforms: ["facebook", "instagram"],
   });
 
+  console.error("Publish to Meta result", publishResult);
+
   if (!publishResult.ok) {
     await prisma.fixture.update({
       where: { id: fixture.id },
@@ -440,12 +457,12 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
         socialLastError: publishResult.reason,
       },
     });
-  
+
     revalidateFixturePaths({
       leagueId: fixture.leagueId,
       leagueSlug: fixture.league.slug ?? null,
     });
-  
+
     return;
   }
 

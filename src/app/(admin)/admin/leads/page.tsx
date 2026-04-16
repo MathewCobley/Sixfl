@@ -293,6 +293,8 @@ type BulkEmailTemplate = {
   subject: string;
   body: string;
   interestType: InterestType | null;
+  ctaLabel: string | null;
+  ctaUrlKey: string | null;
 };
 
 export default async function AdminLeadsPage({
@@ -428,10 +430,32 @@ export default async function AdminLeadsPage({
         subject: true,
         body: true,
         interestType: true,
+        ctaLabel: true,
+        ctaUrlKey: true,
       },
     }),
   ]);
-
+  const managedTeams = await prisma.team.findMany({
+    where: {
+      teamMode: "MANAGED",
+      isRecruiting: true,
+      joinSlug: {
+        not: null,
+      },
+    },
+    orderBy: [{ name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      joinSlug: true,
+      league: {
+        select: {
+          name: true,
+          season: true,
+        },
+      },
+    },
+  });
   const areas = allAreas
     .map((x) => x.area)
     .filter((value): value is string => Boolean(value));
@@ -550,6 +574,8 @@ export default async function AdminLeadsPage({
       subject: template.subject,
       body: template.body,
       interestType: template.interestType,
+      ctaLabel: template.ctaLabel,
+      ctaUrlKey: template.ctaUrlKey,
     }),
   );
 
@@ -562,7 +588,14 @@ export default async function AdminLeadsPage({
       contactName: recipient.contactName,
       email: recipient.email,
     }));
-
+    const managedTeamOptions = managedTeams.map((team) => ({
+      value: team.id,
+      label: `${team.name}${
+        team.league?.name
+          ? ` · ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+          : ""
+      }`,
+    }));
   return (
     <AdminCard title="Leads">
       <div className="space-y-6">
@@ -1293,6 +1326,7 @@ export default async function AdminLeadsPage({
             recipientCount={recipientCount}
             recipientPreview={previewRecipients}
             templates={bulkEmailTemplates}
+            managedTeamOptions={managedTeamOptions}
           />
         </div>
       </div>
