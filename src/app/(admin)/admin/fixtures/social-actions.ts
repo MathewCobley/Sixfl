@@ -424,6 +424,7 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
     webhookUrl: process.env.SOCIAL_PUBLISH_WEBHOOK_URL,
     status: fixture.socialPostStatus,
   });
+  
   const publishResult = await postPublishWebhook({
     fixtureId: fixture.id,
     postType: fixture.socialPostType,
