@@ -27,14 +27,14 @@ model User {
 
   createdFromLeadId String?
 
-  accounts                Account[]
-  sessions                Session[]
-  teamMembers             TeamMember[]
-  createdTeams            Team[]                       @relation("TeamCreatedBy")
-  refereedFixtures        Fixture[]                    @relation("FixtureReferee")
-  enteredResults          MatchResult[]                @relation("ResultEnteredBy")
-  createdResultDisputes   ResultDispute[]              @relation("ResultDisputeCreatedBy")
-  fixtureConfirmations    FixtureCaptainConfirmation[] @relation("FixtureCaptainConfirmationUser")
+  accounts              Account[]
+  sessions              Session[]
+  teamMembers           TeamMember[]
+  createdTeams          Team[]                       @relation("TeamCreatedBy")
+  refereedFixtures      Fixture[]                    @relation("FixtureReferee")
+  enteredResults        MatchResult[]                @relation("ResultEnteredBy")
+  createdResultDisputes ResultDispute[]              @relation("ResultDisputeCreatedBy")
+  fixtureConfirmations  FixtureCaptainConfirmation[] @relation("FixtureCaptainConfirmationUser")
 
   assignedMessageThreads MessageThread[] @relation("UserAssignedMessageThreads")
   createdMessageEntries  MessageEntry[]  @relation("UserCreatedMessageEntries")
@@ -47,7 +47,7 @@ enum UserRole {
 }
 
 model Account {
-  id                String @id @default(cuid())
+  id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
@@ -134,11 +134,23 @@ model Venue {
   updatedAt DateTime @updatedAt
 }
 
+enum TeamMode {
+  STANDARD
+  MANAGED
+}
+
 model Team {
   id        String  @id @default(cuid())
   name      String
   claimCode String  @unique
   logoUrl   String?
+
+  teamMode           TeamMode @default(STANDARD)
+  isRecruiting       Boolean  @default(false)
+  joinSlug           String?  @unique
+  squadTargetSize    Int?
+  matchdayTargetSize Int?
+  managerNotes       String?
 
   contactName           String?
   contactEmail          String?
@@ -150,7 +162,7 @@ model Team {
   latestKickoffTime String?
 
   createdByUserId String?
-  createdByUser   User? @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUser   User?   @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
@@ -164,6 +176,7 @@ model Team {
   captainClaimSource  String?
 
   members              TeamMember[]
+  prospects            TeamPlayerProspect[]
   homeGames            Fixture[]                    @relation("HomeTeam")
   awayGames            Fixture[]                    @relation("AwayTeam")
   resultMetadata       MatchResultTeamMeta[]
@@ -187,6 +200,9 @@ model Team {
   @@index([captainLinkedAt])
   @@index([captainInviteSentAt])
   @@index([captainClaimedAt])
+  @@index([teamMode])
+  @@index([isRecruiting])
+  @@index([joinSlug])
 }
 
 model TeamMember {
@@ -198,6 +214,9 @@ model TeamMember {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
+  fixtureAvailabilities FixtureAvailability[]
+  fixtureSelections     FixtureSelection[]
+
   createdAt DateTime @default(now())
 
   @@unique([userId, teamId])
@@ -206,15 +225,44 @@ model TeamMember {
   @@index([role])
 }
 
+model TeamPlayerProspect {
+  id String @id @default(cuid())
+
+  teamId String
+
+  firstName           String
+  lastName            String?
+  email               String?
+  phone               String?
+  preferredPositions  String?
+  experienceSummary   String?
+  availabilitySummary String?
+  source              String?
+  status              String    @default("NEW")
+  lastContactedAt     DateTime?
+  notes               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, status])
+  @@index([email])
+  @@index([phone])
+}
+
 enum TeamRole {
   CAPTAIN
   MANAGER
   PLAYER
   COACH
+  VICE_CAPTAIN
+  BACKUP_PLAYER
 }
 
 model Fixture {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   leagueId      String
   homeTeamId    String
   awayTeamId    String
@@ -249,6 +297,8 @@ model Fixture {
   result               MatchResult?
   paymentCharges       PaymentCharge[]
   captainConfirmations FixtureCaptainConfirmation[]
+  availabilities       FixtureAvailability[]
+  selections           FixtureSelection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -320,6 +370,47 @@ model FixtureCaptainConfirmation {
   @@index([teamId, status])
   @@index([confirmedByUserId])
   @@index([lastChasedAt])
+}
+
+model FixtureAvailability {
+  id String @id @default(cuid())
+
+  fixtureId    String
+  teamMemberId String
+  response     String    @default("NO_RESPONSE")
+  note         String?
+  respondedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fixture    Fixture    @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([fixtureId, teamMemberId])
+  @@index([fixtureId, response])
+  @@index([teamMemberId, response])
+}
+
+model FixtureSelection {
+  id String @id @default(cuid())
+
+  fixtureId       String
+  teamMemberId    String
+  selectionStatus String  @default("NOT_SELECTED")
+  isCaptain       Boolean @default(false)
+  isGoalkeeper    Boolean @default(false)
+  note            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fixture    Fixture    @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([fixtureId, teamMemberId])
+  @@index([fixtureId, selectionStatus])
+  @@index([teamMemberId, selectionStatus])
 }
 
 model MatchResult {
@@ -510,8 +601,8 @@ model InterestLead {
   closedAt    DateTime?
 
   convertedAt     DateTime?
-  convertedTeamId String? @unique
-  convertedTeam   Team?   @relation("LeadConvertedTeam", fields: [convertedTeamId], references: [id], onDelete: SetNull)
+  convertedTeamId String?   @unique
+  convertedTeam   Team?     @relation("LeadConvertedTeam", fields: [convertedTeamId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -722,7 +813,7 @@ model NotificationRecipient {
 
   preferences    NotificationPreference?
   dispatches     NotificationDispatch[]
-  messageThreads MessageThread[] @relation("NotificationRecipientMessageThreads")
+  messageThreads MessageThread[]         @relation("NotificationRecipientMessageThreads")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -758,7 +849,7 @@ model NotificationPreference {
 model NotificationTemplate {
   id String @id @default(cuid())
 
-  key         String @unique
+  key         String  @unique
   name        String
   description String?
 
@@ -809,7 +900,7 @@ model NotificationDispatch {
   variables Json?
   metadata  Json?
 
-  scheduledFor DateTime @default(now())
+  scheduledFor DateTime  @default(now())
   processedAt  DateTime?
   sentAt       DateTime?
   failedAt     DateTime?

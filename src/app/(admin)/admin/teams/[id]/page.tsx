@@ -772,7 +772,95 @@ export default async function AdminTeamPage({
                   </span>
                 </div>
               </div>
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-2">
+                  <label htmlFor="teamMode" className="text-sm text-white/60">
+                    Team mode
+                  </label>
+                  <select
+                    id="teamMode"
+                    name="teamMode"
+                    defaultValue={team.teamMode ?? "STANDARD"}
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
+                  >
+                    <option value="STANDARD">Standard team</option>
+                    <option value="MANAGED">Managed team</option>
+                  </select>
+                  <div className="text-xs text-white/50">
+                    Managed teams are organiser-led and can later use recruitment tools.
+                  </div>
+                </div>
 
+                <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    name="isRecruiting"
+                    defaultChecked={Boolean(team.isRecruiting)}
+                  />
+                  Recruiting players
+                </label>
+
+                <div className="space-y-2">
+                  <label htmlFor="joinSlug" className="text-sm text-white/60">
+                    Join slug
+                  </label>
+                  <input
+                    id="joinSlug"
+                    name="joinSlug"
+                    type="text"
+                    defaultValue={team.joinSlug ?? ""}
+                    placeholder="rossett-managed-team"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                  <div className="text-xs text-white/50">
+                    Future public join link: /teams/join/{team.joinSlug ?? "your-slug"}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="squadTargetSize" className="text-sm text-white/60">
+                    Squad target size
+                  </label>
+                  <input
+                    id="squadTargetSize"
+                    name="squadTargetSize"
+                    type="number"
+                    min="0"
+                    defaultValue={team.squadTargetSize ?? ""}
+                    placeholder="10"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="matchdayTargetSize" className="text-sm text-white/60">
+                    Matchday target size
+                  </label>
+                  <input
+                    id="matchdayTargetSize"
+                    name="matchdayTargetSize"
+                    type="number"
+                    min="0"
+                    defaultValue={team.matchdayTargetSize ?? ""}
+                    placeholder="7"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="managerNotes" className="text-sm text-white/60">
+                  Manager notes
+                </label>
+                <textarea
+                  id="managerNotes"
+                  name="managerNotes"
+                  rows={4}
+                  defaultValue={team.managerNotes ?? ""}
+                  placeholder="Internal notes about recruitment, squad gaps, or organiser setup."
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                />
+              </div>
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="space-y-2">
                   <label htmlFor="contactName" className="text-sm text-white/60">
