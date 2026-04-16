@@ -205,10 +205,13 @@ export default async function AdminSocialPage() {
           <div className="divide-y divide-white/10">
             {fixtures.map((fixture) => {
               const title = `${fixture.homeTeam?.name ?? "Team 1"} vs ${fixture.awayTeam?.name ?? "Team 2"}`;
-              const resultLabel =
-                fixture.result?.homeScore !== null && fixture.result?.awayScore !== null
-                  ? `${fixture.result.homeScore}-${fixture.result.awayScore}`
-                  : null;
+              const homeScore = fixture.result?.homeScore ?? null;
+const awayScore = fixture.result?.awayScore ?? null;
+
+const resultLabel =
+  homeScore !== null && awayScore !== null
+    ? `${homeScore}-${awayScore}`
+    : null;
 
               return (
                 <div
