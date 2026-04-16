@@ -11,6 +11,7 @@ import {
 } from "@/app/(admin)/admin/social/actions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import CopyCaptionButton from "@/components/admin/social/CopyCaptionButton";
 
 function formatTimestamp(value: Date | null) {
   if (!value) return null;
@@ -60,17 +61,7 @@ function formatStatus(status: SocialPostStatus) {
   }
 }
 
-function CopyCaptionButton({ caption }: { caption: string }) {
-  return (
-    <button
-      type="button"
-      onClick={() => navigator.clipboard.writeText(caption)}
-      className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
-    >
-      Copy caption
-    </button>
-  );
-}
+
 
 export default async function AdminSocialPage() {
   await requireAdmin();
