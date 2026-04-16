@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import {
   NotificationAudience,
   NotificationChannel,
+  TeamMode,
   TeamRole,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -97,6 +98,27 @@ function getTrimmedValue(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
 
+function normaliseNullableInt(value: FormDataEntryValue | null) {
+  const parsed = String(value ?? "").trim();
+
+  if (!parsed) {
+    return null;
+  }
+
+  const asNumber = Number(parsed);
+
+  if (!Number.isInteger(asNumber) || asNumber < 0) {
+    return null;
+  }
+
+  return asNumber;
+}
+
+function normaliseTeamMode(value: FormDataEntryValue | null): TeamMode {
+  const parsed = String(value ?? "").trim().toUpperCase();
+  return parsed === "MANAGED" ? "MANAGED" : "STANDARD";
+}
+
 function getStoredPhoneValue(value: FormDataEntryValue | null) {
   return getPhoneDisplayValue(getTrimmedValue(value)) || null;
 }
@@ -176,6 +198,15 @@ export async function updateTeamDetailsAction(formData: FormData) {
     formData.get("latestKickoffTime"),
   );
 
+  const teamMode = normaliseTeamMode(formData.get("teamMode"));
+  const isRecruiting = String(formData.get("isRecruiting") ?? "") === "on";
+  const joinSlug = getTrimmedValue(formData.get("joinSlug")) || null;
+  const squadTargetSize = normaliseNullableInt(formData.get("squadTargetSize"));
+  const matchdayTargetSize = normaliseNullableInt(
+    formData.get("matchdayTargetSize"),
+  );
+  const managerNotes = getTrimmedValue(formData.get("managerNotes")) || null;
+
   const contactName = getTrimmedValue(formData.get("contactName")) || null;
   const contactEmail = getTrimmedValue(formData.get("contactEmail")) || null;
   const contactPhone = getStoredPhoneValue(formData.get("contactPhone"));
@@ -205,6 +236,12 @@ export async function updateTeamDetailsAction(formData: FormData) {
       leagueId,
       logoUrl,
       latestKickoffTime,
+      teamMode,
+      isRecruiting,
+      joinSlug,
+      squadTargetSize,
+      matchdayTargetSize,
+      managerNotes,
       contactName,
       contactEmail,
       contactPhone,
@@ -221,6 +258,10 @@ export async function updateTeamDetailsAction(formData: FormData) {
   if (leagueId) {
     revalidatePath(`/admin/leagues/${leagueId}`);
   }
+  revalidatePath(`/captain/team/${id}`);
+  revalidatePath(`/captain/team/${id}/squad`);
+  revalidatePath(`/captain/team/${id}/prospects`);
+  revalidatePath(`/captain/team/${id}/availability`);
 
   redirect(`/admin/teams/${id}?saved=1`);
 }
