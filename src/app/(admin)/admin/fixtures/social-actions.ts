@@ -419,7 +419,11 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
   if (!fixture.socialImageUrl) {
     throw new Error("No social image found for this fixture.");
   }
-
+  console.error("Publish to Meta debug", {
+    fixtureId: fixture.id,
+    webhookUrl: process.env.SOCIAL_PUBLISH_WEBHOOK_URL,
+    status: fixture.socialPostStatus,
+  });
   const publishResult = await postPublishWebhook({
     fixtureId: fixture.id,
     postType: fixture.socialPostType,
