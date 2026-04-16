@@ -31,7 +31,8 @@ type CtaUrlKeyValue =
   | "signupUrl"
   | "manageTeamUrl"
   | "paymentUrl"
-  | "captainDashboardUrl";
+  | "captainDashboardUrl"
+  | "teamJoinUrl";
 
 type EmailTemplateFormValues = {
   id?: string;
@@ -154,6 +155,13 @@ const CTA_OPTIONS: Array<{
     description:
       "Links captains into the claim and dashboard access flow for their team.",
     previewUrl: PREVIEW_CLAIM_LINK,
+  },
+  {
+    value: "teamJoinUrl",
+    label: "Team join page",
+    description:
+      "Links players to the managed team public join page using that team’s join slug.",
+    previewUrl: "https://www.sixfl.co.uk/teams/join/rossett-managed-team",
   },
   {
     value: "paymentUrl",
