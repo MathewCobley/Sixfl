@@ -6,6 +6,8 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
+
+import FormListboxField from "@/components/ui/FormListboxField";
 import TemplateSelect from "./TemplateSelect";
 
 type Template = {
@@ -15,6 +17,8 @@ type Template = {
   subject: string;
   body: string;
   interestType: "TEAM" | "PLAYER" | "REFEREE" | null;
+  ctaLabel?: string | null;
+  ctaUrlKey?: string | null;
 };
 
 type RecipientPreviewItem = {
@@ -30,13 +34,18 @@ type BulkEmailActionState = {
   failedCount?: number;
 };
 
-function SubmitButton() {
+type ManagedTeamOption = {
+  value: string;
+  label: string;
+};
+
+function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={disabled || pending}
       className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Sending bulk email..." : "Send bulk email"}
@@ -52,6 +61,7 @@ export default function BulkLeadEmailForm({
   selectedNight,
   recipientCount,
   recipientPreview,
+  managedTeamOptions,
   action,
 }: {
   templates: Template[];
@@ -69,6 +79,7 @@ export default function BulkLeadEmailForm({
     | "ANY";
   recipientCount: number;
   recipientPreview: RecipientPreviewItem[];
+  managedTeamOptions: ManagedTeamOption[];
   action: (
     prevState: BulkEmailActionState,
     formData: FormData,
@@ -79,6 +90,7 @@ export default function BulkLeadEmailForm({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [includedLeadIds, setIncludedLeadIds] = useState<string[]>([]);
+  const [targetTeamId, setTargetTeamId] = useState("");
 
   const filteredTemplates = useMemo(() => {
     return templates.filter((t) => {
@@ -92,6 +104,14 @@ export default function BulkLeadEmailForm({
     label: t.label,
   }));
 
+  const selectedTemplateRecord = useMemo(
+    () => templates.find((t) => t.id === selectedTemplate) ?? null,
+    [templates, selectedTemplate],
+  );
+
+  const templateNeedsTeamJoinTarget =
+    selectedTemplateRecord?.ctaUrlKey === "teamJoinUrl";
+
   useEffect(() => {
     setIncludedLeadIds(recipientPreview.map((recipient) => recipient.id));
   }, [recipientPreview]);
@@ -101,8 +121,15 @@ export default function BulkLeadEmailForm({
       setSelectedTemplate("");
       setSubject("");
       setBody("");
+      setTargetTeamId("");
     }
   }, [state?.ok]);
+
+  useEffect(() => {
+    if (!templateNeedsTeamJoinTarget) {
+      setTargetTeamId("");
+    }
+  }, [templateNeedsTeamJoinTarget]);
 
   function handleTemplateChange(templateId: string) {
     setSelectedTemplate(templateId);
@@ -124,6 +151,13 @@ export default function BulkLeadEmailForm({
 
   const selectedPreviewCount = includedLeadIds.length;
 
+  const canSubmit = Boolean(
+    subject.trim() &&
+      body.trim() &&
+      selectedPreviewCount > 0 &&
+      (!templateNeedsTeamJoinTarget || targetTeamId.trim()),
+  );
+
   return (
     <form
       action={formAction}
@@ -134,6 +168,16 @@ export default function BulkLeadEmailForm({
       </div>
 
       <input type="hidden" name="templateId" value={selectedTemplate} />
+      <input
+        type="hidden"
+        name="ctaLabel"
+        value={selectedTemplateRecord?.ctaLabel ?? ""}
+      />
+      <input
+        type="hidden"
+        name="ctaUrlKey"
+        value={selectedTemplateRecord?.ctaUrlKey ?? ""}
+      />
       <input type="hidden" name="selectedType" value={selectedType ?? ""} />
       <input type="hidden" name="selectedStatus" value={selectedStatus ?? ""} />
       <input type="hidden" name="selectedArea" value={selectedArea ?? ""} />
@@ -149,6 +193,21 @@ export default function BulkLeadEmailForm({
         options={templateOptions}
         placeholder="Choose a template"
       />
+
+      {templateNeedsTeamJoinTarget ? (
+        <div>
+          <FormListboxField
+            name="targetTeamId"
+            label="Target managed team"
+            value={targetTeamId}
+            options={managedTeamOptions}
+            placeholder="Select managed team"
+          />
+          <div className="mt-2 text-xs text-white/45">
+            Choose which managed team this email should link to.
+          </div>
+        </div>
+      ) : null}
 
       <input
         name="subject"
@@ -244,7 +303,7 @@ export default function BulkLeadEmailForm({
         </div>
       ) : null}
 
-      <SubmitButton />
+      <SubmitButton disabled={!canSubmit} />
     </form>
   );
 }
