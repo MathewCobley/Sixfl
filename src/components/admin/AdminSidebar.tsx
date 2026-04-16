@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
+  PhotoIcon,
   Cog6ToothIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
@@ -51,6 +52,11 @@ const navigation = [
     name: "Fixtures",
     href: "/admin/fixtures",
     icon: CalendarDaysIcon,
+  },
+  {
+    name: "Social",
+    href: "/admin/social",
+    icon: PhotoIcon,
   },
   {
     name: "Result Disputes",
@@ -168,24 +174,23 @@ export default function AdminSidebar({
                   </div>
 
                   <div className="mt-0.5 text-xs text-white/35">
-                    {item.name === "Overview" && "Admin dashboard"}
-                    {item.name === "Teams" && "Squads and captains"}
-                    {item.name === "Leagues" && "League setup"}
-                    {item.name === "Venues" && "Match locations"}
-                    {item.name === "Fixtures" && "Schedule and results"}
-                    {item.name === "Result Disputes" && "Captain-raised issues"}
-                    {item.name === "Payments" && "Charges and payments"}
-                    {item.name === "Referees" && "Officials and assignments"}
-                    {item.name === "Leads" && "Inbound enquiries"}
-                    {item.name === "Messaging" &&
-                      (unreadCount > 0
-                        ? `${unreadCount} unread thread${
-                            unreadCount === 1 ? "" : "s"
-                          }`
-                        : "Campaigns and outreach")}
-                    {item.name === "Email Templates" && "Reusable email messaging"}
-                    {item.name === "SMS Templates" && "Reusable text messaging"}
-                  </div>
+  {item.name === "Overview" && "Admin dashboard"}
+  {item.name === "Teams" && "Squads and captains"}
+  {item.name === "Leagues" && "League setup"}
+  {item.name === "Venues" && "Match locations"}
+  {item.name === "Fixtures" && "Schedule and results"}
+  {item.name === "Social" && "Drafts and publishing"}
+  {item.name === "Result Disputes" && "Captain-raised issues"}
+  {item.name === "Payments" && "Charges and payments"}
+  {item.name === "Referees" && "Officials and assignments"}
+  {item.name === "Leads" && "Inbound enquiries"}
+  {item.name === "Messaging" &&
+    (unreadCount > 0
+      ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
+      : "Campaigns and outreach")}
+  {item.name === "Email Templates" && "Reusable email messaging"}
+  {item.name === "SMS Templates" && "Reusable text messaging"}
+</div>
                 </div>
               </Link>
             );
