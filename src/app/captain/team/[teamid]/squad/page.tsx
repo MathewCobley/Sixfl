@@ -8,6 +8,7 @@ import { TeamRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import FormListboxField from "@/components/ui/FormListboxField";
 import {
   addSquadMemberAction,
   removeSquadMemberAction,
@@ -308,17 +309,14 @@ export default async function CaptainSquadPage({
                       <input type="hidden" name="teamid" value={teamid} />
                       <input type="hidden" name="membershipId" value={member.id} />
 
-                      <select
-                        name="role"
-                        defaultValue={member.role}
-                        className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500/60"
-                      >
-                        {roleOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="min-w-[220px]">
+  <FormListboxField
+    name="role"
+    value={member.role}
+    options={roleOptions}
+    placeholder="Select role"
+  />
+</div>
 
                       <button
                         type="submit"
@@ -371,23 +369,13 @@ export default async function CaptainSquadPage({
                 />
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="role" className="text-sm text-white/60">
-                  Role
-                </label>
-                <select
-                  id="role"
-                  name="role"
-                  defaultValue="PLAYER"
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-                >
-                  {roleOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FormListboxField
+  name="role"
+  label="Role"
+  value="PLAYER"
+  options={roleOptions}
+  placeholder="Select role"
+/>
 
               <button
                 type="submit"

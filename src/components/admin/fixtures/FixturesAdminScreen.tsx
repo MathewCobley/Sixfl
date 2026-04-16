@@ -26,6 +26,7 @@ import {
 import {
   approveFixtureSocialPostAction,
   generateFixtureSocialDraftAction,
+  publishFixtureSocialPostAction,
   resetFixtureSocialPostAction,
 } from "@/app/(admin)/admin/fixtures/social-actions";
 import {
@@ -620,6 +621,18 @@ function SocialCell({ fixture }: { fixture: FixtureItem }) {
               className="inline-flex h-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 text-xs font-semibold text-sky-200 transition hover:border-sky-300/30 hover:bg-sky-400/15"
             >
               Approve
+            </button>
+          </form>
+        ) : null}
+
+{fixture.socialPostStatus === "APPROVED" ? (
+          <form action={publishFixtureSocialPostAction}>
+            <input type="hidden" name="fixtureId" value={fixture.id} />
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
+            >
+              Publish to Meta
             </button>
           </form>
         ) : null}

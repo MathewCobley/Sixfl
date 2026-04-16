@@ -11,6 +11,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import FormListboxField from "@/components/ui/FormListboxField";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { buildChargePaymentUrl } from "@/lib/payments/fixture-match-fees";
 import {
@@ -773,23 +774,21 @@ export default async function AdminTeamPage({
                 </div>
               </div>
               <div className="grid gap-5 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <label htmlFor="teamMode" className="text-sm text-white/60">
-                    Team mode
-                  </label>
-                  <select
-                    id="teamMode"
-                    name="teamMode"
-                    defaultValue={team.teamMode ?? "STANDARD"}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-                  >
-                    <option value="STANDARD">Standard team</option>
-                    <option value="MANAGED">Managed team</option>
-                  </select>
-                  <div className="text-xs text-white/50">
-                    Managed teams are organiser-led and can later use recruitment tools.
-                  </div>
-                </div>
+              <div className="space-y-2">
+  <FormListboxField
+    name="teamMode"
+    label="Team mode"
+    value={team.teamMode ?? "STANDARD"}
+    options={[
+      { value: "STANDARD", label: "Standard team" },
+      { value: "MANAGED", label: "Managed team" },
+    ]}
+    placeholder="Select team mode"
+  />
+  <div className="text-xs text-white/50">
+    Managed teams are organiser-led and can later use recruitment tools.
+  </div>
+</div>
 
                 <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80">
                   <input

@@ -124,11 +124,60 @@ async function postDraftWebhook(input: {
   } as const;
 }
 
+async function postPublishWebhook(input: {
+  fixtureId: string;
+  postType: SocialPostType;
+  caption: string;
+  imageUrl: string;
+  platforms: Array<"facebook" | "instagram">;
+}) {
+  const webhookUrl = process.env.SOCIAL_PUBLISH_WEBHOOK_URL?.trim();
+
+  if (!webhookUrl) {
+    return {
+      ok: false,
+      reason: "SOCIAL_PUBLISH_WEBHOOK_URL is not configured.",
+    } as const;
+  }
+
+  const secret = process.env.SOCIAL_WEBHOOK_SECRET?.trim() || "";
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(secret ? { "x-sixfl-social-secret": secret } : {}),
+    },
+    body: JSON.stringify({
+      event: "social.publish.requested",
+      fixtureId: input.fixtureId,
+      socialPostType: input.postType,
+      caption: input.caption,
+      imageUrl: input.imageUrl,
+      platforms: input.platforms,
+      callbackUrl: `${getBaseUrl()}/api/social/callback`,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    return {
+      ok: false,
+      reason: text || `Publish webhook failed with status ${response.status}.`,
+    } as const;
+  }
+
+  return {
+    ok: true,
+  } as const;
+}
+
 function revalidateFixturePaths(input: {
   leagueId: string;
   leagueSlug: string | null;
 }) {
   revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/social");
   revalidatePath(`/admin/leagues/${input.leagueId}/fixtures`);
   revalidatePath(`/admin/leagues/${input.leagueId}`);
 
@@ -326,6 +375,69 @@ export async function approveFixtureSocialPostAction(formData: FormData) {
       socialLastError: null,
     },
   });
+
+  revalidateFixturePaths({
+    leagueId: fixture.leagueId,
+    leagueSlug: fixture.league.slug ?? null,
+  });
+}
+
+export async function publishFixtureSocialPostAction(formData: FormData) {
+  await requireAdmin();
+
+  const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture ID");
+
+  const fixture = await prisma.fixture.findUnique({
+    where: { id: fixtureId },
+    select: {
+      id: true,
+      leagueId: true,
+      socialPostStatus: true,
+      socialPostType: true,
+      socialCaption: true,
+      socialImageUrl: true,
+      league: {
+        select: {
+          slug: true,
+        },
+      },
+    },
+  });
+
+  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  if (fixture.socialPostStatus !== SocialPostStatus.APPROVED) {
+    throw new Error("Only approved social posts can be published.");
+  }
+
+  if (!fixture.socialCaption) {
+    throw new Error("No social caption found for this fixture.");
+  }
+
+  if (!fixture.socialImageUrl) {
+    throw new Error("No social image found for this fixture.");
+  }
+
+  const publishResult = await postPublishWebhook({
+    fixtureId: fixture.id,
+    postType: fixture.socialPostType,
+    caption: fixture.socialCaption,
+    imageUrl: fixture.socialImageUrl,
+    platforms: ["facebook", "instagram"],
+  });
+
+  if (!publishResult.ok) {
+    await prisma.fixture.update({
+      where: { id: fixture.id },
+      data: {
+        socialLastError: publishResult.reason,
+      },
+    });
+
+    throw new Error(publishResult.reason);
+  }
 
   revalidateFixturePaths({
     leagueId: fixture.leagueId,

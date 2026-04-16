@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import FormListboxField from "@/components/ui/FormListboxField";
 import {
   addProspectAction,
   convertProspectToMemberAction,
@@ -410,17 +411,17 @@ export default async function CaptainProspectsPage({
                       <input type="hidden" name="teamid" value={teamid} />
                       <input type="hidden" name="prospectId" value={prospect.id} />
 
-                      <select
-                        name="status"
-                        defaultValue={prospect.status}
-                        className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500/60"
-                      >
-                        {STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="min-w-[220px]">
+  <FormListboxField
+    name="status"
+    value={prospect.status}
+    options={STATUS_OPTIONS.map((option) => ({
+      value: option.value,
+      label: option.label,
+    }))}
+    placeholder="Select status"
+  />
+</div>
 
                       <button
                         type="submit"
