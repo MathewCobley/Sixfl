@@ -38,9 +38,7 @@ function getSuccessRedirect(teamid: string, saved = "1") {
 
 export async function addSquadMemberAction(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "").trim();
-  const email = String(formData.get("email") ?? "")
-    .trim()
-    .toLowerCase();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = getRoleValue(formData.get("role"));
 
   await requireCaptain(teamid);
@@ -82,9 +80,7 @@ export async function addSquadMemberAction(formData: FormData) {
   });
 
   if (existingMember) {
-    redirect(
-      getErrorRedirect(teamid, "That user is already in this team squad."),
-    );
+    redirect(getErrorRedirect(teamid, "That user is already in this team squad."));
   }
 
   await prisma.teamMember.create({
