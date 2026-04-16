@@ -435,8 +435,13 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
         socialLastError: publishResult.reason,
       },
     });
-
-    throw new Error(publishResult.reason);
+  
+    revalidateFixturePaths({
+      leagueId: fixture.leagueId,
+      leagueSlug: fixture.league.slug ?? null,
+    });
+  
+    return;
   }
 
   revalidateFixturePaths({

@@ -43,6 +43,7 @@ export default async function CaptainTeamLayout({
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: `/captain/team/${teamid}/squad`, label: "Squad" },
     { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
+    { href: `/captain/team/${teamid}/availability`, label: "Availability" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
     { href: `/captain/team/${teamid}/payments`, label: "Payments" },
