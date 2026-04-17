@@ -14,7 +14,14 @@ type Template = {
   key: string;
   label: string;
   body: string;
+  description: string | null;
   interestType: "TEAM" | "PLAYER" | "REFEREE" | null;
+  ctaUrlKey?: string | null;
+};
+
+type ManagedTeamOption = {
+  value: string;
+  label: string;
 };
 
 type RecipientPreviewItem = {
@@ -52,6 +59,7 @@ export default function BulkLeadSmsForm({
   selectedNight,
   recipientCount,
   recipientPreview,
+  managedTeamOptions,
   action,
 }: {
   templates: Template[];
@@ -69,6 +77,7 @@ export default function BulkLeadSmsForm({
     | "ANY";
   recipientCount: number;
   recipientPreview: RecipientPreviewItem[];
+  managedTeamOptions: ManagedTeamOption[];
   action: (
     prevState: BulkSmsActionState,
     formData: FormData,
@@ -77,6 +86,7 @@ export default function BulkLeadSmsForm({
   const [state, formAction] = useActionState(action, {});
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [body, setBody] = useState("");
+  const [targetTeamId, setTargetTeamId] = useState("");
   const [includedLeadIds, setIncludedLeadIds] = useState<string[]>([]);
 
   const filteredTemplates = useMemo(() => {
@@ -91,6 +101,14 @@ export default function BulkLeadSmsForm({
     label: template.label,
   }));
 
+  const selectedTemplateRecord = useMemo(
+    () => templates.find((item) => item.id === selectedTemplate) ?? null,
+    [templates, selectedTemplate],
+  );
+
+  const selectedPreviewCount = includedLeadIds.length;
+  const requiresManagedTeam = selectedTemplateRecord?.ctaUrlKey === "teamJoinUrl";
+
   useEffect(() => {
     setIncludedLeadIds(recipientPreview.map((recipient) => recipient.id));
   }, [recipientPreview]);
@@ -99,16 +117,38 @@ export default function BulkLeadSmsForm({
     if (state?.ok) {
       setSelectedTemplate("");
       setBody("");
+      setTargetTeamId("");
     }
   }, [state?.ok]);
+
+  useEffect(() => {
+    if (!requiresManagedTeam) {
+      setTargetTeamId("");
+      return;
+    }
+
+    if (!targetTeamId && managedTeamOptions.length > 0) {
+      setTargetTeamId(managedTeamOptions[0].value);
+    }
+  }, [managedTeamOptions, requiresManagedTeam, targetTeamId]);
 
   function handleTemplateChange(templateId: string) {
     setSelectedTemplate(templateId);
 
     const template = templates.find((item) => item.id === templateId);
-    if (!template) return;
+    if (!template) {
+      setBody("");
+      setTargetTeamId("");
+      return;
+    }
 
     setBody(template.body);
+
+    if (template.ctaUrlKey === "teamJoinUrl") {
+      setTargetTeamId((current) => current || managedTeamOptions[0]?.value || "");
+    } else {
+      setTargetTeamId("");
+    }
   }
 
   function toggleLead(id: string) {
@@ -119,8 +159,11 @@ export default function BulkLeadSmsForm({
     );
   }
 
-  const selectedPreviewCount = includedLeadIds.length;
-  const canSubmit = Boolean(body.trim() && selectedPreviewCount > 0);
+  const canSubmit = Boolean(
+    body.trim() &&
+      selectedPreviewCount > 0 &&
+      (!requiresManagedTeam || Boolean(targetTeamId)),
+  );
 
   return (
     <form
@@ -132,6 +175,12 @@ export default function BulkLeadSmsForm({
       </div>
 
       <input type="hidden" name="templateId" value={selectedTemplate} />
+      <input
+        type="hidden"
+        name="templateCtaUrlKey"
+        value={selectedTemplateRecord?.ctaUrlKey ?? ""}
+      />
+      <input type="hidden" name="targetTeamId" value={targetTeamId} />
       <input type="hidden" name="selectedType" value={selectedType ?? ""} />
       <input type="hidden" name="selectedStatus" value={selectedStatus ?? ""} />
       <input type="hidden" name="selectedArea" value={selectedArea ?? ""} />
@@ -145,8 +194,22 @@ export default function BulkLeadSmsForm({
         value={selectedTemplate}
         onChange={handleTemplateChange}
         options={templateOptions}
-        placeholder="Choose a template"
+        placeholder="Choose SMS template"
       />
+
+      {selectedTemplateRecord?.description ? (
+        <div className="text-xs text-white/45">{selectedTemplateRecord.description}</div>
+      ) : null}
+
+      {requiresManagedTeam ? (
+        <TemplateSelect
+          label="Managed team link"
+          value={targetTeamId}
+          onChange={setTargetTeamId}
+          options={managedTeamOptions}
+          placeholder="Choose managed team"
+        />
+      ) : null}
 
       <textarea
         name="body"
