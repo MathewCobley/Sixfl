@@ -4,9 +4,11 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { NotificationAudience, NotificationChannel } from "@prisma/client";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { prisma } from "@/lib/prisma";
 import LeadEmailForm from "@/components/admin/leads/LeadEmailForm";
+import LeadSmsForm from "@/components/admin/leads/LeadSmsForm";
 import DeleteLeadButton from "@/components/admin/leads/DeleteLeadButton";
 import ConvertLeadToTeamButton from "@/components/admin/leads/ConvertLeadToTeamButton";
 import ConvertLeadToRefereeForm from "@/components/admin/leads/ConvertLeadToRefereeForm";
@@ -196,7 +198,7 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  const [emailTemplates, managedTeams] = await Promise.all([
+  const [emailTemplates, smsTemplates, managedTeams] = await Promise.all([
     prisma.emailTemplate.findMany({
       where: {
         isActive: true,
@@ -213,6 +215,22 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
         description: true,
         interestType: true,
         ctaLabel: true,
+        ctaUrlKey: true,
+      },
+    }),
+    prisma.notificationTemplate.findMany({
+      where: {
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.LEAD,
+        isActive: true,
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        body: true,
+        description: true,
         ctaUrlKey: true,
       },
     }),
@@ -577,6 +595,32 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
                     No email address is stored for this lead yet. Use the phone
                     number for SMS or add an email address before sending an
                     email from this screen.
+                  </div>
+                )}
+              </ActionCard>
+
+              <ActionCard
+                title="Send SMS"
+                description={
+                  hasPhone
+                    ? "Use a saved SMS template or write a direct text message to this lead from the admin console."
+                    : "This lead does not currently have a mobile number, so SMS sending is unavailable."
+                }
+              >
+                {hasPhone ? (
+                  <LeadSmsForm
+                    leadId={lead.id}
+                    phone={lead.phone}
+                    firstName={lead.contactName}
+                    fullName={lead.contactName}
+                    area={lead.area}
+                    signupUrl={signupUrl}
+                    templates={smsTemplates}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
+                    No mobile number is stored for this lead yet. Add a phone
+                    number before sending an SMS from this screen.
                   </div>
                 )}
               </ActionCard>
