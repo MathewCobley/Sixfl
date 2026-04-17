@@ -183,6 +183,18 @@ function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
   };
 }
 
+function revalidateTemplatePaths(id?: string) {
+  revalidatePath("/admin/templates");
+  revalidatePath("/admin/templates/new");
+  revalidatePath("/admin/email-templates");
+  revalidatePath("/admin/leads");
+
+  if (id) {
+    revalidatePath(`/admin/templates/${id}`);
+    revalidatePath(`/admin/email-templates/${id}`);
+  }
+}
+
 // ========================================
 // Actions
 // ========================================
@@ -230,10 +242,9 @@ export async function createEmailTemplateAction(
     },
   });
 
-  revalidatePath("/admin/email-templates");
-  revalidatePath("/admin/leads");
+  revalidateTemplatePaths(created.id);
 
-  redirect(`/admin/email-templates/${created.id}`);
+  redirect(`/admin/templates/${created.id}`);
 }
 
 export async function updateEmailTemplateAction(
@@ -284,9 +295,7 @@ export async function updateEmailTemplateAction(
     },
   });
 
-  revalidatePath("/admin/email-templates");
-  revalidatePath(`/admin/email-templates/${values.id}`);
-  revalidatePath("/admin/leads");
+  revalidateTemplatePaths(values.id);
 
   return {
     ok: true,
