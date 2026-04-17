@@ -22,6 +22,9 @@ type SmsTemplateActionState = {
   errors?: Record<string, string[]>;
 };
 
+const ALLOWED_CTA_URL_KEYS = ["signupUrl", "manageTeamUrl", "teamJoinUrl"] as const;
+type AllowedCtaUrlKey = (typeof ALLOWED_CTA_URL_KEYS)[number];
+
 function buildValidationError(
   errors: Record<string, string[]>,
   message = "Please fix the highlighted fields.",
@@ -48,6 +51,10 @@ function isAllowedAudience(value: string): value is "LEAD" | "TEAM" {
   return value === "LEAD" || value === "TEAM";
 }
 
+function isAllowedCtaUrlKey(value: string): value is AllowedCtaUrlKey {
+  return ALLOWED_CTA_URL_KEYS.includes(value as AllowedCtaUrlKey);
+}
+
 function getTemplateValues(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
@@ -55,6 +62,7 @@ function getTemplateValues(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const audienceRaw = String(formData.get("audience") ?? "").trim().toUpperCase();
   const body = String(formData.get("body") ?? "").trim();
+  const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
   const isActive =
     formData.get("isActive") === "true" || formData.get("isActive") === "on";
 
@@ -65,6 +73,7 @@ function getTemplateValues(formData: FormData) {
     description,
     audienceRaw,
     body,
+    ctaUrlKey,
     isActive,
   };
 }
@@ -84,6 +93,10 @@ function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
     errors.audience = ["Please select a valid SMS audience."];
   }
 
+  if (values.ctaUrlKey && !isAllowedCtaUrlKey(values.ctaUrlKey)) {
+    errors.ctaUrlKey = ["Please select a valid SMS link destination."];
+  }
+
   const key = slugifyTemplateKey(values.keyInput || values.name);
 
   if (!key) {
@@ -96,6 +109,7 @@ function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
     audience: isAllowedAudience(values.audienceRaw)
       ? (values.audienceRaw as "LEAD" | "TEAM")
       : undefined,
+    ctaUrlKey: values.ctaUrlKey ? values.ctaUrlKey : null,
   };
 }
 
@@ -145,7 +159,7 @@ export async function createSmsTemplateAction(
       subject: null,
       body: values.body,
       ctaLabel: null,
-      ctaUrlKey: null,
+      ctaUrlKey: validated.ctaUrlKey,
       isActive: values.isActive,
     },
     select: {
@@ -200,7 +214,7 @@ export async function updateSmsTemplateAction(
       subject: null,
       body: values.body,
       ctaLabel: null,
-      ctaUrlKey: null,
+      ctaUrlKey: validated.ctaUrlKey,
       isActive: values.isActive,
     },
   });
