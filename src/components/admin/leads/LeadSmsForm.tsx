@@ -23,6 +23,11 @@ type LeadSmsTemplateOption = {
   ctaUrlKey?: string | null;
 };
 
+type ManagedTeamOption = {
+  value: string;
+  label: string;
+};
+
 type Props = {
   leadId: string;
   phone: string | null;
@@ -31,16 +36,29 @@ type Props = {
   area?: string | null;
   signupUrl?: string | null;
   templates: LeadSmsTemplateOption[];
+  managedTeamOptions?: ManagedTeamOption[];
 };
 
 function resolveSmsLink(input: {
   ctaUrlKey?: string | null;
   signupUrl?: string | null;
+  targetTeamId?: string | null;
+  managedTeamOptions?: ManagedTeamOption[];
 }) {
   const urlKey = input.ctaUrlKey?.trim() || "";
 
   if (urlKey === "signupUrl") {
     return input.signupUrl?.trim() || "";
+  }
+
+  if (urlKey === "teamJoinUrl") {
+    const selectedTeam = input.managedTeamOptions?.find(
+      (team) => team.value === input.targetTeamId,
+    );
+
+    if (selectedTeam) {
+      return `Selected managed team: ${selectedTeam.label}`;
+    }
   }
 
   return "";
@@ -54,10 +72,12 @@ export default function LeadSmsForm({
   area,
   signupUrl,
   templates,
+  managedTeamOptions = [],
 }: Props) {
   const router = useRouter();
 
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [targetTeamId, setTargetTeamId] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -68,6 +88,15 @@ export default function LeadSmsForm({
         label: template.name,
       })),
     [templates],
+  );
+
+  const managedTeamSelectOptions = useMemo(
+    () =>
+      managedTeamOptions.map((team) => ({
+        value: team.value,
+        label: team.label,
+      })),
+    [managedTeamOptions],
   );
 
   const selectedTemplate = useMemo(
@@ -88,6 +117,19 @@ export default function LeadSmsForm({
     );
   }, [firstName, fullName, area, signupUrl]);
 
+  const requiresManagedTeam = selectedTemplate?.ctaUrlKey === "teamJoinUrl";
+
+  useEffect(() => {
+    if (!requiresManagedTeam) {
+      setTargetTeamId("");
+      return;
+    }
+
+    if (!targetTeamId && managedTeamOptions.length > 0) {
+      setTargetTeamId(managedTeamOptions[0].value);
+    }
+  }, [managedTeamOptions, requiresManagedTeam, targetTeamId]);
+
   useEffect(() => {
     if (!selectedTemplate) {
       setBody("");
@@ -97,6 +139,8 @@ export default function LeadSmsForm({
     const resolvedLink = resolveSmsLink({
       ctaUrlKey: selectedTemplate.ctaUrlKey,
       signupUrl,
+      targetTeamId,
+      managedTeamOptions,
     });
 
     setBody(
@@ -105,7 +149,7 @@ export default function LeadSmsForm({
         resolvedLink,
       ),
     );
-  }, [selectedTemplate, signupUrl, templateContext]);
+  }, [selectedTemplate, signupUrl, targetTeamId, managedTeamOptions, templateContext]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -117,6 +161,7 @@ export default function LeadSmsForm({
       formData.append("body", body);
       formData.append("signupUrl", signupUrl ?? "");
       formData.append("ctaUrlKey", selectedTemplate?.ctaUrlKey?.trim() || "");
+      formData.append("targetTeamId", targetTeamId);
 
       const result = await sendLeadSmsAction(formData);
 
@@ -143,6 +188,8 @@ export default function LeadSmsForm({
     const resolvedLink = resolveSmsLink({
       ctaUrlKey: selectedTemplate.ctaUrlKey,
       signupUrl,
+      targetTeamId,
+      managedTeamOptions,
     });
 
     setBody(
@@ -181,6 +228,19 @@ export default function LeadSmsForm({
         ) : null}
       </div>
 
+      {requiresManagedTeam ? (
+        <div>
+          <TemplateSelect
+            label="Managed team link"
+            value={targetTeamId}
+            options={managedTeamSelectOptions}
+            onChange={setTargetTeamId}
+            disabled={sending}
+            placeholder="Select managed team"
+          />
+        </div>
+      ) : null}
+
       <div>
         <label className="mb-1 block text-sm text-white/70">To</label>
         <input
@@ -216,7 +276,7 @@ export default function LeadSmsForm({
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={sending || !phone}
+          disabled={sending || !phone || (requiresManagedTeam && !targetTeamId)}
           className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? "Sending..." : "Send SMS"}
