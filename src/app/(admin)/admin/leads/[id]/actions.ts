@@ -183,6 +183,58 @@ async function resolveLeadSmsLink(input: {
   return "";
 }
 
+async function ensureLeadSmsNotificationRecipient(input: {
+  leadId: string;
+  contactName?: string | null;
+  phone: string;
+}) {
+  const recipient = await prisma.notificationRecipient.upsert({
+    where: {
+      sourceType_sourceId: {
+        sourceType: "LEAD",
+        sourceId: input.leadId,
+      },
+    },
+    update: {
+      audience: NotificationAudience.LEAD,
+      displayName: input.contactName?.trim() || null,
+      phone: input.phone,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
+    },
+    create: {
+      sourceType: "LEAD",
+      sourceId: input.leadId,
+      audience: NotificationAudience.LEAD,
+      displayName: input.contactName?.trim() || null,
+      phone: input.phone,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
+    },
+  });
+
+  await prisma.notificationPreference.upsert({
+    where: {
+      recipientId: recipient.id,
+    },
+    update: {
+      smsEnabled: true,
+      urgentSmsEnabled: true,
+      marketingSmsEnabled: true,
+    },
+    create: {
+      recipientId: recipient.id,
+      smsEnabled: true,
+      urgentSmsEnabled: true,
+      marketingSmsEnabled: true,
+      emailEnabled: true,
+      marketingEmailEnabled: false,
+    },
+  });
+
+  return recipient;
+}
+
 // ========================================
 // Actions
 // ========================================
@@ -386,43 +438,25 @@ export async function sendLeadSmsAction(formData: FormData) {
   );
 
   try {
-    const recipient = await prisma.notificationRecipient.upsert({
-      where: {
-        sourceType_sourceId: {
-          sourceType: "LEAD",
-          sourceId: lead.id,
-        },
-      },
-      update: {
-        audience: NotificationAudience.LEAD,
-        displayName: lead.contactName?.trim() || null,
-        phone: leadPhone,
-        transactionalSmsOptIn: true,
-        marketingSmsOptIn: true,
-      },
-      create: {
-        sourceType: "LEAD",
-        sourceId: lead.id,
-        audience: NotificationAudience.LEAD,
-        displayName: lead.contactName?.trim() || null,
-        phone: leadPhone,
-        transactionalSmsOptIn: true,
-        marketingSmsOptIn: true,
-      },
+    const recipient = await ensureLeadSmsNotificationRecipient({
+      leadId: lead.id,
+      contactName: lead.contactName,
+      phone: leadPhone,
     });
 
-    await queueDirectNotification({
+    const dispatch = await queueDirectNotification({
       recipientId: recipient.id,
       channel: NotificationChannel.SMS,
       audience: NotificationAudience.LEAD,
       body: resolvedBody,
-      isTransactional: false,
+      isTransactional: true,
       sourceType: "LEAD",
       sourceId: lead.id,
       metadata: {
         origin: "lead_single_sms",
         originLabel: "Sent from lead page",
         leadId: lead.id,
+        contactName: lead.contactName?.trim() || null,
         ctaUrlKey,
         targetTeamId: targetTeamId || null,
       },
@@ -442,7 +476,12 @@ export async function sendLeadSmsAction(formData: FormData) {
     revalidatePath("/admin/leads");
     revalidatePath(`/admin/leads/${lead.id}`);
 
-    return { ok: true };
+    return {
+      ok: true,
+      status: dispatch.status,
+      dispatchId: dispatch.id,
+      queued: dispatch.status === "QUEUED",
+    };
   } catch (error) {
     console.error("sendLeadSmsAction error", error);
 
