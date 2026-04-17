@@ -209,6 +209,58 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+async function ensureLeadSmsNotificationRecipient(input: {
+  leadId: string;
+  contactName?: string | null;
+  phone: string;
+}) {
+  const recipient = await prisma.notificationRecipient.upsert({
+    where: {
+      sourceType_sourceId: {
+        sourceType: "LEAD",
+        sourceId: input.leadId,
+      },
+    },
+    update: {
+      audience: NotificationAudience.LEAD,
+      displayName: input.contactName?.trim() || null,
+      phone: input.phone,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
+    },
+    create: {
+      sourceType: "LEAD",
+      sourceId: input.leadId,
+      audience: NotificationAudience.LEAD,
+      displayName: input.contactName?.trim() || null,
+      phone: input.phone,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
+    },
+  });
+
+  await prisma.notificationPreference.upsert({
+    where: {
+      recipientId: recipient.id,
+    },
+    update: {
+      smsEnabled: true,
+      urgentSmsEnabled: true,
+      marketingSmsEnabled: true,
+    },
+    create: {
+      recipientId: recipient.id,
+      smsEnabled: true,
+      urgentSmsEnabled: true,
+      marketingSmsEnabled: true,
+      emailEnabled: true,
+      marketingEmailEnabled: false,
+    },
+  });
+
+  return recipient;
+}
+
 // ========================================
 // Actions
 // ========================================
@@ -723,29 +775,10 @@ export async function sendBulkLeadSmsAction(
         link: resolvedLink,
       });
 
-      const recipient = await prisma.notificationRecipient.upsert({
-        where: {
-          sourceType_sourceId: {
-            sourceType: "LEAD",
-            sourceId: lead.id,
-          },
-        },
-        update: {
-          audience: NotificationAudience.LEAD,
-          displayName: lead.contactName?.trim() || null,
-          phone,
-          transactionalSmsOptIn: true,
-          marketingSmsOptIn: true,
-        },
-        create: {
-          sourceType: "LEAD",
-          sourceId: lead.id,
-          audience: NotificationAudience.LEAD,
-          displayName: lead.contactName?.trim() || null,
-          phone,
-          transactionalSmsOptIn: true,
-          marketingSmsOptIn: true,
-        },
+      const recipient = await ensureLeadSmsNotificationRecipient({
+        leadId: lead.id,
+        contactName: lead.contactName,
+        phone,
       });
 
       await queueDirectNotification({
@@ -760,6 +793,7 @@ export async function sendBulkLeadSmsAction(
           origin: "lead_bulk_sms",
           originLabel: "Sent from leads page",
           leadId: lead.id,
+          contactName: lead.contactName?.trim() || null,
           templateCtaUrlKey,
           targetTeamId: targetManagedTeam?.id ?? null,
         },
