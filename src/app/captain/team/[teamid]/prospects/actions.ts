@@ -96,6 +96,52 @@ async function getProspectForTeam(teamid: string, prospectId: string) {
   });
 }
 
+async function getProspectsForTeam(input: {
+  teamid: string;
+  prospectIds: string[];
+}) {
+  return prisma.teamPlayerProspect.findMany({
+    where: {
+      teamId: input.teamid,
+      ...(input.prospectIds.length > 0
+        ? {
+            id: {
+              in: input.prospectIds,
+            },
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
+}
+
+async function markProspectsContacted(prospectIds: string[]) {
+  if (prospectIds.length === 0) return;
+
+  await prisma.teamPlayerProspect.updateMany({
+    where: {
+      id: {
+        in: prospectIds,
+      },
+    },
+    data: {
+      lastContactedAt: new Date(),
+    },
+  });
+
+  await prisma.teamPlayerProspect.updateMany({
+    where: {
+      id: {
+        in: prospectIds,
+      },
+      status: "NEW",
+    },
+    data: {
+      status: "CONTACTED",
+    },
+  });
+}
+
 export async function addProspectAction(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "").trim();
 
@@ -219,7 +265,7 @@ export async function sendProspectEmailAction(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
 
-  const { user } = await requireCaptain(teamid);
+  await requireCaptain(teamid);
 
   if (!teamid || !prospectId) {
     redirect("/captain");
@@ -270,13 +316,7 @@ export async function sendProspectEmailAction(formData: FormData) {
     html: signedHtmlBody,
   });
 
-  await prisma.teamPlayerProspect.update({
-    where: { id: prospect.id },
-    data: {
-      status: prospect.status === "NEW" ? "CONTACTED" : prospect.status,
-      lastContactedAt: new Date(),
-    },
-  });
+  await markProspectsContacted([prospect.id]);
 
   revalidatePath(`/captain/team/${teamid}/prospects`);
   redirect(buildProspectsRedirect(teamid, "?saved=email-sent"));
@@ -367,16 +407,178 @@ export async function sendProspectSmsAction(formData: FormData) {
     createdByUserId: user?.id ?? null,
   });
 
-  await prisma.teamPlayerProspect.update({
-    where: { id: prospect.id },
-    data: {
-      status: prospect.status === "NEW" ? "CONTACTED" : prospect.status,
-      lastContactedAt: new Date(),
-    },
-  });
+  await markProspectsContacted([prospect.id]);
 
   revalidatePath(`/captain/team/${teamid}/prospects`);
   redirect(buildProspectsRedirect(teamid, "?saved=sms-sent"));
+}
+
+export async function sendBulkProspectEmailAction(formData: FormData) {
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const prospectIds = formData
+    .getAll("prospectIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  await requireCaptain(teamid);
+
+  if (!teamid) {
+    redirect("/captain");
+  }
+
+  if (!subject) {
+    redirect(buildProspectsRedirect(teamid, "?error=Bulk%20email%20subject%20is%20required."));
+  }
+
+  if (!body) {
+    redirect(buildProspectsRedirect(teamid, "?error=Bulk%20email%20body%20is%20required."));
+  }
+
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+    redirect(buildProspectsRedirect(teamid, "?error=Email%20is%20not%20configured%20yet."));
+  }
+
+  const [team, prospects] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: {
+        id: true,
+        name: true,
+        joinSlug: true,
+      },
+    }),
+    getProspectsForTeam({ teamid, prospectIds }),
+  ]);
+
+  if (!team) {
+    redirect(buildProspectsRedirect(teamid, "?error=Team%20not%20found."));
+  }
+
+  const recipients = prospects.filter((prospect) => Boolean(prospect.email?.trim()));
+
+  if (recipients.length === 0) {
+    redirect(buildProspectsRedirect(teamid, "?error=No%20prospects%20with%20email%20were%20selected."));
+  }
+
+  for (const prospect of recipients) {
+    const personalisedSubject = personaliseProspectText(subject, prospect, team);
+    const personalisedBody = personaliseProspectText(body, prospect, team);
+    const signedTextBody = appendSIXFLTextSignature(personalisedBody);
+    const signedHtmlBody = buildSIXFLEmailHtml({ body: signedTextBody });
+
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM,
+      to: prospect.email!.trim(),
+      subject: personalisedSubject,
+      text: signedTextBody,
+      html: signedHtmlBody,
+    });
+  }
+
+  await markProspectsContacted(recipients.map((prospect) => prospect.id));
+
+  revalidatePath(`/captain/team/${teamid}/prospects`);
+  redirect(buildProspectsRedirect(teamid, "?saved=bulk-email-sent"));
+}
+
+export async function sendBulkProspectSmsAction(formData: FormData) {
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const prospectIds = formData
+    .getAll("prospectIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  const { user } = await requireCaptain(teamid);
+
+  if (!teamid) {
+    redirect("/captain");
+  }
+
+  if (!body) {
+    redirect(buildProspectsRedirect(teamid, "?error=Bulk%20SMS%20body%20is%20required."));
+  }
+
+  const [team, prospects] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: {
+        id: true,
+        name: true,
+        joinSlug: true,
+      },
+    }),
+    getProspectsForTeam({ teamid, prospectIds }),
+  ]);
+
+  if (!team) {
+    redirect(buildProspectsRedirect(teamid, "?error=Team%20not%20found."));
+  }
+
+  const recipients = prospects.filter((prospect) => Boolean(prospect.phone?.trim()));
+
+  if (recipients.length === 0) {
+    redirect(buildProspectsRedirect(teamid, "?error=No%20prospects%20with%20a%20mobile%20number%20were%20selected."));
+  }
+
+  for (const prospect of recipients) {
+    const personalisedBody = personaliseProspectText(body, prospect, team);
+
+    const recipient = await prisma.notificationRecipient.upsert({
+      where: {
+        sourceType_sourceId: {
+          sourceType: "GENERAL",
+          sourceId: `team-prospect:${prospect.id}`,
+        },
+      },
+      update: {
+        audience: NotificationAudience.PLAYER,
+        displayName: getProspectDisplayName({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+        }),
+        phone: prospect.phone!.trim(),
+        transactionalSmsOptIn: true,
+        marketingSmsOptIn: true,
+      },
+      create: {
+        sourceType: "GENERAL",
+        sourceId: `team-prospect:${prospect.id}`,
+        audience: NotificationAudience.PLAYER,
+        displayName: getProspectDisplayName({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+        }),
+        phone: prospect.phone!.trim(),
+        transactionalSmsOptIn: true,
+        marketingSmsOptIn: true,
+      },
+    });
+
+    await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: NotificationChannel.SMS,
+      audience: NotificationAudience.PLAYER,
+      body: personalisedBody,
+      isTransactional: false,
+      sourceType: "TEAM_PLAYER_PROSPECT",
+      sourceId: prospect.id,
+      metadata: {
+        origin: "captain_prospect_sms_bulk",
+        originLabel: "Bulk SMS to prospects from captain hub",
+        teamId: teamid,
+        prospectId: prospect.id,
+      },
+      createdByUserId: user?.id ?? null,
+    });
+  }
+
+  await markProspectsContacted(recipients.map((prospect) => prospect.id));
+
+  revalidatePath(`/captain/team/${teamid}/prospects`);
+  redirect(buildProspectsRedirect(teamid, "?saved=bulk-sms-sent"));
 }
 
 export async function convertProspectToMemberAction(formData: FormData) {
