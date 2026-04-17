@@ -4,6 +4,7 @@
 
 import twilio from "twilio";
 import type { Prisma } from "@prisma/client";
+import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
 export type SendSmsWithTwilioInput = {
   to: string;
@@ -50,6 +51,22 @@ function getTwilioClient(): TwilioClient {
   return cachedClient;
 }
 
+function normalizeOutgoingSmsNumber(value: string) {
+  const normalized = normalizeUkMobileNumber(value);
+
+  if (normalized) {
+    return normalized;
+  }
+
+  const trimmed = value.trim();
+
+  if (/^\+[1-9]\d{7,14}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  throw new Error(`Invalid SMS recipient number: ${value}`);
+}
+
 function buildMessageCreateInput(input: SendSmsWithTwilioInput) {
   const messagingServiceSid = getOptionalEnv("TWILIO_MESSAGING_SERVICE_SID");
   const fromNumber = getOptionalEnv("TWILIO_PHONE_NUMBER");
@@ -67,7 +84,7 @@ function buildMessageCreateInput(input: SendSmsWithTwilioInput) {
     from?: string;
     mediaUrl?: string[];
   } = {
-    to: input.to,
+    to: normalizeOutgoingSmsNumber(input.to),
     body: input.body,
   };
 
