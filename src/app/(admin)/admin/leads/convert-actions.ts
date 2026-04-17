@@ -29,6 +29,31 @@ function getSafeTeamName(input: {
   return "New Team";
 }
 
+function splitLeadName(fullName: string | null | undefined) {
+  const raw = fullName?.trim() ?? "";
+
+  if (!raw) {
+    return {
+      firstName: "Player",
+      lastName: null as string | null,
+    };
+  }
+
+  const parts = raw.split(/\s+/).filter(Boolean);
+
+  if (parts.length === 1) {
+    return {
+      firstName: parts[0],
+      lastName: null,
+    };
+  }
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
 async function generateUniqueClaimCode(tx: Prisma.TransactionClient) {
   for (let i = 0; i < 10; i += 1) {
     const claimCode = crypto.randomBytes(4).toString("hex").toUpperCase();
@@ -256,4 +281,168 @@ export async function convertLeadToTeamAction(
   }
 
   redirect(`/admin/teams/${result.teamId}?created=1&fromLead=${leadId}`);
+}
+
+export async function convertLeadToManagedSquadPlayerAction(formData: FormData) {
+  await requireAdmin();
+
+  const leadId = String(formData.get("leadId") ?? "").trim();
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!leadId) {
+    throw new Error("Lead ID is required.");
+  }
+
+  if (!teamId) {
+    throw new Error("Managed team is required.");
+  }
+
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
+    select: {
+      id: true,
+      interestType: true,
+      status: true,
+      contactName: true,
+      email: true,
+      phone: true,
+      area: true,
+      leagueType: true,
+      message: true,
+      source: true,
+      preferredNights: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          night: true,
+        },
+      },
+    },
+  });
+
+  if (!lead) {
+    throw new Error("Lead not found.");
+  }
+
+  if (lead.interestType !== "PLAYER") {
+    throw new Error("Only PLAYER leads can be added into a managed squad.");
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      name: true,
+      teamMode: true,
+    },
+  });
+
+  if (!team) {
+    throw new Error("Managed team not found.");
+  }
+
+  if (team.teamMode !== "MANAGED") {
+    throw new Error("Only managed teams can receive player leads.");
+  }
+
+  const { firstName, lastName } = splitLeadName(lead.contactName);
+
+  const preferredNightSummary =
+    lead.preferredNights.length > 0
+      ? lead.preferredNights.map((entry) => entry.night).join(", ")
+      : null;
+
+  const sourceParts = ["LEAD_CONVERSION", lead.source?.trim() || null].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  const generatedNotes = [
+    notes || null,
+    lead.message?.trim() ? `Lead message: ${lead.message.trim()}` : null,
+    lead.area?.trim() ? `Area: ${lead.area.trim()}` : null,
+    lead.leagueType ? `League type: ${lead.leagueType}` : null,
+    preferredNightSummary ? `Preferred nights: ${preferredNightSummary}` : null,
+    `Source lead ID: ${lead.id}`,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n");
+
+  const duplicateWhere = [
+    ...(lead.email?.trim()
+      ? [
+          {
+            email: {
+              equals: lead.email.trim(),
+              mode: "insensitive" as const,
+            },
+          },
+        ]
+      : []),
+    ...(lead.phone?.trim()
+      ? [
+          {
+            phone: lead.phone.trim(),
+          },
+        ]
+      : []),
+  ];
+
+  const duplicate = duplicateWhere.length
+    ? await prisma.teamPlayerProspect.findFirst({
+        where: {
+          teamId: team.id,
+          OR: duplicateWhere,
+        },
+        select: {
+          id: true,
+        },
+      })
+    : null;
+
+  if (duplicate) {
+    redirect(
+      `/admin/teams/${team.id}?playerLead=${lead.id}&prospect=${duplicate.id}&existingProspect=1`,
+    );
+  }
+
+  const prospect = await prisma.$transaction(async (tx) => {
+    const createdProspect = await tx.teamPlayerProspect.create({
+      data: {
+        teamId: team.id,
+        firstName,
+        lastName,
+        email: lead.email?.trim() || null,
+        phone: lead.phone?.trim() || null,
+        preferredPositions: null,
+        experienceSummary: null,
+        availabilitySummary: preferredNightSummary,
+        source: sourceParts.join(" • "),
+        status: "NEW",
+        notes: generatedNotes || null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await tx.interestLead.update({
+      where: { id: lead.id },
+      data: {
+        status: "CLOSED",
+        contactedAt: lead.status === "NEW" ? new Date() : undefined,
+        closedAt: new Date(),
+      },
+    });
+
+    return createdProspect;
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${lead.id}`);
+  revalidatePath("/admin/teams");
+  revalidatePath(`/admin/teams/${team.id}`);
+
+  redirect(
+    `/admin/teams/${team.id}?playerLead=${lead.id}&prospect=${prospect.id}&createdProspect=1`,
+  );
 }
