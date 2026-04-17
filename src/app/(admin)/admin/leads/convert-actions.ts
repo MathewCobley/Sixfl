@@ -399,9 +399,14 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
       })
     : null;
 
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${lead.id}`);
+  revalidatePath("/admin/teams");
+  revalidatePath(`/admin/teams/${team.id}`);
+
   if (duplicate) {
     redirect(
-      `/admin/teams/${team.id}?playerLead=${lead.id}&prospect=${duplicate.id}&existingProspect=1`,
+      `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&existingProspect=1&prospect=${duplicate.id}`,
     );
   }
 
@@ -443,6 +448,6 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
   revalidatePath(`/admin/teams/${team.id}`);
 
   redirect(
-    `/admin/teams/${team.id}?playerLead=${lead.id}&prospect=${prospect.id}&createdProspect=1`,
+    `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&prospect=${prospect.id}`,
   );
 }
