@@ -75,6 +75,15 @@ function getStatusClasses(status: string) {
   }
 }
 
+function getPreferredNightsDisplay(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const nights = value.filter((item): item is string => typeof item === "string");
+  return nights.length > 0 ? nights.join(", ") : null;
+}
+
 export default async function AdminTeamProspectsPage({
   params,
   searchParams,
@@ -394,117 +403,138 @@ export default async function AdminTeamProspectsPage({
                 No prospects yet.
               </div>
             ) : (
-              team.prospects.map((prospect) => (
-                <div key={prospect.id} className="space-y-5 px-6 py-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-base font-semibold text-white">
-                          {[prospect.firstName, prospect.lastName]
-                            .filter(Boolean)
-                            .join(" ")}
+              team.prospects.map((prospect) => {
+                const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
+
+                return (
+                  <div key={prospect.id} className="space-y-5 px-6 py-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-base font-semibold text-white">
+                            {[prospect.firstName, prospect.lastName]
+                              .filter(Boolean)
+                              .join(" ")}
+                          </div>
+
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getStatusClasses(
+                              prospect.status,
+                            )}`}
+                          >
+                            {getStatusLabel(prospect.status)}
+                          </span>
                         </div>
 
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getStatusClasses(
-                            prospect.status,
-                          )}`}
+                        <div className="mt-2 text-sm text-white/65">
+                          {prospect.email || "No email"}{" "}
+                          {prospect.phone ? `· ${prospect.phone}` : ""}
+                        </div>
+
+                        <div className="mt-1 text-xs text-white/45">
+                          {prospect.source || "No source"} · Added {prospect.createdAt.toLocaleString()}
+                        </div>
+
+                        {prospect.ageBand ? (
+                          <div className="mt-2 text-sm text-white/70">
+                            Age band: {prospect.ageBand}
+                          </div>
+                        ) : null}
+
+                        {prospect.preferredPositions ? (
+                          <div className="mt-2 text-sm text-white/70">
+                            Position: {prospect.preferredPositions}
+                          </div>
+                        ) : null}
+
+                        {prospect.experienceSummary ? (
+                          <div className="mt-2 text-sm text-white/60">
+                            Experience: {prospect.experienceSummary}
+                          </div>
+                        ) : null}
+
+                        {prospect.availabilityLevel ? (
+                          <div className="mt-2 text-sm text-white/60">
+                            Availability level: {prospect.availabilityLevel}
+                          </div>
+                        ) : null}
+
+                        {preferredNights ? (
+                          <div className="mt-2 text-sm text-white/60">
+                            Preferred nights: {preferredNights}
+                          </div>
+                        ) : null}
+
+                        {prospect.availabilitySummary ? (
+                          <div className="mt-2 text-sm text-white/50">
+                            {prospect.availabilitySummary}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <form
+                        action={updateAdminProspectStatusAction}
+                        className="min-w-[220px]"
+                      >
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input
+                          type="hidden"
+                          name="prospectId"
+                          value={prospect.id}
+                        />
+                        <FormListboxField
+                          name="status"
+                          value={prospect.status}
+                          options={STATUS_OPTIONS.map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                          }))}
+                          placeholder="Select status"
+                        />
+                        <button
+                          type="submit"
+                          className="mt-3 inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
                         >
-                          {getStatusLabel(prospect.status)}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 text-sm text-white/65">
-                        {prospect.email || "No email"}{" "}
-                        {prospect.phone ? `· ${prospect.phone}` : ""}
-                      </div>
-
-                      <div className="mt-1 text-xs text-white/45">
-                        {prospect.source || "No source"} · Added{" "}
-                        {prospect.createdAt.toLocaleString()}
-                      </div>
-
-                      {prospect.preferredPositions ? (
-                        <div className="mt-2 text-sm text-white/70">
-                          Positions: {prospect.preferredPositions}
-                        </div>
-                      ) : null}
-
-                      {prospect.experienceSummary ? (
-                        <div className="mt-2 text-sm text-white/60">
-                          {prospect.experienceSummary}
-                        </div>
-                      ) : null}
-
-                      {prospect.availabilitySummary ? (
-                        <div className="mt-2 text-sm text-white/60">
-                          Availability: {prospect.availabilitySummary}
-                        </div>
-                      ) : null}
+                          Update status
+                        </button>
+                      </form>
                     </div>
 
-                    <form
-                      action={updateAdminProspectStatusAction}
-                      className="min-w-[220px]"
-                    >
-                      <input type="hidden" name="teamId" value={team.id} />
-                      <input
-                        type="hidden"
-                        name="prospectId"
-                        value={prospect.id}
-                      />
-                      <FormListboxField
-                        name="status"
-                        value={prospect.status}
-                        options={STATUS_OPTIONS.map((option) => ({
-                          value: option.value,
-                          label: option.label,
-                        }))}
-                        placeholder="Select status"
-                      />
-                      <button
-                        type="submit"
-                        className="mt-3 inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                      >
-                        Update status
-                      </button>
-                    </form>
+                    <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+                      <form action={updateAdminProspectNotesAction} className="space-y-3">
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input type="hidden" name="prospectId" value={prospect.id} />
+
+                        <textarea
+                          name="notes"
+                          rows={3}
+                          defaultValue={prospect.notes ?? ""}
+                          placeholder="Internal notes"
+                          className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition focus:border-emerald-500/60"
+                        />
+
+                        <button
+                          type="submit"
+                          className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                        >
+                          Save notes
+                        </button>
+                      </form>
+
+                      <form action={convertAdminProspectToMemberAction} className="lg:self-start">
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input type="hidden" name="prospectId" value={prospect.id} />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                        >
+                          Promote to squad
+                        </button>
+                      </form>
+                    </div>
                   </div>
-
-                  <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-                    <form action={updateAdminProspectNotesAction} className="space-y-3">
-                      <input type="hidden" name="teamId" value={team.id} />
-                      <input type="hidden" name="prospectId" value={prospect.id} />
-
-                      <textarea
-                        name="notes"
-                        rows={3}
-                        defaultValue={prospect.notes ?? ""}
-                        placeholder="Internal notes"
-                        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition focus:border-emerald-500/60"
-                      />
-
-                      <button
-                        type="submit"
-                        className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                      >
-                        Save notes
-                      </button>
-                    </form>
-
-                    <form action={convertAdminProspectToMemberAction} className="lg:self-start">
-                      <input type="hidden" name="teamId" value={team.id} />
-                      <input type="hidden" name="prospectId" value={prospect.id} />
-                      <button
-                        type="submit"
-                        className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-                      >
-                        Promote to squad
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
