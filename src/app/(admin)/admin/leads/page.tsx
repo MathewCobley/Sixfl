@@ -773,6 +773,7 @@ export default async function AdminLeadsPage({
 
             <BulkLeadSmsForm
               action={sendBulkLeadSmsAction}
+              templates={bulkEmailTemplates}
               selectedType={selectedType}
               selectedStatus={selectedStatus}
               selectedArea={selectedArea}
