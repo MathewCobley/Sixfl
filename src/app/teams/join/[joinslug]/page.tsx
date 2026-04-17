@@ -20,6 +20,29 @@ type SearchParams = {
   error?: string;
 };
 
+const AGE_BAND_OPTIONS = [
+  {
+    value: "16-18",
+    label: "16–18",
+    description: "You are in the younger player bracket.",
+  },
+  {
+    value: "18-25",
+    label: "18–25",
+    description: "Early adult age group.",
+  },
+  {
+    value: "25-35",
+    label: "25–35",
+    description: "Prime years and still flying around.",
+  },
+  {
+    value: "35+",
+    label: "35 and over",
+    description: "Experienced and still doing the business.",
+  },
+] as const;
+
 const POSITION_OPTIONS = [
   {
     value: "Goalkeeper",
@@ -342,6 +365,18 @@ export default async function TeamJoinPage({
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    Age band
+                  </h2>
+                  <p className="mt-1 text-sm text-white/60">
+                    This helps organisers understand the likely squad fit.
+                  </p>
+                </div>
+                <OptionCards name="ageBand" options={AGE_BAND_OPTIONS} />
               </div>
 
               <div className="space-y-3">
