@@ -26,6 +26,7 @@ function revalidateFixturePaths(input: {
   leagueId: string;
   leagueSlug: string | null;
 }) {
+  revalidatePath("/admin/social");
   revalidatePath("/admin/fixtures");
   revalidatePath(`/admin/leagues/${input.leagueId}/fixtures`);
   revalidatePath(`/admin/leagues/${input.leagueId}`);

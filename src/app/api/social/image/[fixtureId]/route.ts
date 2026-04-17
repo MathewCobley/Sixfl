@@ -182,6 +182,18 @@ function getTemplateName(input: {
   return "fixture-card-master.png";
 }
 
+function getUpdateHeadline(status: string) {
+  if (status === "POSTPONED") {
+    return "POSTPONED";
+  }
+
+  if (status === "CANCELLED") {
+    return "CANCELLED";
+  }
+
+  return "FIXTURE UPDATE";
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ fixtureId: string }> },
@@ -232,11 +244,14 @@ export async function GET(
     return new Response("Fixture not found", { status: 404 });
   }
 
+  const homeScore = fixture.result?.homeScore ?? null;
+  const awayScore = fixture.result?.awayScore ?? null;
+
   const templateName = getTemplateName({
     socialPostType: fixture.socialPostType,
     status: fixture.status,
-    homeScore: fixture.result?.homeScore ?? null,
-    awayScore: fixture.result?.awayScore ?? null,
+    homeScore,
+    awayScore,
   });
 
   const templatePath = path.join(
@@ -266,13 +281,10 @@ export async function GET(
     fitText(fixture.venue?.name ?? "Venue TBC", 36),
   );
   const kickoffText = formatKickoff(fixture.kickoffAt);
-  const homeScore = fixture.result?.homeScore ?? null;
-const awayScore = fixture.result?.awayScore ?? null;
-
-const scoreText =
-  homeScore !== null && awayScore !== null
-    ? `${homeScore} - ${awayScore}`
-    : null;
+  const scoreText =
+    homeScore !== null && awayScore !== null
+      ? `${homeScore} - ${awayScore}`
+      : null;
 
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
@@ -291,13 +303,6 @@ const scoreText =
     weight: 700,
     color: "#F4F7FA",
   });
-
-  if (homeBadge) {
-    // badge positions handled by sharp below
-  }
-  if (awayBadge) {
-    // badge positions handled by sharp below
-  }
 
   if (isResult) {
     drawCenteredTextBlock({
@@ -355,6 +360,17 @@ const scoreText =
       color: "#F4F7FA",
     });
   } else if (isUpdate) {
+    drawCenteredTextBlock({
+      ctx,
+      text: getUpdateHeadline(fixture.status),
+      x: 540,
+      y: 520,
+      maxWidth: 320,
+      fontSize: 52,
+      weight: 800,
+      color: "#FFFFFF",
+    });
+
     drawCenteredTextBlock({
       ctx,
       text: homeName,
@@ -452,7 +468,7 @@ const scoreText =
     composites.push({
       input: homeBadge,
       left: 150,
-      top: isResult ? 320 : 350,
+      top: isResult || isUpdate ? 320 : 350,
     });
   }
 
@@ -460,7 +476,7 @@ const scoreText =
     composites.push({
       input: awayBadge,
       left: 670,
-      top: isResult ? 320 : 350,
+      top: isResult || isUpdate ? 320 : 350,
     });
   }
 
