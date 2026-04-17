@@ -5,6 +5,19 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
+function formatKickoffTime(value: Date | null) {
+  if (!value) {
+    return "TBC";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Europe/London",
+  }).format(new Date(value));
+}
+
 export default async function LeagueFixturesPublic({
   params,
 }: {
@@ -72,13 +85,7 @@ export default async function LeagueFixturesPublic({
               </span>
 
               <span className="text-sm text-white/50">
-                {fixture.pitch ?? "Pitch TBC"} ·{" "}
-                {fixture.kickoffAt
-                  ? new Date(fixture.kickoffAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "TBC"}
+                {fixture.pitch ?? "Pitch TBC"} · {formatKickoffTime(fixture.kickoffAt)}
               </span>
             </div>
           ))}
