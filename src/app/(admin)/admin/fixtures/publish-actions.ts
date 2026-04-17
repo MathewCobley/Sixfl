@@ -8,6 +8,7 @@ import {
   NotificationAudience,
   NotificationChannel,
   NotificationDispatchStatus,
+  Prisma,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -17,6 +18,28 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { getEmailReplyDomain } from "@/lib/resend/client";
+
+type PublishFixtureRecord = {
+  id: string;
+  kickoffAt: Date;
+  pitch: string | null;
+  homeTeam: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+  };
+  awayTeam: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+  };
+  venue: {
+    name: string;
+  } | null;
+};
+
+const SERIALIZABLE_RETRY_LIMIT = 3;
+const PUBLISH_RETRY_ERROR = "fixture_publish_retry_conflict";
 
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
   const str = String(value ?? "").trim();
@@ -125,6 +148,190 @@ function getTeamDetailsForFixture(
   return fixture.homeTeam.id === teamId ? fixture.homeTeam : fixture.awayTeam;
 }
 
+function buildDigestSourceId(input: { leagueId: string; teamId: string }) {
+  return `${input.leagueId}:${input.teamId}`;
+}
+
+function buildReminderSourceId(input: {
+  fixtureId: string;
+  teamId: string;
+  scheduledFor: Date;
+}) {
+  return `${input.fixtureId}:${input.teamId}:${input.scheduledFor.toISOString()}`;
+}
+
+function isRetryablePublishError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P2034";
+  }
+
+  return error instanceof Error && error.message === PUBLISH_RETRY_ERROR;
+}
+
+async function withSerializableRetry<T>(callback: () => Promise<T>): Promise<T> {
+  let attempt = 0;
+
+  while (attempt < SERIALIZABLE_RETRY_LIMIT) {
+    try {
+      return await callback();
+    } catch (error) {
+      attempt += 1;
+
+      if (!isRetryablePublishError(error) || attempt >= SERIALIZABLE_RETRY_LIMIT) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Unable to complete fixture publish.");
+}
+
+async function claimUnpublishedLeagueFixtures(
+  leagueId: string,
+): Promise<PublishFixtureRecord[]> {
+  return withSerializableRetry(async () => {
+    return prisma.$transaction(
+      async (tx) => {
+        const unpublishedFixtures = await tx.fixture.findMany({
+          where: {
+            leagueId,
+            publishedAt: null,
+          },
+          orderBy: {
+            kickoffAt: "asc",
+          },
+          select: {
+            id: true,
+            kickoffAt: true,
+            pitch: true,
+            homeTeam: {
+              select: {
+                id: true,
+                name: true,
+                logoUrl: true,
+              },
+            },
+            awayTeam: {
+              select: {
+                id: true,
+                name: true,
+                logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        });
+
+        if (unpublishedFixtures.length === 0) {
+          return [];
+        }
+
+        const fixtureIds = unpublishedFixtures.map((fixture) => fixture.id);
+        const publishedAt = new Date();
+
+        const updateResult = await tx.fixture.updateMany({
+          where: {
+            id: {
+              in: fixtureIds,
+            },
+            leagueId,
+            publishedAt: null,
+          },
+          data: {
+            publishedAt,
+          },
+        });
+
+        if (updateResult.count !== fixtureIds.length) {
+          throw new Error(PUBLISH_RETRY_ERROR);
+        }
+
+        return unpublishedFixtures;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
+  });
+}
+
+async function queueDirectNotificationOnce(input: {
+  recipientId: string;
+  channel: NotificationChannel;
+  audience: NotificationAudience;
+  subject?: string | null;
+  body: string;
+  isTransactional?: boolean;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  metadata?: Prisma.InputJsonValue;
+  variables?: Prisma.InputJsonValue;
+  emailBranding?: {
+    teamName?: string | null;
+    teamLogoUrl?: string | null;
+    leagueName?: string | null;
+  };
+  emailCta?: {
+    label: string;
+    url: string;
+  };
+  scheduledFor?: Date;
+  createdByUserId?: string | null;
+}) {
+  const sourceType = input.sourceType?.trim() || null;
+  const sourceId = input.sourceId?.trim() || null;
+
+  if (sourceType && sourceId) {
+    const existingDispatch = await prisma.notificationDispatch.findFirst({
+      where: {
+        sourceType,
+        sourceId,
+        status: {
+          in: [
+            NotificationDispatchStatus.QUEUED,
+            NotificationDispatchStatus.PROCESSING,
+            NotificationDispatchStatus.SENT,
+          ],
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (existingDispatch) {
+      return {
+        status: NotificationDispatchStatus.SKIPPED,
+      } as const;
+    }
+  }
+
+  const dispatch = await queueDirectNotification({
+    recipientId: input.recipientId,
+    channel: input.channel,
+    audience: input.audience,
+    subject: input.subject,
+    body: input.body,
+    isTransactional: input.isTransactional,
+    sourceType,
+    sourceId,
+    metadata: input.metadata,
+    variables: input.variables,
+    emailBranding: input.emailBranding,
+    emailCta: input.emailCta,
+    scheduledFor: input.scheduledFor,
+    createdByUserId: input.createdByUserId,
+  });
+
+  return {
+    status: dispatch.status,
+  } as const;
+}
+
 export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
   await requireAdmin();
 
@@ -156,39 +363,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     throw new Error("League not found.");
   }
 
-  const unpublishedFixtures = await prisma.fixture.findMany({
-    where: {
-      leagueId,
-      publishedAt: null,
-    },
-    orderBy: {
-      kickoffAt: "asc",
-    },
-    select: {
-      id: true,
-      kickoffAt: true,
-      pitch: true,
-      homeTeam: {
-        select: {
-          id: true,
-          name: true,
-          logoUrl: true,
-        },
-      },
-      awayTeam: {
-        select: {
-          id: true,
-          name: true,
-          logoUrl: true,
-        },
-      },
-      venue: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
+  const unpublishedFixtures = await claimUnpublishedLeagueFixtures(leagueId);
 
   if (unpublishedFixtures.length === 0) {
     revalidatePath("/admin/fixtures");
@@ -207,18 +382,6 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       }),
     );
   }
-
-  const publishedAt = new Date();
-
-  await prisma.fixture.updateMany({
-    where: {
-      leagueId,
-      publishedAt: null,
-    },
-    data: {
-      publishedAt,
-    },
-  });
 
   const teamIds = unique(
     unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]),
@@ -243,7 +406,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
 
     const teamDetails = getTeamDetailsForFixture(teamFixtures[0], teamId);
 
-    const digestDispatch = await queueDirectNotification({
+    const digestDispatch = await queueDirectNotificationOnce({
       recipientId: recipient.id,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.TEAM,
@@ -259,7 +422,10 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       ].join("\n"),
       isTransactional: true,
       sourceType: "LEAGUE_FIXTURE_DIGEST",
-      sourceId: league.id,
+      sourceId: buildDigestSourceId({
+        leagueId: league.id,
+        teamId,
+      }),
       metadata: {
         kind: "fixture_publish_digest",
         teamId,
@@ -294,7 +460,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       ].filter((date) => date.getTime() > Date.now());
 
       for (const scheduledFor of reminderTimes) {
-        const reminderDispatch = await queueDirectNotification({
+        const reminderDispatch = await queueDirectNotificationOnce({
           recipientId: recipient.id,
           channel: NotificationChannel.EMAIL,
           audience: NotificationAudience.TEAM,
@@ -308,7 +474,11 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
           ].join("\n"),
           isTransactional: true,
           sourceType: "FIXTURE_REMINDER",
-          sourceId: fixture.id,
+          sourceId: buildReminderSourceId({
+            fixtureId: fixture.id,
+            teamId,
+            scheduledFor,
+          }),
           metadata: {
             kind: "fixture_reminder",
             teamId,

@@ -14,9 +14,12 @@ import {
   InterestType,
   LeadStatus,
   LeagueType,
+  NotificationAudience,
+  NotificationChannel,
   PreferredNight,
 } from "@prisma/client";
 import { Resend } from "resend";
+
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -24,6 +27,7 @@ import {
   buildSIXFLEmailHtml,
   type SIXFLEmailCta,
 } from "@/lib/email/buildEmail";
+import { queueDirectNotification } from "@/lib/notifications/service";
 import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
 // ========================================
@@ -31,6 +35,13 @@ import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 // ========================================
 
 type BulkEmailActionState = {
+  ok?: boolean;
+  error?: string;
+  sentCount?: number;
+  failedCount?: number;
+};
+
+type BulkSmsActionState = {
   ok?: boolean;
   error?: string;
   sentCount?: number;
@@ -121,12 +132,14 @@ function isLeagueType(value: string): value is LeagueType {
 function getTrimmedValue(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
 }
+
 function getBaseUrl() {
   return (process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk").replace(
     /\/+$/,
     "",
   );
 }
+
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -485,6 +498,156 @@ export async function sendBulkLeadEmailAction(
       sentCount += 1;
     } catch (error) {
       console.error("sendBulkLeadEmailAction item error", lead.id, error);
+      failedCount += 1;
+    }
+  }
+
+  revalidatePath("/admin/leads");
+
+  return {
+    ok: true,
+    sentCount,
+    failedCount,
+  };
+}
+
+export async function sendBulkLeadSmsAction(
+  _prevState: BulkSmsActionState,
+  formData: FormData,
+): Promise<BulkSmsActionState> {
+  const { user } = await requireAdmin();
+
+  const body = String(formData.get("body") ?? "").trim();
+
+  const selectedTypeRaw = String(formData.get("selectedType") ?? "")
+    .trim()
+    .toUpperCase();
+  const selectedStatusRaw = String(formData.get("selectedStatus") ?? "")
+    .trim()
+    .toUpperCase();
+  const selectedArea = String(formData.get("selectedArea") ?? "").trim();
+  const selectedNightRaw = String(formData.get("selectedNight") ?? "")
+    .trim()
+    .toUpperCase();
+
+  const includedLeadIds = formData
+    .getAll("includedLeadIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  if (!body) {
+    return {
+      ok: false,
+      error: "Please enter an SMS message.",
+    };
+  }
+
+  const where = {
+    ...(selectedTypeRaw && isInterestType(selectedTypeRaw)
+      ? { interestType: selectedTypeRaw as InterestType }
+      : {}),
+    ...(selectedStatusRaw && isLeadStatus(selectedStatusRaw)
+      ? { status: selectedStatusRaw as LeadStatus }
+      : {}),
+    ...(selectedArea ? { area: selectedArea } : {}),
+    ...(selectedNightRaw && isPreferredNight(selectedNightRaw)
+      ? {
+          preferredNights: {
+            some: {
+              night: selectedNightRaw as PreferredNight,
+            },
+          },
+        }
+      : {}),
+    AND: [
+      {
+        phone: {
+          not: null,
+        },
+      },
+      {
+        phone: {
+          not: "",
+        },
+      },
+    ],
+    ...(includedLeadIds.length > 0
+      ? {
+          id: {
+            in: includedLeadIds,
+          },
+        }
+      : {}),
+  };
+
+  const leads = await prisma.interestLead.findMany({
+    where,
+    select: {
+      id: true,
+      phone: true,
+      status: true,
+      contactName: true,
+    },
+  });
+
+  const validLeads = leads.filter((lead) => lead.phone?.trim());
+
+  if (validLeads.length === 0) {
+    return {
+      ok: false,
+      error: "No matching SMS recipients were found for this message.",
+    };
+  }
+
+  let sentCount = 0;
+  let failedCount = 0;
+
+  for (const lead of validLeads) {
+    try {
+      const phone = lead.phone?.trim();
+
+      if (!phone) {
+        failedCount += 1;
+        continue;
+      }
+
+      const personalisedBody = personaliseTemplateText(body, lead.contactName);
+
+      await queueDirectNotification({
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.LEAD,
+        recipient: {
+          sourceType: "LEAD",
+          sourceId: lead.id,
+          audience: NotificationAudience.LEAD,
+          displayName: lead.contactName?.trim() || null,
+          phone,
+        },
+        body: personalisedBody,
+        isTransactional: false,
+        sourceType: "LEAD",
+        sourceId: lead.id,
+        metadata: {
+          origin: "lead_bulk_sms",
+          originLabel: "Sent from leads page",
+          leadId: lead.id,
+        },
+        createdByUserId: user?.id ?? null,
+      });
+
+      if (lead.status === "NEW") {
+        await prisma.interestLead.update({
+          where: { id: lead.id },
+          data: {
+            status: "CONTACTED",
+            contactedAt: new Date(),
+          },
+        });
+      }
+
+      sentCount += 1;
+    } catch (error) {
+      console.error("sendBulkLeadSmsAction item error", lead.id, error);
       failedCount += 1;
     }
   }

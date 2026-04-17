@@ -314,6 +314,7 @@ export default async function AdminTeamPage({
     }),
     prisma.messageThread.findMany({
       where: {
+        channel: "SMS",
         OR: [{ teamId: id }, { recipientId: recipient.id }],
       },
       include: {
@@ -334,6 +335,9 @@ export default async function AdminTeamPage({
           },
         },
         messages: {
+          where: {
+            channel: "SMS",
+          },
           orderBy: [{ createdAt: "desc" }],
           take: 20,
         },
@@ -389,12 +393,12 @@ export default async function AdminTeamPage({
             ? matchFeeCtaUrlByChargeId.get(dispatch.sourceId) ?? null
             : null
           : null;
-  
+
       const cta = getDispatchCta({
         metadata: dispatch.metadata,
         matchFeeCtaUrl,
       });
-  
+
       return {
         id: `dispatch-${dispatch.id}`,
         kind: "dispatch" as const,
@@ -451,20 +455,20 @@ export default async function AdminTeamPage({
   const FIXED_TEAM_PAYMENT_URL =
     "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
-    const captainUser = team.members[0]?.user;
-    const hasCaptain = Boolean(captainUser?.email);
-    const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
-  
-    const captainAccessLabel =
-  team.captainClaimedAt && hasCaptain && !isAdminCaptain
-    ? "Claimed"
-    : team.captainInviteSentAt
-      ? "Invite sent"
-      : hasCaptain && !isAdminCaptain
-        ? "Captain linked"
-        : hasCaptain && isAdminCaptain
-          ? "Admin linked"
-          : "Unlinked";
+  const captainUser = team.members[0]?.user;
+  const hasCaptain = Boolean(captainUser?.email);
+  const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
+
+  const captainAccessLabel =
+    team.captainClaimedAt && hasCaptain && !isAdminCaptain
+      ? "Claimed"
+      : team.captainInviteSentAt
+        ? "Invite sent"
+        : hasCaptain && !isAdminCaptain
+          ? "Captain linked"
+          : hasCaptain && isAdminCaptain
+            ? "Admin linked"
+            : "Unlinked";
 
   const queuedMessage = sp.messageQueued === "1";
   const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
@@ -644,9 +648,7 @@ export default async function AdminTeamPage({
 
                 <div className="text-sm text-white/60">
                   {team.league
-                    ? `${team.league.name}${
-                        team.league.season ? ` — ${team.league.season}` : ""
-                      }`
+                    ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
                     : "No league assigned"}
                 </div>
               </div>
@@ -705,9 +707,7 @@ export default async function AdminTeamPage({
                 <div className="text-xs text-white/50">
                   Current:{" "}
                   {team.league
-                    ? `${team.league.name}${
-                        team.league.season ? ` — ${team.league.season}` : ""
-                      }`
+                    ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
                     : "No league assigned"}
                 </div>
               </div>
@@ -774,21 +774,22 @@ export default async function AdminTeamPage({
                 </div>
               </div>
               <div className="grid gap-5 lg:grid-cols-2">
-              <div className="space-y-2">
-  <FormListboxField
-    name="teamMode"
-    label="Team mode"
-    value={team.teamMode ?? "STANDARD"}
-    options={[
-      { value: "STANDARD", label: "Standard team" },
-      { value: "MANAGED", label: "Managed team" },
-    ]}
-    placeholder="Select team mode"
-  />
-  <div className="text-xs text-white/50">
-    Managed teams are organiser-led and can later use recruitment tools.
-  </div>
-</div>
+                <div className="space-y-2">
+                  <FormListboxField
+                    name="teamMode"
+                    label="Team mode"
+                    value={team.teamMode ?? "STANDARD"}
+                    options={[
+                      { value: "STANDARD", label: "Standard team" },
+                      { value: "MANAGED", label: "Managed team" },
+                    ]}
+                    placeholder="Select team mode"
+                  />
+                  <div className="text-xs text-white/50">
+                    Managed teams are organiser-led and can later use
+                    recruitment tools.
+                  </div>
+                </div>
 
                 <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80">
                   <input
@@ -1267,38 +1268,38 @@ export default async function AdminTeamPage({
                       </div>
 
                       {item.channel === NotificationChannel.EMAIL && item.bodyHtml ? (
-  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-    <div dangerouslySetInnerHTML={{ __html: item.bodyHtml }} />
-  </div>
-) : (
-  <>
-    <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
-      {item.bodyText}
-    </div>
+                        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+                          <div dangerouslySetInnerHTML={{ __html: item.bodyHtml }} />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
+                            {item.bodyText}
+                          </div>
 
-    {item.cta ? (
-      <div className="mt-3">
-        <a
-          href={item.cta.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-        >
-          {item.cta.label}
-        </a>
-        <div className="mt-2 break-all text-xs text-emerald-300">
-          {item.cta.url}
-        </div>
-      </div>
-    ) : null}
-  </>
-)}
+                          {item.cta ? (
+                            <div className="mt-3">
+                              <a
+                                href={item.cta.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                              >
+                                {item.cta.label}
+                              </a>
+                              <div className="mt-2 break-all text-xs text-emerald-300">
+                                {item.cta.url}
+                              </div>
+                            </div>
+                          ) : null}
+                        </>
+                      )}
 
-{item.failureReason ? (
-  <div className="text-xs text-red-300">
-    Failure: {item.failureReason}
-  </div>
-) : null}
+                      {item.failureReason ? (
+                        <div className="text-xs text-red-300">
+                          Failure: {item.failureReason}
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 )}
@@ -1312,7 +1313,7 @@ export default async function AdminTeamPage({
             <h2 className="text-lg font-semibold text-white">Team snapshot</h2>
 
             <div className="mt-4 space-y-4 text-sm text-white/70">
-            <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
                 <span>Captain status</span>
                 <span className="font-medium text-white">
                   {captainAccessLabel}
@@ -1366,8 +1367,6 @@ export default async function AdminTeamPage({
                   {team.captainClaimSource ?? "—"}
                 </span>
               </div>
-
-              
 
               <div className="flex items-center justify-between">
                 <span>Primary email</span>
@@ -1595,7 +1594,7 @@ export default async function AdminTeamPage({
             </h2>
 
             <p className="mt-2 text-sm text-white/60">
-            Regenerating the claim code invalidates the old link, clears invite/claim tracking, and removes the current captain assignment.
+              Regenerating the claim code invalidates the old link, clears invite/claim tracking, and removes the current captain assignment.
             </p>
 
             <form action={regenerateClaimCodeAction} className="mt-5">
