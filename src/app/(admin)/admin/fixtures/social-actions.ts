@@ -427,11 +427,35 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
   }
 
   if (!fixture.socialCaption) {
-    throw new Error("No social caption found for this fixture.");
+    await prisma.fixture.update({
+      where: { id: fixture.id },
+      data: {
+        socialLastError: "No social caption found for this fixture.",
+      },
+    });
+  
+    revalidateFixturePaths({
+      leagueId: fixture.leagueId,
+      leagueSlug: fixture.league.slug ?? null,
+    });
+  
+    return;
   }
-
+  
   if (!fixture.socialImageUrl) {
-    throw new Error("No social image found for this fixture.");
+    await prisma.fixture.update({
+      where: { id: fixture.id },
+      data: {
+        socialLastError: "No social image found for this fixture.",
+      },
+    });
+  
+    revalidateFixturePaths({
+      leagueId: fixture.leagueId,
+      leagueSlug: fixture.league.slug ?? null,
+    });
+  
+    return;
   }
 
   console.error("Publish to Meta debug", {
