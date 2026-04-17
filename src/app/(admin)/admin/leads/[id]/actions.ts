@@ -10,7 +10,12 @@
 
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
-import { LeadStatus, TeamRole } from "@prisma/client";
+import {
+  LeadStatus,
+  NotificationAudience,
+  NotificationChannel,
+  TeamRole,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -22,6 +27,7 @@ import {
   mergeEmailTemplateContext,
   resolveTemplateText,
 } from "@/lib/email/template-context";
+import { queueDirectNotification } from "@/lib/notifications/service";
 
 // ========================================
 // Constants
@@ -128,6 +134,19 @@ function resolveLeadEmailCta(input: {
   }
 
   return undefined;
+}
+
+function resolveLeadSmsLink(input: {
+  ctaUrlKey?: string | null;
+  signupUrl?: string | null;
+}) {
+  const urlKey = input.ctaUrlKey?.trim() || "";
+
+  if (urlKey === "signupUrl") {
+    return input.signupUrl?.trim() || "";
+  }
+
+  return "";
 }
 
 // ========================================
@@ -256,6 +275,128 @@ export async function sendLeadEmailAction(formData: FormData) {
       ok: false,
       error:
         "The email could not be sent. Please check your Resend domain and email settings.",
+    };
+  }
+}
+
+export async function sendLeadSmsAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const leadId = String(formData.get("leadId") ?? "").trim();
+  const bodyInput = String(formData.get("body") ?? "").trim();
+  const signupUrl = String(formData.get("signupUrl") ?? "").trim();
+  const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
+
+  if (!leadId) {
+    return { ok: false, error: "Missing lead id." };
+  }
+
+  if (!bodyInput) {
+    return { ok: false, error: "Please enter an SMS message." };
+  }
+
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
+    select: {
+      id: true,
+      contactName: true,
+      phone: true,
+      area: true,
+      teamName: true,
+      status: true,
+    },
+  });
+
+  if (!lead) {
+    return { ok: false, error: "Lead not found." };
+  }
+
+  const leadPhone = lead.phone?.trim() || "";
+
+  if (!leadPhone) {
+    return {
+      ok: false,
+      error: "This lead does not have a mobile number.",
+    };
+  }
+
+  const context = buildLeadEmailContext({
+    contactName: lead.contactName,
+    area: lead.area ?? null,
+    signupUrl,
+    teamName: lead.teamName ?? null,
+  });
+
+  const resolvedBody = resolveTemplateText(bodyInput, context).replace(
+    /{{link}}/gi,
+    resolveLeadSmsLink({
+      ctaUrlKey,
+      signupUrl,
+    }),
+  );
+
+  try {
+    const recipient = await prisma.notificationRecipient.upsert({
+      where: {
+        sourceType_sourceId: {
+          sourceType: "LEAD",
+          sourceId: lead.id,
+        },
+      },
+      update: {
+        audience: NotificationAudience.LEAD,
+        displayName: lead.contactName?.trim() || null,
+        phone: leadPhone,
+        transactionalSmsOptIn: true,
+        marketingSmsOptIn: true,
+      },
+      create: {
+        sourceType: "LEAD",
+        sourceId: lead.id,
+        audience: NotificationAudience.LEAD,
+        displayName: lead.contactName?.trim() || null,
+        phone: leadPhone,
+        transactionalSmsOptIn: true,
+        marketingSmsOptIn: true,
+      },
+    });
+
+    await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: NotificationChannel.SMS,
+      audience: NotificationAudience.LEAD,
+      body: resolvedBody,
+      isTransactional: false,
+      sourceType: "LEAD",
+      sourceId: lead.id,
+      metadata: {
+        origin: "lead_single_sms",
+        originLabel: "Sent from lead page",
+        leadId: lead.id,
+      },
+      createdByUserId: user?.id ?? null,
+    });
+
+    if (lead.status === LeadStatus.NEW) {
+      await prisma.interestLead.update({
+        where: { id: lead.id },
+        data: {
+          status: LeadStatus.CONTACTED,
+          contactedAt: new Date(),
+        },
+      });
+    }
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${lead.id}`);
+
+    return { ok: true };
+  } catch (error) {
+    console.error("sendLeadSmsAction error", error);
+
+    return {
+      ok: false,
+      error: "The SMS could not be queued. Please check the SMS provider settings.",
     };
   }
 }
