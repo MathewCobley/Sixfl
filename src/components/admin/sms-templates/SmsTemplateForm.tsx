@@ -233,14 +233,7 @@ export default function SmsTemplateForm({
                 <label htmlFor="name" className="text-sm font-medium text-white">
                   Template name
                 </label>
-                <input
-                  id="name"
-                  name="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Lead launch follow-up"
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
-                />
+                <input id="name" name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Lead launch follow-up" className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
                 {nameError ? <p className="text-sm text-red-400">{nameError}</p> : null}
               </div>
 
@@ -248,14 +241,7 @@ export default function SmsTemplateForm({
                 <label htmlFor="key" className="text-sm font-medium text-white">
                   Template key
                 </label>
-                <input
-                  id="key"
-                  name="key"
-                  value={key}
-                  onChange={(event) => setKey(slugifyTemplateKey(event.target.value))}
-                  placeholder="lead-launch-follow-up"
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
-                />
+                <input id="key" name="key" value={key} onChange={(event) => setKey(slugifyTemplateKey(event.target.value))} placeholder="lead-launch-follow-up" className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
                 {keyError ? <p className="text-sm text-red-400">{keyError}</p> : null}
               </div>
 
@@ -263,15 +249,7 @@ export default function SmsTemplateForm({
                 <label htmlFor="description" className="text-sm font-medium text-white">
                   Description
                 </label>
-                <textarea
-                  id="description"
-                  name="description"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  rows={4}
-                  placeholder="Explain when this SMS should be used."
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
-                />
+                <textarea id="description" name="description" value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Explain when this SMS should be used." className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
               </div>
             </div>
           </section>
@@ -279,31 +257,19 @@ export default function SmsTemplateForm({
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">Audience</h2>
-              <p className="mt-1 text-sm text-neutral-400">
-                Choose whether this SMS is for leads or teams.
-              </p>
+              <p className="mt-1 text-sm text-neutral-400">Choose whether this SMS is for leads or teams.</p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               {AUDIENCE_OPTIONS.map((option) => {
                 const selected = audience === option.value;
-
                 return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setAudience(option.value)}
-                    className={[
-                      "min-h-[138px] rounded-2xl border px-4 py-4 text-left transition",
-                      selected
-                        ? "border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
-                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
-                    ].join(" ")}
-                  >
+                  <button key={option.value} type="button" onClick={() => setAudience(option.value)} className={[
+                    "min-h-[138px] rounded-2xl border px-4 py-4 text-left transition",
+                    selected ? "border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]" : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
+                  ].join(" ")}>
                     <div className="text-sm font-semibold text-white">{option.label}</div>
-                    <div className="mt-2 text-sm leading-6 text-neutral-400">
-                      {option.description}
-                    </div>
+                    <div className="mt-2 text-sm leading-6 text-neutral-400">{option.description}</div>
                   </button>
                 );
               })}
@@ -315,46 +281,27 @@ export default function SmsTemplateForm({
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">SMS content</h2>
-              <p className="mt-1 text-sm text-neutral-400">
-                Write the actual text message. Keep it concise and easy to scan.
-              </p>
+              <p className="mt-1 text-sm text-neutral-400">Write the actual text message. Keep it concise and easy to scan.</p>
             </div>
 
             <div className="space-y-5">
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">
-                  Quick insert
-                </div>
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">Quick insert</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {availableTokens.map((token) => (
-                    <button
-                      key={token}
-                      type="button"
-                      onClick={() => insertToken(token)}
-                      className="rounded-full border border-emerald-500/25 bg-black/30 px-3 py-1.5 text-sm text-emerald-300 transition hover:border-emerald-400/40 hover:bg-emerald-500/10"
-                    >
+                    <button key={token} type="button" onClick={() => insertToken(token)} className="rounded-full border border-emerald-500/25 bg-black/30 px-3 py-1.5 text-sm text-emerald-300 transition hover:border-emerald-400/40 hover:bg-emerald-500/10">
                       {token}
                     </button>
                   ))}
                 </div>
                 <p className="mt-3 text-sm leading-6 text-neutral-300">
-                  Use <span className="text-white">{{"{{link}}"}}</span> where you want the selected signup or join link to appear. If you leave it out, the link will be appended at the end of the SMS preview.
+                  Use <span className="text-white">{'{{link}}'}</span> where you want the selected signup or join link to appear. If you leave it out, the link will be appended at the end of the SMS preview.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="body" className="text-sm font-medium text-white">
-                  SMS body
-                </label>
-                <textarea
-                  id="body"
-                  name="body"
-                  value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                  rows={12}
-                  placeholder="Write the SMS body here..."
-                  className="min-h-[320px] w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-7 text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]"
-                />
+                <label htmlFor="body" className="text-sm font-medium text-white">SMS body</label>
+                <textarea id="body" name="body" value={body} onChange={(event) => setBody(event.target.value)} rows={12} placeholder="Write the SMS body here..." className="min-h-[320px] w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-7 text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
                 {bodyError ? <p className="text-sm text-red-400">{bodyError}</p> : null}
               </div>
             </div>
@@ -363,52 +310,30 @@ export default function SmsTemplateForm({
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">SMS link</h2>
-              <p className="mt-1 text-sm text-neutral-400">
-                SMS uses a plain text link, not a button. Choose the destination you want to include.
-              </p>
+              <p className="mt-1 text-sm text-neutral-400">SMS uses a plain text link, not a button. Choose the destination you want to include.</p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
               {CTA_OPTIONS.map((option) => {
                 const selected = ctaUrlKey === option.value;
-
                 return (
-                  <button
-                    key={option.value || "none"}
-                    type="button"
-                    onClick={() => setCtaUrlKey(option.value)}
-                    className={[
-                      "rounded-2xl border px-4 py-4 text-left transition",
-                      selected
-                        ? "border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
-                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
-                    ].join(" ")}
-                  >
-                    <div className="text-sm font-semibold text-white">
-                      {option.label}
-                    </div>
-                    <div className="mt-1 text-xs leading-5 text-neutral-400">
-                      {option.description}
-                    </div>
-                    {option.previewUrl ? (
-                      <div className="mt-3 break-all text-xs text-emerald-300/90">
-                        {option.previewUrl}
-                      </div>
-                    ) : null}
+                  <button key={option.value || "none"} type="button" onClick={() => setCtaUrlKey(option.value)} className={[
+                    "rounded-2xl border px-4 py-4 text-left transition",
+                    selected ? "border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]" : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
+                  ].join(" ")}>
+                    <div className="text-sm font-semibold text-white">{option.label}</div>
+                    <div className="mt-1 text-xs leading-5 text-neutral-400">{option.description}</div>
+                    {option.previewUrl ? <div className="mt-3 break-all text-xs text-emerald-300/90">{option.previewUrl}</div> : null}
                   </button>
                 );
               })}
             </div>
-            {ctaUrlKeyError ? (
-              <p className="mt-3 text-sm text-red-400">{ctaUrlKeyError}</p>
-            ) : null}
+            {ctaUrlKeyError ? <p className="mt-3 text-sm text-red-400">{ctaUrlKeyError}</p> : null}
 
             <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-neutral-300">
               <div className="font-medium text-white">Selected link</div>
               <div className="mt-2">
-                {selectedCtaOption.value
-                  ? `${selectedCtaOption.label}${selectedCtaOption.previewUrl ? ` · ${selectedCtaOption.previewUrl}` : ""}`
-                  : "No link selected"}
+                {selectedCtaOption.value ? `${selectedCtaOption.label}${selectedCtaOption.previewUrl ? ` · ${selectedCtaOption.previewUrl}` : ""}` : "No link selected"}
               </div>
             </div>
           </section>
@@ -416,29 +341,18 @@ export default function SmsTemplateForm({
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                  Characters
-                </div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Characters</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{bodyLength}</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                  Segments
-                </div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Segments</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{bodySegments}</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                  Status
-                </div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Status</div>
                 <div className="mt-2">
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={isActive}
-                      onChange={(event) => setIsActive(event.target.checked)}
-                      className="h-5 w-5 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500"
-                    />
+                    <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="h-5 w-5 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500" />
                     <span className="text-sm font-medium text-white">Template is active</span>
                   </label>
                 </div>
@@ -447,14 +361,10 @@ export default function SmsTemplateForm({
           </section>
 
           {state?.message || state?.error ? (
-            <div
-              className={[
-                "rounded-2xl border px-4 py-3 text-sm",
-                state?.success || state?.ok
-                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                  : "border-red-500/25 bg-red-500/10 text-red-300",
-              ].join(" ")}
-            >
+            <div className={[
+              "rounded-2xl border px-4 py-3 text-sm",
+              state?.success || state?.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-red-500/25 bg-red-500/10 text-red-300",
+            ].join(" ")}>
               {state?.error || state?.message}
             </div>
           ) : null}
