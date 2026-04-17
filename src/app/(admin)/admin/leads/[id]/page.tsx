@@ -23,6 +23,12 @@ type PageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    managedSquadAdded?: string;
+    managedTeamId?: string;
+    existingProspect?: string;
+    prospect?: string;
+  }>;
 };
 
 function formatDate(date: Date) {
@@ -157,10 +163,11 @@ function ActionCard({
   );
 }
 
-export default async function LeadPage({ params }: PageProps) {
+export default async function LeadPage({ params, searchParams }: PageProps) {
   await requireAdmin();
 
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
 
   const lead = await prisma.interestLead.findUnique({
     where: { id },
@@ -247,6 +254,21 @@ export default async function LeadPage({ params }: PageProps) {
       : team.name,
   }));
 
+  const selectedManagedTeam = sp.managedTeamId
+    ? managedTeams.find((team) => team.id === sp.managedTeamId) ?? null
+    : null;
+
+  const managedSquadNotice =
+    sp.managedSquadAdded === "1"
+      ? sp.existingProspect === "1"
+        ? selectedManagedTeam
+          ? `This player was already on ${selectedManagedTeam.name}, so the existing squad prospect was reused.`
+          : "This player was already on that managed squad, so the existing squad prospect was reused."
+        : selectedManagedTeam
+          ? `Player lead added to ${selectedManagedTeam.name} successfully.`
+          : "Player lead added to the managed squad successfully."
+      : null;
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -301,6 +323,12 @@ export default async function LeadPage({ params }: PageProps) {
           Back to leads
         </Link>
       </div>
+
+      {managedSquadNotice ? (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          {managedSquadNotice}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <div className="space-y-6">
