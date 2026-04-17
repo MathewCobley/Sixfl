@@ -13,7 +13,12 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import AdminCard from "@/components/admin/AdminCard";
 import BulkLeadEmailForm from "@/components/admin/leads/BulkLeadEmailForm";
-import { sendBulkLeadEmailAction, updateLeadStatus } from "./actions";
+import BulkLeadSmsForm from "@/components/admin/leads/BulkLeadSmsForm";
+import {
+  sendBulkLeadEmailAction,
+  sendBulkLeadSmsAction,
+  updateLeadStatus,
+} from "./actions";
 
 type SearchParams = Promise<{
   type?: string;
@@ -286,6 +291,12 @@ type RecipientPreviewItem = {
   email: string;
 };
 
+type SmsRecipientPreviewItem = {
+  id: string;
+  contactName: string | null;
+  phone: string;
+};
+
 type BulkEmailTemplate = {
   id: string;
   key: string;
@@ -351,6 +362,22 @@ export default async function AdminLeadsPage({
     ],
   };
 
+  const smsRecipientWhere = {
+    ...where,
+    AND: [
+      {
+        phone: {
+          not: null,
+        },
+      },
+      {
+        phone: {
+          not: "",
+        },
+      },
+    ],
+  };
+
   const returnTo = buildHref({
     type: selectedType,
     status: selectedStatus,
@@ -370,6 +397,8 @@ export default async function AdminLeadsPage({
     allLeadsForSummary,
     recipientCount,
     recipientPreview,
+    recipientSmsCount,
+    recipientSmsPreview,
     leadTemplates,
   ] = await Promise.all([
     prisma.interestLead.findMany({
@@ -417,6 +446,19 @@ export default async function AdminLeadsPage({
         email: true,
       },
     }),
+    prisma.interestLead.count({
+      where: smsRecipientWhere,
+    }),
+    prisma.interestLead.findMany({
+      where: smsRecipientWhere,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        contactName: true,
+        phone: true,
+      },
+    }),
     prisma.emailTemplate.findMany({
       where: {
         audience: "LEAD",
@@ -435,6 +477,7 @@ export default async function AdminLeadsPage({
       },
     }),
   ]);
+
   const managedTeams = await prisma.team.findMany({
     where: {
       teamMode: "MANAGED",
@@ -456,6 +499,7 @@ export default async function AdminLeadsPage({
       },
     },
   });
+
   const areas = allAreas
     .map((x) => x.area)
     .filter((value): value is string => Boolean(value));
@@ -588,14 +632,26 @@ export default async function AdminLeadsPage({
       contactName: recipient.contactName,
       email: recipient.email,
     }));
-    const managedTeamOptions = managedTeams.map((team) => ({
-      value: team.id,
-      label: `${team.name}${
-        team.league?.name
-          ? ` · ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
-          : ""
-      }`,
+
+  const previewSmsRecipients: SmsRecipientPreviewItem[] = recipientSmsPreview
+    .filter((recipient): recipient is typeof recipient & { phone: string } =>
+      Boolean(recipient.phone),
+    )
+    .map((recipient) => ({
+      id: recipient.id,
+      contactName: recipient.contactName,
+      phone: recipient.phone,
     }));
+
+  const managedTeamOptions = managedTeams.map((team) => ({
+    value: team.id,
+    label: `${team.name}${
+      team.league?.name
+        ? ` · ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+        : ""
+    }`,
+  }));
+
   return (
     <AdminCard title="Leads">
       <div className="space-y-6">
@@ -648,6 +704,82 @@ export default async function AdminLeadsPage({
             >
               Import SMS CSV
             </Link>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
+            <div className="mb-4 flex flex-col gap-2 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
+                  BULK EMAIL
+                </div>
+                <div className="mt-2 text-lg font-black text-white">
+                  Contact filtered leads by email
+                </div>
+                <div className="mt-1 text-sm text-white/60">
+                  Send a campaign to the current filtered lead set, with preview
+                  recipients shown before sending.
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-right">
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
+                  Matching recipients
+                </div>
+                <div className="mt-1 text-lg font-black text-white">
+                  {recipientCount}
+                </div>
+              </div>
+            </div>
+
+            <BulkLeadEmailForm
+              action={sendBulkLeadEmailAction}
+              selectedType={selectedType}
+              selectedStatus={selectedStatus}
+              selectedArea={selectedArea}
+              selectedNight={selectedNight}
+              recipientCount={recipientCount}
+              recipientPreview={previewRecipients}
+              templates={bulkEmailTemplates}
+              managedTeamOptions={managedTeamOptions}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
+            <div className="mb-4 flex flex-col gap-2 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
+                  BULK SMS
+                </div>
+                <div className="mt-2 text-lg font-black text-white">
+                  Contact filtered leads by SMS
+                </div>
+                <div className="mt-1 text-sm text-white/60">
+                  Queue an SMS campaign to the current filtered lead set, with
+                  preview recipients shown before sending.
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-right">
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
+                  Matching recipients
+                </div>
+                <div className="mt-1 text-lg font-black text-white">
+                  {recipientSmsCount}
+                </div>
+              </div>
+            </div>
+
+            <BulkLeadSmsForm
+              action={sendBulkLeadSmsAction}
+              selectedType={selectedType}
+              selectedStatus={selectedStatus}
+              selectedArea={selectedArea}
+              selectedNight={selectedNight}
+              recipientCount={recipientSmsCount}
+              recipientPreview={previewSmsRecipients}
+            />
           </div>
         </div>
 
@@ -1291,44 +1423,6 @@ export default async function AdminLeadsPage({
             </div>
           </div>
         )}
-
-        <div className="rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
-          <div className="mb-4 flex flex-col gap-2 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
-                BULK EMAIL
-              </div>
-              <div className="mt-2 text-lg font-black text-white">
-                Contact filtered leads
-              </div>
-              <div className="mt-1 text-sm text-white/60">
-                Send a campaign to the current filtered lead set, with preview
-                recipients shown before sending.
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-right">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
-                Matching recipients
-              </div>
-              <div className="mt-1 text-lg font-black text-white">
-                {recipientCount}
-              </div>
-            </div>
-          </div>
-
-          <BulkLeadEmailForm
-            action={sendBulkLeadEmailAction}
-            selectedType={selectedType}
-            selectedStatus={selectedStatus}
-            selectedArea={selectedArea}
-            selectedNight={selectedNight}
-            recipientCount={recipientCount}
-            recipientPreview={previewRecipients}
-            templates={bulkEmailTemplates}
-            managedTeamOptions={managedTeamOptions}
-          />
-        </div>
       </div>
     </AdminCard>
   );
