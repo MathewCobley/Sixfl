@@ -18,6 +18,29 @@ function buildRedirect(joinSlug: string, query: string) {
   return `/teams/join/${joinSlug}${query}`;
 }
 
+function normaliseNightValues(values: FormDataEntryValue[]) {
+  return values
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+}
+
+function buildAvailabilitySummary(
+  availabilityLevel: string | null,
+  preferredNights: string[],
+) {
+  const parts: string[] = [];
+
+  if (availabilityLevel) {
+    parts.push(`Availability: ${availabilityLevel}`);
+  }
+
+  if (preferredNights.length > 0) {
+    parts.push(`Preferred nights: ${preferredNights.join(", ")}`);
+  }
+
+  return parts.length > 0 ? parts.join(" | ") : null;
+}
+
 export async function submitTeamJoinProspectAction(formData: FormData) {
   const joinSlug = String(formData.get("joinSlug") ?? "").trim();
 
@@ -31,8 +54,13 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
   const experienceSummary = normaliseNullableString(
     formData.get("experienceSummary"),
   );
-  const availabilitySummary = normaliseNullableString(
-    formData.get("availabilitySummary"),
+  const availabilityLevel = normaliseNullableString(
+    formData.get("availabilityLevel"),
+  );
+  const preferredNights = normaliseNightValues(formData.getAll("preferredNights"));
+  const availabilitySummary = buildAvailabilitySummary(
+    availabilityLevel,
+    preferredNights,
   );
   const notes = normaliseNullableString(formData.get("notes"));
 
