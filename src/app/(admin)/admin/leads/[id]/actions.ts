@@ -136,14 +136,48 @@ function resolveLeadEmailCta(input: {
   return undefined;
 }
 
-function resolveLeadSmsLink(input: {
+async function resolveLeadSmsLink(input: {
   ctaUrlKey?: string | null;
   signupUrl?: string | null;
+  targetTeamId?: string | null;
 }) {
   const urlKey = input.ctaUrlKey?.trim() || "";
 
   if (urlKey === "signupUrl") {
     return input.signupUrl?.trim() || "";
+  }
+
+  if (urlKey === "teamJoinUrl") {
+    const targetTeamId = input.targetTeamId?.trim() || "";
+
+    if (!targetTeamId) {
+      throw new Error("Please select which managed team this SMS should link to.");
+    }
+
+    const team = await prisma.team.findFirst({
+      where: {
+        id: targetTeamId,
+        teamMode: "MANAGED",
+        isRecruiting: true,
+        joinSlug: {
+          not: null,
+        },
+      },
+      select: {
+        joinSlug: true,
+      },
+    });
+
+    if (!team?.joinSlug) {
+      throw new Error("The selected managed team does not have an active join link.");
+    }
+
+    const baseUrl = (process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk").replace(
+      /\/+$/,
+      "",
+    );
+
+    return `${baseUrl}/teams/join/${team.joinSlug}`;
   }
 
   return "";
@@ -286,6 +320,7 @@ export async function sendLeadSmsAction(formData: FormData) {
   const bodyInput = String(formData.get("body") ?? "").trim();
   const signupUrl = String(formData.get("signupUrl") ?? "").trim();
   const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
+  const targetTeamId = String(formData.get("targetTeamId") ?? "").trim();
 
   if (!leadId) {
     return { ok: false, error: "Missing lead id." };
@@ -327,12 +362,27 @@ export async function sendLeadSmsAction(formData: FormData) {
     teamName: lead.teamName ?? null,
   });
 
-  const resolvedBody = resolveTemplateText(bodyInput, context).replace(
-    /{{link}}/gi,
-    resolveLeadSmsLink({
+  let resolvedLink = "";
+
+  try {
+    resolvedLink = await resolveLeadSmsLink({
       ctaUrlKey,
       signupUrl,
-    }),
+      targetTeamId,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to resolve the SMS link.",
+    };
+  }
+
+  const resolvedBody = resolveTemplateText(bodyInput, context).replace(
+    /{{link}}/gi,
+    resolvedLink,
   );
 
   try {
@@ -373,6 +423,8 @@ export async function sendLeadSmsAction(formData: FormData) {
         origin: "lead_single_sms",
         originLabel: "Sent from lead page",
         leadId: lead.id,
+        ctaUrlKey,
+        targetTeamId: targetTeamId || null,
       },
       createdByUserId: user?.id ?? null,
     });
