@@ -360,11 +360,37 @@ export async function approveFixtureSocialPostAction(formData: FormData) {
     throw new Error("Fixture not found.");
   }
 
+  if (!fixture.leagueId) {
+    throw new Error("Fixture league ID is missing.");
+  }
+
+  if (
+    fixture.socialPostStatus === SocialPostStatus.APPROVED ||
+    fixture.socialPostStatus === SocialPostStatus.PUBLISHED
+  ) {
+    revalidateFixturePaths({
+      leagueId: fixture.leagueId,
+      leagueSlug: fixture.league?.slug ?? null,
+    });
+    return;
+  }
+
   if (
     fixture.socialPostStatus !== SocialPostStatus.DRAFTED &&
     fixture.socialPostStatus !== SocialPostStatus.QUEUED
   ) {
-    throw new Error("Only queued or drafted social posts can be approved.");
+    await prisma.fixture.update({
+      where: { id: fixture.id },
+      data: {
+        socialLastError: `Approve skipped because status was ${fixture.socialPostStatus}.`,
+      },
+    });
+
+    revalidateFixturePaths({
+      leagueId: fixture.leagueId,
+      leagueSlug: fixture.league?.slug ?? null,
+    });
+    return;
   }
 
   await prisma.fixture.update({
@@ -378,7 +404,7 @@ export async function approveFixtureSocialPostAction(formData: FormData) {
 
   revalidateFixturePaths({
     leagueId: fixture.leagueId,
-    leagueSlug: fixture.league.slug ?? null,
+    leagueSlug: fixture.league?.slug ?? null,
   });
 }
 
@@ -420,7 +446,7 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
 
     revalidateFixturePaths({
       leagueId: fixture.leagueId,
-      leagueSlug: fixture.league.slug ?? null,
+      leagueSlug: fixture.league?.slug ?? null,
     });
 
     return;
@@ -433,15 +459,15 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
         socialLastError: "No social caption found for this fixture.",
       },
     });
-  
+
     revalidateFixturePaths({
       leagueId: fixture.leagueId,
-      leagueSlug: fixture.league.slug ?? null,
+      leagueSlug: fixture.league?.slug ?? null,
     });
-  
+
     return;
   }
-  
+
   if (!fixture.socialImageUrl) {
     await prisma.fixture.update({
       where: { id: fixture.id },
@@ -449,12 +475,12 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
         socialLastError: "No social image found for this fixture.",
       },
     });
-  
+
     revalidateFixturePaths({
       leagueId: fixture.leagueId,
-      leagueSlug: fixture.league.slug ?? null,
+      leagueSlug: fixture.league?.slug ?? null,
     });
-  
+
     return;
   }
 
@@ -484,7 +510,7 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
 
     revalidateFixturePaths({
       leagueId: fixture.leagueId,
-      leagueSlug: fixture.league.slug ?? null,
+      leagueSlug: fixture.league?.slug ?? null,
     });
 
     return;
@@ -492,7 +518,7 @@ export async function publishFixtureSocialPostAction(formData: FormData) {
 
   revalidateFixturePaths({
     leagueId: fixture.leagueId,
-    leagueSlug: fixture.league.slug ?? null,
+    leagueSlug: fixture.league?.slug ?? null,
   });
 }
 
@@ -535,6 +561,6 @@ export async function resetFixtureSocialPostAction(formData: FormData) {
 
   revalidateFixturePaths({
     leagueId: fixture.leagueId,
-    leagueSlug: fixture.league.slug ?? null,
+    leagueSlug: fixture.league?.slug ?? null,
   });
 }

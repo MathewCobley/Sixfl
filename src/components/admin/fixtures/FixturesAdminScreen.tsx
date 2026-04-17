@@ -6,6 +6,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import type {
   FixtureCaptainConfirmationStatus,
   FixtureStatus,
@@ -258,6 +259,7 @@ function formatConfirmationState(
       return "—";
   }
 }
+
 function getSocialStatusTone(status: SocialPostStatus) {
   switch (status) {
     case "PUBLISHED":
@@ -546,12 +548,41 @@ function ConfirmationCell({
     </div>
   );
 }
+
+function SocialActionButton({
+  label,
+  pendingLabel,
+  disabled = false,
+  className,
+}: {
+  label: string;
+  pendingLabel: string;
+  disabled?: boolean;
+  className: string;
+}) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={disabled || pending}
+      className={cx(
+        className,
+        "disabled:cursor-not-allowed disabled:opacity-40",
+      )}
+    >
+      {pending ? pendingLabel : label}
+    </button>
+  );
+}
+
 function SocialCell({ fixture }: { fixture: FixtureItem }) {
   const readiness = getSocialReadiness(fixture);
   const hasDraft = fixture.socialPostStatus !== "NONE";
   const canApprove =
     fixture.socialNeedsApproval &&
-    (fixture.socialPostStatus === "DRAFTED" || fixture.socialPostStatus === "QUEUED");
+    (fixture.socialPostStatus === "DRAFTED" ||
+      fixture.socialPostStatus === "QUEUED");
 
   return (
     <div className="min-w-[320px] space-y-3">
@@ -604,52 +635,48 @@ function SocialCell({ fixture }: { fixture: FixtureItem }) {
       <div className="flex flex-wrap gap-2">
         <form action={generateFixtureSocialDraftAction}>
           <input type="hidden" name="fixtureId" value={fixture.id} />
-          <button
-            type="submit"
+          <SocialActionButton
+            label={hasDraft ? "Regenerate draft" : "Generate draft"}
+            pendingLabel={hasDraft ? "Regenerating..." : "Generating..."}
             disabled={!readiness.canDraft}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/30 hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {hasDraft ? "Regenerate draft" : "Generate draft"}
-          </button>
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
+          />
         </form>
 
         {canApprove ? (
           <form action={approveFixtureSocialPostAction}>
             <input type="hidden" name="fixtureId" value={fixture.id} />
-            <button
-              type="submit"
+            <SocialActionButton
+              label="Approve"
+              pendingLabel="Approving..."
               className="inline-flex h-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 text-xs font-semibold text-sky-200 transition hover:border-sky-300/30 hover:bg-sky-400/15"
-            >
-              Approve
-            </button>
+            />
           </form>
         ) : null}
 
-{fixture.socialPostStatus === "APPROVED" ? (
+        {fixture.socialPostStatus === "APPROVED" ? (
           <form action={publishFixtureSocialPostAction}>
             <input type="hidden" name="fixtureId" value={fixture.id} />
-            <button
-              type="submit"
+            <SocialActionButton
+              label="Publish to Meta"
+              pendingLabel="Publishing..."
               className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
-            >
-              Publish to Meta
-            </button>
+            />
           </form>
         ) : null}
 
         {hasDraft ? (
           <form action={resetFixtureSocialPostAction}>
             <input type="hidden" name="fixtureId" value={fixture.id} />
-            <button
-              type="submit"
+            <SocialActionButton
+              label="Reset"
+              pendingLabel="Resetting..."
               className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
-            >
-              Reset
-            </button>
+            />
           </form>
         ) : null}
 
-{fixture.socialImageUrl ? (
+        {fixture.socialImageUrl ? (
           <a
             href={fixture.socialImageUrl}
             target="_blank"
@@ -663,6 +690,7 @@ function SocialCell({ fixture }: { fixture: FixtureItem }) {
     </div>
   );
 }
+
 export default function FixturesAdminScreen({
   leagues,
   teams,
@@ -1339,8 +1367,8 @@ export default function FixturesAdminScreen({
                   Update selected match
                 </h3>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                Review generated matches, edit details, submit results, prep social drafts, and see exactly which teams have confirmed their fixtures.
-              </p>
+                  Review generated matches, edit details, submit results, prep social drafts, and see exactly which teams have confirmed their fixtures.
+                </p>
               </div>
 
               <button
