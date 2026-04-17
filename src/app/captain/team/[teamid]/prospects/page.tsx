@@ -11,6 +11,8 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import {
   addProspectAction,
   convertProspectToMemberAction,
+  sendProspectEmailAction,
+  sendProspectSmsAction,
   updateProspectNotesAction,
   updateProspectStatusAction,
 } from "./actions";
@@ -46,6 +48,10 @@ function getSavedMessage(saved?: string) {
       return "Prospect notes updated.";
     case "promoted":
       return "Prospect promoted to squad.";
+    case "email-sent":
+      return "Prospect email sent.";
+    case "sms-sent":
+      return "Prospect SMS queued.";
     default:
       return saved ? "Saved." : null;
   }
@@ -133,7 +139,7 @@ export default async function CaptainProspectsPage({
 
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
               Track individual players who want to join, move them through your pipeline,
-              and promote them into the squad when ready.
+              message them directly, and promote them into the squad when ready.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -490,6 +496,61 @@ export default async function CaptainProspectsPage({
                           className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
                         >
                           Promote to squad
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <form action={sendProspectEmailAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <input type="hidden" name="teamid" value={teamid} />
+                        <input type="hidden" name="prospectId" value={prospect.id} />
+
+                        <div className="text-sm font-semibold text-white">Email prospect</div>
+                        <div className="mt-1 text-xs text-white/45">To: {prospect.email || "No email"}</div>
+
+                        <div className="mt-4 space-y-3">
+                          <input
+                            name="subject"
+                            placeholder="Subject"
+                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                          />
+                          <textarea
+                            name="body"
+                            rows={5}
+                            placeholder="Hi {{firstName}}, ..."
+                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                        >
+                          Send email
+                        </button>
+                      </form>
+
+                      <form action={sendProspectSmsAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <input type="hidden" name="teamid" value={teamid} />
+                        <input type="hidden" name="prospectId" value={prospect.id} />
+
+                        <div className="text-sm font-semibold text-white">SMS prospect</div>
+                        <div className="mt-1 text-xs text-white/45">To: {prospect.phone || "No phone"}</div>
+
+                        <div className="mt-4 space-y-3">
+                          <textarea
+                            name="body"
+                            rows={5}
+                            placeholder="Hi {{firstName}}, ..."
+                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                        >
+                          Send SMS
                         </button>
                       </form>
                     </div>
