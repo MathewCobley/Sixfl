@@ -234,8 +234,11 @@ model TeamPlayerProspect {
   lastName            String?
   email               String?
   phone               String?
+  ageBand             String?
   preferredPositions  String?
   experienceSummary   String?
+  availabilityLevel   String?
+  preferredNights     Json?
   availabilitySummary String?
   source              String?
   status              String    @default("NEW")
@@ -250,6 +253,8 @@ model TeamPlayerProspect {
   @@index([teamId, status])
   @@index([email])
   @@index([phone])
+  @@index([ageBand])
+  @@index([availabilityLevel])
 }
 
 enum TeamRole {
