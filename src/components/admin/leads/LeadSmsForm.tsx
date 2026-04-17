@@ -26,6 +26,7 @@ type LeadSmsTemplateOption = {
 type ManagedTeamOption = {
   value: string;
   label: string;
+  joinUrl?: string | null;
 };
 
 type Props = {
@@ -56,9 +57,7 @@ function resolveSmsLink(input: {
       (team) => team.value === input.targetTeamId,
     );
 
-    if (selectedTeam) {
-      return `Selected managed team: ${selectedTeam.label}`;
-    }
+    return selectedTeam?.joinUrl?.trim() || "";
   }
 
   return "";
