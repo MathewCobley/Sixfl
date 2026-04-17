@@ -48,6 +48,7 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
   const lastName = normaliseNullableString(formData.get("lastName"));
   const email = normaliseNullableString(formData.get("email"))?.toLowerCase() ?? null;
   const phone = normaliseNullableString(formData.get("phone"));
+  const ageBand = normaliseNullableString(formData.get("ageBand"));
   const preferredPositions = normaliseNullableString(
     formData.get("preferredPositions"),
   );
@@ -113,8 +114,11 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
       lastName,
       email,
       phone,
+      ageBand,
       preferredPositions,
       experienceSummary,
+      availabilityLevel,
+      preferredNights,
       availabilitySummary,
       notes,
       source: "public-join-page",
