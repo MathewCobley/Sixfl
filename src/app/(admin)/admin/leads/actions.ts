@@ -27,6 +27,11 @@ import {
   buildSIXFLEmailHtml,
   type SIXFLEmailCta,
 } from "@/lib/email/buildEmail";
+import {
+  buildBaseEmailTemplateContext,
+  mergeEmailTemplateContext,
+  resolveTemplateText,
+} from "@/lib/email/template-context";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
@@ -90,6 +95,25 @@ function getPersonalisationValues(contactName?: string | null) {
   };
 }
 
+function buildLeadCampaignContext(input: {
+  contactName?: string | null;
+  area?: string | null;
+  teamName?: string | null;
+  signupUrl?: string | null;
+}) {
+  const { fullName, firstName } = getPersonalisationValues(input.contactName);
+
+  return mergeEmailTemplateContext(
+    buildBaseEmailTemplateContext({
+      firstName,
+      fullName,
+      area: input.area,
+      signupUrl: input.signupUrl,
+      teamName: input.teamName,
+    }),
+  );
+}
+
 function personaliseTemplateText(text: string, contactName?: string | null) {
   const { fullName, firstName } = getPersonalisationValues(contactName);
 
@@ -97,6 +121,47 @@ function personaliseTemplateText(text: string, contactName?: string | null) {
     .replace(/{{firstName}}/gi, firstName)
     .replace(/{{name}}/gi, fullName || firstName)
     .replace(/Hi there/gi, `Hi ${firstName}`);
+}
+
+function resolveLeadCampaignText(input: {
+  text: string;
+  contactName?: string | null;
+  area?: string | null;
+  teamName?: string | null;
+  signupUrl?: string | null;
+  link?: string | null;
+}) {
+  const context = buildLeadCampaignContext({
+    contactName: input.contactName,
+    area: input.area,
+    teamName: input.teamName,
+    signupUrl: input.signupUrl,
+  });
+
+  return resolveTemplateText(input.text, context).replace(
+    /{{link}}/gi,
+    input.link?.trim() || "",
+  );
+}
+
+function resolveBulkSmsLink(input: {
+  ctaUrlKey?: string | null;
+  baseUrl: string;
+  targetManagedTeam?: {
+    joinSlug: string | null;
+  } | null;
+}) {
+  const ctaUrlKey = input.ctaUrlKey?.trim() || "";
+
+  if (ctaUrlKey === "signupUrl") {
+    return `${input.baseUrl}/register-interest`;
+  }
+
+  if (ctaUrlKey === "teamJoinUrl" && input.targetManagedTeam?.joinSlug) {
+    return `${input.baseUrl}/teams/join/${input.targetManagedTeam.joinSlug}`;
+  }
+
+  return "";
 }
 
 function isLeadStatus(value: string): value is LeadStatus {
@@ -518,6 +583,8 @@ export async function sendBulkLeadSmsAction(
   const { user } = await requireAdmin();
 
   const body = String(formData.get("body") ?? "").trim();
+  const templateCtaUrlKey = String(formData.get("templateCtaUrlKey") ?? "").trim();
+  const targetTeamId = String(formData.get("targetTeamId") ?? "").trim();
 
   const selectedTypeRaw = String(formData.get("selectedType") ?? "")
     .trim()
@@ -541,6 +608,40 @@ export async function sendBulkLeadSmsAction(
       error: "Please enter an SMS message.",
     };
   }
+
+  const baseUrl = getBaseUrl();
+
+  const targetManagedTeam =
+    templateCtaUrlKey === "teamJoinUrl" && targetTeamId
+      ? await prisma.team.findFirst({
+          where: {
+            id: targetTeamId,
+            teamMode: "MANAGED",
+            isRecruiting: true,
+            joinSlug: {
+              not: null,
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+            joinSlug: true,
+          },
+        })
+      : null;
+
+  if (templateCtaUrlKey === "teamJoinUrl" && !targetManagedTeam) {
+    return {
+      ok: false,
+      error: "Please select which managed team this SMS should link to.",
+    };
+  }
+
+  const resolvedLink = resolveBulkSmsLink({
+    ctaUrlKey: templateCtaUrlKey,
+    baseUrl,
+    targetManagedTeam,
+  });
 
   const where = {
     ...(selectedTypeRaw && isInterestType(selectedTypeRaw)
@@ -587,6 +688,8 @@ export async function sendBulkLeadSmsAction(
       phone: true,
       status: true,
       contactName: true,
+      area: true,
+      teamName: true,
     },
   });
 
@@ -611,7 +714,14 @@ export async function sendBulkLeadSmsAction(
         continue;
       }
 
-      const personalisedBody = personaliseTemplateText(body, lead.contactName);
+      const personalisedBody = resolveLeadCampaignText({
+        text: body,
+        contactName: lead.contactName,
+        area: lead.area ?? null,
+        teamName: lead.teamName ?? null,
+        signupUrl: `${baseUrl}/register-interest`,
+        link: resolvedLink,
+      });
 
       const recipient = await prisma.notificationRecipient.upsert({
         where: {
@@ -650,6 +760,8 @@ export async function sendBulkLeadSmsAction(
           origin: "lead_bulk_sms",
           originLabel: "Sent from leads page",
           leadId: lead.id,
+          templateCtaUrlKey,
+          targetTeamId: targetManagedTeam?.id ?? null,
         },
         createdByUserId: user?.id ?? null,
       });
