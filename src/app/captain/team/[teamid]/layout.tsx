@@ -24,6 +24,7 @@ export default async function CaptainTeamLayout({
     select: {
       id: true,
       name: true,
+      teamMode: true,
       league: {
         select: {
           id: true,
@@ -42,7 +43,9 @@ export default async function CaptainTeamLayout({
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: `/captain/team/${teamid}/squad`, label: "Squad" },
-    { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
+    ...(team.teamMode === "MANAGED"
+      ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
+      : []),
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
