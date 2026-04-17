@@ -11,6 +11,8 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import {
   addProspectAction,
   convertProspectToMemberAction,
+  sendBulkProspectEmailAction,
+  sendBulkProspectSmsAction,
   sendProspectEmailAction,
   sendProspectSmsAction,
   updateProspectNotesAction,
@@ -52,6 +54,10 @@ function getSavedMessage(saved?: string) {
       return "Prospect email sent.";
     case "sms-sent":
       return "Prospect SMS queued.";
+    case "bulk-email-sent":
+      return "Bulk prospect email sent.";
+    case "bulk-sms-sent":
+      return "Bulk prospect SMS queued.";
     default:
       return saved ? "Saved." : null;
   }
@@ -90,6 +96,10 @@ function getPreferredNightsDisplay(value: unknown) {
   return nights.length > 0 ? nights.join(", ") : null;
 }
 
+function getProspectName(input: { firstName: string; lastName: string | null }) {
+  return [input.firstName, input.lastName].filter(Boolean).join(" ");
+}
+
 export default async function CaptainProspectsPage({
   params,
   searchParams,
@@ -123,6 +133,8 @@ export default async function CaptainProspectsPage({
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
   const joinUrl = team.joinSlug ? `/teams/join/${team.joinSlug}` : null;
+  const prospectsWithEmail = team.prospects.filter((prospect) => Boolean(prospect.email?.trim()));
+  const prospectsWithPhone = team.prospects.filter((prospect) => Boolean(prospect.phone?.trim()));
 
   return (
     <div className="space-y-8">
@@ -139,7 +151,7 @@ export default async function CaptainProspectsPage({
 
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
               Track individual players who want to join, move them through your pipeline,
-              message them directly, and promote them into the squad when ready.
+              message them directly or in bulk, and promote them into the squad when ready.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -224,6 +236,117 @@ export default async function CaptainProspectsPage({
           {errorMessage}
         </section>
       ) : null}
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <form action={sendBulkProspectEmailAction} className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-6">
+          <input type="hidden" name="teamid" value={teamid} />
+
+          <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
+            BULK EMAIL
+          </div>
+          <div className="mt-2 text-xl font-semibold text-white">Email selected prospects</div>
+          <div className="mt-1 text-sm text-white/60">
+            Send one email draft to every checked prospect with an email address.
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <input
+              name="subject"
+              placeholder="Subject"
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400"
+            />
+            <textarea
+              name="body"
+              rows={6}
+              placeholder="Hi {{firstName}}, ..."
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+            />
+          </div>
+
+          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-4">
+            {prospectsWithEmail.length === 0 ? (
+              <div className="text-sm text-white/55">No prospects with email addresses yet.</div>
+            ) : (
+              prospectsWithEmail.map((prospect) => (
+                <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <input
+                    type="checkbox"
+                    name="prospectIds"
+                    value={prospect.id}
+                    defaultChecked
+                    className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-white">
+                      {getProspectName({ firstName: prospect.firstName, lastName: prospect.lastName })}
+                    </div>
+                    <div className="text-sm text-white/55">{prospect.email}</div>
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+          >
+            Send bulk email
+          </button>
+        </form>
+
+        <form action={sendBulkProspectSmsAction} className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-6">
+          <input type="hidden" name="teamid" value={teamid} />
+
+          <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
+            BULK SMS
+          </div>
+          <div className="mt-2 text-xl font-semibold text-white">SMS selected prospects</div>
+          <div className="mt-1 text-sm text-white/60">
+            Send one SMS draft to every checked prospect with a mobile number.
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <textarea
+              name="body"
+              rows={6}
+              placeholder="Hi {{firstName}}, ..."
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
+            />
+          </div>
+
+          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-4">
+            {prospectsWithPhone.length === 0 ? (
+              <div className="text-sm text-white/55">No prospects with mobile numbers yet.</div>
+            ) : (
+              prospectsWithPhone.map((prospect) => (
+                <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <input
+                    type="checkbox"
+                    name="prospectIds"
+                    value={prospect.id}
+                    defaultChecked
+                    className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-white">
+                      {getProspectName({ firstName: prospect.firstName, lastName: prospect.lastName })}
+                    </div>
+                    <div className="text-sm text-white/55">{prospect.phone}</div>
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+          >
+            Send bulk SMS
+          </button>
+        </form>
+      </section>
 
       <section className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
