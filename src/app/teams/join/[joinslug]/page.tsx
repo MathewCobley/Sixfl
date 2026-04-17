@@ -20,6 +20,89 @@ type SearchParams = {
   error?: string;
 };
 
+const POSITION_OPTIONS = [
+  {
+    value: "Goalkeeper",
+    label: "Goalkeeper",
+    description: "You mainly want to play in goal.",
+  },
+  {
+    value: "Outfield",
+    label: "Outfield",
+    description: "You prefer to play out on the pitch.",
+  },
+  {
+    value: "Both",
+    label: "Both",
+    description: "Happy to play in goal or outfield.",
+  },
+] as const;
+
+const EXPERIENCE_OPTIONS = [
+  {
+    value: "New to football",
+    label: "New to football",
+    description: "Just getting started and up for it.",
+  },
+  {
+    value: "Casual player",
+    label: "Casual player",
+    description: "Social player who wants a good game each week.",
+  },
+  {
+    value: "Can play a bit",
+    label: "Can play a bit",
+    description: "Comfortable on the ball and knows the basics.",
+  },
+  {
+    value: "Good player",
+    label: "Good player",
+    description: "Strong standard and can contribute straight away.",
+  },
+  {
+    value: "Top baller",
+    label: "Top baller",
+    description: "Should probably be getting scouted by now.",
+  },
+] as const;
+
+const AVAILABILITY_OPTIONS = [
+  {
+    value: "Available every week",
+    label: "Available every week",
+    description: "Looking to play regularly.",
+  },
+  {
+    value: "Usually available",
+    label: "Usually available",
+    description: "Can make most weeks.",
+  },
+  {
+    value: "Sometimes available",
+    label: "Sometimes available",
+    description: "Can play but not every week.",
+  },
+  {
+    value: "Rarely available",
+    label: "Rarely available",
+    description: "Only available now and then.",
+  },
+  {
+    value: "Not sure yet",
+    label: "Not sure yet",
+    description: "Still figuring out schedule and commitments.",
+  },
+] as const;
+
+const NIGHT_OPTIONS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Any",
+] as const;
+
 function getSavedMessage(saved?: string) {
   switch (saved) {
     case "1":
@@ -29,6 +112,65 @@ function getSavedMessage(saved?: string) {
     default:
       return null;
   }
+}
+
+function OptionCards({
+  name,
+  options,
+}: {
+  name: string;
+  options: ReadonlyArray<{
+    value: string;
+    label: string;
+    description: string;
+  }>;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {options.map((option) => (
+        <label
+          key={option.value}
+          className="group block cursor-pointer rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-emerald-500/30 hover:bg-white/[0.06]"
+        >
+          <input
+            type="radio"
+            name={name}
+            value={option.value}
+            className="peer sr-only"
+          />
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 transition peer-checked:border-emerald-400/50 peer-checked:bg-emerald-500/10 peer-checked:shadow-[0_0_0_1px_rgba(16,185,129,0.12)]">
+            <div className="text-sm font-semibold text-white">{option.label}</div>
+            <div className="mt-2 text-sm leading-6 text-white/60">
+              {option.description}
+            </div>
+          </div>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function NightCheckboxes() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {NIGHT_OPTIONS.map((night) => (
+        <label
+          key={night}
+          className="group block cursor-pointer rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-emerald-500/30 hover:bg-white/[0.06]"
+        >
+          <input
+            type="checkbox"
+            name="preferredNights"
+            value={night}
+            className="peer sr-only"
+          />
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white transition peer-checked:border-emerald-400/50 peer-checked:bg-emerald-500/10 peer-checked:text-emerald-100 peer-checked:shadow-[0_0_0_1px_rgba(16,185,129,0.12)]">
+            {night}
+          </div>
+        </label>
+      ))}
+    </div>
+  );
 }
 
 export default async function TeamJoinPage({
@@ -70,7 +212,7 @@ export default async function TeamJoinPage({
 
   return (
     <div className="min-h-screen bg-[#07130f] text-white">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
         <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
           <div className="px-6 py-8 lg:px-8">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -147,7 +289,7 @@ export default async function TeamJoinPage({
           </section>
         ) : (
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-            <form action={submitTeamJoinProspectAction} className="space-y-5">
+            <form action={submitTeamJoinProspectAction} className="space-y-8">
               <input type="hidden" name="joinSlug" value={joinSlug} />
 
               <div className="grid gap-5 sm:grid-cols-2">
@@ -202,42 +344,52 @@ export default async function TeamJoinPage({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="preferredPositions" className="text-sm text-white/60">
-                  Preferred positions
-                </label>
-                <input
-                  id="preferredPositions"
-                  name="preferredPositions"
-                  type="text"
-                  placeholder="Defender, pivot, winger"
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-                />
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    Preferred position
+                  </h2>
+                  <p className="mt-1 text-sm text-white/60">
+                    Choose the role that suits you best.
+                  </p>
+                </div>
+                <OptionCards name="preferredPositions" options={POSITION_OPTIONS} />
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="experienceSummary" className="text-sm text-white/60">
-                  Playing experience
-                </label>
-                <textarea
-                  id="experienceSummary"
-                  name="experienceSummary"
-                  rows={4}
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white outline-none transition focus:border-emerald-500/60"
-                />
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    Experience level
+                  </h2>
+                  <p className="mt-1 text-sm text-white/60">
+                    Pick the option that feels closest to your level.
+                  </p>
+                </div>
+                <OptionCards name="experienceSummary" options={EXPERIENCE_OPTIONS} />
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="availabilitySummary" className="text-sm text-white/60">
-                  Availability
-                </label>
-                <textarea
-                  id="availabilitySummary"
-                  name="availabilitySummary"
-                  rows={4}
-                  placeholder="Usually available Tuesdays, can play most weeks"
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white outline-none transition focus:border-emerald-500/60"
-                />
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    Availability
+                  </h2>
+                  <p className="mt-1 text-sm text-white/60">
+                    Tell the organiser how often you can usually play.
+                  </p>
+                </div>
+                <OptionCards name="availabilityLevel" options={AVAILABILITY_OPTIONS} />
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    Preferred nights
+                  </h2>
+                  <p className="mt-1 text-sm text-white/60">
+                    Select as many nights as work for you.
+                  </p>
+                </div>
+                <NightCheckboxes />
               </div>
 
               <div className="space-y-2">
@@ -248,6 +400,7 @@ export default async function TeamJoinPage({
                   id="notes"
                   name="notes"
                   rows={4}
+                  placeholder="Anything useful for the organiser to know"
                   className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white outline-none transition focus:border-emerald-500/60"
                 />
               </div>
