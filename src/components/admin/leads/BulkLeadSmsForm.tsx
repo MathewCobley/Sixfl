@@ -1,12 +1,21 @@
 // ========================================
 // File: src/components/admin/leads/BulkLeadSmsForm.tsx
-// NEW FILE
 // ========================================
 
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
+
+import TemplateSelect from "./TemplateSelect";
+
+type Template = {
+  id: string;
+  key: string;
+  label: string;
+  body: string;
+  interestType: "TEAM" | "PLAYER" | "REFEREE" | null;
+};
 
 type RecipientPreviewItem = {
   id: string;
@@ -36,6 +45,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
 }
 
 export default function BulkLeadSmsForm({
+  templates,
   selectedType,
   selectedStatus,
   selectedArea,
@@ -44,6 +54,7 @@ export default function BulkLeadSmsForm({
   recipientPreview,
   action,
 }: {
+  templates: Template[];
   selectedType?: "TEAM" | "PLAYER" | "REFEREE";
   selectedStatus?: "NEW" | "CONTACTED" | "QUALIFIED" | "CLOSED";
   selectedArea?: string;
@@ -64,8 +75,21 @@ export default function BulkLeadSmsForm({
   ) => Promise<BulkSmsActionState>;
 }) {
   const [state, formAction] = useActionState(action, {});
+  const [selectedTemplate, setSelectedTemplate] = useState("");
   const [body, setBody] = useState("");
   const [includedLeadIds, setIncludedLeadIds] = useState<string[]>([]);
+
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((template) => {
+      if (!selectedType) return true;
+      return !template.interestType || template.interestType === selectedType;
+    });
+  }, [templates, selectedType]);
+
+  const templateOptions = filteredTemplates.map((template) => ({
+    value: template.id,
+    label: template.label,
+  }));
 
   useEffect(() => {
     setIncludedLeadIds(recipientPreview.map((recipient) => recipient.id));
@@ -73,9 +97,19 @@ export default function BulkLeadSmsForm({
 
   useEffect(() => {
     if (state?.ok) {
+      setSelectedTemplate("");
       setBody("");
     }
   }, [state?.ok]);
+
+  function handleTemplateChange(templateId: string) {
+    setSelectedTemplate(templateId);
+
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) return;
+
+    setBody(template.body);
+  }
 
   function toggleLead(id: string) {
     setIncludedLeadIds((current) =>
@@ -97,6 +131,7 @@ export default function BulkLeadSmsForm({
         BULK SMS
       </div>
 
+      <input type="hidden" name="templateId" value={selectedTemplate} />
       <input type="hidden" name="selectedType" value={selectedType ?? ""} />
       <input type="hidden" name="selectedStatus" value={selectedStatus ?? ""} />
       <input type="hidden" name="selectedArea" value={selectedArea ?? ""} />
@@ -105,6 +140,13 @@ export default function BulkLeadSmsForm({
       {includedLeadIds.map((id) => (
         <input key={id} type="hidden" name="includedLeadIds" value={id} />
       ))}
+
+      <TemplateSelect
+        value={selectedTemplate}
+        onChange={handleTemplateChange}
+        options={templateOptions}
+        placeholder="Choose a template"
+      />
 
       <textarea
         name="body"
