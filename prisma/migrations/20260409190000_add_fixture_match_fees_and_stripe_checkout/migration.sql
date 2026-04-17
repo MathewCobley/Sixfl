@@ -1,7 +1,3 @@
--- ========================================
--- File: prisma/migrations/20260409190000_add_fixture_match_fees_and_stripe_checkout/migration.sql
--- ========================================
-
 ALTER TABLE "Fixture"
 ADD COLUMN "matchFeePence" INTEGER;
 
