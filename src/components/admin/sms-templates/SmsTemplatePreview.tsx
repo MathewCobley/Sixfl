@@ -7,28 +7,59 @@
 import { useMemo } from "react";
 
 type SmsTemplateAudience = "LEAD" | "TEAM";
+type SmsCtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
 
 export type SmsTemplatePreviewProps = {
   body: string;
   audience: SmsTemplateAudience;
+  ctaUrlKey?: SmsCtaUrlKeyValue;
 };
 
-function previewReplace(text: string, audience: SmsTemplateAudience) {
-  const common = text
+function getPreviewLink(ctaUrlKey: SmsCtaUrlKeyValue | undefined) {
+  if (ctaUrlKey === "signupUrl") {
+    return "https://www.sixfl.co.uk/register-interest?type=player";
+  }
+
+  if (ctaUrlKey === "manageTeamUrl") {
+    return "https://www.sixfl.co.uk/claim?code=H862NY";
+  }
+
+  if (ctaUrlKey === "teamJoinUrl") {
+    return "https://www.sixfl.co.uk/teams/join/rossett-managed-team";
+  }
+
+  return "";
+}
+
+function previewReplace(
+  text: string,
+  audience: SmsTemplateAudience,
+  ctaUrlKey?: SmsCtaUrlKeyValue,
+) {
+  const previewLink = getPreviewLink(ctaUrlKey);
+
+  let replaced = text
     .replaceAll("{{firstName}}", "Jordan")
     .replaceAll("{{fullName}}", "Jordan Smith")
     .replaceAll("{{teamName}}", "Harrogate Athletic")
-    .replaceAll("{{area}}", "Harrogate");
+    .replaceAll("{{area}}", "Harrogate")
+    .replaceAll("{{link}}", previewLink);
 
   if (audience === "TEAM") {
-    return common
+    replaced = replaced
+      .replaceAll("{{captainName}}", "Jordan Smith")
+      .replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
+  } else {
+    replaced = replaced
       .replaceAll("{{captainName}}", "Jordan Smith")
       .replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
   }
 
-  return common
-    .replaceAll("{{captainName}}", "Jordan Smith")
-    .replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
+  if (previewLink && !text.includes("{{link}}")) {
+    return `${replaced}${replaced ? "\n\n" : ""}${previewLink}`;
+  }
+
+  return replaced;
 }
 
 function estimateSegments(text: string) {
@@ -48,10 +79,15 @@ function estimateSegments(text: string) {
 export default function SmsTemplatePreview({
   body,
   audience,
+  ctaUrlKey = "",
 }: SmsTemplatePreviewProps) {
-  const previewBody = useMemo(() => previewReplace(body, audience), [body, audience]);
+  const previewBody = useMemo(
+    () => previewReplace(body, audience, ctaUrlKey),
+    [body, audience, ctaUrlKey],
+  );
   const length = previewBody.length;
   const segments = estimateSegments(previewBody);
+  const previewLink = getPreviewLink(ctaUrlKey);
 
   return (
     <aside className="rounded-3xl border border-emerald-500/20 bg-[#04120d] p-6 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
@@ -68,7 +104,7 @@ export default function SmsTemplatePreview({
             SMS preview
           </div>
 
-          <div className="rounded-[22px] bg-emerald-500/15 px-4 py-3 text-sm leading-6 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="rounded-[22px] bg-emerald-500/15 px-4 py-3 text-sm leading-6 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] whitespace-pre-wrap">
             {previewBody || "Your SMS preview will appear here."}
           </div>
 
@@ -102,15 +138,18 @@ export default function SmsTemplatePreview({
         <div className="mt-3 space-y-2 text-sm leading-6 text-neutral-300">
           {audience === "LEAD" ? (
             <>
-              <div>{"{{firstName}} • {{fullName}} • {{teamName}} • {{area}}"}</div>
+              <div>{"{{firstName}} • {{fullName}} • {{teamName}} • {{area}} • {{link}}"}</div>
               <div>Ideal for campaign follow-up and launch reminders.</div>
             </>
           ) : (
             <>
-              <div>{"{{teamName}} • {{captainName}} • {{leagueName}} • {{area}}"}</div>
-              <div>Ideal for team updates, payment nudges, and fixture comms.</div>
+              <div>{"{{teamName}} • {{captainName}} • {{leagueName}} • {{area}} • {{link}}"}</div>
+              <div>Ideal for team updates, payment nudges, and managed team join links.</div>
             </>
           )}
+          {previewLink ? (
+            <div className="break-all text-emerald-300">Preview link: {previewLink}</div>
+          ) : null}
         </div>
       </div>
     </aside>
