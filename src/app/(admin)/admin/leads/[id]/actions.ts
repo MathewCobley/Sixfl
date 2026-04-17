@@ -28,6 +28,7 @@ import {
   resolveTemplateText,
 } from "@/lib/email/template-context";
 import { queueDirectNotification } from "@/lib/notifications/service";
+import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
 // ========================================
 // Constants
@@ -188,6 +189,12 @@ async function ensureLeadSmsNotificationRecipient(input: {
   contactName?: string | null;
   phone: string;
 }) {
+  const normalizedPhone = normalizeUkMobileNumber(input.phone);
+
+  if (!normalizedPhone) {
+    throw new Error("This lead does not have a valid UK mobile number for SMS.");
+  }
+
   const recipient = await prisma.notificationRecipient.upsert({
     where: {
       sourceType_sourceId: {
@@ -198,7 +205,8 @@ async function ensureLeadSmsNotificationRecipient(input: {
     update: {
       audience: NotificationAudience.LEAD,
       displayName: input.contactName?.trim() || null,
-      phone: input.phone,
+      phone: normalizedPhone,
+      phoneNormalized: normalizedPhone,
       transactionalSmsOptIn: true,
       marketingSmsOptIn: true,
     },
@@ -207,7 +215,8 @@ async function ensureLeadSmsNotificationRecipient(input: {
       sourceId: input.leadId,
       audience: NotificationAudience.LEAD,
       displayName: input.contactName?.trim() || null,
-      phone: input.phone,
+      phone: normalizedPhone,
+      phoneNormalized: normalizedPhone,
       transactionalSmsOptIn: true,
       marketingSmsOptIn: true,
     },
@@ -487,7 +496,10 @@ export async function sendLeadSmsAction(formData: FormData) {
 
     return {
       ok: false,
-      error: "The SMS could not be queued. Please check the SMS provider settings.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "The SMS could not be queued. Please check the SMS provider settings.",
     };
   }
 }
