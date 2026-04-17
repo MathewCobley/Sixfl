@@ -41,6 +41,7 @@ type Props = {
   placeholderBody?: string;
   submitLabel: string;
   variant?: "primary" | "secondary";
+  applyPersonalization?: boolean;
 };
 
 function personaliseText(
@@ -74,6 +75,7 @@ export default function ProspectTemplateMessageForm({
   placeholderBody = "Hi {{firstName}}, ...",
   submitLabel,
   variant = "primary",
+  applyPersonalization = true,
 }: Props) {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [subject, setSubject] = useState("");
@@ -106,14 +108,22 @@ export default function ProspectTemplateMessageForm({
 
     if (channel === "EMAIL") {
       const template = selectedTemplate as EmailTemplate;
-      setSubject(personaliseText(template.subject, context));
-      setBody(personaliseText(template.body, context));
+      setSubject(
+        applyPersonalization
+          ? personaliseText(template.subject, context)
+          : template.subject,
+      );
+      setBody(
+        applyPersonalization ? personaliseText(template.body, context) : template.body,
+      );
       return;
     }
 
     const template = selectedTemplate as SmsTemplate;
-    setBody(personaliseText(template.body, context));
-  }, [channel, context, selectedTemplate]);
+    setBody(
+      applyPersonalization ? personaliseText(template.body, context) : template.body,
+    );
+  }, [applyPersonalization, channel, context, selectedTemplate]);
 
   const buttonClass =
     variant === "primary"
@@ -154,7 +164,7 @@ export default function ProspectTemplateMessageForm({
 
         <textarea
           name="body"
-          rows={channel === "EMAIL" ? 5 : 5}
+          rows={5}
           value={body}
           onChange={(event) => setBody(event.target.value)}
           placeholder={placeholderBody}
