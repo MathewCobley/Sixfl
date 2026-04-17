@@ -242,6 +242,7 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
       select: {
         id: true,
         name: true,
+        joinSlug: true,
         league: {
           select: {
             name: true,
@@ -271,6 +272,18 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
       ? `${team.name} • ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
       : team.name,
   }));
+
+  const managedTeamSmsOptions = managedTeams
+    .filter((team) => Boolean(team.joinSlug))
+    .map((team) => ({
+      value: team.id,
+      label: team.league?.name
+        ? `${team.name} • ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+        : team.name,
+      joinUrl: team.joinSlug
+        ? `https://www.sixfl.co.uk/teams/join/${team.joinSlug}`
+        : null,
+    }));
 
   const selectedManagedTeam = sp.managedTeamId
     ? managedTeams.find((team) => team.id === sp.managedTeamId) ?? null
@@ -616,6 +629,7 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
                     area={lead.area}
                     signupUrl={signupUrl}
                     templates={smsTemplates}
+                    managedTeamOptions={managedTeamSmsOptions}
                   />
                 ) : (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
