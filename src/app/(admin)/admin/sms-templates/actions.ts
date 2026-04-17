@@ -4,7 +4,11 @@
 
 "use server";
 
-import { NotificationAudience, NotificationChannel, NotificationTemplateKind } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationChannel,
+  NotificationTemplateKind,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -95,6 +99,18 @@ function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
   };
 }
 
+function revalidateTemplatePaths(id?: string) {
+  revalidatePath("/admin/templates");
+  revalidatePath("/admin/templates/new");
+  revalidatePath("/admin/sms-templates");
+  revalidatePath("/admin/messaging");
+
+  if (id) {
+    revalidatePath(`/admin/templates/${id}`);
+    revalidatePath(`/admin/sms-templates/${id}`);
+  }
+}
+
 export async function createSmsTemplateAction(
   formData: FormData,
 ): Promise<SmsTemplateActionState> {
@@ -137,10 +153,9 @@ export async function createSmsTemplateAction(
     },
   });
 
-  revalidatePath("/admin/sms-templates");
-  revalidatePath("/admin/messaging");
+  revalidateTemplatePaths(created.id);
 
-  redirect(`/admin/sms-templates/${created.id}`);
+  redirect(`/admin/templates/${created.id}`);
 }
 
 export async function updateSmsTemplateAction(
@@ -190,9 +205,7 @@ export async function updateSmsTemplateAction(
     },
   });
 
-  revalidatePath("/admin/sms-templates");
-  revalidatePath(`/admin/sms-templates/${values.id}`);
-  revalidatePath("/admin/messaging");
+  revalidateTemplatePaths(values.id);
 
   return {
     ok: true,
