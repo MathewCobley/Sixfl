@@ -24,12 +24,26 @@ type EmailCtaUrlKey =
   | "captainDashboardUrl"
   | "teamJoinUrl";
 
+type SmsCtaUrlKey = "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
+
 function getEmailCtaUrlKey(value: string | null): EmailCtaUrlKey | undefined {
   if (
     value === "signupUrl" ||
     value === "manageTeamUrl" ||
     value === "paymentUrl" ||
     value === "captainDashboardUrl" ||
+    value === "teamJoinUrl"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function getSmsCtaUrlKey(value: string | null): SmsCtaUrlKey | undefined {
+  if (
+    value === "signupUrl" ||
+    value === "manageTeamUrl" ||
     value === "teamJoinUrl"
   ) {
     return value;
@@ -140,6 +154,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
             description: smsTemplate.description ?? "",
             audience: smsTemplate.audience === "TEAM" ? "TEAM" : "LEAD",
             body: smsTemplate.body,
+            ctaUrlKey: getSmsCtaUrlKey(smsTemplate.ctaUrlKey),
             isActive: smsTemplate.isActive,
           }}
         />
