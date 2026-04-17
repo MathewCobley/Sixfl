@@ -7,6 +7,8 @@ import {
   InterestType,
   LeadStatus,
   LeagueType,
+  NotificationAudience,
+  NotificationChannel,
   PreferredNight,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -308,6 +310,16 @@ type BulkEmailTemplate = {
   ctaUrlKey: string | null;
 };
 
+type BulkSmsTemplate = {
+  id: string;
+  key: string;
+  label: string;
+  body: string;
+  description: string | null;
+  interestType: InterestType | null;
+  ctaUrlKey: string | null;
+};
+
 export default async function AdminLeadsPage({
   searchParams,
 }: {
@@ -400,6 +412,7 @@ export default async function AdminLeadsPage({
     recipientSmsCount,
     recipientSmsPreview,
     leadTemplates,
+    smsTemplates,
   ] = await Promise.all([
     prisma.interestLead.findMany({
       where,
@@ -426,6 +439,7 @@ export default async function AdminLeadsPage({
         area: true,
         interestType: true,
         leagueType: true,
+        teamName: true,
         preferredNights: {
           select: {
             night: true,
@@ -473,6 +487,22 @@ export default async function AdminLeadsPage({
         body: true,
         interestType: true,
         ctaLabel: true,
+        ctaUrlKey: true,
+      },
+    }),
+    prisma.notificationTemplate.findMany({
+      where: {
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.LEAD,
+        isActive: true,
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        body: true,
+        description: true,
         ctaUrlKey: true,
       },
     }),
@@ -622,6 +652,16 @@ export default async function AdminLeadsPage({
       ctaUrlKey: template.ctaUrlKey,
     }),
   );
+
+  const bulkSmsTemplates: BulkSmsTemplate[] = smsTemplates.map((template) => ({
+    id: template.id,
+    key: template.key,
+    label: template.name,
+    body: template.body,
+    description: template.description,
+    interestType: null,
+    ctaUrlKey: template.ctaUrlKey,
+  }));
 
   const previewRecipients: RecipientPreviewItem[] = recipientPreview
     .filter((recipient): recipient is typeof recipient & { email: string } =>
@@ -773,13 +813,14 @@ export default async function AdminLeadsPage({
 
             <BulkLeadSmsForm
               action={sendBulkLeadSmsAction}
-              templates={bulkEmailTemplates}
+              templates={bulkSmsTemplates}
               selectedType={selectedType}
               selectedStatus={selectedStatus}
               selectedArea={selectedArea}
               selectedNight={selectedNight}
               recipientCount={recipientSmsCount}
               recipientPreview={previewSmsRecipients}
+              managedTeamOptions={managedTeamOptions}
             />
           </div>
         </div>
