@@ -10,6 +10,7 @@ import LeadEmailForm from "@/components/admin/leads/LeadEmailForm";
 import DeleteLeadButton from "@/components/admin/leads/DeleteLeadButton";
 import ConvertLeadToTeamButton from "@/components/admin/leads/ConvertLeadToTeamButton";
 import ConvertLeadToRefereeForm from "@/components/admin/leads/ConvertLeadToRefereeForm";
+import ConvertLeadToManagedSquadForm from "@/components/admin/leads/ConvertLeadToManagedSquadForm";
 import type {
   InterestType,
   LeadStatus,
@@ -188,37 +189,63 @@ export default async function LeadPage({ params }: PageProps) {
     notFound();
   }
 
-  const emailTemplates = await prisma.emailTemplate.findMany({
-    where: {
-      isActive: true,
-      audience: "LEAD" satisfies TemplateAudience,
-      OR: [{ interestType: null }, { interestType: lead.interestType }],
-    },
-    orderBy: [{ name: "asc" }],
-    select: {
-      id: true,
-      key: true,
-      name: true,
-      subject: true,
-      body: true,
-      description: true,
-      interestType: true,
-      ctaLabel: true,
-      ctaUrlKey: true,
-    },
-  });
+  const [emailTemplates, managedTeams] = await Promise.all([
+    prisma.emailTemplate.findMany({
+      where: {
+        isActive: true,
+        audience: "LEAD" satisfies TemplateAudience,
+        OR: [{ interestType: null }, { interestType: lead.interestType }],
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        subject: true,
+        body: true,
+        description: true,
+        interestType: true,
+        ctaLabel: true,
+        ctaUrlKey: true,
+      },
+    }),
+    prisma.team.findMany({
+      where: {
+        teamMode: "MANAGED",
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        league: {
+          select: {
+            name: true,
+            season: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   const emailCount = lead.emails.length;
   const latestEmail = lead.emails[0];
   const alreadyConverted = Boolean(lead.convertedAt || lead.convertedTeamId);
   const canConvertToTeam = lead.interestType === "TEAM";
   const canConvertToReferee = lead.interestType === "REFEREE";
+  const canConvertToManagedSquad = lead.interestType === "PLAYER";
   const hasEmail = Boolean(lead.email?.trim());
   const hasPhone = Boolean(lead.phone?.trim());
 
   const signupUrl = lead.league?.slug
     ? `https://www.sixfl.co.uk/leagues/${lead.league.slug}`
     : "https://www.sixfl.co.uk/register-interest";
+
+  const managedTeamOptions = managedTeams.map((team) => ({
+    value: team.id,
+    label: team.league?.name
+      ? `${team.name} • ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+      : team.name,
+  }));
 
   return (
     <div className="space-y-8">
@@ -470,6 +497,19 @@ export default async function LeadPage({ params }: PageProps) {
                       .
                     </div>
                   ) : null}
+                </ActionCard>
+              ) : null}
+
+              {canConvertToManagedSquad ? (
+                <ActionCard
+                  title="Add to managed squad"
+                  description="Turn this player lead into a managed squad prospect. This creates a squad record on the selected managed team and closes the lead."
+                  tone="success"
+                >
+                  <ConvertLeadToManagedSquadForm
+                    leadId={lead.id}
+                    teams={managedTeamOptions}
+                  />
                 </ActionCard>
               ) : null}
 
