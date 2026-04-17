@@ -613,16 +613,35 @@ export async function sendBulkLeadSmsAction(
 
       const personalisedBody = personaliseTemplateText(body, lead.contactName);
 
-      await queueDirectNotification({
-        channel: NotificationChannel.SMS,
-        audience: NotificationAudience.LEAD,
-        recipient: {
+      const recipient = await prisma.notificationRecipient.upsert({
+        where: {
+          sourceType_sourceId: {
+            sourceType: "LEAD",
+            sourceId: lead.id,
+          },
+        },
+        update: {
+          audience: NotificationAudience.LEAD,
+          displayName: lead.contactName?.trim() || null,
+          phone,
+          transactionalSmsOptIn: true,
+          marketingSmsOptIn: true,
+        },
+        create: {
           sourceType: "LEAD",
           sourceId: lead.id,
           audience: NotificationAudience.LEAD,
           displayName: lead.contactName?.trim() || null,
           phone,
+          transactionalSmsOptIn: true,
+          marketingSmsOptIn: true,
         },
+      });
+
+      await queueDirectNotification({
+        recipientId: recipient.id,
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.LEAD,
         body: personalisedBody,
         isTransactional: false,
         sourceType: "LEAD",
