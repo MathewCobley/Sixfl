@@ -4,7 +4,8 @@
 
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Listbox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import { convertLeadToManagedSquadPlayerAction } from "@/app/(admin)/admin/leads/convert-actions";
@@ -23,45 +24,31 @@ function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {pending ? "Adding to squad..." : "Add to managed squad"}
+    </button>
+  );
+}
+
 export default function ConvertLeadToManagedSquadForm({
   leadId,
   teams,
 }: Props) {
   const [selectedTeamId, setSelectedTeamId] = useState(teams[0]?.value ?? "");
   const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.value === selectedTeamId) ?? null,
     [selectedTeamId, teams],
   );
-
-  function handleSubmit() {
-    if (!selectedTeamId) {
-      setError("Please select a managed squad.");
-      return;
-    }
-
-    setError(null);
-
-    const formData = new FormData();
-    formData.append("leadId", leadId);
-    formData.append("teamId", selectedTeamId);
-    formData.append("notes", notes);
-
-    startTransition(async () => {
-      try {
-        await convertLeadToManagedSquadPlayerAction(formData);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to add this lead to the managed squad.",
-        );
-      }
-    });
-  }
 
   if (teams.length === 0) {
     return (
@@ -73,7 +60,13 @@ export default function ConvertLeadToManagedSquadForm({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+    <form
+      action={convertLeadToManagedSquadPlayerAction}
+      className="rounded-2xl border border-white/10 bg-white/5 p-4"
+    >
+      <input type="hidden" name="leadId" value={leadId} />
+      <input type="hidden" name="teamId" value={selectedTeamId} />
+
       <div className="space-y-4">
         <div className="space-y-2">
           <label className="block text-sm text-white/70">Managed squad</label>
@@ -149,6 +142,7 @@ export default function ConvertLeadToManagedSquadForm({
           </label>
           <textarea
             id="managed-squad-notes"
+            name="notes"
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             rows={5}
@@ -162,18 +156,9 @@ export default function ConvertLeadToManagedSquadForm({
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isPending}
-            className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? "Adding to squad..." : "Add to managed squad"}
-          </button>
+          <SubmitButton />
         </div>
-
-        {error ? <p className="text-sm text-red-300">{error}</p> : null}
       </div>
-    </div>
+    </form>
   );
 }
