@@ -6,6 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Resend } from "resend";
 import {
   NotificationAudience,
   NotificationChannel,
@@ -18,6 +19,12 @@ import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { getPhoneDisplayValue } from "@/lib/notifications/phone";
 import { getEmailReplyDomain } from "@/lib/resend/client";
+import {
+  appendSIXFLTextSignature,
+  buildSIXFLEmailHtml,
+} from "@/lib/email/buildEmail";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function generateClaimCode(length = 8) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -129,6 +136,75 @@ function redirectIfEmailRepliesNotConfigured(path: string) {
   } catch {
     redirect(path);
   }
+}
+
+function getProspectRedirectParams(input: {
+  mode: "single" | "bulk";
+  channel: NotificationChannel;
+}) {
+  return `${input.mode === "bulk" ? "prospectBulkQueued" : "prospectQueued"}=1&channel=${input.channel.toLowerCase()}`;
+}
+
+function getProspectDisplayName(input: {
+  firstName: string;
+  lastName: string | null;
+}) {
+  return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
+}
+
+function personaliseProspectText(
+  text: string,
+  prospect: {
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
+  },
+  team: {
+    name: string;
+    league: { name: string; season: string | null } | null;
+    joinSlug: string | null;
+  },
+) {
+  const fullName = getProspectDisplayName({
+    firstName: prospect.firstName,
+    lastName: prospect.lastName,
+  });
+  const firstName = prospect.firstName.trim() || "there";
+  const leagueName = team.league
+    ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+    : "SIXFL";
+  const joinUrl = team.joinSlug
+    ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
+    : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
+
+  return text
+    .replace(/{{firstName}}/gi, firstName)
+    .replace(/{{name}}/gi, fullName || firstName)
+    .replace(/{{fullName}}/gi, fullName || firstName)
+    .replace(/{{teamName}}/gi, team.name)
+    .replace(/{{leagueName}}/gi, leagueName)
+    .replace(/{{joinUrl}}/gi, joinUrl)
+    .replace(/{{email}}/gi, prospect.email ?? "")
+    .replace(/Hi there/gi, `Hi ${firstName}`);
+}
+
+async function getProspectsForMessage(input: {
+  teamId: string;
+  prospectIds: string[];
+}) {
+  return prisma.teamPlayerProspect.findMany({
+    where: {
+      teamId: input.teamId,
+      ...(input.prospectIds.length > 0
+        ? {
+            id: {
+              in: input.prospectIds,
+            },
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
 }
 
 export async function createTeamAction(formData: FormData) {
@@ -400,6 +476,338 @@ export async function sendTeamMessageAction(formData: FormData) {
   }
 
   redirect(`${from}?messageQueued=1&channel=${channel.toLowerCase()}`);
+}
+
+export async function sendProspectMessageAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const teamId = getTrimmedValue(formData.get("teamId"));
+  const prospectId = getTrimmedValue(formData.get("prospectId"));
+  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
+  const from = getSafeRedirectPath(
+    formData.get("from"),
+    `/admin/teams/${teamId}`,
+  );
+  const subject = getTrimmedValue(formData.get("subject"));
+  const body = getTrimmedValue(formData.get("body"));
+
+  if (!teamId || !prospectId) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  if (!body) {
+    redirect(`${from}?prospectComposeError=missing_body`);
+  }
+
+  const channel =
+    channelInput === "SMS"
+      ? NotificationChannel.SMS
+      : NotificationChannel.EMAIL;
+
+  if (channel === NotificationChannel.EMAIL && !subject) {
+    redirect(`${from}?prospectComposeError=missing_subject`);
+  }
+
+  const [team, prospect] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamId },
+      select: {
+        id: true,
+        name: true,
+        logoUrl: true,
+        joinSlug: true,
+        leagueId: true,
+        league: {
+          select: {
+            name: true,
+            season: true,
+          },
+        },
+      },
+    }),
+    prisma.teamPlayerProspect.findFirst({
+      where: {
+        id: prospectId,
+        teamId,
+      },
+    }),
+  ]);
+
+  if (!team || !prospect) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  if (channel === NotificationChannel.EMAIL && !prospect.email?.trim()) {
+    redirect(`${from}?prospectComposeError=missing_email`);
+  }
+
+  if (channel === NotificationChannel.SMS && !prospect.phone?.trim()) {
+    redirect(`${from}?prospectComposeError=missing_phone`);
+  }
+
+  const personalisedSubject =
+    channel === NotificationChannel.EMAIL
+      ? personaliseProspectText(subject, prospect, team)
+      : "";
+  const personalisedBody = personaliseProspectText(body, prospect, team);
+
+  if (channel === NotificationChannel.EMAIL) {
+    if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+      redirect(`${from}?prospectComposeError=email_not_configured`);
+    }
+
+    const signedTextBody = appendSIXFLTextSignature(personalisedBody);
+    const signedHtmlBody = buildSIXFLEmailHtml({
+      body: signedTextBody,
+    });
+
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM,
+      to: prospect.email!.trim(),
+      subject: personalisedSubject,
+      text: signedTextBody,
+      html: signedHtmlBody,
+    });
+  } else {
+    const recipient = await prisma.notificationRecipient.upsert({
+      where: {
+        sourceType_sourceId: {
+          sourceType: "GENERAL",
+          sourceId: `team-prospect:${prospect.id}`,
+        },
+      },
+      update: {
+        audience: NotificationAudience.PLAYER,
+        displayName: getProspectDisplayName({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+        }),
+        phone: prospect.phone!.trim(),
+        transactionalSmsOptIn: true,
+        marketingSmsOptIn: true,
+      },
+      create: {
+        sourceType: "GENERAL",
+        sourceId: `team-prospect:${prospect.id}`,
+        audience: NotificationAudience.PLAYER,
+        displayName: getProspectDisplayName({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+        }),
+        phone: prospect.phone!.trim(),
+        transactionalSmsOptIn: true,
+        marketingSmsOptIn: true,
+      },
+    });
+
+    await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: NotificationChannel.SMS,
+      audience: NotificationAudience.PLAYER,
+      body: personalisedBody,
+      isTransactional: false,
+      sourceType: "TEAM_PLAYER_PROSPECT",
+      sourceId: prospect.id,
+      metadata: {
+        origin: "team_prospect_admin",
+        originLabel: "Sent to prospect from team page",
+        teamId,
+        teamName: team.name,
+        prospectId: prospect.id,
+      },
+      createdByUserId: user?.id ?? null,
+    });
+  }
+
+  await prisma.teamPlayerProspect.update({
+    where: { id: prospect.id },
+    data: {
+      status: prospect.status === "NEW" ? "CONTACTED" : prospect.status,
+      lastContactedAt: new Date(),
+    },
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/prospects`);
+
+  redirect(`${from}?${getProspectRedirectParams({ mode: "single", channel })}`);
+}
+
+export async function sendBulkProspectMessageAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const teamId = getTrimmedValue(formData.get("teamId"));
+  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
+  const from = getSafeRedirectPath(
+    formData.get("from"),
+    `/admin/teams/${teamId}`,
+  );
+  const subject = getTrimmedValue(formData.get("subject"));
+  const body = getTrimmedValue(formData.get("body"));
+  const prospectIds = formData
+    .getAll("prospectIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  if (!teamId) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  if (!body) {
+    redirect(`${from}?prospectComposeError=missing_body`);
+  }
+
+  const channel =
+    channelInput === "SMS"
+      ? NotificationChannel.SMS
+      : NotificationChannel.EMAIL;
+
+  if (channel === NotificationChannel.EMAIL && !subject) {
+    redirect(`${from}?prospectComposeError=missing_subject`);
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      name: true,
+      logoUrl: true,
+      joinSlug: true,
+      leagueId: true,
+      league: {
+        select: {
+          name: true,
+          season: true,
+        },
+      },
+    },
+  });
+
+  if (!team) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  const prospects = await getProspectsForMessage({
+    teamId,
+    prospectIds,
+  });
+
+  const recipients = prospects.filter((prospect) =>
+    channel === NotificationChannel.EMAIL
+      ? Boolean(prospect.email?.trim())
+      : Boolean(prospect.phone?.trim()),
+  );
+
+  if (recipients.length === 0) {
+    redirect(`${from}?prospectComposeError=no_recipients`);
+  }
+
+  if (channel === NotificationChannel.EMAIL) {
+    if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+      redirect(`${from}?prospectComposeError=email_not_configured`);
+    }
+  }
+
+  for (const prospect of recipients) {
+    const personalisedSubject =
+      channel === NotificationChannel.EMAIL
+        ? personaliseProspectText(subject, prospect, team)
+        : "";
+    const personalisedBody = personaliseProspectText(body, prospect, team);
+
+    if (channel === NotificationChannel.EMAIL) {
+      const signedTextBody = appendSIXFLTextSignature(personalisedBody);
+      const signedHtmlBody = buildSIXFLEmailHtml({
+        body: signedTextBody,
+      });
+
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM!,
+        to: prospect.email!.trim(),
+        subject: personalisedSubject,
+        text: signedTextBody,
+        html: signedHtmlBody,
+      });
+    } else {
+      const recipient = await prisma.notificationRecipient.upsert({
+        where: {
+          sourceType_sourceId: {
+            sourceType: "GENERAL",
+            sourceId: `team-prospect:${prospect.id}`,
+          },
+        },
+        update: {
+          audience: NotificationAudience.PLAYER,
+          displayName: getProspectDisplayName({
+            firstName: prospect.firstName,
+            lastName: prospect.lastName,
+          }),
+          phone: prospect.phone!.trim(),
+          transactionalSmsOptIn: true,
+          marketingSmsOptIn: true,
+        },
+        create: {
+          sourceType: "GENERAL",
+          sourceId: `team-prospect:${prospect.id}`,
+          audience: NotificationAudience.PLAYER,
+          displayName: getProspectDisplayName({
+            firstName: prospect.firstName,
+            lastName: prospect.lastName,
+          }),
+          phone: prospect.phone!.trim(),
+          transactionalSmsOptIn: true,
+          marketingSmsOptIn: true,
+        },
+      });
+
+      await queueDirectNotification({
+        recipientId: recipient.id,
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.PLAYER,
+        body: personalisedBody,
+        isTransactional: false,
+        sourceType: "TEAM_PLAYER_PROSPECT",
+        sourceId: prospect.id,
+        metadata: {
+          origin: "team_prospect_admin_bulk",
+          originLabel: "Bulk SMS to prospects from team page",
+          teamId,
+          teamName: team.name,
+          prospectId: prospect.id,
+        },
+        createdByUserId: user?.id ?? null,
+      });
+    }
+  }
+
+  await prisma.teamPlayerProspect.updateMany({
+    where: {
+      id: {
+        in: recipients.map((prospect) => prospect.id),
+      },
+      status: "NEW",
+    },
+    data: {
+      status: "CONTACTED",
+      lastContactedAt: new Date(),
+    },
+  });
+
+  await prisma.teamPlayerProspect.updateMany({
+    where: {
+      id: {
+        in: recipients.map((prospect) => prospect.id),
+      },
+    },
+    data: {
+      lastContactedAt: new Date(),
+    },
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/prospects`);
+
+  redirect(`${from}?${getProspectRedirectParams({ mode: "bulk", channel })}`);
 }
 
 export async function sendTeamPaymentRequestAction(formData: FormData) {
