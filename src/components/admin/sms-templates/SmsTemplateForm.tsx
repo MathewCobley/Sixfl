@@ -17,6 +17,7 @@ type FormState = {
 };
 
 type SmsTemplateAudience = "LEAD" | "TEAM";
+type SmsCtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
 
 type SmsTemplateFormValues = {
   id?: string;
@@ -25,6 +26,7 @@ type SmsTemplateFormValues = {
   description: string;
   audience: SmsTemplateAudience;
   body: string;
+  ctaUrlKey: SmsCtaUrlKeyValue;
   isActive: boolean;
 };
 
@@ -59,8 +61,51 @@ const AUDIENCE_OPTIONS: Array<{
   },
 ];
 
-const LEAD_TOKENS = ["{{firstName}}", "{{fullName}}", "{{teamName}}", "{{area}}"] as const;
-const TEAM_TOKENS = ["{{teamName}}", "{{captainName}}", "{{leagueName}}", "{{area}}"] as const;
+const CTA_OPTIONS: Array<{
+  value: SmsCtaUrlKeyValue;
+  label: string;
+  description: string;
+  previewUrl?: string;
+}> = [
+  {
+    value: "",
+    label: "No link",
+    description: "Keep this SMS body-only.",
+  },
+  {
+    value: "teamJoinUrl",
+    label: "Managed team join link",
+    description: "Public team join page for managed teams and player signup.",
+    previewUrl: "https://www.sixfl.co.uk/teams/join/rossett-managed-team",
+  },
+  {
+    value: "signupUrl",
+    label: "Register interest link",
+    description: "General SIXFL player registration and interest flow.",
+    previewUrl: "https://www.sixfl.co.uk/register-interest?type=player",
+  },
+  {
+    value: "manageTeamUrl",
+    label: "Manage team link",
+    description: "Team claim or team access flow for captains.",
+    previewUrl: "https://www.sixfl.co.uk/claim?code=H862NY",
+  },
+];
+
+const LEAD_TOKENS = [
+  "{{firstName}}",
+  "{{fullName}}",
+  "{{teamName}}",
+  "{{area}}",
+  "{{link}}",
+] as const;
+const TEAM_TOKENS = [
+  "{{teamName}}",
+  "{{captainName}}",
+  "{{leagueName}}",
+  "{{area}}",
+  "{{link}}",
+] as const;
 
 function SubmitButton({ mode }: { mode: "create" | "edit" }) {
   const { pending } = useFormStatus();
@@ -123,6 +168,9 @@ export default function SmsTemplateForm({
     initialValues?.audience ?? "LEAD",
   );
   const [body, setBody] = useState(initialValues?.body ?? "");
+  const [ctaUrlKey, setCtaUrlKey] = useState<SmsCtaUrlKeyValue>(
+    initialValues?.ctaUrlKey ?? "",
+  );
   const [isActive, setIsActive] = useState(initialValues?.isActive ?? true);
 
   useEffect(() => {
@@ -136,6 +184,12 @@ export default function SmsTemplateForm({
     [audience],
   );
 
+  const selectedCtaOption = useMemo(
+    () =>
+      CTA_OPTIONS.find((option) => option.value === ctaUrlKey) ?? CTA_OPTIONS[0],
+    [ctaUrlKey],
+  );
+
   const bodyLength = body.length;
   const bodySegments = estimateSegments(body);
 
@@ -143,6 +197,7 @@ export default function SmsTemplateForm({
   const nameError = state?.errors?.name?.[0];
   const audienceError = state?.errors?.audience?.[0];
   const bodyError = state?.errors?.body?.[0];
+  const ctaUrlKeyError = state?.errors?.ctaUrlKey?.[0];
 
   function insertToken(token: string) {
     setBody((current) => {
@@ -160,6 +215,7 @@ export default function SmsTemplateForm({
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
 
       <input type="hidden" name="audience" value={audience} />
+      <input type="hidden" name="ctaUrlKey" value={ctaUrlKey} />
       <input type="hidden" name="isActive" value={String(isActive)} />
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
@@ -281,6 +337,9 @@ export default function SmsTemplateForm({
                     </button>
                   ))}
                 </div>
+                <p className="mt-3 text-sm leading-6 text-neutral-300">
+                  Use <span className="text-white">{{"{{link}}"}}</span> where you want the selected signup or join link to appear. If you leave it out, the link will be appended at the end of the SMS preview.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -298,35 +357,90 @@ export default function SmsTemplateForm({
                 />
                 {bodyError ? <p className="text-sm text-red-400">{bodyError}</p> : null}
               </div>
+            </div>
+          </section>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                    Characters
-                  </div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{bodyLength}</div>
+          <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-white">SMS link</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                SMS uses a plain text link, not a button. Choose the destination you want to include.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {CTA_OPTIONS.map((option) => {
+                const selected = ctaUrlKey === option.value;
+
+                return (
+                  <button
+                    key={option.value || "none"}
+                    type="button"
+                    onClick={() => setCtaUrlKey(option.value)}
+                    className={[
+                      "rounded-2xl border px-4 py-4 text-left transition",
+                      selected
+                        ? "border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
+                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
+                    ].join(" ")}
+                  >
+                    <div className="text-sm font-semibold text-white">
+                      {option.label}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-neutral-400">
+                      {option.description}
+                    </div>
+                    {option.previewUrl ? (
+                      <div className="mt-3 break-all text-xs text-emerald-300/90">
+                        {option.previewUrl}
+                      </div>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            {ctaUrlKeyError ? (
+              <p className="mt-3 text-sm text-red-400">{ctaUrlKeyError}</p>
+            ) : null}
+
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-neutral-300">
+              <div className="font-medium text-white">Selected link</div>
+              <div className="mt-2">
+                {selectedCtaOption.value
+                  ? `${selectedCtaOption.label}${selectedCtaOption.previewUrl ? ` · ${selectedCtaOption.previewUrl}` : ""}`
+                  : "No link selected"}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                  Characters
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                    Segments
-                  </div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{bodySegments}</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{bodyLength}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                  Segments
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                    Status
-                  </div>
-                  <div className="mt-2">
-                    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={isActive}
-                        onChange={(event) => setIsActive(event.target.checked)}
-                        className="h-5 w-5 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500"
-                      />
-                      <span className="text-sm font-medium text-white">Template is active</span>
-                    </label>
-                  </div>
+                <div className="mt-2 text-2xl font-semibold text-white">{bodySegments}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                  Status
+                </div>
+                <div className="mt-2">
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(event) => setIsActive(event.target.checked)}
+                      className="h-5 w-5 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm font-medium text-white">Template is active</span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -350,7 +464,7 @@ export default function SmsTemplateForm({
           </div>
         </div>
 
-        <SmsTemplatePreview body={body} audience={audience} />
+        <SmsTemplatePreview body={body} audience={audience} ctaUrlKey={ctaUrlKey} />
       </div>
     </form>
   );
