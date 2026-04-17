@@ -4,10 +4,15 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  NotificationAudience,
+  NotificationChannel,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import FormListboxField from "@/components/ui/FormListboxField";
+import ProspectTemplateMessageForm from "@/components/captain/prospects/ProspectTemplateMessageForm";
 import {
   addProspectAction,
   convertProspectToMemberAction,
@@ -112,19 +117,55 @@ export default async function CaptainProspectsPage({
 
   await requireCaptain(teamid);
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamid },
-    select: {
-      id: true,
-      name: true,
-      teamMode: true,
-      isRecruiting: true,
-      joinSlug: true,
-      prospects: {
-        orderBy: [{ createdAt: "desc" }],
+  const [team, emailTemplates, smsTemplates] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: {
+        id: true,
+        name: true,
+        teamMode: true,
+        isRecruiting: true,
+        joinSlug: true,
+        prospects: {
+          orderBy: [{ createdAt: "desc" }],
+        },
       },
-    },
-  });
+    }),
+    prisma.emailTemplate.findMany({
+      where: {
+        isActive: true,
+        audience: {
+          in: ["PLAYER", "GENERAL"],
+        },
+      },
+      orderBy: [{ audience: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        subject: true,
+        body: true,
+        description: true,
+      },
+    }),
+    prisma.notificationTemplate.findMany({
+      where: {
+        channel: NotificationChannel.SMS,
+        audience: {
+          in: [NotificationAudience.PLAYER, NotificationAudience.GENERAL],
+        },
+        isActive: true,
+      },
+      orderBy: [{ audience: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        body: true,
+        description: true,
+      },
+    }),
+  ]);
 
   if (!team) {
     notFound();
@@ -133,6 +174,9 @@ export default async function CaptainProspectsPage({
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
   const joinUrl = team.joinSlug ? `/teams/join/${team.joinSlug}` : null;
+  const absoluteJoinUrl = team.joinSlug
+    ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
+    : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
   const prospectsWithEmail = team.prospects.filter((prospect) => Boolean(prospect.email?.trim()));
   const prospectsWithPhone = team.prospects.filter((prospect) => Boolean(prospect.phone?.trim()));
 
@@ -238,114 +282,38 @@ export default async function CaptainProspectsPage({
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <form action={sendBulkProspectEmailAction} className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-6">
-          <input type="hidden" name="teamid" value={teamid} />
+        <ProspectTemplateMessageForm
+          channel="EMAIL"
+          title="Bulk email prospects"
+          subtitle="Send one email draft to every checked prospect with an email address."
+          action={sendBulkProspectEmailAction}
+          hiddenFields={[
+            { name: "teamid", value: teamid },
+            { name: "teamName", value: team.name },
+            { name: "joinUrl", value: absoluteJoinUrl },
+            ...prospectsWithEmail.map((prospect) => ({ name: "prospectIds", value: prospect.id })),
+          ]}
+          emailTemplates={emailTemplates}
+          submitLabel="Send bulk email"
+          applyPersonalization={false}
+        />
 
-          <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
-            BULK EMAIL
-          </div>
-          <div className="mt-2 text-xl font-semibold text-white">Email selected prospects</div>
-          <div className="mt-1 text-sm text-white/60">
-            Send one email draft to every checked prospect with an email address.
-          </div>
-
-          <div className="mt-5 space-y-3">
-            <input
-              name="subject"
-              placeholder="Subject"
-              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400"
-            />
-            <textarea
-              name="body"
-              rows={6}
-              placeholder="Hi {{firstName}}, ..."
-              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-            />
-          </div>
-
-          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-4">
-            {prospectsWithEmail.length === 0 ? (
-              <div className="text-sm text-white/55">No prospects with email addresses yet.</div>
-            ) : (
-              prospectsWithEmail.map((prospect) => (
-                <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <input
-                    type="checkbox"
-                    name="prospectIds"
-                    value={prospect.id}
-                    defaultChecked
-                    className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-white">
-                      {getProspectName({ firstName: prospect.firstName, lastName: prospect.lastName })}
-                    </div>
-                    <div className="text-sm text-white/55">{prospect.email}</div>
-                  </div>
-                </label>
-              ))
-            )}
-          </div>
-
-          <button
-            type="submit"
-            className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-          >
-            Send bulk email
-          </button>
-        </form>
-
-        <form action={sendBulkProspectSmsAction} className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-6">
-          <input type="hidden" name="teamid" value={teamid} />
-
-          <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
-            BULK SMS
-          </div>
-          <div className="mt-2 text-xl font-semibold text-white">SMS selected prospects</div>
-          <div className="mt-1 text-sm text-white/60">
-            Send one SMS draft to every checked prospect with a mobile number.
-          </div>
-
-          <div className="mt-5 space-y-3">
-            <textarea
-              name="body"
-              rows={6}
-              placeholder="Hi {{firstName}}, ..."
-              className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-            />
-          </div>
-
-          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-4">
-            {prospectsWithPhone.length === 0 ? (
-              <div className="text-sm text-white/55">No prospects with mobile numbers yet.</div>
-            ) : (
-              prospectsWithPhone.map((prospect) => (
-                <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <input
-                    type="checkbox"
-                    name="prospectIds"
-                    value={prospect.id}
-                    defaultChecked
-                    className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-white">
-                      {getProspectName({ firstName: prospect.firstName, lastName: prospect.lastName })}
-                    </div>
-                    <div className="text-sm text-white/55">{prospect.phone}</div>
-                  </div>
-                </label>
-              ))
-            )}
-          </div>
-
-          <button
-            type="submit"
-            className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-          >
-            Send bulk SMS
-          </button>
-        </form>
+        <ProspectTemplateMessageForm
+          channel="SMS"
+          title="Bulk SMS prospects"
+          subtitle="Send one SMS draft to every checked prospect with a mobile number."
+          action={sendBulkProspectSmsAction}
+          hiddenFields={[
+            { name: "teamid", value: teamid },
+            { name: "teamName", value: team.name },
+            { name: "joinUrl", value: absoluteJoinUrl },
+            ...prospectsWithPhone.map((prospect) => ({ name: "prospectIds", value: prospect.id })),
+          ]}
+          smsTemplates={smsTemplates}
+          submitLabel="Send bulk SMS"
+          variant="secondary"
+          applyPersonalization={false}
+        />
       </section>
 
       <section className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
@@ -501,6 +469,10 @@ export default async function CaptainProspectsPage({
             ) : (
               team.prospects.map((prospect) => {
                 const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
+                const prospectName = getProspectName({
+                  firstName: prospect.firstName,
+                  lastName: prospect.lastName,
+                });
 
                 return (
                   <div key={prospect.id} className="space-y-5 px-6 py-5">
@@ -508,7 +480,7 @@ export default async function CaptainProspectsPage({
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-base font-semibold text-white">
-                            {[prospect.firstName, prospect.lastName].filter(Boolean).join(" ")}
+                            {prospectName}
                           </div>
 
                           <span
@@ -624,58 +596,42 @@ export default async function CaptainProspectsPage({
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-2">
-                      <form action={sendProspectEmailAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <input type="hidden" name="teamid" value={teamid} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
+                      <ProspectTemplateMessageForm
+                        channel="EMAIL"
+                        title="Email prospect"
+                        subtitle={`To: ${prospect.email || "No email"}`}
+                        action={sendProspectEmailAction}
+                        hiddenFields={[
+                          { name: "teamid", value: teamid },
+                          { name: "prospectId", value: prospect.id },
+                          { name: "teamName", value: team.name },
+                          { name: "joinUrl", value: absoluteJoinUrl },
+                          { name: "prospectFirstName", value: prospect.firstName },
+                          { name: "prospectFullName", value: prospectName },
+                          { name: "prospectEmail", value: prospect.email ?? "" },
+                        ]}
+                        emailTemplates={emailTemplates}
+                        submitLabel="Send email"
+                      />
 
-                        <div className="text-sm font-semibold text-white">Email prospect</div>
-                        <div className="mt-1 text-xs text-white/45">To: {prospect.email || "No email"}</div>
-
-                        <div className="mt-4 space-y-3">
-                          <input
-                            name="subject"
-                            placeholder="Subject"
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400"
-                          />
-                          <textarea
-                            name="body"
-                            rows={5}
-                            placeholder="Hi {{firstName}}, ..."
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-                        >
-                          Send email
-                        </button>
-                      </form>
-
-                      <form action={sendProspectSmsAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <input type="hidden" name="teamid" value={teamid} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
-
-                        <div className="text-sm font-semibold text-white">SMS prospect</div>
-                        <div className="mt-1 text-xs text-white/45">To: {prospect.phone || "No phone"}</div>
-
-                        <div className="mt-4 space-y-3">
-                          <textarea
-                            name="body"
-                            rows={5}
-                            placeholder="Hi {{firstName}}, ..."
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-                        >
-                          Send SMS
-                        </button>
-                      </form>
+                      <ProspectTemplateMessageForm
+                        channel="SMS"
+                        title="SMS prospect"
+                        subtitle={`To: ${prospect.phone || "No phone"}`}
+                        action={sendProspectSmsAction}
+                        hiddenFields={[
+                          { name: "teamid", value: teamid },
+                          { name: "prospectId", value: prospect.id },
+                          { name: "teamName", value: team.name },
+                          { name: "joinUrl", value: absoluteJoinUrl },
+                          { name: "prospectFirstName", value: prospect.firstName },
+                          { name: "prospectFullName", value: prospectName },
+                          { name: "prospectEmail", value: prospect.email ?? "" },
+                        ]}
+                        smsTemplates={smsTemplates}
+                        submitLabel="Send SMS"
+                        variant="secondary"
+                      />
                     </div>
                   </div>
                 );
