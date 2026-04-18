@@ -8,18 +8,26 @@ import EmailTemplateForm from "@/components/admin/email-templates/EmailTemplateF
 import SmsTemplateForm from "@/components/admin/sms-templates/SmsTemplateForm";
 import { createEmailTemplateAction } from "@/app/(admin)/admin/email-templates/actions";
 import { createSmsTemplateAction } from "@/app/(admin)/admin/sms-templates/actions";
+import { createSystemEmailTemplateAction } from "@/app/(admin)/admin/system-email-templates/actions";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 type SearchParams = Promise<{
   channel?: string;
+  type?: string;
 }>;
+
+type TemplateConsoleType = "campaign" | "system";
 
 function isChannel(value: string | undefined): value is "EMAIL" | "SMS" {
   return value === "EMAIL" || value === "SMS";
 }
 
-function buildChannelHref(channel: "EMAIL" | "SMS") {
-  return `/admin/templates/new?channel=${channel}`;
+function isTemplateConsoleType(value: string | undefined): value is TemplateConsoleType {
+  return value === "campaign" || value === "system";
+}
+
+function buildChannelHref(type: TemplateConsoleType, channel: "EMAIL" | "SMS") {
+  return `/admin/templates/new?type=${type}&channel=${channel}`;
 }
 
 export default async function NewTemplatePage({
@@ -29,11 +37,22 @@ export default async function NewTemplatePage({
 }) {
   await requireAdmin();
 
-  const { channel: channelParam } = await searchParams;
-  const selectedChannel = isChannel(channelParam) ? channelParam : "EMAIL";
+  const { channel: channelParam, type: typeParam } = await searchParams;
+  const selectedType = isTemplateConsoleType(typeParam) ? typeParam : "campaign";
+  const selectedChannel =
+    selectedType === "system"
+      ? "EMAIL"
+      : isChannel(channelParam)
+        ? channelParam
+        : "EMAIL";
+
+  const title =
+    selectedType === "system"
+      ? "Create System Email Template"
+      : `Create ${selectedChannel === "EMAIL" ? "Email" : "SMS"} Template`;
 
   return (
-    <AdminCard title={`Create ${selectedChannel === "EMAIL" ? "Email" : "SMS"} Template`}>
+    <AdminCard title={title}>
       <div className="space-y-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
@@ -42,12 +61,14 @@ export default async function NewTemplatePage({
             </h1>
 
             <p className="max-w-2xl text-sm leading-6 text-white/65">
-              Start with the channel, then configure the template using the tailored editor for that message type.
+              {selectedType === "system"
+                ? "Create an automated system email used by operational flows like fixture publishing and match fee reminders."
+                : "Start with the channel, then configure the template using the tailored editor for that message type."}
             </p>
           </div>
 
           <Link
-            href="/admin/templates"
+            href={`/admin/templates?type=${selectedType}`}
             className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white"
           >
             Back to templates
@@ -56,31 +77,33 @@ export default async function NewTemplatePage({
 
         <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
           <div className="mb-5">
-            <h2 className="text-lg font-semibold text-white">Channel</h2>
+            <h2 className="text-lg font-semibold text-white">Template type</h2>
             <p className="mt-1 text-sm text-neutral-400">
-              Email templates support subjects and CTA buttons. SMS templates stay focused on short body copy and segment length.
+              Campaign templates are manual outreach and admin comms. System Emails are automated transactional templates used by the platform.
             </p>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
             {[
               {
-                value: "EMAIL" as const,
-                label: "Email",
-                description: "Subject, rich preview, and CTA placement.",
+                value: "campaign" as const,
+                label: "Campaign Templates",
+                description: "Manual outreach, lead follow-up, and reusable admin email / SMS messaging.",
+                href: "/admin/templates/new?type=campaign&channel=EMAIL",
               },
               {
-                value: "SMS" as const,
-                label: "SMS",
-                description: "Short plain-text messaging with segment awareness.",
+                value: "system" as const,
+                label: "System Emails",
+                description: "Automated operational emails such as fixture publish, fixture reminders, and match fee reminders.",
+                href: "/admin/templates/new?type=system",
               },
             ].map((option) => {
-              const selected = selectedChannel === option.value;
+              const selected = selectedType === option.value;
 
               return (
                 <Link
                   key={option.value}
-                  href={buildChannelHref(option.value)}
+                  href={option.href}
                   className={[
                     "min-h-[120px] rounded-2xl border px-4 py-4 text-left transition",
                     selected
@@ -88,19 +111,61 @@ export default async function NewTemplatePage({
                       : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
                   ].join(" ")}
                 >
-                  <div className="text-sm font-semibold text-white">
-                    {option.label}
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-neutral-400">
-                    {option.description}
-                  </div>
+                  <div className="text-sm font-semibold text-white">{option.label}</div>
+                  <div className="mt-2 text-sm leading-6 text-neutral-400">{option.description}</div>
                 </Link>
               );
             })}
           </div>
         </section>
 
-        {selectedChannel === "EMAIL" ? (
+        {selectedType === "campaign" ? (
+          <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-white">Channel</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                Email templates support subjects and CTA buttons. SMS templates stay focused on short body copy and segment length.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              {[
+                {
+                  value: "EMAIL" as const,
+                  label: "Email",
+                  description: "Subject, rich preview, and CTA placement.",
+                },
+                {
+                  value: "SMS" as const,
+                  label: "SMS",
+                  description: "Short plain-text messaging with segment awareness.",
+                },
+              ].map((option) => {
+                const selected = selectedChannel === option.value;
+
+                return (
+                  <Link
+                    key={option.value}
+                    href={buildChannelHref("campaign", option.value)}
+                    className={[
+                      "min-h-[120px] rounded-2xl border px-4 py-4 text-left transition",
+                      selected
+                        ? "border-emerald-400/50 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
+                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
+                    ].join(" ")}
+                  >
+                    <div className="text-sm font-semibold text-white">{option.label}</div>
+                    <div className="mt-2 text-sm leading-6 text-neutral-400">{option.description}</div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {selectedType === "system" ? (
+          <EmailTemplateForm mode="create" action={createSystemEmailTemplateAction} />
+        ) : selectedChannel === "EMAIL" ? (
           <EmailTemplateForm mode="create" action={createEmailTemplateAction} />
         ) : (
           <SmsTemplateForm mode="create" action={createSmsTemplateAction} />
