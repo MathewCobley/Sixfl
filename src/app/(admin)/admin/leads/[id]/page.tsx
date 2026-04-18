@@ -115,6 +115,26 @@ function typeClasses(type: InterestType) {
   return "border-amber-500/20 bg-amber-500/10 text-amber-300";
 }
 
+function getEmailTemplateAudiences(interestType: InterestType): TemplateAudience[] {
+  if (interestType === "PLAYER") {
+    return ["LEAD", "PLAYER"];
+  }
+
+  if (interestType === "REFEREE") {
+    return ["LEAD", "REFEREE"];
+  }
+
+  return ["LEAD"];
+}
+
+function getSmsTemplateAudiences(interestType: InterestType): NotificationAudience[] {
+  if (interestType === "PLAYER") {
+    return [NotificationAudience.LEAD, NotificationAudience.PLAYER];
+  }
+
+  return [NotificationAudience.LEAD];
+}
+
 function DetailRow({
   label,
   value,
@@ -198,11 +218,16 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
     notFound();
   }
 
+  const emailTemplateAudiences = getEmailTemplateAudiences(lead.interestType);
+  const smsTemplateAudiences = getSmsTemplateAudiences(lead.interestType);
+
   const [emailTemplates, smsTemplates, managedTeams] = await Promise.all([
     prisma.emailTemplate.findMany({
       where: {
         isActive: true,
-        audience: "LEAD" satisfies TemplateAudience,
+        audience: {
+          in: emailTemplateAudiences,
+        },
         OR: [{ interestType: null }, { interestType: lead.interestType }],
       },
       orderBy: [{ name: "asc" }],
@@ -221,7 +246,9 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
     prisma.notificationTemplate.findMany({
       where: {
         channel: NotificationChannel.SMS,
-        audience: NotificationAudience.LEAD,
+        audience: {
+          in: smsTemplateAudiences,
+        },
         isActive: true,
       },
       orderBy: [{ name: "asc" }],
@@ -274,13 +301,13 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
   }));
 
   const managedTeamEmailOptions = managedTeams
-  .filter((team) => Boolean(team.joinSlug))
-  .map((team) => ({
-    value: team.id,
-    label: team.league?.name
-      ? `${team.name} • ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
-      : team.name,
-  }));
+    .filter((team) => Boolean(team.joinSlug))
+    .map((team) => ({
+      value: team.id,
+      label: team.league?.name
+        ? `${team.name} • ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+        : team.name,
+    }));
 
   const selectedManagedTeam = sp.managedTeamId
     ? managedTeams.find((team) => team.id === sp.managedTeamId) ?? null
@@ -592,15 +619,15 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
               >
                 {hasEmail ? (
                   <LeadEmailForm
-                  leadId={lead.id}
-                  email={lead.email}
-                  firstName={lead.contactName}
-                  fullName={lead.contactName}
-                  area={lead.area}
-                  signupUrl={signupUrl}
-                  templates={emailTemplates}
-                  managedTeamOptions={managedTeamEmailOptions}
-                />
+                    leadId={lead.id}
+                    email={lead.email}
+                    firstName={lead.contactName}
+                    fullName={lead.contactName}
+                    area={lead.area}
+                    signupUrl={signupUrl}
+                    templates={emailTemplates}
+                    managedTeamOptions={managedTeamEmailOptions}
+                  />
                 ) : (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
                     No email address is stored for this lead yet. Use the phone
