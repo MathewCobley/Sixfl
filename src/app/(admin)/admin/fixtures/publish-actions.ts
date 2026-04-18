@@ -5,8 +5,6 @@
 "use server";
 
 import {
-  NotificationAudience,
-  NotificationChannel,
   NotificationDispatchStatus,
   Prisma,
 } from "@prisma/client";
@@ -15,7 +13,7 @@ import { redirect } from "next/navigation";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { getEmailReplyDomain } from "@/lib/resend/client";
 
@@ -259,25 +257,17 @@ async function claimUnpublishedLeagueFixtures(
   });
 }
 
-async function queueDirectNotificationOnce(input: {
+async function queueTemplateNotificationOnce(input: {
   recipientId: string;
-  channel: NotificationChannel;
-  audience: NotificationAudience;
-  subject?: string | null;
-  body: string;
-  isTransactional?: boolean;
+  templateKey: string;
   sourceType?: string | null;
   sourceId?: string | null;
   metadata?: Prisma.InputJsonValue;
-  variables?: Prisma.InputJsonValue;
+  variables?: Record<string, string | null | undefined>;
   emailBranding?: {
     teamName?: string | null;
     teamLogoUrl?: string | null;
     leagueName?: string | null;
-  };
-  emailCta?: {
-    label: string;
-    url: string;
   };
   scheduledFor?: Date;
   createdByUserId?: string | null;
@@ -310,19 +300,14 @@ async function queueDirectNotificationOnce(input: {
     }
   }
 
-  const dispatch = await queueDirectNotification({
+  const dispatch = await queueNotificationFromTemplate({
+    templateKey: input.templateKey,
     recipientId: input.recipientId,
-    channel: input.channel,
-    audience: input.audience,
-    subject: input.subject,
-    body: input.body,
-    isTransactional: input.isTransactional,
     sourceType,
     sourceId,
     metadata: input.metadata,
     variables: input.variables,
     emailBranding: input.emailBranding,
-    emailCta: input.emailCta,
     scheduledFor: input.scheduledFor,
     createdByUserId: input.createdByUserId,
   });
@@ -406,21 +391,9 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
 
     const teamDetails = getTeamDetailsForFixture(teamFixtures[0], teamId);
 
-    const digestDispatch = await queueDirectNotificationOnce({
+    const digestDispatch = await queueTemplateNotificationOnce({
       recipientId: recipient.id,
-      channel: NotificationChannel.EMAIL,
-      audience: NotificationAudience.TEAM,
-      subject: `${league.name} fixtures are live`,
-      body: [
-        `Hi ${snapshot.primaryContact.name ?? snapshot.teamName},`,
-        "",
-        `Your fixtures for ${league.name}${league.season ? ` (${league.season})` : ""} are now live.`,
-        "",
-        ...teamFixtures.map((fixture) => buildFixtureLine(fixture)),
-        "",
-        "You will also receive automatic reminders before kickoff.",
-      ].join("\n"),
-      isTransactional: true,
+      templateKey: "fixture-publish-digest-email",
       sourceType: "LEAGUE_FIXTURE_DIGEST",
       sourceId: buildDigestSourceId({
         leagueId: league.id,
@@ -431,14 +404,17 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
         teamId,
         leagueId: league.id,
       },
+      variables: {
+        firstName: snapshot.primaryContact.name ?? snapshot.teamName,
+        leagueName: league.name,
+        leagueDisplayName,
+        fixturesList: teamFixtures.map((fixture) => buildFixtureLine(fixture)).join("\n"),
+        fixturesUrl,
+      },
       emailBranding: {
         teamName: snapshot.teamName || teamDetails.name,
         teamLogoUrl: teamDetails.logoUrl ?? null,
         leagueName: leagueDisplayName,
-      },
-      emailCta: {
-        label: "View fixtures",
-        url: fixturesUrl,
       },
     });
 
@@ -460,19 +436,9 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       ].filter((date) => date.getTime() > Date.now());
 
       for (const scheduledFor of reminderTimes) {
-        const reminderDispatch = await queueDirectNotificationOnce({
+        const reminderDispatch = await queueTemplateNotificationOnce({
           recipientId: recipient.id,
-          channel: NotificationChannel.EMAIL,
-          audience: NotificationAudience.TEAM,
-          subject: `${league.name} fixture reminder`,
-          body: [
-            `Hi ${recipient.displayName?.trim() || teamDetails.name},`,
-            "",
-            `Reminder: ${buildFixtureLine(fixture)}`,
-            "",
-            "Please make sure your team is ready for kickoff.",
-          ].join("\n"),
-          isTransactional: true,
+          templateKey: "fixture-reminder-email",
           sourceType: "FIXTURE_REMINDER",
           sourceId: buildReminderSourceId({
             fixtureId: fixture.id,
@@ -485,14 +451,17 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
             leagueId: league.id,
           },
           scheduledFor,
+          variables: {
+            firstName: recipient.displayName?.trim() || teamDetails.name,
+            leagueName: league.name,
+            fixtureName: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`,
+            kickoffLabel: formatKickoff(fixture.kickoffAt),
+            fixturesUrl,
+          },
           emailBranding: {
             teamName: teamDetails.name,
             teamLogoUrl: teamDetails.logoUrl ?? null,
             leagueName: leagueDisplayName,
-          },
-          emailCta: {
-            label: "View fixtures",
-            url: fixturesUrl,
           },
         });
 
