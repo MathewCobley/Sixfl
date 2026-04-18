@@ -216,14 +216,14 @@ function getStatusTone(status: FixtureStatus) {
   }
 }
 
-function getPublishTone(publishedAtIso: string | null) {
+function getFixtureVisibilityTone(publishedAtIso: string | null) {
   return publishedAtIso
     ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
     : "border-amber-400/20 bg-amber-400/10 text-amber-200";
 }
 
-function formatPublishState(publishedAtIso: string | null) {
-  return publishedAtIso ? "Published" : "Draft";
+function formatFixtureVisibilityState(publishedAtIso: string | null) {
+  return publishedAtIso ? "Live on site" : "Draft only";
 }
 
 function getConfirmationTone(
@@ -289,7 +289,7 @@ function formatSocialStatus(status: SocialPostStatus) {
     case "APPROVED":
       return "Approved";
     case "PUBLISHED":
-      return "Published";
+      return "Published to Meta";
     case "FAILED":
       return "Failed";
     default:
@@ -628,7 +628,7 @@ function SocialCell({ fixture }: { fixture: FixtureItem }) {
           <span>Approved {formatTimestamp(fixture.socialApprovedAtIso)}</span>
         ) : null}
         {fixture.socialPublishedAtIso ? (
-          <span>Published {formatTimestamp(fixture.socialPublishedAtIso)}</span>
+          <span>Published to Meta {formatTimestamp(fixture.socialPublishedAtIso)}</span>
         ) : null}
       </div>
 
@@ -1642,10 +1642,10 @@ export default function FixturesAdminScreen({
                         <span
                           className={cx(
                             "inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold",
-                            getPublishTone(fixture.publishedAtIso),
+                            getFixtureVisibilityTone(fixture.publishedAtIso),
                           )}
                         >
-                          {formatPublishState(fixture.publishedAtIso)}
+                          {formatFixtureVisibilityState(fixture.publishedAtIso)}
                         </span>
                       </div>
                     </td>
