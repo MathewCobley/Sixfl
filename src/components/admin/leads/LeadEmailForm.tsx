@@ -35,6 +35,11 @@ type LeadEmailTemplateOption = {
   ctaUrlKey?: string | null;
 };
 
+type ManagedTeamOption = {
+  value: string;
+  label: string;
+};
+
 type Props = {
   leadId: string;
   email: string | null;
@@ -43,6 +48,7 @@ type Props = {
   area?: string | null;
   signupUrl?: string | null;
   templates: LeadEmailTemplateOption[];
+  managedTeamOptions: ManagedTeamOption[];
 };
 
 // ========================================
@@ -57,10 +63,12 @@ export default function LeadEmailForm({
   area,
   signupUrl,
   templates,
+  managedTeamOptions,
 }: Props) {
   const router = useRouter();
 
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [targetTeamId, setTargetTeamId] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -71,13 +79,15 @@ export default function LeadEmailForm({
         value: template.id,
         label: template.name,
       })),
-    [templates]
+    [templates],
   );
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) ?? null,
-    [templates, selectedTemplateId]
+    [templates, selectedTemplateId],
   );
+
+  const requiresManagedTeam = selectedTemplate?.ctaUrlKey === "teamJoinUrl";
 
   const templateContext = useMemo(() => {
     const derivedFullName = fullName?.trim() || firstName?.trim() || "";
@@ -88,7 +98,7 @@ export default function LeadEmailForm({
         fullName: derivedFullName,
         area,
         signupUrl,
-      })
+      }),
     );
   }, [firstName, fullName, area, signupUrl]);
 
@@ -103,6 +113,17 @@ export default function LeadEmailForm({
     setBody(resolveTemplateText(selectedTemplate.body, templateContext));
   }, [selectedTemplate, templateContext]);
 
+  useEffect(() => {
+    if (!requiresManagedTeam) {
+      setTargetTeamId("");
+      return;
+    }
+
+    if (!targetTeamId && managedTeamOptions.length > 0) {
+      setTargetTeamId(managedTeamOptions[0].value);
+    }
+  }, [managedTeamOptions, requiresManagedTeam, targetTeamId]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSending(true);
@@ -115,6 +136,7 @@ export default function LeadEmailForm({
       formData.append("signupUrl", signupUrl ?? "");
       formData.append("ctaLabel", selectedTemplate?.ctaLabel?.trim() || "");
       formData.append("ctaUrlKey", selectedTemplate?.ctaUrlKey?.trim() || "");
+      formData.append("targetTeamId", targetTeamId);
 
       const result = await sendLeadEmailAction(formData);
 
@@ -171,6 +193,27 @@ export default function LeadEmailForm({
         ) : null}
       </div>
 
+      {requiresManagedTeam ? (
+        <div>
+          <label className="mb-1 block text-sm text-white/70">
+            Managed team link
+          </label>
+
+          <TemplateSelect
+            label=""
+            value={targetTeamId}
+            options={managedTeamOptions}
+            onChange={(value) => setTargetTeamId(value)}
+            disabled={sending}
+            placeholder={
+              managedTeamOptions.length > 0
+                ? "Choose managed team"
+                : "No managed recruiting teams available"
+            }
+          />
+        </div>
+      ) : null}
+
       <div>
         <label className="mb-1 block text-sm text-white/70">To</label>
         <input
@@ -206,11 +249,7 @@ export default function LeadEmailForm({
             onChange={(e) => setBody(e.target.value)}
             disabled={sending}
             className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder={`Hi ${firstName || "there"},
-
-Thanks for your interest in SIXFL...
-
-We’ll be in touch shortly.`}
+            placeholder={`Hi ${firstName || "there"},\n\nThanks for your interest in SIXFL...\n\nWe’ll be in touch shortly.`}
           />
         </div>
 
@@ -222,7 +261,7 @@ We’ll be in touch shortly.`}
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={sending || !email}
+          disabled={sending || !email || (requiresManagedTeam && !targetTeamId)}
           className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? "Sending..." : "Send email"}

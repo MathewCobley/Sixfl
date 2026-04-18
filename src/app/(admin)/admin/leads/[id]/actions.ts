@@ -109,10 +109,44 @@ function buildLeadEmailContext(input: {
   );
 }
 
-function resolveLeadEmailCta(input: {
+async function resolveTeamJoinUrl(targetTeamId: string) {
+  const trimmedTeamId = targetTeamId.trim();
+
+  if (!trimmedTeamId) {
+    return "";
+  }
+
+  const team = await prisma.team.findFirst({
+    where: {
+      id: trimmedTeamId,
+      teamMode: "MANAGED",
+      isRecruiting: true,
+      joinSlug: {
+        not: null,
+      },
+    },
+    select: {
+      joinSlug: true,
+    },
+  });
+
+  if (!team?.joinSlug) {
+    return "";
+  }
+
+  const baseUrl = (process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk").replace(
+    /\/+$/,
+    "",
+  );
+
+  return `${baseUrl}/teams/join/${team.joinSlug}`;
+}
+
+async function resolveLeadEmailCta(input: {
   ctaLabel?: string | null;
   ctaUrlKey?: string | null;
   signupUrl?: string | null;
+  targetTeamId?: string | null;
 }) {
   const label = input.ctaLabel?.trim() || "";
   const urlKey = input.ctaUrlKey?.trim() || "";
@@ -123,6 +157,19 @@ function resolveLeadEmailCta(input: {
 
   if (urlKey === "signupUrl") {
     const url = input.signupUrl?.trim() || "";
+
+    if (!url) {
+      return undefined;
+    }
+
+    return {
+      label,
+      url,
+    };
+  }
+
+  if (urlKey === "teamJoinUrl") {
+    const url = await resolveTeamJoinUrl(input.targetTeamId?.trim() || "");
 
     if (!url) {
       return undefined;
@@ -155,30 +202,13 @@ async function resolveLeadSmsLink(input: {
       throw new Error("Please select which managed team this SMS should link to.");
     }
 
-    const team = await prisma.team.findFirst({
-      where: {
-        id: targetTeamId,
-        teamMode: "MANAGED",
-        isRecruiting: true,
-        joinSlug: {
-          not: null,
-        },
-      },
-      select: {
-        joinSlug: true,
-      },
-    });
+    const url = await resolveTeamJoinUrl(targetTeamId);
 
-    if (!team?.joinSlug) {
+    if (!url) {
       throw new Error("The selected managed team does not have an active join link.");
     }
 
-    const baseUrl = (process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk").replace(
-      /\/+$/,
-      "",
-    );
-
-    return `${baseUrl}/teams/join/${team.joinSlug}`;
+    return url;
   }
 
   return "";
@@ -258,6 +288,7 @@ export async function sendLeadEmailAction(formData: FormData) {
   const signupUrl = String(formData.get("signupUrl") ?? "").trim();
   const ctaLabelInput = String(formData.get("ctaLabel") ?? "").trim();
   const ctaUrlKeyInput = String(formData.get("ctaUrlKey") ?? "").trim();
+  const targetTeamId = String(formData.get("targetTeamId") ?? "").trim();
 
   if (!leadId) {
     return { ok: false, error: "Missing lead id." };
@@ -318,10 +349,11 @@ export async function sendLeadEmailAction(formData: FormData) {
     context,
   ).replaceAll(CTA_PLACEHOLDER_TOKEN, "{{cta}}");
 
-  const resolvedCta = resolveLeadEmailCta({
+  const resolvedCta = await resolveLeadEmailCta({
     ctaLabel: ctaLabelInput,
     ctaUrlKey: ctaUrlKeyInput,
     signupUrl,
+    targetTeamId,
   });
 
   const signedTextBody = appendSIXFLTextSignature(resolvedBody);
