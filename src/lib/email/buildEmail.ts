@@ -107,6 +107,13 @@ function stripTrailingSIXFLSignature(text: string) {
   return output;
 }
 
+function stripCtaPlaceholder(text: string) {
+  return normalizeLineEndings(text)
+    .replaceAll(CTA_PLACEHOLDER, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function convertTextToHtml(text: string) {
   return normalizeLineEndings(text)
     .trim()
@@ -347,7 +354,7 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
   const ctaHtml = buildCtaHtml(cta);
 
   if (!ctaHtml) {
-    return convertTextToHtml(cleanedBody);
+    return convertTextToHtml(stripCtaPlaceholder(cleanedBody));
   }
 
   if (cleanedBody.includes(CTA_PLACEHOLDER)) {
