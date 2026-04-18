@@ -4,12 +4,13 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { NotificationChannel } from "@prisma/client";
+import { NotificationChannel, NotificationTemplateKind } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import EmailTemplateForm from "@/components/admin/email-templates/EmailTemplateForm";
 import SmsTemplateForm from "@/components/admin/sms-templates/SmsTemplateForm";
 import { updateEmailTemplateAction } from "@/app/(admin)/admin/email-templates/actions";
 import { updateSmsTemplateAction } from "@/app/(admin)/admin/sms-templates/actions";
+import { updateSystemEmailTemplateAction } from "@/app/(admin)/admin/system-email-templates/actions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -22,7 +23,8 @@ type EmailCtaUrlKey =
   | "manageTeamUrl"
   | "paymentUrl"
   | "captainDashboardUrl"
-  | "teamJoinUrl";
+  | "teamJoinUrl"
+  | "fixturesUrl";
 
 type SmsCtaUrlKey = "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
 
@@ -32,7 +34,8 @@ function getEmailCtaUrlKey(value: string | null): EmailCtaUrlKey | undefined {
     value === "manageTeamUrl" ||
     value === "paymentUrl" ||
     value === "captainDashboardUrl" ||
-    value === "teamJoinUrl"
+    value === "teamJoinUrl" ||
+    value === "fixturesUrl"
   ) {
     return value;
   }
@@ -68,7 +71,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
               <div className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300">
-                Email template
+                Campaign email
               </div>
               <h1 className="text-3xl font-semibold tracking-tight text-white">
                 Edit template
@@ -79,7 +82,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
             </div>
 
             <Link
-              href="/admin/templates?channel=EMAIL"
+              href="/admin/templates?type=campaign&channel=EMAIL"
               className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white"
             >
               Back to templates
@@ -108,14 +111,64 @@ export default async function EditTemplatePage({ params }: PageProps) {
     );
   }
 
-  const smsTemplate = await prisma.notificationTemplate.findUnique({
+  const notificationTemplate = await prisma.notificationTemplate.findUnique({
     where: { id },
   });
 
   if (
-    !smsTemplate ||
-    smsTemplate.channel !== NotificationChannel.SMS ||
-    (smsTemplate.audience !== "LEAD" && smsTemplate.audience !== "TEAM")
+    notificationTemplate &&
+    notificationTemplate.channel === NotificationChannel.EMAIL &&
+    notificationTemplate.kind === NotificationTemplateKind.TRANSACTIONAL
+  ) {
+    return (
+      <AdminCard title="Edit System Email Template">
+        <div className="space-y-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                System email
+              </div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white">
+                Edit template
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-white/65">
+                Update the automated transactional email used by SIXFL operational flows.
+              </p>
+            </div>
+
+            <Link
+              href="/admin/templates?type=system"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white"
+            >
+              Back to templates
+            </Link>
+          </div>
+
+          <EmailTemplateForm
+            mode="edit"
+            action={updateSystemEmailTemplateAction}
+            initialValues={{
+              id: notificationTemplate.id,
+              key: notificationTemplate.key,
+              name: notificationTemplate.name,
+              description: notificationTemplate.description ?? "",
+              audience: notificationTemplate.audience,
+              subject: notificationTemplate.subject ?? "",
+              body: notificationTemplate.body,
+              ctaLabel: notificationTemplate.ctaLabel ?? "",
+              ctaUrlKey: getEmailCtaUrlKey(notificationTemplate.ctaUrlKey),
+              isActive: notificationTemplate.isActive,
+            }}
+          />
+        </div>
+      </AdminCard>
+    );
+  }
+
+  if (
+    !notificationTemplate ||
+    notificationTemplate.channel !== NotificationChannel.SMS ||
+    (notificationTemplate.audience !== "LEAD" && notificationTemplate.audience !== "TEAM")
   ) {
     notFound();
   }
@@ -137,7 +190,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
           </div>
 
           <Link
-            href="/admin/templates?channel=SMS"
+            href="/admin/templates?type=campaign&channel=SMS"
             className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white"
           >
             Back to templates
@@ -148,14 +201,14 @@ export default async function EditTemplatePage({ params }: PageProps) {
           mode="edit"
           action={updateSmsTemplateAction}
           initialValues={{
-            id: smsTemplate.id,
-            key: smsTemplate.key,
-            name: smsTemplate.name,
-            description: smsTemplate.description ?? "",
-            audience: smsTemplate.audience === "TEAM" ? "TEAM" : "LEAD",
-            body: smsTemplate.body,
-            ctaUrlKey: getSmsCtaUrlKey(smsTemplate.ctaUrlKey),
-            isActive: smsTemplate.isActive,
+            id: notificationTemplate.id,
+            key: notificationTemplate.key,
+            name: notificationTemplate.name,
+            description: notificationTemplate.description ?? "",
+            audience: notificationTemplate.audience === "TEAM" ? "TEAM" : "LEAD",
+            body: notificationTemplate.body,
+            ctaUrlKey: getSmsCtaUrlKey(notificationTemplate.ctaUrlKey),
+            isActive: notificationTemplate.isActive,
           }}
         />
       </div>
