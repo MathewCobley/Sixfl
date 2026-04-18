@@ -11,6 +11,10 @@ import { NotificationAudience, NotificationChannel } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { queueDirectNotification } from "@/lib/notifications/service";
+import {
+  linkDispatchToThread,
+  linkQueuedEmailDispatchToThread,
+} from "@/lib/messaging/service";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 
 const ALLOWED_PROSPECT_STATUSES = [
@@ -398,8 +402,12 @@ export async function sendProspectEmailAction(formData: FormData) {
     teamName: team.name,
     prospect,
   });
+  const contactName = getProspectDisplayName({
+    firstName: prospect.firstName,
+    lastName: prospect.lastName,
+  });
 
-  await queueDirectNotification({
+  const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
     channel: NotificationChannel.EMAIL,
     audience: NotificationAudience.PLAYER,
@@ -413,11 +421,22 @@ export async function sendProspectEmailAction(formData: FormData) {
       originLabel: "Sent to prospect from captain hub",
       teamId: teamid,
       prospectId: prospect.id,
-      contactName: getProspectDisplayName({
-        firstName: prospect.firstName,
-        lastName: prospect.lastName,
-      }),
+      contactName,
     },
+    createdByUserId: user?.id ?? null,
+  });
+
+  await linkQueuedEmailDispatchToThread({
+    notificationDispatchId: dispatch.id,
+    recipientId: recipient.id,
+    teamId: teamid,
+    sourceType: "TEAM_PLAYER_PROSPECT",
+    sourceId: prospect.id,
+    contactName,
+    toEmail: prospect.email,
+    subject: dispatch.subject ?? personalisedSubject,
+    bodyText: dispatch.bodyText,
+    bodyHtml: dispatch.bodyHtml,
     createdByUserId: user?.id ?? null,
   });
 
@@ -469,8 +488,12 @@ export async function sendProspectSmsAction(formData: FormData) {
     teamName: team.name,
     prospect,
   });
+  const contactName = getProspectDisplayName({
+    firstName: prospect.firstName,
+    lastName: prospect.lastName,
+  });
 
-  await queueDirectNotification({
+  const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
     channel: NotificationChannel.SMS,
     audience: NotificationAudience.PLAYER,
@@ -483,12 +506,23 @@ export async function sendProspectSmsAction(formData: FormData) {
       originLabel: "Sent to prospect from captain hub",
       teamId: teamid,
       prospectId: prospect.id,
-      contactName: getProspectDisplayName({
-        firstName: prospect.firstName,
-        lastName: prospect.lastName,
-      }),
+      contactName,
     },
     createdByUserId: user?.id ?? null,
+  });
+
+  await linkDispatchToThread({
+    dispatchId: dispatch.id,
+    recipientId: recipient.id,
+    teamId: teamid,
+    sourceType: "TEAM_PLAYER_PROSPECT",
+    sourceId: prospect.id,
+    contactName,
+    phone: prospect.phone,
+    body: dispatch.bodyText,
+    providerStatus: "queued",
+    createdByUserId: user?.id ?? null,
+    sentAt: null,
   });
 
   await markProspectsContacted([prospect.id]);
@@ -550,8 +584,12 @@ export async function sendBulkProspectEmailAction(formData: FormData) {
       teamName: team.name,
       prospect,
     });
+    const contactName = getProspectDisplayName({
+      firstName: prospect.firstName,
+      lastName: prospect.lastName,
+    });
 
-    await queueDirectNotification({
+    const dispatch = await queueDirectNotification({
       recipientId: recipient.id,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.PLAYER,
@@ -565,11 +603,22 @@ export async function sendBulkProspectEmailAction(formData: FormData) {
         originLabel: "Bulk email to prospects from captain hub",
         teamId: teamid,
         prospectId: prospect.id,
-        contactName: getProspectDisplayName({
-          firstName: prospect.firstName,
-          lastName: prospect.lastName,
-        }),
+        contactName,
       },
+      createdByUserId: user?.id ?? null,
+    });
+
+    await linkQueuedEmailDispatchToThread({
+      notificationDispatchId: dispatch.id,
+      recipientId: recipient.id,
+      teamId: teamid,
+      sourceType: "TEAM_PLAYER_PROSPECT",
+      sourceId: prospect.id,
+      contactName,
+      toEmail: prospect.email,
+      subject: dispatch.subject ?? personalisedSubject,
+      bodyText: dispatch.bodyText,
+      bodyHtml: dispatch.bodyHtml,
       createdByUserId: user?.id ?? null,
     });
   }
@@ -627,8 +676,12 @@ export async function sendBulkProspectSmsAction(formData: FormData) {
       teamName: team.name,
       prospect,
     });
+    const contactName = getProspectDisplayName({
+      firstName: prospect.firstName,
+      lastName: prospect.lastName,
+    });
 
-    await queueDirectNotification({
+    const dispatch = await queueDirectNotification({
       recipientId: recipient.id,
       channel: NotificationChannel.SMS,
       audience: NotificationAudience.PLAYER,
@@ -641,12 +694,23 @@ export async function sendBulkProspectSmsAction(formData: FormData) {
         originLabel: "Bulk SMS to prospects from captain hub",
         teamId: teamid,
         prospectId: prospect.id,
-        contactName: getProspectDisplayName({
-          firstName: prospect.firstName,
-          lastName: prospect.lastName,
-        }),
+        contactName,
       },
       createdByUserId: user?.id ?? null,
+    });
+
+    await linkDispatchToThread({
+      dispatchId: dispatch.id,
+      recipientId: recipient.id,
+      teamId: teamid,
+      sourceType: "TEAM_PLAYER_PROSPECT",
+      sourceId: prospect.id,
+      contactName,
+      phone: prospect.phone,
+      body: dispatch.bodyText,
+      providerStatus: "queued",
+      createdByUserId: user?.id ?? null,
+      sentAt: null,
     });
   }
 
