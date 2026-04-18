@@ -115,36 +115,6 @@ function typeClasses(type: InterestType) {
   return "border-amber-500/20 bg-amber-500/10 text-amber-300";
 }
 
-function smsStatusClasses(status: string) {
-  if (status === "SENT") {
-    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (status === "QUEUED" || status === "PROCESSING") {
-    return "border-sky-500/20 bg-sky-500/10 text-sky-300";
-  }
-
-  if (status === "SKIPPED") {
-    return "border-amber-500/20 bg-amber-500/10 text-amber-300";
-  }
-
-  if (status === "FAILED" || status === "CANCELLED") {
-    return "border-rose-500/20 bg-rose-500/10 text-rose-300";
-  }
-
-  return "border-white/10 bg-white/5 text-white/70";
-}
-
-function formatDispatchStatus(status: string) {
-  if (status === "QUEUED") return "Queued";
-  if (status === "PROCESSING") return "Processing";
-  if (status === "SENT") return "Sent";
-  if (status === "FAILED") return "Failed";
-  if (status === "CANCELLED") return "Cancelled";
-  if (status === "SKIPPED") return "Skipped";
-  return status;
-}
-
 function DetailRow({
   label,
   value,
@@ -228,7 +198,7 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  const [emailTemplates, smsTemplates, managedTeams, leadSmsRecipient] = await Promise.all([
+  const [emailTemplates, smsTemplates, managedTeams] = await Promise.all([
     prisma.emailTemplate.findMany({
       where: {
         isActive: true,
@@ -272,7 +242,6 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
       select: {
         id: true,
         name: true,
-        joinSlug: true,
         league: {
           select: {
             name: true,
@@ -281,35 +250,10 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
         },
       },
     }),
-    prisma.notificationRecipient.findUnique({
-      where: {
-        sourceType_sourceId: {
-          sourceType: "LEAD",
-          sourceId: lead.id,
-        },
-      },
-      include: {
-        dispatches: {
-          where: {
-            channel: NotificationChannel.SMS,
-          },
-          orderBy: [{ createdAt: "desc" }],
-          include: {
-            attempts: {
-              orderBy: [{ attemptedAt: "desc" }],
-            },
-          },
-          take: 20,
-        },
-      },
-    }),
   ]);
 
   const emailCount = lead.emails.length;
   const latestEmail = lead.emails[0];
-  const smsDispatches = leadSmsRecipient?.dispatches ?? [];
-  const smsCount = smsDispatches.length;
-  const latestSms = smsDispatches[0];
   const alreadyConverted = Boolean(lead.convertedAt || lead.convertedTeamId);
   const canConvertToTeam = lead.interestType === "TEAM";
   const canConvertToReferee = lead.interestType === "REFEREE";
@@ -327,18 +271,6 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
       ? `${team.name} • ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
       : team.name,
   }));
-
-  const managedTeamSmsOptions = managedTeams
-    .filter((team) => Boolean(team.joinSlug))
-    .map((team) => ({
-      value: team.id,
-      label: team.league?.name
-        ? `${team.name} • ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
-        : team.name,
-      joinUrl: team.joinSlug
-        ? `https://www.sixfl.co.uk/teams/join/${team.joinSlug}`
-        : null,
-    }));
 
   const selectedManagedTeam = sp.managedTeamId
     ? managedTeams.find((team) => team.id === sp.managedTeamId) ?? null
@@ -564,123 +496,6 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
               </div>
             )}
           </div>
-
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-white">SMS history</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  Queue and delivery history for texts sent to this lead.
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
-                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
-                  Total SMS
-                </div>
-                <div className="mt-1 text-lg font-black text-white">
-                  {smsCount}
-                </div>
-              </div>
-            </div>
-
-            {latestSms ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${smsStatusClasses(
-                      latestSms.status,
-                    )}`}
-                  >
-                    {formatDispatchStatus(latestSms.status)}
-                  </span>
-                  <span className="text-xs text-white/50">
-                    {latestSms.sentAt
-                      ? `Sent ${formatDate(latestSms.sentAt)}`
-                      : latestSms.failedAt
-                        ? `Failed ${formatDate(latestSms.failedAt)}`
-                        : latestSms.createdAt
-                          ? `Created ${formatDate(latestSms.createdAt)}`
-                          : ""}
-                  </span>
-                </div>
-
-                <div className="mt-3 whitespace-pre-wrap rounded-xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/80">
-                  {latestSms.bodyText}
-                </div>
-
-                {latestSms.failureReason ? (
-                  <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-100/85">
-                    {latestSms.failureReason}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {smsDispatches.length === 0 ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-sm text-white/60">No SMS history yet.</p>
-              </div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                {smsDispatches.map((dispatch, index) => {
-                  const latestAttempt = dispatch.attempts[0];
-
-                  return (
-                    <div
-                      key={dispatch.id}
-                      className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/60">
-                              #{smsCount - index}
-                            </span>
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${smsStatusClasses(
-                                dispatch.status,
-                              )}`}
-                            >
-                              {formatDispatchStatus(dispatch.status)}
-                            </span>
-                          </div>
-
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
-                            <span>Created {formatDate(dispatch.createdAt)}</span>
-                            {dispatch.sentAt ? <span>Sent {formatDate(dispatch.sentAt)}</span> : null}
-                            {dispatch.provider ? <span>Provider: {dispatch.provider}</span> : null}
-                            {dispatch.providerMessageId ? <span>ID: {dispatch.providerMessageId}</span> : null}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4">
-                        <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
-                          Message body
-                        </div>
-                        <div className="max-h-[360px] overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/80">
-                          {dispatch.bodyText}
-                        </div>
-                      </div>
-
-                      {dispatch.failureReason ? (
-                        <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-100/85">
-                          {dispatch.failureReason}
-                        </div>
-                      ) : null}
-
-                      {latestAttempt?.errorMessage ? (
-                        <div className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-sm text-rose-100/85">
-                          {latestAttempt.errorMessage}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="space-y-6">
@@ -767,14 +582,15 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
               >
                 {hasEmail ? (
                   <LeadEmailForm
-                    leadId={lead.id}
-                    email={lead.email}
-                    firstName={lead.contactName}
-                    fullName={lead.contactName}
-                    area={lead.area}
-                    signupUrl={signupUrl}
-                    templates={emailTemplates}
-                  />
+                  leadId={lead.id}
+                  email={lead.email}
+                  firstName={lead.contactName}
+                  fullName={lead.contactName}
+                  area={lead.area}
+                  signupUrl={signupUrl}
+                  templates={emailTemplates}
+                  managedTeamOptions={managedTeamOptions}
+                />
                 ) : (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
                     No email address is stored for this lead yet. Use the phone
@@ -801,7 +617,6 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
                     area={lead.area}
                     signupUrl={signupUrl}
                     templates={smsTemplates}
-                    managedTeamOptions={managedTeamSmsOptions}
                   />
                 ) : (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
