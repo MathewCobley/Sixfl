@@ -356,6 +356,20 @@ export async function sendLeadEmailAction(formData: FormData) {
     targetTeamId,
   });
 
+  if (ctaUrlKeyInput === "teamJoinUrl" && !resolvedCta) {
+    return {
+      ok: false,
+      error: "The selected managed team does not have an active join link.",
+    };
+  }
+  
+  const signedTextBody = appendSIXFLTextSignature(resolvedBody);
+  
+  const signedHtmlBody = buildSIXFLEmailHtml({
+    body: signedTextBody,
+    cta: resolvedCta,
+  });
+
   const signedTextBody = appendSIXFLTextSignature(resolvedBody);
 
   const signedHtmlBody = buildSIXFLEmailHtml({
