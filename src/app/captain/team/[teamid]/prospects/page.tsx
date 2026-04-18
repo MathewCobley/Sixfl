@@ -105,6 +105,10 @@ function getProspectName(input: { firstName: string; lastName: string | null }) 
   return [input.firstName, input.lastName].filter(Boolean).join(" ");
 }
 
+function getProspectRecipientSourceId(prospectId: string) {
+  return `team-prospect:${prospectId}`;
+}
+
 function formatDateTime(value: Date | null | undefined) {
   if (!value) {
     return null;
@@ -199,17 +203,56 @@ export default async function CaptainProspectsPage({
     notFound();
   }
 
-  const prospectThreads = team.prospects.length
-    ? await prisma.messageThread.findMany({
+  const prospectIds = team.prospects.map((prospect) => prospect.id);
+  const prospectRecipientSourceIds = prospectIds.map((prospectId) =>
+    getProspectRecipientSourceId(prospectId),
+  );
+
+  const prospectRecipients = prospectRecipientSourceIds.length
+    ? await prisma.notificationRecipient.findMany({
         where: {
-          teamId: teamid,
-          sourceType: "TEAM_PLAYER_PROSPECT",
+          sourceType: "GENERAL",
           sourceId: {
-            in: team.prospects.map((prospect) => prospect.id),
+            in: prospectRecipientSourceIds,
           },
         },
         select: {
           id: true,
+          sourceId: true,
+        },
+      })
+    : [];
+
+  const prospectRecipientIds = prospectRecipients.map((recipient) => recipient.id);
+  const prospectIdByRecipientSource = new Map(
+    prospectRecipients.map((recipient) => [recipient.sourceId, recipient.sourceId.replace(/^team-prospect:/, "")]),
+  );
+
+  const prospectThreads = prospectIds.length
+    ? await prisma.messageThread.findMany({
+        where: {
+          teamId: teamid,
+          OR: [
+            {
+              sourceType: "TEAM_PLAYER_PROSPECT",
+              sourceId: {
+                in: prospectIds,
+              },
+            },
+            ...(prospectRecipientIds.length > 0
+              ? [
+                  {
+                    recipientId: {
+                      in: prospectRecipientIds,
+                    },
+                  },
+                ]
+              : []),
+          ],
+        },
+        select: {
+          id: true,
+          recipientId: true,
           sourceId: true,
           channel: true,
           status: true,
@@ -218,6 +261,11 @@ export default async function CaptainProspectsPage({
           latestOutboundAt: true,
           unreadForAdminCount: true,
           lastMessagePreview: true,
+          recipient: {
+            select: {
+              sourceId: true,
+            },
+          },
           messages: {
             orderBy: [{ createdAt: "desc" }],
             take: 3,
@@ -244,15 +292,19 @@ export default async function CaptainProspectsPage({
   const prospectThreadMap = new Map<string, typeof prospectThreads>();
 
   for (const thread of prospectThreads) {
-    const sourceId = thread.sourceId?.trim();
+    const directSourceId = thread.sourceId?.trim();
+    const recipientSourceId = thread.recipient?.sourceId?.trim();
+    const prospectId =
+      directSourceId ||
+      (recipientSourceId ? prospectIdByRecipientSource.get(recipientSourceId) ?? null : null);
 
-    if (!sourceId) {
+    if (!prospectId) {
       continue;
     }
 
-    const existing = prospectThreadMap.get(sourceId) ?? [];
+    const existing = prospectThreadMap.get(prospectId) ?? [];
     existing.push(thread);
-    prospectThreadMap.set(sourceId, existing);
+    prospectThreadMap.set(prospectId, existing);
   }
 
   const savedMessage = getSavedMessage(filters.saved);
