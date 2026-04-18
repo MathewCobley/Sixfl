@@ -4,13 +4,11 @@
 
 import { randomBytes } from "node:crypto";
 import {
-  NotificationAudience,
-  NotificationChannel,
   NotificationDispatchStatus,
   PaymentChargeStatus,
 } from "@prisma/client";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
@@ -406,25 +404,9 @@ export async function queueFixtureMatchFeeEmails(
     );
 
     if (shouldQueueInitialRequest) {
-      const requestDispatch = await queueDirectNotification({
+      const requestDispatch = await queueNotificationFromTemplate({
+        templateKey: "match-fee-due-email",
         recipientId: recipient.id,
-        channel: NotificationChannel.EMAIL,
-        audience: NotificationAudience.TEAM,
-        subject: `${input.leagueName} match fee due`,
-        body: [
-          `Hi ${snapshot.primaryContact.name ?? charge.teamName},`,
-          "",
-          "A match fee has been raised for your SIXFL fixture.",
-          "",
-          `Fixture: ${input.homeTeam.name} vs ${input.awayTeam.name}`,
-          `Kickoff: ${formatKickoffLabel(input.kickoffAt)}`,
-          `Amount due: ${formatMoney(input.matchFeePence ?? 0)}`,
-          "",
-          "Payment is normally settled after the match. If the charge is still unpaid, SIXFL will automatically send reminder emails 24 hours and 72 hours after kickoff.",
-          "",
-          "Use the secure payment link below to review the charge and pay online.",
-        ].join("\n"),
-        isTransactional: true,
         sourceType: "FIXTURE_MATCH_FEE",
         sourceId: charge.id,
         metadata: {
@@ -433,14 +415,19 @@ export async function queueFixtureMatchFeeEmails(
           fixtureId: input.fixtureId,
           teamId: charge.teamId,
         },
+        variables: {
+          firstName: snapshot.primaryContact.name ?? charge.teamName,
+          leagueName: input.leagueName,
+          leagueDisplayName,
+          fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+          kickoffLabel: formatKickoffLabel(input.kickoffAt),
+          amount: formatMoney(input.matchFeePence ?? 0),
+          paymentUrl: buildChargePaymentUrl(charge.paymentToken),
+        },
         emailBranding: {
           teamName: charge.teamName,
           teamLogoUrl: charge.teamLogoUrl,
           leagueName: leagueDisplayName,
-        },
-        emailCta: {
-          label: "Review & pay match fee",
-          url: buildChargePaymentUrl(charge.paymentToken),
         },
         paymentSummary: {
           amount: formatMoney(input.matchFeePence ?? 0),
@@ -458,24 +445,9 @@ export async function queueFixtureMatchFeeEmails(
     const reminderSchedules = getFixtureMatchFeeReminderSchedules(input.kickoffAt);
 
     for (const reminder of reminderSchedules) {
-      const reminderDispatch = await queueDirectNotification({
+      const reminderDispatch = await queueNotificationFromTemplate({
+        templateKey: "match-fee-reminder-email",
         recipientId: recipient.id,
-        channel: NotificationChannel.EMAIL,
-        audience: NotificationAudience.TEAM,
-        subject: `${input.leagueName} match fee reminder`,
-        body: [
-          `Hi ${snapshot.primaryContact.name ?? charge.teamName},`,
-          "",
-          reminder.hoursAfterKickoff === 24
-            ? "Your match fee for the fixture below is still unpaid."
-            : "Your match fee for the fixture below is still unpaid after our earlier reminder.",
-          "",
-          `Fixture: ${input.homeTeam.name} vs ${input.awayTeam.name}`,
-          `Kickoff: ${formatKickoffLabel(input.kickoffAt)}`,
-          "",
-          "Please use the secure payment link below to review the charge and pay the outstanding balance.",
-        ].join("\n"),
-        isTransactional: true,
         sourceType: "FIXTURE_MATCH_FEE_REMINDER",
         sourceId: charge.id,
         metadata: {
@@ -486,14 +458,22 @@ export async function queueFixtureMatchFeeEmails(
           reminderOffsetHours: reminder.hoursAfterKickoff,
         },
         scheduledFor: reminder.scheduledFor,
+        variables: {
+          firstName: snapshot.primaryContact.name ?? charge.teamName,
+          leagueName: input.leagueName,
+          leagueDisplayName,
+          fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+          kickoffLabel: formatKickoffLabel(input.kickoffAt),
+          paymentUrl: buildChargePaymentUrl(charge.paymentToken),
+          reminderIntro:
+            reminder.hoursAfterKickoff === 24
+              ? "Your match fee for the fixture below is still unpaid."
+              : "Your match fee for the fixture below is still unpaid after our earlier reminder.",
+        },
         emailBranding: {
           teamName: charge.teamName,
           teamLogoUrl: charge.teamLogoUrl,
           leagueName: leagueDisplayName,
-        },
-        emailCta: {
-          label: "Review & pay match fee",
-          url: buildChargePaymentUrl(charge.paymentToken),
         },
       });
 
