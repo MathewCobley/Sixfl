@@ -11,6 +11,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import FormListboxField from "@/components/ui/FormListboxField";
 import ProspectTemplateMessageForm from "@/components/captain/prospects/ProspectTemplateMessageForm";
 import {
@@ -121,6 +122,11 @@ function normalizeProspectKey(value?: string | null) {
   }
 
   return trimmed;
+}
+
+function normalizeEmail(value?: string | null) {
+  const trimmed = value?.trim().toLowerCase();
+  return trimmed || null;
 }
 
 function formatDateTime(value: Date | null | undefined) {
@@ -250,6 +256,43 @@ export default async function CaptainProspectsPage({
       ]),
   );
 
+  const prospectIdByEmail = new Map<string, string>();
+  const duplicateEmails = new Set<string>();
+  const prospectIdByPhone = new Map<string, string>();
+  const duplicatePhones = new Set<string>();
+
+  for (const prospect of team.prospects) {
+    const email = normalizeEmail(prospect.email);
+    const phone = normalizePhoneNumber(prospect.phone);
+
+    if (email) {
+      if (prospectIdByEmail.has(email)) {
+        duplicateEmails.add(email);
+      } else {
+        prospectIdByEmail.set(email, prospect.id);
+      }
+    }
+
+    if (phone) {
+      if (prospectIdByPhone.has(phone)) {
+        duplicatePhones.add(phone);
+      } else {
+        prospectIdByPhone.set(phone, prospect.id);
+      }
+    }
+  }
+
+  for (const email of duplicateEmails) {
+    prospectIdByEmail.delete(email);
+  }
+
+  for (const phone of duplicatePhones) {
+    prospectIdByPhone.delete(phone);
+  }
+
+  const prospectEmails = [...prospectIdByEmail.keys()];
+  const prospectPhones = [...prospectIdByPhone.keys()];
+
   const prospectThreads = prospectIds.length
     ? await prisma.messageThread.findMany({
         where: {
@@ -261,11 +304,34 @@ export default async function CaptainProspectsPage({
                 in: prospectIds,
               },
             },
+            {
+              sourceId: {
+                in: prospectRecipientSourceIds,
+              },
+            },
             ...(prospectRecipientIds.length > 0
               ? [
                   {
                     recipientId: {
                       in: prospectRecipientIds,
+                    },
+                  },
+                ]
+              : []),
+            ...(prospectEmails.length > 0
+              ? [
+                  {
+                    emailNormalized: {
+                      in: prospectEmails,
+                    },
+                  },
+                ]
+              : []),
+            ...(prospectPhones.length > 0
+              ? [
+                  {
+                    phoneNormalized: {
+                      in: prospectPhones,
                     },
                   },
                 ]
@@ -276,6 +342,8 @@ export default async function CaptainProspectsPage({
           id: true,
           recipientId: true,
           sourceId: true,
+          emailNormalized: true,
+          phoneNormalized: true,
           channel: true,
           status: true,
           latestMessageAt: true,
@@ -316,17 +384,26 @@ export default async function CaptainProspectsPage({
   for (const thread of prospectThreads) {
     const directSourceId = normalizeProspectKey(thread.sourceId);
     const recipientSourceId = thread.recipient?.sourceId?.trim();
+    const emailProspectId =
+      thread.emailNormalized ? prospectIdByEmail.get(thread.emailNormalized) ?? null : null;
+    const phoneProspectId =
+      thread.phoneNormalized ? prospectIdByPhone.get(thread.phoneNormalized) ?? null : null;
     const prospectId =
       directSourceId ||
-      (recipientSourceId ? prospectIdByRecipientSource.get(recipientSourceId) ?? null : null);
+      (recipientSourceId ? prospectIdByRecipientSource.get(recipientSourceId) ?? null : null) ||
+      emailProspectId ||
+      phoneProspectId;
 
     if (!prospectId) {
       continue;
     }
 
     const existing = prospectThreadMap.get(prospectId) ?? [];
-    existing.push(thread);
-    prospectThreadMap.set(prospectId, existing);
+
+    if (!existing.some((item) => item.id === thread.id)) {
+      existing.push(thread);
+      prospectThreadMap.set(prospectId, existing);
+    }
   }
 
   const savedMessage = getSavedMessage(filters.saved);
