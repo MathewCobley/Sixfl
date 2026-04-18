@@ -306,6 +306,77 @@ export async function addProspectAction(formData: FormData) {
   redirect(buildProspectsRedirect(teamid, "?saved=prospect-added"));
 }
 
+export async function updateProspectDetailsAction(formData: FormData) {
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = normaliseNullableString(formData.get("lastName"));
+  const email = normaliseNullableString(formData.get("email"))?.toLowerCase() ?? null;
+  const phone = normaliseNullableString(formData.get("phone"));
+
+  await requireCaptain(teamid);
+
+  if (!teamid || !prospectId) {
+    redirect("/captain");
+  }
+
+  if (!firstName) {
+    redirect(buildProspectsRedirect(teamid, "?error=First%20name%20is%20required."));
+  }
+
+  const [team, existing] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.teamPlayerProspect.findFirst({
+      where: {
+        id: prospectId,
+        teamId: teamid,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+      },
+    }),
+  ]);
+
+  if (!team || !existing) {
+    redirect(buildProspectsRedirect(teamid, "?error=Prospect%20not%20found."));
+  }
+
+  await prisma.teamPlayerProspect.update({
+    where: { id: prospectId },
+    data: {
+      firstName,
+      lastName,
+      email,
+      phone,
+    },
+  });
+
+  await ensureProspectNotificationRecipient({
+    teamId: teamid,
+    teamName: team.name,
+    prospect: {
+      id: prospectId,
+      firstName,
+      lastName,
+      email,
+      phone,
+    },
+  });
+
+  revalidatePath(`/captain/team/${teamid}/prospects`);
+  redirect(buildProspectsRedirect(teamid, "?saved=details-updated"));
+}
+
 export async function updateProspectStatusAction(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "").trim();
   const prospectId = String(formData.get("prospectId") ?? "").trim();
