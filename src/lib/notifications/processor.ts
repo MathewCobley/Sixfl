@@ -8,8 +8,10 @@ import {
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
 import { prisma } from "@/lib/prisma";
-import { buildThreadReplyAddress } from "@/lib/email/reply-address";
-import { linkDispatchToThread } from "@/lib/messaging/service";
+import {
+  findOrCreateEmailThreadForOutbound,
+  linkDispatchToThread,
+} from "@/lib/messaging/service";
 import { sendEmailWithResend } from "./providers/resend";
 import { sendSmsWithTwilio } from "./providers/twilio";
 import {
@@ -48,22 +50,6 @@ function getMetadataString(
 ): string | null {
   const value = metadata?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function normaliseEmailAddress(input: string | null | undefined): string | null {
-  if (!input) return null;
-
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  const angleMatch = trimmed.match(/<([^<>]+)>/);
-  const candidate = (angleMatch?.[1] ?? trimmed).trim().toLowerCase();
-
-  if (!candidate.includes("@")) {
-    return null;
-  }
-
-  return candidate;
 }
 
 function buildLastMessagePreview(body: string): string {
@@ -123,109 +109,83 @@ async function getQueuedMatchFeeCancellationReason(input: {
   return null;
 }
 
-async function findOrCreateEmailThread(params: {
+async function recordOutboundEmailToThread(params: {
   recipientId?: string | null;
   teamId?: string | null;
   leagueId?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
   contactName?: string | null;
-  contactEmail?: string | null;
-}) {
-  const emailNormalized = normaliseEmailAddress(params.contactEmail);
-
-  const orConditions = [];
-
-  if (params.recipientId) {
-    orConditions.push({
-      recipientId: params.recipientId,
-      channel: "EMAIL" as const,
-      status: "OPEN" as const,
-    });
-  }
-
-  if (params.teamId && emailNormalized) {
-    orConditions.push({
-      teamId: params.teamId,
-      emailNormalized,
-      channel: "EMAIL" as const,
-      status: "OPEN" as const,
-    });
-  }
-
-  if (emailNormalized) {
-    orConditions.push({
-      emailNormalized,
-      channel: "EMAIL" as const,
-      status: "OPEN" as const,
-    });
-  }
-
-  const existing =
-    orConditions.length > 0
-      ? await prisma.messageThread.findFirst({
-          where: {
-            OR: orConditions,
-          },
-          orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
-        })
-      : null;
-
-  if (existing) {
-    if (!existing.replyAddress) {
-      return prisma.messageThread.update({
-        where: { id: existing.id },
-        data: {
-          replyAddress: buildThreadReplyAddress(existing.id),
-          contactEmail: existing.contactEmail ?? params.contactEmail ?? null,
-          emailNormalized: existing.emailNormalized ?? emailNormalized,
-          channel: "EMAIL",
-        },
-      });
-    }
-
-    return existing;
-  }
-
-  const created = await prisma.messageThread.create({
-    data: {
-      channel: "EMAIL",
-      status: "OPEN",
-      recipientId: params.recipientId ?? null,
-      teamId: params.teamId ?? null,
-      leagueId: params.leagueId ?? null,
-      sourceType: params.sourceType ?? null,
-      sourceId: params.sourceId ?? null,
-      contactName: params.contactName ?? null,
-      contactEmail: params.contactEmail ?? null,
-      emailNormalized,
-    },
-  });
-
-  return prisma.messageThread.update({
-    where: { id: created.id },
-    data: {
-      replyAddress: buildThreadReplyAddress(created.id),
-    },
-  });
-}
-
-async function recordOutboundEmailToThread(params: {
-  threadId: string;
+  toEmail: string;
   dispatchId: string;
   subject: string;
   bodyText: string;
   bodyHtml?: string | null;
-  toEmail: string;
   fromEmail: string;
   provider: string;
   providerMessageId: string | null;
   createdByUserId?: string | null;
-  responsePayload?: unknown;
 }) {
+  const thread = await findOrCreateEmailThreadForOutbound({
+    recipientId: params.recipientId,
+    teamId: params.teamId,
+    leagueId: params.leagueId,
+    sourceType: params.sourceType,
+    sourceId: params.sourceId,
+    contactName: params.contactName,
+    contactEmail: params.toEmail,
+  });
+
+  const existing = await prisma.messageEntry.findFirst({
+    where: {
+      notificationDispatchId: params.dispatchId,
+    },
+    select: {
+      id: true,
+      createdAt: true,
+    },
+  });
+
+  if (existing) {
+    const updated = await prisma.messageEntry.update({
+      where: { id: existing.id },
+      data: {
+        threadId: thread.id,
+        channel: "EMAIL",
+        direction: "OUTBOUND",
+        participantRole: params.createdByUserId ? "ADMIN" : "SYSTEM",
+        body: params.bodyText,
+        subject: params.subject,
+        textBody: params.bodyText,
+        htmlBody: params.bodyHtml ?? null,
+        fromEmail: params.fromEmail,
+        toEmail: params.toEmail,
+        provider: params.provider,
+        providerMessageId: params.providerMessageId,
+        providerStatus: "sent",
+        notificationDispatchId: params.dispatchId,
+        createdByUserId: params.createdByUserId ?? null,
+        sentAt: new Date(),
+      },
+    });
+
+    await prisma.messageThread.update({
+      where: { id: thread.id },
+      data: {
+        channel: "EMAIL",
+        latestMessageAt: updated.sentAt ?? updated.createdAt,
+        latestOutboundAt: updated.sentAt ?? updated.createdAt,
+        lastOutboundMessageId: updated.id,
+        lastMessagePreview: buildLastMessagePreview(params.bodyText),
+      },
+    });
+
+    return updated;
+  }
+
   const entry = await prisma.messageEntry.create({
     data: {
-      threadId: params.threadId,
+      threadId: thread.id,
       channel: "EMAIL",
       direction: "OUTBOUND",
       participantRole: params.createdByUserId ? "ADMIN" : "SYSTEM",
@@ -245,7 +205,7 @@ async function recordOutboundEmailToThread(params: {
   });
 
   await prisma.messageThread.update({
-    where: { id: params.threadId },
+    where: { id: thread.id },
     data: {
       channel: "EMAIL",
       latestMessageAt: entry.sentAt ?? entry.createdAt,
@@ -313,7 +273,7 @@ export async function processNotificationQueue(limit = 25) {
 
         const metadata = getMetadataRecord(dispatch.metadata);
 
-        const thread = await findOrCreateEmailThread({
+        const thread = await findOrCreateEmailThreadForOutbound({
           recipientId: dispatch.recipientId,
           teamId: getMetadataString(metadata, "teamId"),
           leagueId: getMetadataString(metadata, "leagueId"),
@@ -348,17 +308,24 @@ export async function processNotificationQueue(limit = 25) {
         });
 
         await recordOutboundEmailToThread({
-          threadId: thread.id,
+          recipientId: dispatch.recipientId,
+          teamId: getMetadataString(metadata, "teamId"),
+          leagueId: getMetadataString(metadata, "leagueId"),
+          sourceType: dispatch.sourceType,
+          sourceId: dispatch.sourceId,
+          contactName:
+            getMetadataString(metadata, "contactName") ??
+            dispatch.recipient.displayName ??
+            null,
+          toEmail: dispatch.recipient.email,
           dispatchId: dispatch.id,
           subject: dispatch.subject,
           bodyText: dispatch.bodyText,
           bodyHtml: dispatch.bodyHtml,
-          toEmail: dispatch.recipient.email,
           fromEmail: sendResult.fromEmail,
           provider: sendResult.provider,
           providerMessageId: sendResult.providerMessageId,
           createdByUserId: dispatch.createdByUserId,
-          responsePayload: sendResult.responsePayload,
         });
 
         result.sent += 1;
