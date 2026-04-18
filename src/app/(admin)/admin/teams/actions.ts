@@ -25,6 +25,7 @@ import {
 } from "@/lib/email/buildEmail";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const PROSPECT_JOIN_CTA_LABEL = "Register as a Player";
 
 function generateClaimCode(length = 8) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -186,6 +187,32 @@ function personaliseProspectText(
     .replace(/{{joinUrl}}/gi, joinUrl)
     .replace(/{{email}}/gi, prospect.email ?? "")
     .replace(/Hi there/gi, `Hi ${firstName}`);
+}
+
+function buildProspectEmailBodies(input: {
+  personalisedBody: string;
+  joinUrl: string;
+}) {
+  const hasCtaPlaceholder = /{{\s*cta\s*}}/i.test(input.personalisedBody);
+  const plainTextBody = hasCtaPlaceholder
+    ? input.personalisedBody
+        .replace(/{{\s*cta\s*}}/gi, `${PROSPECT_JOIN_CTA_LABEL}: ${input.joinUrl}`)
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+    : input.personalisedBody;
+
+  return {
+    signedTextBody: appendSIXFLTextSignature(plainTextBody),
+    signedHtmlBody: buildSIXFLEmailHtml({
+      body: input.personalisedBody,
+      cta: hasCtaPlaceholder
+        ? {
+            label: PROSPECT_JOIN_CTA_LABEL,
+            url: input.joinUrl,
+          }
+        : undefined,
+    }),
+  };
 }
 
 async function getProspectsForMessage(input: {
@@ -550,15 +577,18 @@ export async function sendProspectMessageAction(formData: FormData) {
       ? personaliseProspectText(subject, prospect, team)
       : "";
   const personalisedBody = personaliseProspectText(body, prospect, team);
+  const joinUrl = team.joinSlug
+    ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
+    : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
 
   if (channel === NotificationChannel.EMAIL) {
     if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
       redirect(`${from}?prospectComposeError=email_not_configured`);
     }
 
-    const signedTextBody = appendSIXFLTextSignature(personalisedBody);
-    const signedHtmlBody = buildSIXFLEmailHtml({
-      body: signedTextBody,
+    const { signedTextBody, signedHtmlBody } = buildProspectEmailBodies({
+      personalisedBody,
+      joinUrl,
     });
 
     await resend.emails.send({
@@ -708,6 +738,10 @@ export async function sendBulkProspectMessageAction(formData: FormData) {
     }
   }
 
+  const joinUrl = team.joinSlug
+    ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
+    : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
+
   for (const prospect of recipients) {
     const personalisedSubject =
       channel === NotificationChannel.EMAIL
@@ -716,9 +750,9 @@ export async function sendBulkProspectMessageAction(formData: FormData) {
     const personalisedBody = personaliseProspectText(body, prospect, team);
 
     if (channel === NotificationChannel.EMAIL) {
-      const signedTextBody = appendSIXFLTextSignature(personalisedBody);
-      const signedHtmlBody = buildSIXFLEmailHtml({
-        body: signedTextBody,
+      const { signedTextBody, signedHtmlBody } = buildProspectEmailBodies({
+        personalisedBody,
+        joinUrl,
       });
 
       await resend.emails.send({
