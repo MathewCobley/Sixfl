@@ -282,6 +282,7 @@ export async function sendLeadEmailAction(formData: FormData) {
   await requireAdmin();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
+  const templateId = String(formData.get("templateId") ?? "").trim();
   const subjectInput = String(formData.get("subject") ?? "").trim();
   const bodyInput = String(formData.get("body") ?? "").trim();
 
@@ -335,6 +336,19 @@ export async function sendLeadEmailAction(formData: FormData) {
     };
   }
 
+  const selectedTemplate = templateId
+    ? await prisma.emailTemplate.findUnique({
+        where: { id: templateId },
+        select: {
+          ctaLabel: true,
+          ctaUrlKey: true,
+        },
+      })
+    : null;
+
+  const ctaLabel = ctaLabelInput || selectedTemplate?.ctaLabel?.trim() || "";
+  const ctaUrlKey = ctaUrlKeyInput || selectedTemplate?.ctaUrlKey?.trim() || "";
+
   const context = buildLeadEmailContext({
     contactName: lead.contactName,
     area: lead.area ?? null,
@@ -350,16 +364,24 @@ export async function sendLeadEmailAction(formData: FormData) {
   ).replaceAll(CTA_PLACEHOLDER_TOKEN, "{{cta}}");
 
   const resolvedCta = await resolveLeadEmailCta({
-    ctaLabel: ctaLabelInput,
-    ctaUrlKey: ctaUrlKeyInput,
+    ctaLabel,
+    ctaUrlKey,
     signupUrl,
     targetTeamId,
   });
 
-  if (ctaUrlKeyInput === "teamJoinUrl" && !resolvedCta) {
+  if (ctaUrlKey === "teamJoinUrl" && !resolvedCta) {
     return {
       ok: false,
       error: "The selected managed team does not have an active join link.",
+    };
+  }
+
+  if (resolvedBody.includes("{{cta}}") && !resolvedCta) {
+    return {
+      ok: false,
+      error:
+        "This email includes a CTA placeholder, but no working CTA could be built. Please reselect the template and check the CTA settings.",
     };
   }
 
