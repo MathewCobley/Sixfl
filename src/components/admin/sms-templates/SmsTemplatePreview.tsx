@@ -6,7 +6,7 @@
 
 import { useMemo } from "react";
 
-type SmsTemplateAudience = "LEAD" | "TEAM";
+type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER";
 type SmsCtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
 
 export type SmsTemplatePreviewProps = {
@@ -31,6 +31,18 @@ function getPreviewLink(ctaUrlKey: SmsCtaUrlKeyValue | undefined) {
   return "";
 }
 
+function getAudienceLabel(audience: SmsTemplateAudience) {
+  if (audience === "LEAD") {
+    return "Lead";
+  }
+
+  if (audience === "PLAYER") {
+    return "Player";
+  }
+
+  return "Team";
+}
+
 function previewReplace(
   text: string,
   audience: SmsTemplateAudience,
@@ -49,10 +61,8 @@ function previewReplace(
     replaced = replaced
       .replaceAll("{{captainName}}", "Jordan Smith")
       .replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
-  } else {
-    replaced = replaced
-      .replaceAll("{{captainName}}", "Jordan Smith")
-      .replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
+  } else if (audience === "PLAYER") {
+    replaced = replaced.replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
   }
 
   if (previewLink && !text.includes("{{link}}")) {
@@ -114,7 +124,7 @@ export default function SmsTemplatePreview({
                 Audience
               </div>
               <div className="mt-1 text-sm font-semibold text-white">
-                {audience === "LEAD" ? "Lead" : "Team"}
+                {getAudienceLabel(audience)}
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
@@ -140,6 +150,11 @@ export default function SmsTemplatePreview({
             <>
               <div>{"{{firstName}} • {{fullName}} • {{teamName}} • {{area}} • {{link}}"}</div>
               <div>Ideal for campaign follow-up and launch reminders.</div>
+            </>
+          ) : audience === "PLAYER" ? (
+            <>
+              <div>{"{{firstName}} • {{fullName}} • {{teamName}} • {{leagueName}} • {{area}} • {{link}}"}</div>
+              <div>Ideal for player signup chases, prospect follow-up, and managed team recruitment.</div>
             </>
           ) : (
             <>
