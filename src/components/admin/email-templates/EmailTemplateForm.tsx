@@ -55,6 +55,65 @@ const INITIAL_STATE: FormState = {
   errors: {},
 };
 
+const AUDIENCE_OPTIONS: Array<{
+  value: TemplateAudience;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "LEAD",
+    label: "Lead",
+    description: "General lead nurture and enquiry follow-up.",
+  },
+  {
+    value: "TEAM",
+    label: "Team",
+    description: "Team-specific admin or captain communication.",
+  },
+  {
+    value: "PLAYER",
+    label: "Player",
+    description: "Player sign-up and player messaging.",
+  },
+  {
+    value: "REFEREE",
+    label: "Referee",
+    description: "Referee onboarding and operational emails.",
+  },
+  {
+    value: "GENERAL",
+    label: "General",
+    description: "Reusable template not tied to one audience.",
+  },
+];
+
+const INTEREST_TYPE_OPTIONS: Array<{
+  value: InterestTypeValue;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "",
+    label: "None",
+    description: "Do not restrict this to a specific lead interest type.",
+  },
+  {
+    value: "TEAM",
+    label: "Team",
+    description: "Best for team enquiry follow-up.",
+  },
+  {
+    value: "PLAYER",
+    label: "Player",
+    description: "Best for individual player follow-up.",
+  },
+  {
+    value: "REFEREE",
+    label: "Referee",
+    description: "Best for referee enquiry follow-up.",
+  },
+];
+
 const TOKENS = [
   "{{firstName}}",
   "{{fullName}}",
@@ -75,16 +134,6 @@ const TOKENS = [
   "{{preferredNight}}",
   "{{cta}}",
 ] as const;
-
-const INTEREST_TYPE_OPTIONS: Array<{
-  value: InterestTypeValue;
-  label: string;
-}> = [
-  { value: "", label: "None" },
-  { value: "TEAM", label: "Team" },
-  { value: "PLAYER", label: "Player" },
-  { value: "REFEREE", label: "Referee" },
-];
 
 const CTA_OPTIONS: Array<{
   value: CtaUrlKeyValue;
@@ -237,12 +286,19 @@ export default function EmailTemplateForm({
     }
   }, [key, mode, name]);
 
+  useEffect(() => {
+    if (audience !== "LEAD" && interestType !== "") {
+      setInterestType("");
+    }
+  }, [audience, interestType]);
+
   const selectedCta = useMemo(
     () =>
       CTA_OPTIONS.find((option) => option.value === ctaUrlKey) ??
       CTA_OPTIONS[0],
     [ctaUrlKey],
   );
+
   const previewSubject = useMemo(() => previewReplace(subject), [subject]);
   const previewBody = useMemo(
     () => previewReplace(body).replaceAll("{{cta}}", ""),
@@ -347,46 +403,67 @@ export default function EmailTemplateForm({
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">Audience</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                Choose who this template is for.
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              {(
-                ["LEAD", "TEAM", "PLAYER", "REFEREE", "GENERAL"] as const
-              ).map((value) => (
+              {AUDIENCE_OPTIONS.map((option) => (
                 <button
-                  key={value}
+                  key={option.value}
                   type="button"
-                  onClick={() => setAudience(value)}
+                  onClick={() => setAudience(option.value)}
                   className={[
-                    "rounded-2xl border px-4 py-4 text-left text-sm transition",
-                    audience === value
+                    "rounded-2xl border px-4 py-4 text-left transition",
+                    audience === option.value
                       ? "border-emerald-400/50 bg-emerald-500/10 text-white"
                       : "border-white/10 bg-white/[0.03] text-neutral-300 hover:border-white/20 hover:bg-white/[0.05]",
                   ].join(" ")}
                 >
-                  {value}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-2">
-              {INTEREST_TYPE_OPTIONS.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => setInterestType(option.value)}
-                  className={[
-                    "rounded-full border px-4 py-2 text-sm transition",
-                    interestType === option.value
-                      ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-300"
-                      : "border-white/10 bg-white/[0.03] text-neutral-300 hover:border-white/20 hover:bg-white/[0.05]",
-                  ].join(" ")}
-                >
-                  {option.label}
+                  <div className="text-sm font-semibold">{option.label}</div>
+                  <div className="mt-2 text-xs leading-5 text-neutral-400">
+                    {option.description}
+                  </div>
                 </button>
               ))}
             </div>
           </section>
+
+          {audience === "LEAD" ? (
+            <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-white">
+                  Interest type
+                </h2>
+                <p className="mt-1 text-sm text-neutral-400">
+                  Optionally narrow this lead template to a specific enquiry
+                  type.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {INTEREST_TYPE_OPTIONS.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => setInterestType(option.value)}
+                    className={[
+                      "rounded-2xl border px-4 py-4 text-left transition",
+                      interestType === option.value
+                        ? "border-emerald-400/50 bg-emerald-500/10 text-white"
+                        : "border-white/10 bg-white/[0.03] text-neutral-300 hover:border-white/20 hover:bg-white/[0.05]",
+                    ].join(" ")}
+                  >
+                    <div className="text-sm font-semibold">{option.label}</div>
+                    <div className="mt-2 text-xs leading-5 text-neutral-400">
+                      {option.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6">
             <div className="mb-5">
