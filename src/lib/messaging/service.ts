@@ -7,6 +7,7 @@ import {
   type InboxAlertStatus,
   type MessageThreadStatus,
 } from "@prisma/client";
+import { buildThreadReplyAddress } from "@/lib/email/reply-address";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 
@@ -39,6 +40,21 @@ type RecordOutboundSmsInput = {
   twilioMessageSid?: string | null;
   createdByUserId?: string | null;
   sentAt?: Date | null;
+};
+
+type QueueOutboundEmailInput = {
+  notificationDispatchId: string;
+  recipientId?: string | null;
+  teamId?: string | null;
+  leagueId?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  contactName?: string | null;
+  toEmail?: string | null;
+  subject: string;
+  bodyText: string;
+  bodyHtml?: string | null;
+  createdByUserId?: string | null;
 };
 
 type InboxThreadListFilters = {
@@ -76,6 +92,22 @@ function isStartKeyword(body: string): boolean {
 
 function isHelpKeyword(body: string): boolean {
   return ["HELP", "INFO"].includes(uppercaseKeyword(body));
+}
+
+function normalizeEmailAddress(input: NullableString) {
+  if (!input) return null;
+
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const angleMatch = trimmed.match(/<([^<>]+)>/);
+  const candidate = (angleMatch?.[1] ?? trimmed).trim().toLowerCase();
+
+  if (!candidate.includes("@")) {
+    return null;
+  }
+
+  return candidate;
 }
 
 async function findRecipientByPhone(phone: NullableString) {
@@ -118,6 +150,51 @@ async function findExistingOpenThread(params: {
   if (params.phoneNormalized) {
     or.push({
       phoneNormalized: params.phoneNormalized,
+      status: "OPEN",
+    });
+  }
+
+  if (or.length === 0) {
+    return null;
+  }
+
+  return prisma.messageThread.findFirst({
+    where: {
+      OR: or,
+    },
+    orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+  });
+}
+
+async function findExistingOpenEmailThread(params: {
+  recipientId?: string | null;
+  teamId?: string | null;
+  leagueId?: string | null;
+  emailNormalized?: string | null;
+}) {
+  const or: Prisma.MessageThreadWhereInput[] = [];
+
+  if (params.recipientId) {
+    or.push({
+      recipientId: params.recipientId,
+      channel: "EMAIL",
+      status: "OPEN",
+    });
+  }
+
+  if (params.teamId && params.emailNormalized) {
+    or.push({
+      teamId: params.teamId,
+      emailNormalized: params.emailNormalized,
+      channel: "EMAIL",
+      status: "OPEN",
+    });
+  }
+
+  if (params.emailNormalized) {
+    or.push({
+      emailNormalized: params.emailNormalized,
+      channel: "EMAIL",
       status: "OPEN",
     });
   }
@@ -430,6 +507,126 @@ export async function findOrCreateThreadForOutbound(params: {
   });
 }
 
+export async function findOrCreateEmailThreadForOutbound(params: {
+  recipientId?: string | null;
+  teamId?: string | null;
+  leagueId?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  contactName?: string | null;
+  contactEmail?: string | null;
+}) {
+  const emailNormalized = normalizeEmailAddress(params.contactEmail);
+
+  const existing = await findExistingOpenEmailThread({
+    recipientId: params.recipientId,
+    teamId: params.teamId,
+    leagueId: params.leagueId,
+    emailNormalized,
+  });
+
+  if (existing) {
+    if (!existing.replyAddress) {
+      return prisma.messageThread.update({
+        where: { id: existing.id },
+        data: {
+          replyAddress: buildThreadReplyAddress(existing.id),
+          contactEmail: existing.contactEmail ?? params.contactEmail ?? null,
+          emailNormalized: existing.emailNormalized ?? emailNormalized,
+          channel: "EMAIL",
+        },
+      });
+    }
+
+    return existing;
+  }
+
+  const created = await prisma.messageThread.create({
+    data: {
+      channel: "EMAIL",
+      status: "OPEN",
+      recipientId: params.recipientId ?? null,
+      teamId: params.teamId ?? null,
+      leagueId: params.leagueId ?? null,
+      sourceType: params.sourceType ?? null,
+      sourceId: params.sourceId ?? null,
+      contactName: params.contactName ?? null,
+      contactEmail: params.contactEmail ?? null,
+      emailNormalized,
+    },
+  });
+
+  return prisma.messageThread.update({
+    where: { id: created.id },
+    data: {
+      replyAddress: buildThreadReplyAddress(created.id),
+    },
+  });
+}
+
+export async function linkQueuedEmailDispatchToThread(input: QueueOutboundEmailInput) {
+  const thread = await findOrCreateEmailThreadForOutbound({
+    recipientId: input.recipientId,
+    teamId: input.teamId,
+    leagueId: input.leagueId,
+    sourceType: input.sourceType,
+    sourceId: input.sourceId,
+    contactName: input.contactName,
+    contactEmail: input.toEmail,
+  });
+
+  const existing = await prisma.messageEntry.findFirst({
+    where: {
+      notificationDispatchId: input.notificationDispatchId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existing) {
+    await prisma.messageEntry.update({
+      where: { id: existing.id },
+      data: {
+        threadId: thread.id,
+        channel: "EMAIL",
+        direction: "OUTBOUND",
+        participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
+        body: input.bodyText,
+        subject: input.subject,
+        textBody: input.bodyText,
+        htmlBody: input.bodyHtml ?? null,
+        toEmail: input.toEmail?.trim() || null,
+        notificationDispatchId: input.notificationDispatchId,
+        createdByUserId: input.createdByUserId ?? null,
+        providerStatus: "queued",
+        sentAt: null,
+      },
+    });
+  } else {
+    await prisma.messageEntry.create({
+      data: {
+        threadId: thread.id,
+        channel: "EMAIL",
+        direction: "OUTBOUND",
+        participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
+        body: input.bodyText,
+        subject: input.subject,
+        textBody: input.bodyText,
+        htmlBody: input.bodyHtml ?? null,
+        toEmail: input.toEmail?.trim() || null,
+        notificationDispatchId: input.notificationDispatchId,
+        createdByUserId: input.createdByUserId ?? null,
+        providerStatus: "queued",
+      },
+    });
+  }
+
+  await updateThreadSummary({ threadId: thread.id });
+
+  return thread;
+}
+
 export async function recordOutboundSms(input: RecordOutboundSmsInput) {
   const thread = await findOrCreateThreadForOutbound({
     recipientId: input.recipientId,
@@ -440,6 +637,46 @@ export async function recordOutboundSms(input: RecordOutboundSmsInput) {
     contactName: input.contactName,
     phone: input.toNumber ?? input.phone,
   });
+
+  const existing = input.notificationDispatchId
+    ? await prisma.messageEntry.findFirst({
+        where: {
+          notificationDispatchId: input.notificationDispatchId,
+        },
+        select: {
+          id: true,
+        },
+      })
+    : null;
+
+  if (existing) {
+    await prisma.messageEntry.update({
+      where: { id: existing.id },
+      data: {
+        threadId: thread.id,
+        channel: "SMS",
+        direction: "OUTBOUND",
+        participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
+        body: input.body,
+        fromNumber: normalizePhoneNumber(input.fromNumber),
+        toNumber: normalizePhoneNumber(input.toNumber ?? input.phone),
+        provider: input.provider ?? "twilio",
+        providerMessageId: input.providerMessageId ?? null,
+        providerStatus: input.providerStatus ?? null,
+        twilioMessageSid: input.twilioMessageSid ?? null,
+        notificationDispatchId: input.notificationDispatchId ?? null,
+        createdByUserId: input.createdByUserId ?? null,
+        sentAt: input.sentAt ?? null,
+      },
+    });
+
+    await updateThreadSummary({ threadId: thread.id });
+
+    return {
+      threadId: thread.id,
+      messageEntryId: existing.id,
+    };
+  }
 
   const entry = await prisma.messageEntry.create({
     data: {
@@ -456,7 +693,7 @@ export async function recordOutboundSms(input: RecordOutboundSmsInput) {
       twilioMessageSid: input.twilioMessageSid ?? null,
       notificationDispatchId: input.notificationDispatchId ?? null,
       createdByUserId: input.createdByUserId ?? null,
-      sentAt: input.sentAt ?? new Date(),
+      sentAt: input.sentAt ?? null,
     },
   });
 
