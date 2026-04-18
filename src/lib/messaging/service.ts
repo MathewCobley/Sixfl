@@ -489,7 +489,19 @@ export async function findOrCreateThreadForOutbound(params: {
   });
 
   if (existing) {
-    return existing;
+    return prisma.messageThread.update({
+      where: { id: existing.id },
+      data: {
+        recipientId: existing.recipientId ?? params.recipientId ?? null,
+        teamId: existing.teamId ?? params.teamId ?? null,
+        leagueId: existing.leagueId ?? params.leagueId ?? null,
+        sourceType: existing.sourceType ?? params.sourceType ?? null,
+        sourceId: existing.sourceId ?? params.sourceId ?? null,
+        contactName: existing.contactName ?? params.contactName ?? null,
+        contactPhone: existing.contactPhone ?? params.phone ?? null,
+        phoneNormalized: existing.phoneNormalized ?? normalizedPhone,
+      },
+    });
   }
 
   return prisma.messageThread.create({
@@ -526,19 +538,21 @@ export async function findOrCreateEmailThreadForOutbound(params: {
   });
 
   if (existing) {
-    if (!existing.replyAddress) {
-      return prisma.messageThread.update({
-        where: { id: existing.id },
-        data: {
-          replyAddress: buildThreadReplyAddress(existing.id),
-          contactEmail: existing.contactEmail ?? params.contactEmail ?? null,
-          emailNormalized: existing.emailNormalized ?? emailNormalized,
-          channel: "EMAIL",
-        },
-      });
-    }
-
-    return existing;
+    return prisma.messageThread.update({
+      where: { id: existing.id },
+      data: {
+        replyAddress: existing.replyAddress ?? buildThreadReplyAddress(existing.id),
+        recipientId: existing.recipientId ?? params.recipientId ?? null,
+        teamId: existing.teamId ?? params.teamId ?? null,
+        leagueId: existing.leagueId ?? params.leagueId ?? null,
+        sourceType: existing.sourceType ?? params.sourceType ?? null,
+        sourceId: existing.sourceId ?? params.sourceId ?? null,
+        contactName: existing.contactName ?? params.contactName ?? null,
+        contactEmail: existing.contactEmail ?? params.contactEmail ?? null,
+        emailNormalized: existing.emailNormalized ?? emailNormalized,
+        channel: "EMAIL",
+      },
+    });
   }
 
   const created = await prisma.messageThread.create({
