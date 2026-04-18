@@ -16,7 +16,7 @@ type FormState = {
   errors?: Record<string, string[]>;
 };
 
-type SmsTemplateAudience = "LEAD" | "TEAM";
+type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER";
 type SmsCtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
 
 type SmsTemplateFormValues = {
@@ -53,6 +53,11 @@ const AUDIENCE_OPTIONS: Array<{
     value: "LEAD",
     label: "Lead",
     description: "Lead campaigns, follow-up, and launch outreach.",
+  },
+  {
+    value: "PLAYER",
+    label: "Player",
+    description: "Player prospect follow-up, signup nudges, and managed team recruitment.",
   },
   {
     value: "TEAM",
@@ -96,6 +101,14 @@ const LEAD_TOKENS = [
   "{{firstName}}",
   "{{fullName}}",
   "{{teamName}}",
+  "{{area}}",
+  "{{link}}",
+] as const;
+const PLAYER_TOKENS = [
+  "{{firstName}}",
+  "{{fullName}}",
+  "{{teamName}}",
+  "{{leagueName}}",
   "{{area}}",
   "{{link}}",
 ] as const;
@@ -179,10 +192,17 @@ export default function SmsTemplateForm({
     }
   }, [mode, name, key]);
 
-  const availableTokens = useMemo(
-    () => (audience === "LEAD" ? LEAD_TOKENS : TEAM_TOKENS),
-    [audience],
-  );
+  const availableTokens = useMemo(() => {
+    if (audience === "LEAD") {
+      return LEAD_TOKENS;
+    }
+
+    if (audience === "PLAYER") {
+      return PLAYER_TOKENS;
+    }
+
+    return TEAM_TOKENS;
+  }, [audience]);
 
   const selectedCtaOption = useMemo(
     () =>
@@ -233,7 +253,7 @@ export default function SmsTemplateForm({
                 <label htmlFor="name" className="text-sm font-medium text-white">
                   Template name
                 </label>
-                <input id="name" name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Lead launch follow-up" className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
+                <input id="name" name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Player signup chase" className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
                 {nameError ? <p className="text-sm text-red-400">{nameError}</p> : null}
               </div>
 
@@ -241,7 +261,7 @@ export default function SmsTemplateForm({
                 <label htmlFor="key" className="text-sm font-medium text-white">
                   Template key
                 </label>
-                <input id="key" name="key" value={key} onChange={(event) => setKey(slugifyTemplateKey(event.target.value))} placeholder="lead-launch-follow-up" className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
+                <input id="key" name="key" value={key} onChange={(event) => setKey(slugifyTemplateKey(event.target.value))} placeholder="player-signup-chase" className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-emerald-400/50 focus:bg-white/[0.05]" />
                 {keyError ? <p className="text-sm text-red-400">{keyError}</p> : null}
               </div>
 
@@ -257,10 +277,10 @@ export default function SmsTemplateForm({
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">Audience</h2>
-              <p className="mt-1 text-sm text-neutral-400">Choose whether this SMS is for leads or teams.</p>
+              <p className="mt-1 text-sm text-neutral-400">Choose whether this SMS is for leads, players, or teams.</p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               {AUDIENCE_OPTIONS.map((option) => {
                 const selected = audience === option.value;
                 return (
