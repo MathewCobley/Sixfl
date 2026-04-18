@@ -24,6 +24,7 @@ type EmailCtaUrlKey =
   | "paymentUrl"
   | "captainDashboardUrl"
   | "teamJoinUrl"
+  | "fixtureUrl"
   | "fixturesUrl";
 
 type SmsCtaUrlKey = "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
@@ -35,6 +36,7 @@ function getEmailCtaUrlKey(value: string | null): EmailCtaUrlKey | undefined {
     value === "paymentUrl" ||
     value === "captainDashboardUrl" ||
     value === "teamJoinUrl" ||
+    value === "fixtureUrl" ||
     value === "fixturesUrl"
   ) {
     return value;
@@ -44,11 +46,7 @@ function getEmailCtaUrlKey(value: string | null): EmailCtaUrlKey | undefined {
 }
 
 function getSmsCtaUrlKey(value: string | null): SmsCtaUrlKey | undefined {
-  if (
-    value === "signupUrl" ||
-    value === "manageTeamUrl" ||
-    value === "teamJoinUrl"
-  ) {
+  if (value === "signupUrl" || value === "manageTeamUrl" || value === "teamJoinUrl") {
     return value;
   }
 
@@ -60,9 +58,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
 
   const { id } = await params;
 
-  const emailTemplate = await prisma.emailTemplate.findUnique({
-    where: { id },
-  });
+  const emailTemplate = await prisma.emailTemplate.findUnique({ where: { id } });
 
   if (emailTemplate) {
     return (
@@ -70,23 +66,10 @@ export default async function EditTemplatePage({ params }: PageProps) {
         <div className="space-y-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
-              <div className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300">
-                Campaign email
-              </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">
-                Edit template
-              </h1>
-              <p className="max-w-2xl text-sm leading-6 text-white/65">
-                Update the email content, placeholders, and CTA settings.
-              </p>
+              <div className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300">Campaign email</div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white">Edit template</h1>
             </div>
-
-            <Link
-              href="/admin/templates?type=campaign&channel=EMAIL"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white"
-            >
-              Back to templates
-            </Link>
+            <Link href="/admin/templates?type=campaign&channel=EMAIL" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white">Back to templates</Link>
           </div>
 
           <EmailTemplateForm
@@ -111,9 +94,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
     );
   }
 
-  const notificationTemplate = await prisma.notificationTemplate.findUnique({
-    where: { id },
-  });
+  const notificationTemplate = await prisma.notificationTemplate.findUnique({ where: { id } });
 
   if (
     notificationTemplate &&
@@ -125,23 +106,10 @@ export default async function EditTemplatePage({ params }: PageProps) {
         <div className="space-y-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
-              <div className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
-                System email
-              </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">
-                Edit template
-              </h1>
-              <p className="max-w-2xl text-sm leading-6 text-white/65">
-                Update the automated transactional email used by SIXFL operational flows.
-              </p>
+              <div className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">System email</div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white">Edit template</h1>
             </div>
-
-            <Link
-              href="/admin/templates?type=system"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white"
-            >
-              Back to templates
-            </Link>
+            <Link href="/admin/templates?type=system" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white">Back to templates</Link>
           </div>
 
           <EmailTemplateForm
@@ -178,23 +146,10 @@ export default async function EditTemplatePage({ params }: PageProps) {
       <div className="space-y-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
-            <div className="inline-flex items-center rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300">
-              SMS template
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-white">
-              Edit template
-            </h1>
-            <p className="max-w-2xl text-sm leading-6 text-white/65">
-              Update this reusable SMS template for lead or team messaging.
-            </p>
+            <div className="inline-flex items-center rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300">SMS template</div>
+            <h1 className="text-3xl font-semibold tracking-tight text-white">Edit template</h1>
           </div>
-
-          <Link
-            href="/admin/templates?type=campaign&channel=SMS"
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white"
-          >
-            Back to templates
-          </Link>
+          <Link href="/admin/templates?type=campaign&channel=SMS" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white">Back to templates</Link>
         </div>
 
         <SmsTemplateForm
