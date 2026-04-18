@@ -36,6 +36,8 @@ export type QueueNotificationFromTemplateInput = {
   metadata?: Prisma.InputJsonValue;
   scheduledFor?: Date;
   createdByUserId?: string | null;
+  emailBranding?: SIXFLEmailBranding;
+  paymentSummary?: SIXFLPaymentSummary;
 };
 
 export type QueueDirectNotificationInput = {
@@ -116,6 +118,8 @@ function ensureEmailRepliesConfigured() {
 function buildQueuedContentFromTemplate(input: {
   template: NotificationTemplate;
   variables?: NotificationTemplateVariables;
+  emailBranding?: SIXFLEmailBranding;
+  paymentSummary?: SIXFLPaymentSummary;
 }): ResolvedQueuedContent {
   const renderedSubject = input.template.subject
     ? renderNotificationText(input.template.subject, input.variables)
@@ -135,7 +139,8 @@ function buildQueuedContentFromTemplate(input: {
       subject: renderedSubject,
       bodyText: signedTextBody,
       bodyHtml: buildSIXFLEmailHtml({
-        body: cleanedBody,
+        body: renderedBody,
+        branding: input.emailBranding,
         cta:
           input.template.ctaLabel && ctaUrl
             ? {
@@ -143,6 +148,7 @@ function buildQueuedContentFromTemplate(input: {
                 url: ctaUrl,
               }
             : undefined,
+        payment: input.paymentSummary,
       }),
     };
   }
@@ -317,6 +323,8 @@ export async function queueNotificationFromTemplate(
   const rendered = buildQueuedContentFromTemplate({
     template,
     variables: input.variables,
+    emailBranding: input.emailBranding,
+    paymentSummary: input.paymentSummary,
   });
 
   if (!allowed.ok) {
