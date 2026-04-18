@@ -140,7 +140,11 @@ export default async function AdminTemplatesPage({
       where: {
         channel: NotificationChannel.SMS,
         audience: {
-          in: [NotificationAudience.LEAD, NotificationAudience.TEAM],
+          in: [
+            NotificationAudience.LEAD,
+            NotificationAudience.TEAM,
+            NotificationAudience.PLAYER,
+          ],
         },
       },
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
