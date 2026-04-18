@@ -56,13 +56,13 @@ function getSavedMessage(saved?: string) {
     case "promoted":
       return "Prospect promoted to squad.";
     case "email-sent":
-      return "Prospect email sent.";
+      return "Prospect email queued to the SIXFL inbox.";
     case "sms-sent":
-      return "Prospect SMS queued.";
+      return "Prospect SMS queued to the SIXFL inbox.";
     case "bulk-email-sent":
-      return "Bulk prospect email sent.";
+      return "Bulk prospect email queued to the SIXFL inbox.";
     case "bulk-sms-sent":
-      return "Bulk prospect SMS queued.";
+      return "Bulk prospect SMS queued to the SIXFL inbox.";
     default:
       return saved ? "Saved." : null;
   }
@@ -103,6 +103,34 @@ function getPreferredNightsDisplay(value: unknown) {
 
 function getProspectName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ");
+}
+
+function formatDateTime(value: Date | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
+}
+
+function getThreadActivityLabel(thread: {
+  latestInboundAt: Date | null;
+  latestOutboundAt: Date | null;
+}) {
+  if (thread.latestInboundAt) {
+    return `Latest reply ${formatDateTime(thread.latestInboundAt)}`;
+  }
+
+  if (thread.latestOutboundAt) {
+    return `Latest sent ${formatDateTime(thread.latestOutboundAt)}`;
+  }
+
+  return "No activity yet";
 }
 
 export default async function CaptainProspectsPage({
@@ -169,6 +197,62 @@ export default async function CaptainProspectsPage({
 
   if (!team) {
     notFound();
+  }
+
+  const prospectThreads = team.prospects.length
+    ? await prisma.messageThread.findMany({
+        where: {
+          teamId: teamid,
+          sourceType: "TEAM_PLAYER_PROSPECT",
+          sourceId: {
+            in: team.prospects.map((prospect) => prospect.id),
+          },
+        },
+        select: {
+          id: true,
+          sourceId: true,
+          channel: true,
+          status: true,
+          latestMessageAt: true,
+          latestInboundAt: true,
+          latestOutboundAt: true,
+          unreadForAdminCount: true,
+          lastMessagePreview: true,
+          messages: {
+            orderBy: [{ createdAt: "desc" }],
+            take: 3,
+            select: {
+              id: true,
+              direction: true,
+              body: true,
+              participantRole: true,
+              createdAt: true,
+              receivedAt: true,
+              sentAt: true,
+            },
+          },
+          _count: {
+            select: {
+              messages: true,
+            },
+          },
+        },
+        orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+      })
+    : [];
+
+  const prospectThreadMap = new Map<string, typeof prospectThreads>();
+
+  for (const thread of prospectThreads) {
+    const sourceId = thread.sourceId?.trim();
+
+    if (!sourceId) {
+      continue;
+    }
+
+    const existing = prospectThreadMap.get(sourceId) ?? [];
+    existing.push(thread);
+    prospectThreadMap.set(sourceId, existing);
   }
 
   const savedMessage = getSavedMessage(filters.saved);
@@ -280,6 +364,10 @@ export default async function CaptainProspectsPage({
           {errorMessage}
         </section>
       ) : null}
+
+      <section className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+        Prospect emails and SMS now feed into the SIXFL message inbox, so replies and recent history show back on this page under each prospect.
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
         <ProspectTemplateMessageForm
@@ -473,6 +561,9 @@ export default async function CaptainProspectsPage({
                   firstName: prospect.firstName,
                   lastName: prospect.lastName,
                 });
+                const communicationThreads = prospectThreadMap.get(prospect.id) ?? [];
+                const emailThread = communicationThreads.find((thread) => thread.channel === "EMAIL") ?? null;
+                const smsThread = communicationThreads.find((thread) => thread.channel === "SMS") ?? null;
 
                 return (
                   <div key={prospect.id} className="space-y-5 px-6 py-5">
@@ -593,6 +684,88 @@ export default async function CaptainProspectsPage({
                           Promote to squad
                         </button>
                       </form>
+                    </div>
+
+                    <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                            Communication history
+                          </p>
+                          <p className="mt-1 text-sm text-white/65">
+                            Replies and recent messages are kept per channel for this prospect.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-white/55">
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                            Email: {emailThread ? `${emailThread._count.messages} msg` : "none"}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                            SMS: {smsThread ? `${smsThread._count.messages} msg` : "none"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                        {[emailThread, smsThread].map((thread, index) => {
+                          const channelLabel = index === 0 ? "Email thread" : "SMS thread";
+
+                          return (
+                            <div
+                              key={channelLabel}
+                              className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-semibold text-white">{channelLabel}</div>
+                                  <div className="mt-1 text-xs text-white/45">
+                                    {thread
+                                      ? `${getThreadActivityLabel(thread)} · ${thread.unreadForAdminCount} unread repl${thread.unreadForAdminCount === 1 ? "y" : "ies"}`
+                                      : "No messages yet"}
+                                  </div>
+                                </div>
+
+                                {thread ? (
+                                  <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                                    {thread.status}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {thread?.messages.length ? (
+                                <div className="mt-4 space-y-3">
+                                  {thread.messages.map((message) => (
+                                    <div
+                                      key={message.id}
+                                      className={`rounded-xl border px-3 py-2.5 text-sm ${
+                                        message.direction === "INBOUND"
+                                          ? "border-sky-400/20 bg-sky-500/10 text-sky-50"
+                                          : "border-white/10 bg-black/20 text-white/80"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.14em] text-white/45">
+                                        <span>{message.direction === "INBOUND" ? "Reply" : "Sent"}</span>
+                                        <span>
+                                          {formatDateTime(
+                                            message.receivedAt ?? message.sentAt ?? message.createdAt,
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 whitespace-pre-wrap break-words leading-6">
+                                        {message.body}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : thread?.lastMessagePreview ? (
+                                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white/70">
+                                  {thread.lastMessagePreview}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-2">
