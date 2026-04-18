@@ -3,14 +3,21 @@
 // ========================================
 
 import Link from "next/link";
-import { NotificationAudience, NotificationChannel } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationChannel,
+  NotificationTemplateKind,
+} from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 type SearchParams = Promise<{
   channel?: string;
+  type?: string;
 }>;
+
+type TemplateConsoleType = "campaign" | "system";
 
 type UnifiedTemplateRow = {
   id: string;
@@ -24,6 +31,8 @@ type UnifiedTemplateRow = {
   body: string;
   isActive: boolean;
   updatedAt: Date;
+  type: TemplateConsoleType;
+  kindLabel?: string;
 };
 
 function formatDate(value: Date) {
@@ -93,8 +102,23 @@ function isChannelFilter(value: string | undefined): value is "EMAIL" | "SMS" {
   return value === "EMAIL" || value === "SMS";
 }
 
-function buildFilterHref(channel?: "EMAIL" | "SMS") {
-  return channel ? `/admin/templates?channel=${channel}` : "/admin/templates";
+function isTemplateConsoleType(value: string | undefined): value is TemplateConsoleType {
+  return value === "campaign" || value === "system";
+}
+
+function buildTypeHref(type: TemplateConsoleType) {
+  return `/admin/templates?type=${type}`;
+}
+
+function buildFilterHref(type: TemplateConsoleType, channel?: "EMAIL" | "SMS") {
+  const params = new URLSearchParams();
+  params.set("type", type);
+
+  if (channel) {
+    params.set("channel", channel);
+  }
+
+  return `/admin/templates?${params.toString()}`;
 }
 
 export default async function AdminTemplatesPage({
@@ -104,10 +128,11 @@ export default async function AdminTemplatesPage({
 }) {
   await requireAdmin();
 
-  const { channel: channelParam } = await searchParams;
+  const { channel: channelParam, type: typeParam } = await searchParams;
+  const selectedType = isTemplateConsoleType(typeParam) ? typeParam : "campaign";
   const selectedChannel = isChannelFilter(channelParam) ? channelParam : undefined;
 
-  const [emailTemplates, smsTemplates] = await Promise.all([
+  const [emailTemplates, smsTemplates, systemEmailTemplates] = await Promise.all([
     prisma.emailTemplate.findMany({
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
     }),
@@ -120,9 +145,16 @@ export default async function AdminTemplatesPage({
       },
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
     }),
+    prisma.notificationTemplate.findMany({
+      where: {
+        channel: NotificationChannel.EMAIL,
+        kind: NotificationTemplateKind.TRANSACTIONAL,
+      },
+      orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+    }),
   ]);
 
-  const templates: UnifiedTemplateRow[] = [
+  const campaignTemplates: UnifiedTemplateRow[] = [
     ...emailTemplates.map((template) => ({
       id: template.id,
       key: template.key,
@@ -135,6 +167,8 @@ export default async function AdminTemplatesPage({
       body: template.body,
       isActive: template.isActive,
       updatedAt: template.updatedAt,
+      type: "campaign" as const,
+      kindLabel: "Campaign",
     })),
     ...smsTemplates.map((template) => ({
       id: template.id,
@@ -148,10 +182,14 @@ export default async function AdminTemplatesPage({
       body: template.body,
       isActive: template.isActive,
       updatedAt: template.updatedAt,
+      type: "campaign" as const,
+      kindLabel: "Campaign",
     })),
   ]
     .filter((template) =>
-      selectedChannel ? template.channel === selectedChannel : true,
+      selectedType === "campaign" && selectedChannel
+        ? template.channel === selectedChannel
+        : true,
     )
     .sort((a, b) => {
       const updatedAtDifference =
@@ -164,12 +202,40 @@ export default async function AdminTemplatesPage({
       return a.name.localeCompare(b.name);
     });
 
-  const totalCount = emailTemplates.length + smsTemplates.length;
-  const activeCount =
-    emailTemplates.filter((template) => template.isActive).length +
-    smsTemplates.filter((template) => template.isActive).length;
-  const emailCount = emailTemplates.length;
-  const smsCount = smsTemplates.length;
+  const systemTemplates: UnifiedTemplateRow[] = systemEmailTemplates
+    .map((template) => ({
+      id: template.id,
+      key: template.key,
+      name: template.name,
+      description: template.description,
+      audience: template.audience,
+      channel: "EMAIL" as const,
+      interestType: null,
+      subject: template.subject,
+      body: template.body,
+      isActive: template.isActive,
+      updatedAt: template.updatedAt,
+      type: "system" as const,
+      kindLabel: "System email",
+    }))
+    .sort((a, b) => {
+      const updatedAtDifference =
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+
+      if (updatedAtDifference !== 0) {
+        return updatedAtDifference;
+      }
+
+      return a.name.localeCompare(b.name);
+    });
+
+  const templates = selectedType === "system" ? systemTemplates : campaignTemplates;
+
+  const campaignTotalCount = emailTemplates.length + smsTemplates.length;
+  const systemTotalCount = systemEmailTemplates.length;
+  const activeCount = templates.filter((template) => template.isActive).length;
+  const emailCount = templates.filter((template) => template.channel === "EMAIL").length;
+  const smsCount = templates.filter((template) => template.channel === "SMS").length;
 
   return (
     <AdminCard title="Templates">
@@ -181,14 +247,16 @@ export default async function AdminTemplatesPage({
             </h1>
 
             <p className="max-w-2xl text-sm leading-6 text-white/65">
-              Manage email and SMS templates from one place without duplicating
-              admin flows.
+              Manage outreach templates and automated system emails from one premium console.
             </p>
 
             <p className="text-sm text-white/40">
-              {templates.length} template{templates.length === 1 ? "" : "s"}{" "}
-              shown
-              {selectedChannel ? ` · ${selectedChannel.toLowerCase()} only` : ""}
+              {templates.length} template{templates.length === 1 ? "" : "s"} shown
+              {selectedType === "campaign" && selectedChannel
+                ? ` · ${selectedChannel.toLowerCase()} only`
+                : selectedType === "system"
+                  ? " · system emails"
+                  : ""}
             </p>
           </div>
 
@@ -201,7 +269,7 @@ export default async function AdminTemplatesPage({
             </Link>
 
             <Link
-              href="/admin/templates/new"
+              href={selectedType === "system" ? "/admin/templates/new?type=system" : "/admin/templates/new?type=campaign"}
               className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
             >
               New template
@@ -209,14 +277,42 @@ export default async function AdminTemplatesPage({
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-3">
+          {[
+            {
+              label: `Campaign Templates (${campaignTotalCount})`,
+              href: buildTypeHref("campaign"),
+              active: selectedType === "campaign",
+            },
+            {
+              label: `System Emails (${systemTotalCount})`,
+              href: buildTypeHref("system"),
+              active: selectedType === "system",
+            },
+          ].map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={[
+                "inline-flex h-11 items-center justify-center rounded-full border px-5 text-sm font-medium transition",
+                item.active
+                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-white/10 bg-black/20 text-white/75 hover:bg-black/30 hover:text-white",
+              ].join(" ")}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+
         <div className="grid gap-4 lg:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-            <div className="text-sm font-medium text-white/55">Total</div>
+            <div className="text-sm font-medium text-white/55">Visible</div>
             <div className="mt-2 text-3xl font-semibold text-white">
-              {totalCount}
+              {templates.length}
             </div>
             <div className="mt-2 text-sm text-white/60">
-              Email and SMS templates
+              {selectedType === "system" ? "System email templates" : "Campaign templates"}
             </div>
           </div>
 
@@ -226,7 +322,7 @@ export default async function AdminTemplatesPage({
               {activeCount}
             </div>
             <div className="mt-2 text-sm text-white/60">
-              Available in admin flows
+              Available to send right now
             </div>
           </div>
 
@@ -246,39 +342,45 @@ export default async function AdminTemplatesPage({
               {smsCount}
             </div>
             <div className="mt-2 text-sm text-white/60">
-              Reusable text messaging
+              {selectedType === "system" ? "System tab is email-only" : "Reusable text messaging"}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          {[
-            { label: "All", href: buildFilterHref(), active: !selectedChannel },
-            {
-              label: "Email",
-              href: buildFilterHref("EMAIL"),
-              active: selectedChannel === "EMAIL",
-            },
-            {
-              label: "SMS",
-              href: buildFilterHref("SMS"),
-              active: selectedChannel === "SMS",
-            },
-          ].map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={[
-                "inline-flex h-10 items-center justify-center rounded-full border px-4 text-sm font-medium transition",
-                item.active
-                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-                  : "border-white/10 bg-black/20 text-white/75 hover:bg-black/30 hover:text-white",
-              ].join(" ")}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
+        {selectedType === "campaign" ? (
+          <div className="flex flex-wrap gap-3">
+            {[
+              { label: "All", href: buildFilterHref("campaign"), active: !selectedChannel },
+              {
+                label: "Email",
+                href: buildFilterHref("campaign", "EMAIL"),
+                active: selectedChannel === "EMAIL",
+              },
+              {
+                label: "SMS",
+                href: buildFilterHref("campaign", "SMS"),
+                active: selectedChannel === "SMS",
+              },
+            ].map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={[
+                  "inline-flex h-10 items-center justify-center rounded-full border px-4 text-sm font-medium transition",
+                  item.active
+                    ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                    : "border-white/10 bg-black/20 text-white/75 hover:bg-black/30 hover:text-white",
+                ].join(" ")}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.05] px-5 py-4 text-sm leading-6 text-cyan-100/90">
+            System Emails are the automated operational templates used by match fee reminders, fixture publish emails, and other transactional flows.
+          </div>
+        )}
 
         {templates.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm leading-6 text-white/60">
@@ -293,7 +395,7 @@ export default async function AdminTemplatesPage({
                     <th className="px-4 py-3 font-semibold">Name</th>
                     <th className="px-4 py-3 font-semibold">Channel</th>
                     <th className="px-4 py-3 font-semibold">Audience</th>
-                    <th className="px-4 py-3 font-semibold">Interest type</th>
+                    <th className="px-4 py-3 font-semibold">Kind</th>
                     <th className="px-4 py-3 font-semibold">Key</th>
                     <th className="px-4 py-3 font-semibold">Length</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
@@ -306,20 +408,16 @@ export default async function AdminTemplatesPage({
                   {templates.map((template) => {
                     const lengthLabel =
                       template.channel === "SMS"
-                        ? `${template.body.length} chars · ${estimateSmsSegments(
-                            template.body,
-                          )} seg`
+                        ? `${template.body.length} chars · ${estimateSmsSegments(template.body)} seg`
                         : `${template.subject?.length ?? 0} subj · ${template.body.length} body`;
 
                     return (
                       <tr
-                        key={`${template.channel}-${template.id}`}
+                        key={`${template.type}-${template.channel}-${template.id}`}
                         className="border-t border-white/10 align-top transition hover:bg-white/[0.03]"
                       >
                         <td className="px-4 py-4">
-                          <div className="font-medium text-white">
-                            {template.name}
-                          </div>
+                          <div className="font-medium text-white">{template.name}</div>
                           <div className="mt-1 text-sm text-white/45">
                             {template.description || "No description"}
                           </div>
@@ -327,9 +425,7 @@ export default async function AdminTemplatesPage({
 
                         <td className="px-4 py-4">
                           <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${channelClasses(
-                              template.channel,
-                            )}`}
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${channelClasses(template.channel)}`}
                           >
                             {template.channel}
                           </span>
@@ -337,27 +433,19 @@ export default async function AdminTemplatesPage({
 
                         <td className="px-4 py-4">
                           <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${audienceClasses(
-                              template.audience,
-                            )}`}
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${audienceClasses(template.audience)}`}
                           >
                             {formatAudience(template.audience)}
                           </span>
                         </td>
 
                         <td className="px-4 py-4 text-white/70">
-                          {template.channel === "EMAIL"
-                            ? formatInterestType(template.interestType)
-                            : "—"}
+                          {selectedType === "system" ? template.kindLabel : formatInterestType(template.interestType)}
                         </td>
 
-                        <td className="px-4 py-4 text-white/70">
-                          {template.key}
-                        </td>
+                        <td className="px-4 py-4 text-white/70">{template.key}</td>
 
-                        <td className="px-4 py-4 text-white/70">
-                          {lengthLabel}
-                        </td>
+                        <td className="px-4 py-4 text-white/70">{lengthLabel}</td>
 
                         <td className="px-4 py-4">
                           <span
@@ -372,9 +460,7 @@ export default async function AdminTemplatesPage({
                           </span>
                         </td>
 
-                        <td className="px-4 py-4 text-white/55">
-                          {formatDate(template.updatedAt)}
-                        </td>
+                        <td className="px-4 py-4 text-white/55">{formatDate(template.updatedAt)}</td>
 
                         <td className="px-4 py-4">
                           <Link
@@ -393,24 +479,40 @@ export default async function AdminTemplatesPage({
 
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                <div className="text-sm font-medium text-white/55">
-                  What this powers
-                </div>
+                <div className="text-sm font-medium text-white/55">What this powers</div>
                 <div className="mt-3 space-y-2 text-sm leading-6 text-white/70">
-                  <div>Lead email and SMS campaigns</div>
-                  <div>Team outreach and operations</div>
-                  <div>Reusable admin comms across channels</div>
+                  {selectedType === "system" ? (
+                    <>
+                      <div>Fixture publish digests</div>
+                      <div>Fixture reminder emails</div>
+                      <div>Match fee due and reminder emails</div>
+                    </>
+                  ) : (
+                    <>
+                      <div>Lead email and SMS campaigns</div>
+                      <div>Team outreach and operations</div>
+                      <div>Reusable admin comms across channels</div>
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                <div className="text-sm font-medium text-white/55">
-                  Good keys
-                </div>
+                <div className="text-sm font-medium text-white/55">Good keys</div>
                 <div className="mt-3 space-y-2 text-sm leading-6 text-white/70">
-                  <div>lead-response</div>
-                  <div>player-interest-follow-up</div>
-                  <div>team-payment-nudge</div>
+                  {selectedType === "system" ? (
+                    <>
+                      <div>fixture-publish-digest-email</div>
+                      <div>fixture-reminder-email</div>
+                      <div>match-fee-reminder-email</div>
+                    </>
+                  ) : (
+                    <>
+                      <div>lead-response</div>
+                      <div>player-interest-follow-up</div>
+                      <div>team-payment-nudge</div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -418,8 +520,8 @@ export default async function AdminTemplatesPage({
                 <div className="text-sm font-medium text-white/55">Tips</div>
                 <div className="mt-3 space-y-2 text-sm leading-6 text-white/70">
                   <div>Use inactive instead of deleting</div>
-                  <div>Keep SMS short and direct</div>
-                  <div>Use CTA placement only for email templates</div>
+                  <div>Keep keys stable once wired into flows</div>
+                  <div>Use CTA placement only once in the email body</div>
                 </div>
               </div>
             </div>
