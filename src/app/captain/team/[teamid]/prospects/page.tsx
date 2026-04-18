@@ -7,11 +7,11 @@ import { notFound } from "next/navigation";
 import {
   NotificationAudience,
   NotificationChannel,
+  NotificationDispatchStatus,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import FormListboxField from "@/components/ui/FormListboxField";
 import ProspectTemplateMessageForm from "@/components/captain/prospects/ProspectTemplateMessageForm";
 import {
@@ -57,13 +57,13 @@ function getSavedMessage(saved?: string) {
     case "promoted":
       return "Prospect promoted to squad.";
     case "email-sent":
-      return "Prospect email queued to the SIXFL inbox.";
+      return "Prospect email queued.";
     case "sms-sent":
-      return "Prospect SMS queued to the SIXFL inbox.";
+      return "Prospect SMS queued.";
     case "bulk-email-sent":
-      return "Bulk prospect email queued to the SIXFL inbox.";
+      return "Bulk prospect email queued.";
     case "bulk-sms-sent":
-      return "Bulk prospect SMS queued to the SIXFL inbox.";
+      return "Bulk prospect SMS queued.";
     default:
       return saved ? "Saved." : null;
   }
@@ -106,29 +106,6 @@ function getProspectName(input: { firstName: string; lastName: string | null }) 
   return [input.firstName, input.lastName].filter(Boolean).join(" ");
 }
 
-function getProspectRecipientSourceId(prospectId: string) {
-  return `team-prospect:${prospectId}`;
-}
-
-function normalizeProspectKey(value?: string | null) {
-  const trimmed = value?.trim();
-
-  if (!trimmed) {
-    return null;
-  }
-
-  if (trimmed.startsWith("team-prospect:")) {
-    return trimmed.replace(/^team-prospect:/, "");
-  }
-
-  return trimmed;
-}
-
-function normalizeEmail(value?: string | null) {
-  const trimmed = value?.trim().toLowerCase();
-  return trimmed || null;
-}
-
 function formatDateTime(value: Date | null | undefined) {
   if (!value) {
     return null;
@@ -142,19 +119,29 @@ function formatDateTime(value: Date | null | undefined) {
   }).format(value);
 }
 
-function getThreadActivityLabel(thread: {
-  latestInboundAt: Date | null;
-  latestOutboundAt: Date | null;
+function getDispatchStatusClasses(status: NotificationDispatchStatus) {
+  switch (status) {
+    case "QUEUED":
+    case "PROCESSING":
+      return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+    case "SENT":
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+    case "FAILED":
+    case "CANCELLED":
+      return "border-red-400/20 bg-red-500/10 text-red-100";
+    case "SKIPPED":
+      return "border-white/10 bg-white/5 text-white/70";
+    default:
+      return "border-white/10 bg-white/5 text-white/70";
+  }
+}
+
+function getDispatchTimeLabel(input: {
+  sentAt: Date | null;
+  failedAt: Date | null;
+  createdAt: Date;
 }) {
-  if (thread.latestInboundAt) {
-    return `Latest reply ${formatDateTime(thread.latestInboundAt)}`;
-  }
-
-  if (thread.latestOutboundAt) {
-    return `Latest sent ${formatDateTime(thread.latestOutboundAt)}`;
-  }
-
-  return "No activity yet";
+  return formatDateTime(input.sentAt ?? input.failedAt ?? input.createdAt);
 }
 
 export default async function CaptainProspectsPage({
@@ -224,186 +211,46 @@ export default async function CaptainProspectsPage({
   }
 
   const prospectIds = team.prospects.map((prospect) => prospect.id);
-  const prospectRecipientSourceIds = prospectIds.map((prospectId) =>
-    getProspectRecipientSourceId(prospectId),
-  );
 
-  const prospectRecipients = prospectRecipientSourceIds.length
-    ? await prisma.notificationRecipient.findMany({
+  const recentDispatches = prospectIds.length
+    ? await prisma.notificationDispatch.findMany({
         where: {
-          sourceType: "GENERAL",
+          sourceType: "TEAM_PLAYER_PROSPECT",
           sourceId: {
-            in: prospectRecipientSourceIds,
+            in: prospectIds,
+          },
+          channel: {
+            in: [NotificationChannel.EMAIL, NotificationChannel.SMS],
           },
         },
+        orderBy: [{ createdAt: "desc" }],
         select: {
           id: true,
           sourceId: true,
-        },
-      })
-    : [];
-
-  const prospectRecipientIds = prospectRecipients.map((recipient) => recipient.id);
-  const prospectIdByRecipientSource = new Map(
-    prospectRecipients
-      .filter(
-        (recipient): recipient is { id: string; sourceId: string } =>
-          Boolean(recipient.sourceId),
-      )
-      .map((recipient) => [
-        recipient.sourceId,
-        recipient.sourceId.replace(/^team-prospect:/, ""),
-      ]),
-  );
-
-  const prospectIdByEmail = new Map<string, string>();
-  const duplicateEmails = new Set<string>();
-  const prospectIdByPhone = new Map<string, string>();
-  const duplicatePhones = new Set<string>();
-
-  for (const prospect of team.prospects) {
-    const email = normalizeEmail(prospect.email);
-    const phone = normalizePhoneNumber(prospect.phone);
-
-    if (email) {
-      if (prospectIdByEmail.has(email)) {
-        duplicateEmails.add(email);
-      } else {
-        prospectIdByEmail.set(email, prospect.id);
-      }
-    }
-
-    if (phone) {
-      if (prospectIdByPhone.has(phone)) {
-        duplicatePhones.add(phone);
-      } else {
-        prospectIdByPhone.set(phone, prospect.id);
-      }
-    }
-  }
-
-  for (const email of duplicateEmails) {
-    prospectIdByEmail.delete(email);
-  }
-
-  for (const phone of duplicatePhones) {
-    prospectIdByPhone.delete(phone);
-  }
-
-  const prospectEmails = [...prospectIdByEmail.keys()];
-  const prospectPhones = [...prospectIdByPhone.keys()];
-
-  const prospectThreads = prospectIds.length
-    ? await prisma.messageThread.findMany({
-        where: {
-          teamId: teamid,
-          OR: [
-            {
-              sourceType: "TEAM_PLAYER_PROSPECT",
-              sourceId: {
-                in: prospectIds,
-              },
-            },
-            {
-              sourceId: {
-                in: prospectRecipientSourceIds,
-              },
-            },
-            ...(prospectRecipientIds.length > 0
-              ? [
-                  {
-                    recipientId: {
-                      in: prospectRecipientIds,
-                    },
-                  },
-                ]
-              : []),
-            ...(prospectEmails.length > 0
-              ? [
-                  {
-                    emailNormalized: {
-                      in: prospectEmails,
-                    },
-                  },
-                ]
-              : []),
-            ...(prospectPhones.length > 0
-              ? [
-                  {
-                    phoneNormalized: {
-                      in: prospectPhones,
-                    },
-                  },
-                ]
-              : []),
-          ],
-        },
-        select: {
-          id: true,
-          recipientId: true,
-          sourceId: true,
-          emailNormalized: true,
-          phoneNormalized: true,
           channel: true,
           status: true,
-          latestMessageAt: true,
-          latestInboundAt: true,
-          latestOutboundAt: true,
-          unreadForAdminCount: true,
-          lastMessagePreview: true,
-          recipient: {
-            select: {
-              sourceId: true,
-            },
-          },
-          messages: {
-            orderBy: [{ createdAt: "desc" }],
-            take: 3,
-            select: {
-              id: true,
-              direction: true,
-              body: true,
-              participantRole: true,
-              createdAt: true,
-              receivedAt: true,
-              sentAt: true,
-            },
-          },
-          _count: {
-            select: {
-              messages: true,
-            },
-          },
+          subject: true,
+          bodyText: true,
+          failureReason: true,
+          createdAt: true,
+          sentAt: true,
+          failedAt: true,
         },
-        orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
       })
     : [];
 
-  const prospectThreadMap = new Map<string, typeof prospectThreads>();
+  const dispatchMap = new Map<string, typeof recentDispatches>();
 
-  for (const thread of prospectThreads) {
-    const directSourceId = normalizeProspectKey(thread.sourceId);
-    const recipientSourceId = thread.recipient?.sourceId?.trim();
-    const emailProspectId =
-      thread.emailNormalized ? prospectIdByEmail.get(thread.emailNormalized) ?? null : null;
-    const phoneProspectId =
-      thread.phoneNormalized ? prospectIdByPhone.get(thread.phoneNormalized) ?? null : null;
-    const prospectId =
-      directSourceId ||
-      (recipientSourceId ? prospectIdByRecipientSource.get(recipientSourceId) ?? null : null) ||
-      emailProspectId ||
-      phoneProspectId;
+  for (const dispatch of recentDispatches) {
+    const sourceId = dispatch.sourceId?.trim();
 
-    if (!prospectId) {
+    if (!sourceId) {
       continue;
     }
 
-    const existing = prospectThreadMap.get(prospectId) ?? [];
-
-    if (!existing.some((item) => item.id === thread.id)) {
-      existing.push(thread);
-      prospectThreadMap.set(prospectId, existing);
-    }
+    const existing = dispatchMap.get(sourceId) ?? [];
+    existing.push(dispatch);
+    dispatchMap.set(sourceId, existing);
   }
 
   const savedMessage = getSavedMessage(filters.saved);
@@ -517,7 +364,7 @@ export default async function CaptainProspectsPage({
       ) : null}
 
       <section className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
-        Prospect emails and SMS now feed into the SIXFL message inbox, so replies and recent history show back on this page under each prospect.
+        This history is pulled straight from each prospect’s notification dispatches, so these cards show exactly what was queued, sent, failed, skipped, or cancelled for that prospect.
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
@@ -712,9 +559,15 @@ export default async function CaptainProspectsPage({
                   firstName: prospect.firstName,
                   lastName: prospect.lastName,
                 });
-                const communicationThreads = prospectThreadMap.get(prospect.id) ?? [];
-                const emailThread = communicationThreads.find((thread) => thread.channel === "EMAIL") ?? null;
-                const smsThread = communicationThreads.find((thread) => thread.channel === "SMS") ?? null;
+                const dispatches = dispatchMap.get(prospect.id) ?? [];
+                const emailDispatches = dispatches.filter(
+                  (dispatch) => dispatch.channel === NotificationChannel.EMAIL,
+                );
+                const smsDispatches = dispatches.filter(
+                  (dispatch) => dispatch.channel === NotificationChannel.SMS,
+                );
+                const latestEmailDispatch = emailDispatches[0] ?? null;
+                const latestSmsDispatch = smsDispatches[0] ?? null;
 
                 return (
                   <div key={prospect.id} className="space-y-5 px-6 py-5">
@@ -844,78 +697,96 @@ export default async function CaptainProspectsPage({
                             Communication history
                           </p>
                           <p className="mt-1 text-sm text-white/65">
-                            Replies and recent messages are kept per channel for this prospect.
+                            Outbound activity is shown directly from this prospect’s email and SMS dispatch records.
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs text-white/55">
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                            Email: {emailThread ? `${emailThread._count.messages} msg` : "none"}
+                            Email: {emailDispatches.length} msg
                           </span>
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                            SMS: {smsThread ? `${smsThread._count.messages} msg` : "none"}
+                            SMS: {smsDispatches.length} msg
                           </span>
                         </div>
                       </div>
 
                       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                        {[emailThread, smsThread].map((thread, index) => {
-                          const channelLabel = index === 0 ? "Email thread" : "SMS thread";
-
-                          return (
-                            <div
-                              key={channelLabel}
-                              className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-semibold text-white">{channelLabel}</div>
-                                  <div className="mt-1 text-xs text-white/45">
-                                    {thread
-                                      ? `${getThreadActivityLabel(thread)} · ${thread.unreadForAdminCount} unread repl${thread.unreadForAdminCount === 1 ? "y" : "ies"}`
-                                      : "No messages yet"}
-                                  </div>
+                        {[
+                          {
+                            title: "Email history",
+                            latest: latestEmailDispatch,
+                            items: emailDispatches,
+                          },
+                          {
+                            title: "SMS history",
+                            latest: latestSmsDispatch,
+                            items: smsDispatches,
+                          },
+                        ].map((group) => (
+                          <div
+                            key={group.title}
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-white">{group.title}</div>
+                                <div className="mt-1 text-xs text-white/45">
+                                  {group.latest
+                                    ? `Latest ${group.latest.status.toLowerCase()} ${getDispatchTimeLabel(group.latest)}`
+                                    : "No messages yet"}
                                 </div>
-
-                                {thread ? (
-                                  <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
-                                    {thread.status}
-                                  </span>
-                                ) : null}
                               </div>
 
-                              {thread?.messages.length ? (
-                                <div className="mt-4 space-y-3">
-                                  {thread.messages.map((message) => (
-                                    <div
-                                      key={message.id}
-                                      className={`rounded-xl border px-3 py-2.5 text-sm ${
-                                        message.direction === "INBOUND"
-                                          ? "border-sky-400/20 bg-sky-500/10 text-sky-50"
-                                          : "border-white/10 bg-black/20 text-white/80"
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.14em] text-white/45">
-                                        <span>{message.direction === "INBOUND" ? "Reply" : "Sent"}</span>
-                                        <span>
-                                          {formatDateTime(
-                                            message.receivedAt ?? message.sentAt ?? message.createdAt,
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="mt-2 whitespace-pre-wrap break-words leading-6">
-                                        {message.body}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : thread?.lastMessagePreview ? (
-                                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white/70">
-                                  {thread.lastMessagePreview}
-                                </div>
+                              {group.latest ? (
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getDispatchStatusClasses(
+                                    group.latest.status,
+                                  )}`}
+                                >
+                                  {group.latest.status}
+                                </span>
                               ) : null}
                             </div>
-                          );
-                        })}
+
+                            {group.items.length > 0 ? (
+                              <div className="mt-4 space-y-3">
+                                {group.items.slice(0, 5).map((dispatch) => (
+                                  <div
+                                    key={dispatch.id}
+                                    className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white/80"
+                                  >
+                                    <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.14em] text-white/45">
+                                      <span>{dispatch.channel}</span>
+                                      <span>{getDispatchTimeLabel(dispatch)}</span>
+                                    </div>
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <span
+                                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getDispatchStatusClasses(
+                                          dispatch.status,
+                                        )}`}
+                                      >
+                                        {dispatch.status}
+                                      </span>
+                                      {dispatch.subject ? (
+                                        <span className="truncate text-xs text-white/50">
+                                          {dispatch.subject}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <div className="mt-2 whitespace-pre-wrap break-words leading-6">
+                                      {dispatch.bodyText}
+                                    </div>
+                                    {dispatch.failureReason ? (
+                                      <div className="mt-2 text-xs text-red-200/80">
+                                        {dispatch.failureReason}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
                     </div>
 
