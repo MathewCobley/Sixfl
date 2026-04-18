@@ -109,6 +109,20 @@ function getProspectRecipientSourceId(prospectId: string) {
   return `team-prospect:${prospectId}`;
 }
 
+function normalizeProspectKey(value?: string | null) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("team-prospect:")) {
+    return trimmed.replace(/^team-prospect:/, "");
+  }
+
+  return trimmed;
+}
+
 function formatDateTime(value: Date | null | undefined) {
   if (!value) {
     return null;
@@ -300,7 +314,7 @@ export default async function CaptainProspectsPage({
   const prospectThreadMap = new Map<string, typeof prospectThreads>();
 
   for (const thread of prospectThreads) {
-    const directSourceId = thread.sourceId?.trim();
+    const directSourceId = normalizeProspectKey(thread.sourceId);
     const recipientSourceId = thread.recipient?.sourceId?.trim();
     const prospectId =
       directSourceId ||
