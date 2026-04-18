@@ -452,6 +452,9 @@ export default async function AdminTeamPage({
   const claimPath = `/claim?code=${encodeURIComponent(team.claimCode)}`;
   const claimLink = `${baseUrl}${claimPath}`;
   const captainDashboardUrl = claimLink;
+  const teamJoinUrl = team.joinSlug
+    ? `${baseUrl}/teams/join/${team.joinSlug}`
+    : null;
   const FIXED_TEAM_PAYMENT_URL =
     "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
@@ -486,9 +489,11 @@ export default async function AdminTeamPage({
           ? claimLink
           : template.ctaUrlKey === "captainDashboardUrl"
             ? claimLink
-            : template.ctaUrlKey === "paymentUrl"
-              ? FIXED_TEAM_PAYMENT_URL
-              : null;
+            : template.ctaUrlKey === "teamJoinUrl"
+              ? teamJoinUrl
+              : template.ctaUrlKey === "paymentUrl"
+                ? FIXED_TEAM_PAYMENT_URL
+                : null;
 
     return {
       id: template.id,
