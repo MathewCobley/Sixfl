@@ -225,7 +225,15 @@ export default async function CaptainProspectsPage({
 
   const prospectRecipientIds = prospectRecipients.map((recipient) => recipient.id);
   const prospectIdByRecipientSource = new Map(
-    prospectRecipients.map((recipient) => [recipient.sourceId, recipient.sourceId.replace(/^team-prospect:/, "")]),
+    prospectRecipients
+      .filter(
+        (recipient): recipient is { id: string; sourceId: string } =>
+          Boolean(recipient.sourceId),
+      )
+      .map((recipient) => [
+        recipient.sourceId,
+        recipient.sourceId.replace(/^team-prospect:/, ""),
+      ]),
   );
 
   const prospectThreads = prospectIds.length
