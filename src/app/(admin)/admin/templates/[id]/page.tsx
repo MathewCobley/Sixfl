@@ -33,6 +33,7 @@ type EmailCtaUrlKey =
   | "fixtureUrl"
   | "fixturesUrl";
 
+type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER";
 type SmsCtaUrlKey = "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
 
 function getEmailCtaUrlKey(value: string | null): EmailCtaUrlKey | undefined {
@@ -72,6 +73,20 @@ function getTemplateAudience(
     value === NotificationAudience.PLAYER ||
     value === NotificationAudience.REFEREE ||
     value === NotificationAudience.GENERAL
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function getSmsTemplateAudience(
+  value: NotificationAudience,
+): SmsTemplateAudience | undefined {
+  if (
+    value === NotificationAudience.LEAD ||
+    value === NotificationAudience.TEAM ||
+    value === NotificationAudience.PLAYER
   ) {
     return value;
   }
@@ -191,11 +206,14 @@ export default async function EditTemplatePage({ params }: PageProps) {
     );
   }
 
+  const smsTemplateAudience = notificationTemplate
+    ? getSmsTemplateAudience(notificationTemplate.audience)
+    : undefined;
+
   if (
     !notificationTemplate ||
     notificationTemplate.channel !== NotificationChannel.SMS ||
-    (notificationTemplate.audience !== NotificationAudience.LEAD &&
-      notificationTemplate.audience !== NotificationAudience.TEAM)
+    !smsTemplateAudience
   ) {
     notFound();
   }
@@ -229,10 +247,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
             key: notificationTemplate.key,
             name: notificationTemplate.name,
             description: notificationTemplate.description ?? "",
-            audience:
-              notificationTemplate.audience === NotificationAudience.TEAM
-                ? "TEAM"
-                : "LEAD",
+            audience: smsTemplateAudience,
             body: notificationTemplate.body,
             ctaUrlKey: getSmsCtaUrlKey(notificationTemplate.ctaUrlKey),
             isActive: notificationTemplate.isActive,
