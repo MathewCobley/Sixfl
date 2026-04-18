@@ -131,6 +131,7 @@ export default function LeadEmailForm({
     try {
       const formData = new FormData();
       formData.append("leadId", leadId);
+      formData.append("templateId", selectedTemplateId);
       formData.append("subject", subject);
       formData.append("body", body);
       formData.append("signupUrl", signupUrl ?? "");
