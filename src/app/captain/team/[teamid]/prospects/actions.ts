@@ -25,6 +25,7 @@ const ALLOWED_PROSPECT_STATUSES = [
   "BACKUP",
   "DECLINED",
 ] as const;
+const PROSPECT_JOIN_CTA_LABEL = "Register as a Player";
 
 type ProspectStatus = (typeof ALLOWED_PROSPECT_STATUSES)[number];
 
@@ -62,6 +63,12 @@ function getProspectDisplayName(input: {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
+function getProspectJoinUrl(team: { joinSlug: string | null }) {
+  return team.joinSlug
+    ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
+    : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
+}
+
 function personaliseProspectText(
   text: string,
   prospect: {
@@ -79,9 +86,7 @@ function personaliseProspectText(
     lastName: prospect.lastName,
   });
   const firstName = prospect.firstName.trim() || "there";
-  const joinUrl = team.joinSlug
-    ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
-    : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
+  const joinUrl = getProspectJoinUrl(team);
 
   return text
     .replace(/{{firstName}}/gi, firstName)
@@ -91,6 +96,20 @@ function personaliseProspectText(
     .replace(/{{joinUrl}}/gi, joinUrl)
     .replace(/{{email}}/gi, prospect.email ?? "")
     .replace(/Hi there/gi, `Hi ${firstName}`);
+}
+
+function getProspectEmailCta(input: {
+  body: string;
+  joinUrl: string;
+}) {
+  if (!/{{\s*cta\s*}}/i.test(input.body)) {
+    return undefined;
+  }
+
+  return {
+    label: PROSPECT_JOIN_CTA_LABEL,
+    url: input.joinUrl,
+  };
 }
 
 function getProspectRecipientSourceId(prospectId: string) {
@@ -397,6 +416,7 @@ export async function sendProspectEmailAction(formData: FormData) {
 
   const personalisedSubject = personaliseProspectText(subject, prospect, team);
   const personalisedBody = personaliseProspectText(body, prospect, team);
+  const joinUrl = getProspectJoinUrl(team);
   const recipient = await ensureProspectNotificationRecipient({
     teamId: teamid,
     teamName: team.name,
@@ -416,6 +436,10 @@ export async function sendProspectEmailAction(formData: FormData) {
     isTransactional: false,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
+    emailCta: getProspectEmailCta({
+      body: personalisedBody,
+      joinUrl,
+    }),
     metadata: {
       origin: "captain_prospect_email",
       originLabel: "Sent to prospect from captain hub",
@@ -576,6 +600,8 @@ export async function sendBulkProspectEmailAction(formData: FormData) {
     redirect(buildProspectsRedirect(teamid, "?error=No%20prospects%20with%20email%20were%20selected."));
   }
 
+  const joinUrl = getProspectJoinUrl(team);
+
   for (const prospect of recipients) {
     const personalisedSubject = personaliseProspectText(subject, prospect, team);
     const personalisedBody = personaliseProspectText(body, prospect, team);
@@ -598,6 +624,10 @@ export async function sendBulkProspectEmailAction(formData: FormData) {
       isTransactional: false,
       sourceType: "TEAM_PLAYER_PROSPECT",
       sourceId: prospect.id,
+      emailCta: getProspectEmailCta({
+        body: personalisedBody,
+        joinUrl,
+      }),
       metadata: {
         origin: "captain_prospect_email_bulk",
         originLabel: "Bulk email to prospects from captain hub",
