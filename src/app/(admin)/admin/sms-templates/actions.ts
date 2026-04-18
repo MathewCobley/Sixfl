@@ -22,6 +22,8 @@ type SmsTemplateActionState = {
   errors?: Record<string, string[]>;
 };
 
+type AllowedAudience = "LEAD" | "TEAM" | "PLAYER";
+
 const ALLOWED_CTA_URL_KEYS = ["signupUrl", "manageTeamUrl", "teamJoinUrl"] as const;
 type AllowedCtaUrlKey = (typeof ALLOWED_CTA_URL_KEYS)[number];
 
@@ -47,8 +49,8 @@ function slugifyTemplateKey(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function isAllowedAudience(value: string): value is "LEAD" | "TEAM" {
-  return value === "LEAD" || value === "TEAM";
+function isAllowedAudience(value: string): value is AllowedAudience {
+  return value === "LEAD" || value === "TEAM" || value === "PLAYER";
 }
 
 function isAllowedCtaUrlKey(value: string): value is AllowedCtaUrlKey {
@@ -107,7 +109,7 @@ function validateTemplateInput(values: ReturnType<typeof getTemplateValues>) {
     errors,
     key,
     audience: isAllowedAudience(values.audienceRaw)
-      ? (values.audienceRaw as "LEAD" | "TEAM")
+      ? values.audienceRaw
       : undefined,
     ctaUrlKey: values.ctaUrlKey ? values.ctaUrlKey : null,
   };
