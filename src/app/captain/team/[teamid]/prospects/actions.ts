@@ -6,18 +6,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Resend } from "resend";
 import { NotificationAudience, NotificationChannel } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { queueDirectNotification } from "@/lib/notifications/service";
-import {
-  appendSIXFLTextSignature,
-  buildSIXFLEmailHtml,
-} from "@/lib/email/buildEmail";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { normalizePhoneNumber } from "@/lib/messaging/phone";
 
 const ALLOWED_PROSPECT_STATUSES = [
   "NEW",
@@ -29,6 +23,14 @@ const ALLOWED_PROSPECT_STATUSES = [
 ] as const;
 
 type ProspectStatus = (typeof ALLOWED_PROSPECT_STATUSES)[number];
+
+type ProspectForMessaging = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+};
 
 function normaliseNullableString(value: FormDataEntryValue | null) {
   const parsed = String(value ?? "").trim();
@@ -85,6 +87,96 @@ function personaliseProspectText(
     .replace(/{{joinUrl}}/gi, joinUrl)
     .replace(/{{email}}/gi, prospect.email ?? "")
     .replace(/Hi there/gi, `Hi ${firstName}`);
+}
+
+function getProspectRecipientSourceId(prospectId: string) {
+  return `team-prospect:${prospectId}`;
+}
+
+async function ensureProspectNotificationRecipient(input: {
+  teamId: string;
+  teamName: string;
+  prospect: ProspectForMessaging;
+}) {
+  const displayName = getProspectDisplayName({
+    firstName: input.prospect.firstName,
+    lastName: input.prospect.lastName,
+  });
+  const email = input.prospect.email?.trim().toLowerCase() || null;
+  const phone = input.prospect.phone?.trim() || null;
+  const phoneNormalized = normalizePhoneNumber(phone);
+
+  const recipient = await prisma.notificationRecipient.upsert({
+    where: {
+      sourceType_sourceId: {
+        sourceType: "GENERAL",
+        sourceId: getProspectRecipientSourceId(input.prospect.id),
+      },
+    },
+    update: {
+      audience: NotificationAudience.PLAYER,
+      displayName: displayName || null,
+      email,
+      emailNormalized: email,
+      phone,
+      phoneNormalized,
+      transactionalEmailOptIn: true,
+      marketingEmailOptIn: true,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
+      metadata: {
+        teamId: input.teamId,
+        teamName: input.teamName,
+        prospectId: input.prospect.id,
+        contactName: displayName || null,
+      },
+      lastSyncedAt: new Date(),
+    },
+    create: {
+      sourceType: "GENERAL",
+      sourceId: getProspectRecipientSourceId(input.prospect.id),
+      audience: NotificationAudience.PLAYER,
+      displayName: displayName || null,
+      email,
+      emailNormalized: email,
+      phone,
+      phoneNormalized,
+      transactionalEmailOptIn: true,
+      marketingEmailOptIn: true,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
+      metadata: {
+        teamId: input.teamId,
+        teamName: input.teamName,
+        prospectId: input.prospect.id,
+        contactName: displayName || null,
+      },
+      lastSyncedAt: new Date(),
+    },
+  });
+
+  await prisma.notificationPreference.upsert({
+    where: {
+      recipientId: recipient.id,
+    },
+    update: {
+      emailEnabled: true,
+      smsEnabled: true,
+      urgentSmsEnabled: true,
+      marketingEmailEnabled: true,
+      marketingSmsEnabled: true,
+    },
+    create: {
+      recipientId: recipient.id,
+      emailEnabled: true,
+      smsEnabled: true,
+      urgentSmsEnabled: true,
+      marketingEmailEnabled: true,
+      marketingSmsEnabled: true,
+    },
+  });
+
+  return recipient;
 }
 
 async function getProspectForTeam(teamid: string, prospectId: string) {
@@ -265,7 +357,7 @@ export async function sendProspectEmailAction(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
 
-  await requireCaptain(teamid);
+  const { user } = await requireCaptain(teamid);
 
   if (!teamid || !prospectId) {
     redirect("/captain");
@@ -277,10 +369,6 @@ export async function sendProspectEmailAction(formData: FormData) {
 
   if (!body) {
     redirect(buildProspectsRedirect(teamid, "?error=Email%20body%20is%20required."));
-  }
-
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
-    redirect(buildProspectsRedirect(teamid, "?error=Email%20is%20not%20configured%20yet."));
   }
 
   const [team, prospect] = await Promise.all([
@@ -305,15 +393,32 @@ export async function sendProspectEmailAction(formData: FormData) {
 
   const personalisedSubject = personaliseProspectText(subject, prospect, team);
   const personalisedBody = personaliseProspectText(body, prospect, team);
-  const signedTextBody = appendSIXFLTextSignature(personalisedBody);
-  const signedHtmlBody = buildSIXFLEmailHtml({ body: signedTextBody });
+  const recipient = await ensureProspectNotificationRecipient({
+    teamId: teamid,
+    teamName: team.name,
+    prospect,
+  });
 
-  await resend.emails.send({
-    from: process.env.EMAIL_FROM,
-    to: prospect.email.trim(),
+  await queueDirectNotification({
+    recipientId: recipient.id,
+    channel: NotificationChannel.EMAIL,
+    audience: NotificationAudience.PLAYER,
     subject: personalisedSubject,
-    text: signedTextBody,
-    html: signedHtmlBody,
+    body: personalisedBody,
+    isTransactional: false,
+    sourceType: "TEAM_PLAYER_PROSPECT",
+    sourceId: prospect.id,
+    metadata: {
+      origin: "captain_prospect_email",
+      originLabel: "Sent to prospect from captain hub",
+      teamId: teamid,
+      prospectId: prospect.id,
+      contactName: getProspectDisplayName({
+        firstName: prospect.firstName,
+        lastName: prospect.lastName,
+      }),
+    },
+    createdByUserId: user?.id ?? null,
   });
 
   await markProspectsContacted([prospect.id]);
@@ -359,35 +464,10 @@ export async function sendProspectSmsAction(formData: FormData) {
 
   const personalisedBody = personaliseProspectText(body, prospect, team);
 
-  const recipient = await prisma.notificationRecipient.upsert({
-    where: {
-      sourceType_sourceId: {
-        sourceType: "GENERAL",
-        sourceId: `team-prospect:${prospect.id}`,
-      },
-    },
-    update: {
-      audience: NotificationAudience.PLAYER,
-      displayName: getProspectDisplayName({
-        firstName: prospect.firstName,
-        lastName: prospect.lastName,
-      }),
-      phone: prospect.phone.trim(),
-      transactionalSmsOptIn: true,
-      marketingSmsOptIn: true,
-    },
-    create: {
-      sourceType: "GENERAL",
-      sourceId: `team-prospect:${prospect.id}`,
-      audience: NotificationAudience.PLAYER,
-      displayName: getProspectDisplayName({
-        firstName: prospect.firstName,
-        lastName: prospect.lastName,
-      }),
-      phone: prospect.phone.trim(),
-      transactionalSmsOptIn: true,
-      marketingSmsOptIn: true,
-    },
+  const recipient = await ensureProspectNotificationRecipient({
+    teamId: teamid,
+    teamName: team.name,
+    prospect,
   });
 
   await queueDirectNotification({
@@ -403,6 +483,10 @@ export async function sendProspectSmsAction(formData: FormData) {
       originLabel: "Sent to prospect from captain hub",
       teamId: teamid,
       prospectId: prospect.id,
+      contactName: getProspectDisplayName({
+        firstName: prospect.firstName,
+        lastName: prospect.lastName,
+      }),
     },
     createdByUserId: user?.id ?? null,
   });
@@ -422,7 +506,7 @@ export async function sendBulkProspectEmailAction(formData: FormData) {
     .map((value) => String(value).trim())
     .filter(Boolean);
 
-  await requireCaptain(teamid);
+  const { user } = await requireCaptain(teamid);
 
   if (!teamid) {
     redirect("/captain");
@@ -434,10 +518,6 @@ export async function sendBulkProspectEmailAction(formData: FormData) {
 
   if (!body) {
     redirect(buildProspectsRedirect(teamid, "?error=Bulk%20email%20body%20is%20required."));
-  }
-
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
-    redirect(buildProspectsRedirect(teamid, "?error=Email%20is%20not%20configured%20yet."));
   }
 
   const [team, prospects] = await Promise.all([
@@ -465,15 +545,32 @@ export async function sendBulkProspectEmailAction(formData: FormData) {
   for (const prospect of recipients) {
     const personalisedSubject = personaliseProspectText(subject, prospect, team);
     const personalisedBody = personaliseProspectText(body, prospect, team);
-    const signedTextBody = appendSIXFLTextSignature(personalisedBody);
-    const signedHtmlBody = buildSIXFLEmailHtml({ body: signedTextBody });
+    const recipient = await ensureProspectNotificationRecipient({
+      teamId: teamid,
+      teamName: team.name,
+      prospect,
+    });
 
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM,
-      to: prospect.email!.trim(),
+    await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.PLAYER,
       subject: personalisedSubject,
-      text: signedTextBody,
-      html: signedHtmlBody,
+      body: personalisedBody,
+      isTransactional: false,
+      sourceType: "TEAM_PLAYER_PROSPECT",
+      sourceId: prospect.id,
+      metadata: {
+        origin: "captain_prospect_email_bulk",
+        originLabel: "Bulk email to prospects from captain hub",
+        teamId: teamid,
+        prospectId: prospect.id,
+        contactName: getProspectDisplayName({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+        }),
+      },
+      createdByUserId: user?.id ?? null,
     });
   }
 
@@ -525,36 +622,10 @@ export async function sendBulkProspectSmsAction(formData: FormData) {
 
   for (const prospect of recipients) {
     const personalisedBody = personaliseProspectText(body, prospect, team);
-
-    const recipient = await prisma.notificationRecipient.upsert({
-      where: {
-        sourceType_sourceId: {
-          sourceType: "GENERAL",
-          sourceId: `team-prospect:${prospect.id}`,
-        },
-      },
-      update: {
-        audience: NotificationAudience.PLAYER,
-        displayName: getProspectDisplayName({
-          firstName: prospect.firstName,
-          lastName: prospect.lastName,
-        }),
-        phone: prospect.phone!.trim(),
-        transactionalSmsOptIn: true,
-        marketingSmsOptIn: true,
-      },
-      create: {
-        sourceType: "GENERAL",
-        sourceId: `team-prospect:${prospect.id}`,
-        audience: NotificationAudience.PLAYER,
-        displayName: getProspectDisplayName({
-          firstName: prospect.firstName,
-          lastName: prospect.lastName,
-        }),
-        phone: prospect.phone!.trim(),
-        transactionalSmsOptIn: true,
-        marketingSmsOptIn: true,
-      },
+    const recipient = await ensureProspectNotificationRecipient({
+      teamId: teamid,
+      teamName: team.name,
+      prospect,
     });
 
     await queueDirectNotification({
@@ -570,6 +641,10 @@ export async function sendBulkProspectSmsAction(formData: FormData) {
         originLabel: "Bulk SMS to prospects from captain hub",
         teamId: teamid,
         prospectId: prospect.id,
+        contactName: getProspectDisplayName({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+        }),
       },
       createdByUserId: user?.id ?? null,
     });
