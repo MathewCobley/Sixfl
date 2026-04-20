@@ -40,7 +40,7 @@ export default function TemplateSelect({
       ) : null}
 
       <Listbox value={value} onChange={onChange} disabled={disabled}>
-        <div className="relative">
+        <div className="relative z-50">
           <Listbox.Button
             className={[
               "relative flex h-11 w-full items-center justify-between rounded-xl border px-4 text-left text-sm outline-none transition",
@@ -74,7 +74,7 @@ export default function TemplateSelect({
               leaveFrom="opacity-100 translate-y-0"
               leaveTo="opacity-0 translate-y-1"
             >
-              <Listbox.Options className="absolute z-50 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-white/10 bg-zinc-950 p-1 shadow-2xl ring-1 ring-black/40 focus:outline-none">
+              <Listbox.Options className="absolute z-[100] mt-2 max-h-64 w-full overflow-auto rounded-xl border border-white/10 bg-zinc-950 p-1 shadow-2xl ring-1 ring-black/40 focus:outline-none">
                 {options.map((option) => (
                   <Listbox.Option
                     key={option.value}
