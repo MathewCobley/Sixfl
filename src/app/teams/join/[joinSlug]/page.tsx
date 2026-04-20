@@ -50,6 +50,10 @@ function getSavedMessage(saved?: string) {
     return "Thanks — your details have been saved and the organiser has been notified.";
   }
 
+  if (saved === "details-completed") {
+    return "Thanks — your prospect details have been updated and the organiser has been notified.";
+  }
+
   if (saved === "already-registered") {
     return "You have already registered interest for this team.";
   }
