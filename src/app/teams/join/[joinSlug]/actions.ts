@@ -6,8 +6,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { NotificationAudience, NotificationChannel } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { queueDirectNotification } from "@/lib/notifications/service";
 
 function normaliseNullableString(value: FormDataEntryValue | null) {
   const parsed = String(value ?? "").trim();
@@ -39,6 +42,61 @@ function buildAvailabilitySummary(
   }
 
   return parts.length > 0 ? parts.join(" | ") : null;
+}
+
+function getProspectDisplayName(input: {
+  firstName: string;
+  lastName: string | null;
+}) {
+  return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
+}
+
+function getDisplayValue(value: string | null) {
+  return value?.trim() ? value.trim() : "—";
+}
+
+function buildProspectAlertBody(input: {
+  teamName: string;
+  joinSlug: string | null;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  ageBand: string | null;
+  preferredPositions: string | null;
+  experienceSummary: string | null;
+  availabilityLevel: string | null;
+  preferredNights: string[];
+  availabilitySummary: string | null;
+  notes: string | null;
+}) {
+  const prospectName =
+    getProspectDisplayName({
+      firstName: input.firstName,
+      lastName: input.lastName,
+    }) || input.firstName;
+  const joinUrl = input.joinSlug
+    ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${input.joinSlug}`
+    : null;
+
+  return [
+    `A new player prospect has registered interest for ${input.teamName}.`,
+    "",
+    `Name: ${prospectName}`,
+    `Email: ${getDisplayValue(input.email)}`,
+    `Mobile: ${getDisplayValue(input.phone)}`,
+    `Age band: ${getDisplayValue(input.ageBand)}`,
+    `Preferred position: ${getDisplayValue(input.preferredPositions)}`,
+    `Experience: ${getDisplayValue(input.experienceSummary)}`,
+    `Availability level: ${getDisplayValue(input.availabilityLevel)}`,
+    `Preferred nights: ${input.preferredNights.length ? input.preferredNights.join(", ") : "—"}`,
+    `Availability summary: ${getDisplayValue(input.availabilitySummary)}`,
+    `Notes: ${getDisplayValue(input.notes)}`,
+    "Source: public-join-page",
+    ...(joinUrl ? ["", `Join page: ${joinUrl}`] : []),
+    "",
+    "You can review this prospect in the team prospects pipeline.",
+  ].join("\n");
 }
 
 export async function submitTeamJoinProspectAction(formData: FormData) {
@@ -77,6 +135,7 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
     },
     select: {
       id: true,
+      name: true,
       joinSlug: true,
     },
   });
@@ -107,7 +166,7 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
     redirect(buildRedirect(joinSlug, "?saved=already-registered"));
   }
 
-  await prisma.teamPlayerProspect.create({
+  const prospect = await prisma.teamPlayerProspect.create({
     data: {
       teamId: team.id,
       firstName,
@@ -126,6 +185,50 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
     },
   });
 
+  try {
+    const { recipient } = await upsertTeamNotificationRecipient(team.id);
+
+    if (recipient.email?.trim()) {
+      const prospectName = getProspectDisplayName({ firstName, lastName }) || firstName;
+
+      await queueDirectNotification({
+        recipientId: recipient.id,
+        channel: NotificationChannel.EMAIL,
+        audience: NotificationAudience.TEAM,
+        subject: `New prospect for ${team.name}: ${prospectName}`,
+        body: buildProspectAlertBody({
+          teamName: team.name,
+          joinSlug: team.joinSlug,
+          firstName,
+          lastName,
+          email,
+          phone,
+          ageBand,
+          preferredPositions,
+          experienceSummary,
+          availabilityLevel,
+          preferredNights,
+          availabilitySummary,
+          notes,
+        }),
+        isTransactional: true,
+        sourceType: "TEAM_PLAYER_PROSPECT",
+        sourceId: prospect.id,
+        metadata: {
+          origin: "public_team_join_prospect_alert",
+          originLabel: "New public prospect alert",
+          teamId: team.id,
+          prospectId: prospect.id,
+          joinSlug: team.joinSlug,
+          prospectName,
+        },
+      });
+    }
+  } catch {}
+
   revalidatePath(`/teams/join/${joinSlug}`);
+  revalidatePath(`/captain/team/${team.id}/prospects`);
+  revalidatePath(`/admin/teams/${team.id}/prospects`);
+  revalidatePath(`/admin/teams/${team.id}`);
   redirect(buildRedirect(joinSlug, "?saved=1"));
 }
