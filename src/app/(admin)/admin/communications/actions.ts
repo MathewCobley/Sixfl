@@ -39,6 +39,10 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
   const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
   const subject = getTrimmedValue(formData.get("subject"));
   const body = getTrimmedValue(formData.get("body"));
+  const templateId = getTrimmedValue(formData.get("templateId")) || null;
+  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
+  const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
+  const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
 
   if (!teamId) {
     redirect("/admin/teams?error=missing_id");
@@ -55,7 +59,7 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
   }
 
-  const { recipient } = await upsertTeamNotificationRecipient(teamId);
+  const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
 
   if (channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
     redirect(`${from}?error=This%20team%20does%20not%20have%20an%20email%20address.`);
@@ -74,10 +78,28 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     isTransactional: true,
     sourceType: "TEAM",
     sourceId: teamId,
+    emailBranding:
+      channel === NotificationChannel.EMAIL
+        ? {
+            teamName: snapshot.teamName,
+            leagueName: snapshot.leagueName,
+          }
+        : undefined,
+    emailCta:
+      channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
+        ? {
+            label: ctaLabel,
+            url: ctaUrl,
+          }
+        : undefined,
     metadata: {
       origin: "team_communications_hub",
       originLabel: "Sent from communications hub",
       teamId,
+      templateId,
+      templateKey,
+      ctaLabel,
+      ctaUrl,
     },
     createdByUserId: user?.id ?? null,
   });
@@ -102,6 +124,10 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
   const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
   const subject = getTrimmedValue(formData.get("subject"));
   const body = getTrimmedValue(formData.get("body"));
+  const templateId = getTrimmedValue(formData.get("templateId")) || null;
+  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
+  const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
+  const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
 
   if (!teamId || !prospectId) {
     redirect("/admin/teams?error=missing_id");
@@ -123,6 +149,17 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
       email: true,
       phone: true,
       status: true,
+      team: {
+        select: {
+          name: true,
+          league: {
+            select: {
+              name: true,
+              season: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -177,11 +214,31 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     isTransactional: false,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
+    emailBranding:
+      channel === NotificationChannel.EMAIL
+        ? {
+            teamName: prospect.team.name,
+            leagueName: prospect.team.league
+              ? `${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}`
+              : null,
+          }
+        : undefined,
+    emailCta:
+      channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
+        ? {
+            label: ctaLabel,
+            url: ctaUrl,
+          }
+        : undefined,
     metadata: {
       origin: "prospect_communications_hub",
       originLabel: "Sent from communications hub",
       teamId,
       prospectId: prospect.id,
+      templateId,
+      templateKey,
+      ctaLabel,
+      ctaUrl,
     },
     createdByUserId: user?.id ?? null,
   });
