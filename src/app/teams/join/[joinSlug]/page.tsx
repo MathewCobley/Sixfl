@@ -47,7 +47,11 @@ const NIGHTS = [
 
 function getSavedMessage(saved?: string) {
   if (saved === "1") {
-    return "Thanks — your details have been sent to the team organiser.";
+    return "Thanks — your details have been saved and the organiser has been notified.";
+  }
+
+  if (saved === "details-completed") {
+    return "Thanks — your prospect details have been updated and the organiser has been notified.";
   }
 
   if (saved === "already-registered") {
