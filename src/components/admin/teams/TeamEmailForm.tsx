@@ -4,6 +4,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
@@ -315,7 +316,7 @@ If you have any questions, just reply to this email.`}
         </div>
       ) : null}
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <SubmitButton disabled={!canSubmit} />
 
         <button
@@ -326,6 +327,13 @@ If you have any questions, just reply to this email.`}
         >
           Reset template
         </button>
+
+        <Link
+          href={`/admin/teams/${teamId}/communications`}
+          className="rounded-xl border border-white/10 px-4 py-2 text-white transition hover:bg-white/5"
+        >
+          Open communications hub
+        </Link>
       </div>
     </form>
   );
