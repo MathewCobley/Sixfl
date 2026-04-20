@@ -238,6 +238,13 @@ export default async function AdminTeamProspectsPage({
             Captain view
           </Link>
 
+          <Link
+            href={`/admin/teams/${team.id}/communications`}
+            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+          >
+            Team communications
+          </Link>
+
           {joinUrl ? (
             <a
               href={joinUrl}
@@ -720,12 +727,20 @@ export default async function AdminTeamProspectsPage({
                             }))}
                             placeholder="Select status"
                           />
-                          <button
-                            type="submit"
-                            className="mt-3 inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                          >
-                            Update status
-                          </button>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="submit"
+                              className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                            >
+                              Update status
+                            </button>
+                            <Link
+                              href={`/admin/teams/${team.id}/prospects/${prospect.id}/communications`}
+                              className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+                            >
+                              Communications
+                            </Link>
+                          </div>
                         </form>
                       </div>
                     </div>
