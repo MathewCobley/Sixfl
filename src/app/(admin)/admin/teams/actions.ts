@@ -10,6 +10,7 @@ import { Resend } from "resend";
 import {
   NotificationAudience,
   NotificationChannel,
+  NotificationRecipientSourceType,
   TeamMode,
   TeamRole,
 } from "@prisma/client";
@@ -23,6 +24,9 @@ import {
   appendSIXFLTextSignature,
   buildSIXFLEmailHtml,
 } from "@/lib/email/buildEmail";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
+import { logDirectOutboundMessage } from "@/lib/communications/log-direct-message";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const PROSPECT_JOIN_CTA_LABEL = "Register as a Player";
@@ -234,6 +238,38 @@ async function getProspectsForMessage(input: {
   });
 }
 
+async function upsertProspectNotificationRecipient(input: {
+  prospect: {
+    id: string;
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+  };
+  teamId: string;
+}) {
+  return upsertNotificationRecipient({
+    sourceType: NotificationRecipientSourceType.GENERAL,
+    sourceId: `team-prospect:${input.prospect.id}`,
+    audience: NotificationAudience.PLAYER,
+    displayName: getProspectDisplayName({
+      firstName: input.prospect.firstName,
+      lastName: input.prospect.lastName,
+    }) || input.prospect.firstName,
+    email: input.prospect.email?.trim() || null,
+    phone: getPhoneDisplayValue(input.prospect.phone),
+    marketingEmailOptIn: true,
+    marketingSmsOptIn: true,
+    transactionalEmailOptIn: true,
+    transactionalSmsOptIn: true,
+    metadata: {
+      teamId: input.teamId,
+      prospectId: input.prospect.id,
+      entityType: "TEAM_PROSPECT",
+    },
+  });
+}
+
 export async function createTeamAction(formData: FormData) {
   await requireAdmin();
 
@@ -438,7 +474,7 @@ export async function sendTeamMessageAction(formData: FormData) {
     );
   }
 
-  await queueDirectNotification({
+  const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
     channel,
     audience: NotificationAudience.TEAM,
@@ -479,6 +515,11 @@ export async function sendTeamMessageAction(formData: FormData) {
     createdByUserId: user?.id ?? null,
   });
 
+  await logNotificationDispatchToThread({
+    dispatch,
+    recipient,
+  });
+
   if (
     shouldMarkCaptainInvite({
       channel,
@@ -497,6 +538,7 @@ export async function sendTeamMessageAction(formData: FormData) {
   }
 
   revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/communications`);
   revalidatePath("/admin/teams");
   if (team.leagueId) {
     revalidatePath(`/admin/leagues/${team.leagueId}`);
@@ -564,11 +606,22 @@ export async function sendProspectMessageAction(formData: FormData) {
     redirect("/admin/teams?error=missing_id");
   }
 
-  if (channel === NotificationChannel.EMAIL && !prospect.email?.trim()) {
+  const recipient = await upsertProspectNotificationRecipient({
+    prospect: {
+      id: prospect.id,
+      firstName: prospect.firstName,
+      lastName: prospect.lastName,
+      email: prospect.email,
+      phone: prospect.phone,
+    },
+    teamId,
+  });
+
+  if (channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
     redirect(`${from}?prospectComposeError=missing_email`);
   }
 
-  if (channel === NotificationChannel.SMS && !prospect.phone?.trim()) {
+  if (channel === NotificationChannel.SMS && !recipient.phone?.trim()) {
     redirect(`${from}?prospectComposeError=missing_phone`);
   }
 
@@ -591,46 +644,43 @@ export async function sendProspectMessageAction(formData: FormData) {
       joinUrl,
     });
 
-    await resend.emails.send({
+    const resendResult = await resend.emails.send({
       from: process.env.EMAIL_FROM,
       to: prospect.email!.trim(),
       subject: personalisedSubject,
       text: signedTextBody,
       html: signedHtmlBody,
     });
-  } else {
-    const recipient = await prisma.notificationRecipient.upsert({
-      where: {
-        sourceType_sourceId: {
-          sourceType: "GENERAL",
-          sourceId: `team-prospect:${prospect.id}`,
-        },
-      },
-      update: {
-        audience: NotificationAudience.PLAYER,
-        displayName: getProspectDisplayName({
-          firstName: prospect.firstName,
-          lastName: prospect.lastName,
-        }),
-        phone: prospect.phone!.trim(),
-        transactionalSmsOptIn: true,
-        marketingSmsOptIn: true,
-      },
-      create: {
-        sourceType: "GENERAL",
-        sourceId: `team-prospect:${prospect.id}`,
-        audience: NotificationAudience.PLAYER,
-        displayName: getProspectDisplayName({
-          firstName: prospect.firstName,
-          lastName: prospect.lastName,
-        }),
-        phone: prospect.phone!.trim(),
-        transactionalSmsOptIn: true,
-        marketingSmsOptIn: true,
-      },
-    });
 
-    await queueDirectNotification({
+    await logDirectOutboundMessage({
+      channel: "EMAIL",
+      sourceType: "TEAM_PLAYER_PROSPECT",
+      sourceId: prospect.id,
+      recipientId: recipient.id,
+      teamId: team.id,
+      leagueId: team.leagueId,
+      contactName: getProspectDisplayName({
+        firstName: prospect.firstName,
+        lastName: prospect.lastName,
+      }) || prospect.firstName,
+      contactEmail: recipient.email,
+      emailNormalized: recipient.emailNormalized,
+      contactPhone: recipient.phone,
+      phoneNormalized: recipient.phoneNormalized,
+      subject: personalisedSubject,
+      body: signedTextBody,
+      textBody: signedTextBody,
+      htmlBody: signedHtmlBody,
+      toEmail: recipient.email,
+      provider: "resend",
+      providerStatus: "SENT",
+      resendEmailId:
+        typeof resendResult?.data?.id === "string" ? resendResult.data.id : null,
+      createdByUserId: user?.id ?? null,
+      sentAt: new Date(),
+    });
+  } else {
+    const dispatch = await queueDirectNotification({
       recipientId: recipient.id,
       channel: NotificationChannel.SMS,
       audience: NotificationAudience.PLAYER,
@@ -647,6 +697,11 @@ export async function sendProspectMessageAction(formData: FormData) {
       },
       createdByUserId: user?.id ?? null,
     });
+
+    await logNotificationDispatchToThread({
+      dispatch,
+      recipient,
+    });
   }
 
   await prisma.teamPlayerProspect.update({
@@ -658,6 +713,8 @@ export async function sendProspectMessageAction(formData: FormData) {
   });
 
   revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/prospects`);
+  revalidatePath(`/admin/teams/${teamId}/prospects/${prospect.id}/communications`);
   revalidatePath(`/captain/team/${teamId}/prospects`);
 
   redirect(`${from}?${getProspectRedirectParams({ mode: "single", channel })}`);
@@ -743,6 +800,17 @@ export async function sendBulkProspectMessageAction(formData: FormData) {
     : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
 
   for (const prospect of recipients) {
+    const recipient = await upsertProspectNotificationRecipient({
+      prospect: {
+        id: prospect.id,
+        firstName: prospect.firstName,
+        lastName: prospect.lastName,
+        email: prospect.email,
+        phone: prospect.phone,
+      },
+      teamId,
+    });
+
     const personalisedSubject =
       channel === NotificationChannel.EMAIL
         ? personaliseProspectText(subject, prospect, team)
@@ -755,46 +823,43 @@ export async function sendBulkProspectMessageAction(formData: FormData) {
         joinUrl,
       });
 
-      await resend.emails.send({
+      const resendResult = await resend.emails.send({
         from: process.env.EMAIL_FROM!,
         to: prospect.email!.trim(),
         subject: personalisedSubject,
         text: signedTextBody,
         html: signedHtmlBody,
       });
-    } else {
-      const recipient = await prisma.notificationRecipient.upsert({
-        where: {
-          sourceType_sourceId: {
-            sourceType: "GENERAL",
-            sourceId: `team-prospect:${prospect.id}`,
-          },
-        },
-        update: {
-          audience: NotificationAudience.PLAYER,
-          displayName: getProspectDisplayName({
-            firstName: prospect.firstName,
-            lastName: prospect.lastName,
-          }),
-          phone: prospect.phone!.trim(),
-          transactionalSmsOptIn: true,
-          marketingSmsOptIn: true,
-        },
-        create: {
-          sourceType: "GENERAL",
-          sourceId: `team-prospect:${prospect.id}`,
-          audience: NotificationAudience.PLAYER,
-          displayName: getProspectDisplayName({
-            firstName: prospect.firstName,
-            lastName: prospect.lastName,
-          }),
-          phone: prospect.phone!.trim(),
-          transactionalSmsOptIn: true,
-          marketingSmsOptIn: true,
-        },
-      });
 
-      await queueDirectNotification({
+      await logDirectOutboundMessage({
+        channel: "EMAIL",
+        sourceType: "TEAM_PLAYER_PROSPECT",
+        sourceId: prospect.id,
+        recipientId: recipient.id,
+        teamId: team.id,
+        leagueId: team.leagueId,
+        contactName: getProspectDisplayName({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+        }) || prospect.firstName,
+        contactEmail: recipient.email,
+        emailNormalized: recipient.emailNormalized,
+        contactPhone: recipient.phone,
+        phoneNormalized: recipient.phoneNormalized,
+        subject: personalisedSubject,
+        body: signedTextBody,
+        textBody: signedTextBody,
+        htmlBody: signedHtmlBody,
+        toEmail: recipient.email,
+        provider: "resend",
+        providerStatus: "SENT",
+        resendEmailId:
+          typeof resendResult?.data?.id === "string" ? resendResult.data.id : null,
+        createdByUserId: user?.id ?? null,
+        sentAt: new Date(),
+      });
+    } else {
+      const dispatch = await queueDirectNotification({
         recipientId: recipient.id,
         channel: NotificationChannel.SMS,
         audience: NotificationAudience.PLAYER,
@@ -810,6 +875,11 @@ export async function sendBulkProspectMessageAction(formData: FormData) {
           prospectId: prospect.id,
         },
         createdByUserId: user?.id ?? null,
+      });
+
+      await logNotificationDispatchToThread({
+        dispatch,
+        recipient,
       });
     }
   }
@@ -839,6 +909,10 @@ export async function sendBulkProspectMessageAction(formData: FormData) {
   });
 
   revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/prospects`);
+  for (const prospect of recipients) {
+    revalidatePath(`/admin/teams/${teamId}/prospects/${prospect.id}/communications`);
+  }
   revalidatePath(`/captain/team/${teamId}/prospects`);
 
   redirect(`${from}?${getProspectRedirectParams({ mode: "bulk", channel })}`);
@@ -902,7 +976,7 @@ export async function sendTeamPaymentRequestAction(formData: FormData) {
     "If you have any questions, just reply to this email.",
   ].join("\n");
 
-  await queueDirectNotification({
+  const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
     channel: NotificationChannel.EMAIL,
     audience: NotificationAudience.TEAM,
@@ -940,7 +1014,13 @@ export async function sendTeamPaymentRequestAction(formData: FormData) {
     createdByUserId: user?.id ?? null,
   });
 
+  await logNotificationDispatchToThread({
+    dispatch,
+    recipient,
+  });
+
   revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/communications`);
   revalidatePath("/admin/teams");
   if (team.leagueId) {
     revalidatePath(`/admin/leagues/${team.leagueId}`);
