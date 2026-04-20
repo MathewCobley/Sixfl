@@ -105,6 +105,24 @@ We have received your enquiry and we will be in touch shortly.
   });
 
   await upsertTemplate({
+    key: "login-magic-link-email",
+    name: "Login magic link email",
+    description: "Transactional email used for SIXFL sign-in links, including pending captain access.",
+    channel: NotificationChannel.EMAIL,
+    audience: NotificationAudience.GENERAL,
+    subject: "Your SIXFL sign-in link",
+    body: `Hi
+
+Use the secure sign-in link below to access SIXFL.
+
+{{signInUrl}}
+
+{{pendingCaptainNotice}}
+
+If you did not request this email, you can ignore it.`,
+  });
+
+  await upsertTemplate({
     key: "fixture-change-email",
     name: "Fixture change email",
     description: "Transactional email for a fixture change.",
