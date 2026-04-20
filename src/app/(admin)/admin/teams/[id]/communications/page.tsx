@@ -5,10 +5,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
-import { sendTeamCommunicationMessageAction } from "@/app/(admin)/admin/communications/actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -48,6 +48,7 @@ export default async function AdminTeamCommunicationsPage({
     select: {
       id: true,
       name: true,
+      claimCode: true,
       joinSlug: true,
       league: {
         select: {
@@ -65,19 +66,57 @@ export default async function AdminTeamCommunicationsPage({
 
   const { snapshot } = await upsertTeamNotificationRecipient(team.id);
 
-  const threads = await prisma.messageThread.findMany({
-    where: {
-      sourceType: "TEAM",
-      sourceId: team.id,
-    },
-    include: {
-      messages: {
-        orderBy: [{ createdAt: "desc" }],
-        take: 100,
+  const [threads, emailTemplates, smsTemplates] = await Promise.all([
+    prisma.messageThread.findMany({
+      where: {
+        sourceType: "TEAM",
+        sourceId: team.id,
       },
-    },
-    orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
-  });
+      include: {
+        messages: {
+          orderBy: [{ createdAt: "desc" }],
+          take: 100,
+        },
+      },
+      orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+    }),
+    prisma.emailTemplate.findMany({
+      where: {
+        isActive: true,
+        audience: {
+          in: ["TEAM", "GENERAL"],
+        },
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        subject: true,
+        body: true,
+        description: true,
+        ctaLabel: true,
+        ctaUrlKey: true,
+      },
+    }),
+    prisma.notificationTemplate.findMany({
+      where: {
+        isActive: true,
+        channel: "SMS",
+        audience: {
+          in: ["TEAM", "GENERAL"],
+        },
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        body: true,
+        description: true,
+      },
+    }),
+  ]);
 
   const messages = threads
     .flatMap((thread) => thread.messages.map((message) => ({ thread, message })))
@@ -88,6 +127,37 @@ export default async function AdminTeamCommunicationsPage({
       ? `${getChannelLabel(filters.channel)} queued from communications hub.`
       : null;
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
+
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(team.claimCode)}`;
+  const teamJoinUrl = team.joinSlug ? `${baseUrl}/teams/join/${team.joinSlug}` : `${baseUrl}/register-interest`;
+  const fixedPaymentUrl = "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
+
+  const resolvedEmailTemplates = emailTemplates.map((template) => {
+    const ctaUrl =
+      template.ctaUrlKey === "signupUrl"
+        ? `${baseUrl}/register-interest`
+        : template.ctaUrlKey === "manageTeamUrl"
+          ? claimLink
+          : template.ctaUrlKey === "captainDashboardUrl"
+            ? claimLink
+            : template.ctaUrlKey === "teamJoinUrl"
+              ? teamJoinUrl
+              : template.ctaUrlKey === "paymentUrl"
+                ? fixedPaymentUrl
+                : null;
+
+    return {
+      id: template.id,
+      key: template.key,
+      name: template.name,
+      subject: template.subject,
+      body: template.body,
+      description: template.description,
+      ctaLabel: template.ctaLabel,
+      ctaUrl,
+    };
+  });
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -187,70 +257,20 @@ export default async function AdminTeamCommunicationsPage({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="space-y-6">
-          <form
-            action={sendTeamCommunicationMessageAction}
-            className="rounded-3xl border border-white/10 bg-white/5 p-6"
-          >
-            <input type="hidden" name="teamId" value={team.id} />
-            <input type="hidden" name="from" value={`/admin/teams/${team.id}/communications`} />
-            <input type="hidden" name="channel" value="EMAIL" />
-
-            <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">EMAIL</div>
-            <div className="mt-2 text-xl font-semibold text-white">Send team email</div>
-            <div className="mt-1 text-sm text-white/60">To: {snapshot.primaryContact.email ?? "No email set"}</div>
-
-            <div className="mt-5 space-y-3">
-              <input
-                name="subject"
-                placeholder="Subject"
-                className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400"
-              />
-              <textarea
-                name="body"
-                rows={8}
-                placeholder="Write your message..."
-                className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-            >
-              Queue email
-            </button>
-          </form>
-
-          <form
-            action={sendTeamCommunicationMessageAction}
-            className="rounded-3xl border border-white/10 bg-white/5 p-6"
-          >
-            <input type="hidden" name="teamId" value={team.id} />
-            <input type="hidden" name="from" value={`/admin/teams/${team.id}/communications`} />
-            <input type="hidden" name="channel" value="SMS" />
-
-            <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">SMS</div>
-            <div className="mt-2 text-xl font-semibold text-white">Send team SMS</div>
-            <div className="mt-1 text-sm text-white/60">To: {snapshot.primaryContact.phone ?? "No mobile set"}</div>
-
-            <div className="mt-5 space-y-3">
-              <textarea
-                name="body"
-                rows={8}
-                placeholder="Write your SMS..."
-                className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              Queue SMS
-            </button>
-          </form>
-        </div>
+        <TeamCommunicationsComposer
+          teamId={team.id}
+          fromPath={`/admin/teams/${team.id}/communications`}
+          toEmail={snapshot.primaryContact.email ?? null}
+          toPhone={snapshot.primaryContact.phone ?? null}
+          contactName={snapshot.primaryContact.name ?? null}
+          teamName={team.name}
+          leagueName={team.league ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}` : null}
+          claimCode={team.claimCode}
+          claimLink={claimLink}
+          captainDashboardUrl={claimLink}
+          emailTemplates={resolvedEmailTemplates}
+          smsTemplates={smsTemplates}
+        />
 
         <div className="rounded-3xl border border-white/10 bg-white/5">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
