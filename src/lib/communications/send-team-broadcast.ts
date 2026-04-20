@@ -1,0 +1,109 @@
+// ========================================
+// File: src/lib/communications/send-team-broadcast.ts
+// ========================================
+
+import { NotificationAudience, NotificationChannel } from "@prisma/client";
+
+import { prisma } from "@/lib/prisma";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { queueDirectNotification } from "@/lib/notifications/service";
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
+
+type Input = {
+  teamId: string;
+  channel: NotificationChannel;
+  subject?: string | null;
+  body: string;
+  templateId?: string | null;
+  templateKey?: string | null;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+  origin: string;
+  originLabel: string;
+  metadata?: Record<string, unknown>;
+  createdByUserId?: string | null;
+};
+
+export async function sendTeamBroadcastMessage(input: Input) {
+  const team = await prisma.team.findUnique({
+    where: { id: input.teamId },
+    select: {
+      id: true,
+      leagueId: true,
+      name: true,
+      logoUrl: true,
+      league: {
+        select: {
+          name: true,
+          season: true,
+        },
+      },
+    },
+  });
+
+  if (!team) {
+    throw new Error("Team not found");
+  }
+
+  const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
+
+  if (input.channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
+    return { skipped: true as const, reason: "missing_email" };
+  }
+
+  if (input.channel === NotificationChannel.SMS && !recipient.phone?.trim()) {
+    return { skipped: true as const, reason: "missing_phone" };
+  }
+
+  const dispatch = await queueDirectNotification({
+    recipientId: recipient.id,
+    channel: input.channel,
+    audience: NotificationAudience.TEAM,
+    subject: input.channel === NotificationChannel.EMAIL ? input.subject ?? null : null,
+    body: input.body,
+    isTransactional: true,
+    sourceType: "TEAM",
+    sourceId: team.id,
+    emailBranding:
+      input.channel === NotificationChannel.EMAIL
+        ? {
+            teamName: snapshot.teamName,
+            teamLogoUrl: team.logoUrl ?? null,
+            leagueName: team.league
+              ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+              : null,
+          }
+        : undefined,
+    emailCta:
+      input.channel === NotificationChannel.EMAIL && input.ctaLabel && input.ctaUrl
+        ? {
+            label: input.ctaLabel,
+            url: input.ctaUrl,
+          }
+        : undefined,
+    metadata: {
+      origin: input.origin,
+      originLabel: input.originLabel,
+      teamId: team.id,
+      teamName: team.name,
+      leagueId: team.leagueId,
+      templateId: input.templateId ?? null,
+      templateKey: input.templateKey ?? null,
+      ctaLabel: input.ctaLabel ?? null,
+      ctaUrl: input.ctaUrl ?? null,
+      ...(input.metadata ?? {}),
+    },
+    createdByUserId: input.createdByUserId ?? null,
+  });
+
+  await logNotificationDispatchToThread({
+    dispatch,
+    recipient,
+  });
+
+  return {
+    skipped: false as const,
+    dispatchId: dispatch.id,
+    teamId: team.id,
+  };
+}
