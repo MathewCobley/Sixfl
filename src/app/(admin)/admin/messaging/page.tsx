@@ -10,6 +10,7 @@ import {
   getAdminInboxThreads,
   getMessageThreadById,
 } from "@/lib/messaging/service";
+import CommunicationsTeamLauncher from "@/components/admin/communications/CommunicationsTeamLauncher";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
 
 function normaliseFilter(value?: string) {
@@ -45,7 +46,7 @@ export default async function AdminMessagesPage({
   const selectedFilter = normaliseFilter(sp.filter);
   const selectedThreadId = sp.thread?.trim() || "";
 
-  const [summary, threads, selectedThread, leagues] = await Promise.all([
+  const [summary, threads, selectedThread, leagues, teams] = await Promise.all([
     getAdminInboxSummary(),
     getAdminInboxThreads({
       unreadOnly: selectedFilter === "unread",
@@ -65,6 +66,19 @@ export default async function AdminMessagesPage({
         name: true,
         slug: true,
         season: true,
+      },
+    }),
+    prisma.team.findMany({
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        league: {
+          select: {
+            name: true,
+            season: true,
+          },
+        },
       },
     }),
   ]);
@@ -173,6 +187,16 @@ export default async function AdminMessagesPage({
             </div>
           </div>
         </section>
+
+        <CommunicationsTeamLauncher
+          teams={teams.map((team) => ({
+            id: team.id,
+            name: team.name,
+            leagueLabel: team.league
+              ? `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`
+              : null,
+          }))}
+        />
 
         <AdminMessagesInbox
           threads={threads.map((thread) => ({
