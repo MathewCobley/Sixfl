@@ -10,6 +10,9 @@ import {
   getAdminInboxThreads,
   getMessageThreadById,
 } from "@/lib/messaging/service";
+import CommunicationsLeadLauncher from "@/components/admin/communications/CommunicationsLeadLauncher";
+import CommunicationsLeagueLauncher from "@/components/admin/communications/CommunicationsLeagueLauncher";
+import CommunicationsProspectLauncher from "@/components/admin/communications/CommunicationsProspectLauncher";
 import CommunicationsTeamLauncher from "@/components/admin/communications/CommunicationsTeamLauncher";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
 
@@ -46,7 +49,7 @@ export default async function AdminMessagesPage({
   const selectedFilter = normaliseFilter(sp.filter);
   const selectedThreadId = sp.thread?.trim() || "";
 
-  const [summary, threads, selectedThread, leagues, teams] = await Promise.all([
+  const [summary, threads, selectedThread, leagues, teams, prospects] = await Promise.all([
     getAdminInboxSummary(),
     getAdminInboxThreads({
       unreadOnly: selectedFilter === "unread",
@@ -81,6 +84,27 @@ export default async function AdminMessagesPage({
         },
       },
     }),
+    prisma.teamPlayerProspect.findMany({
+      orderBy: [{ createdAt: "desc" }],
+      take: 300,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        teamId: true,
+        team: {
+          select: {
+            name: true,
+            league: {
+              select: {
+                name: true,
+                season: true,
+              },
+            },
+          },
+        },
+      },
+    }),
   ]);
 
   const fallbackThread =
@@ -94,7 +118,7 @@ export default async function AdminMessagesPage({
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
-                Team inbox
+                Communications
               </div>
 
               <div>
@@ -104,24 +128,18 @@ export default async function AdminMessagesPage({
 
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
                   View inbound SMS and email replies, track unread conversations,
-                  and keep team communications in one proper SIXFL inbox.
+                  and use Communications as the central launch point for teams,
+                  prospects, leads, and whole-league outreach.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/admin/messaging"
+                href="/admin/templates"
                 className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
               >
-                Lead campaigns
-              </Link>
-
-              <Link
-                href="/admin/sms-templates"
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
-              >
-                SMS templates
+                Templates
               </Link>
 
               <Link
@@ -129,6 +147,13 @@ export default async function AdminMessagesPage({
                 className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
               >
                 Team contacts
+              </Link>
+
+              <Link
+                href="/admin/leads"
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+              >
+                Leads console
               </Link>
             </div>
           </div>
@@ -188,15 +213,34 @@ export default async function AdminMessagesPage({
           </div>
         </section>
 
-        <CommunicationsTeamLauncher
-          teams={teams.map((team) => ({
-            id: team.id,
-            name: team.name,
-            leagueLabel: team.league
-              ? `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`
-              : null,
-          }))}
-        />
+        <div className="grid gap-6 xl:grid-cols-2">
+          <CommunicationsTeamLauncher
+            teams={teams.map((team) => ({
+              id: team.id,
+              name: team.name,
+              leagueLabel: team.league
+                ? `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`
+                : null,
+            }))}
+          />
+
+          <CommunicationsProspectLauncher
+            prospects={prospects.map((prospect) => ({
+              id: prospect.id,
+              teamId: prospect.teamId,
+              label: `${prospect.firstName}${prospect.lastName ? ` ${prospect.lastName}` : ""} · ${prospect.team.name}${prospect.team.league?.name ? ` · ${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}` : ""}`,
+            }))}
+          />
+
+          <CommunicationsLeagueLauncher
+            leagues={leagues.map((league) => ({
+              id: league.id,
+              label: `${league.name}${league.season ? ` · ${league.season}` : ""}`,
+            }))}
+          />
+
+          <CommunicationsLeadLauncher />
+        </div>
 
         <AdminMessagesInbox
           threads={threads.map((thread) => ({
