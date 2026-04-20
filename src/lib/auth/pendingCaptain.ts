@@ -23,7 +23,7 @@ export async function getPendingCaptainContext(
     where: {
       captainUserId: null,
       claimCode: {
-        not: null,
+        not: "",
       },
       OR: [
         {
