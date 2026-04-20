@@ -5,12 +5,16 @@
 type PageProps = {
   searchParams: Promise<{
     email?: string;
+    pendingCaptain?: string;
+    teamName?: string;
   }>;
 };
 
 export default async function CheckEmailPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const email = params.email ?? "your email address";
+  const pendingCaptain = params.pendingCaptain === "1";
+  const teamName = params.teamName?.trim() || "your team";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
@@ -30,7 +34,14 @@ export default async function CheckEmailPage({ searchParams }: PageProps) {
           junk folder.
         </p>
 
-        <div className="mt-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+        {pendingCaptain ? (
+          <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            You haven’t fully registered as captain for {teamName} yet. Open the
+            link in your email first, then complete the team claim step.
+          </div>
+        ) : null}
+
+        <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
           Make sure you open the link on this device to complete sign-in.
         </div>
 
