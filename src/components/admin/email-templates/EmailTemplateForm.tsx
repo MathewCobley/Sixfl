@@ -127,6 +127,9 @@ const TOKENS = [
   "{{claimCode}}",
   "{{claimLink}}",
   "{{captainDashboardUrl}}",
+  "{{signInUrl}}",
+  "{{claimUrl}}",
+  "{{pendingCaptainNotice}}",
   "{{fixtureUrl}}",
   "{{fixturesUrl}}",
   "{{paymentUrl}}",
@@ -227,6 +230,18 @@ function previewReplace(text: string) {
     .replaceAll(
       "{{captainDashboardUrl}}",
       "https://www.sixfl.co.uk/claim?code=H862NY",
+    )
+    .replaceAll(
+      "{{signInUrl}}",
+      "https://www.sixfl.co.uk/api/auth/callback/email?token=demo-token",
+    )
+    .replaceAll(
+      "{{claimUrl}}",
+      "https://www.sixfl.co.uk/claim?code=H862NY",
+    )
+    .replaceAll(
+      "{{pendingCaptainNotice}}",
+      "It looks like your captain access still needs to be claimed for Harrogate Athletic. Sign in first, then complete your team claim.",
     )
     .replaceAll(
       "{{fixtureUrl}}",
