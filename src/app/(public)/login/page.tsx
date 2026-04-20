@@ -29,15 +29,21 @@ export default function LoginPage() {
 
     const data = await res.json();
 
-    if (!data.exists) {
+    if (!data.canLogin) {
       setLoading(false);
       setNotice("This email isn’t currently registered with SIXFL.");
       return;
     }
 
+    const callbackUrl = data.pendingCaptain
+      ? data.claimCode
+        ? `/claim?code=${encodeURIComponent(data.claimCode)}`
+        : "/claim"
+      : "/dashboard";
+
     const result = await signIn("email", {
       email,
-      callbackUrl: "/dashboard",
+      callbackUrl,
       redirect: false,
     });
 
@@ -47,7 +53,18 @@ export default function LoginPage() {
       return;
     }
 
-    window.location.href = `/login/check-email?email=${encodeURIComponent(email)}`;
+    const nextUrl = new URL("/login/check-email", window.location.origin);
+    nextUrl.searchParams.set("email", email);
+
+    if (data.pendingCaptain) {
+      nextUrl.searchParams.set("pendingCaptain", "1");
+
+      if (data.teamName) {
+        nextUrl.searchParams.set("teamName", data.teamName);
+      }
+    }
+
+    window.location.href = nextUrl.toString();
   }
 
   return (
@@ -95,7 +112,8 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-4 text-xs text-white/50">
-          Only registered SIXFL players, captains, referees and admins can log in.
+          Registered SIXFL users can log in here. Pending captains can also use
+          their team email to get started and then claim their team.
         </p>
       </div>
     </div>
