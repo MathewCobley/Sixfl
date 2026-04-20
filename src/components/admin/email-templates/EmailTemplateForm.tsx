@@ -7,6 +7,8 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { buildSIXFLEmailHtml } from "@/lib/email/buildEmail";
+
 type FormState = {
   ok?: boolean;
   success?: boolean;
@@ -315,9 +317,19 @@ export default function EmailTemplateForm({
   );
 
   const previewSubject = useMemo(() => previewReplace(subject), [subject]);
-  const previewBody = useMemo(
-    () => previewReplace(body).replaceAll("{{cta}}", ""),
-    [body],
+  const previewHtml = useMemo(
+    () =>
+      buildSIXFLEmailHtml({
+        body: previewReplace(body),
+        cta:
+          ctaLabel && selectedCta.previewUrl
+            ? {
+                label: ctaLabel,
+                url: selectedCta.previewUrl,
+              }
+            : undefined,
+      }),
+    [body, ctaLabel, selectedCta.previewUrl],
   );
 
   function insertToken(token: string) {
@@ -653,25 +665,12 @@ export default function EmailTemplateForm({
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-black/10 bg-white p-6 shadow-[0_12px_50px_rgba(0,0,0,0.18)]">
-            <div className="text-xl font-semibold leading-tight text-[#111827]">
+          <div className="overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_12px_50px_rgba(0,0,0,0.18)]">
+            <div className="border-b border-black/5 px-6 py-4 text-xl font-semibold leading-tight text-[#111827]">
               {previewSubject || "Your email subject preview"}
             </div>
 
-            <div className="mt-8 space-y-6 whitespace-pre-wrap text-[15px] leading-8 text-[#111827]">
-              {previewBody || "Your email body preview will appear here."}
-            </div>
-
-            {ctaLabel && selectedCta.previewUrl ? (
-              <div className="mt-8">
-                <div className="inline-flex items-center justify-center rounded-xl bg-[#1E5A43] px-5 py-3 text-sm font-semibold text-white">
-                  {ctaLabel}
-                </div>
-                <div className="mt-3 break-all text-sm text-[#1E5A43]">
-                  {selectedCta.previewUrl}
-                </div>
-              </div>
-            ) : null}
+            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
           </div>
         </aside>
       </div>
