@@ -296,7 +296,13 @@ export default async function AdminProspectCommunicationsPage({
                     </div>
                   </div>
 
-                  <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{message.body}</div>
+                  {message.channel === "EMAIL" && message.htmlBody ? (
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+                      <div dangerouslySetInnerHTML={{ __html: message.htmlBody }} />
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{message.textBody || message.body}</div>
+                  )}
 
                   <div className="text-xs text-white/45">{message.createdAt.toLocaleString()}</div>
                 </div>
