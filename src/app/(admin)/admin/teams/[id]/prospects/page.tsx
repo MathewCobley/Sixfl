@@ -5,19 +5,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import FormListboxField from "@/components/ui/FormListboxField";
+import AdminProspectCard from "@/components/admin/teams/AdminProspectCard";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import {
-  sendBulkProspectMessageAction,
-  sendProspectMessageAction,
-} from "../../actions";
-import {
-  addAdminProspectAction,
-  convertAdminProspectToMemberAction,
-  updateAdminProspectNotesAction,
-  updateAdminProspectStatusAction,
-} from "./actions";
+import { sendBulkProspectMessageAction } from "../../actions";
+import { addAdminProspectAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,15 +19,6 @@ export const metadata = {
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-const STATUS_OPTIONS = [
-  { value: "NEW", label: "New" },
-  { value: "CONTACTED", label: "Contacted" },
-  { value: "TRIAL", label: "Trial" },
-  { value: "ACTIVE_SQUAD", label: "Active squad" },
-  { value: "BACKUP", label: "Backup" },
-  { value: "DECLINED", label: "Declined" },
-] as const;
 
 function getSavedMessage(saved?: string) {
   switch (saved) {
@@ -97,39 +80,6 @@ function getProspectError(searchParams: SearchParams) {
     default:
       return null;
   }
-}
-
-function getStatusLabel(status: string) {
-  const option = STATUS_OPTIONS.find((item) => item.value === status);
-  return option?.label ?? status;
-}
-
-function getStatusClasses(status: string) {
-  switch (status) {
-    case "NEW":
-      return "border-white/10 bg-white/5 text-white/75";
-    case "CONTACTED":
-      return "border-sky-400/25 bg-sky-500/10 text-sky-100";
-    case "TRIAL":
-      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
-    case "ACTIVE_SQUAD":
-      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-    case "BACKUP":
-      return "border-violet-400/25 bg-violet-500/10 text-violet-100";
-    case "DECLINED":
-      return "border-red-400/25 bg-red-500/10 text-red-100";
-    default:
-      return "border-white/10 bg-white/5 text-white/75";
-  }
-}
-
-function getPreferredNightsDisplay(value: unknown) {
-  if (!Array.isArray(value)) {
-    return null;
-  }
-
-  const nights = value.filter((item): item is string => typeof item === "string");
-  return nights.length > 0 ? nights.join(", ") : null;
 }
 
 function getProspectName(input: {
@@ -294,7 +244,7 @@ export default async function AdminTeamProspectsPage({
             </h2>
 
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Review incoming player interest, move prospects through the funnel, email or text them directly, and promote players into the active squad.
+              Review incoming player interest, move prospects through the funnel, and open the central communications view whenever you need history or outreach.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -637,222 +587,13 @@ export default async function AdminTeamProspectsPage({
                 No prospects yet.
               </div>
             ) : (
-              team.prospects.map((prospect) => {
-                const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
-
-                return (
-                  <div key={prospect.id} className="space-y-5 px-6 py-5">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-base font-semibold text-white">
-                            {getProspectName({
-                              firstName: prospect.firstName,
-                              lastName: prospect.lastName,
-                            })}
-                          </div>
-
-                          <span
-                            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getStatusClasses(
-                              prospect.status,
-                            )}`}
-                          >
-                            {getStatusLabel(prospect.status)}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 text-sm text-white/65">
-                          {prospect.email || "No email"}{" "}
-                          {prospect.phone ? `· ${prospect.phone}` : ""}
-                        </div>
-
-                        <div className="mt-1 text-xs text-white/45">
-                          {prospect.source || "No source"} · Added {prospect.createdAt.toLocaleString()}
-                        </div>
-
-                        {prospect.ageBand ? (
-                          <div className="mt-2 text-sm text-white/70">
-                            Age band: {prospect.ageBand}
-                          </div>
-                        ) : null}
-
-                        {prospect.preferredPositions ? (
-                          <div className="mt-2 text-sm text-white/70">
-                            Position: {prospect.preferredPositions}
-                          </div>
-                        ) : null}
-
-                        {prospect.experienceSummary ? (
-                          <div className="mt-2 text-sm text-white/60">
-                            Experience: {prospect.experienceSummary}
-                          </div>
-                        ) : null}
-
-                        {prospect.availabilityLevel ? (
-                          <div className="mt-2 text-sm text-white/60">
-                            Availability level: {prospect.availabilityLevel}
-                          </div>
-                        ) : null}
-
-                        {preferredNights ? (
-                          <div className="mt-2 text-sm text-white/60">
-                            Preferred nights: {preferredNights}
-                          </div>
-                        ) : null}
-
-                        {prospect.availabilitySummary ? (
-                          <div className="mt-2 text-sm text-white/50">
-                            {prospect.availabilitySummary}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="min-w-[220px]">
-                        <form
-                          action={updateAdminProspectStatusAction}
-                          className="min-w-[220px]"
-                        >
-                          <input type="hidden" name="teamId" value={team.id} />
-                          <input
-                            type="hidden"
-                            name="prospectId"
-                            value={prospect.id}
-                          />
-                          <FormListboxField
-                            name="status"
-                            value={prospect.status}
-                            options={STATUS_OPTIONS.map((option) => ({
-                              value: option.value,
-                              label: option.label,
-                            }))}
-                            placeholder="Select status"
-                          />
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              type="submit"
-                              className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                            >
-                              Update status
-                            </button>
-                            <Link
-                              href={`/admin/teams/${team.id}/prospects/${prospect.id}/communications`}
-                              className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-                            >
-                              Communications
-                            </Link>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-                      <form action={updateAdminProspectNotesAction} className="space-y-3">
-                        <input type="hidden" name="teamId" value={team.id} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
-
-                        <textarea
-                          name="notes"
-                          rows={3}
-                          defaultValue={prospect.notes ?? ""}
-                          placeholder="Internal notes"
-                          className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition focus:border-emerald-500/60"
-                        />
-
-                        <button
-                          type="submit"
-                          className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                        >
-                          Save notes
-                        </button>
-                      </form>
-
-                      <form action={convertAdminProspectToMemberAction} className="lg:self-start">
-                        <input type="hidden" name="teamId" value={team.id} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
-                        <button
-                          type="submit"
-                          className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-                        >
-                          Promote to squad
-                        </button>
-                      </form>
-                    </div>
-
-                    <div className="grid gap-4 xl:grid-cols-2">
-                      <form
-                        action={sendProspectMessageAction}
-                        className="rounded-2xl border border-white/10 bg-black/20 p-4"
-                      >
-                        <input type="hidden" name="teamId" value={team.id} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
-                        <input
-                          type="hidden"
-                          name="from"
-                          value={`/admin/teams/${team.id}/prospects`}
-                        />
-                        <input type="hidden" name="channel" value="EMAIL" />
-
-                        <div className="text-sm font-semibold text-white">Individual email</div>
-                        <div className="mt-1 text-xs text-white/45">To: {prospect.email || "No email"}</div>
-
-                        <div className="mt-4 space-y-3">
-                          <input
-                            name="subject"
-                            placeholder="Subject"
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400"
-                          />
-                          <textarea
-                            name="body"
-                            rows={5}
-                            placeholder="Hi {{firstName}}, ..."
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-                        >
-                          Queue email
-                        </button>
-                      </form>
-
-                      <form
-                        action={sendProspectMessageAction}
-                        className="rounded-2xl border border-white/10 bg-black/20 p-4"
-                      >
-                        <input type="hidden" name="teamId" value={team.id} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
-                        <input
-                          type="hidden"
-                          name="from"
-                          value={`/admin/teams/${team.id}/prospects`}
-                        />
-                        <input type="hidden" name="channel" value="SMS" />
-
-                        <div className="text-sm font-semibold text-white">Individual SMS</div>
-                        <div className="mt-1 text-xs text-white/45">To: {prospect.phone || "No phone"}</div>
-
-                        <div className="mt-4 space-y-3">
-                          <textarea
-                            name="body"
-                            rows={5}
-                            placeholder="Hi {{firstName}}, ..."
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-                        >
-                          Queue SMS
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                );
-              })
+              team.prospects.map((prospect) => (
+                <AdminProspectCard
+                  key={prospect.id}
+                  teamId={team.id}
+                  prospect={prospect}
+                />
+              ))
             )}
           </div>
         </div>
