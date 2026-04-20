@@ -78,7 +78,7 @@ const navigation = [
     icon: UsersIcon,
   },
   {
-    name: "Messaging",
+    name: "Communications",
     href: "/admin/messaging",
     icon: DocumentTextIcon,
   },
@@ -132,7 +132,7 @@ export default function AdminSidebar({
             const active = isActivePath(pathname, item.href, item.exact);
             const Icon = item.icon;
             const unreadCount =
-              item.name === "Messaging" ? unreadMessagingCount : 0;
+              item.name === "Communications" ? unreadMessagingCount : 0;
 
             return (
               <Link
@@ -178,10 +178,10 @@ export default function AdminSidebar({
                     {item.name === "Payments" && "Charges and payments"}
                     {item.name === "Referees" && "Officials and assignments"}
                     {item.name === "Leads" && "Inbound enquiries"}
-                    {item.name === "Messaging" &&
+                    {item.name === "Communications" &&
                       (unreadCount > 0
                         ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
-                        : "Campaigns and outreach")}
+                        : "Email, SMS and history")}
                     {item.name === "Templates" && "Email and SMS messaging"}
                   </div>
                 </div>
