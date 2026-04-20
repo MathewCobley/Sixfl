@@ -55,6 +55,24 @@ function getDisplayValue(value: string | null) {
   return value?.trim() ? value.trim() : "—";
 }
 
+function mergeExistingProspectNotes(input: {
+  existingNotes: string | null;
+  publicNotes: string | null;
+}) {
+  if (!input.publicNotes) {
+    return input.existingNotes;
+  }
+
+  const stamp = new Date().toLocaleString("en-GB");
+  const publicEntry = `Public form note (${stamp}): ${input.publicNotes}`;
+
+  if (!input.existingNotes?.trim()) {
+    return publicEntry;
+  }
+
+  return `${input.existingNotes.trim()}\n\n${publicEntry}`;
+}
+
 function buildProspectAlertBody(input: {
   teamName: string;
   joinSlug: string | null;
@@ -69,6 +87,7 @@ function buildProspectAlertBody(input: {
   preferredNights: string[];
   availabilitySummary: string | null;
   notes: string | null;
+  eventLabel: string;
 }) {
   const prospectName =
     getProspectDisplayName({
@@ -80,7 +99,7 @@ function buildProspectAlertBody(input: {
     : null;
 
   return [
-    `A new player prospect has registered interest for ${input.teamName}.`,
+    `${input.eventLabel} for ${input.teamName}.`,
     "",
     `Name: ${prospectName}`,
     `Email: ${getDisplayValue(input.email)}`,
@@ -91,7 +110,7 @@ function buildProspectAlertBody(input: {
     `Availability level: ${getDisplayValue(input.availabilityLevel)}`,
     `Preferred nights: ${input.preferredNights.length ? input.preferredNights.join(", ") : "—"}`,
     `Availability summary: ${getDisplayValue(input.availabilitySummary)}`,
-    `Notes: ${getDisplayValue(input.notes)}`,
+    `Player note: ${getDisplayValue(input.notes)}`,
     "Source: public-join-page",
     ...(joinUrl ? ["", `Join page: ${joinUrl}`] : []),
     "",
@@ -159,31 +178,54 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
     select: {
       id: true,
       status: true,
+      notes: true,
+      source: true,
     },
   });
 
-  if (existing) {
-    redirect(buildRedirect(joinSlug, "?saved=already-registered"));
-  }
+  const eventLabel = existing
+    ? "An existing prospect has completed their player details form"
+    : "A new player prospect has registered interest";
 
-  const prospect = await prisma.teamPlayerProspect.create({
-    data: {
-      teamId: team.id,
-      firstName,
-      lastName,
-      email,
-      phone,
-      ageBand,
-      preferredPositions,
-      experienceSummary,
-      availabilityLevel,
-      preferredNights,
-      availabilitySummary,
-      notes,
-      source: "public-join-page",
-      status: "NEW",
-    },
-  });
+  const prospect = existing
+    ? await prisma.teamPlayerProspect.update({
+        where: { id: existing.id },
+        data: {
+          firstName,
+          lastName,
+          email,
+          phone,
+          ageBand,
+          preferredPositions,
+          experienceSummary,
+          availabilityLevel,
+          preferredNights,
+          availabilitySummary,
+          notes: mergeExistingProspectNotes({
+            existingNotes: existing.notes,
+            publicNotes: notes,
+          }),
+          source: existing.source ?? "public-join-page",
+        },
+      })
+    : await prisma.teamPlayerProspect.create({
+        data: {
+          teamId: team.id,
+          firstName,
+          lastName,
+          email,
+          phone,
+          ageBand,
+          preferredPositions,
+          experienceSummary,
+          availabilityLevel,
+          preferredNights,
+          availabilitySummary,
+          notes,
+          source: "public-join-page",
+          status: "NEW",
+        },
+      });
 
   try {
     const { recipient } = await upsertTeamNotificationRecipient(team.id);
@@ -195,7 +237,9 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
         recipientId: recipient.id,
         channel: NotificationChannel.EMAIL,
         audience: NotificationAudience.TEAM,
-        subject: `New prospect for ${team.name}: ${prospectName}`,
+        subject: existing
+          ? `Prospect details completed for ${team.name}: ${prospectName}`
+          : `New prospect for ${team.name}: ${prospectName}`,
         body: buildProspectAlertBody({
           teamName: team.name,
           joinSlug: team.joinSlug,
@@ -210,13 +254,18 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
           preferredNights,
           availabilitySummary,
           notes,
+          eventLabel,
         }),
         isTransactional: true,
         sourceType: "TEAM_PLAYER_PROSPECT",
         sourceId: prospect.id,
         metadata: {
-          origin: "public_team_join_prospect_alert",
-          originLabel: "New public prospect alert",
+          origin: existing
+            ? "public_team_join_existing_prospect_completed"
+            : "public_team_join_prospect_alert",
+          originLabel: existing
+            ? "Existing prospect completed public details form"
+            : "New public prospect alert",
           teamId: team.id,
           prospectId: prospect.id,
           joinSlug: team.joinSlug,
@@ -230,5 +279,5 @@ export async function submitTeamJoinProspectAction(formData: FormData) {
   revalidatePath(`/captain/team/${team.id}/prospects`);
   revalidatePath(`/admin/teams/${team.id}/prospects`);
   revalidatePath(`/admin/teams/${team.id}`);
-  redirect(buildRedirect(joinSlug, "?saved=1"));
+  redirect(buildRedirect(joinSlug, existing ? "?saved=details-completed" : "?saved=1"));
 }
