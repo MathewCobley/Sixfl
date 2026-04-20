@@ -13,11 +13,12 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
-import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
-import { getPhoneDisplayValue } from "@/lib/notifications/phone";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { getPhoneDisplayValue } from "@/lib/notifications/phone";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { queueDirectNotification } from "@/lib/notifications/service";
 
 function getTrimmedValue(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -257,4 +258,83 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
   });
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
+}
+
+export async function sendLeagueCommunicationMessageAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const leagueId = getTrimmedValue(formData.get("leagueId"));
+  const from = getSafeRedirectPath(
+    formData.get("from"),
+    `/admin/leagues/${leagueId}/communications`,
+  );
+  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
+  const subject = getTrimmedValue(formData.get("subject"));
+  const body = getTrimmedValue(formData.get("body"));
+  const templateId = getTrimmedValue(formData.get("templateId")) || null;
+  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
+  const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
+  const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
+
+  if (!leagueId) {
+    redirect("/admin/leagues?error=missing_id");
+  }
+
+  if (!body) {
+    redirect(`${from}?error=Message%20body%20is%20required.`);
+  }
+
+  const channel =
+    channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+
+  if (channel === NotificationChannel.EMAIL && !subject) {
+    redirect(`${from}?error=Email%20subject%20is%20required.`);
+  }
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { id: true },
+  });
+
+  if (!league) {
+    redirect("/admin/leagues?error=missing_id");
+  }
+
+  const teams = await prisma.team.findMany({
+    where: { leagueId },
+    select: { id: true },
+    orderBy: [{ name: "asc" }],
+  });
+
+  if (teams.length === 0) {
+    redirect(`${from}?error=No%20teams%20found%20in%20this%20league.`);
+  }
+
+  let deliveredCount = 0;
+
+  for (const team of teams) {
+    const result = await sendTeamBroadcastMessage({
+      teamId: team.id,
+      channel,
+      subject: channel === NotificationChannel.EMAIL ? subject : null,
+      body,
+      templateId,
+      templateKey,
+      ctaLabel,
+      ctaUrl,
+      origin: "league_communications_hub",
+      originLabel: "Sent from league communications hub",
+      metadata: {
+        leagueId,
+        broadcastType: "league",
+      },
+      createdByUserId: user?.id ?? null,
+    });
+
+    if (!result.skipped) {
+      deliveredCount += 1;
+    }
+  }
+
+  redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}&count=${deliveredCount}`);
 }
