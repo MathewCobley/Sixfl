@@ -38,6 +38,26 @@ type SearchParams = {
   error?: string;
 };
 
+type ProspectRecord = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  ageBand: string | null;
+  preferredPositions: string | null;
+  experienceSummary: string | null;
+  availabilityLevel: string | null;
+  preferredNights: unknown;
+  availabilitySummary: string | null;
+  source: string | null;
+  status: string;
+  lastContactedAt: Date | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const STATUS_OPTIONS = [
   { value: "NEW", label: "New" },
   { value: "CONTACTED", label: "Contacted" },
@@ -147,6 +167,37 @@ function getDispatchTimeLabel(input: {
   return formatDateTime(input.sentAt ?? input.failedAt ?? input.createdAt);
 }
 
+function countCompletedProfileFields(prospect: ProspectRecord) {
+  const preferredNights = Array.isArray(prospect.preferredNights)
+    ? prospect.preferredNights.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+
+  const values = [
+    prospect.ageBand,
+    prospect.preferredPositions,
+    prospect.experienceSummary,
+    prospect.availabilityLevel,
+    preferredNights.length > 0 ? preferredNights.join(", ") : null,
+    prospect.availabilitySummary,
+  ];
+
+  return values.filter((value) => typeof value === "string" && value.trim().length > 0).length;
+}
+
+function hasCompletedProspectForm(prospect: ProspectRecord) {
+  return countCompletedProfileFields(prospect) >= 4;
+}
+
+function getCompletionBadgeClasses(isComplete: boolean) {
+  return isComplete
+    ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+    : "border-white/10 bg-white/5 text-white/60";
+}
+
+function getCompletionLabel(prospect: ProspectRecord) {
+  return hasCompletedProspectForm(prospect) ? "Form completed" : "Form not completed";
+}
+
 export default async function CaptainProspectsPage({
   params,
   searchParams,
@@ -213,7 +264,8 @@ export default async function CaptainProspectsPage({
     notFound();
   }
 
-  const prospectIds = team.prospects.map((prospect) => prospect.id);
+  const typedProspects = team.prospects as ProspectRecord[];
+  const prospectIds = typedProspects.map((prospect) => prospect.id);
 
   const recentDispatches = prospectIds.length
     ? await prisma.notificationDispatch.findMany({
@@ -262,8 +314,9 @@ export default async function CaptainProspectsPage({
   const absoluteJoinUrl = team.joinSlug
     ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
     : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
-  const prospectsWithEmail = team.prospects.filter((prospect) => Boolean(prospect.email?.trim()));
-  const prospectsWithPhone = team.prospects.filter((prospect) => Boolean(prospect.phone?.trim()));
+  const prospectsWithEmail = typedProspects.filter((prospect) => Boolean(prospect.email?.trim()));
+  const prospectsWithPhone = typedProspects.filter((prospect) => Boolean(prospect.phone?.trim()));
+  const completedProspectsCount = typedProspects.filter(hasCompletedProspectForm).length;
 
   return (
     <div className="space-y-8">
@@ -288,7 +341,7 @@ export default async function CaptainProspectsPage({
                 Mode: {team.teamMode}
               </span>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                {team.prospects.length} prospect{team.prospects.length === 1 ? "" : "s"}
+                {typedProspects.length} prospect{typedProspects.length === 1 ? "" : "s"}
               </span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
                 Recruiting: {team.isRecruiting ? "On" : "Off"}
@@ -323,13 +376,22 @@ export default async function CaptainProspectsPage({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
             <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
                 New
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">
-                {team.prospects.filter((item) => item.status === "NEW").length}
+                {typedProspects.filter((item) => item.status === "NEW").length}
+              </p>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+                Form completed
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-white">
+                {completedProspectsCount}
               </p>
             </div>
 
@@ -338,7 +400,7 @@ export default async function CaptainProspectsPage({
                 Trial
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">
-                {team.prospects.filter((item) => item.status === "TRIAL").length}
+                {typedProspects.filter((item) => item.status === "TRIAL").length}
               </p>
             </div>
 
@@ -347,7 +409,7 @@ export default async function CaptainProspectsPage({
                 Active squad
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">
-                {team.prospects.filter((item) => item.status === "ACTIVE_SQUAD").length}
+                {typedProspects.filter((item) => item.status === "ACTIVE_SQUAD").length}
               </p>
             </div>
           </div>
@@ -367,7 +429,7 @@ export default async function CaptainProspectsPage({
       ) : null}
 
       <section className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
-        This history is pulled straight from each prospect’s notification dispatches, so these cards show exactly what was queued, sent, failed, skipped, or cancelled for that prospect.
+        Form completion is inferred from saved profile details already on the prospect record, so older completed forms can still show up even if they were submitted before dedicated tracking was added.
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
@@ -551,12 +613,12 @@ export default async function CaptainProspectsPage({
           </div>
 
           <div className="divide-y divide-white/10">
-            {team.prospects.length === 0 ? (
+            {typedProspects.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">
                 No prospects yet. Add one manually or use the public join page.
               </div>
             ) : (
-              team.prospects.map((prospect) => {
+              typedProspects.map((prospect) => {
                 const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
                 const prospectName = getProspectName({
                   firstName: prospect.firstName,
@@ -571,6 +633,8 @@ export default async function CaptainProspectsPage({
                 );
                 const latestEmailDispatch = emailDispatches[0] ?? null;
                 const latestSmsDispatch = smsDispatches[0] ?? null;
+                const isFormComplete = hasCompletedProspectForm(prospect);
+                const completionScore = countCompletedProfileFields(prospect);
 
                 return (
                   <div key={prospect.id} className="space-y-5 px-6 py-5">
@@ -588,6 +652,14 @@ export default async function CaptainProspectsPage({
                           >
                             {getStatusLabel(prospect.status)}
                           </span>
+
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getCompletionBadgeClasses(
+                              isFormComplete,
+                            )}`}
+                          >
+                            {getCompletionLabel(prospect)}
+                          </span>
                         </div>
 
                         <div className="mt-2 text-sm text-white/65">
@@ -596,6 +668,11 @@ export default async function CaptainProspectsPage({
 
                         <div className="mt-1 text-xs text-white/45">
                           {prospect.source || "No source"} · Added {prospect.createdAt.toLocaleString()}
+                        </div>
+
+                        <div className="mt-2 text-xs text-white/50">
+                          {completionScore}/6 profile fields completed
+                          {prospect.updatedAt ? ` · Updated ${prospect.updatedAt.toLocaleString()}` : ""}
                         </div>
 
                         {prospect.ageBand ? (

@@ -27,6 +27,7 @@ type Prospect = {
   status: string;
   notes: string | null;
   createdAt: Date;
+  updatedAt: Date;
 };
 
 const STATUS_OPTIONS = [
@@ -75,6 +76,33 @@ function getStatusClasses(status: string) {
   }
 }
 
+function countCompletedProfileFields(prospect: Prospect) {
+  const preferredNights = Array.isArray(prospect.preferredNights)
+    ? prospect.preferredNights.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+
+  const values = [
+    prospect.ageBand,
+    prospect.preferredPositions,
+    prospect.experienceSummary,
+    prospect.availabilityLevel,
+    preferredNights.length > 0 ? preferredNights.join(", ") : null,
+    prospect.availabilitySummary,
+  ];
+
+  return values.filter((value) => typeof value === "string" && value.trim().length > 0).length;
+}
+
+function hasCompletedProspectForm(prospect: Prospect) {
+  return countCompletedProfileFields(prospect) >= 4;
+}
+
+function getCompletionBadgeClasses(isComplete: boolean) {
+  return isComplete
+    ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+    : "border-white/10 bg-white/5 text-white/60";
+}
+
 export default function AdminProspectCard({
   teamId,
   prospect,
@@ -83,6 +111,8 @@ export default function AdminProspectCard({
   prospect: Prospect;
 }) {
   const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
+  const isFormComplete = hasCompletedProspectForm(prospect);
+  const completionScore = countCompletedProfileFields(prospect);
 
   return (
     <div className="space-y-5 px-6 py-5">
@@ -103,6 +133,14 @@ export default function AdminProspectCard({
             >
               {getStatusLabel(prospect.status)}
             </span>
+
+            <span
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getCompletionBadgeClasses(
+                isFormComplete,
+              )}`}
+            >
+              {isFormComplete ? "Form completed" : "Form not completed"}
+            </span>
           </div>
 
           <div className="mt-2 text-sm text-white/65">
@@ -111,6 +149,10 @@ export default function AdminProspectCard({
 
           <div className="mt-1 text-xs text-white/45">
             {prospect.source || "No source"} · Added {prospect.createdAt.toLocaleString()}
+          </div>
+
+          <div className="mt-2 text-xs text-white/50">
+            {completionScore}/6 profile fields completed · Updated {prospect.updatedAt.toLocaleString()}
           </div>
 
           {prospect.ageBand ? (
