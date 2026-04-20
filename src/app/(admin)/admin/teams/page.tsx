@@ -579,6 +579,13 @@ export default async function AdminTeamsPage({
                         </Link>
 
                         <Link
+                          href={`/admin/teams/${team.id}/communications`}
+                          className="inline-flex min-w-[140px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                        >
+                          Communications
+                        </Link>
+
+                        <Link
                           href={`/admin/teams/${team.id}`}
                           className="inline-flex min-w-[92px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
                         >
