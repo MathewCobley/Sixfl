@@ -122,6 +122,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
       lastName: true,
       email: true,
       phone: true,
+      status: true,
     },
   });
 
@@ -193,7 +194,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
   await prisma.teamPlayerProspect.update({
     where: { id: prospect.id },
     data: {
-      status: prospect.email || prospect.phone ? "CONTACTED" : undefined,
+      ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
       lastContactedAt: new Date(),
     },
   });
