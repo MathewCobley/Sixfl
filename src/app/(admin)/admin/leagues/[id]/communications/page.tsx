@@ -238,6 +238,12 @@ export default async function AdminLeagueCommunicationsPage({
           fromPath={`/admin/leagues/${league.id}/communications`}
           leagueName={`${league.name}${league.season ? ` — ${league.season}` : ""}`}
           teamCount={league.teams.length}
+          teams={league.teams.map((team) => ({
+            id: team.id,
+            name: team.name,
+            emailReady: Boolean(team.contactEmail?.trim()),
+            smsReady: Boolean(team.contactPhone?.trim()),
+          }))}
           emailTemplates={resolvedEmailTemplates}
           smsTemplates={smsTemplates}
         />
