@@ -264,12 +264,6 @@ function getNotice(
           tone: "error",
           message: "This thread does not have a valid phone number.",
         };
-      case "not_sms":
-        return {
-          tone: "info",
-          message:
-            "This is an email thread. Replying from the inbox is not wired yet, so use your email client for now.",
-        };
       case "thread_not_open":
         return {
           tone: "error",
@@ -388,7 +382,6 @@ export default function AdminMessageThread({
   }
 
   const title = getThreadTitle(thread);
-  const isSmsThread = thread.channel === "SMS";
   const replyPhoneRaw =
     thread.phoneNormalized || thread.recipient?.phone || thread.contactPhone;
   const replyPhoneLabel = formatPhone(replyPhoneRaw);
@@ -397,16 +390,21 @@ export default function AdminMessageThread({
     thread.recipient?.email ||
     thread.emailNormalized ||
     thread.replyAddress;
-  const canReply =
-    isSmsThread && Boolean(replyPhoneRaw) && thread.status === "OPEN";
+  const canSmsReply = Boolean(replyPhoneRaw) && thread.status === "OPEN";
 
-  const replyHelpText = !isSmsThread
-    ? "This is an email thread. Incoming replies appear here, but replying from the admin inbox is not wired yet. Reply from your email client for now."
+  const replyPanelTitle = canSmsReply
+    ? "Reply by SMS"
+    : thread.channel === "SMS"
+      ? "Reply by SMS"
+      : "Email replies";
+
+  const replyHelpText = canSmsReply
+    ? `Replying by SMS to ${replyPhoneLabel}. This keeps the full mixed conversation timeline together.`
     : !replyPhoneRaw
       ? "This thread has no valid phone number yet, so SMS reply is unavailable."
       : thread.status !== "OPEN"
         ? "Reopen this thread before sending a new SMS reply."
-        : `Replying to ${replyPhoneLabel}. Replies are sent immediately by SMS.`;
+        : "This thread cannot be replied to from the admin inbox right now.";
 
   const orderedMessages = useMemo(
     () =>
@@ -470,20 +468,15 @@ export default function AdminMessageThread({
               </div>
 
               <div className="flex flex-wrap gap-2 text-xs text-white/45">
-                {thread.channel === "SMS" ? (
+                {replyPhoneRaw ? (
                   <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-                    Phone:{" "}
-                    {formatPhone(
-                      thread.contactPhone ||
-                        thread.recipient?.phone ||
-                        thread.phoneNormalized,
-                    )}
+                    SMS: {replyPhoneLabel}
                   </span>
-                ) : (
-                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-                    Email: {replyEmail || "—"}
-                  </span>
-                )}
+                ) : null}
+
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                  Email: {replyEmail || "—"}
+                </span>
 
                 {thread.replyAddress ? (
                   <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
@@ -791,13 +784,11 @@ export default function AdminMessageThread({
 
         <div className="space-y-4">
           <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
-            <h3 className="text-lg font-semibold text-white">
-              {isSmsThread ? "Reply by SMS" : "Email replies"}
-            </h3>
+            <h3 className="text-lg font-semibold text-white">{replyPanelTitle}</h3>
             <p className="mt-2 text-sm leading-6 text-white/55">
-              {isSmsThread
-                ? "Send a direct reply from the inbox and keep the full conversation timeline together."
-                : "Incoming email replies appear here. Reply from your normal email client for now."}
+              {canSmsReply
+                ? "Send a direct SMS reply from the inbox and keep the full mixed conversation timeline together."
+                : "Incoming replies appear here and are grouped across SMS and email."}
             </p>
 
             <form action={sendAdminMessageReplyAction} className="mt-4 space-y-4">
@@ -810,27 +801,25 @@ export default function AdminMessageThread({
 
               <div>
                 <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  {isSmsThread ? "Reply message" : "Inbox reply"}
+                  SMS reply
                 </label>
                 <textarea
                   name="body"
                   rows={5}
-                  disabled={!canReply}
+                  disabled={!canSmsReply}
                   placeholder={
-                    canReply
+                    canSmsReply
                       ? "Type your SMS reply here..."
-                      : isSmsThread
-                        ? "Reply unavailable for this thread"
-                        : "Email reply sending is not wired here yet"
+                      : "SMS reply unavailable for this thread"
                   }
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 focus:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
 
               <ActionButton
-                label={isSmsThread ? "Send SMS reply" : "Email reply unavailable"}
+                label="Send SMS reply"
                 pendingLabel="Sending reply..."
-                disabled={!canReply}
+                disabled={!canSmsReply}
                 className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-white/40"
               />
             </form>
