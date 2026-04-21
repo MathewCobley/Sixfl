@@ -849,44 +849,32 @@ export async function convertProspectToMemberAction(formData: FormData) {
     redirect(buildProspectsRedirect(teamid, "?error=Prospect%20not%20found."));
   }
 
-  if (!prospect.email) {
-    redirect(
-      buildProspectsRedirect(
-        teamid,
-        "?error=Prospect%20needs%20an%20email%20linked%20to%20a%20SIXFL%20account%20before%20promotion.",
-      ),
-    );
-  }
+  const normalizedEmail = prospect.email?.trim().toLowerCase() ?? null;
 
-  const user = await prisma.user.findUnique({
-    where: { email: prospect.email.toLowerCase() },
-    select: {
-      id: true,
-      email: true,
-    },
-  });
+  const user = normalizedEmail
+    ? await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: {
+          id: true,
+          email: true,
+        },
+      })
+    : null;
 
-  if (!user) {
-    redirect(
-      buildProspectsRedirect(
-        teamid,
-        "?error=No%20existing%20SIXFL%20user%20was%20found%20for%20that%20email.",
-      ),
-    );
-  }
-
-  const existingMembership = await prisma.teamMember.findUnique({
-    where: {
-      userId_teamId: {
-        userId: user.id,
-        teamId: teamid,
-      },
-    },
-    select: { id: true },
-  });
+  const existingMembership = user
+    ? await prisma.teamMember.findUnique({
+        where: {
+          userId_teamId: {
+            userId: user.id,
+            teamId: teamid,
+          },
+        },
+        select: { id: true },
+      })
+    : null;
 
   await prisma.$transaction(async (tx) => {
-    if (!existingMembership) {
+    if (user && !existingMembership) {
       await tx.teamMember.create({
         data: {
           teamId: teamid,
