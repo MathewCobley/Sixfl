@@ -221,10 +221,23 @@ function getPromotionState(input: {
     };
   }
 
-  if (!input.prospect.email?.trim()) {
+  if (input.prospect.status === "ACTIVE_SQUAD") {
     return {
       canPromote: false,
-      reason: "Add and save an email address before promoting this prospect.",
+      reason: input.hasLinkedUser
+        ? "Already in the active squad and ready to appear as a linked player."
+        : "Already in the active squad. They can register later and will link when added as a SIXFL user.",
+      tone: "muted",
+      showSignupCta: !input.hasLinkedUser,
+      signupLabel: "Open signup link",
+    };
+  }
+
+  if (!input.prospect.email?.trim()) {
+    return {
+      canPromote: true,
+      reason:
+        "You can promote this prospect now. Add and save an email later if you want to link them to a SIXFL account.",
       tone: "warning",
       showSignupCta: false,
       signupLabel: "",
@@ -233,9 +246,9 @@ function getPromotionState(input: {
 
   if (!input.hasLinkedUser) {
     return {
-      canPromote: false,
+      canPromote: true,
       reason:
-        "This email is saved, but no SIXFL player account exists for it yet. Ask them to complete the signup form first.",
+        "You can promote this prospect now. They will show in the squad straight away, and you can get them to register later using the same email.",
       tone: "warning",
       showSignupCta: true,
       signupLabel: "Open signup link",
