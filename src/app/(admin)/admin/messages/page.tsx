@@ -73,6 +73,31 @@ export default async function AdminMessagesPage({
     selectedThread ??
     (threads.length > 0 ? await getMessageThreadById(threads[0].id) : null);
 
+  const relatedThreads = fallbackThread?.team?.id
+    ? await prisma.messageThread.findMany({
+        where: {
+          teamId: fallbackThread.team.id,
+        },
+        include: {
+          messages: {
+            orderBy: [{ createdAt: "asc" }],
+          },
+        },
+        orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+      })
+    : [];
+
+  const combinedMessages = fallbackThread
+    ? (relatedThreads.length > 0
+        ? relatedThreads.flatMap((thread) => thread.messages)
+        : fallbackThread.messages
+      ).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    : [];
+
+  const uniqueCombinedMessages = Array.from(
+    new Map(combinedMessages.map((message) => [message.id, message])).values(),
+  );
+
   return (
     <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="space-y-8">
@@ -252,24 +277,24 @@ export default async function AdminMessagesPage({
                         sourceType: fallbackThread.recipient.sourceType,
                       }
                     : null,
-                    messages: fallbackThread.messages.map((message) => ({
-                      id: message.id,
-                      channel: message.channel ?? "SMS",
-                      direction: message.direction,
-                      participantRole: message.participantRole,
-                      body: message.body,
-                      htmlBody: message.htmlBody ?? null,
-                      subject: message.subject ?? null,
-                      fromNumber: message.fromNumber,
-                      toNumber: message.toNumber,
-                      fromEmail: message.fromEmail,
-                      toEmail: message.toEmail,
-                      providerStatus: message.providerStatus,
-                      sentAt: message.sentAt?.toISOString() ?? null,
-                      receivedAt: message.receivedAt?.toISOString() ?? null,
-                      readAt: message.readAt?.toISOString() ?? null,
-                      createdAt: message.createdAt.toISOString(),
-                    })),
+                  messages: uniqueCombinedMessages.map((message) => ({
+                    id: message.id,
+                    channel: message.channel ?? "SMS",
+                    direction: message.direction,
+                    participantRole: message.participantRole,
+                    body: message.body,
+                    htmlBody: message.htmlBody ?? null,
+                    subject: message.subject ?? null,
+                    fromNumber: message.fromNumber,
+                    toNumber: message.toNumber,
+                    fromEmail: message.fromEmail,
+                    toEmail: message.toEmail,
+                    providerStatus: message.providerStatus,
+                    sentAt: message.sentAt?.toISOString() ?? null,
+                    receivedAt: message.receivedAt?.toISOString() ?? null,
+                    readAt: message.readAt?.toISOString() ?? null,
+                    createdAt: message.createdAt.toISOString(),
+                  })),
                 }
               : null
           }
