@@ -270,6 +270,13 @@ export default async function AdminFixturesPage({
             name: true,
           },
         },
+        paymentCharges: {
+          select: {
+            teamId: true,
+            amountPence: true,
+            status: true,
+          },
+        },
         result: {
           select: {
             homeScore: true,
@@ -340,6 +347,21 @@ export default async function AdminFixturesPage({
           (item) => item.teamId === fixture.awayTeamId,
         ) ?? null;
 
+      const activeCharges = fixture.paymentCharges.filter(
+        (charge) => charge.status !== "VOID",
+      );
+      const homeCharge = activeCharges.find(
+        (charge) => charge.teamId === fixture.homeTeamId,
+      );
+      const awayCharge = activeCharges.find(
+        (charge) => charge.teamId === fixture.awayTeamId,
+      );
+      const legacyFee = fixture.matchFeePence ?? null;
+      const homeMatchFeePence =
+        homeCharge?.amountPence ?? (legacyFee && !awayCharge ? legacyFee : null);
+      const awayMatchFeePence =
+        awayCharge?.amountPence ?? (legacyFee && !homeCharge ? legacyFee : null);
+
       const homeConfirmationStatus =
         homeConfirmation?.status ??
         (fixture.status === "SCHEDULED" && fixture.kickoffAt > new Date()
@@ -371,6 +393,8 @@ export default async function AdminFixturesPage({
         pitch: fixture.pitch,
         status: fixture.status,
         matchFeePence: fixture.matchFeePence,
+        homeMatchFeePence,
+        awayMatchFeePence,
         homeScore: fixture.result?.homeScore ?? null,
         awayScore: fixture.result?.awayScore ?? null,
         resultIsDisputed: fixture.result?.isDisputed ?? false,
