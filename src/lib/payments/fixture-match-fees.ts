@@ -17,6 +17,11 @@ import {
   getChargeStatusFromAmounts,
 } from "@/lib/payments/charge-status";
 
+export type FixtureMatchFeeChargeTarget =
+  | "BOTH_TEAMS"
+  | "HOME_ONLY"
+  | "AWAY_ONLY";
+
 type FixtureMatchFeeTeam = {
   id: string;
   name: string;
@@ -33,6 +38,7 @@ type SyncFixtureMatchFeeChargesInput = {
   homeTeam: FixtureMatchFeeTeam;
   awayTeam: FixtureMatchFeeTeam;
   matchFeePence: number | null;
+  chargeTarget?: FixtureMatchFeeChargeTarget | null;
 };
 
 type PaymentChargeDbClient = Pick<
@@ -71,7 +77,7 @@ function formatKickoffLabel(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -195,18 +201,33 @@ export async function syncFixtureMatchFeeCharges(
 
   const desiredFee =
     input.matchFeePence && input.matchFeePence > 0 ? input.matchFeePence : null;
+  const chargeTarget = input.chargeTarget ?? "BOTH_TEAMS";
 
   const desiredTeams = desiredFee
-    ? [
-        {
-          team: input.homeTeam,
-          opponent: input.awayTeam,
-        },
-        {
-          team: input.awayTeam,
-          opponent: input.homeTeam,
-        },
-      ]
+    ? chargeTarget === "HOME_ONLY"
+      ? [
+          {
+            team: input.homeTeam,
+            opponent: input.awayTeam,
+          },
+        ]
+      : chargeTarget === "AWAY_ONLY"
+        ? [
+            {
+              team: input.awayTeam,
+              opponent: input.homeTeam,
+            },
+          ]
+        : [
+            {
+              team: input.homeTeam,
+              opponent: input.awayTeam,
+            },
+            {
+              team: input.awayTeam,
+              opponent: input.homeTeam,
+            },
+          ]
     : [];
 
   const desiredTeamIds = new Set(desiredTeams.map((entry) => entry.team.id));
