@@ -58,6 +58,14 @@ type ProspectRecord = {
   updatedAt: Date;
 };
 
+type ProspectPromotionState = {
+  canPromote: boolean;
+  reason: string;
+  tone: "ready" | "warning" | "muted";
+  showSignupCta: boolean;
+  signupLabel: string;
+};
+
 const STATUS_OPTIONS = [
   { value: "NEW", label: "New" },
   { value: "CONTACTED", label: "Contacted" },
@@ -198,6 +206,62 @@ function getCompletionLabel(prospect: ProspectRecord) {
   return hasCompletedProspectForm(prospect) ? "Form completed" : "Form not completed";
 }
 
+function getPromotionState(input: {
+  prospect: ProspectRecord;
+  hasLinkedUser: boolean;
+  isExistingTeamMember: boolean;
+}): ProspectPromotionState {
+  if (input.isExistingTeamMember) {
+    return {
+      canPromote: false,
+      reason: "This player already has a SIXFL account linked to this team.",
+      tone: "muted",
+      showSignupCta: false,
+      signupLabel: "",
+    };
+  }
+
+  if (!input.prospect.email?.trim()) {
+    return {
+      canPromote: false,
+      reason: "Add and save an email address before promoting this prospect.",
+      tone: "warning",
+      showSignupCta: false,
+      signupLabel: "",
+    };
+  }
+
+  if (!input.hasLinkedUser) {
+    return {
+      canPromote: false,
+      reason:
+        "This email is saved, but no SIXFL player account exists for it yet. Ask them to complete the signup form first.",
+      tone: "warning",
+      showSignupCta: true,
+      signupLabel: "Open signup link",
+    };
+  }
+
+  return {
+    canPromote: true,
+    reason: "Ready to promote. Save any detail changes first, then move them into the squad.",
+    tone: "ready",
+    showSignupCta: false,
+    signupLabel: "",
+  };
+}
+
+function getPromotionStateClasses(tone: ProspectPromotionState["tone"]) {
+  switch (tone) {
+    case "ready":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "warning":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    default:
+      return "border-white/10 bg-white/5 text-white/65";
+  }
+}
+
 export default async function CaptainProspectsPage({
   params,
   searchParams,
@@ -266,33 +330,67 @@ export default async function CaptainProspectsPage({
 
   const typedProspects = team.prospects as ProspectRecord[];
   const prospectIds = typedProspects.map((prospect) => prospect.id);
+  const prospectEmails = Array.from(
+    new Set(
+      typedProspects
+        .map((prospect) => prospect.email?.trim().toLowerCase() ?? null)
+        .filter((email): email is string => Boolean(email)),
+    ),
+  );
 
-  const recentDispatches = prospectIds.length
-    ? await prisma.notificationDispatch.findMany({
-        where: {
-          sourceType: "TEAM_PLAYER_PROSPECT",
-          sourceId: {
-            in: prospectIds,
+  const [recentDispatches, linkedUsers] = await Promise.all([
+    prospectIds.length
+      ? prisma.notificationDispatch.findMany({
+          where: {
+            sourceType: "TEAM_PLAYER_PROSPECT",
+            sourceId: {
+              in: prospectIds,
+            },
+            channel: {
+              in: [NotificationChannel.EMAIL, NotificationChannel.SMS],
+            },
           },
-          channel: {
-            in: [NotificationChannel.EMAIL, NotificationChannel.SMS],
+          orderBy: [{ createdAt: "desc" }],
+          select: {
+            id: true,
+            sourceId: true,
+            channel: true,
+            status: true,
+            subject: true,
+            bodyText: true,
+            failureReason: true,
+            createdAt: true,
+            sentAt: true,
+            failedAt: true,
           },
-        },
-        orderBy: [{ createdAt: "desc" }],
-        select: {
-          id: true,
-          sourceId: true,
-          channel: true,
-          status: true,
-          subject: true,
-          bodyText: true,
-          failureReason: true,
-          createdAt: true,
-          sentAt: true,
-          failedAt: true,
-        },
-      })
-    : [];
+        })
+      : [],
+    prospectEmails.length
+      ? prisma.user.findMany({
+          where: {
+            email: {
+              in: prospectEmails,
+            },
+          },
+          select: {
+            id: true,
+            email: true,
+            teamMembers: {
+              where: {
+                teamId: teamid,
+              },
+              select: {
+                id: true,
+              },
+            },
+          },
+        })
+      : [],
+  ]);
+
+  const linkedUserByEmail = new Map(
+    linkedUsers.map((user) => [user.email.trim().toLowerCase(), user]),
+  );
 
   const dispatchMap = new Map<string, typeof recentDispatches>();
 
@@ -635,6 +733,13 @@ export default async function CaptainProspectsPage({
                 const latestSmsDispatch = smsDispatches[0] ?? null;
                 const isFormComplete = hasCompletedProspectForm(prospect);
                 const completionScore = countCompletedProfileFields(prospect);
+                const savedEmail = prospect.email?.trim().toLowerCase() ?? "";
+                const linkedUser = savedEmail ? linkedUserByEmail.get(savedEmail) ?? null : null;
+                const promotionState = getPromotionState({
+                  prospect,
+                  hasLinkedUser: Boolean(linkedUser),
+                  isExistingTeamMember: Boolean(linkedUser?.teamMembers.length),
+                });
 
                 return (
                   <div key={prospect.id} className="space-y-5 px-6 py-5">
@@ -815,16 +920,42 @@ export default async function CaptainProspectsPage({
                         </button>
                       </form>
 
-                      <form action={convertProspectToMemberAction} className="xl:self-start">
-                        <input type="hidden" name="teamid" value={teamid} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
-                        <button
-                          type="submit"
-                          className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                      <div className="space-y-3 xl:self-start">
+                        <div
+                          className={`rounded-2xl border px-4 py-3 text-sm ${getPromotionStateClasses(
+                            promotionState.tone,
+                          )}`}
                         >
-                          Promote to squad
-                        </button>
-                      </form>
+                          {promotionState.reason}
+                        </div>
+
+                        <form action={convertProspectToMemberAction}>
+                          <input type="hidden" name="teamid" value={teamid} />
+                          <input type="hidden" name="prospectId" value={prospect.id} />
+                          <button
+                            type="submit"
+                            disabled={!promotionState.canPromote}
+                            className={`inline-flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                              promotionState.canPromote
+                                ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
+                                : "cursor-not-allowed border border-white/10 bg-white/5 text-white/35"
+                            }`}
+                          >
+                            Promote to squad
+                          </button>
+                        </form>
+
+                        {promotionState.showSignupCta ? (
+                          <a
+                            href={joinUrl ?? absoluteJoinUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                          >
+                            {promotionState.signupLabel}
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
