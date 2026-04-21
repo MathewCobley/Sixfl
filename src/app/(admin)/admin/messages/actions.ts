@@ -129,16 +129,6 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
     );
   }
 
-  if (thread.channel !== "SMS") {
-    redirect(
-      buildMessagesHref({
-        filter,
-        threadId,
-        extras: { error: "not_sms" },
-      }),
-    );
-  }
-
   if (thread.status !== "OPEN") {
     redirect(
       buildMessagesHref({
