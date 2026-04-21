@@ -168,6 +168,28 @@ function parseFixtureStatus(value: FormDataEntryValue | null) {
   return str as FixtureStatus;
 }
 
+function parseFixtureTeamFees(formData: FormData) {
+  const homeMatchFeePence = parseOptionalMoneyToPence(
+    formData.get("homeMatchFeePounds"),
+    "Team 1 fee",
+  );
+  const awayMatchFeePence = parseOptionalMoneyToPence(
+    formData.get("awayMatchFeePounds"),
+    "Team 2 fee",
+  );
+
+  const fixtureMatchFeePence = Math.max(
+    homeMatchFeePence ?? 0,
+    awayMatchFeePence ?? 0,
+  );
+
+  return {
+    homeMatchFeePence,
+    awayMatchFeePence,
+    fixtureMatchFeePence: fixtureMatchFeePence > 0 ? fixtureMatchFeePence : null,
+  };
+}
+
 function parseTimeToMinutes(value: string | null) {
   if (!value) return null;
 
@@ -445,10 +467,11 @@ export async function createFixtureAction(formData: FormData) {
   );
   const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
-  const matchFeePence = parseOptionalMoneyToPence(
-    formData.get("matchFeePounds"),
-    "Match fee",
-  );
+  const {
+    homeMatchFeePence,
+    awayMatchFeePence,
+    fixtureMatchFeePence,
+  } = parseFixtureTeamFees(formData);
 
   if (homeTeamId === awayTeamId) {
     throw new Error("Team 1 and Team 2 cannot be the same team.");
@@ -522,7 +545,7 @@ export async function createFixtureAction(formData: FormData) {
         position,
         pitch,
         status,
-        matchFeePence,
+        matchFeePence: fixtureMatchFeePence,
       },
     });
 
@@ -535,7 +558,8 @@ export async function createFixtureAction(formData: FormData) {
       kickoffAt,
       homeTeam,
       awayTeam,
-      matchFeePence,
+      homeMatchFeePence,
+      awayMatchFeePence,
     });
 
     return {
@@ -544,7 +568,7 @@ export async function createFixtureAction(formData: FormData) {
     };
   });
 
-  if ((matchFeePence ?? 0) > 0 && created.activeCharges.length > 0) {
+  if (created.activeCharges.length > 0) {
     try {
       await queueFixtureMatchFeeEmails({
         fixtureId: created.fixture.id,
@@ -554,7 +578,8 @@ export async function createFixtureAction(formData: FormData) {
         kickoffAt,
         homeTeam,
         awayTeam,
-        matchFeePence,
+        homeMatchFeePence,
+        awayMatchFeePence,
         charges: created.activeCharges,
         mode: "all",
       });
@@ -596,10 +621,11 @@ export async function updateFixtureAction(formData: FormData) {
   );
   const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
-  const matchFeePence = parseOptionalMoneyToPence(
-    formData.get("matchFeePounds"),
-    "Match fee",
-  );
+  const {
+    homeMatchFeePence,
+    awayMatchFeePence,
+    fixtureMatchFeePence,
+  } = parseFixtureTeamFees(formData);
 
   if (homeTeamId === awayTeamId) {
     throw new Error("Team 1 and Team 2 cannot be the same team.");
@@ -690,7 +716,8 @@ export async function updateFixtureAction(formData: FormData) {
       kickoffAt,
       homeTeam,
       awayTeam,
-      matchFeePence,
+      homeMatchFeePence,
+      awayMatchFeePence,
     });
 
     const updatedFixture = await tx.fixture.update({
@@ -706,7 +733,7 @@ export async function updateFixtureAction(formData: FormData) {
         position,
         pitch,
         status,
-        matchFeePence,
+        matchFeePence: fixtureMatchFeePence,
       },
     });
 
@@ -717,11 +744,11 @@ export async function updateFixtureAction(formData: FormData) {
   });
 
   const hadExistingFee = (fixture.matchFeePence ?? 0) > 0;
-  const hasMatchFee = (matchFeePence ?? 0) > 0;
+  const hasMatchFee = (fixtureMatchFeePence ?? 0) > 0;
   const teamsChanged =
     fixture.homeTeamId !== homeTeamId || fixture.awayTeamId !== awayTeamId;
   const feeAmountChanged =
-    (fixture.matchFeePence ?? 0) !== (matchFeePence ?? 0);
+    (fixture.matchFeePence ?? 0) !== (fixtureMatchFeePence ?? 0);
 
   const shouldSendInitialFeeEmail =
     !hadExistingFee || teamsChanged || feeAmountChanged;
@@ -751,7 +778,8 @@ export async function updateFixtureAction(formData: FormData) {
         kickoffAt,
         homeTeam,
         awayTeam,
-        matchFeePence,
+        homeMatchFeePence,
+        awayMatchFeePence,
         charges: updated.activeCharges,
         mode: shouldSendInitialFeeEmail ? "all" : "reminders_only",
       });
