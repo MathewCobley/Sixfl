@@ -66,12 +66,6 @@ type ProspectPromotionState = {
   signupLabel: string;
 };
 
-type LinkedUserRecord = {
-  id: string;
-  email: string;
-  teamMembers: { id: string }[];
-};
-
 const STATUS_OPTIONS = [
   { value: "NEW", label: "New" },
   { value: "CONTACTED", label: "Contacted" },
@@ -407,13 +401,15 @@ export default async function CaptainProspectsPage({
       : [],
   ]);
 
-  const linkedUsers: LinkedUserRecord[] = linkedUsersRaw.filter(
-    (user): user is LinkedUserRecord => Boolean(user.email),
-  );
+  const linkedUserByEmail = new Map<string, (typeof linkedUsersRaw)[number]>();
 
-  const linkedUserByEmail = new Map(
-    linkedUsers.map((user) => [user.email.trim().toLowerCase(), user]),
-  );
+  for (const user of linkedUsersRaw) {
+    const normalizedEmail = user.email?.trim().toLowerCase();
+    if (!normalizedEmail) {
+      continue;
+    }
+    linkedUserByEmail.set(normalizedEmail, user);
+  }
 
   const dispatchMap = new Map<string, typeof recentDispatches>();
 
