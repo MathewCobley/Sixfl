@@ -66,6 +66,12 @@ type ProspectPromotionState = {
   signupLabel: string;
 };
 
+type LinkedUserRecord = {
+  id: string;
+  email: string;
+  teamMembers: { id: string }[];
+};
+
 const STATUS_OPTIONS = [
   { value: "NEW", label: "New" },
   { value: "CONTACTED", label: "Contacted" },
@@ -351,7 +357,7 @@ export default async function CaptainProspectsPage({
     ),
   );
 
-  const [recentDispatches, linkedUsers] = await Promise.all([
+  const [recentDispatches, linkedUsersRaw] = await Promise.all([
     prospectIds.length
       ? prisma.notificationDispatch.findMany({
           where: {
@@ -400,6 +406,10 @@ export default async function CaptainProspectsPage({
         })
       : [],
   ]);
+
+  const linkedUsers: LinkedUserRecord[] = linkedUsersRaw.filter(
+    (user): user is LinkedUserRecord => Boolean(user.email),
+  );
 
   const linkedUserByEmail = new Map(
     linkedUsers.map((user) => [user.email.trim().toLowerCase(), user]),
