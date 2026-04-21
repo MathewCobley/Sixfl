@@ -12,7 +12,10 @@ import {
   buildSIXFLEmailHtml,
 } from "@/lib/email/buildEmail";
 import { renderNotificationText } from "@/lib/notifications/renderer";
-import { getPendingCaptainContext } from "@/lib/auth/pendingCaptain";
+import {
+  getCaptainLoginContext,
+  getPendingCaptainContext,
+} from "@/lib/auth/pendingCaptain";
 
 function getSiteUrl() {
   return (
@@ -107,14 +110,15 @@ export const authOptions: NextAuthOptions = {
       async sendVerificationRequest({ identifier, url, provider }) {
         const email = identifier.toLowerCase().trim();
 
-        const [existingUser, pendingCaptain] = await Promise.all([
+        const [existingUser, pendingCaptain, captainLoginContext] = await Promise.all([
           prisma.user.findUnique({
             where: { email },
           }),
           getPendingCaptainContext(email),
+          getCaptainLoginContext(email),
         ]);
 
-        if (!existingUser && !pendingCaptain) {
+        if (!existingUser && !pendingCaptain && !captainLoginContext) {
           return;
         }
 
@@ -156,14 +160,15 @@ export const authOptions: NextAuthOptions = {
           return false;
         }
 
-        const [existingUser, pendingCaptain] = await Promise.all([
+        const [existingUser, pendingCaptain, captainLoginContext] = await Promise.all([
           prisma.user.findUnique({
             where: { email },
           }),
           getPendingCaptainContext(email),
+          getCaptainLoginContext(email),
         ]);
 
-        if (!existingUser && !pendingCaptain) {
+        if (!existingUser && !pendingCaptain && !captainLoginContext) {
           return false;
         }
       }
