@@ -32,7 +32,8 @@ type SyncFixtureMatchFeeChargesInput = {
   kickoffAt: Date;
   homeTeam: FixtureMatchFeeTeam;
   awayTeam: FixtureMatchFeeTeam;
-  matchFeePence: number | null;
+  homeMatchFeePence: number | null;
+  awayMatchFeePence: number | null;
 };
 
 type PaymentChargeDbClient = Pick<
@@ -52,6 +53,7 @@ type QueueFixtureMatchFeeEmailsInput = SyncFixtureMatchFeeChargesInput & {
     teamName: string;
     teamLogoUrl: string | null;
     paymentToken: string | null;
+    amountPence: number;
   }>;
   mode?: "all" | "reminders_only";
 };
@@ -193,21 +195,30 @@ export async function syncFixtureMatchFeeCharges(
     orderBy: [{ createdAt: "asc" }],
   });
 
-  const desiredFee =
-    input.matchFeePence && input.matchFeePence > 0 ? input.matchFeePence : null;
-
-  const desiredTeams = desiredFee
-    ? [
-        {
-          team: input.homeTeam,
-          opponent: input.awayTeam,
-        },
-        {
-          team: input.awayTeam,
-          opponent: input.homeTeam,
-        },
-      ]
-    : [];
+  const desiredTeams = [
+    {
+      team: input.homeTeam,
+      opponent: input.awayTeam,
+      amountPence:
+        input.homeMatchFeePence && input.homeMatchFeePence > 0
+          ? input.homeMatchFeePence
+          : null,
+    },
+    {
+      team: input.awayTeam,
+      opponent: input.homeTeam,
+      amountPence:
+        input.awayMatchFeePence && input.awayMatchFeePence > 0
+          ? input.awayMatchFeePence
+          : null,
+    },
+  ].filter(
+    (entry): entry is {
+      team: FixtureMatchFeeTeam;
+      opponent: FixtureMatchFeeTeam;
+      amountPence: number;
+    } => entry.amountPence !== null,
+  );
 
   const desiredTeamIds = new Set(desiredTeams.map((entry) => entry.team.id));
   const voidedChargeIds: string[] = [];
@@ -242,7 +253,7 @@ export async function syncFixtureMatchFeeCharges(
     });
   }
 
-  if (!desiredFee) {
+  if (desiredTeams.length === 0) {
     for (const charge of existingCharges) {
       const paidTotalPence = getChargePaidTotal(charge.transactions);
 
@@ -282,6 +293,7 @@ export async function syncFixtureMatchFeeCharges(
     teamName: string;
     teamLogoUrl: string | null;
     paymentToken: string | null;
+    amountPence: number;
   }> = [];
 
   for (const entry of desiredTeams) {
@@ -308,7 +320,7 @@ export async function syncFixtureMatchFeeCharges(
           fixtureId: input.fixtureId,
           title,
           description,
-          amountPence: desiredFee,
+          amountPence: entry.amountPence,
           dueDate: input.kickoffAt,
           status: PaymentChargeStatus.OPEN,
           paymentToken: createPaymentToken(),
@@ -321,6 +333,7 @@ export async function syncFixtureMatchFeeCharges(
         teamName: entry.team.name,
         teamLogoUrl: entry.team.logoUrl ?? null,
         paymentToken: createdCharge.paymentToken,
+        amountPence: createdCharge.amountPence,
       });
 
       continue;
@@ -328,7 +341,7 @@ export async function syncFixtureMatchFeeCharges(
 
     const paidTotalPence = getChargePaidTotal(existingCharge.transactions);
 
-    if (paidTotalPence > 0 && existingCharge.amountPence !== desiredFee) {
+    if (paidTotalPence > 0 && existingCharge.amountPence !== entry.amountPence) {
       throw new Error(
         `Cannot change the match fee amount for ${existingCharge.team.name} because a payment has already been recorded.`,
       );
@@ -342,9 +355,9 @@ export async function syncFixtureMatchFeeCharges(
         fixtureId: input.fixtureId,
         title,
         description,
-        amountPence: desiredFee,
+        amountPence: entry.amountPence,
         dueDate: input.kickoffAt,
-        status: getChargeStatusFromAmounts(desiredFee, paidTotalPence),
+        status: getChargeStatusFromAmounts(entry.amountPence, paidTotalPence),
         paymentToken: existingCharge.paymentToken ?? createPaymentToken(),
       },
     });
@@ -356,6 +369,7 @@ export async function syncFixtureMatchFeeCharges(
         teamName: entry.team.name,
         teamLogoUrl: entry.team.logoUrl ?? null,
         paymentToken: updatedCharge.paymentToken,
+        amountPence: updatedCharge.amountPence,
       });
     }
   }
@@ -421,7 +435,7 @@ export async function queueFixtureMatchFeeEmails(
           leagueDisplayName,
           fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
           kickoffLabel: formatKickoffLabel(input.kickoffAt),
-          amount: formatMoney(input.matchFeePence ?? 0),
+          amount: formatMoney(charge.amountPence),
           paymentUrl: buildChargePaymentUrl(charge.paymentToken),
         },
         emailBranding: {
@@ -430,7 +444,7 @@ export async function queueFixtureMatchFeeEmails(
           leagueName: leagueDisplayName,
         },
         paymentSummary: {
-          amount: formatMoney(input.matchFeePence ?? 0),
+          amount: formatMoney(charge.amountPence),
           reason: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
         },
       });
