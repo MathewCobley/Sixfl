@@ -275,6 +275,10 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
   const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
   const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
+  const selectedTeamIds = formData
+    .getAll("teamIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
 
   if (!leagueId) {
     redirect("/admin/leagues?error=missing_id");
@@ -301,13 +305,22 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   }
 
   const teams = await prisma.team.findMany({
-    where: { leagueId },
+    where: {
+      leagueId,
+      ...(selectedTeamIds.length > 0
+        ? {
+            id: {
+              in: selectedTeamIds,
+            },
+          }
+        : {}),
+    },
     select: { id: true },
     orderBy: [{ name: "asc" }],
   });
 
   if (teams.length === 0) {
-    redirect(`${from}?error=No%20teams%20found%20in%20this%20league.`);
+    redirect(`${from}?error=No%20teams%20selected%20for%20this%20league%20message.`);
   }
 
   let deliveredCount = 0;
