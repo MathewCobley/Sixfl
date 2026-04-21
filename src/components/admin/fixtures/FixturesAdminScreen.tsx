@@ -83,6 +83,8 @@ type FixtureItem = {
   pitch: string | null;
   status: FixtureStatus;
   matchFeePence: number | null;
+  homeMatchFeePence: number | null;
+  awayMatchFeePence: number | null;
   homeScore: number | null;
   awayScore: number | null;
   resultIsDisputed: boolean;
@@ -725,7 +727,8 @@ export default function FixturesAdminScreen({
   const [editRound, setEditRound] = useState("");
   const [editPosition, setEditPosition] = useState("");
   const [editPitch, setEditPitch] = useState("");
-  const [editMatchFee, setEditMatchFee] = useState("");
+  const [editHomeMatchFee, setEditHomeMatchFee] = useState("");
+  const [editAwayMatchFee, setEditAwayMatchFee] = useState("");
   const [editStatus, setEditStatus] = useState<FixtureStatus>("SCHEDULED");
 
   useEffect(() => {
@@ -873,7 +876,8 @@ export default function FixturesAdminScreen({
     setEditRound(fixture.round?.toString() ?? "");
     setEditPosition(fixture.position?.toString() ?? "");
     setEditPitch(fixture.pitch ?? "");
-    setEditMatchFee(formatMoneyInputValue(fixture.matchFeePence));
+    setEditHomeMatchFee(formatMoneyInputValue(fixture.homeMatchFeePence));
+    setEditAwayMatchFee(formatMoneyInputValue(fixture.awayMatchFeePence));
     setEditStatus(fixture.status);
   }
 
@@ -889,7 +893,8 @@ export default function FixturesAdminScreen({
     setEditRound("");
     setEditPosition("");
     setEditPitch("");
-    setEditMatchFee("");
+    setEditHomeMatchFee("");
+    setEditAwayMatchFee("");
     setEditStatus("SCHEDULED");
   }
 
@@ -931,7 +936,7 @@ export default function FixturesAdminScreen({
             <SectionHeading
               eyebrow="Manual match"
               title="Create fixture"
-              description="Add a specific match with full control over teams, venue, referee, week, pitch, status and the per-team match fee."
+              description="Add a specific match with full control over teams, venue, referee, week, pitch, status and separate match fees for each team."
             />
           </div>
 
@@ -1048,18 +1053,32 @@ export default function FixturesAdminScreen({
 
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                  Match fee per team (£)
+                  Team 1 fee (£)
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  name="matchFeePounds"
+                  name="homeMatchFeePounds"
                   placeholder="e.g. 30.00"
                   className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                 />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                  Team 2 fee (£)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  name="awayMatchFeePounds"
+                  placeholder="e.g. 0.00"
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                />
                 <p className="mt-2 text-xs text-white/40">
-                  When set, SIXFL will create one charge per team and email payment links immediately.
+                  Set a different amount for each team, or leave one side blank to only charge the other team.
                 </p>
               </div>
             </div>
@@ -1502,15 +1521,30 @@ export default function FixturesAdminScreen({
 
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                    Match fee per team (£)
+                    Team 1 fee (£)
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
-                    name="matchFeePounds"
-                    value={editMatchFee}
-                    onChange={(event) => setEditMatchFee(event.target.value)}
+                    name="homeMatchFeePounds"
+                    value={editHomeMatchFee}
+                    onChange={(event) => setEditHomeMatchFee(event.target.value)}
+                    className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Team 2 fee (£)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    name="awayMatchFeePounds"
+                    value={editAwayMatchFee}
+                    onChange={(event) => setEditAwayMatchFee(event.target.value)}
                     className="h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
                   />
                 </div>
@@ -1607,9 +1641,18 @@ export default function FixturesAdminScreen({
                           ? ` • Game ${fixture.position}`
                           : ""}
                       </div>
-                      {fixture.matchFeePence !== null && fixture.matchFeePence > 0 ? (
-                        <div className="mt-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
-                          Match fee {formatMoney(fixture.matchFeePence)} per team
+                      {fixture.homeMatchFeePence !== null || fixture.awayMatchFeePence !== null ? (
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                          {fixture.homeMatchFeePence !== null ? (
+                            <div className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-200">
+                              Team 1 {formatMoney(fixture.homeMatchFeePence)}
+                            </div>
+                          ) : null}
+                          {fixture.awayMatchFeePence !== null ? (
+                            <div className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-200">
+                              Team 2 {formatMoney(fixture.awayMatchFeePence)}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </td>
