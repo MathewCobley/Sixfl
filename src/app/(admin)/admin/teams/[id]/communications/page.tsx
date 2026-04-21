@@ -79,7 +79,7 @@ export default async function AdminTeamCommunicationsPage({
     .flatMap((thread) => thread.messages.map((message) => ({ thread, message })))
     .sort((a, b) => b.message.createdAt.getTime() - a.message.createdAt.getTime());
 
-  const inboxUrl = "/admin/messages";
+  const inboxUrl = `/admin/messages?composeTeam=${encodeURIComponent(team.id)}`;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
