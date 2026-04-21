@@ -7,7 +7,7 @@
 import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma, TeamRole, UserRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import type { ConvertLeadToTeamState } from "./convert-action-state";
@@ -75,7 +75,7 @@ export async function convertLeadToTeamAction(
   _prevState: ConvertLeadToTeamState,
   formData: FormData,
 ): Promise<ConvertLeadToTeamState> {
-  await requireAdmin();
+  const { user } = await requireAdmin();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
   const manualTeamName = String(formData.get("teamName") ?? "").trim();
@@ -177,70 +177,19 @@ export async function convertLeadToTeamAction(
         throw new Error("This lead needs an email address before it can be converted.");
       }
 
-      const existingUser = await tx.user.findUnique({
-        where: { email },
-        select: {
-          id: true,
-          name: true,
-          role: true,
-        },
-      });
-
-      let captainUserId: string;
-
-      if (existingUser) {
-        const updatedUser = await tx.user.update({
-          where: { id: existingUser.id },
-          data: {
-            name: existingUser.name?.trim()
-              ? existingUser.name
-              : freshLead.contactName?.trim() || null,
-            role: existingUser.role ?? UserRole.USER,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        captainUserId = updatedUser.id;
-      } else {
-        const newUser = await tx.user.create({
-          data: {
-            name: freshLead.contactName?.trim() || null,
-            email,
-            role: UserRole.USER,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        captainUserId = newUser.id;
-      }
-
       const claimCode = await generateUniqueClaimCode(tx);
 
       const team = await tx.team.create({
         data: {
           name: teamName,
           claimCode,
-          createdByUserId: captainUserId,
-          captainUserId,
-          captainLinkedAt: new Date(),
-          captainLinkedSource: "LEAD_CONVERSION",
+          createdByUserId: user?.id ?? null,
           contactName: freshLead.contactName?.trim() || null,
           contactEmail: email,
+          captainInviteSentTo: email,
         },
         select: {
           id: true,
-        },
-      });
-
-      await tx.teamMember.create({
-        data: {
-          teamId: team.id,
-          userId: captainUserId,
-          role: TeamRole.CAPTAIN,
         },
       });
 
