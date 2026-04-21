@@ -140,12 +140,44 @@ export default async function CaptainSquadPage({
           },
         },
       },
+      prospects: {
+        where: {
+          status: "ACTIVE_SQUAD",
+        },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          notes: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 
   if (!team) {
     notFound();
   }
+
+  const linkedMemberEmails = new Set(
+    team.members
+      .map((member) => member.user.email?.trim().toLowerCase() ?? null)
+      .filter((email): email is string => Boolean(email)),
+  );
+
+  const pendingSquadProspects = team.prospects.filter((prospect) => {
+    const normalizedEmail = prospect.email?.trim().toLowerCase() ?? null;
+
+    if (!normalizedEmail) {
+      return true;
+    }
+
+    return !linkedMemberEmails.has(normalizedEmail);
+  });
 
   const captainCount = team.members.filter((member) => member.role === "CAPTAIN").length;
   const managerCount = team.members.filter((member) => member.role === "MANAGER").length;
@@ -179,8 +211,13 @@ export default async function CaptainSquadPage({
                 {team.league?.season ? ` · ${team.league.season}` : ""}
               </span>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                {team.members.length} squad member{team.members.length === 1 ? "" : "s"}
+                {team.members.length + pendingSquadProspects.length} squad player{team.members.length + pendingSquadProspects.length === 1 ? "" : "s"}
               </span>
+              {pendingSquadProspects.length > 0 ? (
+                <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
+                  {pendingSquadProspects.length} pending activation
+                </span>
+              ) : null}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -196,6 +233,13 @@ export default async function CaptainSquadPage({
                 className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
               >
                 Open fixtures
+              </Link>
+
+              <Link
+                href={`/captain/team/${teamid}/prospects`}
+                className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+              >
+                Open prospects
               </Link>
             </div>
           </div>
@@ -219,10 +263,10 @@ export default async function CaptainSquadPage({
 
             <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                Players
+                Linked players
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">{playerCount}</p>
-              <p className="mt-2 text-sm text-white/65">Standard player memberships.</p>
+              <p className="mt-2 text-sm text-white/65">Players with a SIXFL account.</p>
             </div>
 
             <div className="rounded-[1.5rem] border border-sky-400/20 bg-sky-500/10 p-5">
@@ -259,87 +303,163 @@ export default async function CaptainSquadPage({
             </div>
 
             <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70">
-              {team.members.length} total
+              {team.members.length + pendingSquadProspects.length} total
             </div>
           </div>
 
           <div className="divide-y divide-white/10">
-            {team.members.length === 0 ? (
+            {team.members.length === 0 && pendingSquadProspects.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">
                 No squad members are attached to this team yet.
               </div>
-            ) : (
-              team.members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-center xl:justify-between"
-                >
-                  <div className="flex min-w-0 items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
-                      {getInitials(member.user.name, member.user.email)}
-                    </div>
+            ) : null}
 
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="truncate text-base font-semibold text-white">
-                          {member.user.name || "Unnamed user"}
-                        </div>
-
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(
-                            member.role,
-                          )}`}
-                        >
-                          {getRoleLabel(member.role)}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 text-sm text-white/65">
-                        {member.user.email || "No email on account"}
-                      </div>
-
-                      <div className="mt-1 text-xs text-white/45">
-                        Added {member.createdAt.toLocaleString()}
-                      </div>
-                    </div>
+            {team.members.map((member) => (
+              <div
+                key={member.id}
+                className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-center xl:justify-between"
+              >
+                <div className="flex min-w-0 items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
+                    {getInitials(member.user.name, member.user.email)}
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
-                    <form action={updateSquadMemberRoleAction} className="flex flex-wrap items-center gap-3">
-                      <input type="hidden" name="teamid" value={teamid} />
-                      <input type="hidden" name="membershipId" value={member.id} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-base font-semibold text-white">
+                        {member.user.name || "Unnamed user"}
+                      </div>
 
-                      <div className="min-w-[220px]">
-  <FormListboxField
-    name="role"
-    value={member.role}
-    options={roleOptions}
-    placeholder="Select role"
-  />
-</div>
-
-                      <button
-                        type="submit"
-                        className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(
+                          member.role,
+                        )}`}
                       >
-                        Update role
-                      </button>
-                    </form>
+                        {getRoleLabel(member.role)}
+                      </span>
+                    </div>
 
-                    <form action={removeSquadMemberAction}>
-                      <input type="hidden" name="teamid" value={teamid} />
-                      <input type="hidden" name="membershipId" value={member.id} />
-                      <button
-                        type="submit"
-                        className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
-                      >
-                        Remove
-                      </button>
-                    </form>
+                    <div className="mt-2 text-sm text-white/65">
+                      {member.user.email || "No email on account"}
+                    </div>
+
+                    <div className="mt-1 text-xs text-white/45">
+                      Added {member.createdAt.toLocaleString()}
+                    </div>
                   </div>
                 </div>
-              ))
-            )}
+
+                <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
+                  <form action={updateSquadMemberRoleAction} className="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="teamid" value={teamid} />
+                    <input type="hidden" name="membershipId" value={member.id} />
+
+                    <div className="min-w-[220px]">
+                      <FormListboxField
+                        name="role"
+                        value={member.role}
+                        options={roleOptions}
+                        placeholder="Select role"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                    >
+                      Update role
+                    </button>
+                  </form>
+
+                  <form action={removeSquadMemberAction}>
+                    <input type="hidden" name="teamid" value={teamid} />
+                    <input type="hidden" name="membershipId" value={member.id} />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
+                    >
+                      Remove
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+
+            {pendingSquadProspects.length > 0 ? (
+              <div className="px-6 py-5">
+                <div className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+                        Pending activation
+                      </p>
+                      <p className="mt-1 text-sm text-amber-100">
+                        These players have been promoted to the squad but do not yet have a linked SIXFL account.
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/captain/team/${teamid}/prospects`}
+                      className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                    >
+                      Manage prospects
+                    </Link>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {pendingSquadProspects.map((prospect) => {
+                      const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+
+                      return (
+                        <div
+                          key={prospect.id}
+                          className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 xl:flex-row xl:items-center xl:justify-between"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
+                              {getInitials(fullName, prospect.email)}
+                            </div>
+
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="text-base font-semibold text-white">
+                                  {fullName || "Unnamed prospect"}
+                                </div>
+                                <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">
+                                  Pending account
+                                </span>
+                              </div>
+
+                              <div className="mt-2 text-sm text-white/70">
+                                {prospect.email || "No email saved"}
+                                {prospect.phone ? ` · ${prospect.phone}` : ""}
+                              </div>
+
+                              <div className="mt-1 text-xs text-white/45">
+                                Promoted {prospect.updatedAt.toLocaleString()}
+                              </div>
+
+                              {prospect.notes ? (
+                                <div className="mt-2 text-sm text-white/55">{prospect.notes}</div>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-3">
+                            <Link
+                              href={`/captain/team/${teamid}/prospects`}
+                              className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                            >
+                              Open prospect
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -370,12 +490,12 @@ export default async function CaptainSquadPage({
               </div>
 
               <FormListboxField
-  name="role"
-  label="Role"
-  value="PLAYER"
-  options={roleOptions}
-  placeholder="Select role"
-/>
+                name="role"
+                label="Role"
+                value="PLAYER"
+                options={roleOptions}
+                placeholder="Select role"
+              />
 
               <button
                 type="submit"
