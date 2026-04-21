@@ -30,15 +30,15 @@ export default function CommunicationsTeamLauncher({ teams }: { teams: TeamOptio
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
             Outbound communications
           </div>
-          <h2 className="text-2xl font-semibold text-white">Open a team communications hub</h2>
+          <h2 className="text-2xl font-semibold text-white">Start a team message</h2>
           <p className="max-w-2xl text-sm text-white/60">
-            Pick a team and jump straight into its communications page to send email or SMS with templates, history, and thread tracking already in place.
+            Pick a team and jump straight into the inbox composer to send a new email or SMS with the selected team already loaded.
           </p>
         </div>
 
         {selectedTeam ? (
           <Link
-            href={`/admin/teams/${selectedTeam.id}/communications`}
+            href={`/admin/messages?composeTeam=${encodeURIComponent(selectedTeam.id)}`}
             className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
           >
             Open {selectedTeam.name}
