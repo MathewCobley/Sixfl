@@ -12,7 +12,6 @@ import LeagueForm from "@/components/admin/leagues/LeagueForm";
 import TeamBadge from "@/components/admin/TeamBadge";
 import {
   deleteLeagueAction,
-  sendLeagueTeamsMessageAction,
   updateLeagueAction,
 } from "@/app/(admin)/admin/leagues/actions";
 
@@ -58,12 +57,6 @@ function formatLeagueType(leagueType: string | null) {
     default:
       return leagueType;
   }
-}
-
-function getPrimaryActionButtonClass(enabled: boolean) {
-  return enabled
-    ? "rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400"
-    : "cursor-not-allowed rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white/40";
 }
 
 type Props = {
@@ -133,11 +126,6 @@ export default async function EditLeaguePage({
 
   const created = resolvedSearchParams?.created === "1";
   const deleteError = resolvedSearchParams?.deleteError === "linked-records";
-  const messageQueued = resolvedSearchParams?.messageQueued === "1";
-  const messageCount = Number(resolvedSearchParams?.messageCount ?? 0) || 0;
-  const channel = resolvedSearchParams?.channel === "sms" ? "SMS" : "Email";
-  const messageError = resolvedSearchParams?.messageError;
-  const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -188,32 +176,6 @@ export default async function EditLeaguePage({
         </div>
       ) : null}
 
-      {messageQueued ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {channel} queued for {messageCount} team
-          {messageCount === 1 ? "" : "s"} in this league.
-        </div>
-      ) : null}
-
-      {messageError === "missing_subject" ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Email subject is required.
-        </div>
-      ) : null}
-
-      {messageError === "missing_body" ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Message body is required.
-        </div>
-      ) : null}
-
-      {messageError === "reply_not_configured" ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the
-          deployed environment before queueing league emails.
-        </div>
-      ) : null}
-
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         <div className="space-y-6">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
@@ -244,141 +206,51 @@ export default async function EditLeaguePage({
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
-            <h2 className="text-lg font-semibold text-white">
-              Message all teams in this league
-            </h2>
-            <p className="mt-1 text-sm text-white/60">
-              Each message is queued per team, logged against that team, and can
-              render team-specific details automatically.
-            </p>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  League communications
+                </h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Whole-league email and SMS sending now lives in the dedicated communications page.
+                </p>
+              </div>
 
-            <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200/90">
-                Available placeholders
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {[
-                  "{{teamName}}",
-                  "{{leagueName}}",
-                  "{{leagueSeason}}",
-                  "{{contactName}}",
-                ].map((token) => (
-                  <span
-                    key={token}
-                    className="rounded-full border border-emerald-400/20 bg-black/20 px-3 py-1 text-xs font-mono text-emerald-100"
-                  >
-                    {token}
-                  </span>
-                ))}
-              </div>
-              <p className="mt-3 text-xs leading-6 text-emerald-100/80">
-                Team branding such as the team logo and team name block can be
-                added automatically in the email layout. Use placeholders only
-                when you want the written subject or message itself to mention
-                the specific team, contact, or season.
-              </p>
+              <Link
+                href={`/admin/leagues/${league.id}/communications`}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+              >
+                Open communications
+              </Link>
             </div>
 
-            <div className="mt-6 grid gap-6 lg:grid-cols-2">
-              <form
-                action={sendLeagueTeamsMessageAction}
-                className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-5"
-              >
-                <input type="hidden" name="leagueId" value={league.id} />
-                <input type="hidden" name="channel" value="EMAIL" />
-
-                <div className="text-sm font-semibold text-white">
-                  Bulk email
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                  Teams
                 </div>
-
-                {!emailReplyConfigured ? (
-                  <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                    Reply-by-email is not configured yet. Add{" "}
-                    <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the
-                    deployed environment, for example{" "}
-                    <span className="font-mono">replies.sixfl.co.uk</span>,
-                    before queueing bulk team emails.
-                  </div>
-                ) : null}
-
-                <div>
-                  <label className="mb-1 block text-sm text-white/70">
-                    Subject
-                  </label>
-                  <input
-                    name="subject"
-                    placeholder="Update for {{teamName}}"
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400"
-                  />
-                  <div className="mt-2 text-xs text-white/45">
-                    Example:{" "}
-                    <span className="font-mono">
-                      Update for {"{{teamName}}"}
-                    </span>
-                  </div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {league._count.teams}
                 </div>
+              </div>
 
-                <div>
-                  <label className="mb-1 block text-sm text-white/70">
-                    Message
-                  </label>
-                  <textarea
-                    name="body"
-                    rows={8}
-                    className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                    placeholder={`Hi {{contactName}},\n\nThis is an update for {{teamName}} in {{leagueName}} {{leagueSeason}}.\n\nThanks,\nSIXFL`}
-                  />
-                  <div className="mt-2 text-xs text-white/45">
-                    Use placeholders only where you want personalised wording in
-                    the actual email text.
-                  </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                  Email-ready teams
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={!emailReplyConfigured}
-                  className={getPrimaryActionButtonClass(emailReplyConfigured)}
-                >
-                  Queue email to teams
-                </button>
-              </form>
-
-              <form
-                action={sendLeagueTeamsMessageAction}
-                className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-5"
-              >
-                <input type="hidden" name="leagueId" value={league.id} />
-                <input type="hidden" name="channel" value="SMS" />
-
-                <div className="text-sm font-semibold text-white">
-                  Bulk SMS
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {Array.from(contactMap.values()).filter((snapshot) => Boolean(snapshot.primaryContact.email?.trim())).length}
                 </div>
+              </div>
 
-                <div>
-                  <label className="mb-1 block text-sm text-white/70">
-                    Message
-                  </label>
-                  <textarea
-                    name="body"
-                    rows={8}
-                    className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-                    placeholder={`Hi {{contactName}}, SIXFL update for {{teamName}} in {{leagueName}}.`}
-                  />
-                  <div className="mt-2 text-xs text-white/45">
-                    Available in SMS too:{" "}
-                    <span className="font-mono">
-                      {"{{teamName}} {{leagueName}} {{leagueSeason}} {{contactName}}"}
-                    </span>
-                  </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                  SMS-ready teams
                 </div>
-
-                <button
-                  type="submit"
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white transition hover:bg-white/10"
-                >
-                  Queue SMS to teams
-                </button>
-              </form>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {Array.from(contactMap.values()).filter((snapshot) => Boolean(snapshot.primaryContact.phone?.trim())).length}
+                </div>
+              </div>
             </div>
           </div>
 
