@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import LeagueCommunicationsComposer from "@/components/admin/communications/LeagueCommunicationsComposer";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -59,6 +60,17 @@ export default async function AdminLeagueCommunicationsPage({
 
   if (!league) {
     notFound();
+  }
+
+  const teamSnapshots = await Promise.all(
+    league.teams.map((team) => getTeamContactSnapshot(team.id)),
+  );
+
+  const snapshotMap = new Map<string, NonNullable<(typeof teamSnapshots)[number]>>();
+  for (const snapshot of teamSnapshots) {
+    if (snapshot) {
+      snapshotMap.set(snapshot.teamId, snapshot);
+    }
   }
 
   const [emailTemplates, smsTemplates, teamThreads] = await Promise.all([
@@ -153,8 +165,14 @@ export default async function AdminLeagueCommunicationsPage({
     .flatMap((thread) => thread.messages.map((message) => ({ thread, message })))
     .sort((a, b) => b.message.createdAt.getTime() - a.message.createdAt.getTime());
 
-  const emailReadyCount = league.teams.filter((team) => Boolean(team.contactEmail?.trim())).length;
-  const smsReadyCount = league.teams.filter((team) => Boolean(team.contactPhone?.trim())).length;
+  const emailReadyCount = league.teams.filter((team) => {
+    const snapshot = snapshotMap.get(team.id);
+    return Boolean(snapshot?.primaryContact.email?.trim());
+  }).length;
+  const smsReadyCount = league.teams.filter((team) => {
+    const snapshot = snapshotMap.get(team.id);
+    return Boolean(snapshot?.primaryContact.phone?.trim());
+  }).length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -238,12 +256,15 @@ export default async function AdminLeagueCommunicationsPage({
           fromPath={`/admin/leagues/${league.id}/communications`}
           leagueName={`${league.name}${league.season ? ` — ${league.season}` : ""}`}
           teamCount={league.teams.length}
-          teams={league.teams.map((team) => ({
-            id: team.id,
-            name: team.name,
-            emailReady: Boolean(team.contactEmail?.trim()),
-            smsReady: Boolean(team.contactPhone?.trim()),
-          }))}
+          teams={league.teams.map((team) => {
+            const snapshot = snapshotMap.get(team.id);
+            return {
+              id: team.id,
+              name: team.name,
+              emailReady: Boolean(snapshot?.primaryContact.email?.trim()),
+              smsReady: Boolean(snapshot?.primaryContact.phone?.trim()),
+            };
+          })}
           emailTemplates={resolvedEmailTemplates}
           smsTemplates={smsTemplates}
         />
