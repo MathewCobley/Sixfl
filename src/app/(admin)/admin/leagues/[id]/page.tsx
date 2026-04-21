@@ -83,14 +83,9 @@ export default async function EditLeaguePage({
           logoUrl: true,
           claimCode: true,
           createdAt: true,
-          members: {
-            where: {
-              role: "MANAGER",
-            },
-            select: {
-              id: true,
-            },
-          },
+          captainUserId: true,
+          captainLinkedAt: true,
+          captainClaimedAt: true,
         },
         orderBy: {
           name: "asc",
@@ -279,7 +274,9 @@ export default async function EditLeaguePage({
               <div className="mt-6 overflow-hidden rounded-2xl border border-white/10">
                 <div className="divide-y divide-white/10">
                   {league.teams.map((team) => {
-                    const isClaimed = team.members.length > 0;
+                    const isClaimed = Boolean(
+                      team.captainUserId || team.captainLinkedAt || team.captainClaimedAt,
+                    );
                     const snapshot = contactMap.get(team.id);
 
                     return (
