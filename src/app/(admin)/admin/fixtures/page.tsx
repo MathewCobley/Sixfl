@@ -3,7 +3,7 @@
 // ========================================
 
 import Link from "next/link";
-import { FixtureCaptainConfirmationStatus } from "@prisma/client";
+import { FixtureCaptainConfirmationStatus, PaymentChargeStatus } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
 import { publishAndEmailLeagueFixturesAction } from "@/app/(admin)/admin/fixtures/publish-actions";
@@ -235,6 +235,18 @@ export default async function AdminFixturesPage({
         kickoffAt: true,
         publishedAt: true,
         matchFeePence: true,
+        paymentCharges: {
+          where: {
+            status: {
+              not: PaymentChargeStatus.VOID,
+            },
+          },
+          select: {
+            teamId: true,
+            amountPence: true,
+            status: true,
+          },
+        },
 
         socialPostType: true,
         socialPostStatus: true,
@@ -352,6 +364,13 @@ export default async function AdminFixturesPage({
           ? getFallbackConfirmationStatus(fixture.kickoffAt)
           : null);
 
+      const homeMatchFeePence =
+        fixture.paymentCharges.find((charge) => charge.teamId === fixture.homeTeamId)
+          ?.amountPence ?? null;
+      const awayMatchFeePence =
+        fixture.paymentCharges.find((charge) => charge.teamId === fixture.awayTeamId)
+          ?.amountPence ?? null;
+
       return {
         id: fixture.id,
         leagueId: fixture.leagueId,
@@ -371,6 +390,8 @@ export default async function AdminFixturesPage({
         pitch: fixture.pitch,
         status: fixture.status,
         matchFeePence: fixture.matchFeePence,
+        homeMatchFeePence,
+        awayMatchFeePence,
         homeScore: fixture.result?.homeScore ?? null,
         awayScore: fixture.result?.awayScore ?? null,
         resultIsDisputed: fixture.result?.isDisputed ?? false,
@@ -535,8 +556,7 @@ export default async function AdminFixturesPage({
                       Published
                     </div>
                     <div className="mt-1 text-lg font-semibold text-emerald-300">
-                      {item.published}
-                    </div>
+                      {item.published}</div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
