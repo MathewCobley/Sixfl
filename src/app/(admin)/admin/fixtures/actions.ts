@@ -40,6 +40,8 @@ type FixtureNotificationDbClient = Pick<
   "notificationDispatch" | "paymentCharge"
 >;
 
+type FixtureMatchFeeChargeTarget = "BOTH_TEAMS" | "HOME_ONLY" | "AWAY_ONLY";
+
 function addDays(d: Date, days: number) {
   const out = new Date(d);
   out.setDate(out.getDate() + days);
@@ -120,26 +122,48 @@ function parseRequiredPositiveInt(
   return num;
 }
 
-function parseOptionalMoneyToPence(
+function parseMatchFeeInput(
   value: FormDataEntryValue | null,
   fieldName: string,
-) {
+): {
+  matchFeePence: number | null;
+  chargeTarget: FixtureMatchFeeChargeTarget;
+} {
   const str = String(value ?? "").trim();
 
-  if (!str) return null;
+  if (!str) {
+    return {
+      matchFeePence: null,
+      chargeTarget: "BOTH_TEAMS",
+    };
+  }
 
-  const normalised = str.replace(/,/g, "");
-  const amount = Number(normalised);
+  const lower = str.toLowerCase();
+  const chargeTarget: FixtureMatchFeeChargeTarget =
+    /\b(home|team\s*1|team1|one\s*team\s*1)\b/.test(lower)
+      ? "HOME_ONLY"
+      : /\b(away|team\s*2|team2|one\s*team\s*2)\b/.test(lower)
+        ? "AWAY_ONLY"
+        : "BOTH_TEAMS";
+
+  const amountMatch = str.match(/\d+(?:\.\d{1,2})?/);
+  const amount = amountMatch ? Number(amountMatch[0]) : Number.NaN;
 
   if (!Number.isFinite(amount) || amount < 0) {
     throw new Error(`${fieldName} must be 0 or more.`);
   }
 
   if (amount === 0) {
-    return null;
+    return {
+      matchFeePence: null,
+      chargeTarget,
+    };
   }
 
-  return Math.round(amount * 100);
+  return {
+    matchFeePence: Math.round(amount * 100),
+    chargeTarget,
+  };
 }
 
 function parseKickoffAtFromFields(
@@ -445,7 +469,7 @@ export async function createFixtureAction(formData: FormData) {
   );
   const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
-  const matchFeePence = parseOptionalMoneyToPence(
+  const matchFeeInput = parseMatchFeeInput(
     formData.get("matchFeePounds"),
     "Match fee",
   );
@@ -522,7 +546,7 @@ export async function createFixtureAction(formData: FormData) {
         position,
         pitch,
         status,
-        matchFeePence,
+        matchFeePence: matchFeeInput.matchFeePence,
       },
     });
 
@@ -535,7 +559,8 @@ export async function createFixtureAction(formData: FormData) {
       kickoffAt,
       homeTeam,
       awayTeam,
-      matchFeePence,
+      matchFeePence: matchFeeInput.matchFeePence,
+      chargeTarget: matchFeeInput.chargeTarget,
     });
 
     return {
@@ -544,7 +569,7 @@ export async function createFixtureAction(formData: FormData) {
     };
   });
 
-  if ((matchFeePence ?? 0) > 0 && created.activeCharges.length > 0) {
+  if ((matchFeeInput.matchFeePence ?? 0) > 0 && created.activeCharges.length > 0) {
     try {
       await queueFixtureMatchFeeEmails({
         fixtureId: created.fixture.id,
@@ -554,7 +579,8 @@ export async function createFixtureAction(formData: FormData) {
         kickoffAt,
         homeTeam,
         awayTeam,
-        matchFeePence,
+        matchFeePence: matchFeeInput.matchFeePence,
+        chargeTarget: matchFeeInput.chargeTarget,
         charges: created.activeCharges,
         mode: "all",
       });
@@ -596,7 +622,7 @@ export async function updateFixtureAction(formData: FormData) {
   );
   const pitch = parseOptionalString(formData.get("pitch"));
   const status = parseFixtureStatus(formData.get("status"));
-  const matchFeePence = parseOptionalMoneyToPence(
+  const matchFeeInput = parseMatchFeeInput(
     formData.get("matchFeePounds"),
     "Match fee",
   );
@@ -690,7 +716,8 @@ export async function updateFixtureAction(formData: FormData) {
       kickoffAt,
       homeTeam,
       awayTeam,
-      matchFeePence,
+      matchFeePence: matchFeeInput.matchFeePence,
+      chargeTarget: matchFeeInput.chargeTarget,
     });
 
     const updatedFixture = await tx.fixture.update({
@@ -706,7 +733,7 @@ export async function updateFixtureAction(formData: FormData) {
         position,
         pitch,
         status,
-        matchFeePence,
+        matchFeePence: matchFeeInput.matchFeePence,
       },
     });
 
@@ -717,11 +744,11 @@ export async function updateFixtureAction(formData: FormData) {
   });
 
   const hadExistingFee = (fixture.matchFeePence ?? 0) > 0;
-  const hasMatchFee = (matchFeePence ?? 0) > 0;
+  const hasMatchFee = (matchFeeInput.matchFeePence ?? 0) > 0;
   const teamsChanged =
     fixture.homeTeamId !== homeTeamId || fixture.awayTeamId !== awayTeamId;
   const feeAmountChanged =
-    (fixture.matchFeePence ?? 0) !== (matchFeePence ?? 0);
+    (fixture.matchFeePence ?? 0) !== (matchFeeInput.matchFeePence ?? 0);
 
   const shouldSendInitialFeeEmail =
     !hadExistingFee || teamsChanged || feeAmountChanged;
@@ -751,7 +778,8 @@ export async function updateFixtureAction(formData: FormData) {
         kickoffAt,
         homeTeam,
         awayTeam,
-        matchFeePence,
+        matchFeePence: matchFeeInput.matchFeePence,
+        chargeTarget: matchFeeInput.chargeTarget,
         charges: updated.activeCharges,
         mode: shouldSendInitialFeeEmail ? "all" : "reminders_only",
       });
