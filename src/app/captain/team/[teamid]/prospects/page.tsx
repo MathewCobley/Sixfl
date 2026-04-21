@@ -408,7 +408,8 @@ export default async function CaptainProspectsPage({
   ]);
 
   const linkedUsers: LinkedUserRecord[] = linkedUsersRaw.filter(
-    (user): user is LinkedUserRecord => Boolean(user.email),
+    (user): user is LinkedUserRecord =>
+      typeof user.email === "string" && user.email.trim().length > 0,
   );
 
   const linkedUserByEmail = new Map(
