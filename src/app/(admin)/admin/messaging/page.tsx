@@ -213,7 +213,7 @@ export default async function AdminMessagesPage({
           </div>
         </section>
 
-        <div className="space-y-6">
+        <div className="grid gap-6 xl:grid-cols-2 3xl:grid-cols-4">
           <CommunicationsTeamLauncher
             teams={teams.map((team) => ({
               id: team.id,
