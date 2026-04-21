@@ -4,7 +4,10 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getPendingCaptainContext } from "@/lib/auth/pendingCaptain";
+import {
+  getCaptainLoginContext,
+  getPendingCaptainContext,
+} from "@/lib/auth/pendingCaptain";
 
 export async function POST(req: Request) {
   const { email } = await req.json();
@@ -20,18 +23,19 @@ export async function POST(req: Request) {
     });
   }
 
-  const [user, pendingCaptain] = await Promise.all([
+  const [user, pendingCaptain, captainLoginContext] = await Promise.all([
     prisma.user.findUnique({
       where: { email: normalizedEmail },
     }),
     getPendingCaptainContext(normalizedEmail),
+    getCaptainLoginContext(normalizedEmail),
   ]);
 
   return NextResponse.json({
     exists: !!user,
     pendingCaptain: !!pendingCaptain,
-    canLogin: !!user || !!pendingCaptain,
+    canLogin: !!user || !!pendingCaptain || !!captainLoginContext,
     claimCode: pendingCaptain?.claimCode ?? null,
-    teamName: pendingCaptain?.teamName ?? null,
+    teamName: pendingCaptain?.teamName ?? captainLoginContext?.teamName ?? null,
   });
 }
