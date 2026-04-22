@@ -18,6 +18,8 @@ type PageProps = {
   }>;
 };
 
+type FormResult = "W" | "D" | "L";
+
 type TableRow = {
   team: {
     id: string;
@@ -32,6 +34,7 @@ type TableRow = {
   goalsAgainst: number;
   goalDifference: number;
   points: number;
+  recentForm: FormResult[];
 };
 
 function formatPreferredNight(value?: string | null) {
@@ -122,6 +125,19 @@ function formatGoalDifference(value: number) {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+function getFormBadgeClasses(result: FormResult) {
+  switch (result) {
+    case "W":
+      return "border-emerald-400/30 bg-emerald-500/15 text-emerald-200";
+    case "D":
+      return "border-white/10 bg-white/[0.06] text-white/75";
+    case "L":
+      return "border-red-400/30 bg-red-500/15 text-red-200";
+    default:
+      return "border-white/10 bg-white/[0.06] text-white/75";
+  }
+}
+
 function buildLeagueTable(
   teams: Array<{
     id: string;
@@ -148,6 +164,7 @@ function buildLeagueTable(
       goalsAgainst: 0,
       goalDifference: 0,
       points: 0,
+      recentForm: [],
     });
   }
 
@@ -174,21 +191,28 @@ function buildLeagueTable(
       home.wins += 1;
       away.losses += 1;
       home.points += 3;
+      home.recentForm.push("W");
+      away.recentForm.push("L");
     } else if (awayScore > homeScore) {
       away.wins += 1;
       home.losses += 1;
       away.points += 3;
+      away.recentForm.push("W");
+      home.recentForm.push("L");
     } else {
       home.draws += 1;
       away.draws += 1;
       home.points += 1;
       away.points += 1;
+      home.recentForm.push("D");
+      away.recentForm.push("D");
     }
   }
 
   const table = Array.from(rows.values()).map((row) => ({
     ...row,
     goalDifference: row.goalsFor - row.goalsAgainst,
+    recentForm: row.recentForm.slice(-5),
   }));
 
   table.sort((a, b) => {
@@ -522,17 +546,18 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                 League table
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60 sm:text-base">
-                Full standings with team names, goals scored, goals conceded and
-                goal difference.
+                Full standings with team names, goals scored, goals conceded,
+                goal difference, and recent form.
               </p>
             </div>
 
             {leagueTable.length > 0 ? (
               <div className="lg:overflow-x-auto">
-                <div className="lg:min-w-[1080px]">
-                  <div className="hidden grid-cols-[72px_minmax(320px,2.2fr)_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
+                <div className="lg:min-w-[1240px]">
+                  <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
                     <div>Pos</div>
                     <div>Team</div>
+                    <div>Form</div>
                     <div className="text-center">P</div>
                     <div className="text-center">W</div>
                     <div className="text-center">D</div>
@@ -607,6 +632,26 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                                   {row.team.name}
                                 </Link>
 
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                                    Form
+                                  </span>
+                                  {row.recentForm.length > 0 ? (
+                                    row.recentForm.map((result, formIndex) => (
+                                      <span
+                                        key={`${row.team.id}-mobile-form-${formIndex}`}
+                                        className={`inline-flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-black ${getFormBadgeClasses(
+                                          result,
+                                        )}`}
+                                      >
+                                        {result}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-white/40">—</span>
+                                  )}
+                                </div>
+
                                 <div className="mt-3 grid grid-cols-4 gap-2">
                                   {mobileTopStats.map((stat) => (
                                     <div
@@ -642,7 +687,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                             </div>
                           </div>
 
-                          <div className="hidden grid-cols-[72px_minmax(320px,2.2fr)_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
+                          <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
                             <div>
                               <div
                                 className={`flex h-11 w-11 items-center justify-center rounded-2xl border text-sm font-black ${
@@ -681,6 +726,23 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                                   {row.team.name}
                                 </Link>
                               </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {row.recentForm.length > 0 ? (
+                                row.recentForm.map((result, formIndex) => (
+                                  <span
+                                    key={`${row.team.id}-form-${formIndex}`}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-black ${getFormBadgeClasses(
+                                      result,
+                                    )}`}
+                                  >
+                                    {result}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-sm text-white/40">—</span>
+                              )}
                             </div>
 
                             <div className="text-center font-medium text-white/80">
