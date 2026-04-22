@@ -7,6 +7,7 @@ import Link from "next/link";
 import FormListboxField from "@/components/ui/FormListboxField";
 import {
   convertAdminProspectToMemberAction,
+  updateAdminProspectDetailsAction,
   updateAdminProspectNotesAction,
   updateAdminProspectStatusAction,
 } from "@/app/(admin)/admin/teams/[id]/prospects/actions";
@@ -211,14 +212,71 @@ export default function AdminProspectCard({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
+        <form action={updateAdminProspectDetailsAction} className="space-y-4">
+          <input type="hidden" name="teamId" value={teamId} />
+          <input type="hidden" name="prospectId" value={prospect.id} />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm text-white/60">First name</label>
+              <input
+                name="firstName"
+                type="text"
+                defaultValue={prospect.firstName}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-white/60">Last name</label>
+              <input
+                name="lastName"
+                type="text"
+                defaultValue={prospect.lastName ?? ""}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm text-white/60">Email</label>
+              <input
+                name="email"
+                type="email"
+                defaultValue={prospect.email ?? ""}
+                placeholder="Add email address"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-white/60">Phone</label>
+              <input
+                name="phone"
+                type="text"
+                defaultValue={prospect.phone ?? ""}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+          >
+            Save details
+          </button>
+        </form>
+
         <form action={updateAdminProspectNotesAction} className="space-y-3">
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="prospectId" value={prospect.id} />
 
           <textarea
             name="notes"
-            rows={3}
+            rows={6}
             defaultValue={prospect.notes ?? ""}
             placeholder="Internal notes"
             className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition focus:border-emerald-500/60"
