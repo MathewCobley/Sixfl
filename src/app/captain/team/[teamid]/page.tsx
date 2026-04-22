@@ -88,6 +88,19 @@ function normaliseLogoUrl(value?: string | null) {
   return `/${trimmed}`;
 }
 
+function getFormBadgeClasses(result: "W" | "D" | "L") {
+  switch (result) {
+    case "W":
+      return "border-emerald-400/30 bg-emerald-500/15 text-emerald-200";
+    case "D":
+      return "border-white/10 bg-white/[0.06] text-white/75";
+    case "L":
+      return "border-red-400/30 bg-red-500/15 text-red-200";
+    default:
+      return "border-white/10 bg-white/[0.06] text-white/75";
+  }
+}
+
 function getFixtureLabel(input: {
   homeTeamName: string;
   awayTeamName: string;
@@ -723,10 +736,11 @@ export default async function CaptainOverviewPage({
           </div>
         ) : (
           <div className="lg:overflow-x-auto">
-            <div className="lg:min-w-[1080px]">
-              <div className="hidden grid-cols-[72px_minmax(280px,2fr)_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
+            <div className="lg:min-w-[1240px]">
+              <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
                 <div>Pos</div>
                 <div>Team</div>
+                <div>Form</div>
                 <div className="text-center">P</div>
                 <div className="text-center">W</div>
                 <div className="text-center">D</div>
@@ -805,6 +819,26 @@ export default async function CaptainOverviewPage({
                               ) : null}
                             </div>
 
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                                Form
+                              </span>
+                              {row.recentForm.length > 0 ? (
+                                row.recentForm.map((result, formIndex) => (
+                                  <span
+                                    key={`${row.teamId}-mobile-form-${formIndex}`}
+                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-black ${getFormBadgeClasses(
+                                      result,
+                                    )}`}
+                                  >
+                                    {result}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-white/40">—</span>
+                              )}
+                            </div>
+
                             <div className="mt-3 grid grid-cols-4 gap-2">
                               {mobileTopStats.map((stat) => (
                                 <div
@@ -840,7 +874,7 @@ export default async function CaptainOverviewPage({
                         </div>
                       </div>
 
-                      <div className="hidden grid-cols-[72px_minmax(280px,2fr)_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
+                      <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
                         <div>
                           <div
                             className={`flex h-11 w-11 items-center justify-center rounded-2xl border text-sm font-black ${
@@ -884,6 +918,23 @@ export default async function CaptainOverviewPage({
                               ) : null}
                             </div>
                           </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          {row.recentForm.length > 0 ? (
+                            row.recentForm.map((result, formIndex) => (
+                              <span
+                                key={`${row.teamId}-form-${formIndex}`}
+                                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-black ${getFormBadgeClasses(
+                                  result,
+                                )}`}
+                              >
+                                {result}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-white/40">—</span>
+                          )}
                         </div>
 
                         <div className="text-center font-medium text-white/80">
