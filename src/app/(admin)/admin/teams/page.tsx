@@ -485,6 +485,7 @@ export default async function AdminTeamsPage({
                   const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
                     team.claimCode,
                   )}`;
+                  const isManagedTeam = team.teamMode === "MANAGED";
 
                   return (
                     <div
@@ -507,6 +508,12 @@ export default async function AdminTeamsPage({
                             <span className={accessState.className}>
                               {accessState.label}
                             </span>
+
+                            {isManagedTeam ? (
+                              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                                Managed team
+                              </span>
+                            ) : null}
 
                             {team.latestKickoffTime ? (
                               <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">
@@ -578,12 +585,30 @@ export default async function AdminTeamsPage({
                           Captain view
                         </Link>
 
-                        <Link
-                          href={`/admin/teams/${team.id}/communications`}
-                          className="inline-flex min-w-[140px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                        >
-                          Communications
-                        </Link>
+                        {isManagedTeam ? (
+                          <>
+                            <Link
+                              href={`/admin/teams/${team.id}/prospects`}
+                              className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                            >
+                              Prospects
+                            </Link>
+
+                            <Link
+                              href={`/admin/teams/${team.id}/communications`}
+                              className="inline-flex min-w-[120px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                            >
+                              Squad coms
+                            </Link>
+                          </>
+                        ) : (
+                          <Link
+                            href={`/admin/teams/${team.id}/communications`}
+                            className="inline-flex min-w-[140px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                          >
+                            Communications
+                          </Link>
+                        )}
 
                         <Link
                           href={`/admin/teams/${team.id}`}
