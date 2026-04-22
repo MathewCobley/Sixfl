@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     const result = await handleTwilioWebhook(payload);
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {
