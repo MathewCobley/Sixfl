@@ -30,18 +30,18 @@ export default function CommunicationsProspectLauncher({ prospects }: { prospect
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
             Prospect communications
           </div>
-          <h2 className="text-2xl font-semibold text-white">Open a prospect communications page</h2>
+          <h2 className="text-2xl font-semibold text-white">Open a prospect outreach hub</h2>
           <p className="max-w-2xl text-sm text-white/60">
-            Pick a prospect and jump straight into their communications page with timeline, templates, and outreach already in place.
+            Pick a prospect and jump straight into that team’s prospect hub with bulk email, bulk SMS, recipient selection, and the wider prospect pipeline already in place.
           </p>
         </div>
 
         {selectedProspect ? (
           <Link
-            href={`/admin/teams/${selectedProspect.teamId}/prospects/${selectedProspect.id}/communications`}
+            href={`/admin/teams/${selectedProspect.teamId}/prospects`}
             className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
           >
-            Open prospect
+            Open prospect hub
           </Link>
         ) : null}
       </div>
