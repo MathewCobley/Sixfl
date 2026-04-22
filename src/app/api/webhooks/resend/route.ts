@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const payload = (await request.json()) as Record<string, unknown>;
     const result = await handleResendWebhook(payload);
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {
