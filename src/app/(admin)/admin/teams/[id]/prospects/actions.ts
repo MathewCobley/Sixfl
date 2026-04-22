@@ -90,6 +90,54 @@ export async function addAdminProspectAction(formData: FormData) {
   redirect(buildRedirect(teamId, "?saved=prospect-added"));
 }
 
+export async function updateAdminProspectDetailsAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = normaliseNullableString(formData.get("lastName"));
+  const email =
+    normaliseNullableString(formData.get("email"))?.toLowerCase() ?? null;
+  const phone = normaliseNullableString(formData.get("phone"));
+
+  if (!teamId || !prospectId) {
+    redirect("/admin/teams");
+  }
+
+  if (!firstName) {
+    redirect(buildRedirect(teamId, "?error=First%20name%20is%20required."));
+  }
+
+  const prospect = await prisma.teamPlayerProspect.findFirst({
+    where: {
+      id: prospectId,
+      teamId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!prospect) {
+    redirect(buildRedirect(teamId, "?error=Prospect%20not%20found."));
+  }
+
+  await prisma.teamPlayerProspect.update({
+    where: { id: prospectId },
+    data: {
+      firstName,
+      lastName,
+      email,
+      phone,
+    },
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/prospects`);
+  redirect(buildRedirect(teamId, "?saved=details-updated"));
+}
+
 export async function updateAdminProspectStatusAction(formData: FormData) {
   await requireAdmin();
 
