@@ -12,6 +12,7 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import {
   addSquadMemberAction,
   removeSquadMemberAction,
+  sendSquadEmailAction,
   updateSquadMemberRoleAction,
 } from "./actions";
 
@@ -83,6 +84,8 @@ function getSavedMessage(saved?: string) {
       return "Squad role updated.";
     case "member-removed":
       return "Squad member removed.";
+    case "squad-email-sent":
+      return "Squad email queued.";
     default:
       return saved ? "Saved." : null;
   }
@@ -183,6 +186,7 @@ export default async function CaptainSquadPage({
   const managerCount = team.members.filter((member) => member.role === "MANAGER").length;
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
   const coachCount = team.members.filter((member) => member.role === "COACH").length;
+  const emailableMembers = team.members.filter((member) => Boolean(member.user.email?.trim()));
 
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
@@ -464,6 +468,106 @@ export default async function CaptainSquadPage({
         </div>
 
         <div className="space-y-6">
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Squad communications
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Email selected squad members</h2>
+            <p className="mt-2 text-sm text-white/60">
+              Pick specific linked squad members and queue one email per selected player. Squad SMS is not shown here yet because player mobile numbers are not stored on linked user accounts.
+            </p>
+
+            {team.members.length === 0 ? (
+              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+                Add squad members first before sending squad communications.
+              </div>
+            ) : (
+              <form action={sendSquadEmailAction} className="mt-5 space-y-4">
+                <input type="hidden" name="teamid" value={teamid} />
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-white">Recipients</div>
+                      <div className="mt-1 text-xs text-white/45">
+                        {emailableMembers.length} member{emailableMembers.length === 1 ? "" : "s"} with email available
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {team.members.map((member) => {
+                      const hasEmail = Boolean(member.user.email?.trim());
+                      return (
+                        <label
+                          key={member.id}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
+                            hasEmail
+                              ? "border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                              : "border-white/5 bg-white/[0.03] text-white/35"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            name="memberIds"
+                            value={member.id}
+                            defaultChecked={hasEmail}
+                            disabled={!hasEmail}
+                            className="h-4 w-4 rounded border-white/20 bg-transparent"
+                          />
+                          <span>{member.user.name || member.user.email || "Unnamed user"}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                            hasEmail
+                              ? "bg-emerald-500/15 text-emerald-200"
+                              : "bg-white/10 text-white/45"
+                          }`}>
+                            {hasEmail ? "ready" : "no email"}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="squad-email-subject" className="text-sm text-white/60">
+                    Subject
+                  </label>
+                  <input
+                    id="squad-email-subject"
+                    name="subject"
+                    type="text"
+                    placeholder="Update for {{firstName}}"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                  <div className="text-xs text-white/45">
+                    Supported placeholders: {{firstName}}, {{fullName}}, {{teamName}}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="squad-email-body" className="text-sm text-white/60">
+                    Message
+                  </label>
+                  <textarea
+                    id="squad-email-body"
+                    name="body"
+                    rows={7}
+                    placeholder={"Hi {{firstName}},\n\nHere is an update from {{teamName}}.\n\nThanks,\nCaptain"}
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                >
+                  Queue squad email
+                </button>
+              </form>
+            )}
+          </section>
+
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Add existing user
