@@ -58,6 +58,14 @@ type ProspectRecord = {
   updatedAt: Date;
 };
 
+type LinkedUserRecord = {
+  id: string;
+  email: string;
+  teamMembers: {
+    id: string;
+  }[];
+};
+
 type ProspectPromotionState = {
   canPromote: boolean;
   reason: string;
@@ -275,6 +283,16 @@ function getPromotionStateClasses(tone: ProspectPromotionState["tone"]) {
   }
 }
 
+function isLinkedUserRecord(
+  user: {
+    id: string;
+    email: string | null;
+    teamMembers: { id: string }[];
+  },
+): user is LinkedUserRecord {
+  return typeof user.email === "string" && user.email.trim().length > 0;
+}
+
 export default async function CaptainProspectsPage({
   params,
   searchParams,
@@ -401,13 +419,11 @@ export default async function CaptainProspectsPage({
       : [],
   ]);
 
-  const linkedUserByEmail = new Map<string, (typeof linkedUsersRaw)[number]>();
+  const linkedUsers = linkedUsersRaw.filter(isLinkedUserRecord);
+  const linkedUserByEmail = new Map<string, LinkedUserRecord>();
 
-  for (const user of linkedUsersRaw) {
-    const normalizedEmail = user.email?.trim().toLowerCase();
-    if (!normalizedEmail) {
-      continue;
-    }
+  for (const user of linkedUsers) {
+    const normalizedEmail = user.email.trim().toLowerCase();
     linkedUserByEmail.set(normalizedEmail, user);
   }
 
