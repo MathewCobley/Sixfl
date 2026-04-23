@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/page.tsx
+// File: src/app/(public)/page.tsx
 // ========================================
 
 import Link from "next/link";
@@ -44,7 +44,6 @@ const joinSteps = [
 export default function HomePage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-black text-white">
-      {/* Background */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(16,185,129,0.16),transparent_24%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_18%,rgba(16,185,129,0.10),transparent_18%)]" />
@@ -54,13 +53,10 @@ export default function HomePage() {
         <div className="absolute inset-0 opacity-[0.06] bg-[linear-gradient(0deg,rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:56px_56px]" />
       </div>
 
-      {/* Hero spotlight */}
       <div className="pointer-events-none absolute left-1/2 top-24 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[120px]" />
 
       <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
-        {/* HERO */}
         <section className="grid gap-10 pt-6 lg:grid-cols-12 lg:items-start">
-          {/* LEFT */}
           <div className="lg:col-span-7">
             <h1 className="text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl">
               6-A-SIDE.
@@ -92,7 +88,6 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* HERO CTA */}
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
                 href="/register-interest?type=team"
@@ -108,9 +103,19 @@ export default function HomePage() {
                 JOIN AS A PLAYER
               </Link>
             </div>
+
+            <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-4 text-sm text-white/80">
+              Looking for a league near you? Explore our{" "}
+              <Link
+                href="/leagues/rossett-mens-tuesday"
+                className="font-semibold text-emerald-300 underline underline-offset-4 transition hover:text-emerald-200"
+              >
+                Harrogate 6 a side football league
+              </Link>{" "}
+              at Rossett Sports Centre, with live fixtures, results and league table updates.
+            </div>
           </div>
 
-          {/* RIGHT FUNNEL PANEL */}
           <div className="lg:col-span-5">
             <div className="lg:sticky lg:top-24">
               <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
@@ -161,7 +166,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* STRIP */}
         <section className="mt-10">
           <div className="grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
             <StripItem label="FOUNDING SEASON" value="Now Forming" />
@@ -171,7 +175,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* WHY SIXFL */}
         <section id="why-sixfl" className="mt-16">
           <div className="mb-6">
             <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
@@ -197,7 +200,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* HOW JOINING WORKS */}
         <section id="how-it-works" className="mt-16">
           <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="mb-6 max-w-3xl">
@@ -250,7 +252,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* FOUNDING TEAMS */}
         <section id="founding-teams" className="mt-16">
           <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
@@ -318,7 +319,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* WAITLIST CTA */}
         <section id="lead-capture" className="mt-16">
           <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
