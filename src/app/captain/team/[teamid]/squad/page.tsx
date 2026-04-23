@@ -541,7 +541,7 @@ export default async function CaptainSquadPage({
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
                   />
                   <div className="text-xs text-white/45">
-                    Supported placeholders: {{firstName}}, {{fullName}}, {{teamName}}
+                    Supported placeholders: {"{{firstName}}"}, {"{{fullName}}"}, {"{{teamName}}"}
                   </div>
                 </div>
 
