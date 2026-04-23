@@ -68,6 +68,9 @@ type ResolvedQueuedContent = {
 };
 
 const SIXFL_SMS_SIGNATURE = "— SIXFL";
+const SMS_QUIET_HOURS_START_HOUR = 22;
+const SMS_QUIET_HOURS_END_HOUR = 9;
+const SMS_QUIET_HOURS_TIME_ZONE = "Europe/London";
 
 function appendSIXFLSmsSignature(body: string) {
   const trimmedBody = body.trim();
@@ -81,6 +84,112 @@ function appendSIXFLSmsSignature(body: string) {
     .trim();
 
   return `${withoutExistingSignature}\n\n${SIXFL_SMS_SIGNATURE}`.trim();
+}
+
+function getUkDateParts(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SMS_QUIET_HOURS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+
+  const partMap = new Map(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(partMap.get("year")),
+    month: Number(partMap.get("month")),
+    day: Number(partMap.get("day")),
+    hour: Number(partMap.get("hour")),
+    minute: Number(partMap.get("minute")),
+    second: Number(partMap.get("second")),
+  };
+}
+
+function getUtcDateForUkLocalTime(input: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute?: number;
+  second?: number;
+}) {
+  const utcGuess = new Date(
+    Date.UTC(
+      input.year,
+      input.month - 1,
+      input.day,
+      input.hour,
+      input.minute ?? 0,
+      input.second ?? 0,
+    ),
+  );
+  const ukPartsForGuess = getUkDateParts(utcGuess);
+  const offsetMinutes =
+    (Date.UTC(
+      ukPartsForGuess.year,
+      ukPartsForGuess.month - 1,
+      ukPartsForGuess.day,
+      ukPartsForGuess.hour,
+      ukPartsForGuess.minute,
+      ukPartsForGuess.second,
+    ) -
+      utcGuess.getTime()) /
+    60000;
+
+  return new Date(utcGuess.getTime() - offsetMinutes * 60000);
+}
+
+function getNextUkDate(input: { year: number; month: number; day: number }) {
+  const noonUtc = getUtcDateForUkLocalTime({
+    ...input,
+    hour: 12,
+  });
+  const nextDay = new Date(noonUtc.getTime() + 24 * 60 * 60 * 1000);
+  const nextDayParts = getUkDateParts(nextDay);
+
+  return {
+    year: nextDayParts.year,
+    month: nextDayParts.month,
+    day: nextDayParts.day,
+  };
+}
+
+function resolveScheduledFor(input: {
+  channel: NotificationChannel;
+  scheduledFor?: Date;
+}) {
+  const requestedDate = input.scheduledFor ?? new Date();
+
+  if (input.channel !== NotificationChannel.SMS) {
+    return requestedDate;
+  }
+
+  const ukParts = getUkDateParts(requestedDate);
+
+  if (ukParts.hour >= SMS_QUIET_HOURS_START_HOUR) {
+    const nextUkDate = getNextUkDate(ukParts);
+
+    return getUtcDateForUkLocalTime({
+      ...nextUkDate,
+      hour: SMS_QUIET_HOURS_END_HOUR,
+    });
+  }
+
+  if (ukParts.hour < SMS_QUIET_HOURS_END_HOUR) {
+    return getUtcDateForUkLocalTime({
+      year: ukParts.year,
+      month: ukParts.month,
+      day: ukParts.day,
+      hour: SMS_QUIET_HOURS_END_HOUR,
+    });
+  }
+
+  return requestedDate;
 }
 
 function resolveEmailCtaUrl(input: {
@@ -327,6 +436,11 @@ export async function queueNotificationFromTemplate(
     paymentSummary: input.paymentSummary,
   });
 
+  const scheduledFor = resolveScheduledFor({
+    channel: template.channel,
+    scheduledFor: input.scheduledFor,
+  });
+
   if (!allowed.ok) {
     return prisma.notificationDispatch.create({
       data: {
@@ -343,7 +457,7 @@ export async function queueNotificationFromTemplate(
         sourceId: input.sourceId?.trim() || null,
         variables: (input.variables ?? {}) as Prisma.InputJsonValue,
         metadata: input.metadata,
-        scheduledFor: input.scheduledFor ?? new Date(),
+        scheduledFor,
         failureReason: allowed.reason,
         createdByUserId: input.createdByUserId?.trim() || null,
       },
@@ -369,7 +483,7 @@ export async function queueNotificationFromTemplate(
       sourceId: input.sourceId?.trim() || null,
       variables: (input.variables ?? {}) as Prisma.InputJsonValue,
       metadata: input.metadata,
-      scheduledFor: input.scheduledFor ?? new Date(),
+      scheduledFor,
       createdByUserId: input.createdByUserId?.trim() || null,
     },
   });
@@ -398,6 +512,11 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     paymentSummary: input.paymentSummary,
   });
 
+  const scheduledFor = resolveScheduledFor({
+    channel: input.channel,
+    scheduledFor: input.scheduledFor,
+  });
+
   if (!allowed.ok) {
     return prisma.notificationDispatch.create({
       data: {
@@ -413,7 +532,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
         sourceId: input.sourceId?.trim() || null,
         variables: input.variables,
         metadata: input.metadata,
-        scheduledFor: input.scheduledFor ?? new Date(),
+        scheduledFor,
         failureReason: allowed.reason,
         createdByUserId: input.createdByUserId?.trim() || null,
       },
@@ -438,7 +557,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       sourceId: input.sourceId?.trim() || null,
       variables: input.variables,
       metadata: input.metadata,
-      scheduledFor: input.scheduledFor ?? new Date(),
+      scheduledFor,
       createdByUserId: input.createdByUserId?.trim() || null,
     },
   });
