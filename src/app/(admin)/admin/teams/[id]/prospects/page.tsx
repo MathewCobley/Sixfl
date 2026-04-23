@@ -24,6 +24,8 @@ function getSavedMessage(saved?: string) {
   switch (saved) {
     case "prospect-added":
       return "Prospect added.";
+    case "details-updated":
+      return "Prospect details updated.";
     case "status-updated":
       return "Prospect status updated.";
     case "notes-updated":
