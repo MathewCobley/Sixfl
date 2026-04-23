@@ -157,7 +157,7 @@ export default async function AdminMessagesPage({
   const fallbackThread =
     selectedThread ??
     composeThread ??
-    (threads.length > 0 ? await getMessageThreadById(threads[0].id) : null);
+    (!composeTeamId && threads.length > 0 ? await getMessageThreadById(threads[0].id) : null);
 
   const relatedThreads = fallbackThread?.team?.id
     ? await prisma.messageThread.findMany({
