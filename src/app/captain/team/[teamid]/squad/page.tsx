@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import FormListboxField from "@/components/ui/FormListboxField";
@@ -74,6 +75,16 @@ function getInitials(name: string | null | undefined, email: string | null | und
   if (!parts.length) return "?";
 
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getSavedMessage(saved?: string) {
@@ -348,7 +359,7 @@ export default async function CaptainSquadPage({
                     </div>
 
                     <div className="mt-1 text-xs text-white/45">
-                      Added {member.createdAt.toLocaleString()}
+                      Added {formatUkDateTime(member.createdAt)}
                     </div>
                   </div>
                 </div>
@@ -440,7 +451,7 @@ export default async function CaptainSquadPage({
                               </div>
 
                               <div className="mt-1 text-xs text-white/45">
-                                Promoted {prospect.updatedAt.toLocaleString()}
+                                Promoted {formatUkDateTime(prospect.updatedAt)}
                               </div>
 
                               {prospect.notes ? (
@@ -663,7 +674,7 @@ export default async function CaptainSquadPage({
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Captain linked</span>
                 <span className="text-right text-white">
-                  {team.captainLinkedAt ? team.captainLinkedAt.toLocaleString() : "—"}
+                  {team.captainLinkedAt ? formatUkDateTime(team.captainLinkedAt) : "—"}
                 </span>
               </div>
 
@@ -677,7 +688,7 @@ export default async function CaptainSquadPage({
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Invite sent</span>
                 <span className="text-right text-white">
-                  {team.captainInviteSentAt ? team.captainInviteSentAt.toLocaleString() : "—"}
+                  {team.captainInviteSentAt ? formatUkDateTime(team.captainInviteSentAt) : "—"}
                 </span>
               </div>
 
@@ -691,7 +702,7 @@ export default async function CaptainSquadPage({
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Claimed at</span>
                 <span className="text-right text-white">
-                  {team.captainClaimedAt ? team.captainClaimedAt.toLocaleString() : "—"}
+                  {team.captainClaimedAt ? formatUkDateTime(team.captainClaimedAt) : "—"}
                 </span>
               </div>
             </div>
