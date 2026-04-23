@@ -15,6 +15,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { queueDirectNotification } from "@/lib/notifications/service";
 
 const ALLOWED_ROLES: TeamRole[] = [
@@ -65,12 +66,15 @@ function personaliseSquadText(
 
 async function ensureSquadUserNotificationRecipient(input: {
   userId: string;
-  email: string;
+  email?: string | null;
+  phone?: string | null;
   displayName: string | null;
   teamId: string;
   teamName: string;
 }) {
-  const email = input.email.trim().toLowerCase();
+  const email = input.email?.trim().toLowerCase() || null;
+  const phone = input.phone?.trim() || null;
+  const phoneNormalized = normalizePhoneNumber(phone);
 
   const recipient = await prisma.notificationRecipient.upsert({
     where: {
@@ -84,8 +88,12 @@ async function ensureSquadUserNotificationRecipient(input: {
       displayName: input.displayName,
       email,
       emailNormalized: email,
+      phone,
+      phoneNormalized,
       transactionalEmailOptIn: true,
       marketingEmailOptIn: true,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
       metadata: {
         teamId: input.teamId,
         teamName: input.teamName,
@@ -100,8 +108,12 @@ async function ensureSquadUserNotificationRecipient(input: {
       displayName: input.displayName,
       email,
       emailNormalized: email,
+      phone,
+      phoneNormalized,
       transactionalEmailOptIn: true,
       marketingEmailOptIn: true,
+      transactionalSmsOptIn: true,
+      marketingSmsOptIn: true,
       metadata: {
         teamId: input.teamId,
         teamName: input.teamName,
@@ -115,12 +127,18 @@ async function ensureSquadUserNotificationRecipient(input: {
     where: { recipientId: recipient.id },
     update: {
       emailEnabled: true,
+      smsEnabled: true,
+      urgentSmsEnabled: true,
       marketingEmailEnabled: true,
+      marketingSmsEnabled: true,
     },
     create: {
       recipientId: recipient.id,
       emailEnabled: true,
+      smsEnabled: true,
+      urgentSmsEnabled: true,
       marketingEmailEnabled: true,
+      marketingSmsEnabled: true,
     },
   });
 
@@ -303,6 +321,57 @@ export async function removeSquadMemberAction(formData: FormData) {
   redirect(getSuccessRedirect(teamid, "member-removed"));
 }
 
+export async function updateSquadMemberSmsAction(formData: FormData) {
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const membershipId = String(formData.get("membershipId") ?? "").trim();
+  const phone = getNullableString(formData.get("phone"));
+
+  await requireCaptain(teamid);
+
+  if (!teamid || !membershipId) {
+    redirect("/captain");
+  }
+
+  const membership = await prisma.teamMember.findFirst({
+    where: {
+      id: membershipId,
+      teamId: teamid,
+    },
+    select: {
+      id: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!membership) {
+    redirect(getErrorRedirect(teamid, "Squad member not found."));
+  }
+
+  await ensureSquadUserNotificationRecipient({
+    userId: membership.user.id,
+    email: membership.user.email,
+    phone,
+    displayName: membership.user.name?.trim() || null,
+    teamId: membership.team.id,
+    teamName: membership.team.name,
+  });
+
+  revalidatePath(`/captain/team/${teamid}/squad`);
+  redirect(getSuccessRedirect(teamid, "member-sms-linked"));
+}
+
 export async function sendSquadEmailAction(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
@@ -414,4 +483,112 @@ export async function sendSquadEmailAction(formData: FormData) {
 
   revalidatePath(`/captain/team/${teamid}/squad`);
   redirect(getSuccessRedirect(teamid, `squad-email-sent`));
+}
+
+export async function sendSquadSmsAction(formData: FormData) {
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const selectedMemberIds = formData
+    .getAll("memberIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  const { user } = await requireCaptain(teamid);
+
+  if (!teamid) {
+    redirect("/captain");
+  }
+
+  if (!body) {
+    redirect(getErrorRedirect(teamid, "SMS body is required."));
+  }
+
+  if (selectedMemberIds.length === 0) {
+    redirect(getErrorRedirect(teamid, "Select at least one squad member."));
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamid },
+    select: {
+      id: true,
+      name: true,
+      members: {
+        where: {
+          id: { in: selectedMemberIds },
+        },
+        select: {
+          id: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!team) {
+    redirect(getErrorRedirect(teamid, "Team not found."));
+  }
+
+  const recipients = await prisma.notificationRecipient.findMany({
+    where: {
+      sourceType: NotificationRecipientSourceType.USER,
+      sourceId: {
+        in: team.members.map((member) => member.user.id),
+      },
+    },
+    select: {
+      id: true,
+      sourceId: true,
+      phone: true,
+    },
+  });
+
+  const recipientByUserId = new Map(recipients.map((recipient) => [recipient.sourceId || "", recipient]));
+
+  const smsTargets = team.members
+    .map((member) => ({
+      member,
+      recipient: recipientByUserId.get(member.user.id) ?? null,
+    }))
+    .filter((item) => Boolean(item.recipient?.phone?.trim()));
+
+  if (smsTargets.length === 0) {
+    redirect(getErrorRedirect(teamid, "None of the selected squad members have a linked mobile number."));
+  }
+
+  for (const item of smsTargets) {
+    const firstName = (item.member.user.name || "").trim().split(/\s+/).filter(Boolean)[0] || "there";
+    const fullName = item.member.user.name?.trim() || firstName;
+    const personalisedBody = personaliseSquadText(body, {
+      firstName,
+      fullName,
+      teamName: team.name,
+    });
+
+    await queueDirectNotification({
+      recipientId: item.recipient!.id,
+      channel: NotificationChannel.SMS,
+      audience: NotificationAudience.USER,
+      body: personalisedBody,
+      isTransactional: false,
+      sourceType: "TEAM",
+      sourceId: teamid,
+      metadata: {
+        origin: "captain_squad_sms",
+        originLabel: "Sent to squad from captain hub",
+        teamId: teamid,
+        membershipId: item.member.id,
+        userId: item.member.user.id,
+      },
+      createdByUserId: user?.id ?? null,
+    });
+  }
+
+  revalidatePath(`/captain/team/${teamid}/squad`);
+  redirect(getSuccessRedirect(teamid, `squad-sms-sent`));
 }
