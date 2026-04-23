@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { NotificationAudience, NotificationChannel } from "@prisma/client";
 
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { queueDirectNotification } from "@/lib/notifications/service";
@@ -63,7 +64,13 @@ function mergeExistingProspectNotes(input: {
     return input.existingNotes;
   }
 
-  const stamp = new Date().toLocaleString("en-GB");
+  const stamp = formatDateTimeInLondon(new Date(), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const publicEntry = `Public form note (${stamp}): ${input.publicNotes}`;
 
   if (!input.existingNotes?.trim()) {
