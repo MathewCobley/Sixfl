@@ -91,13 +91,24 @@ function getProspectName(input: {
   return [input.firstName, input.lastName].filter(Boolean).join(" ");
 }
 
+function getConversionRateLabel(openCount: number, convertedCount: number) {
+  const totalCount = openCount + convertedCount;
+
+  if (totalCount === 0) {
+    return "0%";
+  }
+
+  const percentage = Math.round((convertedCount / totalCount) * 100);
+  return `${percentage}%`;
+}
+
 function StatCard({
   label,
   value,
   subtext,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   subtext: string;
 }) {
   return (
@@ -163,6 +174,10 @@ export default async function AdminTeamProspectsPage({
   }
 
   const convertedToSquadCount = team._count.prospects;
+  const conversionRate = getConversionRateLabel(
+    team.prospects.length,
+    convertedToSquadCount,
+  );
   const saved = typeof filters.saved === "string" ? filters.saved : undefined;
   const error = typeof filters.error === "string" ? filters.error : undefined;
   const savedMessage = getSavedMessage(saved);
@@ -290,6 +305,11 @@ export default async function AdminTeamProspectsPage({
               label="CONVERTED"
               value={convertedToSquadCount}
               subtext="Promoted to squad"
+            />
+            <StatCard
+              label="RATE"
+              value={conversionRate}
+              subtext="Conversion to squad"
             />
             <StatCard
               label="EMAIL READY"
