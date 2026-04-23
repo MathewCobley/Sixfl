@@ -175,6 +175,46 @@ function getTimelineTone(item: TimelineItem) {
   return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
 }
 
+function getStatusChipTone(statusLabel: string) {
+  switch (statusLabel) {
+    case "Queued":
+      return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+    case "Processing":
+      return "border-sky-400/20 bg-sky-500/10 text-sky-100";
+    case "Sent":
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+    case "Failed":
+      return "border-red-400/20 bg-red-500/10 text-red-200";
+    case "Cancelled":
+    case "Skipped":
+      return "border-white/10 bg-white/5 text-white/70";
+    default:
+      return "border-white/10 bg-white/5 text-white/70";
+  }
+}
+
+function getPrimaryTypeLabel(item: TimelineItem) {
+  if (item.source === "dispatch") {
+    if (item.channel === NotificationChannel.EMAIL) {
+      return "System email";
+    }
+
+    if (item.channel === NotificationChannel.SMS) {
+      return "System SMS";
+    }
+  }
+
+  if (item.source === "message") {
+    return item.channel === NotificationChannel.EMAIL ? "Inbox email" : "Inbox SMS";
+  }
+
+  if (item.source === "legacyLeadEmail") {
+    return "Legacy email";
+  }
+
+  return item.channel;
+}
+
 export default async function AdminTeamCommunicationsPage({
   params,
   searchParams,
@@ -527,13 +567,13 @@ export default async function AdminTeamCommunicationsPage({
               timeline.map((item) => (
                 <div key={item.id} className="space-y-3 px-6 py-5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
-                      {item.channel}
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-100">
+                      {getPrimaryTypeLabel(item)}
                     </span>
                     <span className={`rounded-full border px-2.5 py-1 text-[11px] ${getTimelineTone(item)}`}>
                       {item.directionLabel}
                     </span>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] ${getStatusChipTone(item.statusLabel)}`}>
                       {item.statusLabel}
                     </span>
                     <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
