@@ -9,6 +9,7 @@ import {
   NotificationDispatchStatus,
 } from "@prisma/client";
 
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
@@ -67,6 +68,16 @@ function formatDispatchStatus(status: NotificationDispatchStatus) {
     default:
       return status;
   }
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getMetadataRecord(metadata: unknown) {
@@ -579,7 +590,7 @@ export default async function AdminTeamCommunicationsPage({
                   )}
 
                   <div className="text-xs text-white/45">
-                    {item.occurredAt.toLocaleString()}
+                    {formatUkDateTime(item.occurredAt)}
                   </div>
 
                   {item.failureReason ? (
