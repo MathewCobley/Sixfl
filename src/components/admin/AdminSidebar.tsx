@@ -38,6 +38,11 @@ const navigation = [
     icon: UserGroupIcon,
   },
   {
+    name: "Users",
+    href: "/admin/users",
+    icon: UsersIcon,
+  },
+  {
     name: "Leagues",
     href: "/admin/leagues",
     icon: TrophyIcon,
@@ -170,6 +175,7 @@ export default function AdminSidebar({
                   <div className="mt-0.5 text-xs text-white/35">
                     {item.name === "Overview" && "Admin dashboard"}
                     {item.name === "Teams" && "Squads and captains"}
+                    {item.name === "Users" && "Names and linked accounts"}
                     {item.name === "Leagues" && "League setup"}
                     {item.name === "Venues" && "Match locations"}
                     {item.name === "Fixtures" && "Schedule and results"}
