@@ -576,9 +576,11 @@ export default async function AdminTeamCommunicationsPage({
                     <span className={`rounded-full border px-2.5 py-1 text-[11px] ${getStatusChipTone(item.statusLabel)}`}>
                       {item.statusLabel}
                     </span>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
-                      {item.sourceLabel}
-                    </span>
+                    {item.sourceLabel !== "Notification dispatch" ? (
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
+                        {item.sourceLabel}
+                      </span>
+                    ) : null}
                     {item.templateName ? (
                       <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-100">
                         Template: {item.templateName}
