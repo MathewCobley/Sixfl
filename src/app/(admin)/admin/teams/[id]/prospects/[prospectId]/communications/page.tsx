@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import ProspectCommunicationsComposer from "@/components/admin/communications/ProspectCommunicationsComposer";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -28,6 +29,16 @@ function getChannelLabel(value?: string) {
 
 function getProspectName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default async function AdminProspectCommunicationsPage({
@@ -304,7 +315,7 @@ export default async function AdminProspectCommunicationsPage({
                     <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{message.textBody || message.body}</div>
                   )}
 
-                  <div className="text-xs text-white/45">{message.createdAt.toLocaleString()}</div>
+                  <div className="text-xs text-white/45">{formatUkDateTime(message.createdAt)}</div>
                 </div>
               ))
             )}
