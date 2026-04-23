@@ -48,7 +48,16 @@ export default async function AdminMessagesPage({
   const selectedThreadId = sp.thread?.trim() || "";
   const composeTeamId = sp.composeTeam?.trim() || "";
 
-  const [summary, threads, selectedThread, leagues, composeTeam, emailTemplates, smsTemplates] = await Promise.all([
+  const [
+    summary,
+    threads,
+    selectedThread,
+    leagues,
+    composeTeam,
+    composeTeamThread,
+    emailTemplates,
+    smsTemplates,
+  ] = await Promise.all([
     getAdminInboxSummary(),
     getAdminInboxThreads({
       unreadOnly: selectedFilter === "unread",
@@ -91,6 +100,17 @@ export default async function AdminMessagesPage({
           },
         })
       : null,
+    !selectedThreadId && composeTeamId
+      ? prisma.messageThread.findFirst({
+          where: {
+            teamId: composeTeamId,
+          },
+          select: {
+            id: true,
+          },
+          orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+        })
+      : null,
     prisma.emailTemplate.findMany({
       where: {
         isActive: true,
@@ -129,8 +149,14 @@ export default async function AdminMessagesPage({
     }),
   ]);
 
+  const composeThread =
+    !selectedThreadId && composeTeamThread?.id
+      ? await getMessageThreadById(composeTeamThread.id)
+      : null;
+
   const fallbackThread =
     selectedThread ??
+    composeThread ??
     (threads.length > 0 ? await getMessageThreadById(threads[0].id) : null);
 
   const relatedThreads = fallbackThread?.team?.id
