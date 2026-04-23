@@ -449,7 +449,11 @@ export default function SmsTemplateForm({
           </div>
         </div>
 
-        <SmsTemplatePreview body={body} audience={audience} ctaUrlKey={ctaUrlKey} />
+        <SmsTemplatePreview
+          body={body}
+          audience={audience as never}
+          ctaUrlKey={ctaUrlKey as never}
+        />
       </div>
     </form>
   );
