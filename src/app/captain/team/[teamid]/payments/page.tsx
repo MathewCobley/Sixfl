@@ -52,6 +52,24 @@ function getChargeStatusTone(status: string) {
   }
 }
 
+function formatUkDate(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getFixtureLabel(
   fixture:
     | {
@@ -252,7 +270,7 @@ export default async function CaptainPaymentsPage({
 
                       <div className="mt-1 text-sm text-white/45">
                         {charge.dueDate
-                          ? `Due ${charge.dueDate.toLocaleDateString("en-GB")}`
+                          ? `Due ${formatUkDate(charge.dueDate)}`
                           : "No due date set"}
                       </div>
                     </div>
@@ -329,7 +347,7 @@ export default async function CaptainPaymentsPage({
                       {tx.reference ? ` · Ref ${tx.reference}` : ""}
                     </div>
                     <div className="mt-1 text-sm text-white/45">
-                      {tx.paidAt.toLocaleString("en-GB")}
+                      {formatUkDateTime(tx.paidAt)}
                     </div>
                   </div>
 
