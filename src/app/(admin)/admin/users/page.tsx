@@ -62,14 +62,13 @@ export default async function AdminUsersPage({
 
   const users = await prisma.user.findMany({
     where,
-    orderBy: [{ createdAt: "desc" }],
+    orderBy: [{ name: "asc" }, { email: "asc" }],
     take: 100,
     select: {
       id: true,
       name: true,
       email: true,
       role: true,
-      createdAt: true,
       teamMembers: {
         select: {
           id: true,
@@ -179,9 +178,6 @@ export default async function AdminUsersPage({
                     </div>
 
                     <div className="mt-2 text-sm text-white/65">{user.email || "No email"}</div>
-                    <div className="mt-1 text-xs text-white/45">
-                      Created {user.createdAt.toLocaleString()}
-                    </div>
 
                     {user.teamMembers.length > 0 ? (
                       <div className="mt-3 flex flex-wrap gap-2">
