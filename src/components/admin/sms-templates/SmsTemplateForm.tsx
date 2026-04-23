@@ -16,8 +16,15 @@ type FormState = {
   errors?: Record<string, string[]>;
 };
 
-type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER";
-type SmsCtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
+type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "GENERAL" | "REFEREE";
+type SmsCtaUrlKeyValue =
+  | ""
+  | "signupUrl"
+  | "manageTeamUrl"
+  | "teamJoinUrl"
+  | "captainDashboardUrl"
+  | "fixtureUrl"
+  | "fixturesUrl";
 
 type SmsTemplateFormValues = {
   id?: string;
@@ -64,6 +71,16 @@ const AUDIENCE_OPTIONS: Array<{
     label: "Team",
     description: "Team communication, captain updates, and operational texts.",
   },
+  {
+    value: "GENERAL",
+    label: "General",
+    description: "Reusable operational messaging not limited to one group.",
+  },
+  {
+    value: "REFEREE",
+    label: "Referee",
+    description: "Referee operational texts and assignment updates.",
+  },
 ];
 
 const CTA_OPTIONS: Array<{
@@ -95,6 +112,24 @@ const CTA_OPTIONS: Array<{
     description: "Team claim or team access flow for captains.",
     previewUrl: "https://www.sixfl.co.uk/claim?code=H862NY",
   },
+  {
+    value: "captainDashboardUrl",
+    label: "Captain dashboard link",
+    description: "Captain access link for fixture and team actions.",
+    previewUrl: "https://www.sixfl.co.uk/captain/team/example",
+  },
+  {
+    value: "fixtureUrl",
+    label: "Fixture link",
+    description: "Direct link to a specific fixture.",
+    previewUrl: "https://www.sixfl.co.uk/fixtures/example",
+  },
+  {
+    value: "fixturesUrl",
+    label: "Fixtures list link",
+    description: "Link to the fixtures list for the current team or league.",
+    previewUrl: "https://www.sixfl.co.uk/captain/team/example/fixtures",
+  },
 ];
 
 const LEAD_TOKENS = [
@@ -117,6 +152,18 @@ const TEAM_TOKENS = [
   "{{captainName}}",
   "{{leagueName}}",
   "{{area}}",
+  "{{link}}",
+] as const;
+const GENERAL_TOKENS = [
+  "{{teamName}}",
+  "{{leagueName}}",
+  "{{area}}",
+  "{{link}}",
+] as const;
+const REFEREE_TOKENS = [
+  "{{fullName}}",
+  "{{leagueName}}",
+  "{{fixtureUrl}}",
   "{{link}}",
 ] as const;
 
@@ -201,6 +248,14 @@ export default function SmsTemplateForm({
       return PLAYER_TOKENS;
     }
 
+    if (audience === "REFEREE") {
+      return REFEREE_TOKENS;
+    }
+
+    if (audience === "GENERAL") {
+      return GENERAL_TOKENS;
+    }
+
     return TEAM_TOKENS;
   }, [audience]);
 
@@ -277,10 +332,10 @@ export default function SmsTemplateForm({
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">Audience</h2>
-              <p className="mt-1 text-sm text-neutral-400">Choose whether this SMS is for leads, players, or teams.</p>
+              <p className="mt-1 text-sm text-neutral-400">Choose the audience this SMS template is for.</p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
               {AUDIENCE_OPTIONS.map((option) => {
                 const selected = audience === option.value;
                 return (
@@ -315,7 +370,7 @@ export default function SmsTemplateForm({
                   ))}
                 </div>
                 <p className="mt-3 text-sm leading-6 text-neutral-300">
-                  Use <span className="text-white">{'{{link}}'}</span> where you want the selected signup or join link to appear. If you leave it out, the link will be appended at the end of the SMS preview.
+                  Use <span className="text-white">{'{{link}}'}</span> where you want the selected link to appear. If you leave it out, the link will be appended at the end of the SMS preview.
                 </p>
               </div>
 
