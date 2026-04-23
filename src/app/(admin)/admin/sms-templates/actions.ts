@@ -22,9 +22,16 @@ type SmsTemplateActionState = {
   errors?: Record<string, string[]>;
 };
 
-type AllowedAudience = "LEAD" | "TEAM" | "PLAYER";
+type AllowedAudience = "LEAD" | "TEAM" | "PLAYER" | "GENERAL" | "REFEREE";
 
-const ALLOWED_CTA_URL_KEYS = ["signupUrl", "manageTeamUrl", "teamJoinUrl"] as const;
+const ALLOWED_CTA_URL_KEYS = [
+  "signupUrl",
+  "manageTeamUrl",
+  "teamJoinUrl",
+  "captainDashboardUrl",
+  "fixtureUrl",
+  "fixturesUrl",
+] as const;
 type AllowedCtaUrlKey = (typeof ALLOWED_CTA_URL_KEYS)[number];
 
 function buildValidationError(
@@ -50,7 +57,13 @@ function slugifyTemplateKey(value: string) {
 }
 
 function isAllowedAudience(value: string): value is AllowedAudience {
-  return value === "LEAD" || value === "TEAM" || value === "PLAYER";
+  return (
+    value === "LEAD" ||
+    value === "TEAM" ||
+    value === "PLAYER" ||
+    value === "GENERAL" ||
+    value === "REFEREE"
+  );
 }
 
 function isAllowedCtaUrlKey(value: string): value is AllowedCtaUrlKey {
@@ -127,8 +140,9 @@ function revalidateTemplatePaths(id?: string) {
   }
 }
 
-export async function createSmsTemplateAction(
+async function createSmsTemplate(
   formData: FormData,
+  kind: NotificationTemplateKind,
 ): Promise<SmsTemplateActionState> {
   await requireAdmin();
 
@@ -155,7 +169,7 @@ export async function createSmsTemplateAction(
       key: validated.key,
       name: values.name,
       description: values.description || null,
-      kind: NotificationTemplateKind.CAMPAIGN,
+      kind,
       channel: NotificationChannel.SMS,
       audience: validated.audience as NotificationAudience,
       subject: null,
@@ -170,12 +184,12 @@ export async function createSmsTemplateAction(
   });
 
   revalidateTemplatePaths(created.id);
-
   redirect(`/admin/templates/${created.id}`);
 }
 
-export async function updateSmsTemplateAction(
+async function updateSmsTemplate(
   formData: FormData,
+  kind: NotificationTemplateKind,
 ): Promise<SmsTemplateActionState> {
   await requireAdmin();
 
@@ -210,7 +224,7 @@ export async function updateSmsTemplateAction(
       key: validated.key,
       name: values.name,
       description: values.description || null,
-      kind: NotificationTemplateKind.CAMPAIGN,
+      kind,
       channel: NotificationChannel.SMS,
       audience: validated.audience as NotificationAudience,
       subject: null,
@@ -226,6 +240,33 @@ export async function updateSmsTemplateAction(
   return {
     ok: true,
     success: true,
-    message: "SMS template saved successfully.",
+    message:
+      kind === NotificationTemplateKind.TRANSACTIONAL
+        ? "System SMS template saved successfully."
+        : "SMS template saved successfully.",
   };
+}
+
+export async function createSmsTemplateAction(
+  formData: FormData,
+): Promise<SmsTemplateActionState> {
+  return createSmsTemplate(formData, NotificationTemplateKind.CAMPAIGN);
+}
+
+export async function updateSmsTemplateAction(
+  formData: FormData,
+): Promise<SmsTemplateActionState> {
+  return updateSmsTemplate(formData, NotificationTemplateKind.CAMPAIGN);
+}
+
+export async function createSystemSmsTemplateAction(
+  formData: FormData,
+): Promise<SmsTemplateActionState> {
+  return createSmsTemplate(formData, NotificationTemplateKind.TRANSACTIONAL);
+}
+
+export async function updateSystemSmsTemplateAction(
+  formData: FormData,
+): Promise<SmsTemplateActionState> {
+  return updateSmsTemplate(formData, NotificationTemplateKind.TRANSACTIONAL);
 }
