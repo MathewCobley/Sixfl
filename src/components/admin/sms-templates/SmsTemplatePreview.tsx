@@ -6,8 +6,15 @@
 
 import { useMemo } from "react";
 
-type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER";
-type SmsCtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "teamJoinUrl";
+type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "GENERAL" | "REFEREE";
+type SmsCtaUrlKeyValue =
+  | ""
+  | "signupUrl"
+  | "manageTeamUrl"
+  | "teamJoinUrl"
+  | "captainDashboardUrl"
+  | "fixtureUrl"
+  | "fixturesUrl";
 
 export type SmsTemplatePreviewProps = {
   body: string;
@@ -28,6 +35,18 @@ function getPreviewLink(ctaUrlKey: SmsCtaUrlKeyValue | undefined) {
     return "https://www.sixfl.co.uk/teams/join/rossett-managed-team";
   }
 
+  if (ctaUrlKey === "captainDashboardUrl") {
+    return "https://www.sixfl.co.uk/captain/team/demo-team";
+  }
+
+  if (ctaUrlKey === "fixtureUrl") {
+    return "https://www.sixfl.co.uk/leagues/rossett-mens-tuesday/fixtures/harrogate-athletic-vs-rossett-vets";
+  }
+
+  if (ctaUrlKey === "fixturesUrl") {
+    return "https://www.sixfl.co.uk/captain/team/demo-team/fixtures";
+  }
+
   return "";
 }
 
@@ -38,6 +57,14 @@ function getAudienceLabel(audience: SmsTemplateAudience) {
 
   if (audience === "PLAYER") {
     return "Player";
+  }
+
+  if (audience === "REFEREE") {
+    return "Referee";
+  }
+
+  if (audience === "GENERAL") {
+    return "General";
   }
 
   return "Team";
@@ -54,14 +81,20 @@ function previewReplace(
     .replaceAll("{{firstName}}", "Jordan")
     .replaceAll("{{fullName}}", "Jordan Smith")
     .replaceAll("{{teamName}}", "Harrogate Athletic")
+    .replaceAll("{{captainName}}", "Jordan Smith")
+    .replaceAll("{{opponentName}}", "Rossett Vets")
+    .replaceAll("{{leagueName}}", "Rossett Mens Tuesday")
+    .replaceAll("{{kickoffDateTime}}", "Tue 21 Apr, 21:20")
+    .replaceAll("{{captainFixturesUrl}}", "https://www.sixfl.co.uk/captain/team/demo-team/fixtures")
+    .replaceAll("{{fixtureUrl}}", "https://www.sixfl.co.uk/leagues/rossett-mens-tuesday/fixtures/harrogate-athletic-vs-rossett-vets")
     .replaceAll("{{area}}", "Harrogate")
-    .replaceAll("{{link}}", previewLink);
+    .replaceAll("{{link}}", previewLink || "https://www.sixfl.co.uk/captain/team/demo-team/fixtures");
 
   if (audience === "TEAM") {
-    replaced = replaced
-      .replaceAll("{{captainName}}", "Jordan Smith")
-      .replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
+    replaced = replaced.replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
   } else if (audience === "PLAYER") {
+    replaced = replaced.replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
+  } else if (audience === "REFEREE") {
     replaced = replaced.replaceAll("{{leagueName}}", "Rossett Mens Tuesday");
   }
 
@@ -156,10 +189,20 @@ export default function SmsTemplatePreview({
               <div>{"{{firstName}} • {{fullName}} • {{teamName}} • {{leagueName}} • {{area}} • {{link}}"}</div>
               <div>Ideal for player signup chases, prospect follow-up, and managed team recruitment.</div>
             </>
+          ) : audience === "REFEREE" ? (
+            <>
+              <div>{"{{fullName}} • {{leagueName}} • {{fixtureUrl}} • {{link}}"}</div>
+              <div>Ideal for referee assignment and operational messaging.</div>
+            </>
+          ) : audience === "GENERAL" ? (
+            <>
+              <div>{"{{teamName}} • {{leagueName}} • {{area}} • {{link}}"}</div>
+              <div>Ideal for reusable system and cross-audience SMS messaging.</div>
+            </>
           ) : (
             <>
-              <div>{"{{teamName}} • {{captainName}} • {{leagueName}} • {{area}} • {{link}}"}</div>
-              <div>Ideal for team updates, payment nudges, and managed team join links.</div>
+              <div>{"{{teamName}} • {{captainName}} • {{leagueName}} • {{opponentName}} • {{kickoffDateTime}} • {{captainFixturesUrl}} • {{link}}"}</div>
+              <div>Ideal for fixture confirmation chases, team updates, and operational reminders.</div>
             </>
           )}
           {previewLink ? (
