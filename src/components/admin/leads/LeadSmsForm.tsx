@@ -169,7 +169,9 @@ export default function LeadSmsForm({
         return;
       }
 
-      alert("SMS queued successfully.");
+      alert(
+        "SMS queued successfully. Messages sent after 10pm will be delivered at 9am.",
+      );
       router.refresh();
     } catch {
       alert("Something went wrong while sending the SMS.");
@@ -268,7 +270,7 @@ export default function LeadSmsForm({
         </div>
 
         <div className="mt-2 text-xs text-white/40">
-          This SMS will be queued directly to the lead.
+          SMS are only sent between 9:00 and 22:00. Messages outside these hours are queued.
         </div>
       </div>
 
