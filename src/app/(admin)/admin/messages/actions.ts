@@ -18,6 +18,9 @@ import {
 import { sendSmsWithTwilio } from "@/lib/notifications/providers/twilio";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
+const SMS_QUIET_HOURS_START_HOUR = 22;
+const SMS_QUIET_HOURS_END_HOUR = 9;
+const SMS_QUIET_HOURS_TIME_ZONE = "Europe/London";
 
 function getStringValue(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value : "";
@@ -25,6 +28,21 @@ function getStringValue(value: FormDataEntryValue | null): string {
 
 function getTrimmedValue(value: FormDataEntryValue | null): string {
   return getStringValue(value).trim();
+}
+
+function getUkHour(value: Date) {
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SMS_QUIET_HOURS_TIME_ZONE,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(value);
+
+  return Number(hour);
+}
+
+function isWithinSmsQuietHours(value: Date) {
+  const hour = getUkHour(value);
+  return hour >= SMS_QUIET_HOURS_START_HOUR || hour < SMS_QUIET_HOURS_END_HOUR;
 }
 
 function buildMessagesHref(params: {
@@ -149,6 +167,16 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
         filter,
         threadId,
         extras: { error: "missing_phone" },
+      }),
+    );
+  }
+
+  if (isWithinSmsQuietHours(new Date())) {
+    redirect(
+      buildMessagesHref({
+        filter,
+        threadId,
+        extras: { error: "sms_quiet_hours" },
       }),
     );
   }
