@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import LeagueCommunicationsComposer from "@/components/admin/communications/LeagueCommunicationsComposer";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
@@ -26,6 +27,16 @@ type SearchParams = {
 
 function getChannelLabel(value?: string) {
   return value === "sms" ? "SMS" : "email";
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default async function AdminLeagueCommunicationsPage({
@@ -299,7 +310,7 @@ export default async function AdminLeagueCommunicationsPage({
                     <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{message.textBody || message.body}</div>
                   )}
 
-                  <div className="text-xs text-white/45">{message.createdAt.toLocaleString()}</div>
+                  <div className="text-xs text-white/45">{formatUkDateTime(message.createdAt)}</div>
                 </div>
               ))
             )}
