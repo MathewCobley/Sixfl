@@ -5,6 +5,7 @@
 import Link from "next/link";
 
 import FormListboxField from "@/components/ui/FormListboxField";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import {
   convertAdminProspectToMemberAction,
   updateAdminProspectDetailsAction,
@@ -104,6 +105,16 @@ function getCompletionBadgeClasses(isComplete: boolean) {
     : "border-white/10 bg-white/5 text-white/60";
 }
 
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function AdminProspectCard({
   teamId,
   prospect,
@@ -149,11 +160,11 @@ export default function AdminProspectCard({
           </div>
 
           <div className="mt-1 text-xs text-white/45">
-            {prospect.source || "No source"} · Added {prospect.createdAt.toLocaleString()}
+            {prospect.source || "No source"} · Added {formatUkDateTime(prospect.createdAt)}
           </div>
 
           <div className="mt-2 text-xs text-white/50">
-            {completionScore}/6 profile fields completed · Updated {prospect.updatedAt.toLocaleString()}
+            {completionScore}/6 profile fields completed · Updated {formatUkDateTime(prospect.updatedAt)}
           </div>
 
           {prospect.ageBand ? (
