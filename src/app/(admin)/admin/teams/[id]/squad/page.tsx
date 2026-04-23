@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
 import FormListboxField from "@/components/ui/FormListboxField";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -86,6 +87,16 @@ function getInitials(
   if (!parts.length) return "?";
 
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getSavedMessage(saved?: string) {
@@ -341,7 +352,7 @@ export default async function AdminTeamSquadPage({
                       </div>
 
                       <div className="mt-1 text-xs text-white/45">
-                        Added {member.createdAt.toLocaleString()}
+                        Added {formatUkDateTime(member.createdAt)}
                       </div>
                     </div>
                   </div>
