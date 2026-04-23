@@ -63,6 +63,27 @@ function resolveSmsLink(input: {
   return "";
 }
 
+function getExpectedSmsSendLabel() {
+  const now = new Date();
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(now),
+  );
+
+  if (hour >= 22) {
+    return "Will send at 09:00 tomorrow.";
+  }
+
+  if (hour < 9) {
+    return "Will send at 09:00 today.";
+  }
+
+  return "Will send shortly.";
+}
+
 export default function LeadSmsForm({
   leadId,
   phone,
@@ -79,6 +100,8 @@ export default function LeadSmsForm({
   const [targetTeamId, setTargetTeamId] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+
+  const expectedSendLabel = getExpectedSmsSendLabel();
 
   const templateOptions = useMemo(
     () =>
@@ -169,9 +192,7 @@ export default function LeadSmsForm({
         return;
       }
 
-      alert(
-        "SMS queued successfully. Messages sent after 10pm will be delivered at 9am.",
-      );
+      alert(`SMS queued successfully. ${expectedSendLabel}`);
       router.refresh();
     } catch {
       alert("Something went wrong while sending the SMS.");
@@ -270,7 +291,7 @@ export default function LeadSmsForm({
         </div>
 
         <div className="mt-2 text-xs text-white/40">
-          SMS are only sent between 9:00 and 22:00. Messages outside these hours are queued.
+          SMS are only sent between 9:00 and 22:00. {expectedSendLabel}
         </div>
       </div>
 
