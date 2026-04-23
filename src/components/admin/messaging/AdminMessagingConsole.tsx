@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { AdminMessagingActionState } from "@/app/(admin)/admin/messaging/actions";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import MessagingTemplatePicker from "./MessagingTemplatePicker";
 import MessagingRecipientPreview from "./MessagingRecipientPreview";
 
@@ -56,6 +57,16 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       {pending ? "Sending campaign..." : "Send campaign"}
     </button>
   );
+}
+
+function formatUkDateTime(value: string) {
+  return formatDateTimeInLondon(new Date(value), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function AdminMessagingConsole({
@@ -332,7 +343,7 @@ export default function AdminMessagingConsole({
                     <div className="text-sm font-semibold text-white">{email.subject}</div>
                     <div className="mt-1 text-sm text-white/55">{email.sentTo}</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">
-                      <span>{new Date(email.sentAt).toLocaleString("en-GB")}</span>
+                      <span>{formatUkDateTime(email.sentAt)}</span>
                       {email.interestLead?.interestType ? <span>{email.interestLead.interestType}</span> : null}
                     </div>
                   </div>
