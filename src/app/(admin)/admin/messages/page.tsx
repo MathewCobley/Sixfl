@@ -314,160 +314,185 @@ export default async function AdminMessagesPage({
         </section>
 
         {composeTeam ? (
-          <section className="rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
-            <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
-                  New outbound message
+          <>
+            <section className="rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+              <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
+                    New outbound message
+                  </div>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    Contact {composeTeam.name}
+                  </h2>
+                  <p className="mt-2 text-sm text-white/60">
+                    You are composing a new message for this team from the inbox.
+                  </p>
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
-                  Contact {composeTeam.name}
-                </h2>
-                <p className="mt-2 text-sm text-white/60">
-                  You are composing a new message for this team from the inbox.
-                </p>
-              </div>
 
-              <div className="flex flex-wrap gap-2 text-xs text-white/60">
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                  Email: {composeTeam.contactEmail || "—"}
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                  SMS: {composeTeam.contactPhone || "—"}
-                </span>
-                {composeTeam.league ? (
+                <div className="flex flex-wrap gap-2 text-xs text-white/60">
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                    {composeTeam.league.name}{composeTeam.league.season ? ` · ${composeTeam.league.season}` : ""}
+                    Email: {composeTeam.contactEmail || "—"}
                   </span>
-                ) : null}
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                    SMS: {composeTeam.contactPhone || "—"}
+                  </span>
+                  {composeTeam.league ? (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                      {composeTeam.league.name}{composeTeam.league.season ? ` · ${composeTeam.league.season}` : ""}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
 
-            <TeamCommunicationsComposer
-              teamId={composeTeam.id}
-              fromPath={`/admin/messages?composeTeam=${composeTeam.id}`}
-              toEmail={composeTeam.contactEmail ?? null}
-              toPhone={composeTeam.contactPhone ?? null}
-              contactName={composeTeam.contactName ?? null}
-              teamName={composeTeam.name}
-              leagueName={composeTeam.league ? `${composeTeam.league.name}${composeTeam.league.season ? ` — ${composeTeam.league.season}` : ""}` : null}
-              claimCode={composeTeam.claimCode}
-              claimLink={claimLink}
-              captainDashboardUrl={claimLink}
-              emailTemplates={resolvedEmailTemplates}
-              smsTemplates={smsTemplates}
-            />
-          </section>
-        ) : null}
+              <TeamCommunicationsComposer
+                teamId={composeTeam.id}
+                fromPath={`/admin/messages?composeTeam=${composeTeam.id}`}
+                toEmail={composeTeam.contactEmail ?? null}
+                toPhone={composeTeam.contactPhone ?? null}
+                contactName={composeTeam.contactName ?? null}
+                teamName={composeTeam.name}
+                leagueName={composeTeam.league ? `${composeTeam.league.name}${composeTeam.league.season ? ` — ${composeTeam.league.season}` : ""}` : null}
+                claimCode={composeTeam.claimCode}
+                claimLink={claimLink}
+                captainDashboardUrl={claimLink}
+                emailTemplates={resolvedEmailTemplates}
+                smsTemplates={smsTemplates}
+              />
+            </section>
 
-        <AdminMessagesInbox
-          threads={threads.map((thread) => ({
-            id: thread.id,
-            channel: thread.channel ?? "SMS",
-            status: thread.status,
-            contactName: thread.contactName,
-            contactPhone: thread.contactPhone,
-            phoneNormalized: thread.phoneNormalized,
-            contactEmail: thread.contactEmail ?? null,
-            emailNormalized: thread.emailNormalized ?? null,
-            replyAddress: thread.replyAddress ?? null,
-            lastMessagePreview: thread.lastMessagePreview,
-            unreadForAdminCount: thread.unreadForAdminCount,
-            latestMessageAt: thread.latestMessageAt?.toISOString() ?? null,
-            latestInboundAt: thread.latestInboundAt?.toISOString() ?? null,
-            latestOutboundAt: thread.latestOutboundAt?.toISOString() ?? null,
-            team: thread.team
-              ? {
-                  id: thread.team.id,
-                  name: thread.team.name,
-                  logoUrl: thread.team.logoUrl,
-                }
-              : null,
-            league: thread.league
-              ? {
-                  id: thread.league.id,
-                  name: thread.league.name,
-                  season: thread.league.season,
-                  slug: thread.league.slug,
-                }
-              : null,
-            latestMessage:
-              thread.messages[0]
+            <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                    Compose mode
+                  </div>
+                  <h2 className="mt-2 text-xl font-semibold text-white">
+                    Focused team contact
+                  </h2>
+                  <p className="mt-2 text-sm text-white/60">
+                    The inbox thread panel is hidden while you are composing to a specific team so unrelated conversations do not appear underneath.
+                  </p>
+                </div>
+
+                <Link
+                  href={`/admin/teams/${composeTeam.id}/communications`}
+                  className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                >
+                  Open full team history
+                </Link>
+              </div>
+            </section>
+          </>
+        ) : (
+          <AdminMessagesInbox
+            threads={threads.map((thread) => ({
+              id: thread.id,
+              channel: thread.channel ?? "SMS",
+              status: thread.status,
+              contactName: thread.contactName,
+              contactPhone: thread.contactPhone,
+              phoneNormalized: thread.phoneNormalized,
+              contactEmail: thread.contactEmail ?? null,
+              emailNormalized: thread.emailNormalized ?? null,
+              replyAddress: thread.replyAddress ?? null,
+              lastMessagePreview: thread.lastMessagePreview,
+              unreadForAdminCount: thread.unreadForAdminCount,
+              latestMessageAt: thread.latestMessageAt?.toISOString() ?? null,
+              latestInboundAt: thread.latestInboundAt?.toISOString() ?? null,
+              latestOutboundAt: thread.latestOutboundAt?.toISOString() ?? null,
+              team: thread.team
                 ? {
-                    id: thread.messages[0].id,
-                    direction: thread.messages[0].direction,
-                    body: thread.messages[0].body,
-                    createdAt: thread.messages[0].createdAt.toISOString(),
+                    id: thread.team.id,
+                    name: thread.team.name,
+                    logoUrl: thread.team.logoUrl,
                   }
                 : null,
-          }))}
-          selectedFilter={selectedFilter}
-          selectedThreadId={fallbackThread?.id ?? null}
-          selectedThread={
-            fallbackThread
-              ? {
-                  id: fallbackThread.id,
-                  channel: fallbackThread.channel ?? "SMS",
-                  status: fallbackThread.status,
-                  contactName: fallbackThread.contactName,
-                  contactPhone: fallbackThread.contactPhone,
-                  phoneNormalized: fallbackThread.phoneNormalized,
-                  contactEmail: fallbackThread.contactEmail ?? null,
-                  emailNormalized: fallbackThread.emailNormalized ?? null,
-                  replyAddress: fallbackThread.replyAddress ?? null,
-                  unreadForAdminCount: fallbackThread.unreadForAdminCount,
-                  latestMessageAt: fallbackThread.latestMessageAt?.toISOString() ?? null,
-                  latestInboundAt: fallbackThread.latestInboundAt?.toISOString() ?? null,
-                  latestOutboundAt:
-                    fallbackThread.latestOutboundAt?.toISOString() ?? null,
-                  team: fallbackThread.team
-                    ? {
-                        id: fallbackThread.team.id,
-                        name: fallbackThread.team.name,
-                        logoUrl: fallbackThread.team.logoUrl,
-                      }
-                    : null,
-                  league: fallbackThread.league
-                    ? {
-                        id: fallbackThread.league.id,
-                        name: fallbackThread.league.name,
-                        season: fallbackThread.league.season,
-                        slug: fallbackThread.league.slug,
-                      }
-                    : null,
-                  recipient: fallbackThread.recipient
-                    ? {
-                        id: fallbackThread.recipient.id,
-                        displayName: fallbackThread.recipient.displayName,
-                        phone: fallbackThread.recipient.phone,
-                        email: fallbackThread.recipient.email,
-                        audience: fallbackThread.recipient.audience,
-                        sourceType: fallbackThread.recipient.sourceType,
-                      }
-                    : null,
-                  messages: uniqueCombinedMessages.map((message) => ({
-                    id: message.id,
-                    channel: message.channel ?? "SMS",
-                    direction: message.direction,
-                    participantRole: message.participantRole,
-                    body: message.body,
-                    htmlBody: message.htmlBody ?? null,
-                    subject: message.subject ?? null,
-                    fromNumber: message.fromNumber,
-                    toNumber: message.toNumber,
-                    fromEmail: message.fromEmail,
-                    toEmail: message.toEmail,
-                    providerStatus: message.providerStatus,
-                    sentAt: message.sentAt?.toISOString() ?? null,
-                    receivedAt: message.receivedAt?.toISOString() ?? null,
-                    readAt: message.readAt?.toISOString() ?? null,
-                    createdAt: message.createdAt.toISOString(),
-                  })),
-                }
-              : null
-          }
-          leagues={leagues}
-        />
+              league: thread.league
+                ? {
+                    id: thread.league.id,
+                    name: thread.league.name,
+                    season: thread.league.season,
+                    slug: thread.league.slug,
+                  }
+                : null,
+              latestMessage:
+                thread.messages[0]
+                  ? {
+                      id: thread.messages[0].id,
+                      direction: thread.messages[0].direction,
+                      body: thread.messages[0].body,
+                      createdAt: thread.messages[0].createdAt.toISOString(),
+                    }
+                  : null,
+            }))}
+            selectedFilter={selectedFilter}
+            selectedThreadId={fallbackThread?.id ?? null}
+            selectedThread={
+              fallbackThread
+                ? {
+                    id: fallbackThread.id,
+                    channel: fallbackThread.channel ?? "SMS",
+                    status: fallbackThread.status,
+                    contactName: fallbackThread.contactName,
+                    contactPhone: fallbackThread.contactPhone,
+                    phoneNormalized: fallbackThread.phoneNormalized,
+                    contactEmail: fallbackThread.contactEmail ?? null,
+                    emailNormalized: fallbackThread.emailNormalized ?? null,
+                    replyAddress: fallbackThread.replyAddress ?? null,
+                    unreadForAdminCount: fallbackThread.unreadForAdminCount,
+                    latestMessageAt: fallbackThread.latestMessageAt?.toISOString() ?? null,
+                    latestInboundAt: fallbackThread.latestInboundAt?.toISOString() ?? null,
+                    latestOutboundAt:
+                      fallbackThread.latestOutboundAt?.toISOString() ?? null,
+                    team: fallbackThread.team
+                      ? {
+                          id: fallbackThread.team.id,
+                          name: fallbackThread.team.name,
+                          logoUrl: fallbackThread.team.logoUrl,
+                        }
+                      : null,
+                    league: fallbackThread.league
+                      ? {
+                          id: fallbackThread.league.id,
+                          name: fallbackThread.league.name,
+                          season: fallbackThread.league.season,
+                          slug: fallbackThread.league.slug,
+                        }
+                      : null,
+                    recipient: fallbackThread.recipient
+                      ? {
+                          id: fallbackThread.recipient.id,
+                          displayName: fallbackThread.recipient.displayName,
+                          phone: fallbackThread.recipient.phone,
+                          email: fallbackThread.recipient.email,
+                          audience: fallbackThread.recipient.audience,
+                          sourceType: fallbackThread.recipient.sourceType,
+                        }
+                      : null,
+                    messages: uniqueCombinedMessages.map((message) => ({
+                      id: message.id,
+                      channel: message.channel ?? "SMS",
+                      direction: message.direction,
+                      participantRole: message.participantRole,
+                      body: message.body,
+                      htmlBody: message.htmlBody ?? null,
+                      subject: message.subject ?? null,
+                      fromNumber: message.fromNumber,
+                      toNumber: message.toNumber,
+                      fromEmail: message.fromEmail,
+                      toEmail: message.toEmail,
+                      providerStatus: message.providerStatus,
+                      sentAt: message.sentAt?.toISOString() ?? null,
+                      receivedAt: message.receivedAt?.toISOString() ?? null,
+                      readAt: message.readAt?.toISOString() ?? null,
+                      createdAt: message.createdAt.toISOString(),
+                    })),
+                  }
+                : null
+            }
+            leagues={leagues}
+          />
+        )}
       </div>
     </div>
   );
