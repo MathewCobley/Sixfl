@@ -297,6 +297,11 @@ export default async function CaptainProspectsPage({
         isRecruiting: true,
         joinSlug: true,
         prospects: {
+          where: {
+            status: {
+              not: "ACTIVE_SQUAD",
+            },
+          },
           orderBy: [{ createdAt: "desc" }],
         },
       },
