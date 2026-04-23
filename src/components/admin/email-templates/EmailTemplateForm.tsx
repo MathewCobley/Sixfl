@@ -120,15 +120,18 @@ const TOKENS = [
   "{{firstName}}",
   "{{fullName}}",
   "{{teamName}}",
+  "{{opponentName}}",
   "{{leagueName}}",
   "{{leagueDisplayName}}",
   "{{fixtureName}}",
   "{{kickoffLabel}}",
+  "{{kickoffDateTime}}",
   "{{fixturesList}}",
   "{{amount}}",
   "{{claimCode}}",
   "{{claimLink}}",
   "{{captainDashboardUrl}}",
+  "{{captainFixturesUrl}}",
   "{{signInUrl}}",
   "{{claimUrl}}",
   "{{pendingCaptainNotice}}",
@@ -137,6 +140,7 @@ const TOKENS = [
   "{{paymentUrl}}",
   "{{area}}",
   "{{preferredNight}}",
+  "{{link}}",
   "{{cta}}",
 ] as const;
 
@@ -218,10 +222,12 @@ function previewReplace(text: string) {
     .replaceAll("{{firstName}}", "Jordan")
     .replaceAll("{{fullName}}", "Jordan Smith")
     .replaceAll("{{teamName}}", "Harrogate Athletic")
+    .replaceAll("{{opponentName}}", "Rossett Vets")
     .replaceAll("{{leagueName}}", "Rossett Mens Tuesday")
     .replaceAll("{{leagueDisplayName}}", "Rossett Mens Tuesday — Spring 2026")
     .replaceAll("{{fixtureName}}", "Harrogate Athletic vs Rossett Vets")
     .replaceAll("{{kickoffLabel}}", "Tue 21 Apr, 21:20")
+    .replaceAll("{{kickoffDateTime}}", "Tue 21 Apr, 21:20")
     .replaceAll(
       "{{fixturesList}}",
       "Tue 21 Apr, 21:20 — Harrogate Athletic vs Rossett Vets\nTue 28 Apr, 20:40 — Rossett Vets vs Boroughbridge United",
@@ -232,6 +238,10 @@ function previewReplace(text: string) {
     .replaceAll(
       "{{captainDashboardUrl}}",
       "https://www.sixfl.co.uk/claim?code=H862NY",
+    )
+    .replaceAll(
+      "{{captainFixturesUrl}}",
+      "https://www.sixfl.co.uk/captain/team/demo-team/fixtures",
     )
     .replaceAll(
       "{{signInUrl}}",
@@ -258,7 +268,8 @@ function previewReplace(text: string) {
       "https://www.sixfl.co.uk/pay/charge/demo-token",
     )
     .replaceAll("{{area}}", "Harrogate")
-    .replaceAll("{{preferredNight}}", "Tuesday");
+    .replaceAll("{{preferredNight}}", "Tuesday")
+    .replaceAll("{{link}}", "https://www.sixfl.co.uk/captain/team/demo-team/fixtures");
 }
 
 export default function EmailTemplateForm({
