@@ -34,6 +34,8 @@ type TimelineItem = {
   directionLabel: string;
   statusLabel: string;
   sourceLabel: string;
+  templateName: string | null;
+  templateKey: string | null;
   subject: string;
   bodyText: string;
   bodyHtml: string | null;
@@ -232,6 +234,13 @@ export default async function AdminTeamCommunicationsPage({
       },
       include: {
         recipient: true,
+        template: {
+          select: {
+            id: true,
+            name: true,
+            key: true,
+          },
+        },
       },
       orderBy: [{ createdAt: "desc" }],
     }),
@@ -308,6 +317,8 @@ export default async function AdminTeamCommunicationsPage({
         directionLabel: "Outbound",
         statusLabel: formatDispatchStatus(dispatch.status),
         sourceLabel: getDispatchOriginLabel(dispatch.metadata),
+        templateName: dispatch.template?.name ?? null,
+        templateKey: dispatch.template?.key ?? null,
         subject:
           dispatch.subject?.trim() ||
           (dispatch.channel === NotificationChannel.SMS ? "SMS message" : "Email"),
@@ -334,6 +345,8 @@ export default async function AdminTeamCommunicationsPage({
         directionLabel: getDirectionLabel(message.direction),
         statusLabel: message.providerStatus || "Recorded",
         sourceLabel: "Inbox thread",
+        templateName: null,
+        templateKey: null,
         subject: message.subject || `${message.channel} message`,
         bodyText: message.textBody || message.body || "",
         bodyHtml: message.channel === "EMAIL" ? message.htmlBody || null : null,
@@ -351,6 +364,8 @@ export default async function AdminTeamCommunicationsPage({
       directionLabel: "Outbound",
       statusLabel: "Sent",
       sourceLabel: "Converted lead history",
+      templateName: null,
+      templateKey: null,
       subject: email.subject?.trim() || "Email",
       bodyText: email.body,
       bodyHtml: null,
@@ -513,6 +528,16 @@ export default async function AdminTeamCommunicationsPage({
                     <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">
                       {item.sourceLabel}
                     </span>
+                    {item.templateName ? (
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-100">
+                        Template: {item.templateName}
+                      </span>
+                    ) : null}
+                    {item.templateKey ? (
+                      <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 font-mono text-[11px] text-white/60">
+                        {item.templateKey}
+                      </span>
+                    ) : null}
                   </div>
 
                   <div>
