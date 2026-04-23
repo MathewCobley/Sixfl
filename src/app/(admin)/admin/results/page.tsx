@@ -9,6 +9,7 @@ import { ResultDisputeStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import FormListboxField from "@/components/ui/FormListboxField";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,16 @@ const disputeStatusOptions = [
   { value: "RESOLVED", label: "Resolved" },
   { value: "REJECTED", label: "Rejected" },
 ];
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 async function updateDisputeAction(formData: FormData) {
   "use server";
@@ -231,7 +242,7 @@ export default async function AdminResultsPage({
 
                   <p className="mt-2 text-sm text-white/70">
                     <span className="text-white/45">Created:</span>{" "}
-                    {dispute.createdAt.toLocaleString("en-GB")}
+                    {formatUkDateTime(dispute.createdAt)}
                   </p>
 
                   <p className="mt-3 text-sm text-white/80">
