@@ -132,13 +132,14 @@ export default async function AdminTemplatesPage({
   const selectedType = isTemplateConsoleType(typeParam) ? typeParam : "campaign";
   const selectedChannel = isChannelFilter(channelParam) ? channelParam : undefined;
 
-  const [emailTemplates, smsTemplates, systemEmailTemplates] = await Promise.all([
+  const [emailTemplates, smsTemplates, systemTemplatesRaw] = await Promise.all([
     prisma.emailTemplate.findMany({
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
     }),
     prisma.notificationTemplate.findMany({
       where: {
         channel: NotificationChannel.SMS,
+        kind: NotificationTemplateKind.CAMPAIGN,
         audience: {
           in: [
             NotificationAudience.LEAD,
@@ -151,8 +152,10 @@ export default async function AdminTemplatesPage({
     }),
     prisma.notificationTemplate.findMany({
       where: {
-        channel: NotificationChannel.EMAIL,
         kind: NotificationTemplateKind.TRANSACTIONAL,
+        channel: {
+          in: [NotificationChannel.EMAIL, NotificationChannel.SMS],
+        },
       },
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
     }),
@@ -206,22 +209,28 @@ export default async function AdminTemplatesPage({
       return a.name.localeCompare(b.name);
     });
 
-  const systemTemplates: UnifiedTemplateRow[] = systemEmailTemplates
+  const systemTemplates: UnifiedTemplateRow[] = systemTemplatesRaw
     .map((template) => ({
       id: template.id,
       key: template.key,
       name: template.name,
       description: template.description,
       audience: template.audience,
-      channel: "EMAIL" as const,
+      channel: template.channel as "EMAIL" | "SMS",
       interestType: null,
       subject: template.subject,
       body: template.body,
       isActive: template.isActive,
       updatedAt: template.updatedAt,
       type: "system" as const,
-      kindLabel: "System email",
+      kindLabel:
+        template.channel === NotificationChannel.SMS ? "System SMS" : "System email",
     }))
+    .filter((template) =>
+      selectedType === "system" && selectedChannel
+        ? template.channel === selectedChannel
+        : true,
+    )
     .sort((a, b) => {
       const updatedAtDifference =
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
@@ -236,7 +245,7 @@ export default async function AdminTemplatesPage({
   const templates = selectedType === "system" ? systemTemplates : campaignTemplates;
 
   const campaignTotalCount = emailTemplates.length + smsTemplates.length;
-  const systemTotalCount = systemEmailTemplates.length;
+  const systemTotalCount = systemTemplatesRaw.length;
   const activeCount = templates.filter((template) => template.isActive).length;
   const emailCount = templates.filter((template) => template.channel === "EMAIL").length;
   const smsCount = templates.filter((template) => template.channel === "SMS").length;
@@ -251,16 +260,13 @@ export default async function AdminTemplatesPage({
             </h1>
 
             <p className="max-w-2xl text-sm leading-6 text-white/65">
-              Manage outreach templates and automated system emails from one premium console.
+              Manage outreach templates and automated system messages from one premium console.
             </p>
 
             <p className="text-sm text-white/40">
               {templates.length} template{templates.length === 1 ? "" : "s"} shown
-              {selectedType === "campaign" && selectedChannel
-                ? ` · ${selectedChannel.toLowerCase()} only`
-                : selectedType === "system"
-                  ? " · system emails"
-                  : ""}
+              {selectedChannel ? ` · ${selectedChannel.toLowerCase()} only` : ""}
+              {selectedType === "system" ? " · system templates" : ""}
             </p>
           </div>
 
@@ -273,7 +279,7 @@ export default async function AdminTemplatesPage({
             </Link>
 
             <Link
-              href={selectedType === "system" ? "/admin/templates/new?type=system" : "/admin/templates/new?type=campaign"}
+              href={`/admin/templates/new?type=${selectedType}${selectedChannel ? `&channel=${selectedChannel}` : ""}`}
               className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
             >
               New template
@@ -289,7 +295,7 @@ export default async function AdminTemplatesPage({
               active: selectedType === "campaign",
             },
             {
-              label: `System Emails (${systemTotalCount})`,
+              label: `System Templates (${systemTotalCount})`,
               href: buildTypeHref("system"),
               active: selectedType === "system",
             },
@@ -316,7 +322,7 @@ export default async function AdminTemplatesPage({
               {templates.length}
             </div>
             <div className="mt-2 text-sm text-white/60">
-              {selectedType === "system" ? "System email templates" : "Campaign templates"}
+              {selectedType === "system" ? "System templates" : "Campaign templates"}
             </div>
           </div>
 
@@ -346,45 +352,45 @@ export default async function AdminTemplatesPage({
               {smsCount}
             </div>
             <div className="mt-2 text-sm text-white/60">
-              {selectedType === "system" ? "System tab is email-only" : "Reusable text messaging"}
+              Reusable text messaging
             </div>
           </div>
         </div>
 
-        {selectedType === "campaign" ? (
-          <div className="flex flex-wrap gap-3">
-            {[
-              { label: "All", href: buildFilterHref("campaign"), active: !selectedChannel },
-              {
-                label: "Email",
-                href: buildFilterHref("campaign", "EMAIL"),
-                active: selectedChannel === "EMAIL",
-              },
-              {
-                label: "SMS",
-                href: buildFilterHref("campaign", "SMS"),
-                active: selectedChannel === "SMS",
-              },
-            ].map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={[
-                  "inline-flex h-10 items-center justify-center rounded-full border px-4 text-sm font-medium transition",
-                  item.active
-                    ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-                    : "border-white/10 bg-black/20 text-white/75 hover:bg-black/30 hover:text-white",
-                ].join(" ")}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        ) : (
+        <div className="flex flex-wrap gap-3">
+          {[
+            { label: "All", href: buildFilterHref(selectedType), active: !selectedChannel },
+            {
+              label: "Email",
+              href: buildFilterHref(selectedType, "EMAIL"),
+              active: selectedChannel === "EMAIL",
+            },
+            {
+              label: "SMS",
+              href: buildFilterHref(selectedType, "SMS"),
+              active: selectedChannel === "SMS",
+            },
+          ].map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={[
+                "inline-flex h-10 items-center justify-center rounded-full border px-4 text-sm font-medium transition",
+                item.active
+                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-white/10 bg-black/20 text-white/75 hover:bg-black/30 hover:text-white",
+              ].join(" ")}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+
+        {selectedType === "system" ? (
           <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.05] px-5 py-4 text-sm leading-6 text-cyan-100/90">
-            System Emails are the automated operational templates used by match fee reminders, fixture publish emails, and other transactional flows.
+            System templates are the automated operational templates used by fixture reminders, confirmation chases, fixture publish emails, and other transactional flows.
           </div>
-        )}
+        ) : null}
 
         {templates.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm leading-6 text-white/60">
@@ -488,8 +494,8 @@ export default async function AdminTemplatesPage({
                   {selectedType === "system" ? (
                     <>
                       <div>Fixture publish digests</div>
-                      <div>Fixture reminder emails</div>
-                      <div>Match fee due and reminder emails</div>
+                      <div>Fixture reminder emails and SMS</div>
+                      <div>Fixture confirmation chase SMS</div>
                     </>
                   ) : (
                     <>
@@ -507,8 +513,8 @@ export default async function AdminTemplatesPage({
                   {selectedType === "system" ? (
                     <>
                       <div>fixture-publish-digest-email</div>
-                      <div>fixture-reminder-email</div>
-                      <div>match-fee-reminder-email</div>
+                      <div>fixture-confirmation-reminder-sms</div>
+                      <div>fixture-confirmation-reminder-urgent-sms</div>
                     </>
                   ) : (
                     <>
