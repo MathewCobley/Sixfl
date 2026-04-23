@@ -139,6 +139,11 @@ export default async function AdminTeamProspectsPage({
         },
       },
       prospects: {
+        where: {
+          status: {
+            not: "ACTIVE_SQUAD",
+          },
+        },
         orderBy: [{ createdAt: "desc" }],
       },
     },
@@ -269,7 +274,7 @@ export default async function AdminTeamProspectsPage({
             <StatCard
               label="TOTAL"
               value={team.prospects.length}
-              subtext="All prospects"
+              subtext="Open prospects"
             />
             <StatCard
               label="EMAIL READY"
@@ -469,7 +474,7 @@ export default async function AdminTeamProspectsPage({
 
             <div className="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-4">
               {prospectsWithEmail.length === 0 ? (
-                <div className="text-sm text-white/55">No prospects with email addresses yet.</div>
+                <div className="text-sm text-white/55">No open prospects with email addresses yet.</div>
               ) : (
                 prospectsWithEmail.map((prospect) => (
                   <label
@@ -534,7 +539,7 @@ export default async function AdminTeamProspectsPage({
 
             <div className="mt-4 max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-4">
               {prospectsWithPhone.length === 0 ? (
-                <div className="text-sm text-white/55">No prospects with mobile numbers yet.</div>
+                <div className="text-sm text-white/55">No open prospects with mobile numbers yet.</div>
               ) : (
                 prospectsWithPhone.map((prospect) => (
                   <label
@@ -586,7 +591,7 @@ export default async function AdminTeamProspectsPage({
           <div className="divide-y divide-white/10">
             {team.prospects.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">
-                No prospects yet.
+                No open prospects yet.
               </div>
             ) : (
               team.prospects.map((prospect) => (
