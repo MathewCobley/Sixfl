@@ -146,6 +146,15 @@ export default async function AdminTeamProspectsPage({
         },
         orderBy: [{ createdAt: "desc" }],
       },
+      _count: {
+        select: {
+          prospects: {
+            where: {
+              status: "ACTIVE_SQUAD",
+            },
+          },
+        },
+      },
     },
   });
 
@@ -153,6 +162,7 @@ export default async function AdminTeamProspectsPage({
     notFound();
   }
 
+  const convertedToSquadCount = team._count.prospects;
   const saved = typeof filters.saved === "string" ? filters.saved : undefined;
   const error = typeof filters.error === "string" ? filters.error : undefined;
   const savedMessage = getSavedMessage(saved);
@@ -270,11 +280,16 @@ export default async function AdminTeamProspectsPage({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <StatCard
-              label="TOTAL"
+              label="OPEN"
               value={team.prospects.length}
-              subtext="Open prospects"
+              subtext="Still in pipeline"
+            />
+            <StatCard
+              label="CONVERTED"
+              value={convertedToSquadCount}
+              subtext="Promoted to squad"
             />
             <StatCard
               label="EMAIL READY"
