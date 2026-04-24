@@ -9,8 +9,13 @@ import { redirect } from "next/navigation";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { summariseCharge } from "@/lib/payments/charge-status";
-import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
+import {
+  buildChargePaymentUrl,
+  cancelQueuedMatchFeeNotificationDispatches,
+} from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -116,6 +121,10 @@ function getDispatchOccurredAt(dispatch: PaymentDispatchRow) {
 function getDispatchKindLabel(dispatch: PaymentDispatchRow) {
   if (dispatch.sourceType === "FIXTURE_MATCH_FEE") {
     return "initial notice";
+  }
+
+  if (dispatch.sourceType === "FIXTURE_MATCH_FEE_MANUAL_CHASE") {
+    return "manual chase";
   }
 
   const metadata = getMetadataRecord(dispatch.metadata);
@@ -294,6 +303,111 @@ async function recordPaymentAction(formData: FormData) {
   redirect("/admin/payments?created=payment");
 }
 
+async function sendManualPaymentChaseSmsAction(formData: FormData) {
+  "use server";
+
+  const { user } = await requireAdmin();
+
+  const chargeId = String(formData.get("chargeId") ?? "").trim();
+
+  if (!chargeId) {
+    redirect("/admin/payments?error=invalid_charge");
+  }
+
+  const charge = await prisma.paymentCharge.findUnique({
+    where: { id: chargeId },
+    include: {
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      fixture: {
+        select: {
+          kickoffAt: true,
+          homeTeam: {
+            select: {
+              name: true,
+            },
+          },
+          awayTeam: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+      transactions: {
+        select: {
+          amountPence: true,
+        },
+      },
+    },
+  });
+
+  if (!charge) {
+    redirect("/admin/payments?error=invalid_charge");
+  }
+
+  const summary = summariseCharge({
+    amountPence: charge.amountPence,
+    transactions: charge.transactions,
+  });
+
+  if (
+    charge.status === "PAID" ||
+    charge.status === "VOID" ||
+    summary.outstandingPence <= 0 ||
+    !charge.paymentToken
+  ) {
+    redirect("/admin/payments?error=invalid_charge");
+  }
+
+  const { recipient, snapshot } = await upsertTeamNotificationRecipient(charge.team.id);
+
+  const fixtureName = charge.fixture
+    ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
+    : charge.title;
+  const kickoffLabel = charge.fixture?.kickoffAt
+    ? formatDateTimeInLondon(charge.fixture.kickoffAt, {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : charge.dueDate
+      ? formatDateTimeLabel(charge.dueDate)
+      : "TBC";
+
+  await queueNotificationFromTemplate({
+    templateKey: "match-fee-reminder-sms",
+    recipientId: recipient.id,
+    sourceType: "FIXTURE_MATCH_FEE_MANUAL_CHASE",
+    sourceId: `${charge.id}:manual-sms:${Date.now()}`,
+    metadata: {
+      kind: "fixture_match_fee_manual_chase_sms",
+      chargeId: charge.id,
+      fixtureId: charge.fixtureId,
+      teamId: charge.team.id,
+      teamName: charge.team.name,
+      triggeredFrom: "admin_payments_page",
+    },
+    variables: {
+      firstName: snapshot.primaryContact.name ?? charge.team.name,
+      fixtureName,
+      kickoffLabel,
+      paymentUrl: buildChargePaymentUrl(charge.paymentToken),
+      reminderIntro: "Your match fee is still unpaid.",
+    },
+    createdByUserId: user?.id ?? null,
+  });
+
+  revalidatePath("/admin/payments");
+  redirect("/admin/payments?created=payment_chase_sms");
+}
+
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
@@ -360,12 +474,19 @@ export default async function AdminPaymentsPage({
   const paymentDispatches = chargeIds.length
     ? await prisma.notificationDispatch.findMany({
         where: {
-          sourceType: {
-            in: ["FIXTURE_MATCH_FEE", "FIXTURE_MATCH_FEE_REMINDER"],
-          },
-          sourceId: {
-            in: chargeIds,
-          },
+          OR: [
+            {
+              sourceType: {
+                in: ["FIXTURE_MATCH_FEE", "FIXTURE_MATCH_FEE_REMINDER"],
+              },
+              sourceId: {
+                in: chargeIds,
+              },
+            },
+            {
+              sourceType: "FIXTURE_MATCH_FEE_MANUAL_CHASE",
+            },
+          ],
         },
         select: {
           id: true,
@@ -387,11 +508,17 @@ export default async function AdminPaymentsPage({
   const latestChaseByChargeId = new Map<string, LatestChaseActivity>();
 
   for (const dispatch of paymentDispatches) {
-    if (!dispatch.sourceId) {
+    const metadata = getMetadataRecord(dispatch.metadata);
+    const derivedChargeId =
+      typeof metadata?.chargeId === "string" && metadata.chargeId.trim()
+        ? metadata.chargeId.trim()
+        : dispatch.sourceId;
+
+    if (!derivedChargeId || !chargeIds.includes(derivedChargeId)) {
       continue;
     }
 
-    const current = latestChaseByChargeId.get(dispatch.sourceId) ?? {};
+    const current = latestChaseByChargeId.get(derivedChargeId) ?? {};
     const occurredAt = getDispatchOccurredAt(dispatch as PaymentDispatchRow).getTime();
 
     if (
@@ -409,7 +536,7 @@ export default async function AdminPaymentsPage({
       current.sms = dispatch as PaymentDispatchRow;
     }
 
-    latestChaseByChargeId.set(dispatch.sourceId, current);
+    latestChaseByChargeId.set(derivedChargeId, current);
   }
 
   const nowMs = Date.now();
@@ -497,6 +624,9 @@ export default async function AdminPaymentsPage({
           ) : null}
           {sp.created === "payment" ? (
             <div className="text-emerald-300">Payment recorded.</div>
+          ) : null}
+          {sp.created === "payment_chase_sms" ? (
+            <div className="text-emerald-300">Payment chase SMS queued.</div>
           ) : null}
           {sp.error === "invalid_charge" ? (
             <div className="text-red-300">Charge details are incomplete.</div>
@@ -754,13 +884,28 @@ export default async function AdminPaymentsPage({
                       </div>
                     ) : null}
 
-                    <div className="mt-4">
+                    <div className="mt-4 flex flex-wrap gap-3">
                       <Link
                         href={`/admin/teams/${row.charge.team.id}/communications`}
                         className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/15"
                       >
                         Open communications
                       </Link>
+
+                      {row.charge.status !== "PAID" &&
+                      row.charge.status !== "VOID" &&
+                      row.summary.outstandingPence > 0 &&
+                      row.charge.paymentToken ? (
+                        <form action={sendManualPaymentChaseSmsAction}>
+                          <input type="hidden" name="chargeId" value={row.charge.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/15"
+                          >
+                            Chase by SMS
+                          </button>
+                        </form>
+                      ) : null}
                     </div>
                   </div>
 
