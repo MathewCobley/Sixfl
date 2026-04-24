@@ -14,7 +14,7 @@ type Template = {
   key: string;
   label: string;
   body: string;
-  description: string | null;
+  description?: string | null;
   interestType: string | null;
   ctaUrlKey?: string | null;
 };
@@ -36,6 +36,11 @@ type BulkSmsActionState = {
   sentCount?: number;
   failedCount?: number;
 };
+
+type BulkSmsAction = (
+  prevState: BulkSmsActionState,
+  formData: FormData,
+) => Promise<BulkSmsActionState>;
 
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
@@ -70,7 +75,7 @@ export default function BulkLeadSmsForm({
   recipientCount: number;
   recipientPreview: RecipientPreviewItem[];
   managedTeamOptions: ManagedTeamOption[];
-  action: any;
+  action: BulkSmsAction;
 }) {
   const [state, formAction] = useActionState(action, {} as BulkSmsActionState);
   const [selectedTemplate, setSelectedTemplate] = useState("");
