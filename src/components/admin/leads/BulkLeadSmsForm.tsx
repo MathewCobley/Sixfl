@@ -37,21 +37,16 @@ type BulkSmsActionState = {
   failedCount?: number;
 };
 
-type BulkSmsAction = (
-  prevState: BulkSmsActionState,
-  formData: FormData,
-) => Promise<BulkSmsActionState>;
-
 type Props = {
   templates: Template[];
-  selectedType: string | undefined;
-  selectedStatus: string | undefined;
-  selectedArea: string | undefined;
-  selectedNight: string | undefined;
+  selectedType?: string;
+  selectedStatus?: string;
+  selectedArea?: string;
+  selectedNight?: string;
   recipientCount: number;
   recipientPreview: RecipientPreviewItem[];
   managedTeamOptions: ManagedTeamOption[];
-  action: BulkSmsAction;
+  action: any;
 };
 
 function SubmitButton({ disabled }: { disabled: boolean }) {
