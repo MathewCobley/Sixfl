@@ -6,10 +6,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
+import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import FormListboxField from "@/components/ui/FormListboxField";
 import {
   addSquadMemberAction,
   removeSquadMemberAction,
@@ -66,11 +66,7 @@ function getRoleBadgeClasses(role: TeamRole) {
 
 function getInitials(name: string | null | undefined, email: string | null | undefined) {
   const base = (name || email || "?").trim();
-
-  const parts = base
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
+  const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
 
   if (!parts.length) return "?";
 
@@ -170,14 +166,13 @@ export default async function CaptainSquadPage({
           notes: true,
           createdAt: true,
           updatedAt: true,
+          lastContactedAt: true,
         },
       },
     },
   });
 
-  if (!team) {
-    notFound();
-  }
+  if (!team) notFound();
 
   const linkedMemberEmails = new Set(
     team.members
@@ -188,9 +183,7 @@ export default async function CaptainSquadPage({
   const pendingSquadProspects = team.prospects.filter((prospect) => {
     const normalizedEmail = prospect.email?.trim().toLowerCase() ?? null;
 
-    if (!normalizedEmail) {
-      return true;
-    }
+    if (!normalizedEmail) return true;
 
     return !linkedMemberEmails.has(normalizedEmail);
   });
@@ -201,6 +194,7 @@ export default async function CaptainSquadPage({
   const coachCount = team.members.filter((member) => member.role === "COACH").length;
   const emailableMembers = team.members.filter((member) => Boolean(member.user.email?.trim()));
 
+  const totalSquadCount = team.members.length + pendingSquadProspects.length;
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
@@ -212,14 +206,11 @@ export default async function CaptainSquadPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               Squad management
             </p>
-
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               Team squad
             </h1>
-
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Control who is attached to the team, assign roles, and keep your captain and
-              organiser setup tidy.
+              Control who is attached to the team, assign roles, and keep your captain and organiser setup tidy.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -228,7 +219,7 @@ export default async function CaptainSquadPage({
                 {team.league?.season ? ` · ${team.league.season}` : ""}
               </span>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                {team.members.length + pendingSquadProspects.length} squad player{team.members.length + pendingSquadProspects.length === 1 ? "" : "s"}
+                {totalSquadCount} squad player{totalSquadCount === 1 ? "" : "s"}
               </span>
               {pendingSquadProspects.length > 0 ? (
                 <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
@@ -244,14 +235,12 @@ export default async function CaptainSquadPage({
               >
                 Back to overview
               </Link>
-
               <Link
                 href={`/captain/team/${teamid}/fixtures`}
                 className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
               >
                 Open fixtures
               </Link>
-
               <Link
                 href={`/captain/team/${teamid}/prospects`}
                 className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
@@ -262,37 +251,31 @@ export default async function CaptainSquadPage({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-            <div className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-                Captains
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{captainCount}</p>
-              <p className="mt-2 text-sm text-amber-100/75">Linked captain roles in squad.</p>
-            </div>
+            {[
+              { label: "Captains", value: captainCount, copy: "Linked captain roles in squad.", tone: "amber" },
+              { label: "Managers", value: managerCount, copy: "Organisers and managers attached.", tone: "emerald" },
+              { label: "Linked players", value: playerCount, copy: "Players with a SIXFL account.", tone: "white" },
+              { label: "Coaches", value: coachCount, copy: "Coach roles currently assigned.", tone: "sky" },
+            ].map((metric) => {
+              const toneClasses =
+                metric.tone === "amber"
+                  ? "border-amber-400/20 bg-amber-500/10 text-amber-100/70"
+                  : metric.tone === "emerald"
+                    ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
+                    : metric.tone === "sky"
+                      ? "border-sky-400/20 bg-sky-500/10 text-sky-100/70"
+                      : "border-white/10 bg-white/5 text-white/55";
 
-            <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
-                Managers
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{managerCount}</p>
-              <p className="mt-2 text-sm text-emerald-100/75">Organisers and managers attached.</p>
-            </div>
-
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                Linked players
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{playerCount}</p>
-              <p className="mt-2 text-sm text-white/65">Players with a SIXFL account.</p>
-            </div>
-
-            <div className="rounded-[1.5rem] border border-sky-400/20 bg-sky-500/10 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">
-                Coaches
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{coachCount}</p>
-              <p className="mt-2 text-sm text-sky-100/75">Coach roles currently assigned.</p>
-            </div>
+              return (
+                <div key={metric.label} className={`rounded-[1.5rem] border p-5 ${toneClasses}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                    {metric.label}
+                  </p>
+                  <p className="mt-3 text-3xl font-semibold text-white">{metric.value}</p>
+                  <p className="mt-2 text-sm text-white/65">{metric.copy}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -318,9 +301,8 @@ export default async function CaptainSquadPage({
               </p>
               <h2 className="mt-2 text-xl font-semibold text-white">Members and roles</h2>
             </div>
-
             <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70">
-              {team.members.length + pendingSquadProspects.length} total
+              {totalSquadCount} total
             </div>
           </div>
 
@@ -340,26 +322,18 @@ export default async function CaptainSquadPage({
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
                     {getInitials(member.user.name, member.user.email)}
                   </div>
-
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="truncate text-base font-semibold text-white">
                         {member.user.name || "Unnamed user"}
                       </div>
-
-                      <span
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(
-                          member.role,
-                        )}`}
-                      >
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                         {getRoleLabel(member.role)}
                       </span>
                     </div>
-
                     <div className="mt-2 text-sm text-white/65">
                       {member.user.email || "No email on account"}
                     </div>
-
                     <div className="mt-1 text-xs text-white/45">
                       Added {formatUkDateTime(member.createdAt)}
                     </div>
@@ -370,7 +344,6 @@ export default async function CaptainSquadPage({
                   <form action={updateSquadMemberRoleAction} className="flex flex-wrap items-center gap-3">
                     <input type="hidden" name="teamid" value={teamid} />
                     <input type="hidden" name="membershipId" value={member.id} />
-
                     <div className="min-w-[220px]">
                       <FormListboxField
                         name="role"
@@ -379,7 +352,6 @@ export default async function CaptainSquadPage({
                         placeholder="Select role"
                       />
                     </div>
-
                     <button
                       type="submit"
                       className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
@@ -414,7 +386,6 @@ export default async function CaptainSquadPage({
                         These players have been promoted to the squad but do not yet have a linked SIXFL account.
                       </p>
                     </div>
-
                     <Link
                       href={`/captain/team/${teamid}/prospects`}
                       className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
@@ -427,6 +398,7 @@ export default async function CaptainSquadPage({
                     {pendingSquadProspects.map((prospect) => {
                       const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
                       const hasEmail = Boolean(prospect.email?.trim());
+                      const hasActivationEmailBeenSent = Boolean(prospect.lastContactedAt);
 
                       return (
                         <div
@@ -446,6 +418,11 @@ export default async function CaptainSquadPage({
                                 <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">
                                   Pending account
                                 </span>
+                                {hasActivationEmailBeenSent ? (
+                                  <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                                    Invite sent
+                                  </span>
+                                ) : null}
                               </div>
 
                               <div className="mt-2 text-sm text-white/70">
@@ -457,24 +434,31 @@ export default async function CaptainSquadPage({
                                 Promoted {formatUkDateTime(prospect.updatedAt)}
                               </div>
 
+                              {prospect.lastContactedAt ? (
+                                <div className="mt-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-100">
+                                  Activation email last sent {formatUkDateTime(prospect.lastContactedAt)}
+                                </div>
+                              ) : (
+                                <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-white/50">
+                                  No activation email sent yet.
+                                </div>
+                              )}
+
                               {prospect.notes ? (
                                 <div className="mt-2 text-sm text-white/55">{prospect.notes}</div>
                               ) : null}
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap gap-3">
-                            <form
-                              method="post"
-                              action={`/captain/team/${teamid}/squad/send-activation`}
-                            >
+                          <div className="flex flex-wrap gap-3 xl:justify-end">
+                            <form method="post" action={`/captain/team/${teamid}/squad/send-activation`}>
                               <input type="hidden" name="prospectId" value={prospect.id} />
                               <button
                                 type="submit"
                                 disabled={!hasEmail}
                                 className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
                               >
-                                Send activation email
+                                {hasActivationEmailBeenSent ? "Send again" : "Send activation email"}
                               </button>
                             </form>
 
@@ -526,6 +510,7 @@ export default async function CaptainSquadPage({
                   <div className="mt-4 flex flex-wrap gap-2">
                     {team.members.map((member) => {
                       const hasEmail = Boolean(member.user.email?.trim());
+
                       return (
                         <label
                           key={member.id}
@@ -650,15 +635,9 @@ export default async function CaptainSquadPage({
                   Primary
                 </div>
                 <div className="mt-3 space-y-2">
-                  <div>
-                    <span className="text-white/45">Name:</span> {team.contactName || "—"}
-                  </div>
-                  <div>
-                    <span className="text-white/45">Email:</span> {team.contactEmail || "—"}
-                  </div>
-                  <div>
-                    <span className="text-white/45">Phone:</span> {team.contactPhone || "—"}
-                  </div>
+                  <div><span className="text-white/45">Name:</span> {team.contactName || "—"}</div>
+                  <div><span className="text-white/45">Email:</span> {team.contactEmail || "—"}</div>
+                  <div><span className="text-white/45">Phone:</span> {team.contactPhone || "—"}</div>
                 </div>
               </div>
 
@@ -667,15 +646,9 @@ export default async function CaptainSquadPage({
                   Secondary
                 </div>
                 <div className="mt-3 space-y-2">
-                  <div>
-                    <span className="text-white/45">Name:</span> {team.secondaryContactName || "—"}
-                  </div>
-                  <div>
-                    <span className="text-white/45">Email:</span> {team.secondaryContactEmail || "—"}
-                  </div>
-                  <div>
-                    <span className="text-white/45">Phone:</span> {team.secondaryContactPhone || "—"}
-                  </div>
+                  <div><span className="text-white/45">Name:</span> {team.secondaryContactName || "—"}</div>
+                  <div><span className="text-white/45">Email:</span> {team.secondaryContactEmail || "—"}</div>
+                  <div><span className="text-white/45">Phone:</span> {team.secondaryContactPhone || "—"}</div>
                 </div>
               </div>
             </div>
@@ -690,37 +663,23 @@ export default async function CaptainSquadPage({
             <div className="mt-5 space-y-3 text-sm text-white/75">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Captain linked</span>
-                <span className="text-right text-white">
-                  {team.captainLinkedAt ? formatUkDateTime(team.captainLinkedAt) : "—"}
-                </span>
+                <span className="text-right text-white">{team.captainLinkedAt ? formatUkDateTime(team.captainLinkedAt) : "—"}</span>
               </div>
-
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Linked source</span>
-                <span className="text-right text-white">
-                  {team.captainLinkedSource || "—"}
-                </span>
+                <span className="text-right text-white">{team.captainLinkedSource || "—"}</span>
               </div>
-
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Invite sent</span>
-                <span className="text-right text-white">
-                  {team.captainInviteSentAt ? formatUkDateTime(team.captainInviteSentAt) : "—"}
-                </span>
+                <span className="text-right text-white">{team.captainInviteSentAt ? formatUkDateTime(team.captainInviteSentAt) : "—"}</span>
               </div>
-
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Invite email</span>
-                <span className="text-right text-white">
-                  {team.captainInviteSentTo || "—"}
-                </span>
+                <span className="text-right text-white">{team.captainInviteSentTo || "—"}</span>
               </div>
-
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/50">Claimed at</span>
-                <span className="text-right text-white">
-                  {team.captainClaimedAt ? formatUkDateTime(team.captainClaimedAt) : "—"}
-                </span>
+                <span className="text-right text-white">{team.captainClaimedAt ? formatUkDateTime(team.captainClaimedAt) : "—"}</span>
               </div>
             </div>
           </section>
