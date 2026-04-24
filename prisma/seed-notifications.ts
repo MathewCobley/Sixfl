@@ -219,6 +219,17 @@ Use the secure payment link below to review the charge and pay online.
   });
 
   await upsertTemplate({
+    key: "match-fee-due-sms",
+    name: "Match fee due SMS",
+    description: "Automated SMS sent when a match fee charge is raised.",
+    kind: NotificationTemplateKind.TRANSACTIONAL,
+    channel: NotificationChannel.SMS,
+    audience: NotificationAudience.TEAM,
+    subject: null,
+    body: "SIXFL: A match fee has been raised for {{fixtureName}} ({{kickoffLabel}}). Amount due: {{amount}}. Payment is normally settled after the match. Review & pay: {{paymentUrl}}",
+  });
+
+  await upsertTemplate({
     key: "match-fee-reminder-email",
     name: "Match fee reminder email",
     description: "Automated reminder email for an unpaid match fee.",
@@ -238,6 +249,17 @@ Please use the secure payment link below to review the charge and pay the outsta
 {{cta}}`,
     ctaLabel: "Review & pay match fee",
     ctaUrlKey: "paymentUrl",
+  });
+
+  await upsertTemplate({
+    key: "match-fee-reminder-sms",
+    name: "Match fee reminder SMS",
+    description: "Automated SMS reminder for an unpaid match fee.",
+    kind: NotificationTemplateKind.TRANSACTIONAL,
+    channel: NotificationChannel.SMS,
+    audience: NotificationAudience.TEAM,
+    subject: null,
+    body: "SIXFL: {{reminderIntro}} Fixture: {{fixtureName}} ({{kickoffLabel}}). Outstanding balance still due. Pay here: {{paymentUrl}}",
   });
 
   console.log("Notification templates seeded.");
