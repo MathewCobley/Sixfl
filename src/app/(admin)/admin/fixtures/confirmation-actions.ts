@@ -26,6 +26,7 @@ function parseRequiredString(value: FormDataEntryValue | null, fieldName: string
 function buildAdminFixturesHref(input?: {
   notice?: "sms_queued" | "sms_skipped" | "sms_not_available" | "sms_error";
   teamName?: string;
+  returnTo?: string;
 }) {
   const searchParams = new URLSearchParams();
 
@@ -38,14 +39,22 @@ function buildAdminFixturesHref(input?: {
   }
 
   const query = searchParams.toString();
-  return query ? `/admin/fixtures?${query}` : "/admin/fixtures";
+  const baseHref = query ? `/admin/fixtures?${query}` : "/admin/fixtures";
+
+  return input?.returnTo?.trim()
+    ? `${baseHref}#${input.returnTo.trim()}`
+    : baseHref;
 }
 
-function getRedirectFromResult(result: QueueFixtureConfirmationSmsResult) {
+function getRedirectFromResult(
+  result: QueueFixtureConfirmationSmsResult,
+  returnTo?: string,
+) {
   if (result.ok) {
     return buildAdminFixturesHref({
       notice: "sms_queued",
       teamName: result.teamName,
+      returnTo,
     });
   }
 
@@ -56,6 +65,7 @@ function getRedirectFromResult(result: QueueFixtureConfirmationSmsResult) {
     return buildAdminFixturesHref({
       notice: "sms_skipped",
       teamName: result.teamName,
+      returnTo,
     });
   }
 
@@ -67,12 +77,14 @@ function getRedirectFromResult(result: QueueFixtureConfirmationSmsResult) {
     return buildAdminFixturesHref({
       notice: "sms_not_available",
       teamName: result.teamName,
+      returnTo,
     });
   }
 
   return buildAdminFixturesHref({
     notice: "sms_error",
     teamName: result.teamName,
+    returnTo,
   });
 }
 
@@ -81,6 +93,7 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
 
   const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture");
   const teamId = parseRequiredString(formData.get("teamId"), "Team");
+  const returnTo = String(formData.get("returnTo") ?? "").trim();
 
   const result = await queueFixtureConfirmationSmsReminder({
     fixtureId,
@@ -115,5 +128,5 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
     revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
   }
 
-  redirect(getRedirectFromResult(result));
+  redirect(getRedirectFromResult(result, returnTo));
 }
