@@ -31,8 +31,30 @@ function getSiteUrl() {
   return value.replace(/\/+$/, "");
 }
 
+function getPublicRequestOrigin(request: NextRequest) {
+  const forwardedHost =
+    request.headers.get("x-forwarded-host")?.trim() ||
+    request.headers.get("host")?.trim() ||
+    "";
+  const forwardedProto =
+    request.headers.get("x-forwarded-proto")?.trim() || "https";
+
+  if (
+    forwardedHost &&
+    !forwardedHost.includes("localhost") &&
+    !forwardedHost.includes("127.0.0.1")
+  ) {
+    return `${forwardedProto}://${forwardedHost}`.replace(/\/+$/, "");
+  }
+
+  return getSiteUrl();
+}
+
 function getSquadRedirectUrl(request: NextRequest, teamid: string, query: string) {
-  return new URL(`/captain/team/${teamid}/squad${query}`, request.url);
+  return new URL(
+    `/captain/team/${teamid}/squad${query}`,
+    getPublicRequestOrigin(request),
+  );
 }
 
 function getDisplayName(input: { firstName: string; lastName: string | null }) {
