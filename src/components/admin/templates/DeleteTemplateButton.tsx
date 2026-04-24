@@ -28,18 +28,26 @@ export default function DeleteTemplateButton({
   templateName,
 }: DeleteTemplateButtonProps) {
   return (
-    <form
-      onSubmit={(event) => {
-        const confirmed = window.confirm(
-          `Delete \"${templateName}\"? This cannot be undone.`,
-        );
+    <div
+      onClick={(event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
 
-        if (!confirmed) {
-          event.preventDefault();
+        if (target.closest("button[type='submit']")) {
+          const confirmed = window.confirm(
+            `Delete \"${templateName}\"? This cannot be undone.`,
+          );
+
+          if (!confirmed) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
         }
       }}
     >
       <SubmitButton />
-    </form>
+    </div>
   );
 }
