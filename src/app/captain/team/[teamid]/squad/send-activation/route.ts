@@ -6,7 +6,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import {
   NotificationAudience,
-  NotificationChannel,
   NotificationRecipientSourceType,
 } from "@prisma/client";
 
@@ -14,7 +13,9 @@ import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { linkQueuedEmailDispatchToThread } from "@/lib/messaging/service";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
+
+const SQUAD_ACTIVATION_TEMPLATE_KEY = "squad-activation-email";
 
 function getSiteUrl() {
   const fallback = "https://www.sixfl.co.uk";
@@ -67,21 +68,6 @@ function getTeamContextLine(team: {
   if (venueName) return `You’ve been added to the ${team.name} squad at ${venueName}.`;
 
   return `You’ve been added to the ${team.name} squad on SIXFL.`;
-}
-
-function buildActivationEmailBody(input: { firstName: string; teamContextLine: string }) {
-  return `Hi ${input.firstName || "there"},
-
-${input.teamContextLine}
-
-Please complete your squad signup using this email address so we can activate your player profile and keep you updated with fixtures, team messages and league information.
-
-Activate your squad place here:
-
-{{cta}}
-
-Thanks,
-SIXFL`;
 }
 
 async function ensureProspectNotificationRecipient(input: {
@@ -195,12 +181,8 @@ export async function POST(
   }
 
   const contactName = getDisplayName(prospect);
+  const firstName = prospect.firstName.trim() || "there";
   const joinUrl = getJoinUrl(team);
-  const subject = `You’ve been added to the ${team.name} squad`;
-  const body = buildActivationEmailBody({
-    firstName: prospect.firstName.trim() || "there",
-    teamContextLine: getTeamContextLine(team),
-  });
 
   const recipient = await ensureProspectNotificationRecipient({
     teamId: teamid,
@@ -208,13 +190,21 @@ export async function POST(
     prospect,
   });
 
-  const dispatch = await queueDirectNotification({
+  const variables = {
+    firstName,
+    fullName: contactName || firstName,
+    teamName: team.name,
+    leagueName: team.league?.name ?? "",
+    venueName: team.league?.venueName ?? "",
+    preferredNight: formatPreferredNight(team.league?.dayOfWeek) ?? "",
+    teamContextLine: getTeamContextLine(team),
+    teamJoinUrl: joinUrl,
+  };
+
+  const dispatch = await queueNotificationFromTemplate({
+    templateKey: SQUAD_ACTIVATION_TEMPLATE_KEY,
     recipientId: recipient.id,
-    channel: NotificationChannel.EMAIL,
-    audience: NotificationAudience.PLAYER,
-    subject,
-    body,
-    isTransactional: true,
+    variables,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
     emailBranding: {
@@ -222,13 +212,13 @@ export async function POST(
       teamLogoUrl: team.logoUrl,
       leagueName: team.league?.name ?? null,
     },
-    emailCta: { label: "Activate your squad place", url: joinUrl },
     metadata: {
       origin: "captain_squad_activation_email",
       originLabel: "Activation email sent from captain squad page",
       teamId: teamid,
       prospectId: prospect.id,
       contactName,
+      templateKey: SQUAD_ACTIVATION_TEMPLATE_KEY,
     },
     createdByUserId: user?.id ?? null,
   });
@@ -241,7 +231,7 @@ export async function POST(
     sourceId: prospect.id,
     contactName,
     toEmail: email,
-    subject: dispatch.subject ?? subject,
+    subject: dispatch.subject ?? `SIXFL squad activation`,
     bodyText: dispatch.bodyText,
     bodyHtml: dispatch.bodyHtml,
     createdByUserId: user?.id ?? null,
