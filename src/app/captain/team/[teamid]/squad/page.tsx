@@ -10,6 +10,7 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
   addSquadMemberAction,
   removeSquadMemberAction,
@@ -34,6 +35,8 @@ const roleOptions: { value: TeamRole; label: string }[] = [
   { value: "MANAGER", label: "Manager" },
   { value: "PLAYER", label: "Player" },
   { value: "COACH", label: "Coach" },
+  { value: "VICE_CAPTAIN", label: "Vice captain" },
+  { value: "BACKUP_PLAYER", label: "Backup player" },
 ];
 
 function getRoleLabel(role: TeamRole) {
@@ -46,6 +49,10 @@ function getRoleLabel(role: TeamRole) {
       return "Player";
     case "COACH":
       return "Coach";
+    case "VICE_CAPTAIN":
+      return "Vice captain";
+    case "BACKUP_PLAYER":
+      return "Backup player";
     default:
       return role;
   }
@@ -155,6 +162,36 @@ function getActivationEmailStatusClasses(status?: NotificationDispatchStatus) {
   return "border-sky-400/20 bg-sky-500/10 text-sky-100";
 }
 
+function formatPreferredNights(value: unknown) {
+  if (!value) return null;
+
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(", ") || null;
+  }
+
+  if (typeof value === "object") {
+    const values = Object.values(value as Record<string, unknown>)
+      .flat()
+      .filter(Boolean)
+      .map(String);
+
+    return values.join(", ") || null;
+  }
+
+  return String(value);
+}
+
+function DetailPill({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value?.trim()) return null;
+
+  return (
+    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70">
+      <span className="text-white/40">{label}:</span>
+      <span className="ml-1 text-white/80">{value}</span>
+    </span>
+  );
+}
+
 export default async function CaptainSquadPage({
   params,
   searchParams,
@@ -227,6 +264,10 @@ export default async function CaptainSquadPage({
   });
 
   if (!team) notFound();
+
+  const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(
+    team.members.map((member) => member.id),
+  );
 
   const linkedMemberEmails = new Set(
     team.members
@@ -405,66 +446,111 @@ export default async function CaptainSquadPage({
               </div>
             ) : null}
 
-            {team.members.map((member) => (
-              <div
-                key={member.id}
-                className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-center xl:justify-between"
-              >
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
-                    {getInitials(member.user.name, member.user.email)}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="truncate text-base font-semibold text-white">
-                        {member.user.name || "Unnamed user"}
+            {team.members.map((member) => {
+              const profile = profileByMemberId.get(member.id);
+              const preferredNights = formatPreferredNights(profile?.preferredNights);
+              const hasProfileDetails = Boolean(
+                profile?.phone ||
+                  profile?.ageBand ||
+                  profile?.preferredPositions ||
+                  profile?.experienceSummary ||
+                  profile?.availabilityLevel ||
+                  preferredNights ||
+                  profile?.availabilitySummary ||
+                  profile?.notes,
+              );
+
+              return (
+                <div
+                  key={member.id}
+                  className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-start xl:justify-between"
+                >
+                  <div className="flex min-w-0 items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
+                      {getInitials(member.user.name, member.user.email)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="truncate text-base font-semibold text-white">
+                          {member.user.name || "Unnamed user"}
+                        </div>
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
+                          {getRoleLabel(member.role)}
+                        </span>
                       </div>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
-                        {getRoleLabel(member.role)}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm text-white/65">
-                      {member.user.email || "No email on account"}
-                    </div>
-                    <div className="mt-1 text-xs text-white/45">
-                      Added {formatUkDateTime(member.createdAt)}
+                      <div className="mt-2 text-sm text-white/65">
+                        {member.user.email || "No email on account"}
+                        {profile?.phone ? ` · ${profile.phone}` : ""}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45">
+                        Added {formatUkDateTime(member.createdAt)}
+                      </div>
+
+                      {hasProfileDetails ? (
+                        <div className="mt-3 space-y-3">
+                          <div className="flex flex-wrap gap-2">
+                            <DetailPill label="Phone" value={profile?.phone} />
+                            <DetailPill label="Age" value={profile?.ageBand} />
+                            <DetailPill label="Position" value={profile?.preferredPositions} />
+                            <DetailPill label="Level" value={profile?.experienceSummary} />
+                            <DetailPill label="Availability" value={profile?.availabilityLevel} />
+                            <DetailPill label="Nights" value={preferredNights} />
+                          </div>
+
+                          {profile?.availabilitySummary ? (
+                            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/60">
+                              <span className="font-semibold text-white/70">Availability notes:</span> {profile.availabilitySummary}
+                            </div>
+                          ) : null}
+
+                          {profile?.notes ? (
+                            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/60">
+                              <span className="font-semibold text-white/70">Player notes:</span> {profile.notes}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/45">
+                          No player profile details saved yet.
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
-                  <form action={updateSquadMemberRoleAction} className="flex flex-wrap items-center gap-3">
-                    <input type="hidden" name="teamid" value={teamid} />
-                    <input type="hidden" name="membershipId" value={member.id} />
-                    <div className="min-w-[220px]">
-                      <FormListboxField
-                        name="role"
-                        value={member.role}
-                        options={roleOptions}
-                        placeholder="Select role"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                    >
-                      Update role
-                    </button>
-                  </form>
+                  <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
+                    <form action={updateSquadMemberRoleAction} className="flex flex-wrap items-center gap-3">
+                      <input type="hidden" name="teamid" value={teamid} />
+                      <input type="hidden" name="membershipId" value={member.id} />
+                      <div className="min-w-[220px]">
+                        <FormListboxField
+                          name="role"
+                          value={member.role}
+                          options={roleOptions}
+                          placeholder="Select role"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                      >
+                        Update role
+                      </button>
+                    </form>
 
-                  <form action={removeSquadMemberAction}>
-                    <input type="hidden" name="teamid" value={teamid} />
-                    <input type="hidden" name="membershipId" value={member.id} />
-                    <button
-                      type="submit"
-                      className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
-                    >
-                      Remove
-                    </button>
-                  </form>
+                    <form action={removeSquadMemberAction}>
+                      <input type="hidden" name="teamid" value={teamid} />
+                      <input type="hidden" name="membershipId" value={member.id} />
+                      <button
+                        type="submit"
+                        className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {pendingSquadProspects.length > 0 ? (
               <div className="px-6 py-5">
