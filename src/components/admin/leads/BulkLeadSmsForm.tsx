@@ -39,10 +39,10 @@ type BulkSmsActionState = {
 
 type Props = {
   templates: Template[];
-  selectedType?: string;
-  selectedStatus?: string;
-  selectedArea?: string;
-  selectedNight?: string;
+  selectedType?: string | undefined;
+  selectedStatus?: string | undefined;
+  selectedArea?: string | undefined;
+  selectedNight?: string | undefined;
   recipientCount: number;
   recipientPreview: RecipientPreviewItem[];
   managedTeamOptions: ManagedTeamOption[];
