@@ -169,7 +169,7 @@ const CTA_OPTIONS: Array<{
   {
     value: "teamJoinUrl",
     label: "Team join page",
-    previewUrl: "https://www.sixfl.co.uk/teams/join/rossett-managed-team",
+    previewUrl: "https://www.sixfl.co.uk/teams/join/rossett-nomads",
   },
   {
     value: "fixtureUrl",
