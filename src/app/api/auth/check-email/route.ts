@@ -9,6 +9,39 @@ import {
   getPendingCaptainContext,
 } from "@/lib/auth/pendingCaptain";
 
+async function getPendingSquadActivationContext(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) return null;
+
+  const prospect = await prisma.teamPlayerProspect.findFirst({
+    where: {
+      email: normalizedEmail,
+      status: "ACTIVE_SQUAD",
+    },
+    select: {
+      id: true,
+      firstName: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  if (!prospect) return null;
+
+  return {
+    prospectId: prospect.id,
+    firstName: prospect.firstName,
+    teamId: prospect.team.id,
+    teamName: prospect.team.name,
+  };
+}
+
 export async function POST(req: Request) {
   const { email } = await req.json();
   const normalizedEmail = String(email ?? "").toLowerCase().trim();
@@ -17,25 +50,32 @@ export async function POST(req: Request) {
     return NextResponse.json({
       exists: false,
       pendingCaptain: false,
+      pendingSquadActivation: false,
       canLogin: false,
       claimCode: null,
       teamName: null,
     });
   }
 
-  const [user, pendingCaptain, captainLoginContext] = await Promise.all([
+  const [user, pendingCaptain, captainLoginContext, pendingSquadActivation] = await Promise.all([
     prisma.user.findUnique({
       where: { email: normalizedEmail },
     }),
     getPendingCaptainContext(normalizedEmail),
     getCaptainLoginContext(normalizedEmail),
+    getPendingSquadActivationContext(normalizedEmail),
   ]);
 
   return NextResponse.json({
     exists: !!user,
     pendingCaptain: !!pendingCaptain,
-    canLogin: !!user || !!pendingCaptain || !!captainLoginContext,
+    pendingSquadActivation: !!pendingSquadActivation,
+    canLogin: !!user || !!pendingCaptain || !!captainLoginContext || !!pendingSquadActivation,
     claimCode: pendingCaptain?.claimCode ?? null,
-    teamName: pendingCaptain?.teamName ?? captainLoginContext?.teamName ?? null,
+    teamName:
+      pendingCaptain?.teamName ??
+      captainLoginContext?.teamName ??
+      pendingSquadActivation?.teamName ??
+      null,
   });
 }
