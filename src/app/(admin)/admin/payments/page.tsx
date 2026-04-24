@@ -23,6 +23,25 @@ export const metadata = {
 const paymentMethodValues = new Set<PaymentMethod>(Object.values(PaymentMethod));
 const ADMIN_CHASE_THRESHOLD_MS = 72 * 60 * 60 * 1000;
 
+type PaymentDispatchRow = {
+  id: string;
+  sourceId: string | null;
+  sourceType: string | null;
+  channel: "EMAIL" | "SMS";
+  status: string;
+  metadata: unknown;
+  createdAt: Date;
+  scheduledFor: Date;
+  sentAt: Date | null;
+  failedAt: Date | null;
+  cancelledAt: Date | null;
+};
+
+type LatestChaseActivity = {
+  email?: PaymentDispatchRow;
+  sms?: PaymentDispatchRow;
+};
+
 function isPaymentMethod(value: string): value is PaymentMethod {
   return paymentMethodValues.has(value as PaymentMethod);
 }
@@ -74,6 +93,89 @@ function formatDueLabel(value: Date | null) {
   }
 
   return formatDateTimeLabel(value);
+}
+
+function getMetadataRecord(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  return metadata as Record<string, unknown>;
+}
+
+function getDispatchOccurredAt(dispatch: PaymentDispatchRow) {
+  return (
+    dispatch.sentAt ??
+    dispatch.cancelledAt ??
+    dispatch.failedAt ??
+    dispatch.scheduledFor ??
+    dispatch.createdAt
+  );
+}
+
+function getDispatchKindLabel(dispatch: PaymentDispatchRow) {
+  if (dispatch.sourceType === "FIXTURE_MATCH_FEE") {
+    return "initial notice";
+  }
+
+  const metadata = getMetadataRecord(dispatch.metadata);
+  const reminderOffsetHours = metadata?.reminderOffsetHours;
+
+  if (reminderOffsetHours === 24) {
+    return "24h reminder";
+  }
+
+  if (reminderOffsetHours === 72) {
+    return "72h reminder";
+  }
+
+  return "reminder";
+}
+
+function getDispatchStatusLabel(status: string) {
+  switch (status) {
+    case "QUEUED":
+      return "queued";
+    case "PROCESSING":
+      return "processing";
+    case "SENT":
+      return "sent";
+    case "FAILED":
+      return "failed";
+    case "CANCELLED":
+      return "cancelled";
+    case "SKIPPED":
+      return "skipped";
+    default:
+      return status.toLowerCase();
+  }
+}
+
+function getDispatchChannelLabel(channel: "EMAIL" | "SMS") {
+  return channel === "SMS" ? "SMS" : "Email";
+}
+
+function formatLastChaseNote(activity?: LatestChaseActivity) {
+  if (!activity?.email && !activity?.sms) {
+    return null;
+  }
+
+  const parts = [activity.email, activity.sms]
+    .filter((dispatch): dispatch is PaymentDispatchRow => Boolean(dispatch))
+    .map((dispatch) => {
+      const channel = getDispatchChannelLabel(dispatch.channel);
+      const kind = getDispatchKindLabel(dispatch);
+      const status = getDispatchStatusLabel(dispatch.status);
+      const when = formatDateTimeLabel(getDispatchOccurredAt(dispatch));
+
+      return `${channel} ${kind} ${status} ${when}`;
+    });
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return `Last system activity: ${parts.join(" • ")}`;
 }
 
 const methodOptions = [
@@ -254,6 +356,62 @@ export default async function AdminPaymentsPage({
     }),
   ]);
 
+  const chargeIds = charges.map((charge) => charge.id);
+  const paymentDispatches = chargeIds.length
+    ? await prisma.notificationDispatch.findMany({
+        where: {
+          sourceType: {
+            in: ["FIXTURE_MATCH_FEE", "FIXTURE_MATCH_FEE_REMINDER"],
+          },
+          sourceId: {
+            in: chargeIds,
+          },
+        },
+        select: {
+          id: true,
+          sourceId: true,
+          sourceType: true,
+          channel: true,
+          status: true,
+          metadata: true,
+          createdAt: true,
+          scheduledFor: true,
+          sentAt: true,
+          failedAt: true,
+          cancelledAt: true,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      })
+    : [];
+
+  const latestChaseByChargeId = new Map<string, LatestChaseActivity>();
+
+  for (const dispatch of paymentDispatches) {
+    if (!dispatch.sourceId) {
+      continue;
+    }
+
+    const current = latestChaseByChargeId.get(dispatch.sourceId) ?? {};
+    const occurredAt = getDispatchOccurredAt(dispatch as PaymentDispatchRow).getTime();
+
+    if (
+      dispatch.channel === "EMAIL" &&
+      (!current.email ||
+        occurredAt > getDispatchOccurredAt(current.email).getTime())
+    ) {
+      current.email = dispatch as PaymentDispatchRow;
+    }
+
+    if (
+      dispatch.channel === "SMS" &&
+      (!current.sms || occurredAt > getDispatchOccurredAt(current.sms).getTime())
+    ) {
+      current.sms = dispatch as PaymentDispatchRow;
+    }
+
+    latestChaseByChargeId.set(dispatch.sourceId, current);
+  }
+
   const nowMs = Date.now();
 
   const chargeRows = charges
@@ -271,10 +429,13 @@ export default async function AdminPaymentsPage({
         !!charge.dueDate &&
         charge.dueDate.getTime() + ADMIN_CHASE_THRESHOLD_MS <= nowMs;
 
+      const latestChase = latestChaseByChargeId.get(charge.id);
+
       return {
         charge,
         summary,
         needsAdminChase,
+        latestChaseNote: formatLastChaseNote(latestChase),
       };
     })
     .sort((a, b) => {
@@ -586,6 +747,12 @@ export default async function AdminPaymentsPage({
                         </span>
                       ) : null}
                     </div>
+
+                    {row.latestChaseNote ? (
+                      <div className="mt-3 text-xs text-white/50">
+                        {row.latestChaseNote}
+                      </div>
+                    ) : null}
 
                     <div className="mt-4">
                       <Link
