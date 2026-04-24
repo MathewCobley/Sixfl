@@ -12,11 +12,13 @@ import { requireAdmin } from "@/lib/requireAdmin";
 
 type TemplateCopySource = "email" | "notification";
 
+type TemplateDeleteSource = "email" | "notification";
+
 function slugifyTemplateKey(value: string) {
   return value
     .trim()
     .toLowerCase()
-    .replace(/['"]/g, "")
+    .replace(/['\"]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
@@ -124,4 +126,49 @@ export async function copyTemplateAction(formData: FormData) {
 
   revalidateTemplatePaths(created.id);
   redirect(`/admin/templates/${created.id}`);
+}
+
+export async function deleteTemplateAction(formData: FormData) {
+  await requireAdmin();
+
+  const source = String(formData.get("source") ?? "").trim() as TemplateDeleteSource;
+  const templateId = String(formData.get("templateId") ?? "").trim();
+
+  if (!templateId || (source !== "email" && source !== "notification")) {
+    redirect("/admin/templates?error=delete-failed");
+  }
+
+  if (source === "email") {
+    const template = await prisma.emailTemplate.findUnique({
+      where: { id: templateId },
+      select: { id: true },
+    });
+
+    if (!template) {
+      redirect("/admin/templates?error=delete-failed");
+    }
+
+    await prisma.emailTemplate.delete({
+      where: { id: templateId },
+    });
+
+    revalidateTemplatePaths(templateId);
+    redirect("/admin/templates?deleted=template");
+  }
+
+  const template = await prisma.notificationTemplate.findUnique({
+    where: { id: templateId },
+    select: { id: true },
+  });
+
+  if (!template) {
+    redirect("/admin/templates?error=delete-failed");
+  }
+
+  await prisma.notificationTemplate.delete({
+    where: { id: templateId },
+  });
+
+  revalidateTemplatePaths(templateId);
+  redirect("/admin/templates?deleted=template");
 }
