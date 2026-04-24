@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:notifications": "tsx prisma/seed-notifications.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed-notifications.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
