@@ -14,6 +14,7 @@ import { requireCaptain } from "@/lib/requireCaptain";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { linkQueuedEmailDispatchToThread } from "@/lib/messaging/service";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
+import { createSquadActivationToken } from "@/lib/squad/activationToken";
 
 const SQUAD_ACTIVATION_TEMPLATE_KEY = "squad-activation-email";
 
@@ -42,10 +43,9 @@ function getProspectRecipientSourceId(prospectId: string) {
   return `team-prospect:${prospectId}`;
 }
 
-function getJoinUrl(team: { joinSlug: string | null }) {
-  return team.joinSlug
-    ? `${getSiteUrl()}/teams/join/${team.joinSlug}`
-    : `${getSiteUrl()}/register-interest`;
+function getSquadActivationUrl(prospectId: string) {
+  const token = createSquadActivationToken(prospectId);
+  return `${getSiteUrl()}/squad/activate/${encodeURIComponent(token)}`;
 }
 
 function formatPreferredNight(value: string | null | undefined) {
@@ -159,7 +159,6 @@ export async function POST(
       id: true,
       name: true,
       logoUrl: true,
-      joinSlug: true,
       league: { select: { name: true, dayOfWeek: true, venueName: true } },
       prospects: {
         where: { id: prospectId, status: "ACTIVE_SQUAD" },
@@ -182,7 +181,7 @@ export async function POST(
 
   const contactName = getDisplayName(prospect);
   const firstName = prospect.firstName.trim() || "there";
-  const joinUrl = getJoinUrl(team);
+  const squadActivationUrl = getSquadActivationUrl(prospect.id);
 
   const recipient = await ensureProspectNotificationRecipient({
     teamId: teamid,
@@ -198,7 +197,8 @@ export async function POST(
     venueName: team.league?.venueName ?? "",
     preferredNight: formatPreferredNight(team.league?.dayOfWeek) ?? "",
     teamContextLine: getTeamContextLine(team),
-    teamJoinUrl: joinUrl,
+    squadActivationUrl,
+    teamJoinUrl: squadActivationUrl,
   };
 
   const dispatch = await queueNotificationFromTemplate({
@@ -231,7 +231,7 @@ export async function POST(
     sourceId: prospect.id,
     contactName,
     toEmail: email,
-    subject: dispatch.subject ?? `SIXFL squad activation`,
+    subject: dispatch.subject ?? "SIXFL squad activation",
     bodyText: dispatch.bodyText,
     bodyHtml: dispatch.bodyHtml,
     createdByUserId: user?.id ?? null,
