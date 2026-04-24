@@ -26,6 +26,7 @@ type CtaUrlKeyValue =
   | "paymentUrl"
   | "captainDashboardUrl"
   | "teamJoinUrl"
+  | "squadActivationUrl"
   | "fixtureUrl"
   | "fixturesUrl";
 
@@ -121,6 +122,7 @@ const TOKENS = [
   "{{fullName}}",
   "{{teamName}}",
   "{{teamContextLine}}",
+  "{{squadActivationUrl}}",
   "{{opponentName}}",
   "{{leagueName}}",
   "{{leagueDisplayName}}",
@@ -170,6 +172,11 @@ const CTA_OPTIONS: Array<{
     value: "teamJoinUrl",
     label: "Team join page",
     previewUrl: "https://www.sixfl.co.uk/teams/join/rossett-nomads",
+  },
+  {
+    value: "squadActivationUrl",
+    label: "Squad activation page",
+    previewUrl: "https://www.sixfl.co.uk/squad/activate/demo-token",
   },
   {
     value: "fixtureUrl",
@@ -226,6 +233,10 @@ function previewReplace(text: string) {
     .replaceAll(
       "{{teamContextLine}}",
       "You’ve been added to the Rossett Nomads squad that plays on a Tuesday night at Rossett Sports Centre.",
+    )
+    .replaceAll(
+      "{{squadActivationUrl}}",
+      "https://www.sixfl.co.uk/squad/activate/demo-token",
     )
     .replaceAll("{{opponentName}}", "Rossett Vets")
     .replaceAll("{{leagueName}}", "Rossett Mens Tuesday")
