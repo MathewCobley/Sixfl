@@ -42,6 +42,18 @@ type BulkSmsAction = (
   formData: FormData,
 ) => Promise<BulkSmsActionState>;
 
+type Props = {
+  templates: Template[];
+  selectedType: string | undefined;
+  selectedStatus: string | undefined;
+  selectedArea: string | undefined;
+  selectedNight: string | undefined;
+  recipientCount: number;
+  recipientPreview: RecipientPreviewItem[];
+  managedTeamOptions: ManagedTeamOption[];
+  action: BulkSmsAction;
+};
+
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
@@ -51,7 +63,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {pending ? "Sending bulk SMS..." : "Send bulk SMS"}
+      {pending ? "Sending..." : "Send SMS"}
     </button>
   );
 }
@@ -66,17 +78,7 @@ export default function BulkLeadSmsForm({
   recipientPreview,
   managedTeamOptions,
   action,
-}: {
-  templates: Template[];
-  selectedType?: string;
-  selectedStatus?: string;
-  selectedArea?: string;
-  selectedNight?: string;
-  recipientCount: number;
-  recipientPreview: RecipientPreviewItem[];
-  managedTeamOptions: ManagedTeamOption[];
-  action: BulkSmsAction;
-}) {
+}: Props) {
   const [state, formAction] = useActionState(action, {} as BulkSmsActionState);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [body, setBody] = useState("");
@@ -108,14 +110,6 @@ export default function BulkLeadSmsForm({
   }, [recipientPreview]);
 
   useEffect(() => {
-    if (state?.ok) {
-      setSelectedTemplate("");
-      setBody("");
-      setTargetTeamId("");
-    }
-  }, [state?.ok]);
-
-  useEffect(() => {
     if (!requiresManagedTeam) {
       setTargetTeamId("");
       return;
@@ -125,6 +119,14 @@ export default function BulkLeadSmsForm({
       setTargetTeamId(managedTeamOptions[0].value);
     }
   }, [managedTeamOptions, requiresManagedTeam, targetTeamId]);
+
+  useEffect(() => {
+    if (state?.ok) {
+      setSelectedTemplate("");
+      setBody("");
+      setTargetTeamId("");
+    }
+  }, [state?.ok]);
 
   function handleTemplateChange(templateId: string) {
     setSelectedTemplate(templateId);
@@ -137,12 +139,11 @@ export default function BulkLeadSmsForm({
     }
 
     setBody(template.body);
-
-    if (template.ctaUrlKey === "teamJoinUrl") {
-      setTargetTeamId((current) => current || managedTeamOptions[0]?.value || "");
-    } else {
-      setTargetTeamId("");
-    }
+    setTargetTeamId(
+      template.ctaUrlKey === "teamJoinUrl"
+        ? managedTeamOptions[0]?.value || ""
+        : "",
+    );
   }
 
   function toggleLead(id: string) {
@@ -160,20 +161,11 @@ export default function BulkLeadSmsForm({
   );
 
   return (
-    <form
-      action={formAction}
-      className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4"
-    >
-      <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
-        BULK SMS
-      </div>
+    <form action={formAction} className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">SMS</div>
 
       <input type="hidden" name="templateId" value={selectedTemplate} />
-      <input
-        type="hidden"
-        name="templateCtaUrlKey"
-        value={selectedTemplateRecord?.ctaUrlKey ?? ""}
-      />
+      <input type="hidden" name="templateCtaUrlKey" value={selectedTemplateRecord?.ctaUrlKey ?? ""} />
       <input type="hidden" name="targetTeamId" value={targetTeamId} />
       <input type="hidden" name="selectedType" value={selectedType ?? ""} />
       <input type="hidden" name="selectedStatus" value={selectedStatus ?? ""} />
@@ -208,7 +200,7 @@ export default function BulkLeadSmsForm({
       <textarea
         name="body"
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={(event) => setBody(event.target.value)}
         placeholder="Write your SMS..."
         rows={6}
         className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-500 focus:outline-none"
@@ -216,79 +208,50 @@ export default function BulkLeadSmsForm({
 
       <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-            Recipient preview
-          </div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Recipient preview</div>
           <div className="text-sm text-white/60">
-            <span className="font-semibold text-white">{selectedPreviewCount}</span>{" "}
-            selected from preview •{" "}
-            <span className="font-semibold text-white">{recipientCount}</span>{" "}
-            total matching leads
+            <span className="font-semibold text-white">{selectedPreviewCount}</span> selected from preview • <span className="font-semibold text-white">{recipientCount}</span> total matching leads
           </div>
         </div>
 
         {recipientPreview.length === 0 ? (
-          <div className="mt-3 text-sm text-white/60">
-            No recipients match the current filters.
-          </div>
+          <div className="mt-3 text-sm text-white/60">No recipients match the current filters.</div>
         ) : (
           <div className="mt-4 space-y-2">
             {recipientPreview.map((recipient) => {
               const checked = includedLeadIds.includes(recipient.id);
 
               return (
-                <label
-                  key={recipient.id}
-                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 hover:bg-white/[0.05]"
-                >
+                <label key={recipient.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 hover:bg-white/[0.05]">
                   <input
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleLead(recipient.id)}
                     className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500"
                   />
-
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-white">
-                      {recipient.contactName || "Unnamed lead"}
-                    </div>
-                    <div className="break-all text-sm text-white/55">
-                      {recipient.phone}
-                    </div>
+                    <div className="text-sm font-medium text-white">{recipient.contactName || "Unnamed lead"}</div>
+                    <div className="break-all text-sm text-white/55">{recipient.phone}</div>
                   </div>
                 </label>
               );
             })}
           </div>
         )}
-
-        {recipientCount > recipientPreview.length ? (
-          <div className="mt-3 text-xs text-white/45">
-            Only the first {recipientPreview.length} matching recipients are shown
-            here for manual exclusion preview.
-          </div>
-        ) : null}
       </div>
 
       <div className="text-sm text-white/60">
-        This will send to{" "}
-        <span className="font-semibold text-white">{selectedPreviewCount}</span>{" "}
-        selected lead{selectedPreviewCount === 1 ? "" : "s"} from the preview.
+        This will send to <span className="font-semibold text-white">{selectedPreviewCount}</span> selected lead{selectedPreviewCount === 1 ? "" : "s"} from the preview.
       </div>
 
       {state?.ok ? (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-          Bulk SMS sent. {state.sentCount ?? 0} sent
-          {typeof state.failedCount === "number"
-            ? `, ${state.failedCount} failed.`
-            : "."}
+          SMS queued. {state.sentCount ?? 0} queued{typeof state.failedCount === "number" ? `, ${state.failedCount} failed.` : "."}
         </div>
       ) : null}
 
       {!state?.ok && state?.error ? (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {state.error}
-        </div>
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{state.error}</div>
       ) : null}
 
       <SubmitButton disabled={!canSubmit} />
