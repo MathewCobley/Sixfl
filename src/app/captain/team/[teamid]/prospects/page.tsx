@@ -12,6 +12,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import FormListboxField from "@/components/ui/FormListboxField";
 import ProspectTemplateMessageForm from "@/components/captain/prospects/ProspectTemplateMessageForm";
 import {
@@ -142,12 +143,22 @@ function formatDateTime(value: Date | null | undefined) {
     return null;
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
+  return formatDateTimeInLondon(value, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(value);
+  });
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getDispatchStatusClasses(status: NotificationDispatchStatus) {
@@ -177,7 +188,10 @@ function getDispatchTimeLabel(input: {
 
 function countCompletedProfileFields(prospect: ProspectRecord) {
   const preferredNights = Array.isArray(prospect.preferredNights)
-    ? prospect.preferredNights.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    ? prospect.preferredNights.filter(
+        (item): item is string =>
+          typeof item === "string" && item.trim().length > 0,
+      )
     : [];
 
   const values = [
@@ -189,7 +203,9 @@ function countCompletedProfileFields(prospect: ProspectRecord) {
     prospect.availabilitySummary,
   ];
 
-  return values.filter((value) => typeof value === "string" && value.trim().length > 0).length;
+  return values.filter(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  ).length;
 }
 
 function hasCompletedProspectForm(prospect: ProspectRecord) {
@@ -203,7 +219,9 @@ function getCompletionBadgeClasses(isComplete: boolean) {
 }
 
 function getCompletionLabel(prospect: ProspectRecord) {
-  return hasCompletedProspectForm(prospect) ? "Form completed" : "Form not completed";
+  return hasCompletedProspectForm(prospect)
+    ? "Form completed"
+    : "Form not completed";
 }
 
 function getPromotionState(input: {
@@ -257,7 +275,8 @@ function getPromotionState(input: {
 
   return {
     canPromote: true,
-    reason: "Ready to promote. Save any detail changes first, then move them into the squad.",
+    reason:
+      "Ready to promote. Save any detail changes first, then move them into the squad.",
     tone: "ready",
     showSignupCta: false,
     signupLabel: "",
@@ -436,9 +455,15 @@ export default async function CaptainProspectsPage({
   const absoluteJoinUrl = team.joinSlug
     ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
     : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
-  const prospectsWithEmail = typedProspects.filter((prospect) => Boolean(prospect.email?.trim()));
-  const prospectsWithPhone = typedProspects.filter((prospect) => Boolean(prospect.phone?.trim()));
-  const completedProspectsCount = typedProspects.filter(hasCompletedProspectForm).length;
+  const prospectsWithEmail = typedProspects.filter((prospect) =>
+    Boolean(prospect.email?.trim()),
+  );
+  const prospectsWithPhone = typedProspects.filter((prospect) =>
+    Boolean(prospect.phone?.trim()),
+  );
+  const completedProspectsCount = typedProspects.filter(
+    hasCompletedProspectForm,
+  ).length;
 
   return (
     <div className="space-y-8">
@@ -564,7 +589,10 @@ export default async function CaptainProspectsPage({
             { name: "teamid", value: teamid },
             { name: "teamName", value: team.name },
             { name: "joinUrl", value: absoluteJoinUrl },
-            ...prospectsWithEmail.map((prospect) => ({ name: "prospectIds", value: prospect.id })),
+            ...prospectsWithEmail.map((prospect) => ({
+              name: "prospectIds",
+              value: prospect.id,
+            })),
           ]}
           emailTemplates={emailTemplates}
           submitLabel="Send bulk email"
@@ -580,7 +608,10 @@ export default async function CaptainProspectsPage({
             { name: "teamid", value: teamid },
             { name: "teamName", value: team.name },
             { name: "joinUrl", value: absoluteJoinUrl },
-            ...prospectsWithPhone.map((prospect) => ({ name: "prospectIds", value: prospect.id })),
+            ...prospectsWithPhone.map((prospect) => ({
+              name: "prospectIds",
+              value: prospect.id,
+            })),
           ]}
           smsTemplates={smsTemplates}
           submitLabel="Send bulk SMS"
@@ -741,7 +772,9 @@ export default async function CaptainProspectsPage({
               </div>
             ) : (
               typedProspects.map((prospect) => {
-                const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
+                const preferredNights = getPreferredNightsDisplay(
+                  prospect.preferredNights,
+                );
                 const prospectName = getProspectName({
                   firstName: prospect.firstName,
                   lastName: prospect.lastName,
@@ -758,7 +791,9 @@ export default async function CaptainProspectsPage({
                 const isFormComplete = hasCompletedProspectForm(prospect);
                 const completionScore = countCompletedProfileFields(prospect);
                 const savedEmail = prospect.email?.trim().toLowerCase() ?? "";
-                const linkedUser = savedEmail ? linkedUserByEmail.get(savedEmail) ?? null : null;
+                const linkedUser = savedEmail
+                  ? linkedUserByEmail.get(savedEmail) ?? null
+                  : null;
                 const promotionState = getPromotionState({
                   prospect,
                   hasLinkedUser: Boolean(linkedUser),
@@ -792,16 +827,20 @@ export default async function CaptainProspectsPage({
                         </div>
 
                         <div className="mt-2 text-sm text-white/65">
-                          {prospect.email || "No email"} {prospect.phone ? `· ${prospect.phone}` : ""}
+                          {prospect.email || "No email"}{" "}
+                          {prospect.phone ? `· ${prospect.phone}` : ""}
                         </div>
 
                         <div className="mt-1 text-xs text-white/45">
-                          {prospect.source || "No source"} · Added {prospect.createdAt.toLocaleString()}
+                          {prospect.source || "No source"} · Added{" "}
+                          {formatUkDateTime(prospect.createdAt)}
                         </div>
 
                         <div className="mt-2 text-xs text-white/50">
                           {completionScore}/6 profile fields completed
-                          {prospect.updatedAt ? ` · Updated ${prospect.updatedAt.toLocaleString()}` : ""}
+                          {prospect.updatedAt
+                            ? ` · Updated ${formatUkDateTime(prospect.updatedAt)}`
+                            : ""}
                         </div>
 
                         {prospect.ageBand ? (
@@ -841,9 +880,16 @@ export default async function CaptainProspectsPage({
                         ) : null}
                       </div>
 
-                      <form action={updateProspectStatusAction} className="flex flex-wrap items-center gap-3">
+                      <form
+                        action={updateProspectStatusAction}
+                        className="flex flex-wrap items-center gap-3"
+                      >
                         <input type="hidden" name="teamid" value={teamid} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
+                        <input
+                          type="hidden"
+                          name="prospectId"
+                          value={prospect.id}
+                        />
 
                         <div className="min-w-[220px]">
                           <FormListboxField
@@ -867,13 +913,22 @@ export default async function CaptainProspectsPage({
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-[1.15fr_0.95fr_auto]">
-                      <form action={updateProspectDetailsAction} className="space-y-4">
+                      <form
+                        action={updateProspectDetailsAction}
+                        className="space-y-4"
+                      >
                         <input type="hidden" name="teamid" value={teamid} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
+                        <input
+                          type="hidden"
+                          name="prospectId"
+                          value={prospect.id}
+                        />
 
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
-                            <label className="text-sm text-white/60">First name</label>
+                            <label className="text-sm text-white/60">
+                              First name
+                            </label>
                             <input
                               name="firstName"
                               type="text"
@@ -883,7 +938,9 @@ export default async function CaptainProspectsPage({
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-sm text-white/60">Last name</label>
+                            <label className="text-sm text-white/60">
+                              Last name
+                            </label>
                             <input
                               name="lastName"
                               type="text"
@@ -895,7 +952,9 @@ export default async function CaptainProspectsPage({
 
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
-                            <label className="text-sm text-white/60">Email</label>
+                            <label className="text-sm text-white/60">
+                              Email
+                            </label>
                             <input
                               name="email"
                               type="email"
@@ -906,7 +965,9 @@ export default async function CaptainProspectsPage({
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-sm text-white/60">Phone</label>
+                            <label className="text-sm text-white/60">
+                              Phone
+                            </label>
                             <input
                               name="phone"
                               type="text"
@@ -926,7 +987,11 @@ export default async function CaptainProspectsPage({
 
                       <form action={updateProspectNotesAction} className="space-y-3">
                         <input type="hidden" name="teamid" value={teamid} />
-                        <input type="hidden" name="prospectId" value={prospect.id} />
+                        <input
+                          type="hidden"
+                          name="prospectId"
+                          value={prospect.id}
+                        />
 
                         <textarea
                           name="notes"
@@ -955,7 +1020,11 @@ export default async function CaptainProspectsPage({
 
                         <form action={convertProspectToMemberAction}>
                           <input type="hidden" name="teamid" value={teamid} />
-                          <input type="hidden" name="prospectId" value={prospect.id} />
+                          <input
+                            type="hidden"
+                            name="prospectId"
+                            value={prospect.id}
+                          />
                           <button
                             type="submit"
                             disabled={!promotionState.canPromote}

@@ -14,6 +14,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import FormListboxField from "@/components/ui/FormListboxField";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { buildChargePaymentUrl } from "@/lib/payments/fixture-match-fees";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import {
   deleteTeamAction,
   regenerateClaimCodeAction,
@@ -57,6 +58,16 @@ function formatThreadStatus(status: string) {
 
 function formatMessageDirection(direction: string) {
   return direction === "INBOUND" ? "Reply received" : "Sent";
+}
+
+function formatUkDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getDispatchOriginLabel(metadata: unknown) {
@@ -1045,7 +1056,7 @@ export default async function AdminTeamPage({
 
                           <div className="mt-1 text-xs text-white/45">
                             Latest activity:{" "}
-                            {thread.latestMessageAt?.toLocaleString() || "—"}
+                            {thread.latestMessageAt ? formatUkDateTime(thread.latestMessageAt) : "—"}
                           </div>
                         </div>
                       </div>
@@ -1092,11 +1103,11 @@ export default async function AdminTeamPage({
                               <div>To: {message.toNumber || "—"}</div>
                               <div>
                                 Time:{" "}
-                                {(
+                                {formatUkDateTime(
                                   message.receivedAt ??
-                                  message.sentAt ??
-                                  message.createdAt
-                                ).toLocaleString()}
+                                    message.sentAt ??
+                                    message.createdAt,
+                                )}
                               </div>
                               <div>Status: {message.providerStatus || "—"}</div>
                             </div>
@@ -1274,12 +1285,12 @@ export default async function AdminTeamPage({
 
                         <div className="text-right text-xs text-white/45">
                           {item.kind === "legacyLeadEmail" ? (
-                            <div>Sent: {item.sentAt?.toLocaleString()}</div>
+                            <div>Sent: {item.sentAt ? formatUkDateTime(item.sentAt) : "—"}</div>
                           ) : (
                             <>
-                              <div>Queued: {item.queuedAt.toLocaleString()}</div>
+                              <div>Queued: {formatUkDateTime(item.queuedAt)}</div>
                               {item.sentAt ? (
-                                <div>Sent: {item.sentAt.toLocaleString()}</div>
+                                <div>Sent: {formatUkDateTime(item.sentAt)}</div>
                               ) : null}
                             </>
                           )}
@@ -1343,7 +1354,7 @@ export default async function AdminTeamPage({
                 <span>Captain linked</span>
                 <span className="text-right font-medium text-white">
                   {team.captainLinkedAt
-                    ? team.captainLinkedAt.toLocaleString()
+                    ? formatUkDateTime(team.captainLinkedAt)
                     : "—"}
                 </span>
               </div>
@@ -1359,7 +1370,7 @@ export default async function AdminTeamPage({
                 <span>Invite sent</span>
                 <span className="text-right font-medium text-white">
                   {team.captainInviteSentAt
-                    ? team.captainInviteSentAt.toLocaleString()
+                    ? formatUkDateTime(team.captainInviteSentAt)
                     : "—"}
                 </span>
               </div>
@@ -1375,7 +1386,7 @@ export default async function AdminTeamPage({
                 <span>Claimed at</span>
                 <span className="text-right font-medium text-white">
                   {team.captainClaimedAt
-                    ? team.captainClaimedAt.toLocaleString()
+                    ? formatUkDateTime(team.captainClaimedAt)
                     : "—"}
                 </span>
               </div>
