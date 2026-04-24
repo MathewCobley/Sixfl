@@ -37,18 +37,6 @@ type BulkSmsActionState = {
   failedCount?: number;
 };
 
-type Props = {
-  templates: Template[];
-  selectedType?: string | undefined;
-  selectedStatus?: string | undefined;
-  selectedArea?: string | undefined;
-  selectedNight?: string | undefined;
-  recipientCount: number;
-  recipientPreview: RecipientPreviewItem[];
-  managedTeamOptions: ManagedTeamOption[];
-  action: any;
-};
-
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
@@ -63,17 +51,29 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
   );
 }
 
-export default function BulkLeadSmsForm({
-  templates,
-  selectedType,
-  selectedStatus,
-  selectedArea,
-  selectedNight,
-  recipientCount,
-  recipientPreview,
-  managedTeamOptions,
-  action,
-}: Props) {
+export default function BulkLeadSmsForm(props: any) {
+  const {
+    templates = [],
+    selectedType,
+    selectedStatus,
+    selectedArea,
+    selectedNight,
+    recipientCount = 0,
+    recipientPreview = [],
+    managedTeamOptions = [],
+    action,
+  } = props as {
+    templates: Template[];
+    selectedType?: string | undefined;
+    selectedStatus?: string | undefined;
+    selectedArea?: string | undefined;
+    selectedNight?: string | undefined;
+    recipientCount: number;
+    recipientPreview: RecipientPreviewItem[];
+    managedTeamOptions: ManagedTeamOption[];
+    action: any;
+  };
+
   const [state, formAction] = useActionState(action, {} as BulkSmsActionState);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [body, setBody] = useState("");
