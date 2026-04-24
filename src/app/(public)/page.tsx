@@ -4,6 +4,12 @@
 
 import Link from "next/link";
 
+export const metadata = {
+  title: "SIXFL | 6-a-side football leagues, fixtures, tables and team sign-up",
+  description:
+    "Join SIXFL for properly organised 6-a-side football leagues with weekly fixtures, live league tables, results and simple sign-up for teams, players and referees.",
+};
+
 const launchAreas = ["York", "Leeds", "Harrogate", "Ripon"];
 
 const leagueTypes = ["MEN’S LEAGUES", "WOMEN’S LEAGUES", "YOUTH LEAGUES"];
@@ -197,6 +203,33 @@ export default function HomePage() {
                 desc={point.desc}
               />
             ))}
+          </div>
+        </section>
+
+        <section className="mt-16">
+          <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+            <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
+              <div className="lg:col-span-8">
+                <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
+                  FEATURED LEAGUE
+                </div>
+                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                  Play 6 a side football in Harrogate
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
+                  Looking for a Harrogate 6 a side football league? Join SIXFL at Rossett Sports Centre for weekly fixtures, live league tables, results and simple sign-up for teams and players.
+                </p>
+              </div>
+
+              <div className="lg:col-span-4">
+                <Link
+                  href="/leagues/rossett-mens-tuesday"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+                >
+                  VIEW THE HARROGATE LEAGUE
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
 
