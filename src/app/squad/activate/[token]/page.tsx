@@ -100,10 +100,10 @@ export default async function SquadActivationPage({ params }: PageProps) {
             This can happen if your account has already been linked or the squad place has been changed by the organiser.
           </p>
           <Link
-            href="/dashboard"
+            href={`/player/team/${prospect?.teamId ?? ""}`}
             className="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
           >
-            Go to dashboard
+            Go to team area
           </Link>
         </div>
       </div>
@@ -250,10 +250,10 @@ export default async function SquadActivationPage({ params }: PageProps) {
           Your SIXFL account has been connected to this squad using {sessionEmail}.
         </p>
         <Link
-          href="/dashboard"
+          href={`/player/team/${prospect.teamId}`}
           className="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
         >
-          Go to dashboard
+          Go to team area
         </Link>
       </div>
     </div>
