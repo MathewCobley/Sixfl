@@ -70,12 +70,9 @@ export default function BulkLeadSmsForm({
   recipientCount: number;
   recipientPreview: RecipientPreviewItem[];
   managedTeamOptions: ManagedTeamOption[];
-  action: (
-    prevState: BulkSmsActionState,
-    formData: FormData,
-  ) => Promise<BulkSmsActionState>;
+  action: any;
 }) {
-  const [state, formAction] = useActionState(action, {});
+  const [state, formAction] = useActionState(action, {} as BulkSmsActionState);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [body, setBody] = useState("");
   const [targetTeamId, setTargetTeamId] = useState("");
