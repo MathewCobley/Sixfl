@@ -378,16 +378,7 @@ export async function syncFixtureMatchFeeCharges(
 export async function queueFixtureMatchFeeEmails(
   input: QueueFixtureMatchFeeEmailsInput,
 ) {
-  if (!process.env.EMAIL_REPLY_DOMAIN?.trim()) {
-    return {
-      queued: 0,
-      skipped: input.charges.length,
-      requestQueued: 0,
-      requestSkipped: input.charges.length,
-      reminderQueued: 0,
-      reminderSkipped: 0,
-    };
-  }
+  const canQueueEmail = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
   const leagueDisplayName = getLeagueDisplayName({
     leagueName: input.leagueName,
@@ -414,13 +405,52 @@ export async function queueFixtureMatchFeeEmails(
     );
 
     if (shouldQueueInitialRequest) {
-      const requestDispatch = await queueNotificationFromTemplate({
-        templateKey: "match-fee-due-email",
+      if (canQueueEmail) {
+        const requestDispatch = await queueNotificationFromTemplate({
+          templateKey: "match-fee-due-email",
+          recipientId: recipient.id,
+          sourceType: "FIXTURE_MATCH_FEE",
+          sourceId: charge.id,
+          metadata: {
+            kind: "fixture_match_fee_request",
+            chargeId: charge.id,
+            fixtureId: input.fixtureId,
+            teamId: charge.teamId,
+          },
+          variables: {
+            firstName: snapshot.primaryContact.name ?? charge.teamName,
+            leagueName: input.leagueName,
+            leagueDisplayName,
+            fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+            kickoffLabel: formatKickoffLabel(input.kickoffAt),
+            amount: formatMoney(charge.amountPence),
+            paymentUrl: buildChargePaymentUrl(charge.paymentToken),
+          },
+          emailBranding: {
+            teamName: charge.teamName,
+            teamLogoUrl: charge.teamLogoUrl,
+            leagueName: leagueDisplayName,
+          },
+          paymentSummary: {
+            amount: formatMoney(charge.amountPence),
+            reason: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+          },
+        });
+
+        if (requestDispatch.status === NotificationDispatchStatus.QUEUED) {
+          requestQueued += 1;
+        } else {
+          requestSkipped += 1;
+        }
+      }
+
+      const requestSmsDispatch = await queueNotificationFromTemplate({
+        templateKey: "match-fee-due-sms",
         recipientId: recipient.id,
         sourceType: "FIXTURE_MATCH_FEE",
         sourceId: charge.id,
         metadata: {
-          kind: "fixture_match_fee_request",
+          kind: "fixture_match_fee_request_sms",
           chargeId: charge.id,
           fixtureId: input.fixtureId,
           teamId: charge.teamId,
@@ -434,18 +464,9 @@ export async function queueFixtureMatchFeeEmails(
           amount: formatMoney(charge.amountPence),
           paymentUrl: buildChargePaymentUrl(charge.paymentToken),
         },
-        emailBranding: {
-          teamName: charge.teamName,
-          teamLogoUrl: charge.teamLogoUrl,
-          leagueName: leagueDisplayName,
-        },
-        paymentSummary: {
-          amount: formatMoney(charge.amountPence),
-          reason: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
-        },
       });
 
-      if (requestDispatch.status === NotificationDispatchStatus.QUEUED) {
+      if (requestSmsDispatch.status === NotificationDispatchStatus.QUEUED) {
         requestQueued += 1;
       } else {
         requestSkipped += 1;
@@ -455,13 +476,53 @@ export async function queueFixtureMatchFeeEmails(
     const reminderSchedules = getFixtureMatchFeeReminderSchedules(input.kickoffAt);
 
     for (const reminder of reminderSchedules) {
-      const reminderDispatch = await queueNotificationFromTemplate({
-        templateKey: "match-fee-reminder-email",
+      if (canQueueEmail) {
+        const reminderDispatch = await queueNotificationFromTemplate({
+          templateKey: "match-fee-reminder-email",
+          recipientId: recipient.id,
+          sourceType: "FIXTURE_MATCH_FEE_REMINDER",
+          sourceId: charge.id,
+          metadata: {
+            kind: "fixture_match_fee_reminder",
+            chargeId: charge.id,
+            fixtureId: input.fixtureId,
+            teamId: charge.teamId,
+            reminderOffsetHours: reminder.hoursAfterKickoff,
+          },
+          scheduledFor: reminder.scheduledFor,
+          variables: {
+            firstName: snapshot.primaryContact.name ?? charge.teamName,
+            leagueName: input.leagueName,
+            leagueDisplayName,
+            fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+            kickoffLabel: formatKickoffLabel(input.kickoffAt),
+            paymentUrl: buildChargePaymentUrl(charge.paymentToken),
+            reminderIntro:
+              reminder.hoursAfterKickoff === 24
+                ? "Your match fee for the fixture below is still unpaid."
+                : "Your match fee for the fixture below is still unpaid after our earlier reminder.",
+          },
+          emailBranding: {
+            teamName: charge.teamName,
+            teamLogoUrl: charge.teamLogoUrl,
+            leagueName: leagueDisplayName,
+          },
+        });
+
+        if (reminderDispatch.status === NotificationDispatchStatus.QUEUED) {
+          reminderQueued += 1;
+        } else {
+          reminderSkipped += 1;
+        }
+      }
+
+      const reminderSmsDispatch = await queueNotificationFromTemplate({
+        templateKey: "match-fee-reminder-sms",
         recipientId: recipient.id,
         sourceType: "FIXTURE_MATCH_FEE_REMINDER",
         sourceId: charge.id,
         metadata: {
-          kind: "fixture_match_fee_reminder",
+          kind: "fixture_match_fee_reminder_sms",
           chargeId: charge.id,
           fixtureId: input.fixtureId,
           teamId: charge.teamId,
@@ -477,17 +538,12 @@ export async function queueFixtureMatchFeeEmails(
           paymentUrl: buildChargePaymentUrl(charge.paymentToken),
           reminderIntro:
             reminder.hoursAfterKickoff === 24
-              ? "Your match fee for the fixture below is still unpaid."
-              : "Your match fee for the fixture below is still unpaid after our earlier reminder.",
-        },
-        emailBranding: {
-          teamName: charge.teamName,
-          teamLogoUrl: charge.teamLogoUrl,
-          leagueName: leagueDisplayName,
+              ? "Your match fee is still unpaid."
+              : "Your match fee is still unpaid after our earlier reminder.",
         },
       });
 
-      if (reminderDispatch.status === NotificationDispatchStatus.QUEUED) {
+      if (reminderSmsDispatch.status === NotificationDispatchStatus.QUEUED) {
         reminderQueued += 1;
       } else {
         reminderSkipped += 1;
