@@ -120,6 +120,7 @@ const TOKENS = [
   "{{firstName}}",
   "{{fullName}}",
   "{{teamName}}",
+  "{{teamContextLine}}",
   "{{opponentName}}",
   "{{leagueName}}",
   "{{leagueDisplayName}}",
@@ -221,7 +222,11 @@ function previewReplace(text: string) {
   return text
     .replaceAll("{{firstName}}", "Jordan")
     .replaceAll("{{fullName}}", "Jordan Smith")
-    .replaceAll("{{teamName}}", "Harrogate Athletic")
+    .replaceAll("{{teamName}}", "Rossett Nomads")
+    .replaceAll(
+      "{{teamContextLine}}",
+      "You’ve been added to the Rossett Nomads squad that plays on a Tuesday night at Rossett Sports Centre.",
+    )
     .replaceAll("{{opponentName}}", "Rossett Vets")
     .replaceAll("{{leagueName}}", "Rossett Mens Tuesday")
     .replaceAll("{{leagueDisplayName}}", "Rossett Mens Tuesday — Spring 2026")
