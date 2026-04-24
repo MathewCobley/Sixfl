@@ -11,6 +11,7 @@ import {
 import AdminCard from "@/components/admin/AdminCard";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { copyTemplateAction } from "./actions";
 
 type SearchParams = Promise<{
   channel?: string;
@@ -32,6 +33,7 @@ type UnifiedTemplateRow = {
   isActive: boolean;
   updatedAt: Date;
   type: TemplateConsoleType;
+  source: "email" | "notification";
   kindLabel?: string;
 };
 
@@ -175,6 +177,7 @@ export default async function AdminTemplatesPage({
       isActive: template.isActive,
       updatedAt: template.updatedAt,
       type: "campaign" as const,
+      source: "email" as const,
       kindLabel: "Campaign",
     })),
     ...smsTemplates.map((template) => ({
@@ -190,6 +193,7 @@ export default async function AdminTemplatesPage({
       isActive: template.isActive,
       updatedAt: template.updatedAt,
       type: "campaign" as const,
+      source: "notification" as const,
       kindLabel: "Campaign",
     })),
   ]
@@ -223,6 +227,7 @@ export default async function AdminTemplatesPage({
       isActive: template.isActive,
       updatedAt: template.updatedAt,
       type: "system" as const,
+      source: "notification" as const,
       kindLabel:
         template.channel === NotificationChannel.SMS ? "System SMS" : "System email",
     }))
@@ -473,12 +478,25 @@ export default async function AdminTemplatesPage({
                         <td className="px-4 py-4 text-white/55">{formatDate(template.updatedAt)}</td>
 
                         <td className="px-4 py-4">
-                          <Link
-                            href={`/admin/templates/${template.id}`}
-                            className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white/85 transition hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300"
-                          >
-                            Edit
-                          </Link>
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/admin/templates/${template.id}`}
+                              className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white/85 transition hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300"
+                            >
+                              Edit
+                            </Link>
+
+                            <form action={copyTemplateAction}>
+                              <input type="hidden" name="source" value={template.source} />
+                              <input type="hidden" name="templateId" value={template.id} />
+                              <button
+                                type="submit"
+                                className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/30 hover:bg-emerald-500/15 hover:text-emerald-100"
+                              >
+                                Copy
+                              </button>
+                            </form>
+                          </div>
                         </td>
                       </tr>
                     );
