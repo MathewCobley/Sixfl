@@ -97,6 +97,8 @@ function getSavedMessage(saved?: string) {
       return "Squad member removed.";
     case "squad-email-sent":
       return "Squad email queued.";
+    case "activation-email-sent":
+      return "Activation email queued.";
     default:
       return saved ? "Saved." : null;
   }
@@ -424,6 +426,7 @@ export default async function CaptainSquadPage({
                   <div className="mt-4 space-y-3">
                     {pendingSquadProspects.map((prospect) => {
                       const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+                      const hasEmail = Boolean(prospect.email?.trim());
 
                       return (
                         <div
@@ -461,6 +464,20 @@ export default async function CaptainSquadPage({
                           </div>
 
                           <div className="flex flex-wrap gap-3">
+                            <form
+                              method="post"
+                              action={`/captain/team/${teamid}/squad/send-activation`}
+                            >
+                              <input type="hidden" name="prospectId" value={prospect.id} />
+                              <button
+                                type="submit"
+                                disabled={!hasEmail}
+                                className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
+                              >
+                                Send activation email
+                              </button>
+                            </form>
+
                             <Link
                               href={`/captain/team/${teamid}/prospects`}
                               className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
