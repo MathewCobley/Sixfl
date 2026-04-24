@@ -30,6 +30,10 @@ function getInitials(name: string) {
     .join("") || "S";
 }
 
+function getProspectFullName(input: { firstName: string; lastName: string | null }) {
+  return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
+}
+
 function buildLoginUrl(input: { token: string; email: string | null }) {
   const callbackUrl = `/squad/activate/${encodeURIComponent(input.token)}`;
   const params = new URLSearchParams({ callbackUrl });
@@ -114,7 +118,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
-    const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+    const fullName = getProspectFullName(prospect);
 
     return (
       <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
@@ -209,7 +213,21 @@ export default async function SquadActivationPage({ params }: PageProps) {
     redirect(buildLoginUrl({ token, email: normalizedProspectEmail }));
   }
 
+  const prospectFullName = getProspectFullName(prospect);
+
   await prisma.$transaction(async (tx) => {
+    const existingUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+
+    if (prospectFullName && !existingUser?.name?.trim()) {
+      await tx.user.update({
+        where: { id: userId },
+        data: { name: prospectFullName },
+      });
+    }
+
     const existingMembership = await tx.teamMember.findUnique({
       where: {
         userId_teamId: {
