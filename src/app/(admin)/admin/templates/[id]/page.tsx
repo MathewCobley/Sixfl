@@ -33,6 +33,7 @@ type EmailCtaUrlKey =
   | "paymentUrl"
   | "captainDashboardUrl"
   | "teamJoinUrl"
+  | "squadActivationUrl"
   | "fixtureUrl"
   | "fixturesUrl";
 
@@ -52,6 +53,7 @@ function getEmailCtaUrlKey(value: string | null): EmailCtaUrlKey | undefined {
     value === "paymentUrl" ||
     value === "captainDashboardUrl" ||
     value === "teamJoinUrl" ||
+    value === "squadActivationUrl" ||
     value === "fixtureUrl" ||
     value === "fixturesUrl"
   ) {
