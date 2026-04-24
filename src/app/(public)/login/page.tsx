@@ -5,7 +5,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 
@@ -14,7 +14,18 @@ function isSafeCallbackUrl(value: string | null) {
   return value.startsWith("/") && !value.startsWith("//");
 }
 
-export default function LoginPage() {
+function LoginFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl">
+        <h1 className="text-xl font-semibold">Login</h1>
+        <p className="mt-2 text-sm text-white/60">Loading login form...</p>
+      </div>
+    </div>
+  );
+}
+
+function LoginForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -146,5 +157,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
   );
 }
