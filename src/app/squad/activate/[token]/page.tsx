@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { verifySquadActivationToken } from "@/lib/squad/activationToken";
+import { upsertTeamMemberProfileFromProspect } from "@/lib/teamMemberProfiles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -72,6 +73,14 @@ export default async function SquadActivationPage({ params }: PageProps) {
       firstName: true,
       lastName: true,
       email: true,
+      phone: true,
+      ageBand: true,
+      preferredPositions: true,
+      experienceSummary: true,
+      availabilityLevel: true,
+      preferredNights: true,
+      availabilitySummary: true,
+      notes: true,
       status: true,
       teamId: true,
       team: {
@@ -228,25 +237,37 @@ export default async function SquadActivationPage({ params }: PageProps) {
       });
     }
 
-    const existingMembership = await tx.teamMember.findUnique({
+    const membership = await tx.teamMember.upsert({
       where: {
         userId_teamId: {
           userId,
           teamId: prospect.teamId,
         },
       },
+      update: {},
+      create: {
+        userId,
+        teamId: prospect.teamId,
+        role: "PLAYER",
+      },
       select: { id: true },
     });
 
-    if (!existingMembership) {
-      await tx.teamMember.create({
-        data: {
-          userId,
-          teamId: prospect.teamId,
-          role: "PLAYER",
-        },
-      });
-    }
+    await upsertTeamMemberProfileFromProspect({
+      client: tx,
+      teamMemberId: membership.id,
+      prospect: {
+        id: prospect.id,
+        phone: prospect.phone,
+        ageBand: prospect.ageBand,
+        preferredPositions: prospect.preferredPositions,
+        experienceSummary: prospect.experienceSummary,
+        availabilityLevel: prospect.availabilityLevel,
+        preferredNights: prospect.preferredNights,
+        availabilitySummary: prospect.availabilitySummary,
+        notes: prospect.notes,
+      },
+    });
 
     await tx.teamPlayerProspect.update({
       where: { id: prospect.id },
