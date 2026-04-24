@@ -143,7 +143,7 @@ Activate your squad place here:
 Thanks,
 SIXFL`,
     ctaLabel: "Activate your squad place",
-    ctaUrlKey: "teamJoinUrl",
+    ctaUrlKey: "squadActivationUrl",
   });
 
   await upsertTemplate({
