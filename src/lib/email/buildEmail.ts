@@ -132,7 +132,7 @@ function convertTextToHtml(text: string) {
       if (bulletLines.length > 0) {
         const normalHtml = nonBulletLines.length
           ? `
-            <p style="margin:0 0 12px 0;color:#111827;font-size:15px;line-height:1.75;">
+            <p style="margin:0 0 12px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
               ${escapeHtml(nonBulletLines.join("\n")).replace(/\n/g, "<br />")}
             </p>
           `.trim()
@@ -144,8 +144,9 @@ function convertTextToHtml(text: string) {
               margin:0 0 18px 0;
               padding-left:20px;
               color:#111827;
-              font-size:15px;
-              line-height:1.75;
+              font-size:16px;
+              line-height:1.65;
+              mso-line-height-rule:exactly;
             "
           >
             ${bulletLines
@@ -166,7 +167,7 @@ function convertTextToHtml(text: string) {
       const paragraphHtml = escapeHtml(paragraph).replace(/\n/g, "<br />");
 
       return `
-        <p style="margin:0 0 18px 0;color:#111827;font-size:15px;line-height:1.75;">
+        <p style="margin:0 0 18px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
           ${paragraphHtml}
         </p>
       `.trim();
@@ -193,10 +194,11 @@ function buildCtaHtml(cta?: SIXFLEmailCta) {
       cellpadding="0"
       cellspacing="0"
       border="0"
-      style="margin:8px 0 0 0;"
+      style="margin:8px 0 0 0;border-collapse:separate;"
     >
       <tr>
         <td
+          bgcolor="#1E5A43"
           style="
             border-radius:12px;
             background:#1E5A43;
@@ -206,6 +208,7 @@ function buildCtaHtml(cta?: SIXFLEmailCta) {
         >
           <a
             href="${escapeHtml(safeCta.url)}"
+            target="_blank"
             style="
               display:inline-block;
               background:#1E5A43;
@@ -214,9 +217,10 @@ function buildCtaHtml(cta?: SIXFLEmailCta) {
               padding:14px 22px;
               border-radius:12px;
               font-weight:700;
-              font-size:14px;
-              line-height:1;
+              font-size:15px;
+              line-height:1.1;
               letter-spacing:0.01em;
+              mso-padding-alt:0;
             "
           >
             ${escapeHtml(safeCta.label)}
@@ -252,6 +256,7 @@ function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
         cellspacing="0"
         border="0"
         width="100%"
+        style="border-collapse:collapse;"
       >
         <tr>
           ${
@@ -263,7 +268,7 @@ function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
                 alt="${escapeHtml(teamName || "Team logo")}"
                 width="48"
                 height="48"
-                style="display:block;width:48px;height:48px;object-fit:contain;border:0;"
+                style="display:block;width:48px;height:48px;object-fit:contain;border:0;outline:none;text-decoration:none;"
               />
             </td>
           `.trim()
@@ -388,6 +393,89 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
   `.trim();
 }
 
+function buildResponsiveEmailDocument(contentHtml: string) {
+  return `<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <title>SIXFL</title>
+    <style>
+      html,
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+
+      * {
+        -ms-text-size-adjust: 100%;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      table,
+      td {
+        mso-table-lspace: 0pt !important;
+        mso-table-rspace: 0pt !important;
+      }
+
+      table {
+        border-spacing: 0 !important;
+        border-collapse: collapse !important;
+        table-layout: fixed !important;
+        margin: 0 auto !important;
+      }
+
+      img {
+        -ms-interpolation-mode: bicubic;
+      }
+
+      a {
+        text-decoration: none;
+      }
+
+      @media screen and (max-width: 680px) {
+        .sixfl-email-outer {
+          padding: 14px 10px !important;
+        }
+
+        .sixfl-email-container {
+          width: 100% !important;
+          max-width: 100% !important;
+          border-radius: 16px !important;
+        }
+
+        .sixfl-email-logo-cell {
+          padding: 24px 22px 18px 22px !important;
+        }
+
+        .sixfl-email-content-cell {
+          padding: 0 22px 26px 22px !important;
+        }
+
+        .sixfl-email-footer-cell {
+          padding: 0 22px 26px 22px !important;
+        }
+
+        .sixfl-email-logo {
+          width: 150px !important;
+          max-width: 150px !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background:#f3f4f6;word-spacing:normal;">
+    <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+      SIXFL message
+    </div>
+    ${contentHtml}
+  </body>
+</html>`;
+}
+
 // ========================================
 // Public API
 // ========================================
@@ -413,58 +501,65 @@ export function buildSIXFLEmailHtml(input: {
   const paymentHtml = buildPaymentSummaryHtml(input.payment);
   const showPaymentProviderNote = Boolean(input.payment);
 
-  return `
-    <div style="background:#f3f4f6;padding:28px 12px;">
-      <table
-        role="presentation"
-        cellpadding="0"
-        cellspacing="0"
-        border="0"
-        width="100%"
-        style="
-          max-width:640px;
-          margin:0 auto;
-          background:#ffffff;
-          border:1px solid #e5e7eb;
-          border-radius:18px;
-          overflow:hidden;
-          font-family:Arial,sans-serif;
-        "
-      >
-        <tr>
-          <td style="padding:34px 32px 20px 32px;">
-            <img
-              src="${SIXFL_LOGO_URL}"
-              alt="SIXFL"
-              width="180"
-              style="display:block;width:180px;max-width:100%;height:auto;border:0;"
-            />
-          </td>
-        </tr>
+  const contentHtml = `
+    <center role="article" aria-roledescription="email" lang="en" style="width:100%;background:#f3f4f6;">
+      <div class="sixfl-email-outer" style="background:#f3f4f6;padding:28px 12px;width:100%;box-sizing:border-box;">
+        <table
+          role="presentation"
+          cellpadding="0"
+          cellspacing="0"
+          border="0"
+          width="100%"
+          class="sixfl-email-container"
+          style="
+            width:100%;
+            max-width:640px;
+            margin:0 auto;
+            background:#ffffff;
+            border:1px solid #e5e7eb;
+            border-radius:18px;
+            overflow:hidden;
+            font-family:Arial,Helvetica,sans-serif;
+          "
+        >
+          <tr>
+            <td class="sixfl-email-logo-cell" style="padding:34px 32px 20px 32px;">
+              <img
+                src="${SIXFL_LOGO_URL}"
+                alt="SIXFL"
+                width="180"
+                class="sixfl-email-logo"
+                style="display:block;width:180px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;"
+              />
+            </td>
+          </tr>
 
-        <tr>
-          <td style="padding:0 32px 30px 32px;">
-            ${brandingHtml}
-            ${paymentHtml}
-            ${bodyHtml}
-            ${
-              showPaymentProviderNote
-                ? `
-              <div style="margin-top:12px;color:#6b7280;font-size:12px;line-height:1.6;">
-                Secure payment powered by Stripe.
-              </div>
-            `.trim()
-                : ""
-            }
-          </td>
-        </tr>
+          <tr>
+            <td class="sixfl-email-content-cell" style="padding:0 32px 30px 32px;">
+              ${brandingHtml}
+              ${paymentHtml}
+              ${bodyHtml}
+              ${
+                showPaymentProviderNote
+                  ? `
+                <div style="margin-top:12px;color:#6b7280;font-size:12px;line-height:1.6;">
+                  Secure payment powered by Stripe.
+                </div>
+              `.trim()
+                  : ""
+              }
+            </td>
+          </tr>
 
-        <tr>
-          <td style="padding:0 32px 32px 32px;">
-            ${buildSIXFLFooterHtml()}
-          </td>
-        </tr>
-      </table>
-    </div>
+          <tr>
+            <td class="sixfl-email-footer-cell" style="padding:0 32px 32px 32px;">
+              ${buildSIXFLFooterHtml()}
+            </td>
+          </tr>
+        </table>
+      </div>
+    </center>
   `.trim();
+
+  return buildResponsiveEmailDocument(contentHtml);
 }
