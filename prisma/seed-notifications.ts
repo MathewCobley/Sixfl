@@ -123,6 +123,30 @@ If you did not request this email, you can ignore it.`,
   });
 
   await upsertTemplate({
+    key: "squad-activation-email",
+    name: "Squad activation email",
+    description: "Transactional email sent to pending squad players so they can activate their squad place.",
+    kind: NotificationTemplateKind.TRANSACTIONAL,
+    channel: NotificationChannel.EMAIL,
+    audience: NotificationAudience.PLAYER,
+    subject: "You’ve been added to the {{teamName}} squad",
+    body: `Hi {{firstName}},
+
+{{teamContextLine}}
+
+Please complete your squad signup using this email address so we can activate your player profile and keep you updated with fixtures, team messages and league information.
+
+Activate your squad place here:
+
+{{cta}}
+
+Thanks,
+SIXFL`,
+    ctaLabel: "Activate your squad place",
+    ctaUrlKey: "teamJoinUrl",
+  });
+
+  await upsertTemplate({
     key: "fixture-change-email",
     name: "Fixture change email",
     description: "Transactional email for a fixture change.",
