@@ -28,6 +28,7 @@ const ALLOWED_CTA_URL_KEYS = [
   "paymentUrl",
   "captainDashboardUrl",
   "teamJoinUrl",
+  "squadActivationUrl",
   "fixtureUrl",
   "fixturesUrl",
 ] as const;
