@@ -5,13 +5,33 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+
+function isSafeCallbackUrl(value: string | null) {
+  if (!value) return false;
+  return value.startsWith("/") && !value.startsWith("//");
+}
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const callbackUrlFromQuery = useMemo(() => {
+    const value = searchParams.get("callbackUrl");
+    return isSafeCallbackUrl(value) ? value! : "";
+  }, [searchParams]);
+
+  useEffect(() => {
+    const emailFromQuery = searchParams.get("email")?.trim() ?? "";
+
+    if (emailFromQuery) {
+      setEmail(emailFromQuery);
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,11 +55,13 @@ export default function LoginPage() {
       return;
     }
 
-    const callbackUrl = data.pendingCaptain
-      ? data.claimCode
-        ? `/claim?code=${encodeURIComponent(data.claimCode)}`
-        : "/claim"
-      : "/dashboard";
+    const callbackUrl = callbackUrlFromQuery
+      ? callbackUrlFromQuery
+      : data.pendingCaptain
+        ? data.claimCode
+          ? `/claim?code=${encodeURIComponent(data.claimCode)}`
+          : "/claim"
+        : "/dashboard";
 
     const result = await signIn("email", {
       email,
@@ -58,6 +80,14 @@ export default function LoginPage() {
 
     if (data.pendingCaptain) {
       nextUrl.searchParams.set("pendingCaptain", "1");
+
+      if (data.teamName) {
+        nextUrl.searchParams.set("teamName", data.teamName);
+      }
+    }
+
+    if (data.pendingSquadActivation) {
+      nextUrl.searchParams.set("pendingSquadActivation", "1");
 
       if (data.teamName) {
         nextUrl.searchParams.set("teamName", data.teamName);
@@ -98,7 +128,7 @@ export default function LoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="captain@email.com"
+            placeholder="player@email.com"
             className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-emerald-400"
           />
 
@@ -112,8 +142,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-4 text-xs text-white/50">
-          Registered SIXFL users can log in here. Pending captains can also use
-          their team email to get started and then claim their team.
+          Registered SIXFL users, pending captains and invited squad players can log in here using the email address connected to their invite.
         </p>
       </div>
     </div>
