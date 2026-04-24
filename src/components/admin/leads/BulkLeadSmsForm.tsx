@@ -6,6 +6,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { InterestType, LeadStatus, PreferredNight } from "@prisma/client";
 
 import TemplateSelect from "./TemplateSelect";
 
@@ -15,7 +16,7 @@ type Template = {
   label: string;
   body: string;
   description: string | null;
-  interestType: "TEAM" | "PLAYER" | "REFEREE" | null;
+  interestType: InterestType | null;
   ctaUrlKey?: string | null;
 };
 
@@ -63,18 +64,10 @@ export default function BulkLeadSmsForm({
   action,
 }: {
   templates: Template[];
-  selectedType?: "TEAM" | "PLAYER" | "REFEREE";
-  selectedStatus?: "NEW" | "CONTACTED" | "QUALIFIED" | "CLOSED";
+  selectedType?: InterestType;
+  selectedStatus?: LeadStatus;
   selectedArea?: string;
-  selectedNight?:
-    | "MONDAY"
-    | "TUESDAY"
-    | "WEDNESDAY"
-    | "THURSDAY"
-    | "FRIDAY"
-    | "SATURDAY"
-    | "SUNDAY"
-    | "ANY";
+  selectedNight?: PreferredNight;
   recipientCount: number;
   recipientPreview: RecipientPreviewItem[];
   managedTeamOptions: ManagedTeamOption[];
