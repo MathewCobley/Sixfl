@@ -9,13 +9,16 @@ import {
   NotificationTemplateKind,
 } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
+import DeleteTemplateButton from "@/components/admin/templates/DeleteTemplateButton";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { copyTemplateAction } from "./actions";
+import { copyTemplateAction, deleteTemplateAction } from "./actions";
 
 type SearchParams = Promise<{
   channel?: string;
   type?: string;
+  deleted?: string;
+  error?: string;
 }>;
 
 type TemplateConsoleType = "campaign" | "system";
@@ -130,7 +133,12 @@ export default async function AdminTemplatesPage({
 }) {
   await requireAdmin();
 
-  const { channel: channelParam, type: typeParam } = await searchParams;
+  const {
+    channel: channelParam,
+    type: typeParam,
+    deleted,
+    error,
+  } = await searchParams;
   const selectedType = isTemplateConsoleType(typeParam) ? typeParam : "campaign";
   const selectedChannel = isChannelFilter(channelParam) ? channelParam : undefined;
 
@@ -291,6 +299,17 @@ export default async function AdminTemplatesPage({
             </Link>
           </div>
         </div>
+
+        {(deleted === "template" || error === "delete-failed") && (
+          <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm">
+            {deleted === "template" ? (
+              <div className="text-emerald-300">Template deleted.</div>
+            ) : null}
+            {error === "delete-failed" ? (
+              <div className="text-red-300">Template could not be deleted.</div>
+            ) : null}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3">
           {[
@@ -495,6 +514,12 @@ export default async function AdminTemplatesPage({
                               >
                                 Copy
                               </button>
+                            </form>
+
+                            <form action={deleteTemplateAction}>
+                              <input type="hidden" name="source" value={template.source} />
+                              <input type="hidden" name="templateId" value={template.id} />
+                              <DeleteTemplateButton templateName={template.name} />
                             </form>
                           </div>
                         </td>
