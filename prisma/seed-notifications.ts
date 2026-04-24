@@ -194,6 +194,28 @@ Please make sure your team is ready for kickoff.
   });
 
   await upsertTemplate({
+    key: "fixture-confirmation-reminder-sms",
+    name: "Fixture confirmation reminder SMS",
+    description: "Automated SMS asking captains to confirm their upcoming fixture.",
+    kind: NotificationTemplateKind.TRANSACTIONAL,
+    channel: NotificationChannel.SMS,
+    audience: NotificationAudience.TEAM,
+    subject: null,
+    body: "SIXFL: Please confirm your fixture for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Confirm here: {{link}}",
+  });
+
+  await upsertTemplate({
+    key: "fixture-confirmation-reminder-urgent-sms",
+    name: "Fixture confirmation urgent SMS",
+    description: "Urgent automated SMS asking captains to confirm their fixture within 24 hours of kickoff.",
+    kind: NotificationTemplateKind.TRANSACTIONAL,
+    channel: NotificationChannel.SMS,
+    audience: NotificationAudience.TEAM,
+    subject: null,
+    body: "SIXFL URGENT: We still need fixture confirmation for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Please confirm now: {{link}}",
+  });
+
+  await upsertTemplate({
     key: "match-fee-due-email",
     name: "Match fee due email",
     description: "Automated email sent when a match fee charge is raised.",
