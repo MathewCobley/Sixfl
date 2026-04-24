@@ -36,6 +36,9 @@ const ALLOWED_CTA_URL_KEYS = [
   "paymentUrl",
   "captainDashboardUrl",
   "teamJoinUrl",
+  "squadActivationUrl",
+  "fixtureUrl",
+  "fixturesUrl",
 ] as const;
 
 type AllowedCtaUrlKey = (typeof ALLOWED_CTA_URL_KEYS)[number];
