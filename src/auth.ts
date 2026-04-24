@@ -37,6 +37,39 @@ function stripCtaPlaceholder(value: string) {
   return value.replace(/\{\{\s*cta\s*\}\}/gi, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+async function getPendingSquadActivationContext(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) return null;
+
+  const prospect = await prisma.teamPlayerProspect.findFirst({
+    where: {
+      email: normalizedEmail,
+      status: "ACTIVE_SQUAD",
+    },
+    select: {
+      id: true,
+      firstName: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  if (!prospect) return null;
+
+  return {
+    prospectId: prospect.id,
+    firstName: prospect.firstName,
+    teamId: prospect.team.id,
+    teamName: prospect.team.name,
+  };
+}
+
 async function buildLoginMagicLinkEmail(input: {
   email: string;
   url: string;
@@ -76,22 +109,8 @@ async function buildLoginMagicLinkEmail(input: {
   }
 
   const fallbackBody = input.pendingCaptain
-    ? `Hi
-
-Use the secure sign-in link below to access SIXFL.
-
-${input.url}
-
-It looks like your captain access still needs to be claimed for ${input.pendingCaptain.teamName}. Once you are signed in, complete your team claim here:
-
-${claimUrl}`
-    : `Hi
-
-Use the secure sign-in link below to access SIXFL.
-
-${input.url}
-
-If you did not request this email, you can ignore it.`;
+    ? `Hi\n\nUse the secure sign-in link below to access SIXFL.\n\n${input.url}\n\nIt looks like your captain access still needs to be claimed for ${input.pendingCaptain.teamName}. Once you are signed in, complete your team claim here:\n\n${claimUrl}`
+    : `Hi\n\nUse the secure sign-in link below to access SIXFL.\n\n${input.url}\n\nIf you did not request this email, you can ignore it.`;
 
   return {
     subject: "Your SIXFL sign-in link",
@@ -110,15 +129,21 @@ export const authOptions: NextAuthOptions = {
       async sendVerificationRequest({ identifier, url, provider }) {
         const email = identifier.toLowerCase().trim();
 
-        const [existingUser, pendingCaptain, captainLoginContext] = await Promise.all([
+        const [
+          existingUser,
+          pendingCaptain,
+          captainLoginContext,
+          pendingSquadActivation,
+        ] = await Promise.all([
           prisma.user.findUnique({
             where: { email },
           }),
           getPendingCaptainContext(email),
           getCaptainLoginContext(email),
+          getPendingSquadActivationContext(email),
         ]);
 
-        if (!existingUser && !pendingCaptain && !captainLoginContext) {
+        if (!existingUser && !pendingCaptain && !captainLoginContext && !pendingSquadActivation) {
           return;
         }
 
@@ -160,15 +185,21 @@ export const authOptions: NextAuthOptions = {
           return false;
         }
 
-        const [existingUser, pendingCaptain, captainLoginContext] = await Promise.all([
+        const [
+          existingUser,
+          pendingCaptain,
+          captainLoginContext,
+          pendingSquadActivation,
+        ] = await Promise.all([
           prisma.user.findUnique({
             where: { email },
           }),
           getPendingCaptainContext(email),
           getCaptainLoginContext(email),
+          getPendingSquadActivationContext(email),
         ]);
 
-        if (!existingUser && !pendingCaptain && !captainLoginContext) {
+        if (!existingUser && !pendingCaptain && !captainLoginContext && !pendingSquadActivation) {
           return false;
         }
       }
