@@ -14,7 +14,6 @@ import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
   addSquadMemberAction,
   removeSquadMemberAction,
-  sendSquadEmailAction,
   updateSquadMemberRoleAction,
 } from "./actions";
 
@@ -98,8 +97,6 @@ function getSavedMessage(saved?: string) {
       return "Squad role updated.";
     case "member-removed":
       return "Squad member removed.";
-    case "squad-email-sent":
-      return "Squad email queued.";
     case "activation-email-sent":
       return "Activation email queued.";
     default:
@@ -192,6 +189,17 @@ function DetailPill({ label, value }: { label: string; value: string | null | un
   );
 }
 
+function CommunicationButton({ href, label = "Comms" }: { href: string; label?: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+    >
+      {label}
+    </Link>
+  );
+}
+
 export default async function CaptainSquadPage({
   params,
   searchParams,
@@ -201,8 +209,8 @@ export default async function CaptainSquadPage({
 }) {
   const { teamid } = await params;
   const filters = await searchParams;
-
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
+  const canOpenAdminComms = access.isAdmin;
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
@@ -325,8 +333,6 @@ export default async function CaptainSquadPage({
   const managerCount = team.members.filter((member) => member.role === "MANAGER").length;
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
   const coachCount = team.members.filter((member) => member.role === "COACH").length;
-  const emailableMembers = team.members.filter((member) => Boolean(member.user.email?.trim()));
-
   const totalSquadCount = team.members.length + pendingSquadProspects.length;
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
@@ -343,7 +349,7 @@ export default async function CaptainSquadPage({
               Team squad
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Control who is attached to the team, assign roles, and keep your captain and organiser setup tidy.
+              Control who is attached to the team, assign roles, review player details, and manage activation status.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -369,17 +375,19 @@ export default async function CaptainSquadPage({
                 Back to overview
               </Link>
               <Link
-                href={`/captain/team/${teamid}/fixtures`}
-                className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-              >
-                Open fixtures
-              </Link>
-              <Link
                 href={`/captain/team/${teamid}/prospects`}
                 className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
               >
                 Open prospects
               </Link>
+              {canOpenAdminComms ? (
+                <Link
+                  href={`/admin/teams/${teamid}/communications`}
+                  className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                >
+                  Team communications
+                </Link>
+              ) : null}
             </div>
           </div>
 
@@ -537,6 +545,14 @@ export default async function CaptainSquadPage({
                       </button>
                     </form>
 
+                    {canOpenAdminComms && profile?.sourceProspectId ? (
+                      <CommunicationButton
+                        href={`/admin/teams/${teamid}/prospects/${profile.sourceProspectId}/communications`}
+                      />
+                    ) : canOpenAdminComms ? (
+                      <CommunicationButton href={`/admin/teams/${teamid}/communications`} label="Team comms" />
+                    ) : null}
+
                     <form action={removeSquadMemberAction}>
                       <input type="hidden" name="teamid" value={teamid} />
                       <input type="hidden" name="membershipId" value={member.id} />
@@ -641,6 +657,12 @@ export default async function CaptainSquadPage({
                               </button>
                             </form>
 
+                            {canOpenAdminComms ? (
+                              <CommunicationButton
+                                href={`/admin/teams/${teamid}/prospects/${prospect.id}/communications`}
+                              />
+                            ) : null}
+
                             <Link
                               href={`/captain/team/${teamid}/prospects`}
                               className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
@@ -661,102 +683,29 @@ export default async function CaptainSquadPage({
         <div className="space-y-6">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Squad communications
+              Communications
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Email selected squad members</h2>
+            <h2 className="mt-2 text-xl font-semibold text-white">Use the communications hub</h2>
             <p className="mt-2 text-sm text-white/60">
-              Pick specific linked squad members and queue one email per selected player. Squad SMS is not shown here yet because player mobile numbers are not stored on linked user accounts.
+              Squad emails and player outreach now live in Communications so the message history, replies and templates stay in one place.
             </p>
 
-            {team.members.length === 0 ? (
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-                Add squad members first before sending squad communications.
+            {canOpenAdminComms ? (
+              <div className="mt-5 space-y-3">
+                <Link
+                  href={`/admin/teams/${teamid}/communications`}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                >
+                  Open team communications
+                </Link>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
+                  Use the individual <span className="text-white/80">Comms</span> buttons beside players for one-to-one player/prospect messages.
+                </div>
               </div>
             ) : (
-              <form action={sendSquadEmailAction} className="mt-5 space-y-4">
-                <input type="hidden" name="teamid" value={teamid} />
-
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-white">Recipients</div>
-                      <div className="mt-1 text-xs text-white/45">
-                        {emailableMembers.length} member{emailableMembers.length === 1 ? "" : "s"} with email available
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {team.members.map((member) => {
-                      const hasEmail = Boolean(member.user.email?.trim());
-
-                      return (
-                        <label
-                          key={member.id}
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
-                            hasEmail
-                              ? "border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
-                              : "border-white/5 bg-white/[0.03] text-white/35"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            name="memberIds"
-                            value={member.id}
-                            defaultChecked={hasEmail}
-                            disabled={!hasEmail}
-                            className="h-4 w-4 rounded border-white/20 bg-transparent"
-                          />
-                          <span>{member.user.name || member.user.email || "Unnamed user"}</span>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                            hasEmail
-                              ? "bg-emerald-500/15 text-emerald-200"
-                              : "bg-white/10 text-white/45"
-                          }`}>
-                            {hasEmail ? "ready" : "no email"}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="squad-email-subject" className="text-sm text-white/60">
-                    Subject
-                  </label>
-                  <input
-                    id="squad-email-subject"
-                    name="subject"
-                    type="text"
-                    placeholder="Update for {{firstName}}"
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
-                  />
-                  <div className="text-xs text-white/45">
-                    Supported placeholders: {"{{firstName}}"}, {"{{fullName}}"}, {"{{teamName}}"}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="squad-email-body" className="text-sm text-white/60">
-                    Message
-                  </label>
-                  <textarea
-                    id="squad-email-body"
-                    name="body"
-                    rows={7}
-                    placeholder={"Hi {{firstName}},\n\nHere is an update from {{teamName}}.\n\nThanks,\nCaptain"}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-                >
-                  Queue squad email
-                </button>
-              </form>
+              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+                Messaging is managed from the central communications area.
+              </div>
             )}
           </section>
 
