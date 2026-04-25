@@ -216,8 +216,8 @@ model TeamMember {
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   fixtureAvailabilities FixtureAvailability[]
-fixtureSelections     FixtureSelection[]
-playerMatchFees       PlayerMatchFee[]
+  fixtureSelections     FixtureSelection[]
+  playerMatchFees       PlayerMatchFee[]
 
   createdAt DateTime @default(now())
 
@@ -590,7 +590,8 @@ model PaymentTransaction {
   @@index([chargeId])
   @@index([paidAt])
   @@index([method])
-}model PlayerMatchFee {
+}
+model PlayerMatchFee {
   id String @id @default(cuid())
 
   fixtureId String
@@ -620,13 +621,13 @@ model PaymentTransaction {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([fixtureId, teamMemberId])
+  @@unique([fixtureId, prospectId])
   @@index([fixtureId])
   @@index([teamId])
   @@index([teamMemberId])
   @@index([prospectId])
   @@index([status])
-  @@unique([fixtureId, teamMemberId])
-  @@unique([fixtureId, prospectId])
 }
 
 model InterestLead {
