@@ -97,12 +97,12 @@ function getSavedMessage(saved?: string) {
       return "Squad role updated.";
     case "member-removed":
       return "Squad member removed.";
-      case "activation-email-sent":
-        return "Activation email queued.";
-      case "activation-sms-sent":
-        return "Activation SMS queued.";
-      default:
-        return saved ? "Saved." : null;
+    case "activation-email-sent":
+      return "Activation email queued.";
+    case "activation-sms-sent":
+      return "Activation SMS queued.";
+    default:
+      return saved ? "Saved." : null;
   }
 }
 
@@ -148,7 +148,30 @@ function getActivationEmailStatusText(input: {
       return `Activation email queued ${formatUkDateTime(input.createdAt)}`;
   }
 }
-
+function getActivationSmsStatusText(input: {
+  status: NotificationDispatchStatus;
+  createdAt: Date;
+  scheduledFor: Date;
+  sentAt: Date | null;
+  failedAt: Date | null;
+}) {
+  switch (input.status) {
+    case "SENT":
+      return `SMS chase sent ${formatUkDateTime(input.sentAt ?? input.createdAt)}`;
+    case "QUEUED":
+      return `SMS chase queued ${formatUkDateTime(input.scheduledFor ?? input.createdAt)}`;
+    case "PROCESSING":
+      return `SMS chase is being processed (${formatUkDateTime(input.createdAt)})`;
+    case "FAILED":
+      return `SMS chase failed ${formatUkDateTime(input.failedAt ?? input.createdAt)}`;
+    case "SKIPPED":
+      return `SMS chase skipped ${formatUkDateTime(input.createdAt)}`;
+    case "CANCELLED":
+      return `SMS chase cancelled ${formatUkDateTime(input.createdAt)}`;
+    default:
+      return `SMS chase queued ${formatUkDateTime(input.createdAt)}`;
+  }
+}
 function getActivationEmailStatusClasses(status?: NotificationDispatchStatus) {
   if (status === "FAILED" || status === "SKIPPED" || status === "CANCELLED") {
     return "border-red-400/20 bg-red-500/10 text-red-100";
@@ -319,7 +342,32 @@ export default async function CaptainSquadPage({
         },
       })
     : [];
-
+    const latestActivationSmsDispatches = pendingSquadProspects.length
+    ? await prisma.notificationDispatch.findMany({
+        where: {
+          sourceType: "TEAM_PLAYER_PROSPECT",
+          sourceId: {
+            in: pendingSquadProspects.map((prospect) => prospect.id),
+          },
+          template: {
+            is: {
+              key: "squad-activation-sms",
+            },
+          },
+        },
+        select: {
+          sourceId: true,
+          status: true,
+          createdAt: true,
+          scheduledFor: true,
+          sentAt: true,
+          failedAt: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      })
+    : [];
   const activationDispatchByProspectId = new Map<
     string,
     (typeof latestActivationDispatches)[number]
@@ -330,7 +378,16 @@ export default async function CaptainSquadPage({
       activationDispatchByProspectId.set(dispatch.sourceId, dispatch);
     }
   }
+  const activationSmsDispatchByProspectId = new Map<
+  string,
+  (typeof latestActivationSmsDispatches)[number]
+>();
 
+for (const dispatch of latestActivationSmsDispatches) {
+  if (dispatch.sourceId && !activationSmsDispatchByProspectId.has(dispatch.sourceId)) {
+    activationSmsDispatchByProspectId.set(dispatch.sourceId, dispatch);
+  }
+}
   const captainCount = team.members.filter((member) => member.role === "CAPTAIN").length;
   const managerCount = team.members.filter((member) => member.role === "MANAGER").length;
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
@@ -595,8 +652,8 @@ export default async function CaptainSquadPage({
                       const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
                       const hasEmail = Boolean(prospect.email?.trim());
                       const latestActivationDispatch = activationDispatchByProspectId.get(prospect.id);
+                      const latestActivationSmsDispatch = activationSmsDispatchByProspectId.get(prospect.id);
                       const hasActivationEmailBeenQueued = Boolean(latestActivationDispatch);
-
                       return (
                         <div
                           key={prospect.id}
@@ -640,6 +697,16 @@ export default async function CaptainSquadPage({
                                   No activation account email sent yet.
                                 </div>
                               )}
+
+                              {latestActivationSmsDispatch ? (
+                                <div
+                                  className={`mt-2 rounded-xl border px-3 py-2 text-xs font-medium ${getActivationEmailStatusClasses(
+                                    latestActivationSmsDispatch.status,
+                                  )}`}
+                                >
+                                  {getActivationSmsStatusText(latestActivationSmsDispatch)}
+                                </div>
+                              ) : null}
 
                               {prospect.notes ? (
                                 <div className="mt-2 text-sm text-white/55">{prospect.notes}</div>

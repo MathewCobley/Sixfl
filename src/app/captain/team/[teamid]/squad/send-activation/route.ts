@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/captain/team/[teamid]/squad/send-activation/route.ts
+// File: src/app/captain/team/[teamid]/squad/send-activation-sms/route.ts
 // ========================================
 
 import { revalidatePath } from "next/cache";
@@ -10,13 +10,13 @@ import {
 } from "@prisma/client";
 
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
-import { linkQueuedEmailDispatchToThread } from "@/lib/messaging/service";
+import { linkDispatchToThread } from "@/lib/messaging/service";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { createSquadActivationToken } from "@/lib/squad/activationToken";
 
-const SQUAD_ACTIVATION_TEMPLATE_KEY = "squad-activation-email";
+const SQUAD_ACTIVATION_SMS_TEMPLATE_KEY = "squad-activation-sms";
 
 function getSiteUrl() {
   const fallback = "https://www.sixfl.co.uk";
@@ -70,36 +70,10 @@ function getSquadActivationUrl(prospectId: string) {
   return `${getSiteUrl()}/squad/activate/${encodeURIComponent(token)}`;
 }
 
-function formatPreferredNight(value: string | null | undefined) {
-  if (!value || value === "ANY") return null;
-  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
-}
-
-function getTeamContextLine(team: {
-  name: string;
-  league: { dayOfWeek: string | null; venueName: string | null } | null;
-}) {
-  const night = formatPreferredNight(team.league?.dayOfWeek);
-  const venueName = team.league?.venueName?.trim();
-
-  if (night && venueName) {
-    return `You’ve been added to the ${team.name} squad that plays on a ${night} night at ${venueName}.`;
-  }
-
-  if (night) {
-    return `You’ve been added to the ${team.name} squad that plays on a ${night} night.`;
-  }
-
-  if (venueName) {
-    return `You’ve been added to the ${team.name} squad at ${venueName}.`;
-  }
-
-  return `You’ve been added to the ${team.name} squad on SIXFL.`;
-}
-
 async function ensureProspectNotificationRecipient(input: {
   teamId: string;
   teamName: string;
+  leagueId: string | null;
   prospect: {
     id: string;
     firstName: string;
@@ -132,6 +106,7 @@ async function ensureProspectNotificationRecipient(input: {
       metadata: {
         teamId: input.teamId,
         teamName: input.teamName,
+        leagueId: input.leagueId,
         prospectId: input.prospect.id,
         contactName: displayName || null,
       },
@@ -151,6 +126,7 @@ async function ensureProspectNotificationRecipient(input: {
       metadata: {
         teamId: input.teamId,
         teamName: input.teamName,
+        leagueId: input.leagueId,
         prospectId: input.prospect.id,
         contactName: displayName || null,
       },
@@ -160,7 +136,7 @@ async function ensureProspectNotificationRecipient(input: {
 
   await prisma.notificationPreference.upsert({
     where: { recipientId: recipient.id },
-    update: { emailEnabled: true, smsEnabled: true, urgentSmsEnabled: true },
+    update: { smsEnabled: true, urgentSmsEnabled: true },
     create: {
       recipientId: recipient.id,
       emailEnabled: true,
@@ -186,7 +162,7 @@ export async function POST(
       getSquadRedirectUrl(
         request,
         teamid,
-        "?error=Missing%20prospect%20details.#pending-activation",
+        "?error=Missing%20prospect%20details#pending-activation",
       ),
     );
   }
@@ -196,8 +172,7 @@ export async function POST(
     select: {
       id: true,
       name: true,
-      logoUrl: true,
-      league: { select: { name: true, dayOfWeek: true, venueName: true } },
+      league: { select: { id: true, name: true } },
       prospects: {
         where: { id: prospectId, status: "ACTIVE_SQUAD" },
         select: {
@@ -218,19 +193,17 @@ export async function POST(
       getSquadRedirectUrl(
         request,
         teamid,
-        "?error=Pending%20squad%20player%20not%20found.#pending-activation",
+        "?error=Pending%20squad%20player%20not%20found#pending-activation",
       ),
     );
   }
 
-  const email = prospect.email?.trim().toLowerCase();
-
-  if (!email) {
+  if (!prospect.phone?.trim()) {
     return NextResponse.redirect(
       getSquadRedirectUrl(
         request,
         teamid,
-        "?error=This%20player%20does%20not%20have%20an%20email%20address.#pending-activation",
+        "?error=This%20player%20does%20not%20have%20a%20phone%20number#pending-activation",
       ),
     );
   }
@@ -242,6 +215,7 @@ export async function POST(
   const recipient = await ensureProspectNotificationRecipient({
     teamId: teamid,
     teamName: team.name,
+    leagueId: team.league?.id ?? null,
     prospect,
   });
 
@@ -250,46 +224,38 @@ export async function POST(
     fullName: contactName || firstName,
     teamName: team.name,
     leagueName: team.league?.name ?? "",
-    venueName: team.league?.venueName ?? "",
-    preferredNight: formatPreferredNight(team.league?.dayOfWeek) ?? "",
-    teamContextLine: getTeamContextLine(team),
     squadActivationUrl,
     teamJoinUrl: squadActivationUrl,
   };
 
   const dispatch = await queueNotificationFromTemplate({
-    templateKey: SQUAD_ACTIVATION_TEMPLATE_KEY,
+    templateKey: SQUAD_ACTIVATION_SMS_TEMPLATE_KEY,
     recipientId: recipient.id,
     variables,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
-    emailBranding: {
-      teamName: team.name,
-      teamLogoUrl: team.logoUrl,
-      leagueName: team.league?.name ?? null,
-    },
     metadata: {
-      origin: "captain_squad_activation_email",
-      originLabel: "Activation email sent from captain squad page",
+      origin: "captain_squad_activation_sms",
+      originLabel: "Activation SMS chase sent from captain squad page",
       teamId: teamid,
       prospectId: prospect.id,
       contactName,
-      templateKey: SQUAD_ACTIVATION_TEMPLATE_KEY,
+      templateKey: SQUAD_ACTIVATION_SMS_TEMPLATE_KEY,
     },
     createdByUserId: user?.id ?? null,
   });
 
-  await linkQueuedEmailDispatchToThread({
-    notificationDispatchId: dispatch.id,
+  await linkDispatchToThread({
+    dispatchId: dispatch.id,
     recipientId: recipient.id,
     teamId: teamid,
+    leagueId: team.league?.id ?? null,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
     contactName,
-    toEmail: email,
-    subject: dispatch.subject ?? "SIXFL squad activation",
-    bodyText: dispatch.bodyText,
-    bodyHtml: dispatch.bodyHtml,
+    phone: prospect.phone,
+    body: dispatch.bodyText,
+    providerStatus: dispatch.status.toLowerCase(),
     createdByUserId: user?.id ?? null,
   });
 
@@ -306,7 +272,7 @@ export async function POST(
     getSquadRedirectUrl(
       request,
       teamid,
-      "?saved=activation-email-sent#pending-activation",
+      "?saved=activation-sms-sent#pending-activation",
     ),
   );
 }
