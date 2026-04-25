@@ -571,7 +571,7 @@ export default async function CaptainSquadPage({
             })}
 
             {pendingSquadProspects.length > 0 ? (
-              <div className="px-6 py-5">
+              <div id="pending-activation" className="scroll-mt-8 px-6 py-5">
                 <div className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
