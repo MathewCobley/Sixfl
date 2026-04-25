@@ -10,6 +10,7 @@ import {
   getAdminInboxThreads,
   getMessageThreadById,
 } from "@/lib/messaging/service";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
 
@@ -30,6 +31,18 @@ function getLatestInboundTitle(summary: Awaited<ReturnType<typeof getAdminInboxS
     summary.latestInbound?.thread.contactPhone ||
     "No replies yet"
   );
+}
+
+function formatRoleLabel(value: string) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function getProspectFullName(input: { firstName: string; lastName: string | null }) {
+  return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
 export default async function AdminMessagesPage({
@@ -97,6 +110,34 @@ export default async function AdminMessagesPage({
                 season: true,
               },
             },
+            members: {
+              orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+              select: {
+                id: true,
+                role: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            prospects: {
+              where: {
+                status: "ACTIVE_SQUAD",
+              },
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                status: true,
+              },
+            },
           },
         })
       : null,
@@ -115,7 +156,7 @@ export default async function AdminMessagesPage({
       where: {
         isActive: true,
         audience: {
-          in: ["TEAM", "GENERAL"],
+          in: ["TEAM", "GENERAL", "PLAYER"],
         },
       },
       orderBy: [{ name: "asc" }],
@@ -135,7 +176,7 @@ export default async function AdminMessagesPage({
         isActive: true,
         channel: "SMS",
         audience: {
-          in: ["TEAM", "GENERAL"],
+          in: ["TEAM", "GENERAL", "PLAYER"],
         },
       },
       orderBy: [{ name: "asc" }],
@@ -148,6 +189,59 @@ export default async function AdminMessagesPage({
       },
     }),
   ]);
+
+  const composeTeamMemberProfiles = composeTeam?.members.length
+    ? await getTeamMemberProfilesByTeamMemberIds(composeTeam.members.map((member) => member.id))
+    : new Map();
+
+  const linkedMemberEmails = new Set(
+    (composeTeam?.members ?? [])
+      .map((member) => member.user.email?.trim().toLowerCase() ?? null)
+      .filter((email): email is string => Boolean(email)),
+  );
+
+  const linkedSourceProspectIds = new Set(
+    Array.from(composeTeamMemberProfiles.values())
+      .map((profile) => profile.sourceProspectId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const playerRecipients = composeTeam
+    ? [
+        ...composeTeam.members.map((member) => {
+          const profile = composeTeamMemberProfiles.get(member.id) ?? null;
+          const label = member.user.name?.trim() || member.user.email?.trim() || "Unnamed player";
+
+          return {
+            id: member.id,
+            type: "teamMember" as const,
+            label,
+            email: member.user.email?.trim() || null,
+            phone: profile?.phone ?? null,
+            roleLabel: formatRoleLabel(member.role),
+            statusLabel: "Linked account",
+          };
+        }),
+        ...composeTeam.prospects
+          .filter((prospect) => {
+            const email = prospect.email?.trim().toLowerCase() ?? null;
+
+            if (linkedSourceProspectIds.has(prospect.id)) return false;
+            if (email && linkedMemberEmails.has(email)) return false;
+
+            return true;
+          })
+          .map((prospect) => ({
+            id: prospect.id,
+            type: "prospect" as const,
+            label: getProspectFullName(prospect) || prospect.firstName,
+            email: prospect.email?.trim() || null,
+            phone: prospect.phone?.trim() || null,
+            roleLabel: "Prospect",
+            statusLabel: prospect.status,
+          })),
+      ]
+    : [];
 
   const composeThread =
     !selectedThreadId && composeTeamThread?.id
@@ -167,6 +261,21 @@ export default async function AdminMessagesPage({
         include: {
           messages: {
             orderBy: [{ createdAt: "asc" }],
+            include: {
+              dispatch: {
+                select: {
+                  id: true,
+                  metadata: true,
+                  template: {
+                    select: {
+                      id: true,
+                      name: true,
+                      key: true,
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
@@ -357,6 +466,7 @@ export default async function AdminMessagesPage({
                 captainDashboardUrl={claimLink}
                 emailTemplates={resolvedEmailTemplates}
                 smsTemplates={smsTemplates}
+                playerRecipients={playerRecipients}
               />
             </section>
 
@@ -486,6 +596,19 @@ export default async function AdminMessagesPage({
                       receivedAt: message.receivedAt?.toISOString() ?? null,
                       readAt: message.readAt?.toISOString() ?? null,
                       createdAt: message.createdAt.toISOString(),
+                      dispatch: message.dispatch
+                        ? {
+                            id: message.dispatch.id,
+                            template: message.dispatch.template
+                              ? {
+                                  id: message.dispatch.template.id,
+                                  name: message.dispatch.template.name,
+                                  key: message.dispatch.template.key,
+                                }
+                              : null,
+                            metadata: message.dispatch.metadata,
+                          }
+                        : null,
                     })),
                   }
                 : null
