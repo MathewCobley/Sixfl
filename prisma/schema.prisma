@@ -183,6 +183,7 @@ model Team {
   resultDisputes       ResultDispute[]
   paymentCharges       PaymentCharge[]
   paymentTransactions  PaymentTransaction[]
+  playerMatchFees      PlayerMatchFee[]
   fixtureConfirmations FixtureCaptainConfirmation[]
 
   convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
@@ -215,7 +216,8 @@ model TeamMember {
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   fixtureAvailabilities FixtureAvailability[]
-  fixtureSelections     FixtureSelection[]
+fixtureSelections     FixtureSelection[]
+playerMatchFees       PlayerMatchFee[]
 
   createdAt DateTime @default(now())
 
@@ -249,6 +251,8 @@ model TeamPlayerProspect {
   updatedAt DateTime @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  playerMatchFees PlayerMatchFee[]
 
   @@index([teamId, status])
   @@index([email])
@@ -304,6 +308,7 @@ model Fixture {
   captainConfirmations FixtureCaptainConfirmation[]
   availabilities       FixtureAvailability[]
   selections           FixtureSelection[]
+  playerMatchFees      PlayerMatchFee[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -506,6 +511,13 @@ enum PaymentChargeStatus {
   VOID
 }
 
+enum PlayerMatchFeeStatus {
+  OPEN
+  PAID
+  WAIVED
+  CANCELLED
+}
+
 enum PaymentMethod {
   BANK_TRANSFER
   STRIPE
@@ -578,6 +590,43 @@ model PaymentTransaction {
   @@index([chargeId])
   @@index([paidAt])
   @@index([method])
+}model PlayerMatchFee {
+  id String @id @default(cuid())
+
+  fixtureId String
+  teamId    String
+
+  teamMemberId String?
+  prospectId   String?
+
+  amountPence Int
+  status      PlayerMatchFeeStatus @default(OPEN)
+
+  paymentUrl   String?
+  paymentToken String? @unique
+
+  paidAt       DateTime?
+  waivedAt     DateTime?
+  cancelledAt  DateTime?
+  lastChasedAt DateTime?
+
+  note String?
+
+  fixture    Fixture             @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  team       Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamMember TeamMember?         @relation(fields: [teamMemberId], references: [id], onDelete: SetNull)
+  prospect   TeamPlayerProspect? @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fixtureId])
+  @@index([teamId])
+  @@index([teamMemberId])
+  @@index([prospectId])
+  @@index([status])
+  @@unique([fixtureId, teamMemberId])
+  @@unique([fixtureId, prospectId])
 }
 
 model InterestLead {
