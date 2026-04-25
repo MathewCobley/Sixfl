@@ -27,6 +27,16 @@ type SmsTemplateOption = {
   description: string | null;
 };
 
+type PlayerRecipientOption = {
+  id: string;
+  type: "teamMember" | "prospect";
+  label: string;
+  email: string | null;
+  phone: string | null;
+  roleLabel?: string | null;
+  statusLabel?: string | null;
+};
+
 type Props = {
   teamId: string;
   fromPath: string;
@@ -40,12 +50,27 @@ type Props = {
   captainDashboardUrl?: string | null;
   emailTemplates: EmailTemplateOption[];
   smsTemplates: SmsTemplateOption[];
+  playerRecipients?: PlayerRecipientOption[];
 };
 
 function getFirstName(value?: string | null) {
   const trimmed = value?.trim();
   if (!trimmed) return "";
   return trimmed.split(/\s+/)[0] ?? "";
+}
+
+function getRecipientValue(input: { type: "team" | "teamMember" | "prospect"; id?: string }) {
+  return input.type === "team" ? "team:" : `${input.type}:${input.id ?? ""}`;
+}
+
+function parseRecipientValue(value: string) {
+  const [type, id] = value.split(":");
+
+  if (type === "teamMember" || type === "prospect") {
+    return { type, id: id || "" } as const;
+  }
+
+  return { type: "team", id: "" } as const;
 }
 
 function resolveText(
@@ -83,24 +108,70 @@ export default function TeamCommunicationsComposer({
   captainDashboardUrl,
   emailTemplates,
   smsTemplates,
+  playerRecipients = [],
 }: Props) {
+  const [selectedRecipientValue, setSelectedRecipientValue] = useState(getRecipientValue({ type: "team" }));
   const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState("");
   const [smsBody, setSmsBody] = useState("");
 
+  const selectedRecipient = useMemo(() => {
+    const parsed = parseRecipientValue(selectedRecipientValue);
+
+    if (parsed.type === "team") {
+      return {
+        id: "",
+        type: "team" as const,
+        label: `${teamName} team contact`,
+        email: toEmail,
+        phone: toPhone,
+        roleLabel: "Team contact",
+        statusLabel: null,
+      };
+    }
+
+    return (
+      playerRecipients.find(
+        (recipient) => recipient.type === parsed.type && recipient.id === parsed.id,
+      ) ?? {
+        id: "",
+        type: "team" as const,
+        label: `${teamName} team contact`,
+        email: toEmail,
+        phone: toPhone,
+        roleLabel: "Team contact",
+        statusLabel: null,
+      }
+    );
+  }, [playerRecipients, selectedRecipientValue, teamName, toEmail, toPhone]);
+
+  const recipientOptions = useMemo(
+    () => [
+      {
+        value: getRecipientValue({ type: "team" }),
+        label: `${teamName} team contact${toEmail ? ` · ${toEmail}` : ""}${toPhone ? ` · ${toPhone}` : ""}`,
+      },
+      ...playerRecipients.map((recipient) => ({
+        value: getRecipientValue({ type: recipient.type, id: recipient.id }),
+        label: `${recipient.label}${recipient.roleLabel ? ` · ${recipient.roleLabel}` : ""}${recipient.statusLabel ? ` · ${recipient.statusLabel}` : ""}${recipient.email ? ` · ${recipient.email}` : ""}${recipient.phone ? ` · ${recipient.phone}` : ""}`,
+      })),
+    ],
+    [playerRecipients, teamName, toEmail, toPhone],
+  );
+
   const templateContext = useMemo(
     () => ({
-      firstName: getFirstName(contactName),
-      fullName: contactName?.trim() || "",
+      firstName: getFirstName(selectedRecipient.label || contactName),
+      fullName: selectedRecipient.label || contactName?.trim() || "",
       teamName: teamName.trim(),
       leagueName: leagueName?.trim() || "",
       claimCode: claimCode?.trim() || "",
       claimLink: claimLink?.trim() || "",
       captainDashboardUrl: captainDashboardUrl?.trim() || claimLink?.trim() || "",
     }),
-    [captainDashboardUrl, claimCode, claimLink, contactName, leagueName, teamName],
+    [captainDashboardUrl, claimCode, claimLink, contactName, leagueName, selectedRecipient.label, teamName],
   );
 
   const selectedEmailTemplate = useMemo(
@@ -132,8 +203,42 @@ export default function TeamCommunicationsComposer({
     setSmsBody(resolveText(selectedSmsTemplate.body, templateContext));
   }, [selectedSmsTemplate, templateContext]);
 
+  const parsedRecipient = parseRecipientValue(selectedRecipientValue);
+
   return (
     <div className="space-y-6">
+      <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6">
+        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300/80">
+          Recipient
+        </div>
+        <div className="mt-2 text-xl font-semibold text-white">Choose who to contact</div>
+        <p className="mt-1 text-sm text-white/60">
+          Send to the main team contact, or pick an individual linked player/prospect from this squad.
+        </p>
+
+        <div className="mt-5">
+          <TemplateSelect
+            label="Recipient"
+            value={selectedRecipientValue}
+            onChange={setSelectedRecipientValue}
+            options={recipientOptions}
+            placeholder="Select recipient"
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/60">
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+            Type: {selectedRecipient.type === "team" ? "Team contact" : selectedRecipient.type === "teamMember" ? "Linked player" : "Prospect"}
+          </span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+            Email: {selectedRecipient.email || "—"}
+          </span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+            SMS: {selectedRecipient.phone || "—"}
+          </span>
+        </div>
+      </div>
+
       <form
         action={sendTeamCommunicationMessageAction}
         className="rounded-3xl border border-white/10 bg-white/5 p-6"
@@ -141,14 +246,20 @@ export default function TeamCommunicationsComposer({
         <input type="hidden" name="teamId" value={teamId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="EMAIL" />
+        <input type="hidden" name="recipientType" value={parsedRecipient.type} />
+        <input type="hidden" name="recipientId" value={parsedRecipient.id} />
         <input type="hidden" name="templateId" value={selectedEmailTemplate?.id || ""} />
         <input type="hidden" name="templateKey" value={selectedEmailTemplate?.key || ""} />
         <input type="hidden" name="ctaLabel" value={selectedEmailTemplate?.ctaLabel || ""} />
         <input type="hidden" name="ctaUrl" value={selectedEmailTemplate?.ctaUrl || ""} />
 
         <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">EMAIL</div>
-        <div className="mt-2 text-xl font-semibold text-white">Send team email</div>
-        <div className="mt-1 text-sm text-white/60">To: {toEmail || "No email set"}</div>
+        <div className="mt-2 text-xl font-semibold text-white">
+          Send {selectedRecipient.type === "team" ? "team" : "player"} email
+        </div>
+        <div className="mt-1 text-sm text-white/60">
+          To: {selectedRecipient.email || "No email set"}
+        </div>
 
         <div className="mt-5 space-y-4">
           <TemplateSelect
@@ -195,12 +306,18 @@ export default function TeamCommunicationsComposer({
         <input type="hidden" name="teamId" value={teamId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="SMS" />
+        <input type="hidden" name="recipientType" value={parsedRecipient.type} />
+        <input type="hidden" name="recipientId" value={parsedRecipient.id} />
         <input type="hidden" name="templateId" value={selectedSmsTemplate?.id || ""} />
         <input type="hidden" name="templateKey" value={selectedSmsTemplate?.key || ""} />
 
         <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">SMS</div>
-        <div className="mt-2 text-xl font-semibold text-white">Send team SMS</div>
-        <div className="mt-1 text-sm text-white/60">To: {toPhone || "No mobile set"}</div>
+        <div className="mt-2 text-xl font-semibold text-white">
+          Send {selectedRecipient.type === "team" ? "team" : "player"} SMS
+        </div>
+        <div className="mt-1 text-sm text-white/60">
+          To: {selectedRecipient.phone || "No mobile set"}
+        </div>
 
         <div className="mt-5 space-y-4">
           <TemplateSelect
