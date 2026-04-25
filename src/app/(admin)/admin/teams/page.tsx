@@ -584,6 +584,12 @@ export default async function AdminTeamsPage({
                         >
                           Captain view
                         </Link>
+                        <Link
+  href={`/admin/teams/${team.id}/player-preview`}
+  className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+>
+  Player view
+</Link>
 
                         {isManagedTeam ? (
                           <>
