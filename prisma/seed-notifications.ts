@@ -147,17 +147,6 @@ SIXFL`,
   });
 
   await upsertTemplate({
-    key: "squad-activation-sms",
-    name: "Squad activation SMS",
-    description: "Transactional SMS sent to pending squad players so they can activate their squad place.",
-    kind: NotificationTemplateKind.TRANSACTIONAL,
-    channel: NotificationChannel.SMS,
-    audience: NotificationAudience.PLAYER,
-    subject: null,
-    body: "SIXFL: Hi {{firstName}}, you’ve been added to the {{teamName}} squad. Activate your place here: {{squadActivationUrl}}",
-  });
-
-  await upsertTemplate({
     key: "fixture-change-email",
     name: "Fixture change email",
     description: "Transactional email for a fixture change.",
