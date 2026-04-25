@@ -210,7 +210,6 @@ export default async function PlayerTeamPage({ params }: PageProps) {
         user: {
           select: {
             name: true,
-            email: true,
           },
         },
       },
@@ -353,10 +352,10 @@ export default async function PlayerTeamPage({ params }: PageProps) {
                     <div key={member.id} className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-white">
-                          {member.user.name || member.user.email || "Unnamed player"}
+                          {member.user.name || "Squad member"}
                         </div>
                         <div className="mt-1 text-xs text-white/45">
-                          {member.user.email || "No email"}
+                          Contact details are managed privately by SIXFL.
                         </div>
                       </div>
                       <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
