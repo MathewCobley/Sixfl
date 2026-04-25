@@ -97,10 +97,12 @@ function getSavedMessage(saved?: string) {
       return "Squad role updated.";
     case "member-removed":
       return "Squad member removed.";
-    case "activation-email-sent":
-      return "Activation email queued.";
-    default:
-      return saved ? "Saved." : null;
+      case "activation-email-sent":
+        return "Activation email queued.";
+      case "activation-sms-sent":
+        return "Activation SMS queued.";
+      default:
+        return saved ? "Saved." : null;
   }
 }
 
@@ -656,7 +658,17 @@ export default async function CaptainSquadPage({
                                 {hasActivationEmailBeenQueued ? "Send again" : "Send activation email"}
                               </button>
                             </form>
-
+                            <form method="post" action={`/captain/team/${teamid}/squad/send-activation-sms`}>
+                              <input type="hidden" name="prospectId" value={prospect.id} />
+                              <button
+                                type="submit"
+                                disabled={!prospect.phone}
+                                className="inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
+                              >
+                                Chase by SMS
+                              </button>
+                            </form>
+                            
                             {canOpenAdminComms ? (
                               <CommunicationButton
                                 href={`/admin/teams/${teamid}/prospects/${prospect.id}/communications`}
