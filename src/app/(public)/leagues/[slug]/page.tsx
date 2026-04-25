@@ -2,6 +2,7 @@
 // File: src/app/(public)/leagues/[slug]/page.tsx
 // ========================================
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -227,6 +228,75 @@ function buildLeagueTable(
   return table;
 }
 
+function buildSeoLocation(input: {
+  area?: string | null;
+  venueName?: string | null;
+  slug: string;
+}) {
+  const area = input.area?.trim() || "";
+  const venue = input.venueName?.trim() || "";
+  const slug = input.slug.toLowerCase();
+
+  if (area) return area;
+  if (slug.includes("harrogate") || venue.toLowerCase().includes("rossett")) {
+    return "Harrogate";
+  }
+
+  return "Local";
+}
+
+function buildSeoVenue(input: {
+  venueName?: string | null;
+  area?: string | null;
+}) {
+  return input.venueName?.trim() || input.area?.trim() || "your local venue";
+}
+
+function buildSeoLeagueHeading(location: string) {
+  return location === "Local"
+    ? "6 a side football league"
+    : `${location} 6 a side football league`;
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+
+  const league = await prisma.league.findFirst({
+    where: { slug, isActive: true },
+    select: {
+      name: true,
+      area: true,
+      venueName: true,
+      dayOfWeek: true,
+    },
+  });
+
+  if (!league) {
+    return {
+      title: "League not found | SIXFL",
+    };
+  }
+
+  const location = buildSeoLocation({
+    area: league.area,
+    venueName: league.venueName,
+    slug,
+  });
+  const venue = buildSeoVenue({
+    venueName: league.venueName,
+    area: league.area,
+  });
+  const nightLabel = formatPreferredNight(league.dayOfWeek) || "weekly";
+  const seoHeading = buildSeoLeagueHeading(location);
+
+  return {
+    title: `${seoHeading} | ${venue} | SIXFL`,
+    description: `Join ${seoHeading} with SIXFL at ${venue}. Weekly ${nightLabel.toLowerCase()} fixtures, live league table, results and simple sign-up for teams and players.`,
+  };
+}
+
 export default async function LeagueLandingPage({ params }: PageProps) {
   const { slug } = await params;
 
@@ -306,25 +376,34 @@ export default async function LeagueLandingPage({ params }: PageProps) {
   const nightLabel = formatPreferredNight(league.dayOfWeek);
   const leagueTypeLabel = formatLeagueType(league.leagueType);
   const leagueTypeCompact = formatLeagueTypeCompact(league.leagueType);
+  const seoLocation = buildSeoLocation({
+    area: league.area,
+    venueName: league.venueName,
+    slug: league.slug,
+  });
+  const seoVenue = buildSeoVenue({
+    venueName: league.venueName,
+    area: league.area,
+  });
+  const seoLeagueHeading = buildSeoLeagueHeading(seoLocation);
 
-  const heroEyebrow = [league.area?.trim(), nightLabel, leagueTypeCompact]
+  const heroEyebrow = [seoVenue, nightLabel, leagueTypeCompact]
     .filter(Boolean)
-    .join(" ");
+    .join(" • ");
 
   const heroMeta = [
     league.season,
-    league.venueName,
     `${league.teams.length} team${league.teams.length === 1 ? "" : "s"}`,
+    league.kickoffInfo,
   ].filter(Boolean);
 
   const heroImageUrl =
     normaliseLogoUrl(league.heroImageUrl) || "/venues/rossett_dark_trendy.jpg";
-  const leagueBadge =
-    normaliseLogoUrl(league.badgeUrl) || "/sixfl-badge.png";
+  const leagueBadge = normaliseLogoUrl(league.badgeUrl) || "/sixfl-badge.png";
 
   const introText =
     league.description?.trim() ||
-    `6-a-side football. Done properly. Register your interest now for ${league.name}.`;
+    `Join ${seoLeagueHeading} with SIXFL at ${seoVenue}. Weekly fixtures, live results and a proper league table make it simple for teams and players to follow the season.`;
 
   const detailCards = [
     {
@@ -337,7 +416,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
     },
     {
       label: "Venue",
-      value: league.venueName || league.area || "TBC",
+      value: seoVenue,
     },
     {
       label: "Season",
@@ -433,8 +512,14 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                 </div>
 
                 <h1 className="mt-8 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
-                  {league.name}
+                  {seoLeagueHeading}
                 </h1>
+
+                {league.name !== seoLeagueHeading ? (
+                  <p className="mt-3 text-lg font-semibold text-emerald-300/90 sm:text-xl">
+                    {league.name}
+                  </p>
+                ) : null}
 
                 <p className="mt-5 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">
                   {introText}
@@ -495,9 +580,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                   <div className="mt-2 text-xl font-bold">
                     {nightLabel || "TBC"}
                   </div>
-                  <div className="mt-1 text-sm text-white/60">
-                    {league.venueName || league.area || "Venue to be confirmed"}
-                  </div>
+                  <div className="mt-1 text-sm text-white/60">{seoVenue}</div>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-black/35 p-5 backdrop-blur-md">
@@ -543,11 +626,11 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                 Standings
               </p>
               <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
-                League table
+                Current {seoLocation === "Local" ? "league" : `${seoLocation} 6 a side`} table
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60 sm:text-base">
-                Full standings with team names, goals scored, goals conceded,
-                goal difference, and recent form.
+                Follow the latest standings, points, goal difference and recent
+                form in this {seoLocation === "Local" ? "league" : `${seoLocation} 6 a side football league`}.
               </p>
             </div>
 
@@ -793,12 +876,13 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               </p>
 
               <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
-                A better way to play local 6-a-side football
+                Play 6 a side football at {seoVenue}
               </h2>
 
               <p className="mt-4 max-w-2xl text-white/70">
-                {league.description?.trim() ||
-                  "This league is designed for teams who want consistency, quality, and a better match-night experience. No chaos. No mess. Just properly organised football."}
+                {seoLocation === "Local"
+                  ? "This SIXFL league is designed for teams and players who want a better weekly football experience, with organised fixtures, live results and a proper league table."
+                  : `If you are looking for ${seoLocation.toLowerCase()} 6 a side football, this SIXFL league at ${seoVenue} offers a more organised way to play. Teams get fixed weekly fixtures, live standings, results and a properly managed league setup from week to week.`}
               </p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -813,6 +897,43 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                     <div className="mt-1 text-white/85">{item.value}</div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
+                Join the league
+              </p>
+              <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
+                Enter a team or join as a player
+              </h2>
+              <div className="mt-4 space-y-4 text-white/70">
+                <p>
+                  If you already have a squad, you can enter a team into this{" "}
+                  {seoLocation === "Local"
+                    ? "SIXFL league"
+                    : `${seoLocation.toLowerCase()} 6 a side football league`}{" "}
+                  and play weekly matches in a properly organised competition.
+                </p>
+                <p>
+                  You do not always need a full team to get involved. Individual
+                  players can also register interest and we can help match them
+                  to teams or managed squads when places are available.
+                </p>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-4">
+                <a
+                  href="#register"
+                  className="rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-black transition hover:bg-emerald-400"
+                >
+                  Enter a team
+                </a>
+                <a
+                  href="#register"
+                  className="rounded-xl border border-white/15 bg-white/5 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+                >
+                  Join as a player
+                </a>
               </div>
             </div>
 
@@ -854,7 +975,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                     Fixtures
                   </p>
                   <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
-                    Upcoming matches
+                    Upcoming {seoLocation === "Local" ? "league" : seoLocation} fixtures
                   </h2>
                 </div>
               </div>
@@ -955,7 +1076,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                     Results
                   </p>
                   <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
-                    Recent results
+                    Recent {seoLocation === "Local" ? "league" : seoLocation} results
                   </h2>
                 </div>
               </div>
@@ -1112,6 +1233,45 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                 </div>
               )}
             </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
+                FAQs
+              </p>
+              <h2 className="mt-3 text-2xl font-bold sm:text-3xl">
+                Common questions about this league
+              </h2>
+              <div className="mt-6 space-y-4 text-white/70">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <div className="font-semibold text-white">
+                    Who can join this league?
+                  </div>
+                  <div className="mt-2 text-sm leading-6">
+                    Teams can register interest directly, and individual players
+                    can also get in touch if they want help finding a squad.
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <div className="font-semibold text-white">
+                    Where are matches played?
+                  </div>
+                  <div className="mt-2 text-sm leading-6">
+                    Matches for this league are played at {seoVenue}, with
+                    fixtures and results shown live on this page once published.
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <div className="font-semibold text-white">
+                    Can I see the league table online?
+                  </div>
+                  <div className="mt-2 text-sm leading-6">
+                    Yes. The live league table, fixtures and recent results all
+                    appear on this page, making it easy to follow the season
+                    week by week.
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -1128,8 +1288,8 @@ export default async function LeagueLandingPage({ params }: PageProps) {
               </h2>
 
               <p className="mt-3 text-white/70">
-                Tell us a little about your team and we&apos;ll be in touch
-                about {league.name}.
+                Tell us a little about your team or playing plans and we will be
+                in touch about {seoLeagueHeading} at {seoVenue}.
               </p>
 
               <form
@@ -1241,7 +1401,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
 
                 <p className="mt-3 text-sm leading-6 text-white/65">
                   A properly run league with reliable weekly fixtures, qualified
-                  referees, tables, results and a stronger match-night
+                  referees, live results, league tables and a stronger match-night
                   experience.
                 </p>
               </div>
@@ -1282,7 +1442,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                 <div className="flex items-center justify-between gap-4">
                   <span>Venue</span>
                   <span className="text-right font-medium text-white">
-                    {league.venueName || league.area || "TBC"}
+                    {seoVenue}
                   </span>
                 </div>
 

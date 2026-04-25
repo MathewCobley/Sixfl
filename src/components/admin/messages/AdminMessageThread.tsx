@@ -69,6 +69,15 @@ type SelectedThread = {
     receivedAt: string | null;
     readAt: string | null;
     createdAt: string;
+    dispatch?: {
+      id: string;
+      template: {
+        id: string;
+        name: string;
+        key: string;
+      } | null;
+      metadata: unknown;
+    } | null;
   }>;
 } | null;
 
@@ -196,10 +205,14 @@ function getAudienceLabel(thread: NonNullable<SelectedThread>): string {
   }
 
   if (thread.recipient?.audience) {
-    return `${thread.recipient.audience} ${thread.channel === "EMAIL" ? "email" : "SMS"} contact`;
+    return `${thread.recipient.audience} ${
+      thread.channel === "EMAIL" ? "email" : "SMS"
+    } contact`;
   }
 
-  return thread.channel === "EMAIL" ? "General email contact" : "General SMS contact";
+  return thread.channel === "EMAIL"
+    ? "General email contact"
+    : "General SMS contact";
 }
 
 function getStatusTone(status: NonNullable<SelectedThread>["status"]): string {
@@ -240,6 +253,37 @@ function getMessageRoleLabel(
     default:
       return "SIXFL";
   }
+}
+
+function getMessageSourceLabel(
+  message: NonNullable<SelectedThread>["messages"][number],
+) {
+  if (message.direction === "INBOUND") {
+    return null;
+  }
+
+  if (message.dispatch?.template) {
+    return {
+      label: `Template: ${message.dispatch.template.name}`,
+      key: message.dispatch.template.key,
+    };
+  }
+
+  if (message.channel === "EMAIL") {
+    return {
+      label: "Manual email",
+      key: null,
+    };
+  }
+
+  if (message.channel === "SMS") {
+    return {
+      label: "Manual SMS",
+      key: null,
+    };
+  }
+
+  return null;
 }
 
 function getNotice(
@@ -627,11 +671,14 @@ export default function AdminMessageThread({
                   message.channel === "EMAIL" &&
                   Boolean(message.htmlBody);
                 const isSmsPreview = message.channel === "SMS";
+                const sourceLabel = getMessageSourceLabel(message);
 
                 return (
                   <div
                     key={message.id}
-                    className={`flex ${isInbound ? "justify-start" : "justify-end"}`}
+                    className={`flex ${
+                      isInbound ? "justify-start" : "justify-end"
+                    }`}
                   >
                     <div
                       className={[
@@ -649,6 +696,7 @@ export default function AdminMessageThread({
                         >
                           {getMessageRoleLabel(message)}
                         </span>
+
                         <span
                           className={
                             isInbound ? "text-white/25" : "text-emerald-200/50"
@@ -656,6 +704,7 @@ export default function AdminMessageThread({
                         >
                           •
                         </span>
+
                         <span
                           className={
                             isInbound ? "text-white/45" : "text-emerald-200/80"
@@ -663,6 +712,7 @@ export default function AdminMessageThread({
                         >
                           {message.channel}
                         </span>
+
                         <span
                           className={
                             isInbound ? "text-white/25" : "text-emerald-200/50"
@@ -670,6 +720,7 @@ export default function AdminMessageThread({
                         >
                           •
                         </span>
+
                         <span
                           className={
                             isInbound ? "text-white/45" : "text-emerald-200/80"
@@ -677,6 +728,28 @@ export default function AdminMessageThread({
                         >
                           {getMessageMeta(message)}
                         </span>
+
+                        {sourceLabel ? (
+                          <>
+                            <span
+                              className={
+                                isInbound
+                                  ? "text-white/25"
+                                  : "text-emerald-200/50"
+                              }
+                            >
+                              •
+                            </span>
+                            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 normal-case tracking-normal text-emerald-100">
+                              {sourceLabel.label}
+                            </span>
+                            {sourceLabel.key ? (
+                              <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 font-mono normal-case tracking-normal text-white/60">
+                                {sourceLabel.key}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : null}
                       </div>
 
                       {message.subject ? (
@@ -784,7 +857,9 @@ export default function AdminMessageThread({
 
         <div className="space-y-4">
           <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
-            <h3 className="text-lg font-semibold text-white">{replyPanelTitle}</h3>
+            <h3 className="text-lg font-semibold text-white">
+              {replyPanelTitle}
+            </h3>
             <p className="mt-2 text-sm leading-6 text-white/55">
               {canSmsReply
                 ? "Send a direct SMS reply from the inbox and keep the full mixed conversation timeline together."
