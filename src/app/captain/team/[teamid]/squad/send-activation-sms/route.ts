@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   NotificationAudience,
-  NotificationChannel,
   NotificationRecipientSourceType,
 } from "@prisma/client";
 
@@ -14,8 +13,10 @@ import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { linkDispatchToThread } from "@/lib/messaging/service";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { createSquadActivationToken } from "@/lib/squad/activationToken";
+
+const SQUAD_ACTIVATION_SMS_TEMPLATE_KEY = "squad-activation-sms";
 
 function getSiteUrl() {
   const fallback = "https://www.sixfl.co.uk";
@@ -194,30 +195,28 @@ export async function POST(
     prospect,
   });
 
-  const body = `Hi ${firstName}, you’ve been added to the ${team.name} squad on SIXFL. Please activate/sign in so we can keep fixtures and team messages in one place: ${squadActivationUrl}`;
+  const variables = {
+    firstName,
+    fullName: contactName || firstName,
+    teamName: team.name,
+    leagueName: team.league?.name ?? "",
+    squadActivationUrl,
+    teamJoinUrl: squadActivationUrl,
+  };
 
-  const dispatch = await queueDirectNotification({
+  const dispatch = await queueNotificationFromTemplate({
+    templateKey: SQUAD_ACTIVATION_SMS_TEMPLATE_KEY,
     recipientId: recipient.id,
-    channel: NotificationChannel.SMS,
-    audience: NotificationAudience.PLAYER,
-    body,
-    isTransactional: true,
+    variables,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
-    variables: {
-      firstName,
-      fullName: contactName || firstName,
-      teamName: team.name,
-      leagueName: team.league?.name ?? "",
-      squadActivationUrl,
-      teamJoinUrl: squadActivationUrl,
-    },
     metadata: {
       origin: "captain_squad_activation_sms",
       originLabel: "Activation SMS chase sent from captain squad page",
       teamId: teamid,
       prospectId: prospect.id,
       contactName,
+      templateKey: SQUAD_ACTIVATION_SMS_TEMPLATE_KEY,
     },
     createdByUserId: user?.id ?? null,
   });
