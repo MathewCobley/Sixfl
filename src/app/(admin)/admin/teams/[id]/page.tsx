@@ -559,7 +559,12 @@ export default async function AdminTeamPage({
           >
             Communications
           </Link>
-
+          <Link
+  href={`/admin/teams/${team.id}/match-fees`}
+  className="inline-flex items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+>
+  Player match fees
+</Link>
           {team.league ? (
             <Link
               href={`/admin/leagues/${team.league.id}`}
