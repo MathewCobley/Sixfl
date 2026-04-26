@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
-import { sendTeamCommunicationMessageAction } from "@/app/(admin)/admin/communications/actions";
+import { sendTeamCommunicationBulkMessageAction } from "@/app/(admin)/admin/communications/team-bulk-actions";
 
 type EmailTemplateOption = {
   id: string;
@@ -30,6 +30,16 @@ type SmsTemplateOption = {
 type PlayerRecipientOption = {
   id: string;
   type: "teamMember" | "prospect";
+  label: string;
+  email: string | null;
+  phone: string | null;
+  roleLabel?: string | null;
+  statusLabel?: string | null;
+};
+
+type RecipientOption = {
+  value: string;
+  type: "team" | "teamMember" | "prospect";
   label: string;
   email: string | null;
   phone: string | null;
@@ -61,16 +71,6 @@ function getFirstName(value?: string | null) {
 
 function getRecipientValue(input: { type: "team" | "teamMember" | "prospect"; id?: string }) {
   return input.type === "team" ? "team:" : `${input.type}:${input.id ?? ""}`;
-}
-
-function parseRecipientValue(value: string) {
-  const [type, id] = value.split(":");
-
-  if (type === "teamMember" || type === "prospect") {
-    return { type, id: id || "" } as const;
-  }
-
-  return { type: "team", id: "" } as const;
 }
 
 function resolveText(
@@ -110,68 +110,60 @@ export default function TeamCommunicationsComposer({
   smsTemplates,
   playerRecipients = [],
 }: Props) {
-  const [selectedRecipientValue, setSelectedRecipientValue] = useState(getRecipientValue({ type: "team" }));
+  const [selectedRecipientValues, setSelectedRecipientValues] = useState<string[]>([
+    getRecipientValue({ type: "team" }),
+  ]);
   const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState("");
   const [smsBody, setSmsBody] = useState("");
 
-  const selectedRecipient = useMemo(() => {
-    const parsed = parseRecipientValue(selectedRecipientValue);
-
-    if (parsed.type === "team") {
-      return {
-        id: "",
-        type: "team" as const,
-        label: `${teamName} team contact`,
-        email: toEmail,
-        phone: toPhone,
-        roleLabel: "Team contact",
-        statusLabel: null,
-      };
-    }
-
-    return (
-      playerRecipients.find(
-        (recipient) => recipient.type === parsed.type && recipient.id === parsed.id,
-      ) ?? {
-        id: "",
-        type: "team" as const,
-        label: `${teamName} team contact`,
-        email: toEmail,
-        phone: toPhone,
-        roleLabel: "Team contact",
-        statusLabel: null,
-      }
-    );
-  }, [playerRecipients, selectedRecipientValue, teamName, toEmail, toPhone]);
-
-  const recipientOptions = useMemo(
+  const recipientOptions = useMemo<RecipientOption[]>(
     () => [
       {
         value: getRecipientValue({ type: "team" }),
-        label: `${teamName} team contact${toEmail ? ` · ${toEmail}` : ""}${toPhone ? ` · ${toPhone}` : ""}`,
+        type: "team",
+        label: `${teamName} team contact`,
+        email: toEmail,
+        phone: toPhone,
+        roleLabel: "Team contact",
+        statusLabel: null,
       },
       ...playerRecipients.map((recipient) => ({
         value: getRecipientValue({ type: recipient.type, id: recipient.id }),
-        label: `${recipient.label}${recipient.roleLabel ? ` · ${recipient.roleLabel}` : ""}${recipient.statusLabel ? ` · ${recipient.statusLabel}` : ""}${recipient.email ? ` · ${recipient.email}` : ""}${recipient.phone ? ` · ${recipient.phone}` : ""}`,
+        type: recipient.type,
+        label: recipient.label,
+        email: recipient.email,
+        phone: recipient.phone,
+        roleLabel: recipient.roleLabel,
+        statusLabel: recipient.statusLabel,
       })),
     ],
     [playerRecipients, teamName, toEmail, toPhone],
   );
 
+  const selectedRecipients = useMemo(() => {
+    const selectedSet = new Set(selectedRecipientValues);
+    return recipientOptions.filter((recipient) => selectedSet.has(recipient.value));
+  }, [recipientOptions, selectedRecipientValues]);
+
+  const primaryRecipient = selectedRecipients[0] ?? recipientOptions[0];
+  const selectedCount = selectedRecipients.length;
+  const selectedEmailCount = selectedRecipients.filter((recipient) => recipient.email?.trim()).length;
+  const selectedSmsCount = selectedRecipients.filter((recipient) => recipient.phone?.trim()).length;
+
   const templateContext = useMemo(
     () => ({
-      firstName: getFirstName(selectedRecipient.label || contactName),
-      fullName: selectedRecipient.label || contactName?.trim() || "",
+      firstName: selectedCount === 1 ? getFirstName(primaryRecipient?.label || contactName) : "",
+      fullName: selectedCount === 1 ? primaryRecipient?.label || contactName?.trim() || "" : "",
       teamName: teamName.trim(),
       leagueName: leagueName?.trim() || "",
       claimCode: claimCode?.trim() || "",
       claimLink: claimLink?.trim() || "",
       captainDashboardUrl: captainDashboardUrl?.trim() || claimLink?.trim() || "",
     }),
-    [captainDashboardUrl, claimCode, claimLink, contactName, leagueName, selectedRecipient.label, teamName],
+    [captainDashboardUrl, claimCode, claimLink, contactName, leagueName, primaryRecipient?.label, selectedCount, teamName],
   );
 
   const selectedEmailTemplate = useMemo(
@@ -203,62 +195,145 @@ export default function TeamCommunicationsComposer({
     setSmsBody(resolveText(selectedSmsTemplate.body, templateContext));
   }, [selectedSmsTemplate, templateContext]);
 
-  const parsedRecipient = parseRecipientValue(selectedRecipientValue);
+  function toggleRecipient(value: string) {
+    setSelectedRecipientValues((current) => {
+      if (current.includes(value)) {
+        const next = current.filter((item) => item !== value);
+        return next.length ? next : current;
+      }
+
+      return [...current, value];
+    });
+  }
+
+  function selectAllPlayers() {
+    const playerValues = recipientOptions
+      .filter((recipient) => recipient.type !== "team")
+      .map((recipient) => recipient.value);
+
+    setSelectedRecipientValues(playerValues.length ? playerValues : [getRecipientValue({ type: "team" })]);
+  }
+
+  function selectAll() {
+    setSelectedRecipientValues(recipientOptions.map((recipient) => recipient.value));
+  }
+
+  function clearToTeamOnly() {
+    setSelectedRecipientValues([getRecipientValue({ type: "team" })]);
+  }
 
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6">
         <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300/80">
-          Recipient
+          Recipients
         </div>
         <div className="mt-2 text-xl font-semibold text-white">Choose who to contact</div>
         <p className="mt-1 text-sm text-white/60">
-          Send to the main team contact, or pick an individual linked player/prospect from this squad.
+          Tick one or more recipients. This lets you send the same message to several linked players/prospects at once.
         </p>
 
-        <div className="mt-5">
-          <TemplateSelect
-            label="Recipient"
-            value={selectedRecipientValue}
-            onChange={setSelectedRecipientValue}
-            options={recipientOptions}
-            placeholder="Select recipient"
-          />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={selectAllPlayers}
+            className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+          >
+            Select all players
+          </button>
+          <button
+            type="button"
+            onClick={selectAll}
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/[0.08]"
+          >
+            Select all
+          </button>
+          <button
+            type="button"
+            onClick={clearToTeamOnly}
+            className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/65 transition hover:bg-white/[0.06]"
+          >
+            Team contact only
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {recipientOptions.map((recipient) => {
+            const checked = selectedRecipientValues.includes(recipient.value);
+
+            return (
+              <label
+                key={recipient.value}
+                className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm transition ${
+                  checked
+                    ? "border-emerald-400/30 bg-emerald-500/10 text-white"
+                    : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.05]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleRecipient(recipient.value)}
+                  className="mt-1"
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold text-white">{recipient.label}</span>
+                  <span className="mt-1 block text-xs text-white/45">
+                    {recipient.type === "team" ? "Team contact" : recipient.type === "teamMember" ? "Linked player" : "Prospect"}
+                    {recipient.roleLabel ? ` · ${recipient.roleLabel}` : ""}
+                    {recipient.statusLabel ? ` · ${recipient.statusLabel}` : ""}
+                  </span>
+                  <span className="mt-1 block break-all text-xs text-white/50">
+                    Email: {recipient.email || "—"}
+                  </span>
+                  <span className="mt-1 block break-all text-xs text-white/50">
+                    SMS: {recipient.phone || "—"}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/60">
           <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-            Type: {selectedRecipient.type === "team" ? "Team contact" : selectedRecipient.type === "teamMember" ? "Linked player" : "Prospect"}
+            Selected: {selectedCount}
           </span>
           <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-            Email: {selectedRecipient.email || "—"}
+            Email-ready: {selectedEmailCount}
           </span>
           <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-            SMS: {selectedRecipient.phone || "—"}
+            SMS-ready: {selectedSmsCount}
           </span>
+          {selectedCount > 1 ? (
+            <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-amber-100">
+              Tokens like {"{{firstName}}"} are personalised when queued.
+            </span>
+          ) : null}
         </div>
       </div>
 
-      <form
-        action={sendTeamCommunicationMessageAction}
-        className="rounded-3xl border border-white/10 bg-white/5 p-6"
-      >
+      <form action={sendTeamCommunicationBulkMessageAction} className="rounded-3xl border border-white/10 bg-white/5 p-6">
         <input type="hidden" name="teamId" value={teamId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="EMAIL" />
-        <input type="hidden" name="recipientType" value={parsedRecipient.type} />
-        <input type="hidden" name="recipientId" value={parsedRecipient.id} />
         <input type="hidden" name="templateId" value={selectedEmailTemplate?.id || ""} />
         <input type="hidden" name="templateKey" value={selectedEmailTemplate?.key || ""} />
         <input type="hidden" name="ctaLabel" value={selectedEmailTemplate?.ctaLabel || ""} />
         <input type="hidden" name="ctaUrl" value={selectedEmailTemplate?.ctaUrl || ""} />
+        <input type="hidden" name="claimCode" value={claimCode || ""} />
+        <input type="hidden" name="claimLink" value={claimLink || ""} />
+        <input type="hidden" name="captainDashboardUrl" value={captainDashboardUrl || claimLink || ""} />
+        {selectedRecipientValues.map((value) => (
+          <input key={`email-${value}`} type="hidden" name="recipientValues" value={value} />
+        ))}
 
         <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">EMAIL</div>
         <div className="mt-2 text-xl font-semibold text-white">
-          Send {selectedRecipient.type === "team" ? "team" : "player"} email
+          Send email to {selectedEmailCount} selected recipient{selectedEmailCount === 1 ? "" : "s"}
         </div>
         <div className="mt-1 text-sm text-white/60">
-          To: {selectedRecipient.email || "No email set"}
+          Recipients without email addresses will be skipped.
         </div>
 
         <div className="mt-5 space-y-4">
@@ -293,30 +368,32 @@ export default function TeamCommunicationsComposer({
 
         <button
           type="submit"
-          className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+          disabled={selectedEmailCount === 0}
+          className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35"
         >
           Queue email
         </button>
       </form>
 
-      <form
-        action={sendTeamCommunicationMessageAction}
-        className="rounded-3xl border border-white/10 bg-white/5 p-6"
-      >
+      <form action={sendTeamCommunicationBulkMessageAction} className="rounded-3xl border border-white/10 bg-white/5 p-6">
         <input type="hidden" name="teamId" value={teamId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="SMS" />
-        <input type="hidden" name="recipientType" value={parsedRecipient.type} />
-        <input type="hidden" name="recipientId" value={parsedRecipient.id} />
         <input type="hidden" name="templateId" value={selectedSmsTemplate?.id || ""} />
         <input type="hidden" name="templateKey" value={selectedSmsTemplate?.key || ""} />
+        <input type="hidden" name="claimCode" value={claimCode || ""} />
+        <input type="hidden" name="claimLink" value={claimLink || ""} />
+        <input type="hidden" name="captainDashboardUrl" value={captainDashboardUrl || claimLink || ""} />
+        {selectedRecipientValues.map((value) => (
+          <input key={`sms-${value}`} type="hidden" name="recipientValues" value={value} />
+        ))}
 
         <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">SMS</div>
         <div className="mt-2 text-xl font-semibold text-white">
-          Send {selectedRecipient.type === "team" ? "team" : "player"} SMS
+          Send SMS to {selectedSmsCount} selected recipient{selectedSmsCount === 1 ? "" : "s"}
         </div>
         <div className="mt-1 text-sm text-white/60">
-          To: {selectedRecipient.phone || "No mobile set"}
+          Recipients without mobile numbers will be skipped. Ask players to use dashboard links rather than replying YES/NO by text.
         </div>
 
         <div className="mt-5 space-y-4">
@@ -344,7 +421,8 @@ export default function TeamCommunicationsComposer({
 
         <button
           type="submit"
-          className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+          disabled={selectedSmsCount === 0}
+          className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:text-white/35"
         >
           Queue SMS
         </button>
