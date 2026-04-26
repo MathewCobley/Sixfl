@@ -68,7 +68,7 @@ type ResolvedQueuedContent = {
 };
 
 const SIXFL_SMS_SIGNATURE = "— SIXFL";
-const SMS_QUIET_HOURS_START_HOUR = 22;
+const SMS_QUIET_HOURS_START_HOUR = 21;
 const SMS_QUIET_HOURS_END_HOUR = 9;
 const SMS_QUIET_HOURS_TIME_ZONE = "Europe/London";
 
