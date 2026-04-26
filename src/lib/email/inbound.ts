@@ -135,17 +135,100 @@ function normaliseReceivedHeaders(
   }));
 }
 
+function decodeBasicHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#x2F;/gi, "/")
+    .replace(/&#(\d+);/g, (_match, code) => {
+      const parsed = Number(code);
+      return Number.isFinite(parsed) ? String.fromCharCode(parsed) : "";
+    });
+}
+
+function htmlToPlainText(html: string | null | undefined) {
+  if (!html?.trim()) return "";
+
+  return decodeBasicHtmlEntities(
+    html
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<br\s*\/?\s*>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripQuotedEmailContent(value: string) {
+  let output = decodeBasicHtmlEntities(value)
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .trim();
+
+  const cutPatterns = [
+    /\n\s*On\s.+?wrote:\s*/is,
+    /\n\s*From:\s.+/is,
+    /\n\s*Sent from my iPhone\s+On\s.+?wrote:\s*/is,
+    /\n\s*-{2,}\s*Original Message\s*-{2,}/is,
+    /\n\s*_{5,}\s*$/is,
+  ];
+
+  for (const pattern of cutPatterns) {
+    const match = output.match(pattern);
+    if (match?.index && match.index > 0) {
+      output = output.slice(0, match.index).trim();
+    }
+  }
+
+  output = output
+    .split("\n")
+    .filter((line) => !line.trim().startsWith(">"))
+    .join("\n")
+    .replace(/SIXFL\s+html,\s*body\s*\{[\s\S]*$/i, "")
+    .replace(/html,\s*body\s*\{[\s\S]*$/i, "")
+    .replace(/\.sixfl-[\s\S]*$/i, "")
+    .replace(/\{\s*margin:\s*0px\s*!important;[\s\S]*$/i, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return output;
+}
+
+function getCleanInboundBody(input: {
+  text?: string | null;
+  html?: string | null;
+  subject?: string | null;
+}) {
+  const textCandidate = stripQuotedEmailContent(input.text ?? "");
+  if (textCandidate) return textCandidate;
+
+  const htmlCandidate = stripQuotedEmailContent(htmlToPlainText(input.html));
+  if (htmlCandidate) return htmlCandidate;
+
+  return input.subject?.trim() || "";
+}
+
 function buildLastMessagePreview(input: {
   subject?: string | null;
   text?: string | null;
   html?: string | null;
 }): string {
   const subject = input.subject?.trim();
-  const text = input.text?.trim();
-  const html = input.html
-    ?.replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = stripQuotedEmailContent(input.text ?? "");
+  const html = stripQuotedEmailContent(htmlToPlainText(input.html));
 
   const base = text || html || subject || "";
 
@@ -371,15 +454,16 @@ export async function handleInboundEmailWebhook(
 
   const fromEmail = normaliseEmailAddressList(data.from)[0] ?? null;
   const toEmail = replyAddress;
-  const textBody = email.text?.trim() || null;
-  const htmlBody = email.html?.trim() || null;
+  const rawTextBody = email.text?.trim() || null;
+  const rawHtmlBody = email.html?.trim() || null;
   const subject = data.subject?.trim() || null;
-
-  const body =
-    textBody ||
-    htmlBody?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ||
-    subject ||
-    "";
+  const body = getCleanInboundBody({
+    text: rawTextBody,
+    html: rawHtmlBody,
+    subject,
+  });
+  const textBody = body || rawTextBody;
+  const htmlBody = rawHtmlBody;
 
   const createdMessage = await prisma.messageEntry.create({
     data: {
