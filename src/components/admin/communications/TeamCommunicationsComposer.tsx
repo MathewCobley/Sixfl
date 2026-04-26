@@ -73,6 +73,23 @@ function getRecipientValue(input: { type: "team" | "teamMember" | "prospect"; id
   return input.type === "team" ? "team:" : `${input.type}:${input.id ?? ""}`;
 }
 
+function getSiteUrl() {
+  if (typeof window !== "undefined" && window.location.origin) {
+    return window.location.origin.replace(/\/+$/, "");
+  }
+
+  return "https://www.sixfl.co.uk";
+}
+
+function appendSnippet(current: string, snippet: string) {
+  const trimmedCurrent = current.trimEnd();
+  const trimmedSnippet = snippet.trim();
+
+  if (!trimmedCurrent) return trimmedSnippet;
+
+  return `${trimmedCurrent}\n\n${trimmedSnippet}`;
+}
+
 function resolveText(
   text: string,
   context: {
@@ -119,6 +136,13 @@ export default function TeamCommunicationsComposer({
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState("");
   const [smsBody, setSmsBody] = useState("");
 
+  const siteUrl = getSiteUrl();
+  const playerDashboardUrl = `${siteUrl}/player/team/${teamId}`;
+  const availabilityUrl = `${siteUrl}/player/team/${teamId}/availability`;
+  const adminAvailabilityUrl = `${siteUrl}/admin/teams/${teamId}/availability`;
+  const adminMatchFeesUrl = `${siteUrl}/admin/teams/${teamId}/match-fees`;
+  const captainUrl = captainDashboardUrl?.trim() || claimLink?.trim() || `${siteUrl}/captain/team/${teamId}`;
+
   const recipientOptions = useMemo<RecipientOption[]>(
     () => [
       {
@@ -161,9 +185,9 @@ export default function TeamCommunicationsComposer({
       leagueName: leagueName?.trim() || "",
       claimCode: claimCode?.trim() || "",
       claimLink: claimLink?.trim() || "",
-      captainDashboardUrl: captainDashboardUrl?.trim() || claimLink?.trim() || "",
+      captainDashboardUrl: captainUrl,
     }),
-    [captainDashboardUrl, claimCode, claimLink, contactName, leagueName, primaryRecipient?.label, selectedCount, teamName],
+    [captainUrl, claimCode, claimLink, contactName, leagueName, primaryRecipient?.label, selectedCount, teamName],
   );
 
   const selectedEmailTemplate = useMemo(
@@ -221,6 +245,42 @@ export default function TeamCommunicationsComposer({
   function clearToTeamOnly() {
     setSelectedRecipientValues([getRecipientValue({ type: "team" })]);
   }
+
+  function insertEmailSnippet(snippet: string) {
+    setEmailBody((current) => appendSnippet(current, snippet));
+  }
+
+  function insertSmsSnippet(snippet: string) {
+    setSmsBody((current) => appendSnippet(current, snippet));
+  }
+
+  const quickLinks = [
+    {
+      label: "Availability link",
+      emailSnippet: `Please confirm your availability here:\n${availabilityUrl}`,
+      smsSnippet: `Please confirm your availability here: ${availabilityUrl}`,
+    },
+    {
+      label: "Player dashboard",
+      emailSnippet: `Open your SIXFL player dashboard here:\n${playerDashboardUrl}`,
+      smsSnippet: `Open your SIXFL player dashboard here: ${playerDashboardUrl}`,
+    },
+    {
+      label: "Captain/dashboard link",
+      emailSnippet: `Open the SIXFL team dashboard here:\n${captainUrl}`,
+      smsSnippet: `Open the SIXFL team dashboard here: ${captainUrl}`,
+    },
+    {
+      label: "Admin availability",
+      emailSnippet: `Admin availability dashboard:\n${adminAvailabilityUrl}`,
+      smsSnippet: `Admin availability dashboard: ${adminAvailabilityUrl}`,
+    },
+    {
+      label: "Match fees",
+      emailSnippet: `Match fees dashboard:\n${adminMatchFeesUrl}`,
+      smsSnippet: `Match fees dashboard: ${adminMatchFeesUrl}`,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -323,7 +383,7 @@ export default function TeamCommunicationsComposer({
         <input type="hidden" name="ctaUrl" value={selectedEmailTemplate?.ctaUrl || ""} />
         <input type="hidden" name="claimCode" value={claimCode || ""} />
         <input type="hidden" name="claimLink" value={claimLink || ""} />
-        <input type="hidden" name="captainDashboardUrl" value={captainDashboardUrl || claimLink || ""} />
+        <input type="hidden" name="captainDashboardUrl" value={captainUrl} />
         {selectedRecipientValues.map((value) => (
           <input key={`email-${value}`} type="hidden" name="recipientValues" value={value} />
         ))}
@@ -348,6 +408,24 @@ export default function TeamCommunicationsComposer({
           {selectedEmailTemplate?.description ? (
             <p className="text-xs text-white/45">{selectedEmailTemplate.description}</p>
           ) : null}
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">
+              Insert CTA / link
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {quickLinks.map((link) => (
+                <button
+                  key={`email-${link.label}`}
+                  type="button"
+                  onClick={() => insertEmailSnippet(link.emailSnippet)}
+                  className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                >
+                  {link.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <input
             name="subject"
@@ -383,7 +461,7 @@ export default function TeamCommunicationsComposer({
         <input type="hidden" name="templateKey" value={selectedSmsTemplate?.key || ""} />
         <input type="hidden" name="claimCode" value={claimCode || ""} />
         <input type="hidden" name="claimLink" value={claimLink || ""} />
-        <input type="hidden" name="captainDashboardUrl" value={captainDashboardUrl || claimLink || ""} />
+        <input type="hidden" name="captainDashboardUrl" value={captainUrl} />
         {selectedRecipientValues.map((value) => (
           <input key={`sms-${value}`} type="hidden" name="recipientValues" value={value} />
         ))}
@@ -408,6 +486,24 @@ export default function TeamCommunicationsComposer({
           {selectedSmsTemplate?.description ? (
             <p className="text-xs text-white/45">{selectedSmsTemplate.description}</p>
           ) : null}
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">
+              Insert CTA / link
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {quickLinks.map((link) => (
+                <button
+                  key={`sms-${link.label}`}
+                  type="button"
+                  onClick={() => insertSmsSnippet(link.smsSnippet)}
+                  className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                >
+                  {link.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <textarea
             name="body"
