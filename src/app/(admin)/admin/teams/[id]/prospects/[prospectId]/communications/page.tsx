@@ -6,7 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NotificationChannel, NotificationDispatchStatus } from "@prisma/client";
 
-import ProspectCommunicationsComposer from "@/components/admin/communications/ProspectCommunicationsComposer";
+import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -21,6 +21,8 @@ export const metadata = {
 type SearchParams = {
   saved?: string;
   channel?: string;
+  count?: string;
+  skipped?: string;
   error?: string;
 };
 
@@ -43,6 +45,11 @@ type TimelineItem = {
 
 function getChannelLabel(value?: string) {
   return value === "sms" ? "SMS" : "email";
+}
+
+function getQueuedCount(value?: string) {
+  const count = Number(value ?? "1");
+  return Number.isFinite(count) && count > 0 ? count : 1;
 }
 
 function getProspectName(input: { firstName: string; lastName: string | null }) {
@@ -145,6 +152,9 @@ export default async function AdminProspectCommunicationsPage({
           id: true,
           joinSlug: true,
           name: true,
+          claimCode: true,
+          contactEmail: true,
+          contactPhone: true,
           league: {
             select: {
               name: true,
@@ -307,9 +317,11 @@ export default async function AdminProspectCommunicationsPage({
     (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
   );
 
+  const queuedCount = getQueuedCount(filters.count);
+  const skippedCount = Number(filters.skipped ?? "0");
   const successMessage =
     filters.saved === "queued"
-      ? `${getChannelLabel(filters.channel)} queued from communications hub.`
+      ? `${getChannelLabel(filters.channel)} queued to ${queuedCount} recipient${queuedCount === 1 ? "" : "s"}${Number.isFinite(skippedCount) && skippedCount > 0 ? ` · ${skippedCount} skipped because contact details were missing` : ""}.`
       : null;
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
@@ -317,6 +329,9 @@ export default async function AdminProspectCommunicationsPage({
   const joinUrl = prospect.team.joinSlug
     ? `${baseUrl}/teams/join/${prospect.team.joinSlug}`
     : `${baseUrl}/register-interest`;
+  const claimLink = prospect.team.claimCode
+    ? `${baseUrl}/claim?code=${encodeURIComponent(prospect.team.claimCode)}`
+    : `${baseUrl}/claim`;
   const fixedPaymentUrl = "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
   const resolvedEmailTemplates = emailTemplates.map((template) => {
@@ -341,6 +356,8 @@ export default async function AdminProspectCommunicationsPage({
     };
   });
 
+  const selectedProspectRecipientValue = `prospect:${prospect.id}`;
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -353,7 +370,7 @@ export default async function AdminProspectCommunicationsPage({
           </Link>
           <h1 className="text-3xl font-semibold text-white">{prospectName} communications</h1>
           <p className="text-sm text-white/60">
-            Central message hub for this prospect. Keep all outreach in one timeline instead of spreading it across multiple forms.
+            Central message hub for this prospect. This page now uses the same shared sending rules as team communications.
           </p>
         </div>
 
@@ -423,19 +440,32 @@ export default async function AdminProspectCommunicationsPage({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <ProspectCommunicationsComposer
+        <TeamCommunicationsComposer
           teamId={prospect.team.id}
-          prospectId={prospect.id}
           fromPath={`/admin/teams/${prospect.team.id}/prospects/${prospect.id}/communications`}
-          toEmail={prospect.email}
-          toPhone={prospect.phone}
-          firstName={prospect.firstName}
-          fullName={prospectName}
+          toEmail={prospect.team.contactEmail ?? null}
+          toPhone={prospect.team.contactPhone ?? null}
+          contactName={prospectName}
           teamName={prospect.team.name}
           leagueName={prospect.team.league ? `${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}` : null}
-          joinUrl={joinUrl}
+          claimCode={prospect.team.claimCode}
+          claimLink={claimLink}
+          captainDashboardUrl={claimLink}
           emailTemplates={resolvedEmailTemplates}
           smsTemplates={smsTemplates}
+          showTeamContactRecipient={false}
+          initialSelectedRecipientValues={[selectedProspectRecipientValue]}
+          playerRecipients={[
+            {
+              id: prospect.id,
+              type: "prospect",
+              label: prospectName,
+              email: prospect.email,
+              phone: prospect.phone,
+              roleLabel: "Prospect",
+              statusLabel: prospect.status,
+            },
+          ]}
         />
 
         <div className="rounded-3xl border border-white/10 bg-white/5">
