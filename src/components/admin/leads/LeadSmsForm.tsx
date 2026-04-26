@@ -99,6 +99,7 @@ export default function LeadSmsForm({
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [targetTeamId, setTargetTeamId] = useState("");
   const [body, setBody] = useState("");
+  const [lastAppliedTemplateKey, setLastAppliedTemplateKey] = useState("");
   const [sending, setSending] = useState(false);
 
   const expectedSendLabel = getExpectedSmsSendLabel();
@@ -141,6 +142,20 @@ export default function LeadSmsForm({
 
   const requiresManagedTeam = selectedTemplate?.ctaUrlKey === "teamJoinUrl";
 
+  function buildTemplateBody(template: LeadSmsTemplateOption) {
+    const resolvedLink = resolveSmsLink({
+      ctaUrlKey: template.ctaUrlKey,
+      signupUrl,
+      targetTeamId,
+      managedTeamOptions,
+    });
+
+    return resolveTemplateText(template.body, templateContext).replace(
+      /{{link}}/gi,
+      resolvedLink,
+    );
+  }
+
   useEffect(() => {
     if (!requiresManagedTeam) {
       setTargetTeamId("");
@@ -154,24 +169,22 @@ export default function LeadSmsForm({
 
   useEffect(() => {
     if (!selectedTemplate) {
-      setBody("");
+      if (lastAppliedTemplateKey) {
+        setBody("");
+        setLastAppliedTemplateKey("");
+      }
       return;
     }
 
-    const resolvedLink = resolveSmsLink({
-      ctaUrlKey: selectedTemplate.ctaUrlKey,
-      signupUrl,
-      targetTeamId,
-      managedTeamOptions,
-    });
+    const nextAppliedTemplateKey = `${selectedTemplate.id}:${targetTeamId}`;
 
-    setBody(
-      resolveTemplateText(selectedTemplate.body, templateContext).replace(
-        /{{link}}/gi,
-        resolvedLink,
-      ),
-    );
-  }, [selectedTemplate, signupUrl, targetTeamId, managedTeamOptions, templateContext]);
+    if (lastAppliedTemplateKey === nextAppliedTemplateKey) {
+      return;
+    }
+
+    setBody(buildTemplateBody(selectedTemplate));
+    setLastAppliedTemplateKey(nextAppliedTemplateKey);
+  }, [lastAppliedTemplateKey, selectedTemplate, targetTeamId]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -204,22 +217,12 @@ export default function LeadSmsForm({
   function resetTemplate() {
     if (!selectedTemplate) {
       setBody("");
+      setLastAppliedTemplateKey("");
       return;
     }
 
-    const resolvedLink = resolveSmsLink({
-      ctaUrlKey: selectedTemplate.ctaUrlKey,
-      signupUrl,
-      targetTeamId,
-      managedTeamOptions,
-    });
-
-    setBody(
-      resolveTemplateText(selectedTemplate.body, templateContext).replace(
-        /{{link}}/gi,
-        resolvedLink,
-      ),
-    );
+    setBody(buildTemplateBody(selectedTemplate));
+    setLastAppliedTemplateKey(`${selectedTemplate.id}:${targetTeamId}`);
   }
 
   return (
@@ -234,7 +237,10 @@ export default function LeadSmsForm({
           label=""
           value={selectedTemplateId}
           options={templateOptions}
-          onChange={(value) => setSelectedTemplateId(value)}
+          onChange={(value) => {
+            setSelectedTemplateId(value);
+            setLastAppliedTemplateKey("");
+          }}
           disabled={sending}
           placeholder={
             templates.length > 0
@@ -256,7 +262,10 @@ export default function LeadSmsForm({
             label="Managed team link"
             value={targetTeamId}
             options={managedTeamSelectOptions}
-            onChange={setTargetTeamId}
+            onChange={(value) => {
+              setTargetTeamId(value);
+              setLastAppliedTemplateKey("");
+            }}
             disabled={sending}
             placeholder="Select managed team"
           />
