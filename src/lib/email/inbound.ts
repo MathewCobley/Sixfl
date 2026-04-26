@@ -179,16 +179,16 @@ function stripQuotedEmailContent(value: string) {
     .trim();
 
   const cutPatterns = [
-    /\n\s*On\s.+?wrote:\s*/is,
-    /\n\s*From:\s.+/is,
-    /\n\s*Sent from my iPhone\s+On\s.+?wrote:\s*/is,
-    /\n\s*-{2,}\s*Original Message\s*-{2,}/is,
-    /\n\s*_{5,}\s*$/is,
+    /\n\s*On\s[\s\S]+?wrote:\s*/i,
+    /\n\s*From:\s[\s\S]+/i,
+    /\n\s*Sent from my iPhone\s+On\s[\s\S]+?wrote:\s*/i,
+    /\n\s*-{2,}\s*Original Message\s*-{2,}/i,
+    /\n\s*_{5,}\s*$/i,
   ];
 
   for (const pattern of cutPatterns) {
     const match = output.match(pattern);
-    if (match?.index && match.index > 0) {
+    if (typeof match?.index === "number" && match.index > 0) {
       output = output.slice(0, match.index).trim();
     }
   }
