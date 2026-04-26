@@ -33,6 +33,12 @@ function getFullName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
+function getFirstName(value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) return "";
+  return trimmed.split(/\s+/)[0] ?? "";
+}
+
 function parseRecipientValue(value: string) {
   const [type, id] = value.split(":");
 
@@ -235,6 +241,9 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
   const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
   const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
+  const claimCode = getTrimmedValue(formData.get("claimCode"));
+  const claimLink = getTrimmedValue(formData.get("claimLink"));
+  const captainDashboardUrl = getTrimmedValue(formData.get("captainDashboardUrl")) || claimLink;
 
   const selectedRecipientValues = formData
     .getAll("recipientValues")
@@ -284,12 +293,23 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       continue;
     }
 
+    const variables = {
+      firstName: getFirstName(recipientContext.displayName),
+      fullName: recipientContext.displayName,
+      teamName: recipientContext.emailBranding.teamName,
+      leagueName: recipientContext.emailBranding.leagueName ?? "",
+      claimCode,
+      claimLink,
+      captainDashboardUrl,
+    };
+
     const dispatch = await queueDirectNotification({
       recipientId: recipientContext.recipient.id,
       channel,
       audience: recipientContext.audience,
       subject: channel === NotificationChannel.EMAIL ? subject : null,
       body,
+      variables,
       isTransactional: recipientContext.audience === NotificationAudience.TEAM,
       sourceType: recipientContext.sourceType,
       sourceId: recipientContext.sourceId,
