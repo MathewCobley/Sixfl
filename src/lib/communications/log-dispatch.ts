@@ -31,6 +31,16 @@ function getParticipantRole(createdByUserId: string | null): MessageParticipantR
   return createdByUserId ? "ADMIN" : "SYSTEM";
 }
 
+function getProviderStatusLabel(dispatch: NotificationDispatch) {
+  const reason = dispatch.failureReason?.trim();
+
+  if (!reason) {
+    return dispatch.status;
+  }
+
+  return `${dispatch.status}: ${reason}`;
+}
+
 function buildPreview(bodyText: string) {
   const trimmed = bodyText.replace(/\s+/g, " ").trim();
   if (!trimmed) return null;
@@ -118,6 +128,7 @@ export async function logNotificationDispatchToThread(input: {
   const channel = getMessageChannel(dispatch.channel);
   const context = await resolveThreadContext(dispatch);
   const preview = buildPreview(dispatch.bodyText);
+  const providerStatus = getProviderStatusLabel(dispatch);
 
   const existingThread = await prisma.messageThread.findFirst({
     where: {
@@ -182,7 +193,7 @@ export async function logNotificationDispatchToThread(input: {
       toEmail: dispatch.channel === "EMAIL" ? recipient.email ?? null : null,
       provider: dispatch.provider,
       providerMessageId: dispatch.providerMessageId,
-      providerStatus: dispatch.status,
+      providerStatus,
       notificationDispatchId: dispatch.id,
       createdByUserId: dispatch.createdByUserId ?? null,
       sentAt: dispatch.sentAt,
