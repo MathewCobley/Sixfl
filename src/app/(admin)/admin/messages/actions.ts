@@ -6,6 +6,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { NotificationDispatchStatus } from "@prisma/client";
+
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import {
@@ -231,6 +234,76 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
       filter,
       threadId,
       extras: { sent: 1 },
+    }),
+  );
+}
+
+export async function cancelQueuedSmsMessageAction(formData: FormData) {
+  await requireAdmin();
+
+  const messageId = getTrimmedValue(formData.get("messageId"));
+  const threadId = getTrimmedValue(formData.get("threadId"));
+  const filter = getTrimmedValue(formData.get("filter")) || "open";
+
+  if (!messageId || !threadId) {
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "missing_message" } }));
+  }
+
+  const message = await prisma.messageEntry.findFirst({
+    where: {
+      id: messageId,
+      threadId,
+      channel: "SMS",
+      direction: "OUTBOUND",
+    },
+    select: {
+      id: true,
+      notificationDispatchId: true,
+      providerStatus: true,
+      dispatch: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!message?.notificationDispatchId || message.dispatch?.status !== NotificationDispatchStatus.QUEUED) {
+    redirect(
+      buildMessagesHref({
+        filter,
+        threadId,
+        extras: { error: "sms_not_queued" },
+      }),
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.notificationDispatch.update({
+      where: { id: message.notificationDispatchId },
+      data: {
+        status: NotificationDispatchStatus.CANCELLED,
+        cancelledAt: new Date(),
+        failureReason: "Cancelled by admin before SMS was sent.",
+      },
+    }),
+    prisma.messageEntry.update({
+      where: { id: message.id },
+      data: {
+        providerStatus: "CANCELLED: Cancelled by admin before SMS was sent.",
+        sentAt: null,
+      },
+    }),
+  ]);
+
+  await revalidateMessageViews(threadId);
+
+  redirect(
+    buildMessagesHref({
+      filter,
+      threadId,
+      extras: { cancelled: 1 },
     }),
   );
 }
