@@ -36,6 +36,34 @@ function getLatestInboundTitle(summary: Awaited<ReturnType<typeof getAdminInboxS
   );
 }
 
+function getComposeNotice(input: {
+  saved?: string;
+  channel?: string;
+  count?: string;
+  skipped?: string;
+  error?: string;
+}) {
+  if (input.error?.trim()) {
+    return {
+      tone: "error" as const,
+      message: decodeURIComponent(input.error),
+    };
+  }
+
+  if (input.saved === "queued") {
+    const channel = input.channel?.toUpperCase() === "SMS" ? "SMS" : "Email";
+    const count = Number(input.count ?? "1");
+    const skipped = Number(input.skipped ?? "0");
+
+    return {
+      tone: "success" as const,
+      message: `${channel} queued to ${Number.isFinite(count) ? count : 1} recipient${count === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} skipped because contact details were missing` : ""}.`,
+    };
+  }
+
+  return null;
+}
+
 export default async function AdminMessagesPage({
   searchParams,
 }: {
@@ -43,6 +71,11 @@ export default async function AdminMessagesPage({
     filter?: string;
     thread?: string;
     composeTeam?: string;
+    saved?: string;
+    channel?: string;
+    count?: string;
+    skipped?: string;
+    error?: string;
   }>;
 }) {
   await requireAdmin();
@@ -51,6 +84,13 @@ export default async function AdminMessagesPage({
   const selectedFilter = normaliseFilter(sp.filter);
   const selectedThreadId = sp.thread?.trim() || "";
   const composeTeamId = sp.composeTeam?.trim() || "";
+  const composeNotice = getComposeNotice({
+    saved: sp.saved,
+    channel: sp.channel,
+    count: sp.count,
+    skipped: sp.skipped,
+    error: sp.error,
+  });
 
   const [
     summary,
@@ -318,6 +358,18 @@ export default async function AdminMessagesPage({
           </div>
         </section>
 
+        {composeNotice ? (
+          <section
+            className={`rounded-2xl border p-4 text-sm ${
+              composeNotice.tone === "error"
+                ? "border-red-400/20 bg-red-500/10 text-red-100"
+                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+            }`}
+          >
+            {composeNotice.message}
+          </section>
+        ) : null}
+
         {composeTeam ? (
           <section className="rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
             <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -350,7 +402,7 @@ export default async function AdminMessagesPage({
 
             <TeamCommunicationsComposer
               teamId={composeTeam.id}
-              fromPath={`/admin/messages?composeTeam=${composeTeam.id}`}
+              fromPath={`/admin/messaging?composeTeam=${composeTeam.id}`}
               toEmail={composeTeam.contactEmail ?? null}
               toPhone={composeTeam.contactPhone ?? null}
               contactName={composeTeam.contactName ?? null}
