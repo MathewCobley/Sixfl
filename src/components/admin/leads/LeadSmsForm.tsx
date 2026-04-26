@@ -63,6 +63,15 @@ function resolveSmsLink(input: {
   return "";
 }
 
+function appendSnippet(current: string, snippet: string) {
+  const trimmedCurrent = current.trimEnd();
+  const trimmedSnippet = snippet.trim();
+
+  if (!trimmedCurrent) return trimmedSnippet;
+
+  return `${trimmedCurrent}\n\n${trimmedSnippet}`;
+}
+
 function getExpectedSmsSendLabel() {
   const now = new Date();
   const hour = Number(
@@ -73,7 +82,7 @@ function getExpectedSmsSendLabel() {
     }).format(now),
   );
 
-  if (hour >= 22) {
+  if (hour >= 21) {
     return "Will send at 09:00 tomorrow.";
   }
 
@@ -127,6 +136,11 @@ export default function LeadSmsForm({
     [templates, selectedTemplateId],
   );
 
+  const selectedManagedTeam = useMemo(
+    () => managedTeamOptions.find((team) => team.value === targetTeamId) ?? null,
+    [managedTeamOptions, targetTeamId],
+  );
+
   const templateContext = useMemo(() => {
     const derivedFullName = fullName?.trim() || firstName?.trim() || "";
 
@@ -154,6 +168,24 @@ export default function LeadSmsForm({
       /{{link}}/gi,
       resolvedLink,
     );
+  }
+
+  function insertSnippet(snippet: string) {
+    setBody((current) => appendSnippet(current, snippet));
+  }
+
+  function insertSignupLink() {
+    const url = signupUrl?.trim();
+    if (!url) return;
+
+    insertSnippet(`Register your interest here: ${url}`);
+  }
+
+  function insertTeamJoinLink() {
+    const url = selectedManagedTeam?.joinUrl?.trim();
+    if (!url) return;
+
+    insertSnippet(`Join the team here: ${url}`);
   }
 
   useEffect(() => {
@@ -282,6 +314,30 @@ export default function LeadSmsForm({
         />
       </div>
 
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">
+          Insert CTA / link
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={insertSignupLink}
+            disabled={!signupUrl?.trim() || sending}
+            className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
+          >
+            Insert signup link
+          </button>
+          <button
+            type="button"
+            onClick={insertTeamJoinLink}
+            disabled={!selectedManagedTeam?.joinUrl?.trim() || sending}
+            className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
+          >
+            Insert team join link
+          </button>
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center justify-between">
           <label className="block text-sm text-white/70">Message</label>
@@ -295,12 +351,12 @@ export default function LeadSmsForm({
             onChange={(e) => setBody(e.target.value)}
             disabled={sending}
             className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder={`Hi ${firstName || "there"},\n\nWe’re launching a new SIXFL team in your area. Reply YES if you want the details.`}
+            placeholder={`Hi ${firstName || "there"},\n\nWe’re launching a new SIXFL team in your area. Use the link to register your interest.`}
           />
         </div>
 
         <div className="mt-2 text-xs text-white/40">
-          SMS are only sent between 9:00 and 22:00. {expectedSendLabel}
+          SMS are only sent between 9:00 and 21:00. {expectedSendLabel}
         </div>
       </div>
 
@@ -310,7 +366,7 @@ export default function LeadSmsForm({
           disabled={sending || !phone || (requiresManagedTeam && !targetTeamId)}
           className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {sending ? "Sending..." : "Send SMS"}
+          {sending ? "Queueing..." : "Queue SMS"}
         </button>
 
         <button
