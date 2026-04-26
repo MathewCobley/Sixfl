@@ -61,6 +61,8 @@ type Props = {
   emailTemplates: EmailTemplateOption[];
   smsTemplates: SmsTemplateOption[];
   playerRecipients?: PlayerRecipientOption[];
+  initialSelectedRecipientValues?: string[];
+  showTeamContactRecipient?: boolean;
 };
 
 function getFirstName(value?: string | null) {
@@ -126,10 +128,18 @@ export default function TeamCommunicationsComposer({
   emailTemplates,
   smsTemplates,
   playerRecipients = [],
+  initialSelectedRecipientValues,
+  showTeamContactRecipient = true,
 }: Props) {
-  const [selectedRecipientValues, setSelectedRecipientValues] = useState<string[]>([
-    getRecipientValue({ type: "team" }),
-  ]);
+  const fallbackRecipientValue = showTeamContactRecipient
+    ? getRecipientValue({ type: "team" })
+    : playerRecipients[0]
+      ? getRecipientValue({ type: playerRecipients[0].type, id: playerRecipients[0].id })
+      : getRecipientValue({ type: "team" });
+
+  const [selectedRecipientValues, setSelectedRecipientValues] = useState<string[]>(() =>
+    initialSelectedRecipientValues?.length ? initialSelectedRecipientValues : [fallbackRecipientValue],
+  );
   const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -145,15 +155,19 @@ export default function TeamCommunicationsComposer({
 
   const recipientOptions = useMemo<RecipientOption[]>(
     () => [
-      {
-        value: getRecipientValue({ type: "team" }),
-        type: "team",
-        label: `${teamName} team contact`,
-        email: toEmail,
-        phone: toPhone,
-        roleLabel: "Team contact",
-        statusLabel: null,
-      },
+      ...(showTeamContactRecipient
+        ? [
+            {
+              value: getRecipientValue({ type: "team" }),
+              type: "team" as const,
+              label: `${teamName} team contact`,
+              email: toEmail,
+              phone: toPhone,
+              roleLabel: "Team contact",
+              statusLabel: null,
+            },
+          ]
+        : []),
       ...playerRecipients.map((recipient) => ({
         value: getRecipientValue({ type: recipient.type, id: recipient.id }),
         type: recipient.type,
@@ -164,7 +178,7 @@ export default function TeamCommunicationsComposer({
         statusLabel: recipient.statusLabel,
       })),
     ],
-    [playerRecipients, teamName, toEmail, toPhone],
+    [playerRecipients, showTeamContactRecipient, teamName, toEmail, toPhone],
   );
 
   const selectedRecipients = useMemo(() => {
@@ -235,15 +249,16 @@ export default function TeamCommunicationsComposer({
       .filter((recipient) => recipient.type !== "team")
       .map((recipient) => recipient.value);
 
-    setSelectedRecipientValues(playerValues.length ? playerValues : [getRecipientValue({ type: "team" })]);
+    setSelectedRecipientValues(playerValues.length ? playerValues : [fallbackRecipientValue]);
   }
 
   function selectAll() {
-    setSelectedRecipientValues(recipientOptions.map((recipient) => recipient.value));
+    const allValues = recipientOptions.map((recipient) => recipient.value);
+    setSelectedRecipientValues(allValues.length ? allValues : [fallbackRecipientValue]);
   }
 
-  function clearToTeamOnly() {
-    setSelectedRecipientValues([getRecipientValue({ type: "team" })]);
+  function clearToPrimaryOnly() {
+    setSelectedRecipientValues([fallbackRecipientValue]);
   }
 
   function insertEmailSnippet(snippet: string) {
@@ -310,10 +325,10 @@ export default function TeamCommunicationsComposer({
           </button>
           <button
             type="button"
-            onClick={clearToTeamOnly}
+            onClick={clearToPrimaryOnly}
             className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/65 transition hover:bg-white/[0.06]"
           >
-            Team contact only
+            {showTeamContactRecipient ? "Team contact only" : "Primary recipient only"}
           </button>
         </div>
 
