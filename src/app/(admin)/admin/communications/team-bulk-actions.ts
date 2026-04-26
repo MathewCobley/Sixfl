@@ -101,6 +101,7 @@ async function getTeamCommunicationRecipientContext(input: {
 
     const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);
     const profile = profiles.get(member.id) ?? null;
+    const sourceProspectId = profile?.sourceProspectId?.trim() || null;
     const displayName = member.user.name?.trim() || member.user.email?.trim() || "Squad member";
     const leagueName = member.team.league
       ? `${member.team.league.name}${member.team.league.season ? ` — ${member.team.league.season}` : ""}`
@@ -121,7 +122,7 @@ async function getTeamCommunicationRecipientContext(input: {
         teamId,
         teamMemberId: member.id,
         userId: member.user.id,
-        sourceProspectId: profile?.sourceProspectId ?? null,
+        sourceProspectId,
         entityType: "TEAM_MEMBER",
       },
     });
@@ -129,8 +130,8 @@ async function getTeamCommunicationRecipientContext(input: {
     return {
       recipient,
       audience: NotificationAudience.PLAYER,
-      sourceType: "TEAM_MEMBER",
-      sourceId: member.id,
+      sourceType: sourceProspectId ? "TEAM_PLAYER_PROSPECT" : "TEAM_MEMBER",
+      sourceId: sourceProspectId ?? member.id,
       displayName,
       emailBranding: {
         teamName: member.team.name,
@@ -140,7 +141,7 @@ async function getTeamCommunicationRecipientContext(input: {
         recipientType: "teamMember",
         teamMemberId: member.id,
         userId: member.user.id,
-        sourceProspectId: profile?.sourceProspectId ?? null,
+        sourceProspectId,
       },
     };
   }
