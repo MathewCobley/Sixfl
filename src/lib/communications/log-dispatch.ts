@@ -109,6 +109,30 @@ async function resolveThreadContext(dispatch: NotificationDispatch) {
     }
   }
 
+  if (dispatch.sourceType === "LEAD" && dispatch.sourceId) {
+    const lead = await prisma.interestLead.findUnique({
+      where: { id: dispatch.sourceId },
+      select: {
+        id: true,
+        contactName: true,
+        email: true,
+        phone: true,
+      },
+    });
+
+    if (lead) {
+      return {
+        sourceType: "LEAD",
+        sourceId: lead.id,
+        teamId: null,
+        leagueId: null,
+        contactName: lead.contactName || null,
+        contactEmail: lead.email || null,
+        contactPhone: lead.phone || null,
+      };
+    }
+  }
+
   return {
     sourceType: dispatch.sourceType?.trim() || null,
     sourceId: dispatch.sourceId?.trim() || null,
