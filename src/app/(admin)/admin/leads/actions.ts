@@ -20,6 +20,7 @@ import {
 } from "@prisma/client";
 import { Resend } from "resend";
 
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -789,7 +790,7 @@ export async function sendBulkLeadSmsAction(
         phone,
       });
 
-      await queueDirectNotification({
+      const dispatch = await queueDirectNotification({
         recipientId: recipient.id,
         channel: NotificationChannel.SMS,
         audience: NotificationAudience.LEAD,
@@ -806,6 +807,11 @@ export async function sendBulkLeadSmsAction(
           targetTeamId: targetManagedTeam?.id ?? null,
         },
         createdByUserId: user?.id ?? null,
+      });
+
+      await logNotificationDispatchToThread({
+        dispatch,
+        recipient,
       });
 
       if (lead.status === "NEW") {
@@ -826,6 +832,7 @@ export async function sendBulkLeadSmsAction(
   }
 
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/messaging");
 
   return {
     ok: true,
