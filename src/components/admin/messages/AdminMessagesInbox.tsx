@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
+import CancelQueuedSmsButton from "@/components/admin/messages/CancelQueuedSmsButton";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
 
@@ -227,6 +228,15 @@ function getFilterHref(filter: AdminMessagesInboxProps["selectedFilter"]): strin
   return `${ADMIN_MESSAGES_BASE_PATH}?filter=${filter}`;
 }
 
+function isQueuedSms(message: NonNullable<SelectedThread>["messages"][number]) {
+  return (
+    message.channel === "SMS" &&
+    message.direction === "OUTBOUND" &&
+    Boolean(message.dispatch?.id) &&
+    Boolean(message.providerStatus?.trim().toUpperCase().startsWith("QUEUED"))
+  );
+}
+
 export default function AdminMessagesInbox({
   threads,
   selectedFilter,
@@ -259,6 +269,17 @@ export default function AdminMessagesInbox({
     ],
     [threads],
   );
+
+  const queuedSmsMessages = useMemo(() => {
+    if (!selectedThread) return [];
+
+    return selectedThread.messages
+      .filter(isQueuedSms)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+  }, [selectedThread]);
 
   return (
     <section className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
@@ -422,10 +443,59 @@ export default function AdminMessagesInbox({
         </div>
       </div>
 
-      <AdminMessageThread
-        selectedFilter={selectedFilter}
-        thread={selectedThread}
-      />
+      <div className="space-y-4">
+        {selectedThread && queuedSmsMessages.length > 0 ? (
+          <div className="rounded-[1.5rem] border border-amber-400/25 bg-amber-500/10 p-4 text-amber-50 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
+                  Queued SMS in this thread
+                </div>
+                <div className="mt-1 text-sm text-amber-100/85">
+                  These SMS messages have not been sent yet. Cancel them here before the notification worker processes them.
+                </div>
+              </div>
+              <span className="inline-flex w-fit rounded-full border border-amber-400/25 bg-black/20 px-3 py-1 text-xs font-semibold text-amber-100">
+                {queuedSmsMessages.length} queued
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {queuedSmsMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className="grid gap-3 rounded-2xl border border-amber-400/20 bg-black/25 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+                >
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/70">
+                      {message.providerStatus || "QUEUED"}
+                    </div>
+                    <div className="mt-1 line-clamp-2 text-sm leading-6 text-white/80">
+                      {message.body}
+                    </div>
+                    <div className="mt-1 text-xs text-white/45">
+                      Queued {formatDateTime(message.createdAt)}
+                      {message.toNumber ? ` · To ${formatPhone(message.toNumber)}` : ""}
+                    </div>
+                  </div>
+
+                  <CancelQueuedSmsButton
+                    messageId={message.id}
+                    threadId={selectedThread.id}
+                    filter={selectedFilter}
+                    compact
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <AdminMessageThread
+          selectedFilter={selectedFilter}
+          thread={selectedThread}
+        />
+      </div>
     </section>
   );
 }
