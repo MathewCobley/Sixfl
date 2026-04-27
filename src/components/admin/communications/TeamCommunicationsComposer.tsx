@@ -114,6 +114,48 @@ function resolveText(
     .replaceAll("{{captainDashboardUrl}}", context.captainDashboardUrl);
 }
 
+function MarketingToggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${
+        checked
+          ? "border-amber-400/30 bg-amber-500/10"
+          : "border-white/10 bg-black/20 hover:bg-white/[0.04]"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-1"
+      />
+      <span>
+        <span className="block text-sm font-semibold text-white">
+          This is a marketing/promotional message
+        </span>
+        <span className="mt-1 block text-xs leading-5 text-white/55">
+          Leave this unticked for fixture, availability, squad, payment, admin, or operational messages. Tick it only for promotional campaigns, advertising, or non-essential marketing.
+        </span>
+        {checked ? (
+          <span className="mt-2 block rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Marketing opt-outs will be respected for this send.
+          </span>
+        ) : (
+          <span className="mt-2 block rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+            This will be treated as a service/operational message.
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
+
 export default function TeamCommunicationsComposer({
   teamId,
   fromPath,
@@ -145,6 +187,7 @@ export default function TeamCommunicationsComposer({
   const [emailBody, setEmailBody] = useState("");
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState("");
   const [smsBody, setSmsBody] = useState("");
+  const [isMarketingMessage, setIsMarketingMessage] = useState(false);
 
   const siteUrl = getSiteUrl();
   const playerDashboardUrl = `${siteUrl}/player/team/${teamId}`;
@@ -388,10 +431,16 @@ export default function TeamCommunicationsComposer({
         </div>
       </div>
 
+      <MarketingToggle
+        checked={isMarketingMessage}
+        onChange={setIsMarketingMessage}
+      />
+
       <form action={sendTeamCommunicationBulkMessageAction} className="rounded-3xl border border-white/10 bg-white/5 p-6">
         <input type="hidden" name="teamId" value={teamId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="EMAIL" />
+        <input type="hidden" name="isMarketing" value={isMarketingMessage ? "1" : "0"} />
         <input type="hidden" name="templateId" value={selectedEmailTemplate?.id || ""} />
         <input type="hidden" name="templateKey" value={selectedEmailTemplate?.key || ""} />
         <input type="hidden" name="ctaLabel" value={selectedEmailTemplate?.ctaLabel || ""} />
@@ -472,6 +521,7 @@ export default function TeamCommunicationsComposer({
         <input type="hidden" name="teamId" value={teamId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="SMS" />
+        <input type="hidden" name="isMarketing" value={isMarketingMessage ? "1" : "0"} />
         <input type="hidden" name="templateId" value={selectedSmsTemplate?.id || ""} />
         <input type="hidden" name="templateKey" value={selectedSmsTemplate?.key || ""} />
         <input type="hidden" name="claimCode" value={claimCode || ""} />
