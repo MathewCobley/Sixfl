@@ -21,7 +21,7 @@ type InboxTeam = {
   id: string;
   name: string;
   logoUrl: string | null;
-  teamMode: "STANDARD" | "MANAGED";
+  teamMode?: "STANDARD" | "MANAGED";
 };
 
 type InboxThreadListItem = {
@@ -100,6 +100,15 @@ type SelectedThread = {
     receivedAt: string | null;
     readAt: string | null;
     createdAt: string;
+    dispatch?: {
+      id: string;
+      template: {
+        id: string;
+        name: string;
+        key: string;
+      } | null;
+      metadata: unknown;
+    } | null;
   }>;
 } | null;
 
