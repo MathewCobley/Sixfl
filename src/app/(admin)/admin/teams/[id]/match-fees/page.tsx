@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   createPlayerMatchFeesAction,
+  markPlayerMatchFeePaidAction,
   updatePlayerMatchFeeAmountAction,
   updatePlayerMatchFeeStatusAction,
 } from "./actions";
@@ -240,6 +241,18 @@ export default async function AdminManagedPlayerMatchFeesPage({
     { total: 0, paid: 0, open: 0, waived: 0 },
   );
 
+  const cashTotal = fees.reduce((sum, fee) => {
+    return fee.status === "PAID" && fee.note?.includes("Paid cash")
+      ? sum + fee.amountPence
+      : sum;
+  }, 0);
+
+  const onlineTotal = fees.reduce((sum, fee) => {
+    return fee.status === "PAID" && fee.note?.includes("Paid online")
+      ? sum + fee.amountPence
+      : sum;
+  }, 0);
+
   const paidCount = fees.filter((fee) => fee.status === "PAID").length;
   const openCount = fees.filter((fee) => fee.status === "OPEN").length;
   const savedMessage = getSavedMessage(sp.saved);
@@ -322,6 +335,21 @@ export default async function AdminManagedPlayerMatchFeesPage({
           <p className="mt-1 text-sm text-sky-100/70">Manual admin override.</p>
         </div>
       </section>
+
+      {fees.length > 0 ? (
+        <section className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+            <p className="text-xs uppercase tracking-[0.16em] text-white/45">Cash collected</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{formatMoney(cashTotal)}</p>
+            <p className="mt-1 text-sm text-white/50">Marked using the Paid cash button.</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+            <p className="text-xs uppercase tracking-[0.16em] text-white/45">Online/manual collected</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{formatMoney(onlineTotal)}</p>
+            <p className="mt-1 text-sm text-white/50">Marked using the Paid online button.</p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.3fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
@@ -503,7 +531,7 @@ export default async function AdminManagedPlayerMatchFeesPage({
           <div>
             <h2 className="text-lg font-semibold text-white">Fee tracker</h2>
             <p className="mt-1 text-sm text-white/55">
-              Manual tracking for the selected fixture. Payment links can be added once this workflow is proven.
+              Manual tracking for the selected fixture. Use Paid cash or Paid online so the night can be reconciled properly.
             </p>
           </div>
           {selectedFixture ? (
@@ -541,6 +569,8 @@ export default async function AdminManagedPlayerMatchFeesPage({
                 ? [fee.prospect.email, fee.prospect.phone].filter(Boolean).join(" · ") || "No contact"
                 : "No contact";
 
+            const statusButtons = ["OPEN", "WAIVED", "CANCELLED"] as PlayerMatchFeeStatus[];
+
             return (
               <div
                 key={fee.id}
@@ -563,6 +593,11 @@ export default async function AdminManagedPlayerMatchFeesPage({
                     {fee.waivedAt ? ` · Waived ${formatUkDateTime(fee.waivedAt)}` : ""}
                     {fee.cancelledAt ? ` · Cancelled ${formatUkDateTime(fee.cancelledAt)}` : ""}
                   </div>
+                  {fee.note ? (
+                    <div className="mt-2 whitespace-pre-line rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/55">
+                      {fee.note}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -585,7 +620,35 @@ export default async function AdminManagedPlayerMatchFeesPage({
                     </button>
                   </form>
 
-                  {(["OPEN", "PAID", "WAIVED", "CANCELLED"] as PlayerMatchFeeStatus[]).map((status) => (
+                  <form action={markPlayerMatchFeePaidAction}>
+                    <input type="hidden" name="teamId" value={team.id} />
+                    <input type="hidden" name="fixtureId" value={fee.fixtureId} />
+                    <input type="hidden" name="feeId" value={fee.id} />
+                    <input type="hidden" name="method" value="CASH" />
+                    <button
+                      type="submit"
+                      disabled={fee.status === "PAID" && fee.note?.includes("Paid cash")}
+                      className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Paid cash
+                    </button>
+                  </form>
+
+                  <form action={markPlayerMatchFeePaidAction}>
+                    <input type="hidden" name="teamId" value={team.id} />
+                    <input type="hidden" name="fixtureId" value={fee.fixtureId} />
+                    <input type="hidden" name="feeId" value={fee.id} />
+                    <input type="hidden" name="method" value="ONLINE" />
+                    <button
+                      type="submit"
+                      disabled={fee.status === "PAID" && fee.note?.includes("Paid online")}
+                      className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Paid online
+                    </button>
+                  </form>
+
+                  {statusButtons.map((status) => (
                     <form key={status} action={updatePlayerMatchFeeStatusAction}>
                       <input type="hidden" name="teamId" value={team.id} />
                       <input type="hidden" name="fixtureId" value={fee.fixtureId} />
