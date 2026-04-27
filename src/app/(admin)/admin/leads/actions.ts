@@ -210,6 +210,65 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+async function ensureLeadEmailNotificationRecipient(input: {
+  leadId: string;
+  contactName?: string | null;
+  email: string;
+}) {
+  const email = input.email.trim().toLowerCase();
+
+  if (!email || !isValidEmail(email)) {
+    throw new Error("Lead does not have a valid email address.");
+  }
+
+  const recipient = await prisma.notificationRecipient.upsert({
+    where: {
+      sourceType_sourceId: {
+        sourceType: "LEAD",
+        sourceId: input.leadId,
+      },
+    },
+    update: {
+      audience: NotificationAudience.LEAD,
+      displayName: input.contactName?.trim() || null,
+      email,
+      emailNormalized: email,
+      transactionalEmailOptIn: true,
+      marketingEmailOptIn: true,
+    },
+    create: {
+      sourceType: "LEAD",
+      sourceId: input.leadId,
+      audience: NotificationAudience.LEAD,
+      displayName: input.contactName?.trim() || null,
+      email,
+      emailNormalized: email,
+      transactionalEmailOptIn: true,
+      marketingEmailOptIn: true,
+    },
+  });
+
+  await prisma.notificationPreference.upsert({
+    where: {
+      recipientId: recipient.id,
+    },
+    update: {
+      emailEnabled: true,
+      marketingEmailEnabled: true,
+    },
+    create: {
+      recipientId: recipient.id,
+      emailEnabled: true,
+      marketingEmailEnabled: true,
+      smsEnabled: true,
+      marketingSmsEnabled: false,
+      urgentSmsEnabled: true,
+    },
+  });
+
+  return recipient;
+}
+
 async function ensureLeadSmsNotificationRecipient(input: {
   leadId: string;
   contactName?: string | null;
@@ -416,7 +475,7 @@ export async function sendBulkLeadEmailAction(
   _prevState: BulkEmailActionState,
   formData: FormData,
 ): Promise<BulkEmailActionState> {
-  await requireAdmin();
+  const { user } = await requireAdmin();
 
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
@@ -451,20 +510,6 @@ export async function sendBulkLeadEmailAction(
     return {
       ok: false,
       error: "Please enter a message.",
-    };
-  }
-
-  if (!process.env.RESEND_API_KEY) {
-    return {
-      ok: false,
-      error: "RESEND_API_KEY is missing from your environment variables.",
-    };
-  }
-
-  if (!process.env.EMAIL_FROM) {
-    return {
-      ok: false,
-      error: "EMAIL_FROM is missing from your environment variables.",
     };
   }
 
@@ -558,6 +603,8 @@ export async function sendBulkLeadEmailAction(
       email: true,
       status: true,
       contactName: true,
+      area: true,
+      teamName: true,
     },
   });
 
@@ -582,33 +629,54 @@ export async function sendBulkLeadEmailAction(
         continue;
       }
 
-      const personalisedSubject = personaliseTemplateText(
-        subject,
-        lead.contactName,
-      );
-      const personalisedBody = personaliseTemplateText(body, lead.contactName);
-
-      const signedTextBody = appendSIXFLTextSignature(personalisedBody);
-      const signedHtmlBody = buildSIXFLEmailHtml({
-        body: signedTextBody,
-        cta: resolvedCta,
+      const personalisedSubject = resolveLeadCampaignText({
+        text: subject,
+        contactName: lead.contactName,
+        area: lead.area ?? null,
+        teamName: lead.teamName ?? null,
+        signupUrl: `${baseUrl}/register-interest`,
+      });
+      const personalisedBody = resolveLeadCampaignText({
+        text: body,
+        contactName: lead.contactName,
+        area: lead.area ?? null,
+        teamName: lead.teamName ?? null,
+        signupUrl: `${baseUrl}/register-interest`,
+        link: resolvedCta?.url ?? "",
       });
 
-      await resend.emails.send({
-        from: process.env.EMAIL_FROM,
-        to: email,
+      const recipient = await ensureLeadEmailNotificationRecipient({
+        leadId: lead.id,
+        contactName: lead.contactName,
+        email,
+      });
+
+      const dispatch = await queueDirectNotification({
+        recipientId: recipient.id,
+        channel: NotificationChannel.EMAIL,
+        audience: NotificationAudience.LEAD,
         subject: personalisedSubject,
-        text: signedTextBody,
-        html: signedHtmlBody,
+        body: personalisedBody,
+        isTransactional: false,
+        sourceType: "LEAD",
+        sourceId: lead.id,
+        emailCta: resolvedCta,
+        metadata: {
+          origin: "lead_bulk_email",
+          originLabel: "Sent from leads page",
+          leadId: lead.id,
+          contactName: lead.contactName?.trim() || null,
+          ctaLabel: resolvedCta?.label ?? null,
+          ctaUrl: resolvedCta?.url ?? null,
+          ctaUrlKey,
+          targetTeamId: targetManagedTeam?.id ?? null,
+        },
+        createdByUserId: user?.id ?? null,
       });
 
-      await prisma.interestLeadEmail.create({
-        data: {
-          interestLeadId: lead.id,
-          subject: personalisedSubject,
-          body: signedTextBody,
-          sentTo: email,
-        },
+      await logNotificationDispatchToThread({
+        dispatch,
+        recipient,
       });
 
       if (lead.status === "NEW") {
@@ -629,6 +697,7 @@ export async function sendBulkLeadEmailAction(
   }
 
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/messaging");
 
   return {
     ok: true,
