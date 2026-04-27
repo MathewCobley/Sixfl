@@ -62,6 +62,38 @@ function getMatchFeesPath(teamId: string, fixtureId?: string, suffix = "") {
   return `/admin/teams/${teamId}/match-fees${query}`;
 }
 
+function getPaidMethodNote(method: string) {
+  switch (method) {
+    case "CASH":
+      return "Paid cash";
+    case "ONLINE":
+      return "Paid online/manual";
+    case "CARD":
+      return "Paid by card";
+    case "BANK_TRANSFER":
+      return "Paid by bank transfer";
+    default:
+      return "Paid manually";
+  }
+}
+
+function mergePaymentNote(input: {
+  existingNote: string | null;
+  methodNote: string;
+}) {
+  const existingNote = input.existingNote?.trim();
+
+  if (!existingNote) {
+    return input.methodNote;
+  }
+
+  if (existingNote.includes(input.methodNote)) {
+    return existingNote;
+  }
+
+  return `${existingNote}\n${input.methodNote}`;
+}
+
 export async function createPlayerMatchFeesAction(formData: FormData) {
   await requireAdmin();
 
@@ -212,6 +244,57 @@ export async function updatePlayerMatchFeeStatusAction(formData: FormData) {
       paidAt: status === "PAID" ? now : null,
       waivedAt: status === "WAIVED" ? now : null,
       cancelledAt: status === "CANCELLED" ? now : null,
+    },
+  });
+
+  revalidatePath(getMatchFeesPath(teamId, fixtureId));
+  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
+}
+
+export async function markPlayerMatchFeePaidAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = getString(formData, "teamId");
+  const fixtureId = getString(formData, "fixtureId");
+  const feeId = getString(formData, "feeId");
+  const method = getString(formData, "method");
+
+  if (!teamId || !fixtureId || !feeId) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  const existingFee = await prisma.playerMatchFee.findFirst({
+    where: {
+      id: feeId,
+      teamId,
+      fixtureId,
+    },
+    select: {
+      id: true,
+      note: true,
+    },
+  });
+
+  if (!existingFee) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  const now = new Date();
+  const methodNote = getPaidMethodNote(method);
+
+  await prisma.playerMatchFee.update({
+    where: {
+      id: existingFee.id,
+    },
+    data: {
+      status: "PAID",
+      paidAt: now,
+      waivedAt: null,
+      cancelledAt: null,
+      note: mergePaymentNote({
+        existingNote: existingFee.note,
+        methodNote,
+      }),
     },
   });
 
