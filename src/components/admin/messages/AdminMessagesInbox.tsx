@@ -17,6 +17,13 @@ type InboxLeague = {
   season: string | null;
 };
 
+type InboxTeam = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  teamMode: "STANDARD" | "MANAGED";
+};
+
 type InboxThreadListItem = {
   id: string;
   channel: "SMS" | "EMAIL";
@@ -32,11 +39,7 @@ type InboxThreadListItem = {
   latestMessageAt: string | null;
   latestInboundAt: string | null;
   latestOutboundAt: string | null;
-  team: {
-    id: string;
-    name: string;
-    logoUrl: string | null;
-  } | null;
+  team: InboxTeam | null;
   league: {
     id: string;
     name: string;
@@ -65,11 +68,7 @@ type SelectedThread = {
   latestMessageAt: string | null;
   latestInboundAt: string | null;
   latestOutboundAt: string | null;
-  team: {
-    id: string;
-    name: string;
-    logoUrl: string | null;
-  } | null;
+  team: InboxTeam | null;
   league: {
     id: string;
     name: string;
@@ -136,10 +135,27 @@ function formatPhone(value: string | null): string {
   return value;
 }
 
+function getPrimaryContactLabel(thread: InboxThreadListItem): string | null {
+  if (thread.contactName?.trim()) return thread.contactName.trim();
+  if (thread.channel === "EMAIL") {
+    return thread.contactEmail || thread.emailNormalized || null;
+  }
+
+  if (thread.contactPhone) return formatPhone(thread.contactPhone);
+  return thread.phoneNormalized || null;
+}
+
 function getThreadTitle(thread: InboxThreadListItem): string {
+  const isManagedTeam = thread.team?.teamMode === "MANAGED";
+  const primaryContact = getPrimaryContactLabel(thread);
+
+  if (isManagedTeam) {
+    return primaryContact || thread.team?.name || "Unknown contact";
+  }
+
   return (
     thread.team?.name ||
-    thread.contactName ||
+    primaryContact ||
     thread.contactEmail ||
     thread.emailNormalized ||
     thread.contactPhone ||
@@ -149,27 +165,42 @@ function getThreadTitle(thread: InboxThreadListItem): string {
 }
 
 function getThreadSubtitle(thread: InboxThreadListItem): string {
-  const primaryContact =
-    thread.channel === "EMAIL"
-      ? thread.contactEmail || thread.emailNormalized
-      : thread.contactPhone
-        ? formatPhone(thread.contactPhone)
-        : thread.phoneNormalized;
+  const isManagedTeam = thread.team?.teamMode === "MANAGED";
+  const primaryContact = getPrimaryContactLabel(thread);
+  const leagueLabel = thread.league
+    ? thread.league.season
+      ? `${thread.league.name} · ${thread.league.season}`
+      : thread.league.name
+    : null;
 
-  const parts = [
-    thread.league
-      ? thread.league.season
-        ? `${thread.league.name} · ${thread.league.season}`
-        : thread.league.name
-      : null,
-    primaryContact,
-  ].filter(Boolean);
+  if (isManagedTeam && thread.team) {
+    return [
+      `Managed team: ${thread.team.name}`,
+      leagueLabel,
+      primaryContact && primaryContact !== getThreadTitle(thread)
+        ? primaryContact
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  const parts = [leagueLabel, primaryContact].filter(Boolean);
 
   if (parts.length > 0) {
     return parts.join(" · ");
   }
 
   return thread.channel === "EMAIL" ? "General email contact" : "General SMS contact";
+}
+
+function getAvatarLabel(thread: InboxThreadListItem): string {
+  const isManagedTeam = thread.team?.teamMode === "MANAGED";
+  const label = isManagedTeam
+    ? getPrimaryContactLabel(thread) || thread.team?.name
+    : thread.team?.name || getPrimaryContactLabel(thread) || thread.contactEmail;
+
+  return (label || "M").slice(0, 2).toUpperCase();
 }
 
 function getStatusLabel(status: InboxThreadListItem["status"]): string {
@@ -290,6 +321,7 @@ export default function AdminMessagesInbox({
             <div className="space-y-3">
               {threads.map((thread) => {
                 const isSelected = selectedThreadId === thread.id;
+                const isManagedTeam = thread.team?.teamMode === "MANAGED";
 
                 return (
                   <Link
@@ -304,7 +336,7 @@ export default function AdminMessagesInbox({
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-white">
-                        {thread.team?.logoUrl ? (
+                        {thread.team?.logoUrl && !isManagedTeam ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={thread.team.logoUrl}
@@ -312,19 +344,22 @@ export default function AdminMessagesInbox({
                             className="h-full w-full rounded-2xl object-cover"
                           />
                         ) : (
-                          <span>
-                            {(thread.team?.name || thread.contactName || thread.contactEmail || "M")
-                              .slice(0, 2)
-                              .toUpperCase()}
-                          </span>
+                          <span>{getAvatarLabel(thread)}</span>
                         )}
                       </div>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-white">
-                              {getThreadTitle(thread)}
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className="truncate text-sm font-semibold text-white">
+                                {getThreadTitle(thread)}
+                              </div>
+                              {isManagedTeam ? (
+                                <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200">
+                                  Managed
+                                </span>
+                              ) : null}
                             </div>
                             <div className="mt-1 truncate text-xs text-white/45">
                               {getThreadSubtitle(thread)}
