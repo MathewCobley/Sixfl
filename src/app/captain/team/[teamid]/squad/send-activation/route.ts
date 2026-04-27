@@ -9,8 +9,8 @@ import {
   NotificationRecipientSourceType,
 } from "@prisma/client";
 
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
-import { linkQueuedEmailDispatchToThread } from "@/lib/messaging/service";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
@@ -279,18 +279,9 @@ export async function POST(
     createdByUserId: user?.id ?? null,
   });
 
-  await linkQueuedEmailDispatchToThread({
-    notificationDispatchId: dispatch.id,
-    recipientId: recipient.id,
-    teamId: teamid,
-    sourceType: "TEAM_PLAYER_PROSPECT",
-    sourceId: prospect.id,
-    contactName,
-    toEmail: email,
-    subject: dispatch.subject ?? "SIXFL squad activation",
-    bodyText: dispatch.bodyText,
-    bodyHtml: dispatch.bodyHtml,
-    createdByUserId: user?.id ?? null,
+  await logNotificationDispatchToThread({
+    dispatch,
+    recipient,
   });
 
   await prisma.teamPlayerProspect.update({
@@ -301,6 +292,8 @@ export async function POST(
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
   revalidatePath(`/captain/team/${teamid}/prospects`);
+  revalidatePath(`/admin/teams/${teamid}/prospects/${prospect.id}/communications`);
+  revalidatePath("/admin/messaging");
 
   return NextResponse.redirect(
     getSquadRedirectUrl(
