@@ -115,6 +115,33 @@ function formatUkDateTime(value: Date) {
   });
 }
 
+function ProspectInput({
+  label,
+  name,
+  defaultValue,
+  type = "text",
+  placeholder,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string | null;
+  type?: string;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block space-y-2">
+      <span className="text-sm font-medium text-white/60">{label}</span>
+      <input
+        name={name}
+        type={type}
+        defaultValue={defaultValue ?? ""}
+        placeholder={placeholder}
+        className="h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-500/60 focus:bg-black/30"
+      />
+    </label>
+  );
+}
+
 export default function AdminProspectCard({
   teamId,
   prospect,
@@ -129,7 +156,7 @@ export default function AdminProspectCard({
   return (
     <div className="space-y-5 px-6 py-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-base font-semibold text-white">
               {getProspectName({
@@ -167,33 +194,47 @@ export default function AdminProspectCard({
             {completionScore}/6 profile fields completed · Updated {formatUkDateTime(prospect.updatedAt)}
           </div>
 
-          {prospect.ageBand ? (
-            <div className="mt-2 text-sm text-white/70">Age band: {prospect.ageBand}</div>
-          ) : null}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {prospect.ageBand ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70">
+                <span className="text-white/45">Age band:</span> {prospect.ageBand}
+              </div>
+            ) : null}
 
-          {prospect.preferredPositions ? (
-            <div className="mt-2 text-sm text-white/70">Position: {prospect.preferredPositions}</div>
-          ) : null}
+            {prospect.preferredPositions ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70">
+                <span className="text-white/45">Position:</span> {prospect.preferredPositions}
+              </div>
+            ) : null}
 
-          {prospect.experienceSummary ? (
-            <div className="mt-2 text-sm text-white/60">Experience: {prospect.experienceSummary}</div>
-          ) : null}
+            {prospect.experienceSummary ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/60">
+                <span className="text-white/45">Experience:</span> {prospect.experienceSummary}
+              </div>
+            ) : null}
 
-          {prospect.availabilityLevel ? (
-            <div className="mt-2 text-sm text-white/60">Availability level: {prospect.availabilityLevel}</div>
-          ) : null}
+            {prospect.availabilityLevel ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/60">
+                <span className="text-white/45">Availability:</span> {prospect.availabilityLevel}
+              </div>
+            ) : null}
 
-          {preferredNights ? (
-            <div className="mt-2 text-sm text-white/60">Preferred nights: {preferredNights}</div>
-          ) : null}
+            {preferredNights ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/60 sm:col-span-2">
+                <span className="text-white/45">Preferred nights:</span> {preferredNights}
+              </div>
+            ) : null}
+          </div>
 
           {prospect.availabilitySummary ? (
-            <div className="mt-2 text-sm text-white/50">{prospect.availabilitySummary}</div>
+            <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm leading-6 text-white/60">
+              {prospect.availabilitySummary}
+            </div>
           ) : null}
         </div>
 
-        <div className="min-w-[220px]">
-          <form action={updateAdminProspectStatusAction} className="min-w-[220px]">
+        <div className="w-full lg:w-[260px] lg:shrink-0">
+          <form action={updateAdminProspectStatusAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <input type="hidden" name="teamId" value={teamId} />
             <input type="hidden" name="prospectId" value={prospect.id} />
             <FormListboxField
@@ -223,90 +264,101 @@ export default function AdminProspectCard({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
-        <form action={updateAdminProspectDetailsAction} className="space-y-4">
+      <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4 sm:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Player details
+            </div>
+            <h3 className="mt-1 text-lg font-semibold text-white">
+              Edit readable contact details
+            </h3>
+            <p className="mt-1 text-sm text-white/55">
+              Use this to fix names, missing emails and mobile numbers before promoting the player.
+            </p>
+          </div>
+        </div>
+
+        <form action={updateAdminProspectDetailsAction} className="mt-5 space-y-4">
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="prospectId" value={prospect.id} />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm text-white/60">First name</label>
-              <input
-                name="firstName"
-                type="text"
-                defaultValue={prospect.firstName}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-              />
-            </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ProspectInput
+              label="First name"
+              name="firstName"
+              defaultValue={prospect.firstName}
+            />
 
-            <div className="space-y-2">
-              <label className="text-sm text-white/60">Last name</label>
-              <input
-                name="lastName"
-                type="text"
-                defaultValue={prospect.lastName ?? ""}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-              />
-            </div>
+            <ProspectInput
+              label="Last name"
+              name="lastName"
+              defaultValue={prospect.lastName}
+            />
+
+            <ProspectInput
+              label="Email"
+              name="email"
+              type="email"
+              defaultValue={prospect.email}
+              placeholder="Add email address"
+            />
+
+            <ProspectInput
+              label="Phone"
+              name="phone"
+              defaultValue={prospect.phone}
+              placeholder="Mobile number"
+            />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm text-white/60">Email</label>
-              <input
-                name="email"
-                type="email"
-                defaultValue={prospect.email ?? ""}
-                placeholder="Add email address"
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm text-white/60">Phone</label>
-              <input
-                name="phone"
-                type="text"
-                defaultValue={prospect.phone ?? ""}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-              />
-            </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+            >
+              Save details
+            </button>
           </div>
-
-          <button
-            type="submit"
-            className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-          >
-            Save details
-          </button>
         </form>
+      </div>
 
-        <form action={updateAdminProspectNotesAction} className="space-y-3">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
+        <form action={updateAdminProspectNotesAction} className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4 sm:p-5">
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="prospectId" value={prospect.id} />
 
-          <textarea
-            name="notes"
-            rows={6}
-            defaultValue={prospect.notes ?? ""}
-            placeholder="Internal notes"
-            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white outline-none transition focus:border-emerald-500/60"
-          />
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-white/60">Internal notes</span>
+            <textarea
+              name="notes"
+              rows={5}
+              defaultValue={prospect.notes ?? ""}
+              placeholder="Internal notes"
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/35 focus:border-emerald-500/60"
+            />
+          </label>
 
           <button
             type="submit"
-            className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+            className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
           >
             Save notes
           </button>
         </form>
 
-        <form action={convertAdminProspectToMemberAction} className="lg:self-start">
+        <form action={convertAdminProspectToMemberAction} className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-4 sm:p-5 xl:self-start">
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="prospectId" value={prospect.id} />
+          <div className="text-sm font-semibold text-emerald-50">
+            Ready for squad?
+          </div>
+          <p className="mt-2 text-sm leading-6 text-emerald-100/70">
+            Promote this player once you are happy with their details.
+          </p>
           <button
             type="submit"
-            className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+            className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
           >
             Promote to squad
           </button>
