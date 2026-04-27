@@ -218,7 +218,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         transactionalEmailOptIn: true,
         transactionalSmsOptIn: true,
         metadata: {
-          teamId,
+          teamId: teamid,
           teamName: membership.team.name,
           userId: membership.userId,
           managedTeamPlayer: true,
@@ -237,7 +237,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         transactionalEmailOptIn: true,
         transactionalSmsOptIn: true,
         metadata: {
-          teamId,
+          teamId: teamid,
           teamName: membership.team.name,
           userId: membership.userId,
           managedTeamPlayer: true,
