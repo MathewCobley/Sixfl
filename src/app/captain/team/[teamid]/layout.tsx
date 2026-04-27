@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -54,6 +55,8 @@ export default async function CaptainTeamLayout({
 
   return (
     <div className="min-h-screen bg-[#07130f] text-white">
+      {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedSquadEditLinks /> : null}
+
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
         <header className="overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
           <div className="border-b border-white/10 px-6 py-5">
