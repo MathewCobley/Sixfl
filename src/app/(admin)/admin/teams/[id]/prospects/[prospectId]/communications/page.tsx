@@ -7,6 +7,9 @@ import { notFound } from "next/navigation";
 import { NotificationChannel, NotificationDispatchStatus } from "@prisma/client";
 
 import { cancelQueuedSmsMessageAction } from "@/app/(admin)/admin/messages/actions";
+import CommunicationStatusBadge, {
+  CommunicationStatusExplanation,
+} from "@/components/admin/communications/CommunicationStatusBadge";
 import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
@@ -89,27 +92,6 @@ function formatDispatchStatus(status: NotificationDispatchStatus) {
   }
 }
 
-function getDisplayStatusLabel(statusLabel: string) {
-  const trimmed = statusLabel.trim();
-  const upper = trimmed.toUpperCase();
-
-  if (upper.startsWith("SKIPPED")) {
-    const reason = trimmed.includes(":") ? trimmed.split(":").slice(1).join(":").trim() : "Message rules prevented this SMS from being sent.";
-    return `NOT SENT: ${reason}`;
-  }
-
-  if (upper.startsWith("FAILED")) {
-    const reason = trimmed.includes(":") ? trimmed.split(":").slice(1).join(":").trim() : "Sending failed.";
-    return `FAILED: ${reason}`;
-  }
-
-  if (upper.startsWith("CANCELLED")) {
-    return trimmed.startsWith("CANCELLED") ? trimmed : "CANCELLED";
-  }
-
-  return trimmed;
-}
-
 function getMetadataRecord(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
@@ -127,24 +109,6 @@ function getOriginLabel(metadata: unknown) {
   }
 
   return "Notification dispatch";
-}
-
-function getStatusTone(statusLabel: string) {
-  const upper = statusLabel.toUpperCase();
-
-  if (upper.startsWith("FAILED") || upper.startsWith("SKIPPED") || upper.startsWith("NOT SENT") || upper.startsWith("CANCELLED")) {
-    return "border-red-400/20 bg-red-500/10 text-red-100";
-  }
-
-  if (upper.startsWith("QUEUED") || upper.startsWith("PROCESSING")) {
-    return "border-amber-400/20 bg-amber-500/10 text-amber-100";
-  }
-
-  if (upper.startsWith("SENT")) {
-    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-  }
-
-  return "border-white/10 bg-white/5 text-white/55";
 }
 
 export default async function AdminProspectCommunicationsPage({
@@ -521,72 +485,60 @@ export default async function AdminProspectCommunicationsPage({
             {timeline.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">No communications have been logged yet.</div>
             ) : (
-              timeline.map((item) => {
-                const displayStatusLabel = getDisplayStatusLabel(item.statusLabel);
-
-                return (
-                  <div key={item.id} className="space-y-3 px-6 py-5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">{item.channel}</span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">{item.direction}</span>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusTone(displayStatusLabel)}`}>{displayStatusLabel}</span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">{item.sourceLabel}</span>
-                      {item.templateName ? (
-                        <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-100">Template: {item.templateName}</span>
-                      ) : null}
-                      {item.templateKey ? (
-                        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 font-mono text-[11px] text-white/60">{item.templateKey}</span>
-                      ) : null}
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-semibold text-white">{item.subject}</div>
-                      <div className="mt-1 text-xs text-white/45">
-                        {item.contactName}
-                        {item.contactValue ? ` · ${item.contactValue}` : ""}
-                      </div>
-                    </div>
-
-                    {item.channel === NotificationChannel.EMAIL && item.bodyHtml ? (
-                      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-                        <div dangerouslySetInnerHTML={{ __html: item.bodyHtml }} />
-                      </div>
-                    ) : (
-                      <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{item.bodyText}</div>
-                    )}
-
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/45">
-                      <span>{formatUkDateTime(item.occurredAt)}</span>
-
-                      {item.canCancelQueuedSms && item.messageEntryId && item.threadId ? (
-                        <form action={cancelQueuedSmsMessageAction}>
-                          <input type="hidden" name="messageId" value={item.messageEntryId} />
-                          <input type="hidden" name="threadId" value={item.threadId} />
-                          <input type="hidden" name="filter" value="all" />
-                          <button
-                            type="submit"
-                            className="inline-flex items-center rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/15"
-                          >
-                            Cancel queued SMS
-                          </button>
-                        </form>
-                      ) : null}
-                    </div>
-
-                    {item.statusLabel.toUpperCase().startsWith("SKIPPED") ? (
-                      <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                        This SMS was not sent. {displayStatusLabel.replace(/^NOT SENT:\s*/i, "")}
-                      </div>
+              timeline.map((item) => (
+                <div key={item.id} className="space-y-3 px-6 py-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">{item.channel}</span>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">{item.direction}</span>
+                    <CommunicationStatusBadge status={item.statusLabel} />
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/55">{item.sourceLabel}</span>
+                    {item.templateName ? (
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-100">Template: {item.templateName}</span>
                     ) : null}
-
-                    {item.failureReason ? (
-                      <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                        Failure: {item.failureReason}
-                      </div>
+                    {item.templateKey ? (
+                      <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 font-mono text-[11px] text-white/60">{item.templateKey}</span>
                     ) : null}
                   </div>
-                );
-              })
+
+                  <div>
+                    <div className="text-sm font-semibold text-white">{item.subject}</div>
+                    <div className="mt-1 text-xs text-white/45">
+                      {item.contactName}
+                      {item.contactValue ? ` · ${item.contactValue}` : ""}
+                    </div>
+                  </div>
+
+                  {item.channel === NotificationChannel.EMAIL && item.bodyHtml ? (
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+                      <div dangerouslySetInnerHTML={{ __html: item.bodyHtml }} />
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{item.bodyText}</div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/45">
+                    <span>{formatUkDateTime(item.occurredAt)}</span>
+
+                    {item.canCancelQueuedSms && item.messageEntryId && item.threadId ? (
+                      <form action={cancelQueuedSmsMessageAction}>
+                        <input type="hidden" name="messageId" value={item.messageEntryId} />
+                        <input type="hidden" name="threadId" value={item.threadId} />
+                        <input type="hidden" name="filter" value="all" />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/15"
+                        >
+                          Cancel queued SMS
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+
+                  <CommunicationStatusExplanation status={item.statusLabel}>
+                    {item.failureReason ? `Failure: ${item.failureReason}` : undefined}
+                  </CommunicationStatusExplanation>
+                </div>
+              ))
             )}
           </div>
         </div>
