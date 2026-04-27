@@ -6,6 +6,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import CommunicationStatusBadge from "@/components/admin/communications/CommunicationStatusBadge";
 import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
 import CancelQueuedSmsButton from "@/components/admin/messages/CancelQueuedSmsButton";
 
@@ -467,10 +468,8 @@ export default function AdminMessagesInbox({
                   className="grid gap-3 rounded-2xl border border-amber-400/20 bg-black/25 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
                 >
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-100/70">
-                      {message.providerStatus || "QUEUED"}
-                    </div>
-                    <div className="mt-1 line-clamp-2 text-sm leading-6 text-white/80">
+                    <CommunicationStatusBadge status={message.providerStatus || "QUEUED"} />
+                    <div className="mt-2 line-clamp-2 text-sm leading-6 text-white/80">
                       {message.body}
                     </div>
                     <div className="mt-1 text-xs text-white/45">
