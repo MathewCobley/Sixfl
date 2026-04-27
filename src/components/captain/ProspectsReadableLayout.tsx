@@ -20,10 +20,10 @@ function applyReadableProspectLayout() {
   }
 
   const detailForms = Array.from(
-    main.querySelectorAll<HTMLFormElement>('form input[name="prospectId"]'),
+    main.querySelectorAll<HTMLInputElement>('form input[name="prospectId"]'),
   )
     .map((input) => input.closest("form"))
-    .filter((form): form is HTMLFormElement => Boolean(form))
+    .filter((form): form is HTMLFormElement => form instanceof HTMLFormElement)
     .filter(
       (form) =>
         Boolean(form.querySelector('input[name="firstName"]')) &&
@@ -46,7 +46,7 @@ function applyReadableProspectLayout() {
 
     const fieldRows = Array.from(form.children).filter(
       (child): child is HTMLElement =>
-        child instanceof HTMLElement && child.querySelector("input"),
+        child instanceof HTMLElement && child.querySelector("input") !== null,
     );
 
     for (const row of fieldRows) {
