@@ -5,7 +5,6 @@
 import "./globals.css";
 import type { ReactNode } from "react";
 import Providers from "./providers";
-import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
   title: "SIXFL",
@@ -24,7 +23,6 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <Providers>{children}</Providers>
-        <Analytics />
       </body>
     </html>
   );
