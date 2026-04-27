@@ -60,7 +60,7 @@ function MetricCard({
   return (
     <Link
       href={href}
-      className="group rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5 transition hover:border-emerald-400/20 hover:bg-white/[0.05]"
+      className="group rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-emerald-400/20 hover:bg-white/[0.05]"
     >
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
         {label}
@@ -282,7 +282,7 @@ export default async function AdminHome() {
   return (
     <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
-        <section className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_34%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
+        <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_34%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
             <div className="max-w-3xl space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">

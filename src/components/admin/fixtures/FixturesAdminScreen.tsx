@@ -900,7 +900,7 @@ export default function FixturesAdminScreen({
 
   return (
     <div className="space-y-8">
-      <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
+      <div className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -931,7 +931,7 @@ export default function FixturesAdminScreen({
       </div>
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+        <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
           <div className="border-b border-white/10 px-6 py-6 md:px-8">
             <SectionHeading
               eyebrow="Manual match"
@@ -1105,7 +1105,7 @@ export default function FixturesAdminScreen({
           </form>
         </AdminCard>
 
-        <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+        <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
           <div className="border-b border-white/10 px-6 py-6 md:px-8">
             <SectionHeading
               eyebrow="Automated schedule"
@@ -1329,7 +1329,7 @@ export default function FixturesAdminScreen({
         </AdminCard>
       </div>
 
-      <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+      <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
         <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:px-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
@@ -1580,7 +1580,7 @@ export default function FixturesAdminScreen({
 
         {filteredFixtures.length === 0 ? (
           <div className="px-6 py-10 md:px-8">
-            <div className="rounded-[1.75rem] border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
+            <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/60">
                 ⚽
               </div>

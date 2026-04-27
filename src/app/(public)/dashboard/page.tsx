@@ -86,7 +86,7 @@ export default async function DashboardPage() {
     return (
       <main className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
         <div className="mx-auto max-w-4xl space-y-6">
-          <section className="rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+          <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               SIXFL account
             </p>
@@ -134,7 +134,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
-      <div className="mx-auto max-w-2xl rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
+      <div className="mx-auto max-w-2xl rounded-3xl border border-white/10 bg-white/[0.04] p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/45">
           SIXFL account
         </p>

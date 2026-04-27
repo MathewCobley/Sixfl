@@ -284,7 +284,7 @@ export default function AdminMessagesInbox({
 
   return (
     <section className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-      <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+      <div className="rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
         <div className="border-b border-white/10 p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -359,7 +359,7 @@ export default function AdminMessagesInbox({
                     key={thread.id}
                     href={`${ADMIN_MESSAGES_BASE_PATH}?filter=${selectedFilter}&thread=${thread.id}`}
                     className={[
-                      "block rounded-[1.5rem] border p-4 transition",
+                      "block rounded-3xl border p-4 transition",
                       isSelected
                         ? "border-emerald-400/30 bg-emerald-400/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
                         : "border-white/10 bg-black/20 hover:border-white/15 hover:bg-white/[0.04]",
@@ -446,7 +446,7 @@ export default function AdminMessagesInbox({
 
       <div className="space-y-4">
         {selectedThread && queuedSmsMessages.length > 0 ? (
-          <div className="rounded-[1.5rem] border border-amber-400/25 bg-amber-500/10 p-4 text-amber-50 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          <div className="rounded-3xl border border-amber-400/25 bg-amber-500/10 p-4 text-amber-50 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">

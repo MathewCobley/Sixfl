@@ -129,7 +129,7 @@ export default function VenuesPage() {
       {/* CTA */}
       <section className="border-t border-white/10">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-          <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/10 p-8 text-center shadow-2xl shadow-black/30 sm:p-10">
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-8 text-center shadow-2xl shadow-black/30 sm:p-10">
             <div className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
               Launch Leagues
             </div>
@@ -191,7 +191,7 @@ function VenueCard({
   mapEmbedUrl: string;
 }) {
   return (
-    <div className="group overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.05] shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl transition hover:border-emerald-500/30 hover:shadow-[0_30px_110px_rgba(16,185,129,0.15)]">
+    <div className="group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.05] shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl transition hover:border-emerald-500/30 hover:shadow-[0_30px_110px_rgba(16,185,129,0.15)]">
       {/* IMAGE HEADER */}
       <div className="relative aspect-[16/8] w-full overflow-hidden border-b border-white/10">
         <Image
@@ -253,7 +253,7 @@ function VenueCard({
         </div>
 
         <div className="p-6 sm:p-8">
-          <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/[0.08] p-5">
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-5">
             <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300">
               VENUE DETAILS
             </div>
@@ -266,7 +266,7 @@ function VenueCard({
             </div>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-black/30">
+          <div className="mt-5 overflow-hidden rounded-3xl border border-white/10 bg-black/30">
             <div className="border-b border-white/10 px-5 py-4">
               <div className="text-[11px] font-bold tracking-[0.2em] text-white/50">
                 LOCATION MAP

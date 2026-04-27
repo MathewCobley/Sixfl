@@ -473,13 +473,13 @@ export default async function LeagueLandingPage({ params }: PageProps) {
         </div>
 
         <div className="relative mx-auto flex min-h-[76vh] max-w-[1400px] items-center px-6 py-16 sm:px-10 sm:py-24 lg:py-28">
-          <div className="w-full rounded-[2rem] border border-white/10 bg-black/25 p-6 backdrop-blur-[3px] sm:p-8 lg:p-10">
+          <div className="w-full rounded-3xl border border-white/10 bg-black/25 p-6 backdrop-blur-[3px] sm:p-8 lg:p-10">
             <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr] xl:items-end">
               <div className="max-w-4xl">
                 <div className="flex flex-wrap items-center gap-6 lg:gap-7">
                   <div className="relative">
-                    <div className="absolute inset-0 rounded-[2rem] bg-emerald-500/15 blur-2xl" />
-                    <div className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-black/55 p-3 shadow-[0_24px_55px_rgba(0,0,0,0.45)] sm:h-36 sm:w-36">
+                    <div className="absolute inset-0 rounded-3xl bg-emerald-500/15 blur-2xl" />
+                    <div className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-3xl border border-emerald-400/20 bg-black/55 p-3 shadow-[0_24px_55px_rgba(0,0,0,0.45)] sm:h-36 sm:w-36">
                       <Image
                         src={leagueBadge}
                         alt={`${league.name} badge`}
@@ -619,7 +619,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
         <div className="px-6 pt-10 sm:px-10 lg:pt-16">
           <div
             id="table"
-            className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]"
+            className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]"
           >
             <div className="border-b border-white/10 px-6 py-6 sm:px-8">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">

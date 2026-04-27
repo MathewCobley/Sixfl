@@ -18,7 +18,7 @@ export default async function AdminTeamDetailLayout({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[1.5rem] border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 shadow-[0_14px_50px_rgba(0,0,0,0.25)]">
+      <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 shadow-[0_14px_50px_rgba(0,0,0,0.25)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">

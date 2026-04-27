@@ -692,7 +692,7 @@ export default function EmailTemplateForm({
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_12px_50px_rgba(0,0,0,0.18)]">
+          <div className="overflow-hidden rounded-3xl border border-black/10 bg-white shadow-[0_12px_50px_rgba(0,0,0,0.18)]">
             <div className="border-b border-black/5 px-6 py-4 text-xl font-semibold leading-tight text-[#111827]">
               {previewSubject || "Your email subject preview"}
             </div>

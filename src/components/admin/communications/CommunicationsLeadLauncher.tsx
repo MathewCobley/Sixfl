@@ -6,7 +6,7 @@ import Link from "next/link";
 
 export default function CommunicationsLeadLauncher() {
   return (
-    <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
       <div className="space-y-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
           Lead campaigns

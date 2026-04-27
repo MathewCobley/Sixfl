@@ -117,7 +117,7 @@ export default async function PayChargePage({
           </p>
         </div>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)] md:p-8">
+        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)] md:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">

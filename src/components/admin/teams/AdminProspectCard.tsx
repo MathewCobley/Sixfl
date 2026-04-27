@@ -264,7 +264,7 @@ export default function AdminProspectCard({
         </div>
       </div>
 
-      <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4 sm:p-5">
+      <div className="rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
@@ -324,7 +324,7 @@ export default function AdminProspectCard({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-        <form action={updateAdminProspectNotesAction} className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4 sm:p-5">
+        <form action={updateAdminProspectNotesAction} className="rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5">
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="prospectId" value={prospect.id} />
 
@@ -347,7 +347,7 @@ export default function AdminProspectCard({
           </button>
         </form>
 
-        <form action={convertAdminProspectToMemberAction} className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-4 sm:p-5 xl:self-start">
+        <form action={convertAdminProspectToMemberAction} className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-4 sm:p-5 xl:self-start">
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="prospectId" value={prospect.id} />
           <div className="text-sm font-semibold text-emerald-50">

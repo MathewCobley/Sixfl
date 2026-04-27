@@ -331,7 +331,7 @@ export default async function AdminMessagesPage({
   return (
     <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="space-y-8">
-        <section className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
+        <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -424,7 +424,7 @@ export default async function AdminMessagesPage({
 
         {composeTeam ? (
           <>
-            <section className="rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+            <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
               <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">

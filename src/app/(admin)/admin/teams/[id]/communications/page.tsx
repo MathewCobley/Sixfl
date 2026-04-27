@@ -471,7 +471,7 @@ export default async function AdminTeamCommunicationsPage({
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -506,19 +506,19 @@ export default async function AdminTeamCommunicationsPage({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-4">
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Timeline</p>
               <p className="mt-3 text-3xl font-semibold text-white">{timeline.length}</p>
             </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Email</p>
               <p className="mt-3 text-3xl font-semibold text-white">{emailCount}</p>
             </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">SMS</p>
               <p className="mt-3 text-3xl font-semibold text-white">{smsCount}</p>
             </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Inbound</p>
               <p className="mt-3 text-3xl font-semibold text-white">{inboundCount}</p>
             </div>

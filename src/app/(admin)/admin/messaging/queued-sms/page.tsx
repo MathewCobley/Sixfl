@@ -119,7 +119,7 @@ export default async function QueuedSmsPage() {
         </div>
       </div>
 
-      <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
+      <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
         {messages.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">
             No queued SMS messages found.

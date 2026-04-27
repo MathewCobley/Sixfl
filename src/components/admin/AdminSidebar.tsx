@@ -108,7 +108,7 @@ export default function AdminSidebar({
 
   return (
     <aside className="sticky top-6">
-      <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+      <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
         <div className="border-b border-white/10 px-5 py-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/35">
             Admin console

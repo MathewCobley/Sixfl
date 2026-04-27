@@ -23,7 +23,7 @@ export default function CommunicationsLeagueLauncher({ leagues }: { leagues: Lea
   );
 
   return (
-    <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">

@@ -53,7 +53,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
   if (!prospectId) {
     return (
       <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
-        <div className="mx-auto max-w-2xl rounded-[2rem] border border-red-400/20 bg-red-500/10 p-6">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-red-400/20 bg-red-500/10 p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-200/80">
             Activation link
           </p>
@@ -104,7 +104,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
   if (!prospect || prospect.status !== "ACTIVE_SQUAD") {
     return (
       <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
-        <div className="mx-auto max-w-2xl rounded-[2rem] border border-amber-400/20 bg-amber-500/10 p-6">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-100/80">
             Activation link
           </p>
@@ -132,7 +132,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
     return (
       <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
         <div className="mx-auto max-w-3xl space-y-6">
-          <section className="rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+          <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               Activate squad place
             </p>
@@ -163,7 +163,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
                 {getInitials(fullName || prospect.email || "Squad")}
@@ -195,7 +195,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
   if (!normalizedProspectEmail || sessionEmail !== normalizedProspectEmail) {
     return (
       <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
-        <div className="mx-auto max-w-2xl rounded-[2rem] border border-red-400/20 bg-red-500/10 p-6">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-red-400/20 bg-red-500/10 p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-200/80">
             Email mismatch
           </p>
@@ -280,7 +280,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
-      <div className="mx-auto max-w-2xl rounded-[2rem] border border-emerald-400/20 bg-emerald-500/10 p-6">
+      <div className="mx-auto max-w-2xl rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200/80">
           Squad activated
         </p>

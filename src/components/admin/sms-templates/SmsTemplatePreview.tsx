@@ -141,13 +141,13 @@ export default function SmsTemplatePreview({
         </p>
       </div>
 
-      <div className="rounded-[28px] border border-white/10 bg-neutral-950/90 p-5 shadow-[0_12px_50px_rgba(0,0,0,0.18)]">
-        <div className="mx-auto max-w-[340px] rounded-[26px] border border-white/10 bg-black/40 p-4">
+      <div className="rounded-3xl border border-white/10 bg-neutral-950/90 p-5 shadow-[0_12px_50px_rgba(0,0,0,0.18)]">
+        <div className="mx-auto max-w-[340px] rounded-3xl border border-white/10 bg-black/40 p-4">
           <div className="mb-3 text-center text-xs font-semibold uppercase tracking-[0.24em] text-white/35">
             SMS preview
           </div>
 
-          <div className="rounded-[22px] bg-emerald-500/15 px-4 py-3 text-sm leading-6 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] whitespace-pre-wrap">
+          <div className="rounded-3xl bg-emerald-500/15 px-4 py-3 text-sm leading-6 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] whitespace-pre-wrap">
             {previewBody || "Your SMS preview will appear here."}
           </div>
 

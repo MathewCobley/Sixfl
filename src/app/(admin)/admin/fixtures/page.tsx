@@ -431,7 +431,7 @@ export default async function AdminFixturesPage({
 
   return (
     <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-      <AdminCard className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+      <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
         <div className="border-b border-white/10 px-6 py-6 md:px-8">
           <div className="space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">

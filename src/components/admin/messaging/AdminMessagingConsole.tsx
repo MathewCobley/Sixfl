@@ -170,7 +170,7 @@ export default function AdminMessagingConsole({
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] md:p-8">
+      <section className="overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] md:p-8">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -206,7 +206,7 @@ export default function AdminMessagingConsole({
       <div className="grid gap-8 2xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <form
           action={formAction}
-          className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]"
+          className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]"
         >
           <div className="border-b border-white/10 px-6 py-6 md:px-8">
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -314,7 +314,7 @@ export default function AdminMessagingConsole({
         </form>
 
         <div className="space-y-8">
-          <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
             <div className="border-b border-white/10 px-6 py-6 md:px-8">
               <h2 className="text-2xl font-semibold tracking-tight text-white">Recipient preview</h2>
               <p className="mt-2 text-sm text-white/50">Review and exclude recipients before sending.</p>
@@ -329,7 +329,7 @@ export default function AdminMessagingConsole({
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
             <div className="border-b border-white/10 px-6 py-6 md:px-8">
               <h2 className="text-2xl font-semibold tracking-tight text-white">Recent sends</h2>
             </div>

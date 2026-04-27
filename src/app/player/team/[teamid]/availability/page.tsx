@@ -235,7 +235,7 @@ export default async function PlayerAvailabilityPage({
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
       <div className="mx-auto max-w-6xl space-y-8">
-        <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
+        <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -292,7 +292,7 @@ export default async function PlayerAvailabilityPage({
         ) : null}
 
         <section className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
@@ -348,7 +348,7 @@ export default async function PlayerAvailabilityPage({
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Your response
             </p>

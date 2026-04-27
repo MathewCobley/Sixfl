@@ -153,7 +153,7 @@ function PlainTextBody({
 
 function SmsTranscriptPreview({ body }: { body: string }) {
   return (
-    <div className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-black/40 px-4 py-4 sm:px-5">
+    <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40 px-4 py-4 sm:px-5">
       <PlainTextBody
         body={body}
         className="whitespace-pre-wrap break-words text-[15px] leading-7 text-white"
@@ -406,7 +406,7 @@ export default function AdminMessageThread({
 
   if (!thread) {
     return (
-      <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+      <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
         <div className="flex min-h-[500px] items-center justify-center">
           <div className="max-w-md text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.04] text-2xl">
@@ -461,17 +461,17 @@ export default function AdminMessageThread({
   );
 
   return (
-    <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
       <div className="border-b border-white/10 p-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.25rem] border border-white/10 bg-white/[0.04] text-sm font-semibold text-white">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-white">
               {thread.team?.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={thread.team.logoUrl}
                   alt={thread.team.name}
-                  className="h-full w-full rounded-[1.25rem] object-cover"
+                  className="h-full w-full rounded-3xl object-cover"
                 />
               ) : (
                 <span>{title.slice(0, 2).toUpperCase()}</span>
@@ -642,7 +642,7 @@ export default function AdminMessageThread({
       </div>
 
       <div className="grid gap-6 p-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-4 sm:p-5">
+        <div className="rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-white">
@@ -682,7 +682,7 @@ export default function AdminMessageThread({
                   >
                     <div
                       className={[
-                        "max-w-[85%] rounded-[1.5rem] border px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.2)]",
+                        "max-w-[85%] rounded-3xl border px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.2)]",
                         isInbound
                           ? "border-white/10 bg-white/[0.05] text-white"
                           : "border-emerald-400/20 bg-emerald-400/10 text-emerald-50",
@@ -856,7 +856,7 @@ export default function AdminMessageThread({
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
+          <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
             <h3 className="text-lg font-semibold text-white">
               {replyPanelTitle}
             </h3>
@@ -900,7 +900,7 @@ export default function AdminMessageThread({
             </form>
           </div>
 
-          <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
+          <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
             <h3 className="text-lg font-semibold text-white">Contact details</h3>
             <div className="mt-4 space-y-3 text-sm">
               <div>
@@ -957,7 +957,7 @@ export default function AdminMessageThread({
             </div>
           </div>
 
-          <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
+          <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
             <h3 className="text-lg font-semibold text-white">Linked records</h3>
 
             <div className="mt-4 space-y-3">

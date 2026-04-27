@@ -349,7 +349,7 @@ export default async function TeamPage({ params }: PageProps) {
             </div>
 
             <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-center">
-              <div className="relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-white/5">
+              <div className="relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/5">
                 {teamLogo ? (
                   <Image
                     src={teamLogo}
@@ -391,7 +391,7 @@ export default async function TeamPage({ params }: PageProps) {
         </section>
 
         <section className="mx-auto max-w-[1400px] px-6 py-10 sm:px-10 lg:py-14">
-          <div className="rounded-[2rem] border border-dashed border-white/10 bg-white/[0.03] p-8 text-white/60">
+          <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-white/60">
             This team is not currently linked to a public league.
           </div>
         </section>
@@ -484,8 +484,8 @@ export default async function TeamPage({ params }: PageProps) {
             <div className="max-w-5xl">
               <div className="flex flex-wrap items-center gap-6">
                 <div className="relative">
-                  <div className="absolute inset-0 rounded-[2rem] bg-emerald-500/15 blur-2xl" />
-                  <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-black/55 p-3 shadow-[0_24px_55px_rgba(0,0,0,0.45)] sm:h-32 sm:w-32">
+                  <div className="absolute inset-0 rounded-3xl bg-emerald-500/15 blur-2xl" />
+                  <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl border border-emerald-400/20 bg-black/55 p-3 shadow-[0_24px_55px_rgba(0,0,0,0.45)] sm:h-32 sm:w-32">
                     <Image
                       src={leagueBadge}
                       alt={`${team.league.name} badge`}
@@ -517,7 +517,7 @@ export default async function TeamPage({ params }: PageProps) {
               </div>
 
               <div className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-center">
-                <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
                   {teamLogo ? (
                     <Image
                       src={teamLogo}
@@ -637,7 +637,7 @@ export default async function TeamPage({ params }: PageProps) {
       <section className="mx-auto max-w-[1400px] space-y-8 px-6 py-10 sm:px-10 lg:py-14">
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           {/* Upcoming Fixtures */}
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
@@ -723,7 +723,7 @@ export default async function TeamPage({ params }: PageProps) {
           </div>
 
           {/* Recent Results */}
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
             <div className="border-b border-white/10 px-6 py-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
                 Results
@@ -807,7 +807,7 @@ export default async function TeamPage({ params }: PageProps) {
 
         <div className="grid gap-8 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           {/* Season Snapshot */}
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 sm:p-8">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">
               Team snapshot
             </p>
@@ -879,7 +879,7 @@ export default async function TeamPage({ params }: PageProps) {
           </div>
 
           {/* League Context */}
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400">

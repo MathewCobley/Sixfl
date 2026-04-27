@@ -179,7 +179,7 @@ export default function FoundingTeamsPage() {
 
       <section className="border-t border-white/10">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/10 p-8 text-center shadow-2xl shadow-black/30 sm:p-10">
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-8 text-center shadow-2xl shadow-black/30 sm:p-10">
             <div className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
               Register early
             </div>

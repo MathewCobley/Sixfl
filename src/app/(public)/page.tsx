@@ -124,7 +124,7 @@ export default function HomePage() {
 
           <div className="lg:col-span-5">
             <div className="lg:sticky lg:top-24">
-              <div className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
                 <div className="flex items-center justify-between">
                   <div className="text-[11px] font-bold tracking-[0.24em] text-white/65">
                     JOIN SIXFL
@@ -173,7 +173,7 @@ export default function HomePage() {
         </section>
 
         <section className="mt-10">
-          <div className="grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
+          <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
             <StripItem label="FOUNDING SEASON" value="Now Forming" />
             <StripItem label="LEAGUE TYPES" value="Men’s / Women’s / Youth" />
             <StripItem label="TEAM SPACES" value="12 Per League" />
@@ -207,7 +207,7 @@ export default function HomePage() {
         </section>
 
         <section className="mt-16">
-          <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-8">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
@@ -234,7 +234,7 @@ export default function HomePage() {
         </section>
 
         <section id="how-it-works" className="mt-16">
-          <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="mb-6 max-w-3xl">
               <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
                 HOW JOINING WORKS
@@ -286,7 +286,7 @@ export default function HomePage() {
         </section>
 
         <section id="founding-teams" className="mt-16">
-          <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
@@ -315,7 +315,7 @@ export default function HomePage() {
               </div>
 
               <div className="lg:col-span-5">
-                <div className="rounded-[24px] border border-white/10 bg-black/35 p-5">
+                <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
                   <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300">
                     TEAM CAPTAINS
                   </div>
@@ -353,7 +353,7 @@ export default function HomePage() {
         </section>
 
         <section id="lead-capture" className="mt-16">
-          <div className="rounded-[32px] border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
@@ -381,7 +381,7 @@ export default function HomePage() {
               </div>
 
               <div className="lg:col-span-5">
-                <div className="rounded-[24px] border border-white/10 bg-black/35 p-5">
+                <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
                   <div className="text-sm font-bold text-white">
                     Choose the route that fits you best.
                   </div>
@@ -474,7 +474,7 @@ function PathwayCard({
   desc: string;
 }) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07]">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07]">
       <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
         SIXFL BENEFIT
       </div>
@@ -497,7 +497,7 @@ function StepCard({
   desc: string;
 }) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur">
       <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-400">
         {number}
       </div>

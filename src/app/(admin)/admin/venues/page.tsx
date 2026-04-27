@@ -65,7 +65,7 @@ export default async function AdminVenuesPage({
   return (
     <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="space-y-8">
-        <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
+        <div className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -106,7 +106,7 @@ export default async function AdminVenuesPage({
         )}
 
         <div className="grid gap-8 2xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
             <div className="border-b border-white/10 px-6 py-6 md:px-8">
               <div className="space-y-2">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -127,7 +127,7 @@ export default async function AdminVenuesPage({
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
             <div className="border-b border-white/10 px-6 py-6 md:px-8">
               <div className="space-y-2">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -144,7 +144,7 @@ export default async function AdminVenuesPage({
 
             {venues.length === 0 ? (
               <div className="px-6 py-10 md:px-8">
-                <div className="rounded-[1.75rem] border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
+                <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
                   <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/60">
                     📍
                   </div>

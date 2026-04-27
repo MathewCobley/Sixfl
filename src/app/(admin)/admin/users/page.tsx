@@ -349,21 +349,21 @@ export default async function AdminUsersPage({
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Results</div>
           <div className="mt-3 text-3xl font-semibold text-white">{users.length}</div>
         </div>
-        <div className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-5">
+        <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Unnamed</div>
           <div className="mt-3 text-3xl font-semibold text-white">{unnamedUsers}</div>
         </div>
-        <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
+        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Linked to teams</div>
           <div className="mt-3 text-3xl font-semibold text-white">{linkedUsers}</div>
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04]">
+      <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
