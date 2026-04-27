@@ -49,24 +49,6 @@ function parseRecipientValue(value: string) {
   return { type: "team", id: "" } as const;
 }
 
-function isOperationalTeamCommunication(input: {
-  body: string;
-  ctaUrl?: string | null;
-}) {
-  const haystack = `${input.body}\n${input.ctaUrl ?? ""}`.toLowerCase();
-
-  return (
-    haystack.includes("/availability") ||
-    haystack.includes("/player/team/") ||
-    haystack.includes("/captain/team/") ||
-    haystack.includes("/match-fees") ||
-    haystack.includes("confirm your availability") ||
-    haystack.includes("player dashboard") ||
-    haystack.includes("match fee") ||
-    haystack.includes("match fees")
-  );
-}
-
 type CommunicationRecipientContext = {
   recipient: Awaited<ReturnType<typeof upsertNotificationRecipient>>;
   audience: NotificationAudience;
@@ -263,6 +245,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   const claimCode = getTrimmedValue(formData.get("claimCode"));
   const claimLink = getTrimmedValue(formData.get("claimLink"));
   const captainDashboardUrl = getTrimmedValue(formData.get("captainDashboardUrl")) || claimLink;
+  const isMarketingMessage = getTrimmedValue(formData.get("isMarketing")) === "1";
 
   const selectedRecipientValues = formData
     .getAll("recipientValues")
@@ -284,7 +267,6 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   }
 
   const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
-  const isOperationalMessage = isOperationalTeamCommunication({ body, ctaUrl });
 
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
@@ -322,8 +304,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       claimLink,
       captainDashboardUrl,
     };
-    const isTransactional =
-      recipientContext.audience === NotificationAudience.TEAM || isOperationalMessage;
+    const isTransactional = !isMarketingMessage;
 
     const dispatch = await queueDirectNotification({
       recipientId: recipientContext.recipient.id,
@@ -346,14 +327,16 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
           recipientContext.audience === NotificationAudience.PLAYER
             ? isTransactional
               ? "Sent from communications hub as service message"
-              : "Sent from communications hub to player"
-            : "Sent from communications hub",
+              : "Sent from communications hub as marketing message"
+            : isTransactional
+              ? "Sent from communications hub as service message"
+              : "Sent from communications hub as marketing message",
         teamId,
         templateId,
         templateKey,
         ctaLabel,
         ctaUrl,
-        isOperationalMessage,
+        isMarketingMessage,
         isTransactional,
         bulkRecipientCount: recipientValues.length,
         ...recipientContext.metadata,
