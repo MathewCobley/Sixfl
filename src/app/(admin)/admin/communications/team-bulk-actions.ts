@@ -49,6 +49,24 @@ function parseRecipientValue(value: string) {
   return { type: "team", id: "" } as const;
 }
 
+function isOperationalTeamCommunication(input: {
+  body: string;
+  ctaUrl?: string | null;
+}) {
+  const haystack = `${input.body}\n${input.ctaUrl ?? ""}`.toLowerCase();
+
+  return (
+    haystack.includes("/availability") ||
+    haystack.includes("/player/team/") ||
+    haystack.includes("/captain/team/") ||
+    haystack.includes("/match-fees") ||
+    haystack.includes("confirm your availability") ||
+    haystack.includes("player dashboard") ||
+    haystack.includes("match fee") ||
+    haystack.includes("match fees")
+  );
+}
+
 type CommunicationRecipientContext = {
   recipient: Awaited<ReturnType<typeof upsertNotificationRecipient>>;
   audience: NotificationAudience;
@@ -266,6 +284,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   }
 
   const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const isOperationalMessage = isOperationalTeamCommunication({ body, ctaUrl });
 
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
@@ -303,6 +322,8 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       claimLink,
       captainDashboardUrl,
     };
+    const isTransactional =
+      recipientContext.audience === NotificationAudience.TEAM || isOperationalMessage;
 
     const dispatch = await queueDirectNotification({
       recipientId: recipientContext.recipient.id,
@@ -311,7 +332,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       subject: channel === NotificationChannel.EMAIL ? subject : null,
       body,
       variables,
-      isTransactional: recipientContext.audience === NotificationAudience.TEAM,
+      isTransactional,
       sourceType: recipientContext.sourceType,
       sourceId: recipientContext.sourceId,
       emailBranding: channel === NotificationChannel.EMAIL ? recipientContext.emailBranding : undefined,
@@ -323,13 +344,17 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
         origin: "team_communications_hub",
         originLabel:
           recipientContext.audience === NotificationAudience.PLAYER
-            ? "Sent from communications hub to player"
+            ? isTransactional
+              ? "Sent from communications hub as service message"
+              : "Sent from communications hub to player"
             : "Sent from communications hub",
         teamId,
         templateId,
         templateKey,
         ctaLabel,
         ctaUrl,
+        isOperationalMessage,
+        isTransactional,
         bulkRecipientCount: recipientValues.length,
         ...recipientContext.metadata,
       },
