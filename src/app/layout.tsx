@@ -25,14 +25,38 @@ const safeClosestPatch = String.raw`
 
   if (typeof originalClosest !== "function") return;
 
-  function escapeClassSelector(selector) {
-    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
-      return selector.replace(/\.([^\s>+~:#.,()[\]]+\[[^\s>+~:#.,()]+\][^\s>+~:#.,()]*)/g, function (_, className) {
-        return "." + CSS.escape(className);
-      });
+  function isSimpleClassSelector(selector) {
+    return (
+      typeof selector === "string" &&
+      selector.charAt(0) === "." &&
+      !/[\s>+~:#,]/.test(selector)
+    );
+  }
+
+  function findClosestByClassName(element, selector) {
+    var className = selector.slice(1);
+    var current = element;
+
+    while (current && current.nodeType === 1) {
+      if (current.classList && current.classList.contains(className)) {
+        return current;
+      }
+
+      current = current.parentElement;
     }
 
-    return selector.replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+    return null;
+  }
+
+  function escapeSelector(selector) {
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function" && isSimpleClassSelector(selector)) {
+      return "." + CSS.escape(selector.slice(1));
+    }
+
+    return selector
+      .replace(/\[/g, "\\[")
+      .replace(/\]/g, "\\]")
+      .replace(/\./g, "\\.");
   }
 
   Element.prototype.closest = function patchedClosest(selector) {
@@ -47,7 +71,15 @@ const safeClosestPatch = String.raw`
         throw error;
       }
 
-      return originalClosest.call(this, escapeClassSelector(selector));
+      if (isSimpleClassSelector(selector)) {
+        return findClosestByClassName(this, selector);
+      }
+
+      try {
+        return originalClosest.call(this, escapeSelector(selector));
+      } catch (_) {
+        return null;
+      }
     }
   };
 })();
