@@ -244,11 +244,12 @@ async function confirmFixtureAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamid}`);
     revalidatePath(`/captain/team/${teamid}/fixtures`);
     revalidatePath(`/admin/fixtures`);
-    redirect(`/captain/team/${teamid}/fixtures?saved=confirmed`);
   } catch (error) {
     const message = encodeURIComponent(getFriendlyErrorMessage(error));
     redirect(`/captain/team/${teamid}/fixtures?error=${message}`);
   }
+
+  redirect(`/captain/team/${teamid}/fixtures?saved=confirmed`);
 }
 
 async function raiseFixtureIssueAction(formData: FormData) {
@@ -315,11 +316,12 @@ async function raiseFixtureIssueAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamid}`);
     revalidatePath(`/captain/team/${teamid}/fixtures`);
     revalidatePath(`/admin/fixtures`);
-    redirect(`/captain/team/${teamid}/fixtures?saved=issue`);
   } catch (error) {
     const message = encodeURIComponent(getFriendlyErrorMessage(error));
     redirect(`/captain/team/${teamid}/fixtures?error=${message}`);
   }
+
+  redirect(`/captain/team/${teamid}/fixtures?saved=issue`);
 }
 
 export default async function CaptainFixturesPage({
@@ -409,6 +411,7 @@ export default async function CaptainFixturesPage({
         kickoffAt: nextFixture.kickoffAt,
       })
     : null;
+  const isNextFixtureConfirmed = nextConfirmation?.status === "CONFIRMED";
 
   return (
     <div className="space-y-8">
@@ -485,9 +488,14 @@ export default async function CaptainFixturesPage({
 
                   <button
                     type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-5 py-4 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                    disabled={isNextFixtureConfirmed}
+                    className={`inline-flex w-full items-center justify-center rounded-2xl border px-5 py-4 text-sm font-medium transition ${
+                      isNextFixtureConfirmed
+                        ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
+                        : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
+                    }`}
                   >
-                    Confirm fixture
+                    {isNextFixtureConfirmed ? "Fixture already confirmed" : "Confirm fixture"}
                   </button>
                 </form>
 
