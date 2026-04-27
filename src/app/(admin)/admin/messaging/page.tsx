@@ -26,12 +26,27 @@ function normaliseFilter(value?: string) {
 }
 
 function getLatestInboundTitle(summary: Awaited<ReturnType<typeof getAdminInboxSummary>>) {
+  const thread = summary.latestInbound?.thread;
+
+  if (thread?.team?.teamMode === "MANAGED") {
+    return (
+      thread.contactName ||
+      thread.recipient?.displayName ||
+      thread.contactEmail ||
+      thread.emailNormalized ||
+      thread.contactPhone ||
+      thread.phoneNormalized ||
+      thread.team.name ||
+      "No replies yet"
+    );
+  }
+
   return (
-    summary.latestInbound?.thread.team?.name ||
-    summary.latestInbound?.thread.recipient?.displayName ||
-    summary.latestInbound?.thread.contactName ||
-    summary.latestInbound?.thread.contactEmail ||
-    summary.latestInbound?.thread.contactPhone ||
+    thread?.team?.name ||
+    thread?.recipient?.displayName ||
+    thread?.contactName ||
+    thread?.contactEmail ||
+    thread?.contactPhone ||
     "No replies yet"
   );
 }
@@ -467,6 +482,7 @@ export default async function AdminMessagesPage({
                   id: thread.team.id,
                   name: thread.team.name,
                   logoUrl: thread.team.logoUrl,
+                  teamMode: thread.team.teamMode,
                 }
               : null,
             league: thread.league
@@ -511,6 +527,7 @@ export default async function AdminMessagesPage({
                         id: fallbackThread.team.id,
                         name: fallbackThread.team.name,
                         logoUrl: fallbackThread.team.logoUrl,
+                        teamMode: fallbackThread.team.teamMode,
                       }
                     : null,
                   league: fallbackThread.league
