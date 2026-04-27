@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
+import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -57,6 +58,7 @@ export default async function CaptainTeamLayout({
   return (
     <div className="min-h-screen bg-[#07130f] text-white">
       <QueuedSmsReasonHints />
+      <ProspectsReadableLayout />
       {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedSquadEditLinks /> : null}
 
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
