@@ -213,7 +213,7 @@ export default async function CaptainPaymentsPage({
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+      <section className="rounded-3xl border border-white/10 bg-white/[0.04]">
         <div className="border-b border-white/10 px-6 py-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Charges
@@ -319,7 +319,7 @@ export default async function CaptainPaymentsPage({
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+      <section className="rounded-3xl border border-white/10 bg-white/[0.04]">
         <div className="border-b border-white/10 px-6 py-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Recent payments

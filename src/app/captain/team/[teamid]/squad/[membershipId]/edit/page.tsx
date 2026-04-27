@@ -151,7 +151,7 @@ export default async function EditSquadPlayerPage({
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1fr_auto] lg:px-8 lg:py-8">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-base font-black text-white/75">
@@ -214,7 +214,7 @@ export default async function EditSquadPlayerPage({
           Player detail editing is only available to SIXFL admins for teams marked as managed.
         </section>
       ) : (
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] lg:p-8">
+        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] lg:p-8">
           <form action={updateManagedSquadMemberDetailsAction} className="space-y-7">
             <input type="hidden" name="teamid" value={teamid} />
             <input type="hidden" name="membershipId" value={membership.id} />

@@ -165,7 +165,7 @@ export default async function CaptainFixtureSelectionPage({
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -199,19 +199,19 @@ export default async function CaptainFixtureSelectionPage({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
+            <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
                 Selected
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">{selectedCount}</p>
             </div>
-            <div className="rounded-[1.5rem] border border-violet-400/20 bg-violet-500/10 p-5">
+            <div className="rounded-3xl border border-violet-400/20 bg-violet-500/10 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-100/70">
                 Backups
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">{backupCount}</p>
             </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
                 Squad pool
               </p>
@@ -233,7 +233,7 @@ export default async function CaptainFixtureSelectionPage({
         </section>
       ) : null}
 
-      <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04]">
+      <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
         <div className="divide-y divide-white/10">
           {team.members.map((member) => {
             const availability = availabilityByMemberId.get(member.id);

@@ -415,7 +415,7 @@ export default async function CaptainFixturesPage({
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -501,7 +501,7 @@ export default async function CaptainFixturesPage({
 
                 <form
                   action={raiseFixtureIssueAction}
-                  className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
+                  className="rounded-3xl border border-white/10 bg-black/20 p-4"
                 >
                   <input type="hidden" name="teamid" value={team.id} />
                   <input type="hidden" name="fixtureId" value={nextFixture.id} />
@@ -534,7 +534,7 @@ export default async function CaptainFixturesPage({
                 </form>
               </>
             ) : (
-              <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-5 text-sm text-white/60">
+              <div className="rounded-3xl border border-white/10 bg-black/20 p-5 text-sm text-white/60">
                 No upcoming fixture to confirm right now.
               </div>
             )}
@@ -543,7 +543,7 @@ export default async function CaptainFixturesPage({
       </section>
 
       <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
@@ -628,7 +628,7 @@ export default async function CaptainFixturesPage({
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">

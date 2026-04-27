@@ -140,7 +140,7 @@ export default async function CaptainAvailabilityPage({
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -164,7 +164,7 @@ export default async function CaptainAvailabilityPage({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-2">
-            <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
+            <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
                 Available
               </p>
@@ -172,7 +172,7 @@ export default async function CaptainAvailabilityPage({
                 {fixtures[0]?.availabilities.filter((item) => item.response === "AVAILABLE").length ?? 0}
               </p>
             </div>
-            <div className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-5">
+            <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
                 Maybe
               </p>
@@ -180,7 +180,7 @@ export default async function CaptainAvailabilityPage({
                 {fixtures[0]?.availabilities.filter((item) => item.response === "MAYBE").length ?? 0}
               </p>
             </div>
-            <div className="rounded-[1.5rem] border border-red-400/20 bg-red-500/10 p-5">
+            <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">
                 Unavailable
               </p>
@@ -188,7 +188,7 @@ export default async function CaptainAvailabilityPage({
                 {fixtures[0]?.availabilities.filter((item) => item.response === "UNAVAILABLE").length ?? 0}
               </p>
             </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
                 No response
               </p>
@@ -244,7 +244,7 @@ export default async function CaptainAvailabilityPage({
             return (
               <section
                 key={fixture.id}
-                className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04]"
+                className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]"
               >
                 <div className="border-b border-white/10 px-6 py-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

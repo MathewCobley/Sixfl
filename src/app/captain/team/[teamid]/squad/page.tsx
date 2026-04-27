@@ -398,7 +398,7 @@ for (const dispatch of latestActivationSmsDispatches) {
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -467,7 +467,7 @@ for (const dispatch of latestActivationSmsDispatches) {
                       : "border-white/10 bg-white/5 text-white/55";
 
               return (
-                <div key={metric.label} className={`rounded-[1.5rem] border p-5 ${toneClasses}`}>
+                <div key={metric.label} className={`rounded-3xl border p-5 ${toneClasses}`}>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">
                     {metric.label}
                   </p>
@@ -493,7 +493,7 @@ for (const dispatch of latestActivationSmsDispatches) {
       ) : null}
 
       <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04]">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
@@ -629,7 +629,7 @@ for (const dispatch of latestActivationSmsDispatches) {
 
             {pendingSquadProspects.length > 0 ? (
               <div id="pending-activation" className="scroll-mt-8 px-6 py-5">
-                <div className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-4">
+                <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
@@ -760,7 +760,7 @@ for (const dispatch of latestActivationSmsDispatches) {
         </div>
 
         <div className="space-y-6">
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Communications
             </p>
@@ -788,7 +788,7 @@ for (const dispatch of latestActivationSmsDispatches) {
             )}
           </section>
 
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Add existing user
             </p>
@@ -830,7 +830,7 @@ for (const dispatch of latestActivationSmsDispatches) {
             </form>
           </section>
 
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Team contacts
             </p>
@@ -861,7 +861,7 @@ for (const dispatch of latestActivationSmsDispatches) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Captain access
             </p>
