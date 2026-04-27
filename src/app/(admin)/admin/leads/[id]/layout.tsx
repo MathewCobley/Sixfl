@@ -6,6 +6,9 @@ import Link from "next/link";
 import { NotificationChannel } from "@prisma/client";
 import type { ReactNode } from "react";
 
+import CommunicationStatusBadge, {
+  CommunicationStatusExplanation,
+} from "@/components/admin/communications/CommunicationStatusBadge";
 import CancelQueuedSmsButton from "@/components/admin/messages/CancelQueuedSmsButton";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -23,24 +26,6 @@ function formatDateTime(value: Date | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(value);
-}
-
-function getStatusTone(status: string | null | undefined) {
-  const upper = status?.trim().toUpperCase() || "RECORDED";
-
-  if (upper.startsWith("FAILED") || upper.startsWith("SKIPPED") || upper.startsWith("CANCELLED")) {
-    return "border-red-400/20 bg-red-500/10 text-red-100";
-  }
-
-  if (upper.startsWith("QUEUED") || upper.startsWith("PROCESSING")) {
-    return "border-amber-400/20 bg-amber-500/10 text-amber-100";
-  }
-
-  if (upper.startsWith("SENT")) {
-    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-  }
-
-  return "border-white/10 bg-white/[0.04] text-white/60";
 }
 
 function getOriginLabel(metadata: unknown) {
@@ -183,9 +168,7 @@ export default async function AdminLeadLayout({
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-white/70">
                     {item.direction}
                   </span>
-                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusTone(String(item.providerStatus))}`}>
-                    {String(item.providerStatus)}
-                  </span>
+                  <CommunicationStatusBadge status={String(item.providerStatus)} />
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/55">
                     {item.originLabel}
                   </span>
@@ -223,13 +206,9 @@ export default async function AdminLeadLayout({
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  {item.failureReason ? (
-                    <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                      Reason: {item.failureReason}
-                    </div>
-                  ) : (
-                    <span />
-                  )}
+                  <CommunicationStatusExplanation status={String(item.providerStatus)}>
+                    {item.failureReason ? `Reason: ${item.failureReason}` : undefined}
+                  </CommunicationStatusExplanation>
 
                   {item.canCancelQueuedSms ? (
                     <CancelQueuedSmsButton
