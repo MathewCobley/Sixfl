@@ -176,7 +176,7 @@ export default async function CaptainPaymentsPage({
   return (
     <div className="space-y-8">
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[1.75rem] border border-amber-400/20 bg-amber-500/10 p-5">
+        <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
             Outstanding balance
           </p>
@@ -188,7 +188,7 @@ export default async function CaptainPaymentsPage({
           </p>
         </div>
 
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Open charges
           </p>
@@ -200,7 +200,7 @@ export default async function CaptainPaymentsPage({
           </p>
         </div>
 
-        <div className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-500/10 p-5">
+        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
             Payment history
           </p>
