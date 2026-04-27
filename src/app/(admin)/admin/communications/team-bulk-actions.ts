@@ -57,6 +57,7 @@ type CommunicationRecipientContext = {
   displayName: string;
   emailBranding: {
     teamName: string;
+    teamLogoUrl: string | null;
     leagueName: string | null;
   };
   metadata: Record<string, unknown>;
@@ -86,6 +87,7 @@ async function getTeamCommunicationRecipientContext(input: {
           select: {
             id: true,
             name: true,
+            logoUrl: true,
             league: {
               select: {
                 name: true,
@@ -135,6 +137,7 @@ async function getTeamCommunicationRecipientContext(input: {
       displayName,
       emailBranding: {
         teamName: member.team.name,
+        teamLogoUrl: member.team.logoUrl,
         leagueName,
       },
       metadata: {
@@ -160,6 +163,7 @@ async function getTeamCommunicationRecipientContext(input: {
           select: {
             id: true,
             name: true,
+            logoUrl: true,
             league: {
               select: {
                 name: true,
@@ -204,6 +208,7 @@ async function getTeamCommunicationRecipientContext(input: {
       displayName,
       emailBranding: {
         teamName: prospect.team.name,
+        teamLogoUrl: prospect.team.logoUrl,
         leagueName,
       },
       metadata: {
@@ -215,6 +220,10 @@ async function getTeamCommunicationRecipientContext(input: {
   }
 
   const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
+  const teamBranding = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { logoUrl: true },
+  });
 
   return {
     recipient,
@@ -224,6 +233,7 @@ async function getTeamCommunicationRecipientContext(input: {
     displayName: snapshot.primaryContact.name || snapshot.teamName,
     emailBranding: {
       teamName: snapshot.teamName,
+      teamLogoUrl: teamBranding?.logoUrl ?? null,
       leagueName: snapshot.leagueName,
     },
     metadata: { recipientType: "team" },
