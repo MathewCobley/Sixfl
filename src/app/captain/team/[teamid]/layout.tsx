@@ -47,12 +47,15 @@ export default async function CaptainTeamLayout({
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: `/captain/team/${teamid}/squad`, label: "Squad" },
     ...(team.teamMode === "MANAGED"
-      ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
+      ? [
+          { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
+          { href: `/captain/team/${teamid}/match-fees`, label: "Player fees" },
+        ]
       : []),
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
-    { href: `/captain/team/${teamid}/payments`, label: "Payments" },
+    { href: `/captain/team/${teamid}/payments`, label: "Team payments" },
   ];
 
   return (
