@@ -12,6 +12,7 @@ import {
 } from "@/lib/fixtures/managed-squad-availability-reminders";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { prisma } from "@/lib/prisma";
+import { backfillTeamMemberProfilesFromProspects } from "@/lib/teamMemberProfileBackfill";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,8 @@ export async function GET(request: NextRequest) {
   }
 
   await ensureManagedSquadAvailabilityTemplates();
+
+  const backfill = await backfillTeamMemberProfilesFromProspects();
 
   const now = new Date();
   const fixtures = await prisma.fixture.findMany({
@@ -117,6 +120,7 @@ export async function GET(request: NextRequest) {
     queuedDispatches: 0,
     alreadySent: 0,
     skipped: 0,
+    backfill,
     byMode: {
       request: 0,
       chase24h: 0,
