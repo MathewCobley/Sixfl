@@ -2,6 +2,7 @@
 // File: src/app/api/admin/fixtures/matchup-grid/route.ts
 // ========================================
 
+import { FixtureStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -15,6 +16,11 @@ type MatchupCell = {
   totalCount: number;
   latestKickoffAt: string | null;
 };
+
+const COUNTABLE_FIXTURE_STATUSES = [
+  FixtureStatus.SCHEDULED,
+  FixtureStatus.COMPLETED,
+] as const;
 
 function getCellLabel(cell: MatchupCell) {
   if (cell.totalCount === 0) return "—";
@@ -74,6 +80,9 @@ export async function GET(request: Request) {
     prisma.fixture.findMany({
       where: {
         leagueId: league.id,
+        status: {
+          in: [...COUNTABLE_FIXTURE_STATUSES],
+        },
       },
       orderBy: [{ kickoffAt: "asc" }],
       select: {
