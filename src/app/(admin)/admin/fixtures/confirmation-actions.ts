@@ -11,6 +11,7 @@ import {
   queueFixtureConfirmationSmsReminder,
   type QueueFixtureConfirmationSmsResult,
 } from "@/lib/fixtures/confirmation-reminders";
+import { processNotificationQueue } from "@/lib/notifications/processor";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
@@ -88,6 +89,14 @@ function getRedirectFromResult(
   });
 }
 
+async function processManualFixtureChaseImmediately() {
+  try {
+    await processNotificationQueue(10);
+  } catch (error) {
+    console.error("Failed to process manual fixture confirmation SMS immediately", error);
+  }
+}
+
 export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
   await requireAdmin();
 
@@ -100,6 +109,10 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
     teamId,
     mode: "manual",
   });
+
+  if (result.ok && result.status === "queued") {
+    await processManualFixtureChaseImmediately();
+  }
 
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },

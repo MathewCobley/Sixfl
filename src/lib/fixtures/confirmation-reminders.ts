@@ -78,6 +78,21 @@ function getSourceId(input: {
   return `${input.fixtureId}:${input.teamId}:${input.mode}`;
 }
 
+function getBlockingDispatchStatuses(mode: FixtureConfirmationReminderMode) {
+  if (mode === "manual") {
+    return [
+      NotificationDispatchStatus.QUEUED,
+      NotificationDispatchStatus.PROCESSING,
+    ];
+  }
+
+  return [
+    NotificationDispatchStatus.QUEUED,
+    NotificationDispatchStatus.PROCESSING,
+    NotificationDispatchStatus.SENT,
+  ];
+}
+
 function getTemplateKey(mode: FixtureConfirmationReminderMode) {
   return mode === "auto24h"
     ? "fixture-confirmation-reminder-urgent-sms"
@@ -150,6 +165,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
       kickoffAt: true,
       status: true,
       leagueId: true,
+      updatedAt: true,
       league: {
         select: {
           id: true,
@@ -222,24 +238,55 @@ export async function queueFixtureConfirmationSmsReminder(input: {
     mode: input.mode,
   });
 
-  const existingDispatch = await prisma.notificationDispatch.findFirst({
+  const existingDispatches = await prisma.notificationDispatch.findMany({
     where: {
       sourceType,
       sourceId,
       status: {
-        in: [
-          NotificationDispatchStatus.QUEUED,
-          NotificationDispatchStatus.PROCESSING,
-          NotificationDispatchStatus.SENT,
-        ],
+        in: getBlockingDispatchStatuses(input.mode),
       },
     },
     select: {
       id: true,
+      status: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: "desc",
     },
   });
 
-  if (existingDispatch) {
+  const staleQueuedDispatchIds = existingDispatches
+    .filter(
+      (dispatch) =>
+        dispatch.status === NotificationDispatchStatus.QUEUED &&
+        fixture.updatedAt.getTime() > dispatch.createdAt.getTime(),
+    )
+    .map((dispatch) => dispatch.id);
+
+  if (staleQueuedDispatchIds.length > 0) {
+    await prisma.notificationDispatch.updateMany({
+      where: {
+        id: {
+          in: staleQueuedDispatchIds,
+        },
+        status: NotificationDispatchStatus.QUEUED,
+      },
+      data: {
+        status: NotificationDispatchStatus.CANCELLED,
+        cancelledAt: new Date(),
+        failureReason: "Fixture was changed before queued confirmation SMS was sent.",
+      },
+    });
+  }
+
+  const activeExistingDispatch = existingDispatches.find((dispatch) => {
+    if (staleQueuedDispatchIds.includes(dispatch.id)) return false;
+
+    return fixture.updatedAt.getTime() <= dispatch.createdAt.getTime();
+  });
+
+  if (activeExistingDispatch) {
     return { ok: true, status: "already_sent", teamName: team.name };
   }
 

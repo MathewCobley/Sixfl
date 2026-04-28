@@ -13,6 +13,7 @@ import {
 
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { getPhoneDisplayValue } from "@/lib/notifications/phone";
+import { processNotificationQueue } from "@/lib/notifications/processor";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
@@ -240,6 +241,16 @@ async function getTeamCommunicationRecipientContext(input: {
   };
 }
 
+async function processJustQueuedMessages(queuedCount: number) {
+  if (queuedCount <= 0) return;
+
+  try {
+    await processNotificationQueue(Math.max(queuedCount + 10, 25));
+  } catch (error) {
+    console.error("Failed to process newly queued admin message immediately", error);
+  }
+}
+
 export async function sendTeamCommunicationBulkMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
 
@@ -378,6 +389,8 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
 
     redirect(`${from}?error=${reason}`);
   }
+
+  await processJustQueuedMessages(queuedCount);
 
   redirect(
     `${from}?saved=queued&channel=${channel.toLowerCase()}&count=${queuedCount}${

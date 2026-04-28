@@ -67,6 +67,16 @@ function isQueuedMatchFeeNotification(
   );
 }
 
+function isFixtureConfirmationSmsNotification(
+  sourceType: string | null | undefined,
+) {
+  return (
+    sourceType === "FIXTURE_CONFIRMATION_CHASE_SMS" ||
+    sourceType === "FIXTURE_CONFIRMATION_AUTO_SMS_72H" ||
+    sourceType === "FIXTURE_CONFIRMATION_AUTO_SMS_24H"
+  );
+}
+
 async function getQueuedMatchFeeCancellationReason(input: {
   sourceType: string | null;
   sourceId: string | null;
@@ -104,6 +114,48 @@ async function getQueuedMatchFeeCancellationReason(input: {
 
   if (outstandingPence <= 0) {
     return "Match fee charge was paid before queued payment email was sent.";
+  }
+
+  return null;
+}
+
+async function getQueuedFixtureConfirmationSmsCancellationReason(input: {
+  sourceType: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}) {
+  if (!isFixtureConfirmationSmsNotification(input.sourceType)) {
+    return null;
+  }
+
+  const fixtureId = getMetadataString(input.metadata, "fixtureId");
+
+  if (!fixtureId) {
+    return "Fixture confirmation SMS is missing its fixture reference.";
+  }
+
+  const fixture = await prisma.fixture.findUnique({
+    where: {
+      id: fixtureId,
+    },
+    select: {
+      id: true,
+      updatedAt: true,
+      status: true,
+      kickoffAt: true,
+    },
+  });
+
+  if (!fixture) {
+    return "Fixture was deleted before queued confirmation SMS was sent.";
+  }
+
+  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
+    return "Fixture is no longer available for confirmation before queued SMS was sent.";
+  }
+
+  if (fixture.updatedAt.getTime() > input.createdAt.getTime()) {
+    return "Fixture was changed before queued confirmation SMS was sent.";
   }
 
   return null;
@@ -231,24 +283,31 @@ export async function processNotificationQueue(limit = 25) {
 
   for (const dispatch of dueDispatches) {
     try {
+      const metadata = getMetadataRecord(dispatch.metadata);
       const queuedMatchFeeCancellationReason =
         await getQueuedMatchFeeCancellationReason({
           sourceType: dispatch.sourceType,
           sourceId: dispatch.sourceId,
         });
+      const queuedFixtureConfirmationSmsCancellationReason =
+        await getQueuedFixtureConfirmationSmsCancellationReason({
+          sourceType: dispatch.sourceType,
+          metadata,
+          createdAt: dispatch.createdAt,
+        });
+      const cancellationReason =
+        queuedMatchFeeCancellationReason ??
+        queuedFixtureConfirmationSmsCancellationReason;
 
-      if (queuedMatchFeeCancellationReason) {
-        await markNotificationDispatchCancelled(
-          dispatch.id,
-          queuedMatchFeeCancellationReason,
-        );
+      if (cancellationReason) {
+        await markNotificationDispatchCancelled(dispatch.id, cancellationReason);
 
         result.skipped += 1;
         result.items.push({
           dispatchId: dispatch.id,
           status: "skipped",
           channel: dispatch.channel,
-          message: queuedMatchFeeCancellationReason,
+          message: cancellationReason,
         });
         continue;
       }
@@ -270,8 +329,6 @@ export async function processNotificationQueue(limit = 25) {
         }
 
         await markNotificationDispatchProcessing(dispatch.id);
-
-        const metadata = getMetadataRecord(dispatch.metadata);
 
         const thread = await findOrCreateEmailThreadForOutbound({
           recipientId: dispatch.recipientId,
@@ -363,8 +420,6 @@ export async function processNotificationQueue(limit = 25) {
           providerMessageId: sendResult.providerMessageId,
           responsePayload: sendResult.responsePayload,
         });
-
-        const metadata = getMetadataRecord(dispatch.metadata);
 
         await linkDispatchToThread({
           dispatchId: dispatch.id,

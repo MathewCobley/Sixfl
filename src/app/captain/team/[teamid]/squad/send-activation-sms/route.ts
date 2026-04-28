@@ -11,6 +11,7 @@ import {
 
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { linkDispatchToThread } from "@/lib/messaging/service";
+import { processNotificationQueue } from "@/lib/notifications/processor";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
@@ -148,6 +149,14 @@ async function ensureProspectNotificationRecipient(input: {
   return recipient;
 }
 
+async function processActivationMessageImmediately() {
+  try {
+    await processNotificationQueue(10);
+  } catch (error) {
+    console.error("Failed to process squad activation SMS immediately", error);
+  }
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ teamid: string }> },
@@ -234,6 +243,8 @@ export async function POST(
     providerStatus: dispatch.status.toLowerCase(),
     createdByUserId: user?.id ?? null,
   });
+
+  await processActivationMessageImmediately();
 
   await prisma.teamPlayerProspect.update({
     where: { id: prospect.id },
