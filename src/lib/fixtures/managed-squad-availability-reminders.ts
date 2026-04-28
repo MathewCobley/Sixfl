@@ -4,6 +4,7 @@
 
 import {
   NotificationAudience,
+  NotificationChannel,
   NotificationDispatchStatus,
   NotificationRecipientSourceType,
   NotificationTemplateKind,
@@ -19,7 +20,7 @@ import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 type ReminderMode = "request" | "chase24h" | "chase72h";
 
-type ReminderChannel = "EMAIL" | "SMS";
+type ReminderChannel = NotificationChannel.EMAIL | NotificationChannel.SMS;
 
 type AvailabilityReminderTemplate = {
   key: string;
@@ -40,8 +41,25 @@ type QueueReminderInput = {
 };
 
 export type QueueManagedSquadAvailabilityReminderResult =
-  | { ok: true; status: "queued" | "already_sent"; queued: number; teamName: string; playerName: string }
-  | { ok: false; status: "fixture_not_found" | "team_not_managed" | "member_not_found" | "already_responded" | "no_contact" | "not_available"; teamName?: string; playerName?: string };
+  | {
+      ok: true;
+      status: "queued" | "already_sent";
+      queued: number;
+      teamName: string;
+      playerName: string;
+    }
+  | {
+      ok: false;
+      status:
+        | "fixture_not_found"
+        | "team_not_managed"
+        | "member_not_found"
+        | "already_responded"
+        | "no_contact"
+        | "not_available";
+      teamName?: string;
+      playerName?: string;
+    };
 
 const SOURCE_TYPES: Record<ReminderMode, string> = {
   request: "MANAGED_SQUAD_AVAILABILITY_REQUEST",
@@ -68,8 +86,9 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
   {
     key: TEMPLATE_KEYS.request.EMAIL,
     name: "Managed squad availability request email",
-    description: "Initial email asking managed squad players to confirm availability for an upcoming fixture.",
-    channel: "EMAIL",
+    description:
+      "Initial email asking managed squad players to confirm availability for an upcoming fixture.",
+    channel: NotificationChannel.EMAIL,
     subject: "Availability needed for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -91,8 +110,9 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
   {
     key: TEMPLATE_KEYS.request.SMS,
     name: "Managed squad availability request SMS",
-    description: "Initial SMS asking managed squad players to confirm availability for an upcoming fixture.",
-    channel: "SMS",
+    description:
+      "Initial SMS asking managed squad players to confirm availability for an upcoming fixture.",
+    channel: NotificationChannel.SMS,
     subject: null,
     body: "SIXFL: Are you available for {{fixtureLabel}}? Please confirm here: {{availabilityUrl}}",
     ctaLabel: null,
@@ -101,8 +121,9 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
   {
     key: TEMPLATE_KEYS.chase24h.EMAIL,
     name: "Managed squad availability 24h chase email",
-    description: "Follow-up email sent when a managed squad player has not confirmed availability after 24 hours.",
-    channel: "EMAIL",
+    description:
+      "Follow-up email sent when a managed squad player has not confirmed availability after 24 hours.",
+    channel: NotificationChannel.EMAIL,
     subject: "Reminder: please confirm availability for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -122,8 +143,9 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
   {
     key: TEMPLATE_KEYS.chase24h.SMS,
     name: "Managed squad availability 24h chase SMS",
-    description: "Follow-up SMS sent when a managed squad player has not confirmed availability after 24 hours.",
-    channel: "SMS",
+    description:
+      "Follow-up SMS sent when a managed squad player has not confirmed availability after 24 hours.",
+    channel: NotificationChannel.SMS,
     subject: null,
     body: "SIXFL reminder: please confirm if you are available for {{fixtureLabel}}. Update here: {{availabilityUrl}}",
     ctaLabel: null,
@@ -132,8 +154,9 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
   {
     key: TEMPLATE_KEYS.chase72h.EMAIL,
     name: "Managed squad availability 72h final chase email",
-    description: "Final email sent when a managed squad player has not confirmed availability after 72 hours.",
-    channel: "EMAIL",
+    description:
+      "Final email sent when a managed squad player has not confirmed availability after 72 hours.",
+    channel: NotificationChannel.EMAIL,
     subject: "Final reminder: availability needed for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -155,8 +178,9 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
   {
     key: TEMPLATE_KEYS.chase72h.SMS,
     name: "Managed squad availability 72h final chase SMS",
-    description: "Final SMS sent when a managed squad player has not confirmed availability after 72 hours.",
-    channel: "SMS",
+    description:
+      "Final SMS sent when a managed squad player has not confirmed availability after 72 hours.",
+    channel: NotificationChannel.SMS,
     subject: null,
     body: "SIXFL final reminder: please confirm availability for {{fixtureLabel}}. If we do not hear back, we may assume you are unavailable. {{availabilityUrl}}",
     ctaLabel: null,
@@ -175,7 +199,9 @@ function getSiteUrl() {
 }
 
 function buildAvailabilityUrl(teamId: string, fixtureId: string) {
-  return `${getSiteUrl()}/player/team/${teamId}/availability?fixtureId=${encodeURIComponent(fixtureId)}`;
+  return `${getSiteUrl()}/player/team/${teamId}/availability?fixtureId=${encodeURIComponent(
+    fixtureId,
+  )}`;
 }
 
 function formatKickoff(value: Date) {
@@ -205,18 +231,22 @@ function getFixtureLabel(input: {
   opponentName: string;
   kickoffAt: Date;
 }) {
-  return `${input.teamName} vs ${input.opponentName} · ${formatKickoff(input.kickoffAt)}`;
+  return `${input.teamName} vs ${input.opponentName} · ${formatKickoff(
+    input.kickoffAt,
+  )}`;
 }
 
 async function hasDispatch(input: {
   fixtureId: string;
   teamMemberId: string;
   mode: ReminderMode;
+  channel?: ReminderChannel;
 }) {
   const dispatch = await prisma.notificationDispatch.findFirst({
     where: {
       sourceType: SOURCE_TYPES[input.mode],
       sourceId: getSourceId(input),
+      ...(input.channel ? { channel: input.channel } : {}),
       status: {
         in: [
           NotificationDispatchStatus.QUEUED,
@@ -227,6 +257,7 @@ async function hasDispatch(input: {
     },
     select: {
       id: true,
+      channel: true,
       createdAt: true,
       sentAt: true,
     },
@@ -380,22 +411,6 @@ export async function queueManagedSquadAvailabilityReminder(
     };
   }
 
-  const existing = await hasDispatch({
-    fixtureId: fixture.id,
-    teamMemberId: member.id,
-    mode: input.mode,
-  });
-
-  if (existing) {
-    return {
-      ok: true,
-      status: "already_sent",
-      queued: 0,
-      teamName: team.name,
-      playerName,
-    };
-  }
-
   const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);
   const profile = profiles.get(member.id) ?? null;
   const phone = getPhoneDisplayValue(profile?.phone ?? null);
@@ -403,6 +418,29 @@ export async function queueManagedSquadAvailabilityReminder(
 
   if (!email && !phone) {
     return { ok: false, status: "no_contact", teamName: team.name, playerName };
+  }
+
+  const existingEmailDispatch = await hasDispatch({
+    fixtureId: fixture.id,
+    teamMemberId: member.id,
+    mode: input.mode,
+    channel: NotificationChannel.EMAIL,
+  });
+  const existingSmsDispatch = await hasDispatch({
+    fixtureId: fixture.id,
+    teamMemberId: member.id,
+    mode: input.mode,
+    channel: NotificationChannel.SMS,
+  });
+
+  if ((!email || existingEmailDispatch) && (!phone || existingSmsDispatch)) {
+    return {
+      ok: true,
+      status: "already_sent",
+      queued: 0,
+      teamName: team.name,
+      playerName,
+    };
   }
 
   const leagueName = team.league
@@ -447,7 +485,7 @@ export async function queueManagedSquadAvailabilityReminder(
 
   let queued = 0;
 
-  if (email) {
+  if (email && !existingEmailDispatch) {
     const dispatch = await queueNotificationFromTemplate({
       templateKey: TEMPLATE_KEYS[input.mode].EMAIL,
       recipientId: recipient.id,
@@ -475,7 +513,7 @@ export async function queueManagedSquadAvailabilityReminder(
     if (dispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
   }
 
-  if (phone) {
+  if (phone && !existingSmsDispatch) {
     const dispatch = await queueNotificationFromTemplate({
       templateKey: TEMPLATE_KEYS[input.mode].SMS,
       recipientId: recipient.id,
@@ -500,7 +538,7 @@ export async function queueManagedSquadAvailabilityReminder(
 
   return {
     ok: true,
-    status: "queued",
+    status: queued > 0 ? "queued" : "already_sent",
     queued,
     teamName: team.name,
     playerName,
@@ -518,8 +556,14 @@ export async function getManagedSquadAvailabilityReminderMode(input: {
     teamMemberId: input.teamMemberId,
     mode: "request",
   });
+  const initialSms = await hasDispatch({
+    fixtureId: input.fixtureId,
+    teamMemberId: input.teamMemberId,
+    mode: "request",
+    channel: NotificationChannel.SMS,
+  });
 
-  if (!initial) return "request";
+  if (!initial || !initialSms) return "request";
 
   const initialAt = initial.sentAt ?? initial.createdAt;
   const hoursSinceInitial =
@@ -531,8 +575,14 @@ export async function getManagedSquadAvailabilityReminderMode(input: {
       teamMemberId: input.teamMemberId,
       mode: "chase72h",
     });
+    const chase72Sms = await hasDispatch({
+      fixtureId: input.fixtureId,
+      teamMemberId: input.teamMemberId,
+      mode: "chase72h",
+      channel: NotificationChannel.SMS,
+    });
 
-    if (!chase72) return "chase72h";
+    if (!chase72 || !chase72Sms) return "chase72h";
   }
 
   if (hoursSinceInitial >= 24) {
@@ -541,8 +591,14 @@ export async function getManagedSquadAvailabilityReminderMode(input: {
       teamMemberId: input.teamMemberId,
       mode: "chase24h",
     });
+    const chase24Sms = await hasDispatch({
+      fixtureId: input.fixtureId,
+      teamMemberId: input.teamMemberId,
+      mode: "chase24h",
+      channel: NotificationChannel.SMS,
+    });
 
-    if (!chase24) return "chase24h";
+    if (!chase24 || !chase24Sms) return "chase24h";
   }
 
   return null;
