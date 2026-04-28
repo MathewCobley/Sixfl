@@ -47,6 +47,29 @@ type RecipientOption = {
   statusLabel?: string | null;
 };
 
+type AvailabilityResponse = "AVAILABLE" | "MAYBE" | "UNAVAILABLE" | "NO_RESPONSE";
+
+type AvailabilityInfo = {
+  response: AvailabilityResponse;
+  label: string;
+  note: string | null;
+  respondedAt: string | null;
+};
+
+type LatestAvailabilityState = {
+  fixture: {
+    id: string;
+    label: string;
+  } | null;
+  availabilityByRecipientValue: Record<string, AvailabilityInfo>;
+  counts: {
+    available: number;
+    maybe: number;
+    unavailable: number;
+    noResponse: number;
+  };
+};
+
 type Props = {
   teamId: string;
   fromPath: string;
@@ -112,6 +135,36 @@ function resolveText(
     .replaceAll("{{claimCode}}", context.claimCode)
     .replaceAll("{{claimLink}}", context.claimLink)
     .replaceAll("{{captainDashboardUrl}}", context.captainDashboardUrl);
+}
+
+function getAvailabilityClasses(response?: AvailabilityResponse) {
+  switch (response) {
+    case "AVAILABLE":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "MAYBE":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    case "UNAVAILABLE":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    case "NO_RESPONSE":
+      return "border-white/10 bg-white/[0.04] text-white/60";
+    default:
+      return "border-white/10 bg-black/20 text-white/45";
+  }
+}
+
+function getAvailabilityShortLabel(response?: AvailabilityResponse) {
+  switch (response) {
+    case "AVAILABLE":
+      return "Available";
+    case "MAYBE":
+      return "Maybe";
+    case "UNAVAILABLE":
+      return "Unavailable";
+    case "NO_RESPONSE":
+      return "No response";
+    default:
+      return "No linked availability";
+  }
 }
 
 function MarketingToggle({
@@ -188,11 +241,17 @@ export default function TeamCommunicationsComposer({
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState("");
   const [smsBody, setSmsBody] = useState("");
   const [isMarketingMessage, setIsMarketingMessage] = useState(false);
+  const [latestAvailability, setLatestAvailability] = useState<LatestAvailabilityState | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
   const siteUrl = getSiteUrl();
   const playerDashboardUrl = `${siteUrl}/player/team/${teamId}`;
-  const availabilityUrl = `${siteUrl}/player/team/${teamId}/availability`;
-  const adminAvailabilityUrl = `${siteUrl}/admin/teams/${teamId}/availability`;
+  const availabilityUrl = latestAvailability?.fixture?.id
+    ? `${siteUrl}/player/team/${teamId}/availability?fixtureId=${latestAvailability.fixture.id}`
+    : `${siteUrl}/player/team/${teamId}/availability`;
+  const adminAvailabilityUrl = latestAvailability?.fixture?.id
+    ? `${siteUrl}/admin/teams/${teamId}/availability?fixtureId=${latestAvailability.fixture.id}`
+    : `${siteUrl}/admin/teams/${teamId}/availability`;
   const adminMatchFeesUrl = `${siteUrl}/admin/teams/${teamId}/match-fees`;
   const captainUrl = captainDashboardUrl?.trim() || claimLink?.trim() || `${siteUrl}/captain/team/${teamId}`;
 
@@ -257,6 +316,43 @@ export default function TeamCommunicationsComposer({
   );
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadLatestAvailability() {
+      setAvailabilityLoading(true);
+
+      try {
+        const response = await fetch(`/api/admin/teams/${teamId}/latest-availability`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Could not load availability.");
+        }
+
+        const data = (await response.json()) as LatestAvailabilityState;
+        if (!cancelled) {
+          setLatestAvailability(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setLatestAvailability(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setAvailabilityLoading(false);
+        }
+      }
+    }
+
+    loadLatestAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId]);
+
+  useEffect(() => {
     if (!selectedEmailTemplate) {
       setEmailSubject("");
       setEmailBody("");
@@ -302,6 +398,19 @@ export default function TeamCommunicationsComposer({
 
   function clearToPrimaryOnly() {
     setSelectedRecipientValues([fallbackRecipientValue]);
+  }
+
+  function selectAvailabilityGroup(response: AvailabilityResponse) {
+    const values = recipientOptions
+      .filter((recipient) => {
+        if (recipient.type !== "teamMember") return false;
+        return latestAvailability?.availabilityByRecipientValue[recipient.value]?.response === response;
+      })
+      .map((recipient) => recipient.value);
+
+    if (values.length) {
+      setSelectedRecipientValues(values);
+    }
   }
 
   function insertEmailSnippet(snippet: string) {
@@ -375,9 +484,68 @@ export default function TeamCommunicationsComposer({
           </button>
         </div>
 
+        <div className="mt-4 rounded-2xl border border-sky-400/15 bg-sky-500/[0.06] p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-200/70">
+                Latest fixture availability
+              </div>
+              <div className="mt-1 text-sm font-semibold text-white">
+                {availabilityLoading
+                  ? "Loading next fixture..."
+                  : latestAvailability?.fixture?.label ?? "No upcoming fixture found"}
+              </div>
+              <p className="mt-1 text-xs text-white/50">
+                Use this to quickly message players who have not answered, are unavailable, or are maybe for the next match.
+              </p>
+            </div>
+
+            <a
+              href={adminAvailabilityUrl}
+              className="inline-flex items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/15"
+            >
+              Open availability dashboard
+            </a>
+          </div>
+
+          {latestAvailability?.fixture ? (
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => selectAvailabilityGroup("AVAILABLE")}
+                className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-emerald-100 transition hover:bg-emerald-500/15"
+              >
+                Available: {latestAvailability.counts.available}
+              </button>
+              <button
+                type="button"
+                onClick={() => selectAvailabilityGroup("MAYBE")}
+                className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-100 transition hover:bg-amber-500/15"
+              >
+                Maybe: {latestAvailability.counts.maybe}
+              </button>
+              <button
+                type="button"
+                onClick={() => selectAvailabilityGroup("UNAVAILABLE")}
+                className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-red-100 transition hover:bg-red-500/15"
+              >
+                Unavailable: {latestAvailability.counts.unavailable}
+              </button>
+              <button
+                type="button"
+                onClick={() => selectAvailabilityGroup("NO_RESPONSE")}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.08]"
+              >
+                No response: {latestAvailability.counts.noResponse}
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {recipientOptions.map((recipient) => {
             const checked = selectedRecipientValues.includes(recipient.value);
+            const availability = latestAvailability?.availabilityByRecipientValue[recipient.value] ?? null;
 
             return (
               <label
@@ -407,6 +575,26 @@ export default function TeamCommunicationsComposer({
                   <span className="mt-1 block break-all text-xs text-white/50">
                     SMS: {recipient.phone || "—"}
                   </span>
+
+                  {recipient.type === "teamMember" ? (
+                    <span
+                      className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(
+                        availability?.response,
+                      )}`}
+                    >
+                      Latest fixture: {availability?.label ?? getAvailabilityShortLabel()}
+                    </span>
+                  ) : recipient.type === "prospect" ? (
+                    <span className="mt-2 inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-white/45">
+                      Latest fixture: not linked
+                    </span>
+                  ) : null}
+
+                  {availability?.note ? (
+                    <span className="mt-2 block rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/55">
+                      Note: {availability.note}
+                    </span>
+                  ) : null}
                 </span>
               </label>
             );
