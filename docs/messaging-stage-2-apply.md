@@ -1,46 +1,67 @@
 # Messaging Stage 2 apply guide
 
-Use branch feature/messaging-webhooks-from-main.
+This guide covers the live messaging/webhook setup for SIXFL.
 
-## Added in this follow-up
+## Webhook routes
 
-- src/lib/notifications/webhooks.ts
-- src/app/api/webhooks/resend/route.ts
-- src/app/api/webhooks/twilio/route.ts
-- docs/messaging-stage-2-apply.md
-
-## What is already in main
-
-- src/lib/notifications/providers/resend.ts
-- src/lib/notifications/providers/twilio.ts
-- src/lib/notifications/processor.ts
-- src/lib/notifications/transactional.ts
-- src/app/api/cron/notifications/route.ts
+- Resend delivery feedback: `/api/webhooks/resend`
+- Twilio delivery feedback: `/api/webhooks/twilio`
+- Notification worker/cron: `/api/cron/notifications`
 
 ## Environment variables
 
 Required for email sending:
-- RESEND_API_KEY
-- EMAIL_FROM
+
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+
+Required for Resend webhook verification:
+
+- `RESEND_WEBHOOK_SECRET`
 
 Required for SMS sending:
-- TWILIO_ACCOUNT_SID
-- TWILIO_AUTH_TOKEN
-- one of TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- one of `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_PHONE_NUMBER`
 
 Optional route protection:
-- CRON_SECRET
-- RESEND_WEBHOOK_SECRET
-- TWILIO_WEBHOOK_SECRET
 
-## What this follow-up does
+- `CRON_SECRET`
+- `TWILIO_WEBHOOK_SECRET`
 
-- adds Resend webhook handling for sent/delivered/failed style events
-- adds Twilio webhook handling for sent/delivered/failed style events
-- records provider webhook outcomes back into notification attempts and dispatches
+## Resend production setup
 
-## What is still next
+Register this endpoint in Resend:
 
-- confirm hosting routes and webhook secrets are configured
-- register webhook endpoints with Resend and Twilio
-- optionally add richer delivery reporting in admin UI
+- `https://www.sixfl.co.uk/api/webhooks/resend`
+
+Enable at least these events:
+
+- `email.sent`
+- `email.delivered`
+- `email.delivery_delayed`
+- `email.bounced`
+- `email.failed`
+- `email.suppressed`
+- `email.complained`
+
+Optional engagement events:
+
+- `email.opened`
+- `email.clicked`
+
+Copy the webhook signing secret from Resend into production as `RESEND_WEBHOOK_SECRET`.
+
+## What Resend feedback updates
+
+- verifies Resend delivery webhooks using the signed `svix-*` headers
+- records sent/delivered feedback
+- records failed/bounced/complained/suppressed feedback
+- records delivery delayed feedback
+- updates outbound email message entries with statuses such as `SENT`, `DELIVERED`, `FAILED`, `BOUNCED`, `SUPPRESSED`, `COMPLAINED`, or `DELIVERY_DELAYED`
+- marks recipients as suppressed when Resend reports `email.suppressed` or `email.complained`
+
+## Manual sends
+
+Manual admin sends should process immediately after being queued. Scheduled sends, fixture reminders, payment reminders, and quiet-hours SMS are intentionally left queued until their scheduled send time.
