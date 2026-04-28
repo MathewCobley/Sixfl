@@ -96,7 +96,7 @@ function findPendingProspectCard(start: HTMLElement) {
   return null;
 }
 
-function findTextElement(card: HTMLElement, classParts: string[]) {
+function findNameElement(card: HTMLElement) {
   return Array.from(card.querySelectorAll<HTMLElement>("div")).find((element) => {
     const classes = getElementClasses(element);
     const text = element.textContent?.trim() ?? "";
@@ -104,14 +104,29 @@ function findTextElement(card: HTMLElement, classParts: string[]) {
     return (
       element.children.length === 0 &&
       text.length > 0 &&
-      classParts.every((classPart) => classes.includes(classPart))
+      classes.includes("text-base") &&
+      classes.includes("font-semibold")
+    );
+  });
+}
+
+function findContactElement(card: HTMLElement) {
+  return Array.from(card.querySelectorAll<HTMLElement>("div")).find((element) => {
+    const classes = getElementClasses(element);
+    const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+
+    return (
+      element.children.length === 0 &&
+      classes.includes("text-sm") &&
+      classes.includes("text-white/70") &&
+      (text.includes("@") || text.includes("·") || text.toLowerCase().includes("no email"))
     );
   });
 }
 
 function getPendingProspectValues(card: HTMLElement) {
-  const nameElement = findTextElement(card, ["text-base", "font-semibold"]);
-  const contactElement = findTextElement(card, ["text-sm", "text-white/70"]);
+  const nameElement = findNameElement(card);
+  const contactElement = findContactElement(card);
   const fullName = nameElement?.textContent?.trim() ?? "";
   const nameParts = fullName && fullName !== "Unnamed prospect" ? fullName.split(/\s+/) : [];
   const contactText = contactElement?.textContent?.replace(/\s+/g, " ").trim() ?? "";
