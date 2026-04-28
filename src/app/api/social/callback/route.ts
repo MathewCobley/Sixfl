@@ -39,40 +39,123 @@ function revalidateFixturePaths(input: {
 
 type SocialCallbackBody = {
   fixtureId?: unknown;
+  cardId?: unknown;
+  socialMatchCardId?: unknown;
   socialPostStatus?: unknown;
   socialPostType?: unknown;
   socialCaption?: unknown;
   socialImageUrl?: unknown;
   socialDraftExternalId?: unknown;
+  externalPostId?: unknown;
   socialLastError?: unknown;
   socialPublishedAt?: unknown;
 };
 
-export async function POST(request: NextRequest) {
-  if (!isValidSocialWebhookRequest(request)) {
+async function handleWeeklyCardCallback(body: SocialCallbackBody) {
+  const cardId =
+    typeof body.cardId === "string"
+      ? body.cardId.trim()
+      : typeof body.socialMatchCardId === "string"
+        ? body.socialMatchCardId.trim()
+        : "";
+
+  if (!cardId) {
+    return null;
+  }
+
+  const rows = await prisma.$queryRaw<
+    Array<{ id: string; leagueId: string; leagueSlug: string | null }>
+  >`
+    SELECT
+      c."id",
+      c."leagueId",
+      l."slug" AS "leagueSlug"
+    FROM "SocialMatchCard" c
+    INNER JOIN "League" l ON l."id" = c."leagueId"
+    WHERE c."id" = ${cardId}
+    LIMIT 1
+  `;
+
+  const card = rows[0];
+
+  if (!card) {
     return NextResponse.json(
-      { ok: false, error: "Unauthorised" },
-      { status: 401 },
+      { ok: false, error: "Weekly match card not found" },
+      { status: 404 },
     );
   }
 
-  let body: SocialCallbackBody;
+  const status = isValidSocialPostStatus(body.socialPostStatus)
+    ? body.socialPostStatus
+    : null;
+  const postType = isValidSocialPostType(body.socialPostType)
+    ? body.socialPostType
+    : null;
+  const caption =
+    typeof body.socialCaption === "string"
+      ? body.socialCaption.trim() || null
+      : null;
+  const imageUrl =
+    typeof body.socialImageUrl === "string"
+      ? body.socialImageUrl.trim() || null
+      : null;
+  const externalPostId =
+    typeof body.externalPostId === "string"
+      ? body.externalPostId.trim() || null
+      : typeof body.socialDraftExternalId === "string"
+        ? body.socialDraftExternalId.trim() || null
+        : null;
+  const lastError =
+    typeof body.socialLastError === "string"
+      ? body.socialLastError.trim() || null
+      : null;
 
-  try {
-    body = (await request.json()) as SocialCallbackBody;
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Invalid JSON body" },
-      { status: 400 },
-    );
-  }
+  const publishedAt = (() => {
+    if (typeof body.socialPublishedAt !== "string" || !body.socialPublishedAt.trim()) {
+      return null;
+    }
 
+    const parsed = new Date(body.socialPublishedAt);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  })();
+
+  await prisma.$executeRaw`
+    UPDATE "SocialMatchCard"
+    SET
+      "postStatus" = COALESCE(${status}::"SocialPostStatus", "postStatus"),
+      "postType" = COALESCE(${postType}::"SocialPostType", "postType"),
+      "caption" = COALESCE(${caption}, "caption"),
+      "imageUrl" = COALESCE(${imageUrl}, "imageUrl"),
+      "externalPostId" = COALESCE(${externalPostId}, "externalPostId"),
+      "lastError" = CASE
+        WHEN ${status}::"SocialPostStatus" = ${SocialPostStatus.FAILED}::"SocialPostStatus" THEN COALESCE(${lastError}, 'Social publish callback reported a failure.')
+        WHEN ${lastError} IS NOT NULL THEN ${lastError}
+        WHEN ${status}::"SocialPostStatus" IN (${SocialPostStatus.DRAFTED}::"SocialPostStatus", ${SocialPostStatus.PUBLISHED}::"SocialPostStatus") THEN NULL
+        ELSE "lastError"
+      END,
+      "publishedAt" = CASE
+        WHEN ${status}::"SocialPostStatus" = ${SocialPostStatus.PUBLISHED}::"SocialPostStatus" THEN COALESCE(${publishedAt}, NOW())
+        ELSE COALESCE(${publishedAt}, "publishedAt")
+      END,
+      "updatedAt" = NOW()
+    WHERE "id" = ${cardId}
+  `;
+
+  revalidateFixturePaths({
+    leagueId: card.leagueId,
+    leagueSlug: card.leagueSlug,
+  });
+
+  return NextResponse.json({ ok: true, cardId });
+}
+
+async function handleFixtureCallback(body: SocialCallbackBody) {
   const fixtureId =
     typeof body.fixtureId === "string" ? body.fixtureId.trim() : "";
 
   if (!fixtureId) {
     return NextResponse.json(
-      { ok: false, error: "fixtureId is required" },
+      { ok: false, error: "fixtureId or cardId is required" },
       { status: 400 },
     );
   }
@@ -174,4 +257,32 @@ export async function POST(request: NextRequest) {
     fixtureId,
     applied: updates,
   });
+}
+
+export async function POST(request: NextRequest) {
+  if (!isValidSocialWebhookRequest(request)) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorised" },
+      { status: 401 },
+    );
+  }
+
+  let body: SocialCallbackBody;
+
+  try {
+    body = (await request.json()) as SocialCallbackBody;
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Invalid JSON body" },
+      { status: 400 },
+    );
+  }
+
+  const weeklyResponse = await handleWeeklyCardCallback(body);
+
+  if (weeklyResponse) {
+    return weeklyResponse;
+  }
+
+  return handleFixtureCallback(body);
 }
