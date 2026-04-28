@@ -45,6 +45,29 @@ function getProspectFullName(input: { firstName: string; lastName: string | null
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
+function normaliseEmail(value?: string | null) {
+  return value?.trim().toLowerCase() || null;
+}
+
+function getLinkedMemberPhoneFallback(input: {
+  memberEmail?: string | null;
+  profilePhone?: string | null;
+  teamContactEmail?: string | null;
+  teamContactPhone?: string | null;
+}) {
+  const profilePhone = input.profilePhone?.trim();
+  if (profilePhone) return profilePhone;
+
+  if (
+    normaliseEmail(input.memberEmail) &&
+    normaliseEmail(input.memberEmail) === normaliseEmail(input.teamContactEmail)
+  ) {
+    return input.teamContactPhone?.trim() || null;
+  }
+
+  return null;
+}
+
 export default async function AdminMessagesPage({
   searchParams,
 }: {
@@ -196,7 +219,7 @@ export default async function AdminMessagesPage({
 
   const linkedMemberEmails = new Set(
     (composeTeam?.members ?? [])
-      .map((member) => member.user.email?.trim().toLowerCase() ?? null)
+      .map((member) => normaliseEmail(member.user.email))
       .filter((email): email is string => Boolean(email)),
   );
 
@@ -211,20 +234,26 @@ export default async function AdminMessagesPage({
         ...composeTeam.members.map((member) => {
           const profile = composeTeamMemberProfiles.get(member.id) ?? null;
           const label = member.user.name?.trim() || member.user.email?.trim() || "Unnamed player";
+          const phone = getLinkedMemberPhoneFallback({
+            memberEmail: member.user.email,
+            profilePhone: profile?.phone,
+            teamContactEmail: composeTeam.contactEmail,
+            teamContactPhone: composeTeam.contactPhone,
+          });
 
           return {
             id: member.id,
             type: "teamMember" as const,
             label,
             email: member.user.email?.trim() || null,
-            phone: profile?.phone ?? null,
+            phone,
             roleLabel: formatRoleLabel(member.role),
             statusLabel: "Linked account",
           };
         }),
         ...composeTeam.prospects
           .filter((prospect) => {
-            const email = prospect.email?.trim().toLowerCase() ?? null;
+            const email = normaliseEmail(prospect.email);
 
             if (linkedSourceProspectIds.has(prospect.id)) return false;
             if (email && linkedMemberEmails.has(email)) return false;
