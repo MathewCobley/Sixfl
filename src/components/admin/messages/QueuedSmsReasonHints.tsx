@@ -7,8 +7,12 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-const QUEUED_SMS_REASON_TEXT =
-  "Queued because SMS sending is paused during quiet hours between 9pm and 9am UK time. It will send automatically after 9am.";
+const QUEUED_SMS_STATUS_TEXTS = new Set([
+  "QUEUED",
+  "SMS QUEUED",
+  "SMS CHASE QUEUED",
+  "ACTIVATION SMS QUEUED",
+]);
 
 function getCommunicationCard(element: Element) {
   return (
@@ -21,15 +25,21 @@ function getCommunicationCard(element: Element) {
   );
 }
 
-function isQueuedSmsText(value: string | null | undefined) {
-  const text = value?.trim().toUpperCase() ?? "";
+function normaliseText(value: string | null | undefined) {
+  return value?.replace(/\s+/g, " ").trim().toUpperCase() ?? "";
+}
 
-  return (
-    text === "QUEUED" ||
-    text === "SMS QUEUED" ||
-    text.includes("SMS CHASE QUEUED") ||
-    text.includes("ACTIVATION SMS QUEUED") ||
-    text.includes("SMS QUEUED")
+function isQueuedSmsStatusText(value: string | null | undefined) {
+  return QUEUED_SMS_STATUS_TEXTS.has(normaliseText(value));
+}
+
+function getExistingStatusDetail(card: Element) {
+  const details = Array.from(card.querySelectorAll("span, div, p"))
+    .map((element) => element.textContent?.trim() ?? "")
+    .filter(Boolean);
+
+  return details.find((text) =>
+    /queued because|waiting for the sms worker|will send automatically/i.test(text),
   );
 }
 
@@ -40,23 +50,35 @@ export default function QueuedSmsReasonHints() {
     const applyHints = () => {
       const candidates = Array.from(
         document.querySelectorAll("span, div, p"),
-      ).filter((element) => isQueuedSmsText(element.textContent));
+      ).filter((element) => isQueuedSmsStatusText(element.textContent));
 
       for (const candidate of candidates) {
         const card = getCommunicationCard(candidate);
         if (!card) continue;
 
-        const cardText = card.textContent?.toUpperCase() ?? "";
+        const cardText = normaliseText(card.textContent);
         if (!cardText.includes("SMS") || !cardText.includes("QUEUED")) continue;
-        if (cardText.includes("QUEUED BECAUSE SMS SENDING IS PAUSED")) continue;
 
-        if (card.querySelector("[data-queued-sms-reason-hint]")) continue;
+        const existingHint = card.querySelector("[data-queued-sms-reason-hint]");
+        const existingDetail = getExistingStatusDetail(card);
+
+        if (!existingDetail) {
+          existingHint?.remove();
+          continue;
+        }
+
+        if (existingHint) {
+          if (existingHint.textContent !== existingDetail) {
+            existingHint.textContent = existingDetail;
+          }
+          continue;
+        }
 
         const hint = document.createElement("div");
         hint.dataset.queuedSmsReasonHint = "true";
         hint.className =
           "mt-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100";
-        hint.textContent = QUEUED_SMS_REASON_TEXT;
+        hint.textContent = existingDetail;
 
         card.appendChild(hint);
       }
