@@ -4,7 +4,6 @@
 
 import {
   NotificationAudience,
-  NotificationChannel,
   NotificationDispatchStatus,
   NotificationRecipientSourceType,
   NotificationTemplateKind,
@@ -19,8 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 type ReminderMode = "request" | "chase24h" | "chase72h";
-
-type ReminderChannel = NotificationChannel.EMAIL | NotificationChannel.SMS;
+type ReminderChannel = "EMAIL" | "SMS";
 
 type AvailabilityReminderTemplate = {
   key: string;
@@ -88,7 +86,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     name: "Managed squad availability request email",
     description:
       "Initial email asking managed squad players to confirm availability for an upcoming fixture.",
-    channel: NotificationChannel.EMAIL,
+    channel: "EMAIL",
     subject: "Availability needed for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -112,7 +110,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     name: "Managed squad availability request SMS",
     description:
       "Initial SMS asking managed squad players to confirm availability for an upcoming fixture.",
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
     subject: null,
     body: "SIXFL: Are you available for {{fixtureLabel}}? Please confirm here: {{availabilityUrl}}",
     ctaLabel: null,
@@ -123,7 +121,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     name: "Managed squad availability 24h chase email",
     description:
       "Follow-up email sent when a managed squad player has not confirmed availability after 24 hours.",
-    channel: NotificationChannel.EMAIL,
+    channel: "EMAIL",
     subject: "Reminder: please confirm availability for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -145,7 +143,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     name: "Managed squad availability 24h chase SMS",
     description:
       "Follow-up SMS sent when a managed squad player has not confirmed availability after 24 hours.",
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
     subject: null,
     body: "SIXFL reminder: please confirm if you are available for {{fixtureLabel}}. Update here: {{availabilityUrl}}",
     ctaLabel: null,
@@ -156,7 +154,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     name: "Managed squad availability 72h final chase email",
     description:
       "Final email sent when a managed squad player has not confirmed availability after 72 hours.",
-    channel: NotificationChannel.EMAIL,
+    channel: "EMAIL",
     subject: "Final reminder: availability needed for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -180,7 +178,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     name: "Managed squad availability 72h final chase SMS",
     description:
       "Final SMS sent when a managed squad player has not confirmed availability after 72 hours.",
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
     subject: null,
     body: "SIXFL final reminder: please confirm availability for {{fixtureLabel}}. If we do not hear back, we may assume you are unavailable. {{availabilityUrl}}",
     ctaLabel: null,
@@ -242,7 +240,7 @@ async function hasDispatch(input: {
   mode: ReminderMode;
   channel?: ReminderChannel;
 }) {
-  const dispatch = await prisma.notificationDispatch.findFirst({
+  return prisma.notificationDispatch.findFirst({
     where: {
       sourceType: SOURCE_TYPES[input.mode],
       sourceId: getSourceId(input),
@@ -263,8 +261,6 @@ async function hasDispatch(input: {
     },
     orderBy: [{ createdAt: "asc" }],
   });
-
-  return dispatch;
 }
 
 export async function ensureManagedSquadAvailabilityTemplates() {
@@ -424,13 +420,13 @@ export async function queueManagedSquadAvailabilityReminder(
     fixtureId: fixture.id,
     teamMemberId: member.id,
     mode: input.mode,
-    channel: NotificationChannel.EMAIL,
+    channel: "EMAIL",
   });
   const existingSmsDispatch = await hasDispatch({
     fixtureId: fixture.id,
     teamMemberId: member.id,
     mode: input.mode,
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
   });
 
   if ((!email || existingEmailDispatch) && (!phone || existingSmsDispatch)) {
@@ -560,7 +556,7 @@ export async function getManagedSquadAvailabilityReminderMode(input: {
     fixtureId: input.fixtureId,
     teamMemberId: input.teamMemberId,
     mode: "request",
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
   });
 
   if (!initial || !initialSms) return "request";
@@ -579,7 +575,7 @@ export async function getManagedSquadAvailabilityReminderMode(input: {
       fixtureId: input.fixtureId,
       teamMemberId: input.teamMemberId,
       mode: "chase72h",
-      channel: NotificationChannel.SMS,
+      channel: "SMS",
     });
 
     if (!chase72 || !chase72Sms) return "chase72h";
@@ -595,7 +591,7 @@ export async function getManagedSquadAvailabilityReminderMode(input: {
       fixtureId: input.fixtureId,
       teamMemberId: input.teamMemberId,
       mode: "chase24h",
-      channel: NotificationChannel.SMS,
+      channel: "SMS",
     });
 
     if (!chase24 || !chase24Sms) return "chase24h";
