@@ -7,9 +7,46 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+function getClassName(element: HTMLElement) {
+  return typeof element.className === "string" ? element.className : "";
+}
+
+function findProspectCard(form: HTMLFormElement, main: HTMLElement) {
+  let current = form.parentElement;
+
+  while (current && current !== main) {
+    const className = getClassName(current);
+
+    if (
+      className.includes("space-y-5") &&
+      className.includes("px-6") &&
+      className.includes("py-5")
+    ) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return form.parentElement instanceof HTMLElement ? form.parentElement : null;
+}
+
+function scrollToSelectedProspect() {
+  if (!window.location.hash.startsWith("#prospect-")) return;
+
+  const targetId = decodeURIComponent(window.location.hash.slice(1));
+  const target = document.getElementById(targetId);
+
+  if (target instanceof HTMLElement) {
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ block: "start" });
+    });
+  }
+}
+
 function applyReadableProspectLayout() {
   const main = document.querySelector("main");
-  if (!main) return;
+  if (!(main instanceof HTMLElement)) return;
 
   const prospectsSection = Array.from(main.querySelectorAll("section")).find(
     (section) => section.textContent?.includes("Current prospects"),
@@ -33,6 +70,19 @@ function applyReadableProspectLayout() {
     );
 
   for (const form of detailForms) {
+    const prospectId = form
+      .querySelector<HTMLInputElement>('input[name="prospectId"]')
+      ?.value.trim();
+
+    if (prospectId) {
+      const card = findProspectCard(form, main);
+
+      if (card) {
+        card.id = `prospect-${prospectId}`;
+        card.style.scrollMarginTop = "2rem";
+      }
+    }
+
     const actionGrid = form.parentElement;
     if (actionGrid instanceof HTMLElement) {
       actionGrid.style.display = "grid";
@@ -70,13 +120,45 @@ function applyReadableProspectLayout() {
       label.style.minWidth = "0";
     }
   }
+
+  scrollToSelectedProspect();
+}
+
+function applyPendingSquadProspectEditLinks(pathname: string) {
+  if (!pathname.endsWith("/squad")) return;
+
+  const main = document.querySelector("main");
+  if (!(main instanceof HTMLElement)) return;
+
+  const prospectsPath = pathname.replace(/\/squad$/, "/prospects");
+  const openProspectLinks = Array.from(main.querySelectorAll<HTMLAnchorElement>("a"))
+    .filter((link) => link.textContent?.trim() === "Open prospect")
+    .filter((link) => link.getAttribute("href")?.includes("/prospects"));
+
+  for (const link of openProspectLinks) {
+    const prospectId = link.parentElement
+      ?.querySelector<HTMLInputElement>('input[name="prospectId"]')
+      ?.value.trim();
+
+    if (!prospectId) continue;
+
+    link.href = `${prospectsPath}#prospect-${encodeURIComponent(prospectId)}`;
+    link.textContent = "Edit details";
+    link.dataset.pendingProspectEditLink = prospectId;
+    link.setAttribute("aria-label", "Edit player details");
+    link.className =
+      "inline-flex items-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15";
+  }
 }
 
 export default function ProspectsReadableLayout() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!pathname.endsWith("/prospects")) return;
+    const shouldHandleProspects = pathname.endsWith("/prospects");
+    const shouldHandleSquad = pathname.endsWith("/squad");
+
+    if (!shouldHandleProspects && !shouldHandleSquad) return;
 
     const styleId = "sixfl-prospects-readable-layout";
     if (!document.getElementById(styleId)) {
@@ -121,19 +203,29 @@ export default function ProspectsReadableLayout() {
       document.head.appendChild(style);
     }
 
-    applyReadableProspectLayout();
+    const applyPageEnhancements = () => {
+      if (shouldHandleProspects) {
+        applyReadableProspectLayout();
+      }
 
-    const observer = new MutationObserver(applyReadableProspectLayout);
+      if (shouldHandleSquad) {
+        applyPendingSquadProspectEditLinks(pathname);
+      }
+    };
+
+    applyPageEnhancements();
+
+    const observer = new MutationObserver(applyPageEnhancements);
     observer.observe(document.body, {
       childList: true,
       subtree: true,
     });
 
-    window.addEventListener("resize", applyReadableProspectLayout);
+    window.addEventListener("resize", applyPageEnhancements);
 
     return () => {
       observer.disconnect();
-      window.removeEventListener("resize", applyReadableProspectLayout);
+      window.removeEventListener("resize", applyPageEnhancements);
       document.getElementById(styleId)?.remove();
     };
   }, [pathname]);
