@@ -297,7 +297,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
   }
 
   const captainFixturesUrl = buildAbsoluteUrl(
-    `/captain/team/${input.teamId}/fixtures`,
+    `/captain/team/${input.teamId}/fixtures?fixtureId=${encodeURIComponent(fixture.id)}`,
   );
 
   const smsBody = await buildSmsBody({
