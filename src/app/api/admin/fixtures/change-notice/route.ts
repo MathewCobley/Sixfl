@@ -4,6 +4,7 @@
 
 import { createHash } from "crypto";
 import {
+  FixtureCaptainConfirmationStatus,
   FixtureStatus,
   NotificationAudience,
   NotificationChannel,
@@ -172,12 +173,6 @@ export async function POST(request: Request) {
         kickoffAt: true,
         pitch: true,
         status: true,
-        league: {
-          select: {
-            name: true,
-            season: true,
-          },
-        },
         homeTeam: {
           select: {
             id: true,
@@ -304,21 +299,10 @@ export async function POST(request: Request) {
       teamId: {
         in: affectedTeamIds,
       },
-      status: FixtureStatus.COMPLETED as never,
-    },
-    data: {},
-  }).catch(() => null);
-
-  await prisma.fixtureCaptainConfirmation.updateMany({
-    where: {
-      fixtureId: fixture.id,
-      teamId: {
-        in: affectedTeamIds,
-      },
-      status: "CONFIRMED",
+      status: FixtureCaptainConfirmationStatus.CONFIRMED,
     },
     data: {
-      status: "PENDING",
+      status: FixtureCaptainConfirmationStatus.PENDING,
       confirmedAt: null,
       confirmedByUserId: null,
       note: "Fixture changed after previous confirmation. Team needs to reconfirm.",
