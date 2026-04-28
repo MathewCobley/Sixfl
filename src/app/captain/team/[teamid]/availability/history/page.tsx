@@ -157,7 +157,7 @@ export default async function CaptainAvailabilityHistoryPage({
       availabilities: {
         where: {
           teamMember: {
-            teamId,
+            teamId: teamid,
           },
         },
         select: {
@@ -171,7 +171,7 @@ export default async function CaptainAvailabilityHistoryPage({
       selections: {
         where: {
           teamMember: {
-            teamId,
+            teamId: teamid,
           },
         },
         select: {
