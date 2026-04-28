@@ -161,6 +161,20 @@ export default async function CaptainAvailabilityPage({
                 {team.members.length} squad member{team.members.length === 1 ? "" : "s"}
               </span>
             </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={`/captain/team/${teamid}/availability/history`}
+                className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+              >
+                View availability history
+              </Link>
+              <Link
+                href={`/captain/team/${teamid}/fixtures`}
+                className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+              >
+                Open fixtures
+              </Link>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-2">
