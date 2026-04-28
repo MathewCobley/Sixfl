@@ -70,7 +70,10 @@ export function normaliseSocialText(value: string) {
     .replaceAll("•", "-")
     .replaceAll("–", "-")
     .replaceAll("—", "-")
-    .replace(/\s+/g, " ")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
