@@ -87,55 +87,55 @@ async function handleWeeklyCardCallback(body: SocialCallbackBody) {
 
   const status = isValidSocialPostStatus(body.socialPostStatus)
     ? body.socialPostStatus
-    : undefined;
+    : null;
   const postType = isValidSocialPostType(body.socialPostType)
     ? body.socialPostType
-    : undefined;
+    : null;
   const caption =
     typeof body.socialCaption === "string"
       ? body.socialCaption.trim() || null
-      : undefined;
+      : null;
   const imageUrl =
     typeof body.socialImageUrl === "string"
       ? body.socialImageUrl.trim() || null
-      : undefined;
+      : null;
   const externalPostId =
     typeof body.externalPostId === "string"
       ? body.externalPostId.trim() || null
       : typeof body.socialDraftExternalId === "string"
         ? body.socialDraftExternalId.trim() || null
-        : undefined;
+        : null;
   const lastError =
     typeof body.socialLastError === "string"
       ? body.socialLastError.trim() || null
-      : undefined;
+      : null;
 
   const publishedAt = (() => {
     if (typeof body.socialPublishedAt !== "string" || !body.socialPublishedAt.trim()) {
-      return undefined;
+      return null;
     }
 
     const parsed = new Date(body.socialPublishedAt);
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   })();
 
   await prisma.$executeRaw`
     UPDATE "SocialMatchCard"
     SET
-      "postStatus" = COALESCE(${status ?? null}::"SocialPostStatus", "postStatus"),
-      "postType" = COALESCE(${postType ?? null}::"SocialPostType", "postType"),
+      "postStatus" = COALESCE(${status}::"SocialPostStatus", "postStatus"),
+      "postType" = COALESCE(${postType}::"SocialPostType", "postType"),
       "caption" = COALESCE(${caption}, "caption"),
       "imageUrl" = COALESCE(${imageUrl}, "imageUrl"),
       "externalPostId" = COALESCE(${externalPostId}, "externalPostId"),
       "lastError" = CASE
-        WHEN ${status ?? null}::"SocialPostStatus" = ${SocialPostStatus.FAILED}::"SocialPostStatus" THEN COALESCE(${lastError}, 'Social publish callback reported a failure.')
+        WHEN ${status}::"SocialPostStatus" = ${SocialPostStatus.FAILED}::"SocialPostStatus" THEN COALESCE(${lastError}, 'Social publish callback reported a failure.')
         WHEN ${lastError} IS NOT NULL THEN ${lastError}
-        WHEN ${status ?? null}::"SocialPostStatus" IN (${SocialPostStatus.DRAFTED}::"SocialPostStatus", ${SocialPostStatus.PUBLISHED}::"SocialPostStatus") THEN NULL
+        WHEN ${status}::"SocialPostStatus" IN (${SocialPostStatus.DRAFTED}::"SocialPostStatus", ${SocialPostStatus.PUBLISHED}::"SocialPostStatus") THEN NULL
         ELSE "lastError"
       END,
       "publishedAt" = CASE
-        WHEN ${status ?? null}::"SocialPostStatus" = ${SocialPostStatus.PUBLISHED}::"SocialPostStatus" THEN COALESCE(${publishedAt ?? null}, NOW())
-        ELSE COALESCE(${publishedAt ?? null}, "publishedAt")
+        WHEN ${status}::"SocialPostStatus" = ${SocialPostStatus.PUBLISHED}::"SocialPostStatus" THEN COALESCE(${publishedAt}, NOW())
+        ELSE COALESCE(${publishedAt}, "publishedAt")
       END,
       "updatedAt" = NOW()
     WHERE "id" = ${cardId}
