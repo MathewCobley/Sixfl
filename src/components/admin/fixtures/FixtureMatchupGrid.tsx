@@ -123,7 +123,7 @@ export default function FixtureMatchupGrid({
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
       <div className="border-b border-white/10 px-6 py-6 md:px-8">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="space-y-5">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               Fixture planning grid
@@ -136,23 +136,31 @@ export default function FixtureMatchupGrid({
             </p>
           </div>
 
-          <label className="w-full max-w-md space-y-2 text-sm text-white/65">
-            <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-              League
-            </span>
-            <select
-              value={selectedLeagueId}
-              onChange={(event) => setSelectedLeagueId(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/60"
-            >
-              {leagues.length === 0 ? <option value="">No leagues found</option> : null}
-              {leagues.map((league) => (
-                <option key={league.id} value={league.id}>
-                  {formatLeagueLabel(league)}{league.isActive ? "" : " (inactive)"}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-wrap gap-2">
+            {leagues.length === 0 ? (
+              <span className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-white/55">
+                No leagues found
+              </span>
+            ) : null}
+            {leagues.map((league) => {
+              const isActive = selectedLeagueId === league.id;
+
+              return (
+                <button
+                  key={league.id}
+                  type="button"
+                  onClick={() => setSelectedLeagueId(league.id)}
+                  className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    isActive
+                      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-50"
+                      : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"
+                  }`}
+                >
+                  {formatLeagueLabel(league)}{league.isActive ? "" : " · inactive"}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
