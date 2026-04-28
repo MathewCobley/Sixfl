@@ -65,6 +65,15 @@ type InviteDispatchStatusSnapshot = {
   createdAt: Date;
 };
 
+function formatUkDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Europe/London",
+  }).format(value);
+}
+
 function getLeagueLabel(league: TeamListItem["league"]) {
   if (!league) return "Unassigned teams";
   return `${league.name}${league.season ? ` • ${league.season}` : ""}`;
@@ -537,7 +546,7 @@ export default async function AdminTeamsPage({
                             </div>
                             <div>
                               <span className="text-white/45">Created:</span>{" "}
-                              {team.createdAt.toLocaleDateString()}
+                              {formatUkDate(team.createdAt)}
                             </div>
                           </div>
 
@@ -585,11 +594,11 @@ export default async function AdminTeamsPage({
                           Captain view
                         </Link>
                         <Link
-  href={`/admin/teams/${team.id}/player-preview`}
-  className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
->
-  Player view
-</Link>
+                          href={`/admin/teams/${team.id}/player-preview`}
+                          className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                        >
+                          Player view
+                        </Link>
 
                         {isManagedTeam ? (
                           <>
