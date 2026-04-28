@@ -4,7 +4,6 @@
 
 import {
   NotificationAudience,
-  NotificationChannel,
   NotificationDispatchStatus,
   NotificationRecipientSourceType,
   NotificationTemplateKind,
@@ -20,7 +19,7 @@ import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 type ReminderMode = "request" | "chase24h" | "chase72h";
 
-type ReminderChannel = NotificationChannel.EMAIL | NotificationChannel.SMS;
+type ReminderChannel = "EMAIL" | "SMS";
 
 type AvailabilityReminderTemplate = {
   key: string;
@@ -70,7 +69,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     key: TEMPLATE_KEYS.request.EMAIL,
     name: "Managed squad availability request email",
     description: "Initial email asking managed squad players to confirm availability for an upcoming fixture.",
-    channel: NotificationChannel.EMAIL,
+    channel: "EMAIL",
     subject: "Availability needed for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -93,7 +92,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     key: TEMPLATE_KEYS.request.SMS,
     name: "Managed squad availability request SMS",
     description: "Initial SMS asking managed squad players to confirm availability for an upcoming fixture.",
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
     subject: null,
     body: "SIXFL: Are you available for {{fixtureLabel}}? Please confirm here: {{availabilityUrl}}",
     ctaLabel: null,
@@ -103,7 +102,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     key: TEMPLATE_KEYS.chase24h.EMAIL,
     name: "Managed squad availability 24h chase email",
     description: "Follow-up email sent when a managed squad player has not confirmed availability after 24 hours.",
-    channel: NotificationChannel.EMAIL,
+    channel: "EMAIL",
     subject: "Reminder: please confirm availability for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -124,7 +123,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     key: TEMPLATE_KEYS.chase24h.SMS,
     name: "Managed squad availability 24h chase SMS",
     description: "Follow-up SMS sent when a managed squad player has not confirmed availability after 24 hours.",
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
     subject: null,
     body: "SIXFL reminder: please confirm if you are available for {{fixtureLabel}}. Update here: {{availabilityUrl}}",
     ctaLabel: null,
@@ -134,7 +133,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     key: TEMPLATE_KEYS.chase72h.EMAIL,
     name: "Managed squad availability 72h final chase email",
     description: "Final email sent when a managed squad player has not confirmed availability after 72 hours.",
-    channel: NotificationChannel.EMAIL,
+    channel: "EMAIL",
     subject: "Final reminder: availability needed for {{fixtureLabel}}",
     body: [
       "Hi {{firstName}},",
@@ -157,7 +156,7 @@ const SYSTEM_TEMPLATES: AvailabilityReminderTemplate[] = [
     key: TEMPLATE_KEYS.chase72h.SMS,
     name: "Managed squad availability 72h final chase SMS",
     description: "Final SMS sent when a managed squad player has not confirmed availability after 72 hours.",
-    channel: NotificationChannel.SMS,
+    channel: "SMS",
     subject: null,
     body: "SIXFL final reminder: please confirm availability for {{fixtureLabel}}. If we do not hear back, we may assume you are unavailable. {{availabilityUrl}}",
     ctaLabel: null,
