@@ -78,6 +78,21 @@ function getSourceId(input: {
   return `${input.fixtureId}:${input.teamId}:${input.mode}`;
 }
 
+function getBlockingDispatchStatuses(mode: FixtureConfirmationReminderMode) {
+  if (mode === "manual") {
+    return [
+      NotificationDispatchStatus.QUEUED,
+      NotificationDispatchStatus.PROCESSING,
+    ];
+  }
+
+  return [
+    NotificationDispatchStatus.QUEUED,
+    NotificationDispatchStatus.PROCESSING,
+    NotificationDispatchStatus.SENT,
+  ];
+}
+
 function getTemplateKey(mode: FixtureConfirmationReminderMode) {
   return mode === "auto24h"
     ? "fixture-confirmation-reminder-urgent-sms"
@@ -227,11 +242,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
       sourceType,
       sourceId,
       status: {
-        in: [
-          NotificationDispatchStatus.QUEUED,
-          NotificationDispatchStatus.PROCESSING,
-          NotificationDispatchStatus.SENT,
-        ],
+        in: getBlockingDispatchStatuses(input.mode),
       },
     },
     select: {
