@@ -2,6 +2,7 @@
 // File: src/app/captain/team/[teamid]/squad/prospect-details/route.ts
 // ========================================
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
@@ -11,6 +12,57 @@ import { requireCaptain } from "@/lib/requireCaptain";
 function normaliseNullableString(value: unknown) {
   const parsed = String(value ?? "").trim();
   return parsed ? parsed : null;
+}
+
+async function syncLinkedMemberProfilePhone(input: {
+  teamid: string;
+  prospectId: string;
+  email: string | null;
+  phone: string | null;
+}) {
+  const linkedMemberIds = input.email
+    ? await prisma.teamMember.findMany({
+        where: {
+          teamId: input.teamid,
+          user: {
+            email: input.email,
+          },
+        },
+        select: {
+          id: true,
+        },
+      })
+    : [];
+
+  for (const member of linkedMemberIds) {
+    await prisma.$executeRaw`
+      INSERT INTO "TeamMemberProfile" (
+        "id",
+        "teamMemberId",
+        "sourceProspectId",
+        "phone",
+        "updatedAt"
+      ) VALUES (
+        ${randomUUID()},
+        ${member.id},
+        ${input.prospectId},
+        ${input.phone},
+        NOW()
+      )
+      ON CONFLICT ("teamMemberId") DO UPDATE SET
+        "sourceProspectId" = COALESCE("TeamMemberProfile"."sourceProspectId", EXCLUDED."sourceProspectId"),
+        "phone" = EXCLUDED."phone",
+        "updatedAt" = NOW()
+    `;
+  }
+
+  await prisma.$executeRaw`
+    UPDATE "TeamMemberProfile"
+    SET
+      "phone" = ${input.phone},
+      "updatedAt" = NOW()
+    WHERE "sourceProspectId" = ${input.prospectId}
+  `;
 }
 
 export async function POST(
@@ -67,28 +119,41 @@ export async function POST(
     );
   }
 
-  const updated = await prisma.teamPlayerProspect.update({
-    where: {
-      id: prospectId,
-    },
-    data: {
-      firstName,
-      lastName,
-      email,
-      phone,
-    },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phone: true,
-      updatedAt: true,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const prospect = await tx.teamPlayerProspect.update({
+      where: {
+        id: prospectId,
+      },
+      data: {
+        firstName,
+        lastName,
+        email,
+        phone,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        updatedAt: true,
+      },
+    });
+
+    return prospect;
+  });
+
+  await syncLinkedMemberProfilePhone({
+    teamid,
+    prospectId,
+    email,
+    phone,
   });
 
   revalidatePath(`/captain/team/${teamid}/squad`);
   revalidatePath(`/captain/team/${teamid}/prospects`);
+  revalidatePath(`/admin/messages`);
+  revalidatePath(`/admin/messaging`);
 
   return NextResponse.json({
     prospect: updated,
