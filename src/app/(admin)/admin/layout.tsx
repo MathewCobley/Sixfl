@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import AppHeader from "@/components/layout/AppHeader";
 
@@ -25,6 +26,7 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-black text-white">
       <QueuedSmsReasonHints />
+      <FixtureChangeNotificationSubmitBridge />
       <AppHeader variant="admin" />
 
       <div className="flex w-full gap-6 px-4 py-6 sm:px-6 lg:px-8">
