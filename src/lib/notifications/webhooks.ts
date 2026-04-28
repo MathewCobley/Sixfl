@@ -116,6 +116,12 @@ type ResendEventClassification = {
   suppressRecipient: boolean;
 };
 
+const FINAL_NOTIFICATION_DISPATCH_STATUSES: NotificationDispatchStatus[] = [
+  NotificationDispatchStatus.CANCELLED,
+  NotificationDispatchStatus.FAILED,
+  NotificationDispatchStatus.SKIPPED,
+];
+
 function classifyResendEvent(
   eventType: string,
 ): ResendEventClassification | null {
@@ -344,11 +350,7 @@ export async function handleResendWebhook(payload: Record<string, unknown>) {
 
       if (
         classification.dispatchStatus === NotificationDispatchStatus.SENT &&
-        ![
-          NotificationDispatchStatus.FAILED,
-          NotificationDispatchStatus.CANCELLED,
-          NotificationDispatchStatus.SKIPPED,
-        ].includes(dispatch.status)
+        !FINAL_NOTIFICATION_DISPATCH_STATUSES.includes(dispatch.status)
       ) {
         await tx.notificationDispatch.update({
           where: { id: dispatch.id },
