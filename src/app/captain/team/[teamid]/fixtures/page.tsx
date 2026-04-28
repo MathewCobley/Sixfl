@@ -21,6 +21,13 @@ export const metadata = {
 type SearchParams = {
   saved?: string;
   error?: string;
+  fixtureId?: string;
+};
+
+type ConfirmationSummary = {
+  label: string;
+  tone: "emerald" | "amber" | "red" | "neutral";
+  helper: string;
 };
 
 function formatDateTime(value: Date) {
@@ -54,7 +61,7 @@ function getCaptainFixtureLabel(input: {
   awayTeamName: string;
   isHome: boolean;
 }) {
-  return input.isHome ? `vs ${input.awayTeamName}` : `at ${input.homeTeamName}`;
+  return input.isHome ? `vs ${input.awayTeamName}` : `vs ${input.homeTeamName}`;
 }
 
 function getResultLabel(goalsFor: number, goalsAgainst: number) {
@@ -117,7 +124,7 @@ function getFixtureConfirmationSummary(input: {
     | null
     | undefined;
   kickoffAt: Date;
-}) {
+}): ConfirmationSummary {
   const confirmation = input.confirmation ?? null;
   const diffMs = input.kickoffAt.getTime() - Date.now();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -125,7 +132,7 @@ function getFixtureConfirmationSummary(input: {
   if (confirmation?.status === "CONFIRMED") {
     return {
       label: "Fixture confirmed",
-      tone: "emerald" as const,
+      tone: "emerald",
       helper: confirmation.confirmedAt
         ? `Confirmed ${formatShortDateTime(confirmation.confirmedAt)}`
         : "Confirmed",
@@ -135,7 +142,7 @@ function getFixtureConfirmationSummary(input: {
   if (confirmation?.status === "ISSUE_RAISED") {
     return {
       label: "Issue raised",
-      tone: "amber" as const,
+      tone: "amber",
       helper: confirmation.issueRaisedAt
         ? `Raised ${formatShortDateTime(confirmation.issueRaisedAt)}`
         : "Awaiting review",
@@ -145,7 +152,7 @@ function getFixtureConfirmationSummary(input: {
   if (diffHours <= 24) {
     return {
       label: "Overdue",
-      tone: "red" as const,
+      tone: "red",
       helper:
         confirmation?.lastChasedAt != null
           ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}`
@@ -156,7 +163,7 @@ function getFixtureConfirmationSummary(input: {
   if (diffHours <= 72) {
     return {
       label: "Awaiting confirmation",
-      tone: "amber" as const,
+      tone: "amber",
       helper:
         confirmation?.lastChasedAt != null
           ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}`
@@ -166,7 +173,7 @@ function getFixtureConfirmationSummary(input: {
 
   return {
     label: "Awaiting confirmation",
-    tone: "neutral" as const,
+    tone: "neutral",
     helper:
       confirmation?.lastChasedAt != null
         ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}`
@@ -174,7 +181,7 @@ function getFixtureConfirmationSummary(input: {
   };
 }
 
-function getToneClasses(tone: "emerald" | "amber" | "red" | "neutral") {
+function getToneClasses(tone: ConfirmationSummary["tone"]) {
   switch (tone) {
     case "emerald":
       return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
@@ -187,11 +194,26 @@ function getToneClasses(tone: "emerald" | "amber" | "red" | "neutral") {
   }
 }
 
+function buildFixtureRedirect(teamid: string, input: { fixtureId: string; saved?: string; error?: string }) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("fixtureId", input.fixtureId);
+
+  if (input.saved) {
+    searchParams.set("saved", input.saved);
+  }
+
+  if (input.error) {
+    searchParams.set("error", input.error);
+  }
+
+  return `/captain/team/${teamid}/fixtures?${searchParams.toString()}`;
+}
+
 async function confirmFixtureAction(formData: FormData) {
   "use server";
 
-  const teamid = String(formData.get("teamid") ?? "");
-  const fixtureId = String(formData.get("fixtureId") ?? "");
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const fixtureId = String(formData.get("fixtureId") ?? "").trim();
   const access = await requireCaptain(teamid);
 
   try {
@@ -245,20 +267,19 @@ async function confirmFixtureAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamid}/fixtures`);
     revalidatePath(`/admin/fixtures`);
   } catch (error) {
-    const message = encodeURIComponent(getFriendlyErrorMessage(error));
-    redirect(`/captain/team/${teamid}/fixtures?error=${message}`);
+    const message = getFriendlyErrorMessage(error);
+    redirect(buildFixtureRedirect(teamid, { fixtureId, error: message }));
   }
 
-  redirect(`/captain/team/${teamid}/fixtures?saved=confirmed`);
+  redirect(buildFixtureRedirect(teamid, { fixtureId, saved: "confirmed" }));
 }
 
 async function raiseFixtureIssueAction(formData: FormData) {
   "use server";
 
-  const teamid = String(formData.get("teamid") ?? "");
-  const fixtureId = String(formData.get("fixtureId") ?? "");
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const fixtureId = String(formData.get("fixtureId") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
-
   const access = await requireCaptain(teamid);
 
   try {
@@ -317,11 +338,11 @@ async function raiseFixtureIssueAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamid}/fixtures`);
     revalidatePath(`/admin/fixtures`);
   } catch (error) {
-    const message = encodeURIComponent(getFriendlyErrorMessage(error));
-    redirect(`/captain/team/${teamid}/fixtures?error=${message}`);
+    const message = getFriendlyErrorMessage(error);
+    redirect(buildFixtureRedirect(teamid, { fixtureId, error: message }));
   }
 
-  redirect(`/captain/team/${teamid}/fixtures?saved=issue`);
+  redirect(buildFixtureRedirect(teamid, { fixtureId, saved: "issue" }));
 }
 
 export default async function CaptainFixturesPage({
@@ -333,6 +354,7 @@ export default async function CaptainFixturesPage({
 }) {
   const { teamid } = await params;
   const filters = await searchParams;
+  const requestedFixtureId = filters.fixtureId?.trim() || "";
 
   await requireCaptain(teamid);
 
@@ -360,7 +382,7 @@ export default async function CaptainFixturesPage({
         kickoffAt: { gte: new Date() },
       },
       orderBy: [{ kickoffAt: "asc" }],
-      take: 12,
+      take: 20,
       include: {
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
@@ -403,15 +425,19 @@ export default async function CaptainFixturesPage({
     notFound();
   }
 
-  const nextFixture = upcomingFixtures[0] ?? null;
-  const nextConfirmation = nextFixture?.captainConfirmations[0] ?? null;
-  const nextStatus = nextFixture
+  const requestedFixture = requestedFixtureId
+    ? upcomingFixtures.find((fixture) => fixture.id === requestedFixtureId) ?? null
+    : null;
+  const selectedFixture = requestedFixture ?? upcomingFixtures[0] ?? null;
+  const selectedConfirmation = selectedFixture?.captainConfirmations[0] ?? null;
+  const selectedStatus = selectedFixture
     ? getFixtureConfirmationSummary({
-        confirmation: nextConfirmation,
-        kickoffAt: nextFixture.kickoffAt,
+        confirmation: selectedConfirmation,
+        kickoffAt: selectedFixture.kickoffAt,
       })
     : null;
-  const isNextFixtureConfirmed = nextConfirmation?.status === "CONFIRMED";
+  const isSelectedFixtureConfirmed = selectedConfirmation?.status === "CONFIRMED";
+  const requestedFixtureWasNotFound = Boolean(requestedFixtureId && !requestedFixture);
 
   return (
     <div className="space-y-8">
@@ -423,40 +449,52 @@ export default async function CaptainFixturesPage({
             </p>
 
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-              {nextFixture
+              {selectedFixture
                 ? getFixtureSummary({
-                    homeTeamName: nextFixture.homeTeam.name,
-                    awayTeamName: nextFixture.awayTeam.name,
+                    homeTeamName: selectedFixture.homeTeam.name,
+                    awayTeamName: selectedFixture.awayTeam.name,
                   })
                 : "No upcoming fixture"}
             </h2>
 
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              {nextFixture
-                ? `${formatDateTime(nextFixture.kickoffAt)} · ${
-                    nextFixture.venue?.name ??
+              {selectedFixture
+                ? `${formatDateTime(selectedFixture.kickoffAt)} · ${
+                    selectedFixture.venue?.name ??
                     team.league?.venueName ??
                     "Venue TBC"
                   }`
                 : "Your next match will appear here as soon as it is scheduled."}
             </p>
 
-            {nextFixture && nextStatus ? (
+            {requestedFixture && selectedFixture ? (
+              <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+                This page was opened from a fixture reminder, so the confirmation button is locked to this exact fixture.
+              </div>
+            ) : null}
+
+            {requestedFixtureWasNotFound ? (
+              <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+                The reminder link pointed to a fixture that is no longer upcoming for this team. Showing the next available fixture instead.
+              </div>
+            ) : null}
+
+            {selectedFixture && selectedStatus ? (
               <>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <span
                     className={`rounded-full border px-3 py-1 text-xs font-medium ${getToneClasses(
-                      nextStatus.tone,
+                      selectedStatus.tone,
                     )}`}
                   >
-                    {nextStatus.label}
+                    {selectedStatus.label}
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                    {getCountdownLabel(nextFixture.kickoffAt)}
+                    {getCountdownLabel(selectedFixture.kickoffAt)}
                   </span>
                 </div>
 
-                <p className="mt-4 text-sm text-white/55">{nextStatus.helper}</p>
+                <p className="mt-4 text-sm text-white/55">{selectedStatus.helper}</p>
               </>
             ) : null}
 
@@ -480,22 +518,22 @@ export default async function CaptainFixturesPage({
           </div>
 
           <div className="space-y-4">
-            {nextFixture ? (
+            {selectedFixture ? (
               <>
                 <form action={confirmFixtureAction}>
                   <input type="hidden" name="teamid" value={team.id} />
-                  <input type="hidden" name="fixtureId" value={nextFixture.id} />
+                  <input type="hidden" name="fixtureId" value={selectedFixture.id} />
 
                   <button
                     type="submit"
-                    disabled={isNextFixtureConfirmed}
+                    disabled={isSelectedFixtureConfirmed}
                     className={`inline-flex w-full items-center justify-center rounded-2xl border px-5 py-4 text-sm font-medium transition ${
-                      isNextFixtureConfirmed
+                      isSelectedFixtureConfirmed
                         ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
                         : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
                     }`}
                   >
-                    {isNextFixtureConfirmed ? "Fixture already confirmed" : "Confirm fixture"}
+                    {isSelectedFixtureConfirmed ? "Fixture already confirmed" : "Confirm this fixture"}
                   </button>
                 </form>
 
@@ -504,7 +542,7 @@ export default async function CaptainFixturesPage({
                   className="rounded-3xl border border-white/10 bg-black/20 p-4"
                 >
                   <input type="hidden" name="teamid" value={team.id} />
-                  <input type="hidden" name="fixtureId" value={nextFixture.id} />
+                  <input type="hidden" name="fixtureId" value={selectedFixture.id} />
 
                   <label className="block text-sm font-medium text-white">
                     Need help with this fixture?
@@ -518,8 +556,8 @@ export default async function CaptainFixturesPage({
                     rows={4}
                     placeholder="Example: We may not have enough players available and need help reviewing this fixture."
                     defaultValue={
-                      nextConfirmation?.status === "ISSUE_RAISED"
-                        ? nextConfirmation.note ?? ""
+                      selectedConfirmation?.status === "ISSUE_RAISED"
+                        ? selectedConfirmation.note ?? ""
                         : ""
                     }
                     className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
@@ -575,11 +613,14 @@ export default async function CaptainFixturesPage({
                   confirmation,
                   kickoffAt: fixture.kickoffAt,
                 });
+                const isSelected = selectedFixture?.id === fixture.id;
 
                 return (
                   <div
                     key={fixture.id}
-                    className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between"
+                    className={`flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between ${
+                      isSelected ? "bg-emerald-500/[0.05]" : ""
+                    }`}
                   >
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -591,8 +632,12 @@ export default async function CaptainFixturesPage({
                           })}
                         </div>
 
-                        {index === 0 ? (
+                        {isSelected ? (
                           <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                            Selected
+                          </span>
+                        ) : index === 0 ? (
+                          <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">
                             Next up
                           </span>
                         ) : null}
@@ -620,6 +665,14 @@ export default async function CaptainFixturesPage({
                       <span className="text-xs uppercase tracking-[0.14em] text-white/45">
                         {getCountdownLabel(fixture.kickoffAt)}
                       </span>
+                      {!isSelected ? (
+                        <Link
+                          href={`/captain/team/${teamid}/fixtures?fixtureId=${fixture.id}`}
+                          className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+                        >
+                          Open this fixture
+                        </Link>
+                      ) : null}
                     </div>
                   </div>
                 );
