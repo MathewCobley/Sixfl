@@ -16,6 +16,7 @@ import {
   NotificationChannel,
   TeamRole,
 } from "@prisma/client";
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -27,6 +28,7 @@ import {
   mergeEmailTemplateContext,
   resolveTemplateText,
 } from "@/lib/email/template-context";
+import { processNotificationQueue } from "@/lib/notifications/processor";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
@@ -272,6 +274,14 @@ async function ensureLeadSmsNotificationRecipient(input: {
   });
 
   return recipient;
+}
+
+async function processLeadSmsImmediately() {
+  try {
+    await processNotificationQueue(10);
+  } catch (error) {
+    console.error("Failed to process lead SMS immediately", error);
+  }
 }
 
 // ========================================
@@ -533,6 +543,13 @@ export async function sendLeadSmsAction(formData: FormData) {
       createdByUserId: user?.id ?? null,
     });
 
+    await logNotificationDispatchToThread({
+      dispatch,
+      recipient,
+    });
+
+    await processLeadSmsImmediately();
+
     if (lead.status === LeadStatus.NEW) {
       await prisma.interestLead.update({
         where: { id: lead.id },
@@ -545,6 +562,7 @@ export async function sendLeadSmsAction(formData: FormData) {
 
     revalidatePath("/admin/leads");
     revalidatePath(`/admin/leads/${lead.id}`);
+    revalidatePath("/admin/messaging");
 
     return {
       ok: true,
