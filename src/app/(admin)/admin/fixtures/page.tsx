@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
+import FixtureMatchupGrid from "@/components/admin/fixtures/FixtureMatchupGrid";
 import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
 import { publishAndEmailLeagueFixturesAction } from "@/app/(admin)/admin/fixtures/publish-actions";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -596,6 +597,8 @@ export default async function AdminFixturesPage({
           })}
         </div>
       </AdminCard>
+
+      <FixtureMatchupGrid initialLeagueId={activeLeagueId} />
 
       <FixturesAdminScreen {...screenData} />
     </div>
