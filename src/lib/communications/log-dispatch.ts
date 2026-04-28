@@ -203,30 +203,65 @@ export async function logNotificationDispatchToThread(input: {
         },
       });
 
-  const entry = await prisma.messageEntry.create({
-    data: {
-      threadId: thread.id,
-      channel,
-      direction: MessageDirection.OUTBOUND,
-      participantRole: getParticipantRole(dispatch.createdByUserId ?? null),
-      body: dispatch.bodyText,
-      subject: dispatch.subject,
-      textBody: dispatch.bodyText,
-      htmlBody: dispatch.bodyHtml,
-      toNumber: dispatch.channel === "SMS" ? recipient.phone ?? null : null,
-      toEmail: dispatch.channel === "EMAIL" ? recipient.email ?? null : null,
-      provider: dispatch.provider,
-      providerMessageId: dispatch.providerMessageId,
-      providerStatus,
+  const existingEntry = await prisma.messageEntry.findFirst({
+    where: {
       notificationDispatchId: dispatch.id,
-      createdByUserId: dispatch.createdByUserId ?? null,
-      sentAt: dispatch.sentAt,
     },
     select: {
       id: true,
-      sentAt: true,
     },
   });
+
+  const entry = existingEntry
+    ? await prisma.messageEntry.update({
+        where: { id: existingEntry.id },
+        data: {
+          threadId: thread.id,
+          channel,
+          direction: MessageDirection.OUTBOUND,
+          participantRole: getParticipantRole(dispatch.createdByUserId ?? null),
+          body: dispatch.bodyText,
+          subject: dispatch.subject,
+          textBody: dispatch.bodyText,
+          htmlBody: dispatch.bodyHtml,
+          toNumber: dispatch.channel === "SMS" ? recipient.phone ?? null : null,
+          toEmail: dispatch.channel === "EMAIL" ? recipient.email ?? null : null,
+          provider: dispatch.provider,
+          providerMessageId: dispatch.providerMessageId,
+          providerStatus,
+          notificationDispatchId: dispatch.id,
+          createdByUserId: dispatch.createdByUserId ?? null,
+          sentAt: dispatch.sentAt,
+        },
+        select: {
+          id: true,
+          sentAt: true,
+        },
+      })
+    : await prisma.messageEntry.create({
+        data: {
+          threadId: thread.id,
+          channel,
+          direction: MessageDirection.OUTBOUND,
+          participantRole: getParticipantRole(dispatch.createdByUserId ?? null),
+          body: dispatch.bodyText,
+          subject: dispatch.subject,
+          textBody: dispatch.bodyText,
+          htmlBody: dispatch.bodyHtml,
+          toNumber: dispatch.channel === "SMS" ? recipient.phone ?? null : null,
+          toEmail: dispatch.channel === "EMAIL" ? recipient.email ?? null : null,
+          provider: dispatch.provider,
+          providerMessageId: dispatch.providerMessageId,
+          providerStatus,
+          notificationDispatchId: dispatch.id,
+          createdByUserId: dispatch.createdByUserId ?? null,
+          sentAt: dispatch.sentAt,
+        },
+        select: {
+          id: true,
+          sentAt: true,
+        },
+      });
 
   await prisma.messageThread.update({
     where: { id: thread.id },
