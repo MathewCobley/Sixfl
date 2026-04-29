@@ -20,15 +20,119 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Could not send message.";
 }
 
+async function getLinkedPlayerContext(teamid: string) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    return { error: "Please sign in again." as const, status: 401 as const };
+  }
+
+  const email = session.user.email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      teamMembers: {
+        where: { teamId: teamid },
+        select: {
+          id: true,
+          teamId: true,
+          role: true,
+          team: { select: { id: true, name: true, leagueId: true } },
+        },
+        take: 1,
+      },
+    },
+  });
+
+  const membership = user?.teamMembers[0] ?? null;
+
+  if (!user || !membership) {
+    return { error: "You are not linked to this team." as const, status: 403 as const };
+  }
+
+  const profiles = await getTeamMemberProfilesByTeamMemberIds([membership.id]);
+  const profile = profiles.get(membership.id) ?? null;
+  const phone = normalizePhoneNumber(profile?.phone ?? null);
+  const displayName = user.name?.trim() || user.email?.trim() || "Player";
+
+  return {
+    user,
+    membership,
+    phone,
+    displayName,
+  };
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ teamid: string }> },
+) {
+  const { teamid } = await params;
+  const context = await getLinkedPlayerContext(teamid);
+
+  if ("error" in context) {
+    return NextResponse.json({ error: context.error }, { status: context.status });
+  }
+
+  const thread = await prisma.messageThread.findFirst({
+    where: {
+      teamId: teamid,
+      sourceType: "TEAM_MEMBER",
+      sourceId: context.membership.id,
+      status: "OPEN",
+    },
+    orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+    select: {
+      id: true,
+      latestMessageAt: true,
+      messages: {
+        orderBy: [{ createdAt: "asc" }],
+        take: 50,
+        select: {
+          id: true,
+          direction: true,
+          participantRole: true,
+          channel: true,
+          body: true,
+          providerStatus: true,
+          createdAt: true,
+          sentAt: true,
+          receivedAt: true,
+        },
+      },
+    },
+  });
+
+  return NextResponse.json({
+    threadId: thread?.id ?? null,
+    latestMessageAt: thread?.latestMessageAt?.toISOString() ?? null,
+    messages:
+      thread?.messages.map((message) => ({
+        id: message.id,
+        direction: message.direction,
+        participantRole: message.participantRole,
+        channel: message.channel,
+        body: message.body,
+        providerStatus: message.providerStatus,
+        createdAt: message.createdAt.toISOString(),
+        sentAt: message.sentAt?.toISOString() ?? null,
+        receivedAt: message.receivedAt?.toISOString() ?? null,
+      })) ?? [],
+  });
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ teamid: string }> },
 ) {
   const { teamid } = await params;
-  const session = await getServerSession(authOptions);
+  const context = await getLinkedPlayerContext(teamid);
 
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
+  if ("error" in context) {
+    return NextResponse.json({ error: context.error }, { status: context.status });
   }
 
   const body = await request.json().catch(() => null);
@@ -47,42 +151,13 @@ export async function POST(
   }
 
   try {
-    const email = session.user.email.trim().toLowerCase();
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        teamMembers: {
-          where: { teamId: teamid },
-          select: {
-            id: true,
-            teamId: true,
-            role: true,
-            team: { select: { id: true, name: true, leagueId: true } },
-          },
-          take: 1,
-        },
-      },
-    });
-
-    const membership = user?.teamMembers[0] ?? null;
-    if (!user || !membership) {
-      return NextResponse.json({ error: "You are not linked to this team." }, { status: 403 });
-    }
-
-    const profiles = await getTeamMemberProfilesByTeamMemberIds([membership.id]);
-    const profile = profiles.get(membership.id) ?? null;
-    const phone = normalizePhoneNumber(profile?.phone ?? null);
-    const displayName = user.name?.trim() || user.email?.trim() || "Player";
     const now = new Date();
 
     const existingThread = await prisma.messageThread.findFirst({
       where: {
         teamId: teamid,
         sourceType: "TEAM_MEMBER",
-        sourceId: membership.id,
+        sourceId: context.membership.id,
         status: "OPEN",
       },
       orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
@@ -93,16 +168,16 @@ export async function POST(
       ? await prisma.messageThread.update({
           where: { id: existingThread.id },
           data: {
-            channel: phone ? "SMS" : "EMAIL",
+            channel: context.phone ? "SMS" : "EMAIL",
             teamId: teamid,
-            leagueId: membership.team.leagueId,
+            leagueId: context.membership.team.leagueId,
             sourceType: "TEAM_MEMBER",
-            sourceId: membership.id,
-            contactName: displayName,
-            contactPhone: phone,
-            phoneNormalized: phone,
-            contactEmail: user.email,
-            emailNormalized: user.email?.trim().toLowerCase() ?? null,
+            sourceId: context.membership.id,
+            contactName: context.displayName,
+            contactPhone: context.phone,
+            phoneNormalized: context.phone,
+            contactEmail: context.user.email,
+            emailNormalized: context.user.email?.trim().toLowerCase() ?? null,
             latestMessageAt: now,
             latestInboundAt: now,
             lastMessagePreview: buildLastMessagePreview(message),
@@ -111,17 +186,17 @@ export async function POST(
         })
       : await prisma.messageThread.create({
           data: {
-            channel: phone ? "SMS" : "EMAIL",
+            channel: context.phone ? "SMS" : "EMAIL",
             status: "OPEN",
             teamId: teamid,
-            leagueId: membership.team.leagueId,
+            leagueId: context.membership.team.leagueId,
             sourceType: "TEAM_MEMBER",
-            sourceId: membership.id,
-            contactName: displayName,
-            contactPhone: phone,
-            phoneNormalized: phone,
-            contactEmail: user.email,
-            emailNormalized: user.email?.trim().toLowerCase() ?? null,
+            sourceId: context.membership.id,
+            contactName: context.displayName,
+            contactPhone: context.phone,
+            phoneNormalized: context.phone,
+            contactEmail: context.user.email,
+            emailNormalized: context.user.email?.trim().toLowerCase() ?? null,
             latestMessageAt: now,
             latestInboundAt: now,
             lastMessagePreview: buildLastMessagePreview(message),
@@ -132,14 +207,14 @@ export async function POST(
     const entry = await prisma.messageEntry.create({
       data: {
         threadId: thread.id,
-        channel: phone ? "SMS" : "EMAIL",
+        channel: context.phone ? "SMS" : "EMAIL",
         direction: "INBOUND",
         participantRole: "CONTACT",
         body: message,
-        subject: `Player message from ${displayName}`,
+        subject: `Player message from ${context.displayName}`,
         textBody: message,
-        fromNumber: phone,
-        fromEmail: user.email,
+        fromNumber: context.phone,
+        fromEmail: context.user.email,
         provider: "sixfl-player-dashboard",
         providerStatus: "received",
         receivedAt: now,
