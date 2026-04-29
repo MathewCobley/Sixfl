@@ -4,7 +4,6 @@
 
 import "./globals.css";
 import type { ReactNode } from "react";
-import PlayerMatchFeePaymentLinkBridge from "@/components/player/PlayerMatchFeePaymentLinkBridge";
 import Providers from "./providers";
 
 export const metadata = {
@@ -95,10 +94,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <script dangerouslySetInnerHTML={{ __html: safeClosestPatch }} />
-        <Providers>
-          <PlayerMatchFeePaymentLinkBridge />
-          {children}
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
