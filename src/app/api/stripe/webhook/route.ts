@@ -6,8 +6,8 @@ import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 
 import {
-  getChargeStatusFromAmounts,
   getChargePaidTotal,
+  getChargeStatusFromAmounts,
 } from "@/lib/payments/charge-status";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
@@ -18,23 +18,111 @@ import {
 
 export const dynamic = "force-dynamic";
 
-async function handleCompletedCheckoutSession(session: Stripe.Checkout.Session) {
-  const chargeId = session.metadata?.chargeId?.trim();
+function getPaymentIntentId(session: Stripe.Checkout.Session) {
+  return typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id ?? null;
+}
 
-  if (!chargeId) {
-    return;
-  }
-
+async function hasExistingTransaction(sessionId: string) {
   const existingTransaction = await prisma.paymentTransaction.findUnique({
     where: {
-      stripeCheckoutSessionId: session.id,
+      stripeCheckoutSessionId: sessionId,
     },
     select: {
       id: true,
     },
   });
 
-  if (existingTransaction) {
+  return Boolean(existingTransaction);
+}
+
+async function handleCompletedPlayerMatchFeeCheckoutSession(
+  session: Stripe.Checkout.Session,
+) {
+  const playerMatchFeeId = session.metadata?.playerMatchFeeId?.trim();
+
+  if (!playerMatchFeeId) {
+    return false;
+  }
+
+  if (await hasExistingTransaction(session.id)) {
+    return true;
+  }
+
+  const fee = await prisma.playerMatchFee.findUnique({
+    where: {
+      id: playerMatchFeeId,
+    },
+    select: {
+      id: true,
+      teamId: true,
+      amountPence: true,
+      status: true,
+    },
+  });
+
+  if (!fee || fee.status !== "OPEN") {
+    return true;
+  }
+
+  const amountPence = session.amount_total ?? 0;
+
+  if (amountPence <= 0) {
+    return true;
+  }
+
+  const paymentIntentId = getPaymentIntentId(session);
+  const paidAt = new Date(
+    (session.created ?? Math.floor(Date.now() / 1000)) * 1000,
+  );
+
+  await prisma.$transaction(async (tx) => {
+    await tx.paymentTransaction.create({
+      data: {
+        teamId: fee.teamId,
+        chargeId: null,
+        amountPence,
+        method: "STRIPE",
+        reference: paymentIntentId || session.id,
+        notes: `Player match fee paid online via Stripe Checkout. Player fee ID: ${fee.id}`,
+        paidAt,
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: paymentIntentId,
+      },
+    });
+
+    await tx.playerMatchFee.update({
+      where: {
+        id: fee.id,
+      },
+      data: {
+        status: "PAID",
+        paidAt,
+        waivedAt: null,
+        cancelledAt: null,
+      },
+    });
+  });
+
+  return true;
+}
+
+async function handleCompletedCheckoutSession(session: Stripe.Checkout.Session) {
+  const handledPlayerMatchFee =
+    await handleCompletedPlayerMatchFeeCheckoutSession(session);
+
+  if (handledPlayerMatchFee) {
+    return;
+  }
+
+  const chargeId = session.metadata?.chargeId?.trim();
+
+  if (!chargeId) {
+    return;
+  }
+
+  if (await hasExistingTransaction(session.id)) {
     return;
   }
 
@@ -61,10 +149,7 @@ async function handleCompletedCheckoutSession(session: Stripe.Checkout.Session) 
     return;
   }
 
-  const paymentIntentId =
-    typeof session.payment_intent === "string"
-      ? session.payment_intent
-      : session.payment_intent?.id ?? null;
+  const paymentIntentId = getPaymentIntentId(session);
 
   await prisma.paymentTransaction.create({
     data: {
@@ -81,7 +166,10 @@ async function handleCompletedCheckoutSession(session: Stripe.Checkout.Session) 
   });
 
   const paidTotalPence = getChargePaidTotal(charge.transactions) + amountPence;
-  const nextStatus = getChargeStatusFromAmounts(charge.amountPence, paidTotalPence);
+  const nextStatus = getChargeStatusFromAmounts(
+    charge.amountPence,
+    paidTotalPence,
+  );
 
   await prisma.paymentCharge.update({
     where: {
