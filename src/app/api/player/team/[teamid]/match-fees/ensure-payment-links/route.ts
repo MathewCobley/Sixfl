@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/api/player/team/[teamId]/match-fees/ensure-payment-links/route.ts
+// File: src/app/api/player/team/[teamid]/match-fees/ensure-payment-links/route.ts
 // ========================================
 
 import { getServerSession } from "next-auth";
@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   _request: Request,
-  { params }: { params: Promise<{ teamId: string }> },
+  { params }: { params: Promise<{ teamid: string }> },
 ) {
   const session = await getServerSession(authOptions);
 
@@ -20,7 +20,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  const { teamId } = await params;
+  const { teamid } = await params;
   const email = session.user.email.trim().toLowerCase();
 
   const user = await prisma.user.findUnique({
@@ -29,7 +29,7 @@ export async function POST(
       id: true,
       role: true,
       teamMembers: {
-        where: { teamId },
+        where: { teamId: teamid },
         select: { id: true },
         take: 1,
       },
@@ -45,7 +45,7 @@ export async function POST(
   const openFees = membership
     ? await prisma.playerMatchFee.findMany({
         where: {
-          teamId,
+          teamId: teamid,
           teamMemberId: membership.id,
           status: PlayerMatchFeeStatus.OPEN,
         },
