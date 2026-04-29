@@ -1,6 +1,7 @@
 // ========================================
 // File: src/app/captain/team/[teamid]/availability/history/page.tsx
 // ========================================
+// Note: Next.js route params for this segment are intentionally lowercase `teamid`.
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
