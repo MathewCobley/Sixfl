@@ -10,6 +10,10 @@ function normaliseEmail(value: string | null | undefined) {
   return trimmed || null;
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown backfill error";
+}
+
 export async function backfillTeamMemberProfilesFromProspects(input?: {
   teamId?: string | null;
 }) {
@@ -39,6 +43,7 @@ export async function backfillTeamMemberProfilesFromProspects(input?: {
   let matchedProspects = 0;
   let profilesUpdated = 0;
   let phoneNumbersBackfilled = 0;
+  const errors: string[] = [];
 
   for (const member of members) {
     scannedMembers += 1;
@@ -46,42 +51,48 @@ export async function backfillTeamMemberProfilesFromProspects(input?: {
     const email = normaliseEmail(member.user.email);
     if (!email) continue;
 
-    const prospect = await prisma.teamPlayerProspect.findFirst({
-      where: {
-        teamId: member.teamId,
-        email: {
-          equals: email,
-          mode: "insensitive",
+    try {
+      const prospect = await prisma.teamPlayerProspect.findFirst({
+        where: {
+          teamId: member.teamId,
+          email: {
+            equals: email,
+            mode: "insensitive",
+          },
         },
-      },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        phone: true,
-        ageBand: true,
-        preferredPositions: true,
-        experienceSummary: true,
-        availabilityLevel: true,
-        preferredNights: true,
-        availabilitySummary: true,
-        notes: true,
-      },
-    });
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          phone: true,
+          ageBand: true,
+          preferredPositions: true,
+          experienceSummary: true,
+          availabilityLevel: true,
+          preferredNights: true,
+          availabilitySummary: true,
+          notes: true,
+        },
+      });
 
-    if (!prospect) continue;
+      if (!prospect) continue;
 
-    matchedProspects += 1;
+      matchedProspects += 1;
 
-    await upsertTeamMemberProfileFromProspect({
-      client: prisma,
-      teamMemberId: member.id,
-      prospect,
-    });
+      await upsertTeamMemberProfileFromProspect({
+        client: prisma,
+        teamMemberId: member.id,
+        prospect,
+      });
 
-    profilesUpdated += 1;
+      profilesUpdated += 1;
 
-    if (prospect.phone?.trim()) {
-      phoneNumbersBackfilled += 1;
+      if (prospect.phone?.trim()) {
+        phoneNumbersBackfilled += 1;
+      }
+    } catch (error) {
+      if (errors.length < 5) {
+        errors.push(`${member.id}: ${getErrorMessage(error)}`);
+      }
     }
   }
 
@@ -90,5 +101,6 @@ export async function backfillTeamMemberProfilesFromProspects(input?: {
     matchedProspects,
     profilesUpdated,
     phoneNumbersBackfilled,
+    errors,
   };
 }
