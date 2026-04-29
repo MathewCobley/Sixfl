@@ -18,6 +18,7 @@ import {
   recordOutboundSms,
   reopenMessageThread,
 } from "@/lib/messaging/service";
+import { sendEmailWithResend } from "@/lib/notifications/providers/resend";
 import { sendSmsWithTwilio } from "@/lib/notifications/providers/twilio";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
@@ -109,13 +110,7 @@ export async function markMessageThreadReadAction(formData: FormData) {
   await markThreadAsReadForAdmin(threadId);
   await revalidateMessageViews(threadId);
 
-  redirect(
-    buildMessagesHref({
-      filter,
-      threadId,
-      extras: { read: 1 },
-    }),
-  );
+  redirect(buildMessagesHref({ filter, threadId, extras: { read: 1 } }));
 }
 
 export async function sendAdminMessageReplyAction(formData: FormData) {
@@ -130,112 +125,114 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
   }
 
   if (!body.trim()) {
-    redirect(
-      buildMessagesHref({
-        filter,
-        threadId,
-        extras: { error: "empty_body" },
-      }),
-    );
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "empty_body" } }));
   }
 
   const thread = await getMessageThreadById(threadId);
 
   if (!thread) {
-    redirect(
-      buildMessagesHref({
-        filter,
-        extras: { error: "missing_thread" },
-      }),
-    );
+    redirect(buildMessagesHref({ filter, extras: { error: "missing_thread" } }));
   }
 
   if (thread.status !== "OPEN") {
-    redirect(
-      buildMessagesHref({
-        filter,
-        threadId,
-        extras: { error: "thread_not_open" },
-      }),
-    );
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "thread_not_open" } }));
   }
 
   const toNumber = normalizePhoneNumber(
     thread.phoneNormalized || thread.contactPhone || thread.recipient?.phone,
   );
+  const toEmail =
+    thread.contactEmail?.trim() ||
+    thread.recipient?.email?.trim() ||
+    thread.emailNormalized?.trim() ||
+    null;
 
-  if (!toNumber) {
-    redirect(
-      buildMessagesHref({
-        filter,
-        threadId,
-        extras: { error: "missing_phone" },
-      }),
-    );
-  }
-
-  if (isWithinSmsQuietHours(new Date())) {
-    redirect(
-      buildMessagesHref({
-        filter,
-        threadId,
-        extras: { error: "sms_quiet_hours" },
-      }),
-    );
+  if (!toNumber && !toEmail) {
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "missing_contact" } }));
   }
 
   try {
-    const sendResult = await sendSmsWithTwilio({
-      to: toNumber,
-      body,
-    });
+    if (toNumber) {
+      if (isWithinSmsQuietHours(new Date())) {
+        redirect(buildMessagesHref({ filter, threadId, extras: { error: "sms_quiet_hours" } }));
+      }
 
-    await recordOutboundSms({
-      recipientId: thread.recipientId,
-      teamId: thread.teamId,
-      leagueId: thread.leagueId,
-      sourceType: thread.sourceType,
-      sourceId: thread.sourceId,
-      contactName:
-        thread.contactName ??
-        thread.recipient?.displayName ??
-        thread.team?.name ??
-        null,
-      phone: toNumber,
-      body,
-      fromNumber: sendResult.fromNumber,
-      toNumber,
-      provider: sendResult.provider,
-      providerMessageId: sendResult.providerMessageId,
-      providerStatus: "sent",
-      twilioMessageSid: sendResult.providerMessageId,
-      createdByUserId: user?.id ?? null,
-      sentAt: new Date(),
-    });
+      const sendResult = await sendSmsWithTwilio({
+        to: toNumber,
+        body,
+      });
+
+      await recordOutboundSms({
+        recipientId: thread.recipientId,
+        teamId: thread.teamId,
+        leagueId: thread.leagueId,
+        sourceType: thread.sourceType,
+        sourceId: thread.sourceId,
+        contactName:
+          thread.contactName ?? thread.recipient?.displayName ?? thread.team?.name ?? null,
+        phone: toNumber,
+        body,
+        fromNumber: sendResult.fromNumber,
+        toNumber,
+        provider: sendResult.provider,
+        providerMessageId: sendResult.providerMessageId,
+        providerStatus: "sent",
+        twilioMessageSid: sendResult.providerMessageId,
+        createdByUserId: user?.id ?? null,
+        sentAt: new Date(),
+      });
+    } else if (toEmail) {
+      const now = new Date();
+      const subject = `SIXFL reply${thread.team?.name ? ` · ${thread.team.name}` : ""}`;
+      const replyTo = thread.replyAddress?.trim() || "hello@sixfl.co.uk";
+      const sendResult = await sendEmailWithResend({
+        to: toEmail,
+        subject,
+        text: body,
+        html: null,
+        replyTo,
+      });
+
+      const entry = await prisma.messageEntry.create({
+        data: {
+          threadId: thread.id,
+          channel: "EMAIL",
+          direction: "OUTBOUND",
+          participantRole: "ADMIN",
+          body,
+          subject,
+          textBody: body,
+          toEmail,
+          provider: sendResult.provider,
+          providerMessageId: sendResult.providerMessageId,
+          providerStatus: "sent",
+          resendEmailId: sendResult.providerMessageId,
+          resendPayload: sendResult.responsePayload,
+          createdByUserId: user?.id ?? null,
+          sentAt: now,
+        },
+      });
+
+      await prisma.messageThread.update({
+        where: { id: thread.id },
+        data: {
+          channel: "EMAIL",
+          latestMessageAt: now,
+          latestOutboundAt: now,
+          lastOutboundMessageId: entry.id,
+          lastMessagePreview: body.trim().replace(/\s+/g, " ").slice(0, 140),
+        },
+      });
+    }
   } catch (error) {
-    console.error("Failed to send admin SMS reply", {
-      threadId,
-      error,
-    });
+    console.error("Failed to send admin message reply", { threadId, error });
 
-    redirect(
-      buildMessagesHref({
-        filter,
-        threadId,
-        extras: { error: "send_failed" },
-      }),
-    );
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "send_failed" } }));
   }
 
   await revalidateMessageViews(threadId);
 
-  redirect(
-    buildMessagesHref({
-      filter,
-      threadId,
-      extras: { sent: 1 },
-    }),
-  );
+  redirect(buildMessagesHref({ filter, threadId, extras: { sent: 1 } }));
 }
 
 export async function cancelQueuedSmsMessageAction(formData: FormData) {
@@ -260,23 +257,12 @@ export async function cancelQueuedSmsMessageAction(formData: FormData) {
       id: true,
       notificationDispatchId: true,
       providerStatus: true,
-      dispatch: {
-        select: {
-          id: true,
-          status: true,
-        },
-      },
+      dispatch: { select: { id: true, status: true } },
     },
   });
 
   if (!message?.notificationDispatchId || message.dispatch?.status !== NotificationDispatchStatus.QUEUED) {
-    redirect(
-      buildMessagesHref({
-        filter,
-        threadId,
-        extras: { error: "sms_not_queued" },
-      }),
-    );
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "sms_not_queued" } }));
   }
 
   await prisma.$transaction([
@@ -299,13 +285,7 @@ export async function cancelQueuedSmsMessageAction(formData: FormData) {
 
   await revalidateMessageViews(threadId);
 
-  redirect(
-    buildMessagesHref({
-      filter,
-      threadId,
-      extras: { cancelled: 1 },
-    }),
-  );
+  redirect(buildMessagesHref({ filter, threadId, extras: { cancelled: 1 } }));
 }
 
 export async function archiveMessageThreadAction(formData: FormData) {
@@ -320,13 +300,7 @@ export async function archiveMessageThreadAction(formData: FormData) {
   await archiveMessageThread(threadId);
   await revalidateMessageViews(threadId);
 
-  redirect(
-    buildMessagesHref({
-      filter: "archived",
-      threadId,
-      extras: { archived: 1 },
-    }),
-  );
+  redirect(buildMessagesHref({ filter: "archived", threadId, extras: { archived: 1 } }));
 }
 
 export async function reopenMessageThreadAction(formData: FormData) {
@@ -341,11 +315,5 @@ export async function reopenMessageThreadAction(formData: FormData) {
   await reopenMessageThread(threadId);
   await revalidateMessageViews(threadId);
 
-  redirect(
-    buildMessagesHref({
-      filter: "open",
-      threadId,
-      extras: { reopened: 1 },
-    }),
-  );
+  redirect(buildMessagesHref({ filter: "open", threadId, extras: { reopened: 1 } }));
 }
