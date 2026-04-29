@@ -4,16 +4,79 @@
 
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type PlayerMessageBoxProps = {
   teamId: string;
 };
 
+type PlayerThreadMessage = {
+  id: string;
+  direction: "INBOUND" | "OUTBOUND";
+  participantRole: "ADMIN" | "CAPTAIN" | "CONTACT" | "SYSTEM";
+  channel: "SMS" | "EMAIL";
+  body: string;
+  providerStatus: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  receivedAt: string | null;
+};
+
+type PlayerThreadResponse = {
+  threadId: string | null;
+  latestMessageAt: string | null;
+  messages: PlayerThreadMessage[];
+};
+
+function formatMessageTime(value: string | null) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function getMessageAuthor(message: PlayerThreadMessage) {
+  if (message.direction === "INBOUND") return "You";
+  if (message.participantRole === "SYSTEM") return "SIXFL";
+  if (message.participantRole === "CAPTAIN") return "Captain";
+  return "SIXFL admin";
+}
+
 export default function PlayerMessageBox({ teamId }: PlayerMessageBoxProps) {
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "sending" | "sent" | "error">("loading");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [threadMessages, setThreadMessages] = useState<PlayerThreadMessage[]>([]);
+
+  async function loadThread() {
+    try {
+      const response = await fetch(`/api/player/team/${teamId}/message`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Could not load messages.");
+      }
+
+      const data = (await response.json()) as PlayerThreadResponse;
+      setThreadMessages(data.messages ?? []);
+      setStatus((current) => (current === "loading" ? "idle" : current));
+    } catch {
+      setStatus((current) => (current === "loading" ? "idle" : current));
+    }
+  }
+
+  useEffect(() => {
+    loadThread();
+    const interval = window.setInterval(loadThread, 30000);
+
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,6 +112,7 @@ export default function PlayerMessageBox({ teamId }: PlayerMessageBoxProps) {
       setMessage("");
       setStatus("sent");
       setFeedback("Message sent to SIXFL. We’ll reply as soon as we can.");
+      await loadThread();
     } catch (error) {
       setStatus("error");
       setFeedback(error instanceof Error ? error.message : "Could not send message.");
@@ -70,8 +134,70 @@ export default function PlayerMessageBox({ teamId }: PlayerMessageBoxProps) {
               Need help with fixtures, availability, or fees?
             </h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
-              Send a message from your player dashboard. It appears in the SIXFL admin inbox so we can reply and keep the conversation tracked.
+              Send a message from your player dashboard. Replies from SIXFL appear here, and SMS replies may also be sent to your mobile if one is saved.
             </p>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                    Conversation
+                  </p>
+                  <p className="mt-1 text-sm text-white/55">
+                    {threadMessages.length > 0
+                      ? `${threadMessages.length} message${threadMessages.length === 1 ? "" : "s"}`
+                      : "No messages yet"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadThread}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/[0.08]"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <div className="mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
+                {status === "loading" ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/50">
+                    Loading conversation...
+                  </div>
+                ) : threadMessages.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/50">
+                    Send a message below and replies will appear here.
+                  </div>
+                ) : (
+                  threadMessages.map((item) => {
+                    const isPlayer = item.direction === "INBOUND";
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex ${isPlayer ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[88%] rounded-2xl border px-4 py-3 text-sm leading-6 ${
+                            isPlayer
+                              ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-50"
+                              : "border-white/10 bg-white/[0.06] text-white/85"
+                          }`}
+                        >
+                          <div className="mb-1 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
+                            <span>{getMessageAuthor(item)}</span>
+                            <span>·</span>
+                            <span>
+                              {formatMessageTime(item.receivedAt || item.sentAt || item.createdAt)}
+                            </span>
+                          </div>
+                          <div className="whitespace-pre-wrap break-words">{item.body}</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
