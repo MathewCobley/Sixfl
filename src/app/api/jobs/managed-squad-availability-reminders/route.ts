@@ -29,11 +29,11 @@ function isAuthorised(request: NextRequest) {
   return authHeader === `Bearer ${secret}`;
 }
 
-export async function GET(request: NextRequest) {
-  if (!isAuthorised(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown managed squad availability reminder error";
+}
 
+async function runManagedSquadAvailabilityReminderJob() {
   await ensureManagedSquadAvailabilityTemplates();
 
   const backfill = await backfillTeamMemberProfilesFromProspects();
@@ -81,10 +81,12 @@ export async function GET(request: NextRequest) {
 
   const managedTeamIds = Array.from(
     new Set(
-      fixtures.flatMap((fixture) => [
-        fixture.homeTeam.teamMode === "MANAGED" ? fixture.homeTeamId : null,
-        fixture.awayTeam.teamMode === "MANAGED" ? fixture.awayTeamId : null,
-      ]).filter((teamId): teamId is string => Boolean(teamId)),
+      fixtures
+        .flatMap((fixture) => [
+          fixture.homeTeam.teamMode === "MANAGED" ? fixture.homeTeamId : null,
+          fixture.awayTeam.teamMode === "MANAGED" ? fixture.awayTeamId : null,
+        ])
+        .filter((teamId): teamId is string => Boolean(teamId)),
     ),
   );
 
@@ -120,6 +122,7 @@ export async function GET(request: NextRequest) {
     queuedDispatches: 0,
     alreadySent: 0,
     skipped: 0,
+    errors: [] as string[],
     backfill,
     byMode: {
       request: 0,
@@ -144,42 +147,52 @@ export async function GET(request: NextRequest) {
       const teamMembers = membersByTeamId.get(teamId) ?? [];
 
       for (const member of teamMembers) {
-        const mode = await getManagedSquadAvailabilityReminderMode({
-          fixtureId: fixture.id,
-          teamMemberId: member.id,
-          now,
-        });
+        try {
+          const mode = await getManagedSquadAvailabilityReminderMode({
+            fixtureId: fixture.id,
+            teamMemberId: member.id,
+            now,
+          });
 
-        if (!mode) {
+          if (!mode) {
+            summary.skipped += 1;
+            continue;
+          }
+
+          const result = await queueManagedSquadAvailabilityReminder({
+            fixtureId: fixture.id,
+            teamId,
+            teamMemberId: member.id,
+            mode,
+          });
+
+          if (result.ok && result.status === "queued") {
+            summary.queuedDispatches += result.queued;
+            summary.byMode[mode] += result.queued;
+            continue;
+          }
+
+          if (result.ok && result.status === "already_sent") {
+            summary.alreadySent += 1;
+            continue;
+          }
+
           summary.skipped += 1;
-          continue;
+        } catch (error) {
+          summary.skipped += 1;
+
+          if (summary.errors.length < 10) {
+            summary.errors.push(`${fixture.id}:${member.id}: ${getErrorMessage(error)}`);
+          }
         }
-
-        const result = await queueManagedSquadAvailabilityReminder({
-          fixtureId: fixture.id,
-          teamId,
-          teamMemberId: member.id,
-          mode,
-        });
-
-        if (result.ok && result.status === "queued") {
-          summary.queuedDispatches += result.queued;
-          summary.byMode[mode] += result.queued;
-          continue;
-        }
-
-        if (result.ok && result.status === "already_sent") {
-          summary.alreadySent += 1;
-          continue;
-        }
-
-        summary.skipped += 1;
       }
     }
   }
 
   if (summary.queuedDispatches > 0) {
-    const processed = await processNotificationQueue(Math.max(summary.queuedDispatches + 10, 25));
+    const processed = await processNotificationQueue(
+      Math.max(summary.queuedDispatches + 10, 25),
+    );
     summary.processedQueue = {
       processed: processed.processed,
       sent: processed.sent,
@@ -188,5 +201,24 @@ export async function GET(request: NextRequest) {
     };
   }
 
-  return NextResponse.json(summary, { status: 200 });
+  return summary;
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorised(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const summary = await runManagedSquadAvailabilityReminderJob();
+    return NextResponse.json(summary, { status: 200 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Managed squad availability reminder job failed.",
+        message: getErrorMessage(error),
+      },
+      { status: 500 },
+    );
+  }
 }
