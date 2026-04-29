@@ -3,13 +3,185 @@
 // ========================================
 
 import { randomBytes } from "node:crypto";
-import { PlayerMatchFeeStatus } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationDispatchStatus,
+  NotificationRecipientSourceType,
+  NotificationTemplateKind,
+  PlayerMatchFeeStatus,
+} from "@prisma/client";
 
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getPhoneDisplayValue } from "@/lib/notifications/phone";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
+
+type PlayerMatchFeeReminderMode = "request" | "chase24h" | "chase72h";
+type ReminderChannel = "EMAIL" | "SMS";
+
+type PlayerMatchFeeReminderTemplate = {
+  key: string;
+  name: string;
+  description: string;
+  channel: ReminderChannel;
+  subject: string | null;
+  body: string;
+  ctaLabel: string | null;
+  ctaUrlKey: string | null;
+};
+
+const PLAYER_MATCH_FEE_SOURCE_TYPES: Record<PlayerMatchFeeReminderMode, string> = {
+  request: "PLAYER_MATCH_FEE_REQUEST",
+  chase24h: "PLAYER_MATCH_FEE_CHASE_24H",
+  chase72h: "PLAYER_MATCH_FEE_CHASE_72H",
+};
+
+const PLAYER_MATCH_FEE_TEMPLATE_KEYS: Record<
+  PlayerMatchFeeReminderMode,
+  Record<ReminderChannel, string>
+> = {
+  request: {
+    EMAIL: "player-match-fee-request-email",
+    SMS: "player-match-fee-request-sms",
+  },
+  chase24h: {
+    EMAIL: "player-match-fee-chase-24h-email",
+    SMS: "player-match-fee-chase-24h-sms",
+  },
+  chase72h: {
+    EMAIL: "player-match-fee-chase-72h-email",
+    SMS: "player-match-fee-chase-72h-sms",
+  },
+};
+
+const PLAYER_MATCH_FEE_SYSTEM_TEMPLATES: PlayerMatchFeeReminderTemplate[] = [
+  {
+    key: PLAYER_MATCH_FEE_TEMPLATE_KEYS.request.EMAIL,
+    name: "Player match fee payment request email",
+    description: "Initial player match fee email with a direct payment link.",
+    channel: "EMAIL",
+    subject: "Match fee due for {{fixtureLabel}}",
+    body: [
+      "Hi {{firstName}},",
+      "",
+      "Your match fee for {{fixtureLabel}} is now due.",
+      "",
+      "Amount: {{amount}}",
+      "",
+      "Please use the secure link below to pay:",
+      "",
+      "{{cta}}",
+      "",
+      "Thanks,",
+      "SIXFL",
+    ].join("\n"),
+    ctaLabel: "Pay match fee",
+    ctaUrlKey: "paymentUrl",
+  },
+  {
+    key: PLAYER_MATCH_FEE_TEMPLATE_KEYS.request.SMS,
+    name: "Player match fee payment request SMS",
+    description: "Initial player match fee SMS with a direct payment link.",
+    channel: "SMS",
+    subject: null,
+    body: "SIXFL: Your {{amount}} match fee for {{fixtureLabel}} is due. Pay here: {{paymentUrl}}",
+    ctaLabel: null,
+    ctaUrlKey: null,
+  },
+  {
+    key: PLAYER_MATCH_FEE_TEMPLATE_KEYS.chase24h.EMAIL,
+    name: "Player match fee 24h chase email",
+    description: "24-hour chase email for unpaid player match fees.",
+    channel: "EMAIL",
+    subject: "Reminder: match fee still due for {{fixtureLabel}}",
+    body: [
+      "Hi {{firstName}},",
+      "",
+      "Just a reminder that your {{amount}} match fee for {{fixtureLabel}} is still outstanding.",
+      "",
+      "Please pay using the secure link below:",
+      "",
+      "{{cta}}",
+      "",
+      "Thanks,",
+      "SIXFL",
+    ].join("\n"),
+    ctaLabel: "Pay match fee",
+    ctaUrlKey: "paymentUrl",
+  },
+  {
+    key: PLAYER_MATCH_FEE_TEMPLATE_KEYS.chase24h.SMS,
+    name: "Player match fee 24h chase SMS",
+    description: "24-hour chase SMS for unpaid player match fees.",
+    channel: "SMS",
+    subject: null,
+    body: "SIXFL reminder: your {{amount}} match fee for {{fixtureLabel}} is still due. Pay here: {{paymentUrl}}",
+    ctaLabel: null,
+    ctaUrlKey: null,
+  },
+  {
+    key: PLAYER_MATCH_FEE_TEMPLATE_KEYS.chase72h.EMAIL,
+    name: "Player match fee 72h final chase email",
+    description: "72-hour final chase email for unpaid player match fees.",
+    channel: "EMAIL",
+    subject: "Final reminder: match fee still unpaid for {{fixtureLabel}}",
+    body: [
+      "Hi {{firstName}},",
+      "",
+      "Final reminder that your {{amount}} match fee for {{fixtureLabel}} is still unpaid.",
+      "",
+      "Please pay using the secure link below as soon as possible:",
+      "",
+      "{{cta}}",
+      "",
+      "Thanks,",
+      "SIXFL",
+    ].join("\n"),
+    ctaLabel: "Pay match fee",
+    ctaUrlKey: "paymentUrl",
+  },
+  {
+    key: PLAYER_MATCH_FEE_TEMPLATE_KEYS.chase72h.SMS,
+    name: "Player match fee 72h final chase SMS",
+    description: "72-hour final chase SMS for unpaid player match fees.",
+    channel: "SMS",
+    subject: null,
+    body: "SIXFL final reminder: your {{amount}} match fee for {{fixtureLabel}} is still unpaid. Pay here: {{paymentUrl}}",
+    ctaLabel: null,
+    ctaUrlKey: null,
+  },
+];
 
 function createPlayerMatchFeeToken() {
   return randomBytes(24).toString("hex");
+}
+
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
+}
+
+function formatKickoff(value: Date) {
+  return formatDateTimeInLondon(value, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getFirstName(value: string) {
+  return value.trim().split(/\s+/)[0] ?? "";
+}
+
+function getSourceId(feeId: string) {
+  return feeId;
 }
 
 export function buildPlayerMatchFeePaymentPath(paymentToken: string) {
@@ -68,4 +240,385 @@ export async function ensurePlayerMatchFeePaymentDetailsForFees(feeIds: string[]
   for (const feeId of uniqueFeeIds) {
     await ensurePlayerMatchFeePaymentDetails(feeId);
   }
+}
+
+export async function ensurePlayerMatchFeeReminderTemplates() {
+  await Promise.all(
+    PLAYER_MATCH_FEE_SYSTEM_TEMPLATES.map((template) =>
+      prisma.notificationTemplate.upsert({
+        where: { key: template.key },
+        update: {
+          name: template.name,
+          description: template.description,
+          kind: NotificationTemplateKind.TRANSACTIONAL,
+          channel: template.channel,
+          audience: NotificationAudience.PLAYER,
+          subject: template.subject,
+          body: template.body,
+          ctaLabel: template.ctaLabel,
+          ctaUrlKey: template.ctaUrlKey,
+          isActive: true,
+        },
+        create: {
+          key: template.key,
+          name: template.name,
+          description: template.description,
+          kind: NotificationTemplateKind.TRANSACTIONAL,
+          channel: template.channel,
+          audience: NotificationAudience.PLAYER,
+          subject: template.subject,
+          body: template.body,
+          ctaLabel: template.ctaLabel,
+          ctaUrlKey: template.ctaUrlKey,
+          isActive: true,
+        },
+      }),
+    ),
+  );
+}
+
+async function hasPlayerMatchFeeDispatch(input: {
+  feeId: string;
+  mode: PlayerMatchFeeReminderMode;
+  channel?: ReminderChannel;
+}) {
+  return prisma.notificationDispatch.findFirst({
+    where: {
+      sourceType: PLAYER_MATCH_FEE_SOURCE_TYPES[input.mode],
+      sourceId: getSourceId(input.feeId),
+      ...(input.channel ? { channel: input.channel } : {}),
+      status: {
+        in: [
+          NotificationDispatchStatus.QUEUED,
+          NotificationDispatchStatus.PROCESSING,
+          NotificationDispatchStatus.SENT,
+        ],
+      },
+    },
+    select: {
+      id: true,
+      channel: true,
+      createdAt: true,
+      sentAt: true,
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+}
+
+async function getPlayerMatchFeeReminderMode(input: {
+  feeId: string;
+  now: Date;
+}): Promise<PlayerMatchFeeReminderMode | null> {
+  const initial = await hasPlayerMatchFeeDispatch({
+    feeId: input.feeId,
+    mode: "request",
+  });
+  const initialSms = await hasPlayerMatchFeeDispatch({
+    feeId: input.feeId,
+    mode: "request",
+    channel: "SMS",
+  });
+
+  if (!initial || !initialSms) return "request";
+
+  const initialAt = initial.sentAt ?? initial.createdAt;
+  const hoursSinceInitial =
+    (input.now.getTime() - initialAt.getTime()) / (1000 * 60 * 60);
+
+  if (hoursSinceInitial >= 72) {
+    const chase72 = await hasPlayerMatchFeeDispatch({
+      feeId: input.feeId,
+      mode: "chase72h",
+    });
+    const chase72Sms = await hasPlayerMatchFeeDispatch({
+      feeId: input.feeId,
+      mode: "chase72h",
+      channel: "SMS",
+    });
+
+    if (!chase72 || !chase72Sms) return "chase72h";
+  }
+
+  if (hoursSinceInitial >= 24) {
+    const chase24 = await hasPlayerMatchFeeDispatch({
+      feeId: input.feeId,
+      mode: "chase24h",
+    });
+    const chase24Sms = await hasPlayerMatchFeeDispatch({
+      feeId: input.feeId,
+      mode: "chase24h",
+      channel: "SMS",
+    });
+
+    if (!chase24 || !chase24Sms) return "chase24h";
+  }
+
+  return null;
+}
+
+function getPlayerName(input: {
+  teamMember: { user: { name: string | null; email: string | null } } | null;
+  prospect: { firstName: string; lastName: string | null; email: string | null } | null;
+}) {
+  if (input.teamMember) {
+    return input.teamMember.user.name || input.teamMember.user.email || "Player";
+  }
+
+  if (input.prospect) {
+    return [input.prospect.firstName, input.prospect.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || input.prospect.email || "Player";
+  }
+
+  return "Player";
+}
+
+export async function queuePlayerMatchFeeReminder(input: {
+  feeId: string;
+  mode: PlayerMatchFeeReminderMode;
+}) {
+  await ensurePlayerMatchFeeReminderTemplates();
+  const ensured = await ensurePlayerMatchFeePaymentDetails(input.feeId);
+
+  if (!ensured || ensured.status !== PlayerMatchFeeStatus.OPEN) {
+    return { queued: 0, skipped: 1, status: "not_open" as const };
+  }
+
+  const fee = await prisma.playerMatchFee.findUnique({
+    where: { id: input.feeId },
+    select: {
+      id: true,
+      amountPence: true,
+      paymentUrl: true,
+      paymentToken: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+          logoUrl: true,
+          league: {
+            select: {
+              name: true,
+              season: true,
+            },
+          },
+        },
+      },
+      fixture: {
+        select: {
+          id: true,
+          kickoffAt: true,
+          homeTeam: { select: { name: true } },
+          awayTeam: { select: { name: true } },
+        },
+      },
+      teamMemberId: true,
+      teamMember: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+      prospect: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  });
+
+  if (!fee?.paymentUrl) {
+    return { queued: 0, skipped: 1, status: "no_payment_url" as const };
+  }
+
+  const playerName = getPlayerName({
+    teamMember: fee.teamMember,
+    prospect: fee.prospect,
+  });
+  const email = fee.teamMember?.user.email?.trim() || fee.prospect?.email?.trim() || null;
+  let phone = getPhoneDisplayValue(fee.prospect?.phone ?? null);
+
+  if (!phone && fee.teamMemberId) {
+    const profiles = await getTeamMemberProfilesByTeamMemberIds([fee.teamMemberId]);
+    phone = getPhoneDisplayValue(profiles.get(fee.teamMemberId)?.phone ?? null);
+  }
+
+  if (!email && !phone) {
+    return { queued: 0, skipped: 1, status: "no_contact" as const };
+  }
+
+  const existingEmailDispatch = await hasPlayerMatchFeeDispatch({
+    feeId: fee.id,
+    mode: input.mode,
+    channel: "EMAIL",
+  });
+  const existingSmsDispatch = await hasPlayerMatchFeeDispatch({
+    feeId: fee.id,
+    mode: input.mode,
+    channel: "SMS",
+  });
+
+  if ((!email || existingEmailDispatch) && (!phone || existingSmsDispatch)) {
+    return { queued: 0, skipped: 0, status: "already_sent" as const };
+  }
+
+  const recipient = await upsertNotificationRecipient({
+    sourceType: NotificationRecipientSourceType.GENERAL,
+    sourceId: `player-match-fee:${fee.id}`,
+    audience: NotificationAudience.PLAYER,
+    displayName: playerName,
+    email,
+    phone,
+    transactionalEmailOptIn: true,
+    transactionalSmsOptIn: true,
+    marketingEmailOptIn: true,
+    marketingSmsOptIn: true,
+    metadata: {
+      playerMatchFeeId: fee.id,
+      teamId: fee.team.id,
+      teamMemberId: fee.teamMember?.id ?? null,
+      prospectId: fee.prospect?.id ?? null,
+      entityType: "PLAYER_MATCH_FEE",
+    },
+  });
+
+  const fixtureLabel = `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name} · ${formatKickoff(fee.fixture.kickoffAt)}`;
+  const leagueName = fee.team.league
+    ? `${fee.team.league.name}${fee.team.league.season ? ` · ${fee.team.league.season}` : ""}`
+    : "";
+  const variables = {
+    firstName: getFirstName(playerName),
+    fullName: playerName,
+    teamName: fee.team.name,
+    leagueName,
+    fixtureLabel,
+    fixtureName: `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`,
+    kickoffDateTime: formatKickoff(fee.fixture.kickoffAt),
+    amount: formatMoney(fee.amountPence),
+    paymentUrl: fee.paymentUrl,
+  };
+
+  let queued = 0;
+  let skipped = 0;
+
+  if (email && !existingEmailDispatch) {
+    const dispatch = await queueNotificationFromTemplate({
+      templateKey: PLAYER_MATCH_FEE_TEMPLATE_KEYS[input.mode].EMAIL,
+      recipientId: recipient.id,
+      variables,
+      sourceType: PLAYER_MATCH_FEE_SOURCE_TYPES[input.mode],
+      sourceId: getSourceId(fee.id),
+      metadata: {
+        origin: "player_match_fee_automation",
+        originLabel: "Player match fee automation",
+        mode: input.mode,
+        playerMatchFeeId: fee.id,
+        fixtureId: fee.fixture.id,
+        teamId: fee.team.id,
+        paymentUrl: fee.paymentUrl,
+      },
+      emailBranding: {
+        teamName: fee.team.name,
+        teamLogoUrl: fee.team.logoUrl,
+        leagueName,
+      },
+      paymentSummary: {
+        amount: formatMoney(fee.amountPence),
+        reason: `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`,
+      },
+    });
+
+    if (dispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
+    else skipped += 1;
+  }
+
+  if (phone && !existingSmsDispatch) {
+    const dispatch = await queueNotificationFromTemplate({
+      templateKey: PLAYER_MATCH_FEE_TEMPLATE_KEYS[input.mode].SMS,
+      recipientId: recipient.id,
+      variables,
+      sourceType: PLAYER_MATCH_FEE_SOURCE_TYPES[input.mode],
+      sourceId: getSourceId(fee.id),
+      metadata: {
+        origin: "player_match_fee_automation",
+        originLabel: "Player match fee automation",
+        mode: input.mode,
+        playerMatchFeeId: fee.id,
+        fixtureId: fee.fixture.id,
+        teamId: fee.team.id,
+        paymentUrl: fee.paymentUrl,
+      },
+    });
+
+    if (dispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
+    else skipped += 1;
+  }
+
+  return { queued, skipped, status: queued > 0 ? "queued" as const : "already_sent" as const };
+}
+
+export async function queueDuePlayerMatchFeeReminders(input?: { now?: Date }) {
+  await ensurePlayerMatchFeeReminderTemplates();
+
+  const now = input?.now ?? new Date();
+  const openFees = await prisma.playerMatchFee.findMany({
+    where: {
+      status: PlayerMatchFeeStatus.OPEN,
+    },
+    orderBy: [{ createdAt: "asc" }],
+    select: {
+      id: true,
+    },
+    take: 100,
+  });
+
+  const summary = {
+    scanned: openFees.length,
+    queued: 0,
+    skipped: 0,
+    alreadySent: 0,
+    byMode: {
+      request: 0,
+      chase24h: 0,
+      chase72h: 0,
+    },
+  };
+
+  for (const fee of openFees) {
+    const mode = await getPlayerMatchFeeReminderMode({
+      feeId: fee.id,
+      now,
+    });
+
+    if (!mode) {
+      summary.skipped += 1;
+      continue;
+    }
+
+    const result = await queuePlayerMatchFeeReminder({
+      feeId: fee.id,
+      mode,
+    });
+
+    summary.queued += result.queued;
+    summary.skipped += result.skipped;
+    summary.byMode[mode] += result.queued;
+
+    if (result.status === "already_sent") {
+      summary.alreadySent += 1;
+    }
+  }
+
+  return summary;
 }
