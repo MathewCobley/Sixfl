@@ -47,6 +47,14 @@ function serializeJsonNullable(value: Prisma.JsonValue | null | undefined) {
   return JSON.stringify(value);
 }
 
+function isMissingTeamMemberProfileTableError(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+
+  const message = String(error.meta?.message ?? error.message ?? "");
+
+  return error.code === "P2010" && message.includes('relation "TeamMemberProfile" does not exist');
+}
+
 async function getSafeSourceProspectId(input: {
   client: PrismaClientLike;
   teamMemberId: string;
@@ -75,67 +83,75 @@ export async function upsertTeamMemberProfileFromProspect(input: {
   teamMemberId: string;
   prospect: ProspectProfileInput;
 }) {
-  const id = randomUUID();
-  const preferredNightsJson = serializeJsonNullable(input.prospect.preferredNights);
-  const sourceProspectId = await getSafeSourceProspectId({
-    client: input.client,
-    teamMemberId: input.teamMemberId,
-    sourceProspectId: input.prospect.id,
-  });
+  try {
+    const id = randomUUID();
+    const preferredNightsJson = serializeJsonNullable(input.prospect.preferredNights);
+    const sourceProspectId = await getSafeSourceProspectId({
+      client: input.client,
+      teamMemberId: input.teamMemberId,
+      sourceProspectId: input.prospect.id,
+    });
 
-  await input.client.$executeRawUnsafe(
-    `
-      INSERT INTO "TeamMemberProfile" (
-        "id",
-        "teamMemberId",
-        "sourceProspectId",
-        "phone",
-        "ageBand",
-        "preferredPositions",
-        "experienceSummary",
-        "availabilityLevel",
-        "preferredNights",
-        "availabilitySummary",
-        "notes",
-        "updatedAt"
-      ) VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9::jsonb,
-        $10,
-        $11,
-        NOW()
-      )
-      ON CONFLICT ("teamMemberId") DO UPDATE SET
-        "sourceProspectId" = COALESCE("TeamMemberProfile"."sourceProspectId", EXCLUDED."sourceProspectId"),
-        "phone" = COALESCE(NULLIF(EXCLUDED."phone", ''), "TeamMemberProfile"."phone"),
-        "ageBand" = COALESCE(NULLIF(EXCLUDED."ageBand", ''), "TeamMemberProfile"."ageBand"),
-        "preferredPositions" = COALESCE(NULLIF(EXCLUDED."preferredPositions", ''), "TeamMemberProfile"."preferredPositions"),
-        "experienceSummary" = COALESCE(NULLIF(EXCLUDED."experienceSummary", ''), "TeamMemberProfile"."experienceSummary"),
-        "availabilityLevel" = COALESCE(NULLIF(EXCLUDED."availabilityLevel", ''), "TeamMemberProfile"."availabilityLevel"),
-        "preferredNights" = COALESCE(EXCLUDED."preferredNights", "TeamMemberProfile"."preferredNights"),
-        "availabilitySummary" = COALESCE(NULLIF(EXCLUDED."availabilitySummary", ''), "TeamMemberProfile"."availabilitySummary"),
-        "notes" = COALESCE(NULLIF(EXCLUDED."notes", ''), "TeamMemberProfile"."notes"),
-        "updatedAt" = NOW()
-    `,
-    id,
-    input.teamMemberId,
-    sourceProspectId,
-    trimNullable(input.prospect.phone),
-    trimNullable(input.prospect.ageBand),
-    trimNullable(input.prospect.preferredPositions),
-    trimNullable(input.prospect.experienceSummary),
-    trimNullable(input.prospect.availabilityLevel),
-    preferredNightsJson,
-    trimNullable(input.prospect.availabilitySummary),
-    trimNullable(input.prospect.notes),
-  );
+    await input.client.$executeRawUnsafe(
+      `
+        INSERT INTO "TeamMemberProfile" (
+          "id",
+          "teamMemberId",
+          "sourceProspectId",
+          "phone",
+          "ageBand",
+          "preferredPositions",
+          "experienceSummary",
+          "availabilityLevel",
+          "preferredNights",
+          "availabilitySummary",
+          "notes",
+          "updatedAt"
+        ) VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9::jsonb,
+          $10,
+          $11,
+          NOW()
+        )
+        ON CONFLICT ("teamMemberId") DO UPDATE SET
+          "sourceProspectId" = COALESCE("TeamMemberProfile"."sourceProspectId", EXCLUDED."sourceProspectId"),
+          "phone" = COALESCE(NULLIF(EXCLUDED."phone", ''), "TeamMemberProfile"."phone"),
+          "ageBand" = COALESCE(NULLIF(EXCLUDED."ageBand", ''), "TeamMemberProfile"."ageBand"),
+          "preferredPositions" = COALESCE(NULLIF(EXCLUDED."preferredPositions", ''), "TeamMemberProfile"."preferredPositions"),
+          "experienceSummary" = COALESCE(NULLIF(EXCLUDED."experienceSummary", ''), "TeamMemberProfile"."experienceSummary"),
+          "availabilityLevel" = COALESCE(NULLIF(EXCLUDED."availabilityLevel", ''), "TeamMemberProfile"."availabilityLevel"),
+          "preferredNights" = COALESCE(EXCLUDED."preferredNights", "TeamMemberProfile"."preferredNights"),
+          "availabilitySummary" = COALESCE(NULLIF(EXCLUDED."availabilitySummary", ''), "TeamMemberProfile"."availabilitySummary"),
+          "notes" = COALESCE(NULLIF(EXCLUDED."notes", ''), "TeamMemberProfile"."notes"),
+          "updatedAt" = NOW()
+      `,
+      id,
+      input.teamMemberId,
+      sourceProspectId,
+      trimNullable(input.prospect.phone),
+      trimNullable(input.prospect.ageBand),
+      trimNullable(input.prospect.preferredPositions),
+      trimNullable(input.prospect.experienceSummary),
+      trimNullable(input.prospect.availabilityLevel),
+      preferredNightsJson,
+      trimNullable(input.prospect.availabilitySummary),
+      trimNullable(input.prospect.notes),
+    );
+  } catch (error) {
+    if (isMissingTeamMemberProfileTableError(error)) {
+      return;
+    }
+
+    throw error;
+  }
 }
 
 export async function getTeamMemberProfilesByTeamMemberIds(teamMemberIds: string[]) {
