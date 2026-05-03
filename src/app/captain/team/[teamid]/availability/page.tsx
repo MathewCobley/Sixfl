@@ -9,7 +9,10 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { updateFixtureAvailabilityAction } from "./actions";
+import {
+  sendAvailabilitySmsChaseAction,
+  updateFixtureAvailabilityAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -30,9 +33,20 @@ const responseOptions = [
   { value: "NO_RESPONSE", label: "No response" },
 ];
 
+const AVAILABILITY_SMS_CHASE_SOURCE_TYPE = "CAPTAIN_AVAILABILITY_SMS_CHASE";
+
 function formatDateTime(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatShortDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -45,7 +59,7 @@ function getSavedMessage(saved?: string) {
     case "availability-updated":
       return "Availability updated.";
     default:
-      return saved ? "Saved." : null;
+      return saved ? decodeURIComponent(saved) : null;
   }
 }
 
@@ -59,6 +73,53 @@ function getResponseClasses(response: string) {
       return "border-red-400/25 bg-red-500/10 text-red-100";
     default:
       return "border-white/10 bg-white/5 text-white/75";
+  }
+}
+
+function getSmsSourceId(input: { fixtureId: string; teamMemberId: string }) {
+  return `${input.fixtureId}:${input.teamMemberId}`;
+}
+
+function getSmsStatusClasses(status?: string) {
+  switch (status) {
+    case "SENT":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "QUEUED":
+    case "PROCESSING":
+      return "border-sky-400/25 bg-sky-500/10 text-sky-100";
+    case "FAILED":
+    case "SKIPPED":
+    case "CANCELLED":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/55";
+  }
+}
+
+function getSmsStatusText(dispatch?: {
+  status: string;
+  createdAt: Date;
+  scheduledFor: Date;
+  sentAt: Date | null;
+  failedAt: Date | null;
+}) {
+  if (!dispatch) return "No SMS chase sent yet";
+
+  switch (dispatch.status) {
+    case "SENT":
+      return `SMS sent ${formatShortDateTime(dispatch.sentAt ?? dispatch.createdAt)}`;
+    case "QUEUED":
+      return `SMS queued ${formatShortDateTime(dispatch.scheduledFor ?? dispatch.createdAt)}`;
+    case "PROCESSING":
+      return `SMS processing ${formatShortDateTime(dispatch.createdAt)}`;
+    case "FAILED":
+      return `SMS failed ${formatShortDateTime(dispatch.failedAt ?? dispatch.createdAt)}`;
+    case "SKIPPED":
+      return `SMS skipped ${formatShortDateTime(dispatch.createdAt)}`;
+    case "CANCELLED":
+      return `SMS cancelled ${formatShortDateTime(dispatch.createdAt)}`;
+    default:
+      return `SMS logged ${formatShortDateTime(dispatch.createdAt)}`;
   }
 }
 
@@ -135,6 +196,37 @@ export default async function CaptainAvailabilityPage({
     },
   });
 
+  const fixtureIds = fixtures.map((fixture) => fixture.id);
+  const teamMemberIds = team.members.map((member) => member.id);
+  const smsDispatches = fixtureIds.length && teamMemberIds.length
+    ? await prisma.notificationDispatch.findMany({
+        where: {
+          sourceType: AVAILABILITY_SMS_CHASE_SOURCE_TYPE,
+          OR: fixtureIds.flatMap((fixtureId) =>
+            teamMemberIds.map((teamMemberId) => ({
+              sourceId: getSmsSourceId({ fixtureId, teamMemberId }),
+            })),
+          ),
+        },
+        select: {
+          sourceId: true,
+          status: true,
+          createdAt: true,
+          scheduledFor: true,
+          sentAt: true,
+          failedAt: true,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      })
+    : [];
+
+  const smsDispatchBySourceId = new Map<string, (typeof smsDispatches)[number]>();
+  for (const dispatch of smsDispatches) {
+    if (dispatch.sourceId && !smsDispatchBySourceId.has(dispatch.sourceId)) {
+      smsDispatchBySourceId.set(dispatch.sourceId, dispatch);
+    }
+  }
+
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
@@ -150,7 +242,7 @@ export default async function CaptainAvailabilityPage({
               Availability
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Keep a live view of who is available, who is doubtful, and who still has not replied.
+              Keep a live view of who is available, who is doubtful, who still has not replied, and who has been chased by SMS.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
@@ -304,6 +396,9 @@ export default async function CaptainAvailabilityPage({
                     const response = availability?.response ?? "NO_RESPONSE";
                     const memberName =
                       member.user.name || member.user.email || "Unnamed user";
+                    const smsDispatch = smsDispatchBySourceId.get(
+                      getSmsSourceId({ fixtureId: fixture.id, teamMemberId: member.id }),
+                    );
 
                     return (
                       <div
@@ -328,6 +423,10 @@ export default async function CaptainAvailabilityPage({
                             {member.user.email || "No email on account"}
                           </div>
 
+                          <div className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getSmsStatusClasses(smsDispatch?.status)}`}>
+                            {getSmsStatusText(smsDispatch)}
+                          </div>
+
                           {availability?.note ? (
                             <div className="mt-2 text-sm text-white/55">
                               Note: {availability.note}
@@ -335,33 +434,47 @@ export default async function CaptainAvailabilityPage({
                           ) : null}
                         </div>
 
-                        <form action={updateFixtureAvailabilityAction} className="space-y-3">
-                          <input type="hidden" name="teamid" value={teamid} />
-                          <input type="hidden" name="fixtureId" value={fixture.id} />
-                          <input type="hidden" name="teamMemberId" value={member.id} />
+                        <div className="space-y-3">
+                          <form action={updateFixtureAvailabilityAction} className="space-y-3">
+                            <input type="hidden" name="teamid" value={teamid} />
+                            <input type="hidden" name="fixtureId" value={fixture.id} />
+                            <input type="hidden" name="teamMemberId" value={member.id} />
 
-                          <FormListboxField
-                            name="response"
-                            value={response}
-                            options={responseOptions}
-                            placeholder="Select response"
-                          />
+                            <FormListboxField
+                              name="response"
+                              value={response}
+                              options={responseOptions}
+                              placeholder="Select response"
+                            />
 
-                          <input
-                            name="note"
-                            type="text"
-                            defaultValue={availability?.note ?? ""}
-                            placeholder="Optional note"
-                            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500/60"
-                          />
+                            <input
+                              name="note"
+                              type="text"
+                              defaultValue={availability?.note ?? ""}
+                              placeholder="Optional note"
+                              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500/60"
+                            />
 
-                          <button
-                            type="submit"
-                            className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                          >
-                            Save response
-                          </button>
-                        </form>
+                            <button
+                              type="submit"
+                              className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                            >
+                              Save response
+                            </button>
+                          </form>
+
+                          <form action={sendAvailabilitySmsChaseAction}>
+                            <input type="hidden" name="teamid" value={teamid} />
+                            <input type="hidden" name="fixtureId" value={fixture.id} />
+                            <input type="hidden" name="teamMemberId" value={member.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+                            >
+                              Chase by SMS
+                            </button>
+                          </form>
+                        </div>
                       </div>
                     );
                   })}
