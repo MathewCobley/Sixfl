@@ -31,6 +31,12 @@ function getFullName(input: { firstName: string; lastName: string | null; email:
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim() || input.email || "Unnamed prospect";
 }
 
+function getInitials(name: string | null | undefined, email: string | null | undefined) {
+  const base = (name || email || "?").trim();
+  const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
+}
+
 export default async function AdminUserProspectLinkPage({
   searchParams,
 }: {
@@ -41,6 +47,66 @@ export default async function AdminUserProspectLinkPage({
   const sp = (await searchParams) ?? {};
   const email = normalizeEmail(sp.email);
   const userId = sp.userId?.trim() || "";
+
+  const unnamedUsers = await prisma.user.findMany({
+    where: {
+      OR: [{ name: null }, { name: "" }],
+      email: { not: null },
+      teamMembers: { none: {} },
+    },
+    orderBy: [{ email: "asc" }],
+    take: 50,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      teamMembers: {
+        select: {
+          teamId: true,
+        },
+      },
+    },
+  });
+
+  const unnamedEmails = unnamedUsers
+    .map((candidate) => normalizeEmail(candidate.email))
+    .filter((candidateEmail): candidateEmail is string => Boolean(candidateEmail));
+
+  const unnamedProspectMatches = unnamedEmails.length
+    ? await prisma.teamPlayerProspect.findMany({
+        where: {
+          email: {
+            in: unnamedEmails,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          status: true,
+          team: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      })
+    : [];
+
+  const unnamedProspectsByEmail = new Map<string, typeof unnamedProspectMatches>();
+  for (const prospect of unnamedProspectMatches) {
+    const prospectEmail = normalizeEmail(prospect.email);
+    if (!prospectEmail) continue;
+    unnamedProspectsByEmail.set(prospectEmail, [
+      ...(unnamedProspectsByEmail.get(prospectEmail) ?? []),
+      prospect,
+    ]);
+  }
 
   const user = userId
     ? await prisma.user.findUnique({
@@ -110,7 +176,7 @@ export default async function AdminUserProspectLinkPage({
   const from = `/admin/users/link-prospect${userEmail ? `?email=${encodeURIComponent(userEmail)}` : ""}`;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8">
       <section className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
           Manual account repair
@@ -119,7 +185,7 @@ export default async function AdminUserProspectLinkPage({
           Link user to squad prospect
         </h1>
         <p className="mt-3 max-w-3xl text-sm text-white/60">
-          Use this when a player has a user account and a matching squad prospect, but the account is not linked to the team.
+          Pick an unnamed user or search by email. Use this when a player has a user account and a matching squad prospect, but the account is not linked to the team.
         </p>
 
         <form action="/admin/users/link-prospect" className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -157,11 +223,86 @@ export default async function AdminUserProspectLinkPage({
         </div>
       ) : null}
 
+      <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Unnamed unlinked users
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Pick a user to repair</h2>
+          </div>
+          <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/55">
+            {unnamedUsers.length} shown
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {unnamedUsers.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+              No unnamed unlinked users found.
+            </div>
+          ) : null}
+
+          {unnamedUsers.map((candidate) => {
+            const candidateEmail = normalizeEmail(candidate.email);
+            const matches = candidateEmail ? unnamedProspectsByEmail.get(candidateEmail) ?? [] : [];
+            const href = candidateEmail
+              ? `/admin/users/link-prospect?email=${encodeURIComponent(candidateEmail)}&userId=${encodeURIComponent(candidate.id)}`
+              : `/admin/users/link-prospect?userId=${encodeURIComponent(candidate.id)}`;
+
+            return (
+              <Link
+                key={candidate.id}
+                href={href}
+                className={`block rounded-2xl border p-4 transition hover:bg-white/[0.06] ${
+                  user?.id === candidate.id
+                    ? "border-emerald-400/30 bg-emerald-500/10"
+                    : matches.length
+                      ? "border-amber-400/20 bg-amber-500/10"
+                      : "border-white/10 bg-black/20"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
+                    {getInitials(candidate.name, candidate.email)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-white">{candidate.name || "Unnamed user"}</div>
+                    <div className="mt-1 truncate text-sm text-white/60">{candidate.email}</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/65">
+                        {candidate.role}
+                      </span>
+                      {matches.length > 0 ? (
+                        <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-100">
+                          {matches.length} matching prospect{matches.length === 1 ? "" : "s"}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/50">
+                          No matching prospect
+                        </span>
+                      )}
+                    </div>
+                    {matches.length > 0 ? (
+                      <div className="mt-2 text-xs text-white/55">
+                        {matches
+                          .map((match) => `${getFullName(match)} · ${match.team.name}`)
+                          .join(" | ")}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
       {userEmail ? (
         <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              User account
+              Selected user account
             </p>
             {user ? (
               <>
