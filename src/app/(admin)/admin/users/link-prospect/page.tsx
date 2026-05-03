@@ -22,6 +22,28 @@ type SearchParams = {
   error?: string;
 };
 
+type UnnamedUser = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  teamMembers: { teamId: string }[];
+};
+
+type ProspectMatch = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  teamId?: string;
+  team: {
+    id: string;
+    name: string;
+  };
+};
+
 function normalizeEmail(value: string | null | undefined) {
   const trimmed = value?.trim().toLowerCase();
   return trimmed || null;
@@ -37,25 +59,15 @@ function getInitials(name: string | null | undefined, email: string | null | und
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
-export default async function AdminUserProspectLinkPage({
-  searchParams,
-}: {
-  searchParams?: Promise<SearchParams>;
-}) {
-  await requireAdmin();
-
-  const sp = (await searchParams) ?? {};
-  const email = normalizeEmail(sp.email);
-  const userId = sp.userId?.trim() || "";
-
-  const unnamedUsers = await prisma.user.findMany({
+async function getUnnamedUnlinkedUsers() {
+  const candidates = await prisma.user.findMany({
     where: {
-      OR: [{ name: null }, { name: "" }],
-      email: { not: null },
-      teamMembers: { none: {} },
+      email: {
+        not: null,
+      },
     },
     orderBy: [{ email: "asc" }],
-    take: 50,
+    take: 150,
     select: {
       id: true,
       name: true,
@@ -69,36 +81,102 @@ export default async function AdminUserProspectLinkPage({
     },
   });
 
+  return candidates
+    .filter((candidate) => !candidate.name?.trim() && candidate.teamMembers.length === 0)
+    .slice(0, 50);
+}
+
+async function getUserForRepair(input: { userId: string; email: string | null }) {
+  if (input.userId) {
+    return prisma.user.findUnique({
+      where: { id: input.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        teamMembers: {
+          select: {
+            teamId: true,
+            role: true,
+            team: { select: { name: true } },
+          },
+        },
+      },
+    });
+  }
+
+  if (!input.email) return null;
+
+  return prisma.user.findFirst({
+    where: {
+      email: {
+        equals: input.email,
+        mode: "insensitive",
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      teamMembers: {
+        select: {
+          teamId: true,
+          role: true,
+          team: { select: { name: true } },
+        },
+      },
+    },
+  });
+}
+
+async function getProspectsForEmails(emails: string[]) {
+  if (!emails.length) return [] as ProspectMatch[];
+
+  return prisma.teamPlayerProspect.findMany({
+    where: {
+      email: {
+        in: emails,
+        mode: "insensitive",
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      status: true,
+      teamId: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+}
+
+export default async function AdminUserProspectLinkPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  await requireAdmin();
+
+  const sp = (await searchParams) ?? {};
+  const email = normalizeEmail(sp.email);
+  const userId = sp.userId?.trim() || "";
+
+  const unnamedUsers = await getUnnamedUnlinkedUsers();
   const unnamedEmails = unnamedUsers
     .map((candidate) => normalizeEmail(candidate.email))
     .filter((candidateEmail): candidateEmail is string => Boolean(candidateEmail));
 
-  const unnamedProspectMatches = unnamedEmails.length
-    ? await prisma.teamPlayerProspect.findMany({
-        where: {
-          email: {
-            in: unnamedEmails,
-            mode: "insensitive",
-          },
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          status: true,
-          team: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      })
-    : [];
+  const unnamedProspectMatches = await getProspectsForEmails(unnamedEmails);
+  const unnamedProspectsByEmail = new Map<string, ProspectMatch[]>();
 
-  const unnamedProspectsByEmail = new Map<string, typeof unnamedProspectMatches>();
   for (const prospect of unnamedProspectMatches) {
     const prospectEmail = normalizeEmail(prospect.email);
     if (!prospectEmail) continue;
@@ -108,72 +186,14 @@ export default async function AdminUserProspectLinkPage({
     ]);
   }
 
-  const user = userId
-    ? await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          teamMembers: {
-            select: {
-              teamId: true,
-              role: true,
-              team: { select: { name: true } },
-            },
-          },
-        },
-      })
-    : email
-      ? await prisma.user.findUnique({
-          where: { email },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            teamMembers: {
-              select: {
-                teamId: true,
-                role: true,
-                team: { select: { name: true } },
-              },
-            },
-          },
-        })
-      : null;
-
+  const user = await getUserForRepair({ userId, email });
   const userEmail = normalizeEmail(user?.email ?? email);
-
-  const prospects = userEmail
-    ? await prisma.teamPlayerProspect.findMany({
-        where: {
-          email: {
-            equals: userEmail,
-            mode: "insensitive",
-          },
-        },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          status: true,
-          teamId: true,
-          updatedAt: true,
-          team: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      })
-    : [];
+  const prospects = await getProspectsForEmails(userEmail ? [userEmail] : []);
 
   const linkedTeamIds = new Set(user?.teamMembers.map((membership) => membership.teamId) ?? []);
-  const from = `/admin/users/link-prospect${userEmail ? `?email=${encodeURIComponent(userEmail)}` : ""}`;
+  const from = `/admin/users/link-prospect${userEmail ? `?email=${encodeURIComponent(userEmail)}` : ""}${
+    user?.id ? `&userId=${encodeURIComponent(user.id)}` : ""
+  }`;
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -243,7 +263,7 @@ export default async function AdminUserProspectLinkPage({
             </div>
           ) : null}
 
-          {unnamedUsers.map((candidate) => {
+          {unnamedUsers.map((candidate: UnnamedUser) => {
             const candidateEmail = normalizeEmail(candidate.email);
             const matches = candidateEmail ? unnamedProspectsByEmail.get(candidateEmail) ?? [] : [];
             const href = candidateEmail
@@ -285,9 +305,7 @@ export default async function AdminUserProspectLinkPage({
                     </div>
                     {matches.length > 0 ? (
                       <div className="mt-2 text-xs text-white/55">
-                        {matches
-                          .map((match) => `${getFullName(match)} · ${match.team.name}`)
-                          .join(" | ")}
+                        {matches.map((match) => `${getFullName(match)} · ${match.team.name}`).join(" | ")}
                       </div>
                     ) : null}
                   </div>
@@ -346,7 +364,7 @@ export default async function AdminUserProspectLinkPage({
               ) : null}
 
               {prospects.map((prospect) => {
-                const isLinked = linkedTeamIds.has(prospect.teamId);
+                const isLinked = linkedTeamIds.has(prospect.teamId ?? prospect.team.id);
 
                 return (
                   <div key={prospect.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
