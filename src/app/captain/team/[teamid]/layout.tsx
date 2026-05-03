@@ -10,6 +10,7 @@ import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLink
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import VoidFixturePlayerFeesBridge from "@/components/captain/VoidFixturePlayerFeesBridge";
+import VoidTeamChargeBridge from "@/components/captain/VoidTeamChargeBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -65,6 +66,7 @@ export default async function CaptainTeamLayout({
       <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
       <VoidFixturePlayerFeesBridge />
+      <VoidTeamChargeBridge />
       {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && team.teamMode === "MANAGED" ? <AdminPlayerPreviewLinks /> : null}
 
