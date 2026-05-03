@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
+import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -95,6 +96,19 @@ function mergePaymentNote(input: {
   }
 
   return `${existingNote}\n${input.methodNote}`;
+}
+
+function appendVoidNote(input: {
+  existingNote: string | null;
+  reason: string;
+}) {
+  const existingNote = input.existingNote?.trim();
+  const voidNote = `Voided: ${input.reason}`;
+
+  if (!existingNote) return voidNote;
+  if (existingNote.includes(voidNote)) return existingNote;
+
+  return `${existingNote}\n${voidNote}`;
 }
 
 export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
@@ -305,6 +319,68 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
       cancelledAt: status === "CANCELLED" ? now : null,
     },
   });
+
+  if (status === "CANCELLED") {
+    await cancelQueuedPlayerMatchFeeNotificationDispatches([feeId]);
+  }
+
+  revalidatePath(getMatchFeesPath(teamId, fixtureId));
+  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
+}
+
+export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData) {
+  const teamId = getString(formData, "teamId");
+  const fixtureId = getString(formData, "fixtureId");
+  const reason = getString(formData, "reason") || "Game conceded / fixture not played";
+
+  if (teamId) {
+    await requireCaptain(teamId);
+  }
+
+  if (!teamId || !fixtureId) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fixture"));
+  }
+
+  const fixtureOk = await assertFixtureBelongsToTeam({ fixtureId, teamId });
+
+  if (!fixtureOk) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=fixture_not_found"));
+  }
+
+  const fees = await prisma.playerMatchFee.findMany({
+    where: {
+      teamId,
+      fixtureId,
+      status: {
+        in: ["OPEN", "WAIVED", "CANCELLED"],
+      },
+    },
+    select: {
+      id: true,
+      note: true,
+    },
+  });
+
+  for (const fee of fees) {
+    await prisma.playerMatchFee.update({
+      where: { id: fee.id },
+      data: {
+        status: "CANCELLED",
+        paidAt: null,
+        waivedAt: null,
+        cancelledAt: new Date(),
+        note: appendVoidNote({
+          existingNote: fee.note,
+          reason,
+        }),
+      },
+    });
+  }
+
+  await cancelQueuedPlayerMatchFeeNotificationDispatches(
+    fees.map((fee) => fee.id),
+    `Player match fees voided: ${reason}`,
+  );
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
