@@ -65,8 +65,8 @@ export default async function CaptainTeamLayout({
     <div className="min-h-screen bg-[#07130f] text-white">
       <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
-      <VoidFixturePlayerFeesBridge />
-      <VoidTeamChargeBridge />
+      {access.isAdmin ? <VoidFixturePlayerFeesBridge /> : null}
+      {access.isAdmin ? <VoidTeamChargeBridge /> : null}
       {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && team.teamMode === "MANAGED" ? <AdminPlayerPreviewLinks /> : null}
 
