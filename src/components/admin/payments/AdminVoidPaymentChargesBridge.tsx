@@ -35,35 +35,68 @@ function normaliseText(value: string) {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function findChargeCard(item: VoidableCharge) {
-  const cards = Array.from(document.querySelectorAll("div"));
-  const titleNeedle = normaliseText(`${item.teamName} · ${item.title}`);
-  const altTitleNeedle = normaliseText(`${item.teamName} - ${item.title}`);
+function countOpenCommunicationActions(element: Element) {
+  return Array.from(element.querySelectorAll("a,button")).filter((node) =>
+    normaliseText(node.textContent ?? "").includes("open communications"),
+  ).length;
+}
 
-  return (
-    cards.find((card) => {
-      const text = normaliseText(card.textContent ?? "");
+function getActualChargeCardFromAction(action: Element) {
+  let current = action.parentElement;
+  let best: Element | null = null;
 
-      return (
-        text.includes(titleNeedle) ||
-        text.includes(altTitleNeedle) ||
-        (text.includes(normaliseText(item.teamName)) &&
-          text.includes(normaliseText(item.title)) &&
-          (!item.fixtureLabel || text.includes(normaliseText(item.fixtureLabel))))
-      );
-    }) ?? null
+  while (current && current.tagName !== "MAIN") {
+    const actionCount = countOpenCommunicationActions(current);
+
+    if (actionCount === 1) {
+      best = current;
+      current = current.parentElement;
+      continue;
+    }
+
+    break;
+  }
+
+  return best;
+}
+
+function findChargeCards() {
+  const actions = Array.from(document.querySelectorAll("a,button")).filter((node) =>
+    normaliseText(node.textContent ?? "").includes("open communications"),
   );
+
+  const cards = actions
+    .map(getActualChargeCardFromAction)
+    .filter((card): card is Element => Boolean(card));
+
+  return Array.from(new Set(cards));
+}
+
+function findMatchingItem(card: Element, items: VoidableCharge[]) {
+  const text = normaliseText(card.textContent ?? "");
+
+  return items.find((item) => {
+    const teamName = normaliseText(item.teamName);
+    const title = normaliseText(item.title);
+    const fixtureLabel = item.fixtureLabel ? normaliseText(item.fixtureLabel) : null;
+
+    return (
+      text.includes(teamName) &&
+      text.includes(title) &&
+      (!fixtureLabel || text.includes(fixtureLabel))
+    );
+  });
 }
 
 function findActionsContainer(card: Element) {
-  const links = Array.from(card.querySelectorAll("a,button"));
-  const action = links.find((node) =>
+  const actions = Array.from(card.querySelectorAll("a,button")).filter((node) =>
     ["open communications", "chase by sms"].some((label) =>
       normaliseText(node.textContent ?? "").includes(label),
     ),
   );
 
-  return action?.parentElement ?? null;
+  const lastAction = actions.at(-1);
+  return lastAction?.parentElement ?? null;
 }
 
 function createVoidButton(input: {
@@ -120,13 +153,13 @@ function injectVoidButtons(input: {
   items: VoidableCharge[];
   onVoided: () => void;
 }) {
-  for (const item of input.items) {
-    const card = findChargeCard(item);
-    if (!card) continue;
+  const usedChargeIds = new Set<string>();
 
-    if (card.querySelector(`[data-admin-void-payment-charge-button="${item.id}"]`)) {
-      continue;
-    }
+  for (const card of findChargeCards()) {
+    if (card.querySelector("[data-admin-void-payment-charge-button]")) continue;
+
+    const item = findMatchingItem(card, input.items);
+    if (!item || usedChargeIds.has(item.id)) continue;
 
     const actions = findActionsContainer(card);
     if (!actions) continue;
@@ -137,6 +170,7 @@ function injectVoidButtons(input: {
         onVoided: input.onVoided,
       }),
     );
+    usedChargeIds.add(item.id);
   }
 }
 
@@ -153,6 +187,8 @@ export default function AdminVoidPaymentChargesBridge() {
 
     async function loadCharges() {
       try {
+        removeExistingButtons();
+
         const response = await fetch("/api/admin/payments/voidable-charges", {
           cache: "no-store",
         });
