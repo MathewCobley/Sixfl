@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
+import VoidFixturePlayerFeesBridge from "@/components/captain/VoidFixturePlayerFeesBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -63,6 +64,7 @@ export default async function CaptainTeamLayout({
     <div className="min-h-screen bg-[#07130f] text-white">
       <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
+      <VoidFixturePlayerFeesBridge />
       {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && team.teamMode === "MANAGED" ? <AdminPlayerPreviewLinks /> : null}
 
