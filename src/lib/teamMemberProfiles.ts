@@ -47,12 +47,72 @@ function serializeJsonNullable(value: Prisma.JsonValue | null | undefined) {
   return JSON.stringify(value);
 }
 
-function isMissingTeamMemberProfileTableError(error: unknown) {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+async function ensureTeamMemberProfileTable(client: PrismaClientLike) {
+  await client.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "TeamMemberProfile" (
+      "id" TEXT NOT NULL,
+      "teamMemberId" TEXT NOT NULL,
+      "sourceProspectId" TEXT,
+      "phone" TEXT,
+      "ageBand" TEXT,
+      "preferredPositions" TEXT,
+      "experienceSummary" TEXT,
+      "availabilityLevel" TEXT,
+      "preferredNights" JSONB,
+      "availabilitySummary" TEXT,
+      "notes" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "TeamMemberProfile_pkey" PRIMARY KEY ("id")
+    );
+  `);
 
-  const message = String(error.meta?.message ?? error.message ?? "");
+  await client.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "TeamMemberProfile_teamMemberId_key"
+    ON "TeamMemberProfile"("teamMemberId");
+  `);
 
-  return error.code === "P2010" && message.includes('relation "TeamMemberProfile" does not exist');
+  await client.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "TeamMemberProfile_sourceProspectId_key"
+    ON "TeamMemberProfile"("sourceProspectId");
+  `);
+
+  await client.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "TeamMemberProfile_phone_idx"
+    ON "TeamMemberProfile"("phone");
+  `);
+
+  await client.$executeRawUnsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'TeamMemberProfile_teamMemberId_fkey'
+      ) THEN
+        ALTER TABLE "TeamMemberProfile"
+          ADD CONSTRAINT "TeamMemberProfile_teamMemberId_fkey"
+          FOREIGN KEY ("teamMemberId") REFERENCES "TeamMember"("id")
+          ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+    END $$;
+  `);
+
+  await client.$executeRawUnsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'TeamMemberProfile_sourceProspectId_fkey'
+      ) THEN
+        ALTER TABLE "TeamMemberProfile"
+          ADD CONSTRAINT "TeamMemberProfile_sourceProspectId_fkey"
+          FOREIGN KEY ("sourceProspectId") REFERENCES "TeamPlayerProspect"("id")
+          ON DELETE SET NULL ON UPDATE CASCADE;
+      END IF;
+    END $$;
+  `);
 }
 
 async function getSafeSourceProspectId(input: {
@@ -60,6 +120,8 @@ async function getSafeSourceProspectId(input: {
   teamMemberId: string;
   sourceProspectId: string;
 }) {
+  await ensureTeamMemberProfileTable(input.client);
+
   const existing = await input.client.$queryRaw<
     Array<{ teamMemberId: string }>
   >`
@@ -83,81 +145,77 @@ export async function upsertTeamMemberProfileFromProspect(input: {
   teamMemberId: string;
   prospect: ProspectProfileInput;
 }) {
-  try {
-    const id = randomUUID();
-    const preferredNightsJson = serializeJsonNullable(input.prospect.preferredNights);
-    const sourceProspectId = await getSafeSourceProspectId({
-      client: input.client,
-      teamMemberId: input.teamMemberId,
-      sourceProspectId: input.prospect.id,
-    });
+  await ensureTeamMemberProfileTable(input.client);
 
-    await input.client.$executeRawUnsafe(
-      `
-        INSERT INTO "TeamMemberProfile" (
-          "id",
-          "teamMemberId",
-          "sourceProspectId",
-          "phone",
-          "ageBand",
-          "preferredPositions",
-          "experienceSummary",
-          "availabilityLevel",
-          "preferredNights",
-          "availabilitySummary",
-          "notes",
-          "updatedAt"
-        ) VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9::jsonb,
-          $10,
-          $11,
-          NOW()
-        )
-        ON CONFLICT ("teamMemberId") DO UPDATE SET
-          "sourceProspectId" = COALESCE("TeamMemberProfile"."sourceProspectId", EXCLUDED."sourceProspectId"),
-          "phone" = COALESCE(NULLIF(EXCLUDED."phone", ''), "TeamMemberProfile"."phone"),
-          "ageBand" = COALESCE(NULLIF(EXCLUDED."ageBand", ''), "TeamMemberProfile"."ageBand"),
-          "preferredPositions" = COALESCE(NULLIF(EXCLUDED."preferredPositions", ''), "TeamMemberProfile"."preferredPositions"),
-          "experienceSummary" = COALESCE(NULLIF(EXCLUDED."experienceSummary", ''), "TeamMemberProfile"."experienceSummary"),
-          "availabilityLevel" = COALESCE(NULLIF(EXCLUDED."availabilityLevel", ''), "TeamMemberProfile"."availabilityLevel"),
-          "preferredNights" = COALESCE(EXCLUDED."preferredNights", "TeamMemberProfile"."preferredNights"),
-          "availabilitySummary" = COALESCE(NULLIF(EXCLUDED."availabilitySummary", ''), "TeamMemberProfile"."availabilitySummary"),
-          "notes" = COALESCE(NULLIF(EXCLUDED."notes", ''), "TeamMemberProfile"."notes"),
-          "updatedAt" = NOW()
-      `,
-      id,
-      input.teamMemberId,
-      sourceProspectId,
-      trimNullable(input.prospect.phone),
-      trimNullable(input.prospect.ageBand),
-      trimNullable(input.prospect.preferredPositions),
-      trimNullable(input.prospect.experienceSummary),
-      trimNullable(input.prospect.availabilityLevel),
-      preferredNightsJson,
-      trimNullable(input.prospect.availabilitySummary),
-      trimNullable(input.prospect.notes),
-    );
-  } catch (error) {
-    if (isMissingTeamMemberProfileTableError(error)) {
-      return;
-    }
+  const id = randomUUID();
+  const preferredNightsJson = serializeJsonNullable(input.prospect.preferredNights);
+  const sourceProspectId = await getSafeSourceProspectId({
+    client: input.client,
+    teamMemberId: input.teamMemberId,
+    sourceProspectId: input.prospect.id,
+  });
 
-    throw error;
-  }
+  await input.client.$executeRawUnsafe(
+    `
+      INSERT INTO "TeamMemberProfile" (
+        "id",
+        "teamMemberId",
+        "sourceProspectId",
+        "phone",
+        "ageBand",
+        "preferredPositions",
+        "experienceSummary",
+        "availabilityLevel",
+        "preferredNights",
+        "availabilitySummary",
+        "notes",
+        "updatedAt"
+      ) VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9::jsonb,
+        $10,
+        $11,
+        NOW()
+      )
+      ON CONFLICT ("teamMemberId") DO UPDATE SET
+        "sourceProspectId" = COALESCE("TeamMemberProfile"."sourceProspectId", EXCLUDED."sourceProspectId"),
+        "phone" = COALESCE(NULLIF(EXCLUDED."phone", ''), "TeamMemberProfile"."phone"),
+        "ageBand" = COALESCE(NULLIF(EXCLUDED."ageBand", ''), "TeamMemberProfile"."ageBand"),
+        "preferredPositions" = COALESCE(NULLIF(EXCLUDED."preferredPositions", ''), "TeamMemberProfile"."preferredPositions"),
+        "experienceSummary" = COALESCE(NULLIF(EXCLUDED."experienceSummary", ''), "TeamMemberProfile"."experienceSummary"),
+        "availabilityLevel" = COALESCE(NULLIF(EXCLUDED."availabilityLevel", ''), "TeamMemberProfile"."availabilityLevel"),
+        "preferredNights" = COALESCE(EXCLUDED."preferredNights", "TeamMemberProfile"."preferredNights"),
+        "availabilitySummary" = COALESCE(NULLIF(EXCLUDED."availabilitySummary", ''), "TeamMemberProfile"."availabilitySummary"),
+        "notes" = COALESCE(NULLIF(EXCLUDED."notes", ''), "TeamMemberProfile"."notes"),
+        "updatedAt" = NOW()
+    `,
+    id,
+    input.teamMemberId,
+    sourceProspectId,
+    trimNullable(input.prospect.phone),
+    trimNullable(input.prospect.ageBand),
+    trimNullable(input.prospect.preferredPositions),
+    trimNullable(input.prospect.experienceSummary),
+    trimNullable(input.prospect.availabilityLevel),
+    preferredNightsJson,
+    trimNullable(input.prospect.availabilitySummary),
+    trimNullable(input.prospect.notes),
+  );
 }
 
 export async function getTeamMemberProfilesByTeamMemberIds(teamMemberIds: string[]) {
   if (teamMemberIds.length === 0) return new Map<string, TeamMemberProfile>();
 
   try {
+    await ensureTeamMemberProfileTable(prisma);
+
     const rows = await prisma.$queryRaw<TeamMemberProfile[]>`
       SELECT
         "id",
