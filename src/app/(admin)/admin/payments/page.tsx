@@ -9,8 +9,13 @@ import { redirect } from "next/navigation";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { summariseCharge } from "@/lib/payments/charge-status";
-import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
+import {
+  buildChargePaymentUrl,
+  cancelQueuedMatchFeeNotificationDispatches,
+} from "@/lib/payments/fixture-match-fees";
 import {
   ensurePlayerMatchFeePaymentDetails,
   queuePlayerMatchFeeReminder,
@@ -59,13 +64,7 @@ function formatFixtureDate(value: Date) {
 
 function formatLastChasedLabel(value: Date | null) {
   if (!value) return "Last chased: not chased yet";
-
-  return `Last chased: ${formatDateTimeInLondon(value, {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
+  return `Last chased: ${formatFixtureDate(value)}`;
 }
 
 function formatPaymentMethodLabel(method: PaymentMethod) {
@@ -221,6 +220,82 @@ async function recordPaymentAction(formData: FormData) {
   redirect("/admin/payments?created=payment");
 }
 
+async function sendTeamChargeReminderAction(formData: FormData) {
+  "use server";
+
+  const { user } = await requireAdmin();
+  const chargeId = String(formData.get("chargeId") ?? "").trim();
+
+  if (!chargeId) redirect("/admin/payments?error=invalid_charge");
+
+  const charge = await prisma.paymentCharge.findUnique({
+    where: { id: chargeId },
+    include: {
+      team: { select: { id: true, name: true } },
+      fixture: {
+        select: {
+          kickoffAt: true,
+          homeTeam: { select: { name: true } },
+          awayTeam: { select: { name: true } },
+        },
+      },
+      transactions: { select: { amountPence: true } },
+    },
+  });
+
+  if (!charge) redirect("/admin/payments?error=invalid_charge");
+
+  const summary = summariseCharge({
+    amountPence: charge.amountPence,
+    transactions: charge.transactions,
+  });
+
+  if (
+    charge.status === "PAID" ||
+    charge.status === "VOID" ||
+    summary.outstandingPence <= 0 ||
+    !charge.paymentToken
+  ) {
+    redirect("/admin/payments?error=invalid_charge");
+  }
+
+  const { recipient, snapshot } = await upsertTeamNotificationRecipient(charge.team.id);
+  const fixtureName = charge.fixture
+    ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
+    : charge.title;
+  const kickoffLabel = charge.fixture?.kickoffAt
+    ? formatFixtureDate(charge.fixture.kickoffAt)
+    : charge.dueDate
+      ? formatDateTimeLabel(charge.dueDate)
+      : "TBC";
+
+  await queueNotificationFromTemplate({
+    templateKey: "match-fee-reminder-sms",
+    recipientId: recipient.id,
+    sourceType: "FIXTURE_MATCH_FEE_MANUAL_CHASE",
+    sourceId: `${charge.id}:manual-sms:${Date.now()}`,
+    metadata: {
+      kind: "fixture_match_fee_manual_chase_sms",
+      chargeId: charge.id,
+      fixtureId: charge.fixtureId,
+      teamId: charge.team.id,
+      teamName: charge.team.name,
+      triggeredFrom: "admin_payments_page",
+    },
+    variables: {
+      firstName: snapshot.primaryContact.name ?? charge.team.name,
+      fixtureName,
+      kickoffLabel,
+      paymentUrl: buildChargePaymentUrl(charge.paymentToken),
+      reminderIntro: "Your team match fee is still unpaid.",
+    },
+    createdByUserId: user?.id ?? null,
+  });
+
+  revalidatePath("/admin/payments");
+  redirect("/admin/payments?created=team_charge_reminder");
+}
+
 async function sendPlayerMatchFeeReminderAction(formData: FormData) {
   "use server";
 
@@ -352,6 +427,48 @@ export default async function AdminPaymentsPage({
   const openChargeRows = chargeRows.filter(
     (row) => row.charge.status !== "PAID" && row.charge.status !== "VOID",
   );
+  const openChargeIds = openChargeRows.map((row) => row.charge.id);
+  const teamChargeChases = openChargeIds.length
+    ? await prisma.notificationDispatch.findMany({
+        where: {
+          sourceType: "FIXTURE_MATCH_FEE_MANUAL_CHASE",
+          OR: openChargeIds.map((chargeId) => ({
+            OR: [
+              { sourceId: { startsWith: `${chargeId}:manual-sms:` } },
+              { metadata: { path: ["chargeId"], equals: chargeId } },
+            ],
+          })),
+        },
+        select: {
+          id: true,
+          sourceId: true,
+          metadata: true,
+          createdAt: true,
+          scheduledFor: true,
+          sentAt: true,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      })
+    : [];
+
+  const lastTeamChargeChaseByChargeId = new Map<string, Date>();
+  for (const dispatch of teamChargeChases) {
+    const metadata =
+      dispatch.metadata && typeof dispatch.metadata === "object" && !Array.isArray(dispatch.metadata)
+        ? (dispatch.metadata as Record<string, unknown>)
+        : null;
+    const chargeIdFromMetadata =
+      typeof metadata?.chargeId === "string" ? metadata.chargeId : null;
+    const chargeIdFromSource = openChargeIds.find((chargeId) =>
+      dispatch.sourceId?.startsWith(`${chargeId}:manual-sms:`),
+    );
+    const chargeId = chargeIdFromMetadata ?? chargeIdFromSource;
+    if (!chargeId) continue;
+    const chasedAt = dispatch.sentAt ?? dispatch.scheduledFor ?? dispatch.createdAt;
+    const existing = lastTeamChargeChaseByChargeId.get(chargeId);
+    if (!existing || chasedAt > existing) lastTeamChargeChaseByChargeId.set(chargeId, chasedAt);
+  }
+
   const teamChargeOutstanding = openChargeRows.reduce(
     (sum, row) => sum + row.summary.outstandingPence,
     0,
@@ -387,6 +504,7 @@ export default async function AdminPaymentsPage({
         <div className="space-y-1 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm">
           {sp.created === "charge" ? <div className="text-emerald-300">Charge created.</div> : null}
           {sp.created === "payment" ? <div className="text-emerald-300">Payment recorded.</div> : null}
+          {sp.created === "team_charge_reminder" ? <div className="text-emerald-300">Team charge SMS queued.</div> : null}
           {sp.created === "player_fee_reminder" ? <div className="text-emerald-300">Player fee reminder queued.</div> : null}
           {sp.created === "player_fee_already_sent" ? <div className="text-amber-200">All player fee reminder stages have already been queued or sent.</div> : null}
           {sp.error === "invalid_charge" ? <div className="text-red-300">Charge details are incomplete.</div> : null}
@@ -504,26 +622,44 @@ export default async function AdminPaymentsPage({
           {chargeRows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No charges yet.</div>
           ) : (
-            chargeRows.map((row) => (
-              <div key={row.charge.id} className={`rounded-2xl border bg-[#0d1428] p-4 ${row.needsAdminChase ? "border-red-500/30" : "border-white/10"}`}>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="text-base font-semibold text-white">{row.charge.team.name} · {row.charge.title}</div>
-                    <div className="mt-1 text-sm text-white/55">{row.charge.description || "No description"}</div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {row.charge.dueDate ? <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Due {formatDueLabel(row.charge.dueDate)}</span> : null}
-                      {row.needsAdminChase ? <span className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-red-200">Needs admin chase</span> : null}
-                      {row.summary.outstandingPence > 0 && row.charge.status !== "VOID" ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">Awaiting payment</span> : null}
+            chargeRows.map((row) => {
+              const lastChasedAt = lastTeamChargeChaseByChargeId.get(row.charge.id) ?? null;
+              const canChaseTeamCharge =
+                row.charge.status !== "PAID" &&
+                row.charge.status !== "VOID" &&
+                row.summary.outstandingPence > 0 &&
+                Boolean(row.charge.paymentToken);
+
+              return (
+                <div key={row.charge.id} className={`rounded-2xl border bg-[#0d1428] p-4 ${row.needsAdminChase ? "border-red-500/30" : "border-white/10"}`}>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="text-base font-semibold text-white">{row.charge.team.name} · {row.charge.title}</div>
+                      <div className="mt-1 text-sm text-white/55">{row.charge.description || "No description"}</div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {row.charge.dueDate ? <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Due {formatDueLabel(row.charge.dueDate)}</span> : null}
+                        {row.needsAdminChase ? <span className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-red-200">Needs admin chase</span> : null}
+                        {row.summary.outstandingPence > 0 && row.charge.status !== "VOID" ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">Awaiting payment</span> : null}
+                        <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/[0.05] text-white/55"}`}>{formatLastChasedLabel(lastChasedAt)}</span>
+                      </div>
+                      {canChaseTeamCharge ? (
+                        <div className="mt-4">
+                          <form action={sendTeamChargeReminderAction}>
+                            <input type="hidden" name="chargeId" value={row.charge.id} />
+                            <button type="submit" className="inline-flex items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/15">Team chase SMS</button>
+                          </form>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-base font-semibold text-white">{formatMoney(row.charge.amountPence)}</div>
+                      <div className="mt-1 text-sm text-white/55">Paid {formatMoney(row.summary.paidTotalPence)} · Outstanding {formatMoney(row.summary.outstandingPence)}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">{row.charge.status}</div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-base font-semibold text-white">{formatMoney(row.charge.amountPence)}</div>
-                    <div className="mt-1 text-sm text-white/55">Paid {formatMoney(row.summary.paidTotalPence)} · Outstanding {formatMoney(row.summary.outstandingPence)}</div>
-                    <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">{row.charge.status}</div>
-                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>
