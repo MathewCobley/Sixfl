@@ -61,8 +61,8 @@ type LatestAvailabilityState = {
     id: string;
     label: string;
   } | null;
-  availabilityByRecipientValue: Record<string, AvailabilityInfo>;
-  counts: {
+  availabilityByRecipientValue?: Record<string, AvailabilityInfo>;
+  counts?: {
     available: number;
     maybe: number;
     unavailable: number;
@@ -244,6 +244,14 @@ export default function TeamCommunicationsComposer({
   const [latestAvailability, setLatestAvailability] = useState<LatestAvailabilityState | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
+  const availabilityByRecipientValue = latestAvailability?.availabilityByRecipientValue ?? {};
+  const availabilityCounts = latestAvailability?.counts ?? {
+    available: 0,
+    maybe: 0,
+    unavailable: 0,
+    noResponse: 0,
+  };
+
   const siteUrl = getSiteUrl();
   const playerDashboardUrl = `${siteUrl}/player/team/${teamId}`;
   const availabilityUrl = latestAvailability?.fixture?.id
@@ -404,7 +412,7 @@ export default function TeamCommunicationsComposer({
     const values = recipientOptions
       .filter((recipient) => {
         if (recipient.type !== "teamMember") return false;
-        return latestAvailability?.availabilityByRecipientValue[recipient.value]?.response === response;
+        return availabilityByRecipientValue[recipient.value]?.response === response;
       })
       .map((recipient) => recipient.value);
 
@@ -515,28 +523,28 @@ export default function TeamCommunicationsComposer({
                 onClick={() => selectAvailabilityGroup("AVAILABLE")}
                 className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-emerald-100 transition hover:bg-emerald-500/15"
               >
-                Available: {latestAvailability.counts.available}
+                Available: {availabilityCounts.available}
               </button>
               <button
                 type="button"
                 onClick={() => selectAvailabilityGroup("MAYBE")}
                 className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-100 transition hover:bg-amber-500/15"
               >
-                Maybe: {latestAvailability.counts.maybe}
+                Maybe: {availabilityCounts.maybe}
               </button>
               <button
                 type="button"
                 onClick={() => selectAvailabilityGroup("UNAVAILABLE")}
                 className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-red-100 transition hover:bg-red-500/15"
               >
-                Unavailable: {latestAvailability.counts.unavailable}
+                Unavailable: {availabilityCounts.unavailable}
               </button>
               <button
                 type="button"
                 onClick={() => selectAvailabilityGroup("NO_RESPONSE")}
                 className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.08]"
               >
-                No response: {latestAvailability.counts.noResponse}
+                No response: {availabilityCounts.noResponse}
               </button>
             </div>
           ) : null}
@@ -545,7 +553,7 @@ export default function TeamCommunicationsComposer({
         <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {recipientOptions.map((recipient) => {
             const checked = selectedRecipientValues.includes(recipient.value);
-            const availability = latestAvailability?.availabilityByRecipientValue[recipient.value] ?? null;
+            const availability = availabilityByRecipientValue[recipient.value] ?? null;
 
             return (
               <label
