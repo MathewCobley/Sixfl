@@ -212,6 +212,64 @@ export async function updateAdminProspectNotesAction(formData: FormData) {
   redirect(buildRedirect(teamId, "?saved=notes-updated"));
 }
 
+export async function moveAdminProspectToTeamAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+  const targetTeamId = String(formData.get("targetTeamId") ?? "").trim();
+
+  if (!teamId || !prospectId) {
+    redirect("/admin/teams");
+  }
+
+  if (!targetTeamId || targetTeamId === teamId) {
+    redirect(buildRedirect(teamId, "?error=Choose%20a%20different%20managed%20team."));
+  }
+
+  const [prospect, targetTeam] = await Promise.all([
+    prisma.teamPlayerProspect.findFirst({
+      where: {
+        id: prospectId,
+        teamId,
+      },
+      select: {
+        id: true,
+      },
+    }),
+    prisma.team.findFirst({
+      where: {
+        id: targetTeamId,
+        teamMode: "MANAGED",
+      },
+      select: {
+        id: true,
+      },
+    }),
+  ]);
+
+  if (!prospect) {
+    redirect(buildRedirect(teamId, "?error=Prospect%20not%20found."));
+  }
+
+  if (!targetTeam) {
+    redirect(buildRedirect(teamId, "?error=Target%20managed%20team%20not%20found."));
+  }
+
+  await prisma.teamPlayerProspect.update({
+    where: { id: prospect.id },
+    data: { teamId: targetTeam.id },
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/prospects`);
+  revalidatePath(`/admin/teams/${targetTeam.id}`);
+  revalidatePath(`/admin/teams/${targetTeam.id}/prospects`);
+  revalidatePath(`/captain/team/${teamId}/prospects`);
+  revalidatePath(`/captain/team/${targetTeam.id}/prospects`);
+  redirect(buildRedirect(teamId, "?saved=prospect-moved"));
+}
+
 export async function convertAdminProspectToMemberAction(formData: FormData) {
   await requireAdmin();
 
