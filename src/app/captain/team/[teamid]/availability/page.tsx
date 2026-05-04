@@ -9,6 +9,7 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
   sendAvailabilitySmsChaseAction,
   updateFixtureAvailabilityAction,
@@ -198,6 +199,8 @@ export default async function CaptainAvailabilityPage({
 
   const fixtureIds = fixtures.map((fixture) => fixture.id);
   const teamMemberIds = team.members.map((member) => member.id);
+  const teamMemberProfilesByMemberId =
+    await getTeamMemberProfilesByTeamMemberIds(teamMemberIds);
   const smsDispatches = fixtureIds.length && teamMemberIds.length
     ? await prisma.notificationDispatch.findMany({
         where: {
@@ -396,6 +399,8 @@ export default async function CaptainAvailabilityPage({
                     const response = availability?.response ?? "NO_RESPONSE";
                     const memberName =
                       member.user.name || member.user.email || "Unnamed user";
+                    const memberProfile = teamMemberProfilesByMemberId.get(member.id);
+                    const memberPhone = memberProfile?.phone?.trim() || null;
                     const smsDispatch = smsDispatchBySourceId.get(
                       getSmsSourceId({ fixtureId: fixture.id, teamMemberId: member.id }),
                     );
@@ -419,8 +424,20 @@ export default async function CaptainAvailabilityPage({
                             </span>
                           </div>
 
-                          <div className="mt-2 text-sm text-white/60">
-                            {member.user.email || "No email on account"}
+                          <div className="mt-2 space-y-1 text-sm text-white/60">
+                            <div>{member.user.email || "No email on account"}</div>
+                            <div>
+                              {memberPhone ? (
+                                <a
+                                  href={`tel:${memberPhone.replace(/\s+/g, "")}`}
+                                  className="text-emerald-100/85 underline-offset-4 transition hover:text-emerald-50 hover:underline"
+                                >
+                                  {memberPhone}
+                                </a>
+                              ) : (
+                                <span className="text-white/35">No phone number on profile</span>
+                              )}
+                            </div>
                           </div>
 
                           <div className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getSmsStatusClasses(smsDispatch?.status)}`}>
