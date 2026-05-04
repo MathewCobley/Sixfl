@@ -377,6 +377,7 @@ function getPlayerName(input: {
 export async function queuePlayerMatchFeeReminder(input: {
   feeId: string;
   mode: PlayerMatchFeeReminderMode;
+  channels?: ReminderChannel[];
 }) {
   await ensurePlayerMatchFeeReminderTemplates();
   const ensured = await ensurePlayerMatchFeePaymentDetails(input.feeId);
@@ -384,6 +385,12 @@ export async function queuePlayerMatchFeeReminder(input: {
   if (!ensured || ensured.status !== PlayerMatchFeeStatus.OPEN) {
     return { queued: 0, skipped: 1, status: "not_open" as const };
   }
+
+  const requestedChannels = new Set<ReminderChannel>(
+    input.channels?.length ? input.channels : ["EMAIL", "SMS"],
+  );
+  const shouldQueueEmail = requestedChannels.has("EMAIL");
+  const shouldQueueSms = requestedChannels.has("SMS");
 
   const fee = await prisma.playerMatchFee.findUnique({
     where: { id: input.feeId },
@@ -454,22 +461,29 @@ export async function queuePlayerMatchFeeReminder(input: {
     phone = getPhoneDisplayValue(profiles.get(fee.teamMemberId)?.phone ?? null);
   }
 
-  if (!email && !phone) {
+  if ((!shouldQueueEmail || !email) && (!shouldQueueSms || !phone)) {
     return { queued: 0, skipped: 1, status: "no_contact" as const };
   }
 
-  const existingEmailDispatch = await hasPlayerMatchFeeDispatch({
-    feeId: fee.id,
-    mode: input.mode,
-    channel: "EMAIL",
-  });
-  const existingSmsDispatch = await hasPlayerMatchFeeDispatch({
-    feeId: fee.id,
-    mode: input.mode,
-    channel: "SMS",
-  });
+  const existingEmailDispatch = shouldQueueEmail
+    ? await hasPlayerMatchFeeDispatch({
+        feeId: fee.id,
+        mode: input.mode,
+        channel: "EMAIL",
+      })
+    : null;
+  const existingSmsDispatch = shouldQueueSms
+    ? await hasPlayerMatchFeeDispatch({
+        feeId: fee.id,
+        mode: input.mode,
+        channel: "SMS",
+      })
+    : null;
 
-  if ((!email || existingEmailDispatch) && (!phone || existingSmsDispatch)) {
+  if (
+    (!shouldQueueEmail || !email || existingEmailDispatch) &&
+    (!shouldQueueSms || !phone || existingSmsDispatch)
+  ) {
     return { queued: 0, skipped: 0, status: "already_sent" as const };
   }
 
@@ -512,7 +526,7 @@ export async function queuePlayerMatchFeeReminder(input: {
   let queued = 0;
   let skipped = 0;
 
-  if (email && !existingEmailDispatch) {
+  if (shouldQueueEmail && email && !existingEmailDispatch) {
     const dispatch = await queueNotificationFromTemplate({
       templateKey: PLAYER_MATCH_FEE_TEMPLATE_KEYS[input.mode].EMAIL,
       recipientId: recipient.id,
@@ -543,7 +557,7 @@ export async function queuePlayerMatchFeeReminder(input: {
     else skipped += 1;
   }
 
-  if (phone && !existingSmsDispatch) {
+  if (shouldQueueSms && phone && !existingSmsDispatch) {
     const dispatch = await queueNotificationFromTemplate({
       templateKey: PLAYER_MATCH_FEE_TEMPLATE_KEYS[input.mode].SMS,
       recipientId: recipient.id,
