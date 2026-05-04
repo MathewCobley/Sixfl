@@ -32,6 +32,8 @@ function getSavedMessage(saved?: string) {
       return "Prospect notes updated.";
     case "promoted":
       return "Prospect promoted to squad.";
+    case "prospect-moved":
+      return "Prospect moved to another managed team.";
     default:
       return saved ? "Saved." : null;
   }
@@ -134,44 +136,70 @@ export default async function AdminTeamProspectsPage({
   const { id } = await params;
   const filters = await searchParams;
 
-  const team = await prisma.team.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      teamMode: true,
-      isRecruiting: true,
-      joinSlug: true,
-      league: {
-        select: {
-          id: true,
-          name: true,
-          season: true,
-        },
-      },
-      prospects: {
-        where: {
-          status: {
-            not: "ACTIVE_SQUAD",
+  const [team, managedTeams] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        teamMode: true,
+        isRecruiting: true,
+        joinSlug: true,
+        league: {
+          select: {
+            id: true,
+            name: true,
+            season: true,
           },
         },
-        orderBy: [{ createdAt: "desc" }],
-      },
-      _count: {
-        select: {
-          prospects: {
-            where: {
-              status: "ACTIVE_SQUAD",
+        prospects: {
+          where: {
+            status: {
+              not: "ACTIVE_SQUAD",
+            },
+          },
+          orderBy: [{ createdAt: "desc" }],
+        },
+        _count: {
+          select: {
+            prospects: {
+              where: {
+                status: "ACTIVE_SQUAD",
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.team.findMany({
+      where: {
+        id: { not: id },
+        teamMode: "MANAGED",
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        league: {
+          select: {
+            name: true,
+            season: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   if (!team) {
     notFound();
   }
+
+  const managedTeamOptions = managedTeams.map((managedTeam) => ({
+    value: managedTeam.id,
+    label: managedTeam.league?.name
+      ? `${managedTeam.name} · ${managedTeam.league.name}${managedTeam.league.season ? ` ${managedTeam.league.season}` : ""}`
+      : managedTeam.name,
+  }));
 
   const convertedToSquadCount = team._count.prospects;
   const conversionRate = getConversionRateLabel(
@@ -634,6 +662,7 @@ export default async function AdminTeamProspectsPage({
                   key={prospect.id}
                   teamId={team.id}
                   prospect={prospect}
+                  managedTeamOptions={managedTeamOptions}
                 />
               ))
             )}
