@@ -57,6 +57,17 @@ function formatFixtureDate(value: Date) {
   });
 }
 
+function formatLastChasedLabel(value: Date | null) {
+  if (!value) return "Last chased: not chased yet";
+
+  return `Last chased: ${formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
 function formatPaymentMethodLabel(method: PaymentMethod) {
   const labels: Record<PaymentMethod, string> = {
     [PaymentMethod.BANK_TRANSFER]: "Bank transfer",
@@ -436,6 +447,9 @@ export default async function AdminPaymentsPage({
                       <div className="font-semibold text-white">{playerName} · {formatMoney(fee.amountPence)}</div>
                       <div className="mt-1 text-sm text-white/55">{fee.team.name} · {fixtureName} · {formatFixtureDate(fee.fixture.kickoffAt)}</div>
                       <div className="mt-1 text-xs text-white/40">{playerContact}</div>
+                      <div className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fee.lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/5 text-white/55"}`}>
+                        {formatLastChasedLabel(fee.lastChasedAt)}
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <Link href={`/captain/team/${fee.team.id}/match-fees?fixtureId=${fee.fixture.id}`} className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10">Open team fees</Link>
