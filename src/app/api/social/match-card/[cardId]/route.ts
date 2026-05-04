@@ -15,6 +15,7 @@ export const runtime = "nodejs";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
+const CARD_FONT_FAMILY = "DejaVu Sans, Arial, Helvetica, sans-serif";
 
 type CardRow = {
   id: string;
@@ -131,6 +132,13 @@ function buildSvg(card: CardRow, fixtures: FixtureRow[]) {
   return `
     <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
+        <style>
+          text {
+            font-family: ${CARD_FONT_FAMILY};
+            font-variant-ligatures: none;
+            text-rendering: geometricPrecision;
+          }
+        </style>
         <radialGradient id="topGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(540 0) rotate(90) scale(760 760)">
           <stop stop-color="#10B981" stop-opacity="0.38"/>
           <stop offset="1" stop-color="#020617" stop-opacity="0"/>
