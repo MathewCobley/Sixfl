@@ -368,11 +368,12 @@ export async function sendCaptainPlayerMatchFeeReminderAction(formData: FormData
     const result = await queuePlayerMatchFeeReminder({
       feeId: fee.id,
       mode,
+      channels: ["SMS"],
     });
 
     if (result.queued > 0) {
       revalidatePath(getMatchFeesPath(teamId, fixtureId));
-      redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_reminder_queued"));
+      redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_sms_queued"));
     }
 
     if (["no_contact", "not_open", "no_payment_url"].includes(result.status)) {
@@ -380,7 +381,7 @@ export async function sendCaptainPlayerMatchFeeReminderAction(formData: FormData
     }
   }
 
-  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_reminder_already_sent"));
+  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_sms_already_sent"));
 }
 
 export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData) {
