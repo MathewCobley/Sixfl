@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 import { SocialPostStatus, SocialPostType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { parseLondonDateTime } from "@/lib/datetime/london";
@@ -321,6 +322,7 @@ export async function generateWeeklyMatchCardAction(formData: FormData) {
   });
 
   revalidateWeeklySocialPaths({ leagueSlug: league.slug });
+  redirect("/admin/social?generated=card-regenerated");
 }
 
 export async function approveWeeklyMatchCardAction(formData: FormData) {
