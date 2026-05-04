@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
+import { queuePlayerMatchFeeReminder } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -326,6 +327,60 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
+}
+
+export async function sendCaptainPlayerMatchFeeReminderAction(formData: FormData) {
+  const teamId = getString(formData, "teamId");
+  const fixtureId = getString(formData, "fixtureId");
+  const feeId = getString(formData, "feeId");
+
+  if (teamId) {
+    await requireCaptain(teamId);
+  }
+
+  if (!teamId || !fixtureId || !feeId) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  const fee = await prisma.playerMatchFee.findFirst({
+    where: {
+      id: feeId,
+      teamId,
+      fixtureId,
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!fee) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  if (fee.status !== "OPEN") {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=fee_not_open"));
+  }
+
+  const reminderModes = ["request", "chase24h", "chase72h"] as const;
+
+  for (const mode of reminderModes) {
+    const result = await queuePlayerMatchFeeReminder({
+      feeId: fee.id,
+      mode,
+    });
+
+    if (result.queued > 0) {
+      revalidatePath(getMatchFeesPath(teamId, fixtureId));
+      redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_reminder_queued"));
+    }
+
+    if (["no_contact", "not_open", "no_payment_url"].includes(result.status)) {
+      redirect(getMatchFeesPath(teamId, fixtureId, `&error=${result.status}`));
+    }
+  }
+
+  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_reminder_already_sent"));
 }
 
 export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData) {
