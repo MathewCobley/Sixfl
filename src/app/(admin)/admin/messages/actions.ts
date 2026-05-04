@@ -22,7 +22,7 @@ import { sendEmailWithResend } from "@/lib/notifications/providers/resend";
 import { sendSmsWithTwilio } from "@/lib/notifications/providers/twilio";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
-const SMS_QUIET_HOURS_START_HOUR = 22;
+const SMS_QUIET_HOURS_START_HOUR = 21;
 const SMS_QUIET_HOURS_END_HOUR = 9;
 const SMS_QUIET_HOURS_TIME_ZONE = "Europe/London";
 
