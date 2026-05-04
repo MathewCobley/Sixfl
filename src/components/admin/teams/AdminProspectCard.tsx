@@ -8,6 +8,7 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import {
   convertAdminProspectToMemberAction,
+  moveAdminProspectToTeamAction,
   updateAdminProspectDetailsAction,
   updateAdminProspectNotesAction,
   updateAdminProspectStatusAction,
@@ -30,6 +31,11 @@ type Prospect = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type ManagedTeamOption = {
+  value: string;
+  label: string;
 };
 
 const STATUS_OPTIONS = [
@@ -145,9 +151,11 @@ function ProspectInput({
 export default function AdminProspectCard({
   teamId,
   prospect,
+  managedTeamOptions,
 }: {
   teamId: string;
   prospect: Prospect;
+  managedTeamOptions: ManagedTeamOption[];
 }) {
   const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
   const isFormComplete = hasCompletedProspectForm(prospect);
@@ -364,6 +372,40 @@ export default function AdminProspectCard({
           </button>
         </form>
       </div>
+
+      {managedTeamOptions.length > 0 ? (
+        <form action={moveAdminProspectToTeamAction} className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-4 sm:p-5">
+          <input type="hidden" name="teamId" value={teamId} />
+          <input type="hidden" name="prospectId" value={prospect.id} />
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">
+                Move prospect
+              </div>
+              <h3 className="mt-1 text-lg font-semibold text-white">
+                Send this prospect to another managed team
+              </h3>
+              <p className="mt-1 text-sm text-sky-100/70">
+                This keeps them as a prospect and moves their prospect card into the selected managed team.
+              </p>
+            </div>
+
+            <div className="grid w-full gap-3 sm:grid-cols-[minmax(260px,1fr)_auto] xl:max-w-xl">
+              <FormListboxField
+                name="targetTeamId"
+                options={managedTeamOptions}
+                placeholder="Choose managed team"
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 px-4 py-2.5 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/20"
+              >
+                Move prospect
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : null}
 
       <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
