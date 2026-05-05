@@ -2,8 +2,7 @@
 // File: src/app/api/social/match-card/[cardId]/route.ts
 // ========================================
 
-import { existsSync } from "node:fs";
-import { createCanvas, registerFont, type CanvasRenderingContext2D } from "canvas";
+import { createCanvas, type CanvasRenderingContext2D } from "canvas";
 import { SocialPostType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -16,40 +15,6 @@ export const runtime = "nodejs";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
-const FONT_FAMILY = "SIXFLSocialSans";
-
-let fontsRegistered = false;
-let hasRegisteredFont = false;
-
-function registerSocialCardFonts() {
-  if (fontsRegistered) return;
-
-  fontsRegistered = true;
-
-  const fontCandidates = [
-    { path: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", weight: "normal" },
-    { path: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", weight: "bold" },
-    { path: "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf", weight: "normal" },
-    { path: "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf", weight: "bold" },
-    { path: "/usr/share/fonts/truetype/freefont/FreeSans.ttf", weight: "normal" },
-    { path: "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", weight: "bold" },
-  ];
-
-  for (const candidate of fontCandidates) {
-    if (!existsSync(candidate.path)) continue;
-
-    try {
-      registerFont(candidate.path, {
-        family: FONT_FAMILY,
-        weight: candidate.weight,
-      });
-      hasRegisteredFont = true;
-    } catch {
-      // Continue through the remaining candidates. The route can still render
-      // with canvas defaults if no server font is available.
-    }
-  }
-}
 
 type CardRow = {
   id: string;
@@ -70,23 +35,143 @@ type FixtureRow = {
   awayScore: number | null;
 };
 
-function font(weight: number, size: number) {
-  const fontWeight = weight >= 700 ? "bold" : "normal";
-  const family = hasRegisteredFont ? FONT_FAMILY : "sans-serif";
+type Glyph = string[];
 
-  return `${fontWeight} ${size}px ${family}`;
+const GLYPHS: Record<string, Glyph> = {
+  " ": ["000", "000", "000", "000", "000", "000", "000"],
+  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  G: ["01111", "10000", "10000", "10011", "10001", "10001", "01111"],
+  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+  J: ["00111", "00010", "00010", "00010", "10010", "10010", "01100"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
+  ".": ["0", "0", "0", "0", "0", "0", "1"],
+  ",": ["0", "0", "0", "0", "0", "1", "1"],
+  ":": ["0", "1", "1", "0", "1", "1", "0"],
+  "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+  "/": ["00001", "00010", "00010", "00100", "01000", "01000", "10000"],
+  "+": ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
+  "&": ["01100", "10010", "10100", "01000", "10101", "10010", "01101"],
+  "#": ["01010", "11111", "01010", "01010", "11111", "01010", "01010"],
+  "'": ["1", "1", "0", "0", "0", "0", "0"],
+  "!": ["1", "1", "1", "1", "1", "0", "1"],
+  "?": ["01110", "10001", "00001", "00010", "00100", "00000", "00100"],
+  "(": ["001", "010", "100", "100", "100", "010", "001"],
+  ")": ["100", "010", "001", "001", "001", "010", "100"],
+};
+
+function normaliseForGlyphs(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’‘`]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—•]/g, "-")
+    .replace(/£/g, "GBP")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 .,:\-\/+#&'!?()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
-  const clean = value.trim();
-  if (ctx.measureText(clean).width <= maxWidth) return clean;
+function glyphWidth(char: string) {
+  return GLYPHS[char]?.[0]?.length ?? GLYPHS["?"].length;
+}
+
+function measureBlockText(value: string, scale: number) {
+  const text = normaliseForGlyphs(value);
+  if (!text) return 0;
+
+  return text.split("").reduce((sum, char, index) => {
+    const width = glyphWidth(char) * scale;
+    const gap = index === text.length - 1 ? 0 : scale;
+    return sum + width + gap;
+  }, 0);
+}
+
+function fitBlockText(value: string, scale: number, maxWidth: number) {
+  const clean = normaliseForGlyphs(value);
+  if (measureBlockText(clean, scale) <= maxWidth) return clean;
 
   let next = clean;
-  while (next.length > 1 && ctx.measureText(`${next}...`).width > maxWidth) {
+  while (next.length > 1 && measureBlockText(`${next}...`, scale) > maxWidth) {
     next = next.slice(0, -1).trimEnd();
   }
 
   return `${next}...`;
+}
+
+function drawBlockText(
+  ctx: CanvasRenderingContext2D,
+  value: string,
+  x: number,
+  y: number,
+  scale: number,
+  color: string,
+  options?: {
+    align?: "left" | "center" | "right";
+    maxWidth?: number;
+  },
+) {
+  const text = options?.maxWidth
+    ? fitBlockText(value, scale, options.maxWidth)
+    : normaliseForGlyphs(value);
+  const width = measureBlockText(text, scale);
+  const align = options?.align ?? "left";
+  let cursorX = x;
+
+  if (align === "center") cursorX -= width / 2;
+  if (align === "right") cursorX -= width;
+
+  ctx.fillStyle = color;
+
+  for (const char of text) {
+    const glyph = GLYPHS[char] ?? GLYPHS["?"];
+
+    glyph.forEach((row, rowIndex) => {
+      row.split("").forEach((cell, colIndex) => {
+        if (cell !== "1") return;
+        ctx.fillRect(
+          Math.round(cursorX + colIndex * scale),
+          Math.round(y + rowIndex * scale),
+          Math.ceil(scale),
+          Math.ceil(scale),
+        );
+      });
+    });
+
+    cursorX += glyphWidth(char) * scale + scale;
+  }
 }
 
 function roundedRect(
@@ -148,9 +233,9 @@ function getTitle(postType: SocialPostType) {
 }
 
 function getSubtitle(postType: SocialPostType) {
-  if (postType === "RESULT") return "This week's scores";
-  if (postType === "UPDATE") return "Latest match-night changes";
-  return "This week's fixtures";
+  if (postType === "RESULT") return "THIS WEEK'S SCORES";
+  if (postType === "UPDATE") return "LATEST MATCH-NIGHT CHANGES";
+  return "THIS WEEK'S FIXTURES";
 }
 
 function getFixtureLine(fixture: FixtureRow, postType: SocialPostType) {
@@ -161,15 +246,15 @@ function getFixtureLine(fixture: FixtureRow, postType: SocialPostType) {
   ) {
     return {
       left: fixture.homeTeamName,
-      middle: `${fixture.homeScore} - ${fixture.awayScore}`,
+      middle: `${fixture.homeScore}-${fixture.awayScore}`,
       right: fixture.awayTeamName,
-      meta: fixture.pitch || "Final score",
+      meta: fixture.pitch || "FINAL SCORE",
     };
   }
 
   return {
     left: fixture.homeTeamName,
-    middle: "v",
+    middle: "V",
     right: fixture.awayTeamName,
     meta: [formatTimeInLondon(fixture.kickoffAt), fixture.pitch]
       .filter(Boolean)
@@ -188,38 +273,33 @@ function drawRow(
   fillRoundedRect(ctx, 90, y, 900, 74, 24, "rgba(255,255,255,0.07)");
   strokeRoundedRect(ctx, 90, y, 900, 74, 24, "rgba(255,255,255,0.12)");
 
-  ctx.textBaseline = "alphabetic";
-  ctx.textAlign = "left";
-  ctx.font = font(700, 20);
-  ctx.fillStyle = "#94A3B8";
-  ctx.fillText(fitText(ctx, line.meta || "SIXFL", 440), 126, y + 31);
+  drawBlockText(ctx, line.meta || "SIXFL", 126, y + 14, 3, "#94A3B8", {
+    maxWidth: 430,
+  });
 
   if (fixture.status === "POSTPONED" || fixture.status === "CANCELLED") {
-    ctx.textAlign = "right";
-    ctx.font = font(800, 20);
-    ctx.fillStyle = "#FDE68A";
-    ctx.fillText(fixture.status, 938, y + 31);
+    drawBlockText(ctx, fixture.status, 938, y + 14, 3, "#FDE68A", {
+      align: "right",
+      maxWidth: 220,
+    });
   }
 
-  ctx.font = font(800, 28);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.textAlign = "left";
-  ctx.fillText(fitText(ctx, line.left, 340), 126, y + 58);
+  drawBlockText(ctx, line.left, 126, y + 43, 4, "#FFFFFF", {
+    maxWidth: 340,
+  });
 
-  ctx.font = font(900, 32);
-  ctx.fillStyle = "#34D399";
-  ctx.textAlign = "center";
-  ctx.fillText(line.middle, 540, y + 58);
+  drawBlockText(ctx, line.middle, 540, y + 39, 5, "#34D399", {
+    align: "center",
+    maxWidth: 110,
+  });
 
-  ctx.font = font(800, 28);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.textAlign = "right";
-  ctx.fillText(fitText(ctx, line.right, 340), 954, y + 58);
+  drawBlockText(ctx, line.right, 954, y + 43, 4, "#FFFFFF", {
+    align: "right",
+    maxWidth: 340,
+  });
 }
 
 function drawCard(card: CardRow, fixtures: FixtureRow[]) {
-  registerSocialCardFonts();
-
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
 
@@ -259,34 +339,21 @@ function drawCard(card: CardRow, fixtures: FixtureRow[]) {
     ? `${card.leagueName} - ${card.season}`
     : card.leagueName;
 
-  ctx.textBaseline = "alphabetic";
-  ctx.textAlign = "left";
-  ctx.font = font(900, 30);
-  ctx.fillStyle = "#34D399";
-  ctx.fillText("SIXFL", 90, 128);
-
-  ctx.textAlign = "right";
-  ctx.font = font(800, 20);
-  ctx.fillStyle = "#A7F3D0";
-  ctx.fillText(shortDateLabel, 990, 128);
-
-  ctx.textAlign = "left";
-  ctx.font = font(900, 74);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(title, 90, 206);
-
-  ctx.font = font(700, 28);
-  ctx.fillStyle = "#94A3B8";
-  ctx.fillText(subtitle, 94, 250);
-
-  ctx.textAlign = "center";
-  ctx.font = font(800, 25);
-  ctx.fillStyle = "#A7F3D0";
-  ctx.fillText(fitText(ctx, leagueLabel.toUpperCase(), 780), 540, 330);
-
-  ctx.font = font(900, 32);
-  ctx.fillStyle = "#F8FAFC";
-  ctx.fillText(dateLabel, 540, 372);
+  drawBlockText(ctx, "SIXFL", 90, 100, 5, "#34D399");
+  drawBlockText(ctx, shortDateLabel, 990, 104, 3, "#A7F3D0", {
+    align: "right",
+    maxWidth: 270,
+  });
+  drawBlockText(ctx, title, 90, 160, 10, "#FFFFFF", { maxWidth: 760 });
+  drawBlockText(ctx, subtitle, 94, 226, 4, "#94A3B8", { maxWidth: 650 });
+  drawBlockText(ctx, leagueLabel, 540, 310, 3, "#A7F3D0", {
+    align: "center",
+    maxWidth: 760,
+  });
+  drawBlockText(ctx, dateLabel, 540, 354, 4, "#F8FAFC", {
+    align: "center",
+    maxWidth: 660,
+  });
 
   const visibleFixtures = fixtures.slice(0, 8);
   const startY = 430;
@@ -297,27 +364,28 @@ function drawCard(card: CardRow, fixtures: FixtureRow[]) {
   });
 
   if (fixtures.length > visibleFixtures.length) {
-    ctx.textAlign = "center";
-    ctx.font = font(800, 24);
-    ctx.fillStyle = "#A7F3D0";
-    ctx.fillText(
-      `+ ${fixtures.length - visibleFixtures.length} more fixtures`,
+    drawBlockText(
+      ctx,
+      `+ ${fixtures.length - visibleFixtures.length} MORE FIXTURES`,
       540,
-      startY + visibleFixtures.length * rowGap + 28,
+      startY + visibleFixtures.length * rowGap + 8,
+      4,
+      "#A7F3D0",
+      { align: "center", maxWidth: 620 },
     );
   }
 
   fillRoundedRect(ctx, 90, 1186, 900, 70, 26, "rgba(16,185,129,0.14)");
   strokeRoundedRect(ctx, 90, 1186, 900, 70, 26, "rgba(52,211,153,0.24)");
 
-  ctx.textAlign = "center";
-  ctx.font = font(900, 28);
-  ctx.fillStyle = "#D1FAE5";
-  ctx.fillText("6-a-side football. Done properly.", 540, 1229);
-
-  ctx.font = font(700, 20);
-  ctx.fillStyle = "#64748B";
-  ctx.fillText("sixfl.co.uk", 540, 1288);
+  drawBlockText(ctx, "6-A-SIDE FOOTBALL. DONE PROPERLY.", 540, 1208, 4, "#D1FAE5", {
+    align: "center",
+    maxWidth: 760,
+  });
+  drawBlockText(ctx, "SIXFL.CO.UK", 540, 1270, 3, "#64748B", {
+    align: "center",
+    maxWidth: 250,
+  });
 
   return canvas.toBuffer("image/png");
 }
