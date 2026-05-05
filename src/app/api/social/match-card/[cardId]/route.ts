@@ -2,7 +2,8 @@
 // File: src/app/api/social/match-card/[cardId]/route.ts
 // ========================================
 
-import { createCanvas, type CanvasRenderingContext2D } from "canvas";
+import { existsSync } from "node:fs";
+import { createCanvas, registerFont, type CanvasRenderingContext2D } from "canvas";
 import { SocialPostType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -15,7 +16,40 @@ export const runtime = "nodejs";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
-const FONT_FAMILY = "sans-serif";
+const FONT_FAMILY = "SIXFLSocialSans";
+
+let fontsRegistered = false;
+let hasRegisteredFont = false;
+
+function registerSocialCardFonts() {
+  if (fontsRegistered) return;
+
+  fontsRegistered = true;
+
+  const fontCandidates = [
+    { path: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", weight: "normal" },
+    { path: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", weight: "bold" },
+    { path: "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf", weight: "normal" },
+    { path: "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf", weight: "bold" },
+    { path: "/usr/share/fonts/truetype/freefont/FreeSans.ttf", weight: "normal" },
+    { path: "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", weight: "bold" },
+  ];
+
+  for (const candidate of fontCandidates) {
+    if (!existsSync(candidate.path)) continue;
+
+    try {
+      registerFont(candidate.path, {
+        family: FONT_FAMILY,
+        weight: candidate.weight,
+      });
+      hasRegisteredFont = true;
+    } catch {
+      // Continue through the remaining candidates. The route can still render
+      // with canvas defaults if no server font is available.
+    }
+  }
+}
 
 type CardRow = {
   id: string;
@@ -38,7 +72,9 @@ type FixtureRow = {
 
 function font(weight: number, size: number) {
   const fontWeight = weight >= 700 ? "bold" : "normal";
-  return `${fontWeight} ${size}px ${FONT_FAMILY}`;
+  const family = hasRegisteredFont ? FONT_FAMILY : "sans-serif";
+
+  return `${fontWeight} ${size}px ${family}`;
 }
 
 function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
@@ -182,6 +218,8 @@ function drawRow(
 }
 
 function drawCard(card: CardRow, fixtures: FixtureRow[]) {
+  registerSocialCardFonts();
+
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
 
