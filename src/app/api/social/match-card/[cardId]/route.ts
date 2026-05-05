@@ -2,7 +2,7 @@
 // File: src/app/api/social/match-card/[cardId]/route.ts
 // ========================================
 
-import sharp from "sharp";
+import { createCanvas, type CanvasRenderingContext2D } from "canvas";
 import { SocialPostType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
-const CARD_FONT_FAMILY = "DejaVu Sans, Arial, Helvetica, sans-serif";
+const FONT_FAMILY = "Arial, Helvetica, sans-serif";
 
 type CardRow = {
   id: string;
@@ -36,18 +36,72 @@ type FixtureRow = {
   awayScore: number | null;
 };
 
-function escapeXml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
+function font(weight: number, size: number) {
+  return `${weight} ${size}px ${FONT_FAMILY}`;
 }
 
-function fitText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
+  const clean = value.trim();
+  if (ctx.measureText(clean).width <= maxWidth) return clean;
+
+  let next = clean;
+  while (next.length > 1 && ctx.measureText(`${next}...`).width > maxWidth) {
+    next = next.slice(0, -1).trimEnd();
+  }
+
+  return `${next}...`;
+}
+
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function fillRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fillStyle: string | CanvasGradient,
+) {
+  roundedRect(ctx, x, y, width, height, radius);
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+}
+
+function strokeRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  strokeStyle: string,
+  lineWidth = 1,
+) {
+  roundedRect(ctx, x, y, width, height, radius);
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
 }
 
 function getTitle(postType: SocialPostType) {
@@ -82,96 +136,151 @@ function getFixtureLine(fixture: FixtureRow, postType: SocialPostType) {
     right: fixture.awayTeamName,
     meta: [formatTimeInLondon(fixture.kickoffAt), fixture.pitch]
       .filter(Boolean)
-      .join(" • "),
+      .join(" - "),
   };
 }
 
-function renderRows(fixtures: FixtureRow[], postType: SocialPostType) {
-  const visibleFixtures = fixtures.slice(0, 8);
-  const startY = 430;
-  const rowGap = 96;
+function drawRow(
+  ctx: CanvasRenderingContext2D,
+  fixture: FixtureRow,
+  postType: SocialPostType,
+  y: number,
+) {
+  const line = getFixtureLine(fixture, postType);
 
-  const rows = visibleFixtures
-    .map((fixture, index) => {
-      const y = startY + index * rowGap;
-      const line = getFixtureLine(fixture, postType);
-      const statusBadge =
-        fixture.status === "POSTPONED" || fixture.status === "CANCELLED"
-          ? `<text x="938" y="${y + 31}" text-anchor="end" fill="#FDE68A" font-size="20" font-weight="800" letter-spacing="1.5">${escapeXml(fixture.status)}</text>`
-          : "";
+  fillRoundedRect(ctx, 90, y, 900, 74, 24, "rgba(255,255,255,0.07)");
+  strokeRoundedRect(ctx, 90, y, 900, 74, 24, "rgba(255,255,255,0.12)");
 
-      return `
-        <g>
-          <rect x="90" y="${y}" width="900" height="74" rx="24" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.12)"/>
-          <text x="126" y="${y + 31}" fill="#94A3B8" font-size="20" font-weight="700">${escapeXml(line.meta || "SIXFL")}</text>
-          ${statusBadge}
-          <text x="126" y="${y + 58}" fill="#FFFFFF" font-size="28" font-weight="850">${escapeXml(fitText(line.left, 22))}</text>
-          <text x="540" y="${y + 58}" text-anchor="middle" fill="#34D399" font-size="32" font-weight="900">${escapeXml(line.middle)}</text>
-          <text x="954" y="${y + 58}" text-anchor="end" fill="#FFFFFF" font-size="28" font-weight="850">${escapeXml(fitText(line.right, 22))}</text>
-        </g>`;
-    })
-    .join("\n");
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.font = font(700, 20);
+  ctx.fillStyle = "#94A3B8";
+  ctx.fillText(fitText(ctx, line.meta || "SIXFL", 440), 126, y + 31);
 
-  const extra =
-    fixtures.length > visibleFixtures.length
-      ? `<text x="540" y="${startY + visibleFixtures.length * rowGap + 28}" text-anchor="middle" fill="#A7F3D0" font-size="24" font-weight="800">+ ${fixtures.length - visibleFixtures.length} more fixtures</text>`
-      : "";
+  if (fixture.status === "POSTPONED" || fixture.status === "CANCELLED") {
+    ctx.textAlign = "right";
+    ctx.font = font(800, 20);
+    ctx.fillStyle = "#FDE68A";
+    ctx.fillText(fixture.status, 938, y + 31);
+  }
 
-  return `${rows}${extra}`;
+  ctx.font = font(850, 28);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "left";
+  ctx.fillText(fitText(ctx, line.left, 340), 126, y + 58);
+
+  ctx.font = font(900, 32);
+  ctx.fillStyle = "#34D399";
+  ctx.textAlign = "center";
+  ctx.fillText(line.middle, 540, y + 58);
+
+  ctx.font = font(850, 28);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "right";
+  ctx.fillText(fitText(ctx, line.right, 340), 954, y + 58);
 }
 
-function buildSvg(card: CardRow, fixtures: FixtureRow[]) {
+function drawCard(card: CardRow, fixtures: FixtureRow[]) {
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#020617";
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  const topGlow = ctx.createRadialGradient(540, 0, 0, 540, 0, 760);
+  topGlow.addColorStop(0, "rgba(16,185,129,0.38)");
+  topGlow.addColorStop(1, "rgba(2,6,23,0)");
+  ctx.fillStyle = topGlow;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  ctx.fillStyle = "rgba(16,185,129,0.09)";
+  ctx.beginPath();
+  ctx.arc(118, 160, 230, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(52,211,153,0.08)";
+  ctx.beginPath();
+  ctx.arc(954, 1236, 300, 0, Math.PI * 2);
+  ctx.fill();
+
+  fillRoundedRect(ctx, 54, 54, 972, 1242, 54, "rgba(255,255,255,0.035)");
+  strokeRoundedRect(ctx, 54, 54, 972, 1242, 54, "rgba(255,255,255,0.12)");
+
+  const panel = ctx.createLinearGradient(90, 250, 990, 1120);
+  panel.addColorStop(0, "rgba(15,23,42,0.96)");
+  panel.addColorStop(1, "rgba(2,6,23,0.98)");
+  fillRoundedRect(ctx, 90, 250, 900, 900, 44, panel);
+  strokeRoundedRect(ctx, 90, 250, 900, 900, 44, "rgba(255,255,255,0.12)");
+
   const title = getTitle(card.postType);
   const subtitle = getSubtitle(card.postType);
   const dateLabel = formatWeeklyCardDate(card.fixtureDate);
   const shortDateLabel = formatWeeklyCardShortDate(card.fixtureDate).toUpperCase();
   const leagueLabel = card.season
-    ? `${card.leagueName} • ${card.season}`
+    ? `${card.leagueName} - ${card.season}`
     : card.leagueName;
 
-  return `
-    <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <style>
-          text {
-            font-family: ${CARD_FONT_FAMILY};
-            font-variant-ligatures: none;
-            text-rendering: geometricPrecision;
-          }
-        </style>
-        <radialGradient id="topGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(540 0) rotate(90) scale(760 760)">
-          <stop stop-color="#10B981" stop-opacity="0.38"/>
-          <stop offset="1" stop-color="#020617" stop-opacity="0"/>
-        </radialGradient>
-        <linearGradient id="panel" x1="90" y1="250" x2="990" y2="1120" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#0F172A" stop-opacity="0.96"/>
-          <stop offset="1" stop-color="#020617" stop-opacity="0.98"/>
-        </linearGradient>
-      </defs>
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.font = font(900, 30);
+  ctx.fillStyle = "#34D399";
+  ctx.fillText("SIXFL", 90, 128);
 
-      <rect width="${WIDTH}" height="${HEIGHT}" fill="#020617"/>
-      <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#topGlow)"/>
-      <circle cx="118" cy="160" r="230" fill="#10B981" opacity="0.09"/>
-      <circle cx="954" cy="1236" r="300" fill="#34D399" opacity="0.08"/>
+  ctx.textAlign = "right";
+  ctx.font = font(800, 20);
+  ctx.fillStyle = "#A7F3D0";
+  ctx.fillText(shortDateLabel, 990, 128);
 
-      <rect x="54" y="54" width="972" height="1242" rx="54" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.12)"/>
-      <rect x="90" y="250" width="900" height="900" rx="44" fill="url(#panel)" stroke="rgba(255,255,255,0.12)"/>
+  ctx.textAlign = "left";
+  ctx.font = font(950, 74);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(title, 90, 206);
 
-      <text x="90" y="128" fill="#34D399" font-size="30" font-weight="900" letter-spacing="6">SIXFL</text>
-      <text x="990" y="128" text-anchor="end" fill="#A7F3D0" font-size="20" font-weight="800" letter-spacing="3">${escapeXml(shortDateLabel)}</text>
+  ctx.font = font(700, 28);
+  ctx.fillStyle = "#94A3B8";
+  ctx.fillText(subtitle, 94, 250);
 
-      <text x="90" y="206" fill="#FFFFFF" font-size="74" font-weight="950" letter-spacing="-3">${escapeXml(title)}</text>
-      <text x="94" y="250" fill="#94A3B8" font-size="28" font-weight="700">${escapeXml(subtitle)}</text>
+  ctx.textAlign = "center";
+  ctx.font = font(850, 25);
+  ctx.fillStyle = "#A7F3D0";
+  ctx.fillText(fitText(ctx, leagueLabel.toUpperCase(), 780), 540, 330);
 
-      <text x="540" y="330" text-anchor="middle" fill="#A7F3D0" font-size="25" font-weight="850" letter-spacing="1.5">${escapeXml(fitText(leagueLabel, 54).toUpperCase())}</text>
-      <text x="540" y="372" text-anchor="middle" fill="#F8FAFC" font-size="32" font-weight="900">${escapeXml(dateLabel)}</text>
+  ctx.font = font(900, 32);
+  ctx.fillStyle = "#F8FAFC";
+  ctx.fillText(dateLabel, 540, 372);
 
-      ${renderRows(fixtures, card.postType)}
+  const visibleFixtures = fixtures.slice(0, 8);
+  const startY = 430;
+  const rowGap = 96;
 
-      <rect x="90" y="1186" width="900" height="70" rx="26" fill="rgba(16,185,129,0.14)" stroke="rgba(52,211,153,0.24)"/>
-      <text x="540" y="1229" text-anchor="middle" fill="#D1FAE5" font-size="28" font-weight="900">6-a-side football. Done properly.</text>
-      <text x="540" y="1288" text-anchor="middle" fill="#64748B" font-size="20" font-weight="750">sixfl.co.uk</text>
-    </svg>`;
+  visibleFixtures.forEach((fixture, index) => {
+    drawRow(ctx, fixture, card.postType, startY + index * rowGap);
+  });
+
+  if (fixtures.length > visibleFixtures.length) {
+    ctx.textAlign = "center";
+    ctx.font = font(800, 24);
+    ctx.fillStyle = "#A7F3D0";
+    ctx.fillText(
+      `+ ${fixtures.length - visibleFixtures.length} more fixtures`,
+      540,
+      startY + visibleFixtures.length * rowGap + 28,
+    );
+  }
+
+  fillRoundedRect(ctx, 90, 1186, 900, 70, 26, "rgba(16,185,129,0.14)");
+  strokeRoundedRect(ctx, 90, 1186, 900, 70, 26, "rgba(52,211,153,0.24)");
+
+  ctx.textAlign = "center";
+  ctx.font = font(900, 28);
+  ctx.fillStyle = "#D1FAE5";
+  ctx.fillText("6-a-side football. Done properly.", 540, 1229);
+
+  ctx.font = font(750, 20);
+  ctx.fillStyle = "#64748B";
+  ctx.fillText("sixfl.co.uk", 540, 1288);
+
+  return canvas.toBuffer("image/png");
 }
 
 export async function GET(
@@ -218,14 +327,13 @@ export async function GET(
     ORDER BY cf."position" ASC, f."kickoffAt" ASC
   `;
 
-  const svg = buildSvg(card, fixtures);
-  const output = await sharp(Buffer.from(svg)).png().toBuffer();
+  const output = drawCard(card, fixtures);
 
   return new Response(new Uint8Array(output), {
     status: 200,
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=60, s-maxage=60",
+      "Cache-Control": "no-store, max-age=0",
     },
   });
 }
