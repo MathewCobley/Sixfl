@@ -230,6 +230,29 @@ export default async function CaptainAvailabilityPage({
     }
   }
 
+  const totalFixtureSlots = fixtures.length * team.members.length;
+  const totalAvailable = fixtures.reduce(
+    (sum, fixture) =>
+      sum + fixture.availabilities.filter((item) => item.response === "AVAILABLE").length,
+    0,
+  );
+  const totalMaybe = fixtures.reduce(
+    (sum, fixture) =>
+      sum + fixture.availabilities.filter((item) => item.response === "MAYBE").length,
+    0,
+  );
+  const totalUnavailable = fixtures.reduce(
+    (sum, fixture) =>
+      sum + fixture.availabilities.filter((item) => item.response === "UNAVAILABLE").length,
+    0,
+  );
+  const totalResponded = fixtures.reduce(
+    (sum, fixture) =>
+      sum + fixture.availabilities.filter((item) => item.response !== "NO_RESPONSE").length,
+    0,
+  );
+  const totalNoResponse = Math.max(totalFixtureSlots - totalResponded, 0);
+
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
@@ -245,7 +268,7 @@ export default async function CaptainAvailabilityPage({
               Availability
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Keep a live view of who is available, who is doubtful, who still has not replied, and who has been chased by SMS.
+              Manage availability fixture-by-fixture. The summary now covers every upcoming open fixture shown below, so two fixtures will count as two sets of player responses.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
@@ -255,6 +278,14 @@ export default async function CaptainAvailabilityPage({
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
                 {team.members.length} squad member{team.members.length === 1 ? "" : "s"}
               </span>
+              <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-100">
+                {fixtures.length} open fixture{fixtures.length === 1 ? "" : "s"}
+              </span>
+              {fixtures.length > 1 ? (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
+                  {totalFixtureSlots} response slot{totalFixtureSlots === 1 ? "" : "s"}
+                </span>
+              ) : null}
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
@@ -278,7 +309,10 @@ export default async function CaptainAvailabilityPage({
                 Available
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">
-                {fixtures[0]?.availabilities.filter((item) => item.response === "AVAILABLE").length ?? 0}
+                {totalAvailable}
+              </p>
+              <p className="mt-2 text-xs text-emerald-100/65">
+                Across {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}
               </p>
             </div>
             <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
@@ -286,7 +320,10 @@ export default async function CaptainAvailabilityPage({
                 Maybe
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">
-                {fixtures[0]?.availabilities.filter((item) => item.response === "MAYBE").length ?? 0}
+                {totalMaybe}
+              </p>
+              <p className="mt-2 text-xs text-amber-100/65">
+                Across {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}
               </p>
             </div>
             <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
@@ -294,7 +331,10 @@ export default async function CaptainAvailabilityPage({
                 Unavailable
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">
-                {fixtures[0]?.availabilities.filter((item) => item.response === "UNAVAILABLE").length ?? 0}
+                {totalUnavailable}
+              </p>
+              <p className="mt-2 text-xs text-red-100/65">
+                Across {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}
               </p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
@@ -302,16 +342,59 @@ export default async function CaptainAvailabilityPage({
                 No response
               </p>
               <p className="mt-3 text-3xl font-semibold text-white">
-                {Math.max(
-                  team.members.length -
-                    (fixtures[0]?.availabilities.filter((item) => item.response !== "NO_RESPONSE").length ?? 0),
-                  0,
-                )}
+                {totalNoResponse}
+              </p>
+              <p className="mt-2 text-xs text-white/45">
+                Outstanding slots
               </p>
             </div>
           </div>
         </div>
       </section>
+
+      {fixtures.length > 1 ? (
+        <section className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">
+                Multiple open fixtures
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Work through each fixture separately
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-100/70">
+                The top numbers are totals across all upcoming fixtures. Use the fixture cards below to update the correct availability list for each match.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
+              {fixtures.map((fixture) => {
+                const respondedCount = fixture.availabilities.filter(
+                  (item) => item.response !== "NO_RESPONSE",
+                ).length;
+                const noResponseCount = Math.max(team.members.length - respondedCount, 0);
+
+                return (
+                  <a
+                    key={fixture.id}
+                    href={`#fixture-${fixture.id}`}
+                    className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm transition hover:border-sky-400/30 hover:bg-sky-500/10"
+                  >
+                    <div className="font-semibold text-white">
+                      {formatDateTime(fixture.kickoffAt)}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-white/55">
+                      {fixture.homeTeam.name} vs {fixture.awayTeam.name}
+                    </div>
+                    <div className="mt-2 text-xs text-sky-100/70">
+                      {respondedCount} replied · {noResponseCount} no response
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {savedMessage ? (
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
@@ -353,7 +436,8 @@ export default async function CaptainAvailabilityPage({
             return (
               <section
                 key={fixture.id}
-                className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]"
+                id={`fixture-${fixture.id}`}
+                className="scroll-mt-8 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]"
               >
                 <div className="border-b border-white/10 px-6 py-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
