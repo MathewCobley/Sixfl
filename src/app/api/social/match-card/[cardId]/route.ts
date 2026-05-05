@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
-const FONT_FAMILY = "Arial, Helvetica, sans-serif";
+const FONT_FAMILY = "sans-serif";
 
 type CardRow = {
   id: string;
@@ -37,7 +37,8 @@ type FixtureRow = {
 };
 
 function font(weight: number, size: number) {
-  return `${weight} ${size}px ${FONT_FAMILY}`;
+  const fontWeight = weight >= 700 ? "bold" : "normal";
+  return `${fontWeight} ${size}px ${FONT_FAMILY}`;
 }
 
 function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
@@ -164,7 +165,7 @@ function drawRow(
     ctx.fillText(fixture.status, 938, y + 31);
   }
 
-  ctx.font = font(850, 28);
+  ctx.font = font(800, 28);
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
   ctx.fillText(fitText(ctx, line.left, 340), 126, y + 58);
@@ -174,7 +175,7 @@ function drawRow(
   ctx.textAlign = "center";
   ctx.fillText(line.middle, 540, y + 58);
 
-  ctx.font = font(850, 28);
+  ctx.font = font(800, 28);
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "right";
   ctx.fillText(fitText(ctx, line.right, 340), 954, y + 58);
@@ -232,7 +233,7 @@ function drawCard(card: CardRow, fixtures: FixtureRow[]) {
   ctx.fillText(shortDateLabel, 990, 128);
 
   ctx.textAlign = "left";
-  ctx.font = font(950, 74);
+  ctx.font = font(900, 74);
   ctx.fillStyle = "#FFFFFF";
   ctx.fillText(title, 90, 206);
 
@@ -241,7 +242,7 @@ function drawCard(card: CardRow, fixtures: FixtureRow[]) {
   ctx.fillText(subtitle, 94, 250);
 
   ctx.textAlign = "center";
-  ctx.font = font(850, 25);
+  ctx.font = font(800, 25);
   ctx.fillStyle = "#A7F3D0";
   ctx.fillText(fitText(ctx, leagueLabel.toUpperCase(), 780), 540, 330);
 
@@ -276,7 +277,7 @@ function drawCard(card: CardRow, fixtures: FixtureRow[]) {
   ctx.fillStyle = "#D1FAE5";
   ctx.fillText("6-a-side football. Done properly.", 540, 1229);
 
-  ctx.font = font(750, 20);
+  ctx.font = font(700, 20);
   ctx.fillStyle = "#64748B";
   ctx.fillText("sixfl.co.uk", 540, 1288);
 
