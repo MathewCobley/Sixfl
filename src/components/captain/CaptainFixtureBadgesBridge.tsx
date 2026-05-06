@@ -132,20 +132,16 @@ function injectFixtureBadges(fixtures: FixtureBadge[]) {
   );
 
   for (const element of headingCandidates) {
-    if (element.dataset.fixtureBadgeProcessed === "true") continue;
-    if (element.querySelector("[data-fixture-badge-injected='true']")) continue;
-
     const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
     if (!text.includes(" vs ") && !text.startsWith("vs ")) continue;
 
     const fixture = findMatchingFixture(text, fixtures);
     if (!fixture) continue;
 
-    element.dataset.fixtureBadgeProcessed = "true";
-
     const size = element.tagName === "H2" ? "lg" : "sm";
     element.textContent = "";
     element.classList.add("flex", "items-center", "gap-3");
+    element.dataset.fixtureBadgeProcessed = "true";
 
     const label = text === fixture.fullLabel
       ? createFullFixtureLabel(fixture, size)
