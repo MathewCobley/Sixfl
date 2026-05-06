@@ -27,12 +27,13 @@ type ResultsCardGeneratorProps = {
 const CANVAS_SIZE = 1080;
 const ROWS = [445, 570, 695];
 const HOME_BADGE_X = 76;
-const HOME_NAME_X = 166;
+const HOME_NAME_X = 142;
 const HOME_SCORE_X = 438;
 const AWAY_SCORE_X = 640;
-const AWAY_NAME_X = 749;
+const AWAY_NAME_X = 708;
 const AWAY_BADGE_X = 1010;
 const BADGE_SIZE = 68;
+const TEAM_NAME_FONT_SIZE = 22;
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -60,27 +61,23 @@ function loadImage(src: string) {
   });
 }
 
-function fitText(input: {
+function getFittedText(input: {
   ctx: CanvasRenderingContext2D;
   text: string;
   maxWidth: number;
-  fontSize: number;
-  minFontSize?: number;
-  weight?: string;
-  family?: string;
 }) {
-  const family = input.family ?? "Arial Narrow, Impact, Arial, sans-serif";
-  const weight = input.weight ?? "900";
-  const minFontSize = input.minFontSize ?? 18;
-  let fontSize = input.fontSize;
-
-  while (fontSize > minFontSize) {
-    input.ctx.font = `${weight} ${fontSize}px ${family}`;
-    if (input.ctx.measureText(input.text).width <= input.maxWidth) break;
-    fontSize -= 1;
+  if (input.ctx.measureText(input.text).width <= input.maxWidth) {
+    return input.text;
   }
 
-  input.ctx.font = `${weight} ${fontSize}px ${family}`;
+  const ellipsis = "…";
+  let output = input.text;
+
+  while (output.length > 1 && input.ctx.measureText(`${output}${ellipsis}`).width > input.maxWidth) {
+    output = output.slice(0, -1);
+  }
+
+  return `${output.trimEnd()}${ellipsis}`;
 }
 
 function drawBadge(input: {
@@ -133,12 +130,14 @@ function drawTeamName(input: {
   maxWidth: number;
 }) {
   const { ctx, name, x, y, align, maxWidth } = input;
+  const uppercaseName = name.toUpperCase();
+
   ctx.save();
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = align;
   ctx.textBaseline = "middle";
-  fitText({ ctx, text: name.toUpperCase(), maxWidth, fontSize: 28, minFontSize: 17 });
-  ctx.fillText(name.toUpperCase(), x, y + 1);
+  ctx.font = `900 ${TEAM_NAME_FONT_SIZE}px Arial Narrow, Impact, Arial, sans-serif`;
+  ctx.fillText(getFittedText({ ctx, text: uppercaseName, maxWidth }), x, y + 1);
   ctx.restore();
 }
 
@@ -169,9 +168,9 @@ function drawFooter(input: {
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#000000";
   ctx.font = "900 23px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(matchweekLabel.toUpperCase(), 540, 963);
+  ctx.fillText(matchweekLabel.toUpperCase(), 540, 967);
   ctx.font = "900 30px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(dateLabel.toUpperCase(), 540, 998);
+  ctx.fillText(dateLabel.toUpperCase(), 540, 1002);
   ctx.restore();
 }
 
@@ -225,11 +224,11 @@ export default function ResultsCardGenerator({
           const awayBadge = badgeEntries[index * 2 + 1] ?? null;
 
           drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: BADGE_SIZE });
-          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: 230 });
+          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: 245 });
           drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y });
 
           drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y });
-          drawTeamName({ ctx, name: fixture.awayTeamName, x: AWAY_NAME_X, y, align: "left", maxWidth: 215 });
+          drawTeamName({ ctx, name: fixture.awayTeamName, x: AWAY_NAME_X, y, align: "left", maxWidth: 250 });
           drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: AWAY_BADGE_X, y, size: BADGE_SIZE });
         });
 
