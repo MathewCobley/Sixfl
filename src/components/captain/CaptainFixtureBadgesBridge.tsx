@@ -49,7 +49,10 @@ function createBadge(team: FixtureBadgeTeam, size: "sm" | "lg") {
     badge.appendChild(image);
   } else {
     const initials = document.createElement("span");
-    initials.className = size === "lg" ? "text-sm font-black text-white/70" : "text-[11px] font-black text-white/70";
+    initials.className =
+      size === "lg"
+        ? "text-sm font-black text-white/70"
+        : "text-[11px] font-black text-white/70";
     initials.textContent = getTeamInitials(team.name);
     badge.appendChild(initials);
   }
@@ -57,13 +60,51 @@ function createBadge(team: FixtureBadgeTeam, size: "sm" | "lg") {
   return badge;
 }
 
-function createFixtureBadges(fixture: FixtureBadge, size: "sm" | "lg") {
+function createTeamLabel(team: FixtureBadgeTeam, size: "sm" | "lg") {
   const wrapper = document.createElement("span");
-  wrapper.className = size === "lg" ? "inline-flex shrink-0 items-center gap-2" : "inline-flex shrink-0 items-center -space-x-2";
+  wrapper.className = "inline-flex min-w-0 items-center gap-2";
   wrapper.dataset.fixtureBadgeInjected = "true";
 
-  wrapper.appendChild(createBadge(fixture.homeTeam, size));
-  wrapper.appendChild(createBadge(fixture.awayTeam, size));
+  const name = document.createElement("span");
+  name.className = "min-w-0";
+  name.textContent = team.name;
+
+  wrapper.appendChild(createBadge(team, size));
+  wrapper.appendChild(name);
+
+  return wrapper;
+}
+
+function createFullFixtureLabel(fixture: FixtureBadge, size: "sm" | "lg") {
+  const wrapper = document.createElement("span");
+  wrapper.className = "inline-flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2";
+  wrapper.dataset.fixtureBadgeInjected = "true";
+
+  const separator = document.createElement("span");
+  separator.className = "text-white/55";
+  separator.textContent = "vs";
+
+  wrapper.appendChild(createTeamLabel(fixture.homeTeam, size));
+  wrapper.appendChild(separator);
+  wrapper.appendChild(createTeamLabel(fixture.awayTeam, size));
+
+  return wrapper;
+}
+
+function createCaptainFixtureLabel(fixture: FixtureBadge, size: "sm" | "lg") {
+  const wrapper = document.createElement("span");
+  wrapper.className = "inline-flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2";
+  wrapper.dataset.fixtureBadgeInjected = "true";
+
+  const isHomeLabel = fixture.captainLabel === `vs ${fixture.awayTeam.name}`;
+  const opponent = isHomeLabel ? fixture.awayTeam : fixture.homeTeam;
+
+  const separator = document.createElement("span");
+  separator.className = "text-white/55";
+  separator.textContent = "vs";
+
+  wrapper.appendChild(separator);
+  wrapper.appendChild(createTeamLabel(opponent, size));
 
   return wrapper;
 }
@@ -71,25 +112,31 @@ function createFixtureBadges(fixture: FixtureBadge, size: "sm" | "lg") {
 function findMatchingFixture(text: string, fixtures: FixtureBadge[]) {
   const normalisedText = text.replace(/\s+/g, " ").trim();
 
-  return fixtures.find((fixture) => {
-    const fullLabel = fixture.fullLabel.replace(/\s+/g, " ").trim();
-    const captainLabel = fixture.captainLabel.replace(/\s+/g, " ").trim();
+  return (
+    fixtures.find((fixture) => {
+      const fullLabel = fixture.fullLabel.replace(/\s+/g, " ").trim();
+      const captainLabel = fixture.captainLabel.replace(/\s+/g, " ").trim();
 
-    return normalisedText === fullLabel || normalisedText === captainLabel;
-  }) ?? null;
+      return normalisedText === fullLabel || normalisedText === captainLabel;
+    }) ?? null
+  );
 }
 
 function injectFixtureBadges(fixtures: FixtureBadge[]) {
   if (fixtures.length === 0) return;
 
-  const headingCandidates = Array.from(document.querySelectorAll<HTMLElement>("h2, div.text-base.font-semibold.text-white, div.font-semibold.text-white"));
+  const headingCandidates = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      "h2, div.text-base.font-semibold.text-white, div.font-semibold.text-white",
+    ),
+  );
 
   for (const element of headingCandidates) {
     if (element.dataset.fixtureBadgeProcessed === "true") continue;
     if (element.querySelector("[data-fixture-badge-injected='true']")) continue;
 
-    const text = element.textContent?.trim() ?? "";
-    if (!text.includes(" vs ")) continue;
+    const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    if (!text.includes(" vs ") && !text.startsWith("vs ")) continue;
 
     const fixture = findMatchingFixture(text, fixtures);
     if (!fixture) continue;
@@ -97,15 +144,13 @@ function injectFixtureBadges(fixtures: FixtureBadge[]) {
     element.dataset.fixtureBadgeProcessed = "true";
 
     const size = element.tagName === "H2" ? "lg" : "sm";
-    const currentText = element.textContent ?? "";
     element.textContent = "";
     element.classList.add("flex", "items-center", "gap-3");
 
-    const badges = createFixtureBadges(fixture, size);
-    const label = document.createElement("span");
-    label.textContent = currentText;
+    const label = text === fixture.fullLabel
+      ? createFullFixtureLabel(fixture, size)
+      : createCaptainFixtureLabel(fixture, size);
 
-    element.appendChild(badges);
     element.appendChild(label);
   }
 }
