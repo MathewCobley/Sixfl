@@ -168,10 +168,10 @@ function drawFooter(input: {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#000000";
-  ctx.font = "900 24px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(matchweekLabel.toUpperCase(), 540, 947);
+  ctx.font = "900 23px Arial Narrow, Impact, Arial, sans-serif";
+  ctx.fillText(matchweekLabel.toUpperCase(), 540, 963);
   ctx.font = "900 30px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(dateLabel.toUpperCase(), 540, 981);
+  ctx.fillText(dateLabel.toUpperCase(), 540, 998);
   ctx.restore();
 }
 
