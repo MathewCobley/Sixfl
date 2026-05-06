@@ -199,6 +199,43 @@ function showMoveModal(input: {
     });
 }
 
+async function deleteProspect(input: {
+  teamId: string;
+  prospectId: string;
+  prospectName: string;
+  button: HTMLButtonElement;
+}) {
+  const confirmed = window.confirm(
+    `Delete ${input.prospectName}? This removes the prospect record from this team.`,
+  );
+
+  if (!confirmed) return;
+
+  input.button.setAttribute("disabled", "true");
+  input.button.textContent = "Deleting…";
+
+  try {
+    const response = await fetch(
+      `/api/captain/team/${input.teamId}/prospects/${input.prospectId}`,
+      { method: "DELETE" },
+    );
+
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Prospect could not be deleted.");
+    }
+
+    window.location.reload();
+  } catch (error) {
+    input.button.removeAttribute("disabled");
+    input.button.textContent = "Delete prospect";
+    window.alert(error instanceof Error ? error.message : "Prospect could not be deleted.");
+  }
+}
+
 function addManagedProspectMoveLinks(pathname: string) {
   const teamId = getTeamIdFromPathname(pathname);
   if (!teamId) return;
@@ -226,21 +263,7 @@ function addManagedProspectMoveLinks(pathname: string) {
     const card = findProspectCard(form);
     if (!card) continue;
 
-    if (card.querySelector(`button[data-managed-prospect-move-link="${prospectId}"]`)) {
-      continue;
-    }
-
     const prospectName = getProspectName(card);
-    const moveButton = document.createElement("button");
-    moveButton.type = "button";
-    moveButton.textContent = "Move prospect";
-    moveButton.dataset.managedProspectMoveLink = prospectId;
-    moveButton.className =
-      "mt-3 inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15";
-    moveButton.addEventListener("click", () => {
-      showMoveModal({ teamId, prospectId, prospectName });
-    });
-
     const signupLink = Array.from(card.querySelectorAll<HTMLAnchorElement>("a")).find(
       (link) => link.textContent?.trim() === "Open signup link",
     );
@@ -250,13 +273,40 @@ function addManagedProspectMoveLinks(pathname: string) {
         !candidate.querySelector('input[name="firstName"]') &&
         candidate.textContent?.includes("Promote to squad"),
     );
+    const insertionParent = signupLink?.parentElement ?? promoteForm?.parentElement ?? card;
+    const insertionPoint = signupLink ? signupLink.nextSibling : promoteForm ? promoteForm.nextSibling : null;
 
-    if (signupLink?.parentElement) {
-      signupLink.parentElement.insertBefore(moveButton, signupLink.nextSibling);
-    } else if (promoteForm?.parentElement) {
-      promoteForm.parentElement.insertBefore(moveButton, promoteForm.nextSibling);
-    } else {
-      card.appendChild(moveButton);
+    if (!card.querySelector(`button[data-managed-prospect-move-link="${prospectId}"]`)) {
+      const moveButton = document.createElement("button");
+      moveButton.type = "button";
+      moveButton.textContent = "Move prospect";
+      moveButton.dataset.managedProspectMoveLink = prospectId;
+      moveButton.className =
+        "mt-3 inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15";
+      moveButton.addEventListener("click", () => {
+        showMoveModal({ teamId, prospectId, prospectName });
+      });
+
+      insertionParent.insertBefore(moveButton, insertionPoint);
+    }
+
+    if (!card.querySelector(`button[data-managed-prospect-delete-link="${prospectId}"]`)) {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.textContent = "Delete prospect";
+      deleteButton.dataset.managedProspectDeleteLink = prospectId;
+      deleteButton.className =
+        "mt-3 inline-flex w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15";
+      deleteButton.addEventListener("click", () => {
+        void deleteProspect({
+          teamId,
+          prospectId,
+          prospectName,
+          button: deleteButton,
+        });
+      });
+
+      insertionParent.insertBefore(deleteButton, insertionPoint);
     }
   }
 }
