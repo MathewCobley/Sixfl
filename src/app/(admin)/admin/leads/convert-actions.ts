@@ -348,12 +348,21 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
       })
     : null;
 
-  revalidatePath("/admin/leads");
-  revalidatePath(`/admin/leads/${lead.id}`);
-  revalidatePath("/admin/teams");
-  revalidatePath(`/admin/teams/${team.id}`);
-
   if (duplicate) {
+    await prisma.interestLead.update({
+      where: { id: lead.id },
+      data: {
+        status: "CLOSED",
+        contactedAt: lead.status === "NEW" ? new Date() : undefined,
+        closedAt: new Date(),
+      },
+    });
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${lead.id}`);
+    revalidatePath("/admin/teams");
+    revalidatePath(`/admin/teams/${team.id}`);
+
     redirect(
       `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&existingProspect=1&prospect=${duplicate.id}`,
     );
