@@ -36,9 +36,14 @@ function parseDateInput(value?: string) {
 
   if (!year || !month || !day) return null;
 
+  const displayDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
   return {
-    start: new Date(Date.UTC(year, month - 1, day, 0, 0, 0)),
-    end: new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0)),
+    displayDate,
+    // Deliberately wide UTC range so UK evening fixtures are not missed during BST.
+    start: new Date(Date.UTC(year, month - 1, day - 1, 12, 0, 0)),
+    end: new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0)),
+    londonDateInput: value,
   };
 }
 
@@ -105,7 +110,7 @@ export default async function AdminResultsCardGeneratorPage({
     (latestCompletedFixture ? toLondonDateInputValue(latestCompletedFixture.kickoffAt) : toLondonDateInputValue(new Date()));
   const dateRange = parseDateInput(fixtureDateInput);
 
-  const fixtures = selectedLeague && dateRange
+  const fixturesRaw = selectedLeague && dateRange
     ? await prisma.fixture.findMany({
         where: {
           leagueId: selectedLeague.id,
@@ -116,7 +121,6 @@ export default async function AdminResultsCardGeneratorPage({
           result: { isNot: null },
         },
         orderBy: [{ kickoffAt: "asc" }, { position: "asc" }, { pitch: "asc" }],
-        take: 3,
         select: {
           id: true,
           kickoffAt: true,
@@ -142,6 +146,12 @@ export default async function AdminResultsCardGeneratorPage({
       })
     : [];
 
+  const fixtures = dateRange
+    ? fixturesRaw
+        .filter((fixture) => toLondonDateInputValue(fixture.kickoffAt) === dateRange.londonDateInput)
+        .slice(0, 3)
+    : [];
+
   const resultCardFixtures = fixtures
     .filter((fixture) => fixture.result)
     .map((fixture) => ({
@@ -154,7 +164,7 @@ export default async function AdminResultsCardGeneratorPage({
       awayScore: fixture.result?.awayScore ?? 0,
     }));
 
-  const selectedDate = dateRange?.start ?? new Date();
+  const selectedDate = dateRange?.displayDate ?? new Date();
   const leagueOptions = leagues.map((league) => ({
     value: league.id,
     label: league.season ? `${league.name} · ${league.season}` : league.name,
