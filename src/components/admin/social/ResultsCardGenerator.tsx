@@ -25,7 +25,14 @@ type ResultsCardGeneratorProps = {
 };
 
 const CANVAS_SIZE = 1080;
-const ROWS = [444, 570, 696];
+const ROWS = [445, 570, 695];
+const HOME_BADGE_X = 76;
+const HOME_NAME_X = 166;
+const HOME_SCORE_X = 438;
+const AWAY_SCORE_X = 640;
+const AWAY_NAME_X = 749;
+const AWAY_BADGE_X = 1010;
+const BADGE_SIZE = 68;
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -58,14 +65,16 @@ function fitText(input: {
   text: string;
   maxWidth: number;
   fontSize: number;
+  minFontSize?: number;
   weight?: string;
   family?: string;
 }) {
   const family = input.family ?? "Arial Narrow, Impact, Arial, sans-serif";
-  const weight = input.weight ?? "800";
+  const weight = input.weight ?? "900";
+  const minFontSize = input.minFontSize ?? 18;
   let fontSize = input.fontSize;
 
-  while (fontSize > 18) {
+  while (fontSize > minFontSize) {
     input.ctx.font = `${weight} ${fontSize}px ${family}`;
     if (input.ctx.measureText(input.text).width <= input.maxWidth) break;
     fontSize -= 1;
@@ -89,7 +98,7 @@ function drawBadge(input: {
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.closePath();
-  ctx.fillStyle = "rgba(8, 18, 14, 0.72)";
+  ctx.fillStyle = "rgba(8, 18, 14, 0.62)";
   ctx.fill();
 
   if (image) {
@@ -106,7 +115,7 @@ function drawBadge(input: {
     ctx.drawImage(image, x - drawWidth / 2, y - drawHeight / 2, drawWidth, drawHeight);
   } else {
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 24px Arial, sans-serif";
+    ctx.font = "900 22px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(getInitials(teamName), x, y + 1);
@@ -128,7 +137,7 @@ function drawTeamName(input: {
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = align;
   ctx.textBaseline = "middle";
-  fitText({ ctx, text: name.toUpperCase(), maxWidth, fontSize: 30 });
+  fitText({ ctx, text: name.toUpperCase(), maxWidth, fontSize: 28, minFontSize: 17 });
   ctx.fillText(name.toUpperCase(), x, y + 1);
   ctx.restore();
 }
@@ -142,10 +151,10 @@ function drawScore(input: {
   const { ctx, score, x, y } = input;
   ctx.save();
   ctx.fillStyle = "#000000";
-  ctx.font = "900 64px Impact, Arial Black, Arial, sans-serif";
+  ctx.font = "900 58px Impact, Arial Black, Arial, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(String(score), x, y + 2);
+  ctx.fillText(String(score), x, y + 1);
   ctx.restore();
 }
 
@@ -159,10 +168,10 @@ function drawFooter(input: {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#000000";
-  ctx.font = "900 28px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(matchweekLabel.toUpperCase(), 540, 936);
-  ctx.font = "900 36px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(dateLabel.toUpperCase(), 540, 980);
+  ctx.font = "900 24px Arial Narrow, Impact, Arial, sans-serif";
+  ctx.fillText(matchweekLabel.toUpperCase(), 540, 947);
+  ctx.font = "900 30px Arial Narrow, Impact, Arial, sans-serif";
+  ctx.fillText(dateLabel.toUpperCase(), 540, 981);
   ctx.restore();
 }
 
@@ -215,13 +224,13 @@ export default function ResultsCardGenerator({
           const homeBadge = badgeEntries[index * 2] ?? null;
           const awayBadge = badgeEntries[index * 2 + 1] ?? null;
 
-          drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: 86, y, size: 76 });
-          drawTeamName({ ctx, name: fixture.homeTeamName, x: 240, y, align: "left", maxWidth: 220 });
-          drawScore({ ctx, score: fixture.homeScore, x: 438, y });
+          drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: BADGE_SIZE });
+          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: 230 });
+          drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y });
 
-          drawScore({ ctx, score: fixture.awayScore, x: 640, y });
-          drawTeamName({ ctx, name: fixture.awayTeamName, x: 760, y, align: "left", maxWidth: 210 });
-          drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: 1000, y, size: 76 });
+          drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y });
+          drawTeamName({ ctx, name: fixture.awayTeamName, x: AWAY_NAME_X, y, align: "left", maxWidth: 215 });
+          drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: AWAY_BADGE_X, y, size: BADGE_SIZE });
         });
 
         drawFooter({ ctx, matchweekLabel, dateLabel });
