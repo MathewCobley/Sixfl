@@ -37,6 +37,34 @@ async function hasExistingTransaction(sessionId: string) {
   return Boolean(existingTransaction);
 }
 
+async function ensurePaymentTransactionPlayerFeeColumn() {
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "PaymentTransaction"
+      ADD COLUMN IF NOT EXISTS "playerMatchFeeId" TEXT;
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "PaymentTransaction_playerMatchFeeId_idx"
+      ON "PaymentTransaction"("playerMatchFeeId");
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'PaymentTransaction_playerMatchFeeId_fkey'
+      ) THEN
+        ALTER TABLE "PaymentTransaction"
+          ADD CONSTRAINT "PaymentTransaction_playerMatchFeeId_fkey"
+          FOREIGN KEY ("playerMatchFeeId") REFERENCES "PlayerMatchFee"("id")
+          ON DELETE SET NULL ON UPDATE CASCADE;
+      END IF;
+    END $$;
+  `);
+}
+
 async function handleCompletedPlayerMatchFeeCheckoutSession(
   session: Stripe.Checkout.Session,
 ) {
@@ -77,8 +105,10 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
     (session.created ?? Math.floor(Date.now() / 1000)) * 1000,
   );
 
+  await ensurePaymentTransactionPlayerFeeColumn();
+
   await prisma.$transaction(async (tx) => {
-    await tx.paymentTransaction.create({
+    const transaction = await tx.paymentTransaction.create({
       data: {
         teamId: fee.teamId,
         chargeId: null,
@@ -90,7 +120,16 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
         stripeCheckoutSessionId: session.id,
         stripePaymentIntentId: paymentIntentId,
       },
+      select: {
+        id: true,
+      },
     });
+
+    await tx.$executeRaw`
+      UPDATE "PaymentTransaction"
+      SET "playerMatchFeeId" = ${fee.id}
+      WHERE "id" = ${transaction.id}
+    `;
 
     await tx.playerMatchFee.update({
       where: {
