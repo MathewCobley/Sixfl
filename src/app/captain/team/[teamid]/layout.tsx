@@ -10,6 +10,7 @@ import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLink
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import ManagedProspectMoveLinks from "@/components/captain/ManagedProspectMoveLinks";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
+import PendingActivationDeleteLinks from "@/components/captain/PendingActivationDeleteLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import { prisma } from "@/lib/prisma";
@@ -77,6 +78,7 @@ export default async function CaptainTeamLayout({
       <CaptainFixtureBadgesBridge />
       {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedProspectMoveLinks /> : null}
+      {access.isAdmin && team.teamMode === "MANAGED" ? <PendingActivationDeleteLinks /> : null}
       {access.isAdmin && team.teamMode === "MANAGED" ? <AdminPlayerPreviewLinks /> : null}
 
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
