@@ -221,7 +221,7 @@ export default async function AdminFixturesPage({
     }),
 
     prisma.fixture.findMany({
-      orderBy: [{ kickoffAt: "asc" }, { round: "asc" }, { position: "asc" }],
+      orderBy: [{ kickoffAt: "desc" }, { round: "asc" }, { position: "asc" }],
       select: {
         id: true,
         leagueId: true,
