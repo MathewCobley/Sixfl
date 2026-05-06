@@ -66,6 +66,38 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
+function getDefaultMatchFeePence() {
+  return Number.isFinite(DEFAULT_PLAYER_MATCH_FEE_PENCE)
+    ? DEFAULT_PLAYER_MATCH_FEE_PENCE
+    : 600;
+}
+
+async function getPlayerMatchFeeAmountPence(teamMemberId: string) {
+  try {
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "TeamMemberProfile"
+        ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER;
+    `);
+
+    const rows = await prisma.$queryRaw<Array<{ playerMatchFeePenceOverride: number | null }>>`
+      SELECT "playerMatchFeePenceOverride"
+      FROM "TeamMemberProfile"
+      WHERE "teamMemberId" = ${teamMemberId}
+      LIMIT 1
+    `;
+
+    const override = rows[0]?.playerMatchFeePenceOverride;
+
+    if (typeof override === "number" && Number.isFinite(override) && override >= 0) {
+      return override;
+    }
+  } catch {
+    return getDefaultMatchFeePence();
+  }
+
+  return getDefaultMatchFeePence();
+}
+
 function getFirstName(nameOrEmail: string) {
   return nameOrEmail.trim().split(/\s+/)[0] || "there";
 }
@@ -322,6 +354,8 @@ async function syncPlayerMatchFeeForSelection(input: {
     return null;
   }
 
+  const amountPence = await getPlayerMatchFeeAmountPence(input.teamMemberId);
+
   if (existingFee) {
     if (existingFee.status === "PAID") {
       return existingFee.id;
@@ -331,18 +365,21 @@ async function syncPlayerMatchFeeForSelection(input: {
       where: { id: existingFee.id },
       data: {
         teamId: input.teamId,
-        amountPence: Number.isFinite(DEFAULT_PLAYER_MATCH_FEE_PENCE)
-          ? DEFAULT_PLAYER_MATCH_FEE_PENCE
-          : 600,
+        amountPence,
         status: "OPEN",
         cancelledAt: null,
         waivedAt: null,
-        note: existingFee.note ?? "Auto-created when player was selected for the fixture.",
+        note:
+          amountPence === 0
+            ? "Auto-created as a free player match fee because this player has a £0 override."
+            : existingFee.note ?? "Auto-created when player was selected for the fixture.",
       },
       select: { id: true },
     });
 
-    await ensurePlayerMatchFeePaymentDetails(updatedFee.id);
+    if (amountPence > 0) {
+      await ensurePlayerMatchFeePaymentDetails(updatedFee.id);
+    }
     return updatedFee.id;
   }
 
@@ -351,17 +388,20 @@ async function syncPlayerMatchFeeForSelection(input: {
       fixtureId: input.fixtureId,
       teamId: input.teamId,
       teamMemberId: input.teamMemberId,
-      amountPence: Number.isFinite(DEFAULT_PLAYER_MATCH_FEE_PENCE)
-        ? DEFAULT_PLAYER_MATCH_FEE_PENCE
-        : 600,
-      note: `Auto-created when player was selected for the fixture. Chase after the match only. Amount: ${formatMoney(
-        Number.isFinite(DEFAULT_PLAYER_MATCH_FEE_PENCE) ? DEFAULT_PLAYER_MATCH_FEE_PENCE : 600,
-      )}`,
+      amountPence,
+      note:
+        amountPence === 0
+          ? "Auto-created as a free player match fee because this player has a £0 override."
+          : `Auto-created when player was selected for the fixture. Chase after the match only. Amount: ${formatMoney(
+              amountPence,
+            )}`,
     },
     select: { id: true },
   });
 
-  await ensurePlayerMatchFeePaymentDetails(createdFee.id);
+  if (amountPence > 0) {
+    await ensurePlayerMatchFeePaymentDetails(createdFee.id);
+  }
   return createdFee.id;
 }
 
