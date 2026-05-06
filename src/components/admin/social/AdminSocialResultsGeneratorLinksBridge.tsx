@@ -30,21 +30,48 @@ function enhanceResultsCardButtons() {
     .filter((form): form is HTMLFormElement => form instanceof HTMLFormElement);
 
   for (const form of resultForms) {
-    if (form.dataset.visualResultsGeneratorEnhanced === "true") continue;
+    const parent = form.parentElement;
+    if (!parent) continue;
 
-    const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-    if (!submitButton) continue;
+    if (!parent.querySelector("[data-visual-results-card-link]")) {
+      const link = document.createElement("a");
+      link.href = buildResultsGeneratorHref(form);
+      link.textContent = "Open visual results card";
+      link.dataset.visualResultsCardLink = "true";
+      link.className =
+        "inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-3 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/35 hover:bg-emerald-500/20";
 
-    form.dataset.visualResultsGeneratorEnhanced = "true";
-    submitButton.textContent = "Old results queue";
+      form.insertAdjacentElement("afterend", link);
+    }
 
-    const link = document.createElement("a");
-    link.href = buildResultsGeneratorHref(form);
-    link.textContent = "Open visual results card";
-    link.className =
-      "inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-3 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/35 hover:bg-emerald-500/20";
+    form.style.display = "none";
+    form.setAttribute("aria-hidden", "true");
+  }
+}
 
-    form.insertAdjacentElement("afterend", link);
+function hideOldResultsQueueCards() {
+  const headings = Array.from(document.querySelectorAll<HTMLElement>("div, h2, h3")).filter((element) =>
+    element.textContent?.trim().startsWith("Results card •"),
+  );
+
+  for (const heading of headings) {
+    let row: HTMLElement | null = heading;
+
+    while (row && row.parentElement && row.parentElement.tagName !== "MAIN") {
+      const className = typeof row.className === "string" ? row.className : "";
+
+      if (
+        className.includes("grid") &&
+        className.includes("px-6") &&
+        className.includes("py-6")
+      ) {
+        row.style.display = "none";
+        row.setAttribute("aria-hidden", "true");
+        break;
+      }
+
+      row = row.parentElement;
+    }
   }
 }
 
@@ -67,7 +94,7 @@ function addResultsGeneratorIntro() {
       <div>
         <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-200/80">Visual results cards</p>
         <h2 class="mt-2 text-xl font-semibold tracking-tight text-white">Use the Canva-style results generator</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-white/60">Use this for the new image-based match results card. The older queue remains below for captions/publishing until we fully merge the flows.</p>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-white/60">Use this for the new image-based match results card. The old results queue is hidden while we finish the visual card flow.</p>
       </div>
       <a href="/admin/social/results" class="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20">Open visual results generator</a>
     </div>
@@ -76,19 +103,21 @@ function addResultsGeneratorIntro() {
   hero.insertAdjacentElement("afterend", intro);
 }
 
+function cleanSocialPage() {
+  addResultsGeneratorIntro();
+  enhanceResultsCardButtons();
+  hideOldResultsQueueCards();
+}
+
 export default function AdminSocialResultsGeneratorLinksBridge() {
   const pathname = usePathname();
 
   useEffect(() => {
     if (pathname !== "/admin/social") return;
 
-    addResultsGeneratorIntro();
-    enhanceResultsCardButtons();
+    cleanSocialPage();
 
-    const observer = new MutationObserver(() => {
-      addResultsGeneratorIntro();
-      enhanceResultsCardButtons();
-    });
+    const observer = new MutationObserver(cleanSocialPage);
 
     observer.observe(document.body, {
       childList: true,
