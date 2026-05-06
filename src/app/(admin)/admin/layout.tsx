@@ -11,6 +11,7 @@ import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/F
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
+import AdminSocialResultsGeneratorLinksBridge from "@/components/admin/social/AdminSocialResultsGeneratorLinksBridge";
 import AppHeader from "@/components/layout/AppHeader";
 
 export default async function AdminLayout({
@@ -33,6 +34,7 @@ export default async function AdminLayout({
       <ProspectCommunicationCtaBridge />
       <AdminVoidPaymentChargesBridge />
       <AdminPlayerFeePaymentLabelsBridge />
+      <AdminSocialResultsGeneratorLinksBridge />
       <AppHeader variant="admin" />
 
       <div className="flex w-full gap-6 px-4 py-6 sm:px-6 lg:px-8">
