@@ -35,6 +35,11 @@ function formatPreferredNights(value: unknown) {
   return String(value);
 }
 
+function formatFeeOverride(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  return (value / 100).toFixed(2);
+}
+
 function getInitials(name: string | null | undefined, email: string | null | undefined) {
   const base = (name || email || "?").trim();
   const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
@@ -50,12 +55,14 @@ function Field({
   defaultValue,
   type = "text",
   placeholder,
+  help,
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   type?: string;
   placeholder?: string;
+  help?: string;
 }) {
   return (
     <label className="space-y-2 text-sm font-medium text-white/65">
@@ -67,6 +74,7 @@ function Field({
         placeholder={placeholder}
         className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50 focus:bg-black/35"
       />
+      {help ? <span className="block text-xs font-normal text-white/40">{help}</span> : null}
     </label>
   );
 }
@@ -165,7 +173,7 @@ export default async function EditSquadPlayerPage({
                 Edit {membership.user.name || "player"}
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                Update player contact details, availability notes, position details and internal SIXFL notes for this managed team.
+                Update player contact details, availability notes, position details, match fee override and internal SIXFL notes for this managed team.
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
@@ -248,6 +256,22 @@ export default async function EditSquadPlayerPage({
 
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Match fee setting
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Player fee override"
+                  name="playerMatchFeeOverride"
+                  type="number"
+                  defaultValue={formatFeeOverride(profile?.playerMatchFeePenceOverride)}
+                  placeholder="Leave blank for £6.00 default"
+                  help="Use 0 for a free player. Leave blank to use the team default of £6.00."
+                />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Football profile
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -299,7 +323,7 @@ export default async function EditSquadPlayerPage({
                   Save managed player details
                 </div>
                 <p className="mt-1 text-sm text-white/55">
-                  This updates the linked user account, squad player profile and messaging recipient so comms stay accurate.
+                  This updates the linked user account, squad player profile, fee override and messaging recipient so comms stay accurate.
                 </p>
               </div>
               <button
