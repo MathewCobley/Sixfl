@@ -42,12 +42,29 @@ function parsePreferredNights(value: string | null) {
   return nights.length > 0 ? nights : null;
 }
 
+function parsePlayerMatchFeeOverride(value: FormDataEntryValue | null) {
+  const rawValue = String(value ?? "").replace(/[£,\s]/g, "").trim();
+
+  if (!rawValue) return null;
+
+  const parsed = Number(rawValue);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return Number.NaN;
+  }
+
+  return Math.round(parsed * 100);
+}
+
 export async function updateManagedSquadMemberDetailsAction(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "").trim();
   const membershipId = String(formData.get("membershipId") ?? "").trim();
   const displayName = getNullableString(formData.get("displayName"));
   const email = getEmailValue(formData.get("email"));
   const phone = getNullableString(formData.get("phone"));
+  const playerMatchFeeOverride = parsePlayerMatchFeeOverride(
+    formData.get("playerMatchFeeOverride"),
+  );
   const preferredPositions = getNullableString(formData.get("preferredPositions"));
   const experienceSummary = getNullableString(formData.get("experienceSummary"));
   const availabilityLevel = getNullableString(formData.get("availabilityLevel"));
@@ -63,6 +80,10 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
 
   if (!access.isAdmin) {
     redirect(getErrorRedirect(teamid, "Only SIXFL admins can edit managed squad player details."));
+  }
+
+  if (Number.isNaN(playerMatchFeeOverride)) {
+    redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank."));
   }
 
   const membership = await prisma.teamMember.findFirst({
@@ -133,6 +154,11 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   const sourceProspectId = existingProfiles[0]?.sourceProspectId ?? null;
 
   await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`
+      ALTER TABLE "TeamMemberProfile"
+        ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER;
+    `);
+
     await tx.user.update({
       where: { id: membership.userId },
       data: {
@@ -146,6 +172,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         "id",
         "teamMemberId",
         "phone",
+        "playerMatchFeePenceOverride",
         "preferredPositions",
         "experienceSummary",
         "availabilityLevel",
@@ -157,6 +184,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         ${profileId},
         ${membershipId},
         ${phone},
+        ${playerMatchFeeOverride},
         ${preferredPositions},
         ${experienceSummary},
         ${availabilityLevel},
@@ -167,6 +195,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
       )
       ON CONFLICT ("teamMemberId") DO UPDATE SET
         "phone" = EXCLUDED."phone",
+        "playerMatchFeePenceOverride" = EXCLUDED."playerMatchFeePenceOverride",
         "preferredPositions" = EXCLUDED."preferredPositions",
         "experienceSummary" = EXCLUDED."experienceSummary",
         "availabilityLevel" = EXCLUDED."availabilityLevel",
@@ -249,6 +278,8 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/fixtures`);
+  revalidatePath(`/captain/team/${teamid}/match-fees`);
   revalidatePath(`/admin/teams/${teamid}`);
   revalidatePath(`/admin/teams/${teamid}/communications`);
 
