@@ -118,6 +118,14 @@ function getRoleLabel(role: TeamRole) {
   }
 }
 
+function getTeamInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+
+  if (parts.length === 0) return "S";
+
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "S";
+}
+
 export default async function PlayerTeamPage({ params }: PageProps) {
   const { teamid } = await params;
   const session = await getServerSession(authOptions);
@@ -308,39 +316,55 @@ export default async function PlayerTeamPage({ params }: PageProps) {
       <div className="mx-auto max-w-6xl space-y-8">
         <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-                Player team area
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                {team.name}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
-                You’re linked to this SIXFL squad. Use this page to check your fixtures, confirm availability, and keep track of any match fees.
-              </p>
+            <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-emerald-400/20 bg-black/30 shadow-[0_14px_40px_rgba(0,0,0,0.35)] sm:h-24 sm:w-24">
+                {team.logoUrl ? (
+                  <img
+                    src={team.logoUrl}
+                    alt={`${team.name} badge`}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl font-black tracking-tight text-emerald-100 sm:text-3xl">
+                    {getTeamInitials(team.name)}
+                  </span>
+                )}
+              </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                {team.league?.name ? (
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                    {team.league.name}
-                    {team.league.season ? ` · ${team.league.season}` : ""}
-                  </span>
-                ) : null}
-                {team.league?.dayOfWeek ? (
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                    {team.league.dayOfWeek}
-                  </span>
-                ) : null}
-                {team.league?.venueName ? (
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                    {team.league.venueName}
-                  </span>
-                ) : null}
-                {membership?.role ? (
-                  <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                    {getRoleLabel(membership.role)}
-                  </span>
-                ) : null}
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+                  Player team area
+                </p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  {team.name}
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
+                  You’re linked to this SIXFL squad. Use this page to check your fixtures, confirm availability, and keep track of any match fees.
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {team.league?.name ? (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
+                      {team.league.name}
+                      {team.league.season ? ` · ${team.league.season}` : ""}
+                    </span>
+                  ) : null}
+                  {team.league?.dayOfWeek ? (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
+                      {team.league.dayOfWeek}
+                    </span>
+                  ) : null}
+                  {team.league?.venueName ? (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
+                      {team.league.venueName}
+                    </span>
+                  ) : null}
+                  {membership?.role ? (
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                      {getRoleLabel(membership.role)}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
 
