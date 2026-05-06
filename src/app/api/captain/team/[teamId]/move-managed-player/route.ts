@@ -3,7 +3,7 @@
 // ========================================
 
 import { NextResponse } from "next/server";
-import { TeamRole } from "@prisma/client";
+import { Prisma, TeamRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -18,6 +18,8 @@ type MoveBody = {
   itemId?: unknown;
   targetTeamId?: unknown;
 };
+
+type PrismaClientLike = typeof prisma | Prisma.TransactionClient;
 
 function getString(value: unknown) {
   const parsed = String(value ?? "").trim();
@@ -62,6 +64,50 @@ async function getTargetTeams(sourceTeamId: string) {
       },
     },
   });
+}
+
+async function getLinkedSourceProspectId(input: {
+  client: PrismaClientLike;
+  membershipId: string;
+}) {
+  try {
+    const rows = await input.client.$queryRaw<Array<{ sourceProspectId: string | null }>>`
+      SELECT "sourceProspectId"
+      FROM "TeamMemberProfile"
+      WHERE "teamMemberId" = ${input.membershipId}
+      LIMIT 1
+    `;
+
+    return rows[0]?.sourceProspectId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function moveLinkedProspectForSquadMember(input: {
+  client: PrismaClientLike;
+  membershipId: string;
+  sourceTeamId: string;
+  targetTeamId: string;
+}) {
+  const sourceProspectId = await getLinkedSourceProspectId({
+    client: input.client,
+    membershipId: input.membershipId,
+  });
+
+  if (!sourceProspectId) return false;
+
+  const result = await input.client.teamPlayerProspect.updateMany({
+    where: {
+      id: sourceProspectId,
+      teamId: input.sourceTeamId,
+    },
+    data: {
+      teamId: input.targetTeamId,
+    },
+  });
+
+  return result.count > 0;
 }
 
 export async function GET(
@@ -213,15 +259,26 @@ export async function POST(
       );
     }
 
-    await prisma.teamMember.update({
-      where: { id: membership.id },
-      data: {
-        teamId: targetTeam.id,
-        role: membership.role === TeamRole.CAPTAIN ? TeamRole.PLAYER : membership.role,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.teamMember.update({
+        where: { id: membership.id },
+        data: {
+          teamId: targetTeam.id,
+          role: membership.role === TeamRole.CAPTAIN ? TeamRole.PLAYER : membership.role,
+        },
+      });
+
+      const linkedProspectMoved = await moveLinkedProspectForSquadMember({
+        client: tx,
+        membershipId: membership.id,
+        sourceTeamId: teamId,
+        targetTeamId: targetTeam.id,
+      });
+
+      return { linkedProspectMoved };
     });
 
-    return NextResponse.json({ ok: true, moved: true });
+    return NextResponse.json({ ok: true, moved: true, ...result });
   } catch (error) {
     return NextResponse.json({ error: getRouteError(error) }, { status: 500 });
   }
