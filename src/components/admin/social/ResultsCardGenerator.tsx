@@ -27,7 +27,7 @@ type ResultsCardGeneratorProps = {
 const CANVAS_SIZE = 1080;
 const ROWS = [445, 570, 695];
 const HOME_BADGE_X = 76;
-const HOME_NAME_X = 142;
+const HOME_NAME_X = 130;
 const HOME_SCORE_X = 438;
 const AWAY_SCORE_X = 640;
 const AWAY_NAME_X = 708;
@@ -168,9 +168,9 @@ function drawFooter(input: {
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#000000";
   ctx.font = "900 23px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(matchweekLabel.toUpperCase(), 540, 967);
+  ctx.fillText(matchweekLabel.toUpperCase(), 540, 971);
   ctx.font = "900 30px Arial Narrow, Impact, Arial, sans-serif";
-  ctx.fillText(dateLabel.toUpperCase(), 540, 1002);
+  ctx.fillText(dateLabel.toUpperCase(), 540, 1007);
   ctx.restore();
 }
 
@@ -224,7 +224,7 @@ export default function ResultsCardGenerator({
           const awayBadge = badgeEntries[index * 2 + 1] ?? null;
 
           drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: BADGE_SIZE });
-          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: 245 });
+          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: 255 });
           drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y });
 
           drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y });
