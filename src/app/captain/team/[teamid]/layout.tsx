@@ -14,6 +14,14 @@ import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHin
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
+function getTeamInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+
+  if (parts.length === 0) return "S";
+
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "S";
+}
+
 export default async function CaptainTeamLayout({
   children,
   params,
@@ -29,6 +37,7 @@ export default async function CaptainTeamLayout({
     select: {
       id: true,
       name: true,
+      logoUrl: true,
       teamMode: true,
       league: {
         select: {
@@ -72,24 +81,40 @@ export default async function CaptainTeamLayout({
         <header className="overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
           <div className="border-b border-white/10 px-6 py-5">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-                  SIXFL Captain Hub
-                </p>
+              <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-emerald-400/20 bg-black/30 shadow-[0_14px_40px_rgba(0,0,0,0.35)] sm:h-24 sm:w-24">
+                  {team.logoUrl ? (
+                    <img
+                      src={team.logoUrl}
+                      alt={`${team.name} badge`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-2xl font-black tracking-tight text-emerald-100 sm:text-3xl">
+                      {getTeamInitials(team.name)}
+                    </span>
+                  )}
+                </div>
 
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  {team.name}
-                </h1>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+                    SIXFL Captain Hub
+                  </p>
 
-                <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                  Matchday control, fixtures, results and payments for your team.
-                </p>
+                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                    {team.name}
+                  </h1>
 
-                <p className="mt-3 text-sm text-white/55">
-                  {team.league?.name ?? "No league assigned"}
-                  {team.league?.season ? ` · ${team.league.season}` : ""}
-                  {team.league?.isActive ? " · Live season" : ""}
-                </p>
+                  <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
+                    Matchday control, fixtures, results and payments for your team.
+                  </p>
+
+                  <p className="mt-3 text-sm text-white/55">
+                    {team.league?.name ?? "No league assigned"}
+                    {team.league?.season ? ` · ${team.league.season}` : ""}
+                    {team.league?.isActive ? " · Live season" : ""}
+                  </p>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-3">
