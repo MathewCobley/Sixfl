@@ -62,12 +62,25 @@ function normaliseLogoUrl(value?: string | null) {
   return `/${trimmed}`;
 }
 
-function getMatchweekLabel(value?: string) {
+function getMatchweekLabel(value?: string | null) {
   const trimmed = value?.trim();
   if (!trimmed) return "MATCHWEEK";
 
   if (/^matchweek/i.test(trimmed)) return trimmed;
   return `MATCHWEEK ${trimmed}`;
+}
+
+function getFixtureMatchweek(fixtures: Array<{ round: number | null }>) {
+  const rounds = fixtures
+    .map((fixture) => fixture.round)
+    .filter((round): round is number => typeof round === "number" && Number.isFinite(round));
+
+  if (rounds.length === 0) return null;
+
+  const firstRound = rounds[0];
+  const allSameRound = rounds.every((round) => round === firstRound);
+
+  return allSameRound ? String(firstRound) : null;
 }
 
 export default async function AdminResultsCardGeneratorPage({
@@ -124,6 +137,7 @@ export default async function AdminResultsCardGeneratorPage({
         select: {
           id: true,
           kickoffAt: true,
+          round: true,
           homeTeam: {
             select: {
               name: true,
@@ -165,6 +179,8 @@ export default async function AdminResultsCardGeneratorPage({
     }));
 
   const selectedDate = dateRange?.displayDate ?? new Date();
+  const fixtureMatchweek = getFixtureMatchweek(fixtures);
+  const matchweekValue = sp.matchweek?.trim() || fixtureMatchweek || "";
   const leagueOptions = leagues.map((league) => ({
     value: league.id,
     label: league.season ? `${league.name} · ${league.season}` : league.name,
@@ -225,8 +241,8 @@ export default async function AdminResultsCardGeneratorPage({
               <input
                 type="text"
                 name="matchweek"
-                defaultValue={sp.matchweek ?? ""}
-                placeholder="Example: 4"
+                defaultValue={matchweekValue}
+                placeholder="Pulled from fixture round where possible"
                 className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50"
               />
             </label>
@@ -244,6 +260,9 @@ export default async function AdminResultsCardGeneratorPage({
             <div className="mt-1">
               {resultCardFixtures.length} completed fixture{resultCardFixtures.length === 1 ? "" : "s"} found for this card.
             </div>
+            {fixtureMatchweek ? (
+              <div className="mt-1 text-white/45">Fixture round: matchweek {fixtureMatchweek}</div>
+            ) : null}
             {resultCardFixtures.length < 3 ? (
               <div className="mt-2 text-amber-100/80">
                 This template has room for 3 rows. Add/complete more results if you want all rows filled.
@@ -257,7 +276,7 @@ export default async function AdminResultsCardGeneratorPage({
             <ResultsCardGenerator
               templateUrl={TEMPLATE_URL}
               leagueName={selectedLeague?.name ?? "SIXFL"}
-              matchweekLabel={getMatchweekLabel(sp.matchweek)}
+              matchweekLabel={getMatchweekLabel(matchweekValue)}
               dateLabel={formatDisplayDate(selectedDate)}
               fixtures={resultCardFixtures}
             />
