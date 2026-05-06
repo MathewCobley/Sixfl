@@ -7,7 +7,20 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-function isPlayerFeePaymentCard(card: Element) {
+type PlayerFeePaymentLabel = {
+  transactionId: string;
+  teamName: string;
+  amountPence: number;
+  paidAt: string;
+  title: string;
+  subtitle: string;
+};
+
+type LabelsPayload = {
+  labels?: PlayerFeePaymentLabel[];
+};
+
+function isUnlabelledPlayerFeePaymentCard(card: Element) {
   const text = card.textContent ?? "";
 
   return (
@@ -17,29 +30,53 @@ function isPlayerFeePaymentCard(card: Element) {
   );
 }
 
-function relabelPlayerFeePayments() {
+function getRecentPaymentsCards() {
   const recentPaymentsHeadings = Array.from(document.querySelectorAll("h2")).filter(
     (heading) => heading.textContent?.trim() === "Recent payments",
   );
 
-  for (const heading of recentPaymentsHeadings) {
+  return recentPaymentsHeadings.flatMap((heading) => {
     const section = heading.closest("section");
-    if (!section) continue;
+    if (!section) return [];
 
-    const paymentCards = Array.from(section.querySelectorAll("div.rounded-2xl"));
+    return Array.from(section.querySelectorAll("div.rounded-2xl")).filter(
+      isUnlabelledPlayerFeePaymentCard,
+    );
+  });
+}
 
-    for (const card of paymentCards) {
-      if (!isPlayerFeePaymentCard(card)) continue;
+function relabelPlayerFeePayments(labels: PlayerFeePaymentLabel[]) {
+  const cards = getRecentPaymentsCards();
 
-      const label = Array.from(card.querySelectorAll("div")).find((element) =>
-        element.textContent?.trim() === "Unlinked payment · Stripe",
-      );
+  cards.forEach((card, index) => {
+    const label = labels[index];
+    if (!label) return;
 
-      if (label) {
-        label.textContent = "Player match fee · Stripe";
-      }
+    const subtitleElement = Array.from(card.querySelectorAll("div")).find(
+      (element) => element.textContent?.trim() === "Unlinked payment · Stripe",
+    );
+
+    if (!subtitleElement) return;
+
+    const titleElement = subtitleElement.previousElementSibling;
+
+    if (titleElement) {
+      titleElement.textContent = label.title;
     }
-  }
+
+    subtitleElement.textContent = label.subtitle;
+  });
+}
+
+async function loadPlayerFeePaymentLabels() {
+  const response = await fetch("/api/admin/payments/player-fee-labels", {
+    cache: "no-store",
+  });
+
+  if (!response.ok) return [];
+
+  const payload = (await response.json().catch(() => null)) as LabelsPayload | null;
+  return payload?.labels ?? [];
 }
 
 export default function AdminPlayerFeePaymentLabelsBridge() {
@@ -48,15 +85,30 @@ export default function AdminPlayerFeePaymentLabelsBridge() {
   useEffect(() => {
     if (pathname !== "/admin/payments") return;
 
-    relabelPlayerFeePayments();
+    let cancelled = false;
+    let labels: PlayerFeePaymentLabel[] = [];
 
-    const observer = new MutationObserver(relabelPlayerFeePayments);
+    void loadPlayerFeePaymentLabels().then((loadedLabels) => {
+      if (cancelled) return;
+      labels = loadedLabels;
+      relabelPlayerFeePayments(labels);
+    });
+
+    const observer = new MutationObserver(() => {
+      if (labels.length > 0) {
+        relabelPlayerFeePayments(labels);
+      }
+    });
+
     observer.observe(document.body, {
       childList: true,
       subtree: true,
     });
 
-    return () => observer.disconnect();
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [pathname]);
 
   return null;
