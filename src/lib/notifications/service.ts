@@ -288,9 +288,7 @@ function shortenSmsBodyLinks(input: {
   };
 }
 
-async function applySmsShortLinks<T extends Pick<NotificationDispatch, "id" | "channel" | "bodyText" | "metadata">>(
-  dispatch: T,
-): Promise<T> {
+async function applySmsShortLinks(dispatch: NotificationDispatch) {
   if (dispatch.channel !== NotificationChannel.SMS) {
     return dispatch;
   }
@@ -313,9 +311,9 @@ async function applySmsShortLinks<T extends Pick<NotificationDispatch, "id" | "c
       metadata: {
         ...metadata,
         smsShortLinks: shortened.links,
-      } satisfies Prisma.InputJsonValue,
+      },
     },
-  }) as Promise<T>;
+  });
 }
 
 function buildQueuedContentFromTemplate(input: {
