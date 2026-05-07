@@ -21,12 +21,7 @@ function getString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function createVenueAction(
-  _prevState: VenueFormState,
-  formData: FormData
-): Promise<VenueFormState> {
-  await requireAdmin();
-
+function buildVenuePayload(formData: FormData) {
   const name = getString(formData, "name");
   const address = getString(formData, "address");
   const postcode = getString(formData, "postcode");
@@ -38,9 +33,36 @@ export async function createVenueAction(
   const pitchNotes = getString(formData, "pitchNotes");
   const facilities = getString(formData, "facilities");
 
+  return {
+    name,
+    address: address || null,
+    postcode: postcode || null,
+    notes: notes || null,
+    imageUrl: imageUrl || null,
+    websiteUrl: websiteUrl || null,
+    googleMapsUrl: googleMapsUrl || null,
+    parkingNotes: parkingNotes || null,
+    pitchNotes: pitchNotes || null,
+    facilities: facilities || null,
+  };
+}
+
+function revalidateVenuePages() {
+  revalidatePath("/admin/venues");
+  revalidatePath("/admin/fixtures");
+  revalidatePath("/venues");
+}
+
+export async function createVenueAction(
+  _prevState: VenueFormState,
+  formData: FormData
+): Promise<VenueFormState> {
+  await requireAdmin();
+
+  const data = buildVenuePayload(formData);
   const errors: Record<string, string[]> = {};
 
-  if (!name) {
+  if (!data.name) {
     errors.name = ["Venue name is required."];
   }
 
@@ -51,29 +73,38 @@ export async function createVenueAction(
     };
   }
 
-  await prisma.venue.create({
-    data: {
-      name,
-      address: address || null,
-      postcode: postcode || null,
-      notes: notes || null,
-      imageUrl: imageUrl || null,
-      websiteUrl: websiteUrl || null,
-      googleMapsUrl: googleMapsUrl || null,
-      parkingNotes: parkingNotes || null,
-      pitchNotes: pitchNotes || null,
-      facilities: facilities || null,
-    },
-  });
+  await prisma.venue.create({ data });
 
-  revalidatePath("/admin/venues");
-  revalidatePath("/admin/fixtures");
-  revalidatePath("/venues");
+  revalidateVenuePages();
 
   return {
     success: true,
     message: "Venue created successfully.",
   };
+}
+
+export async function updateVenueAction(formData: FormData) {
+  await requireAdmin();
+
+  const id = getString(formData, "id");
+  const data = buildVenuePayload(formData);
+
+  if (!id) {
+    redirect("/admin/venues?error=missing-id");
+  }
+
+  if (!data.name) {
+    redirect("/admin/venues?error=missing-name");
+  }
+
+  await prisma.venue.update({
+    where: { id },
+    data,
+  });
+
+  revalidateVenuePages();
+
+  redirect("/admin/venues?updated=1");
 }
 
 export async function deleteVenueAction(formData: FormData) {
@@ -99,9 +130,7 @@ export async function deleteVenueAction(formData: FormData) {
     where: { id },
   });
 
-  revalidatePath("/admin/venues");
-  revalidatePath("/admin/fixtures");
-  revalidatePath("/venues");
+  revalidateVenuePages();
 
   redirect("/admin/venues?deleted=1");
 }
