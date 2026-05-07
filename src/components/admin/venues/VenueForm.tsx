@@ -4,6 +4,7 @@
 
 "use client";
 
+import type { ReactNode } from "react";
 import { useActionState } from "react";
 import { createVenueAction } from "@/app/(admin)/admin/venues/actions";
 
@@ -32,7 +33,7 @@ function FormSection({
 }: {
   eyebrow: string;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5">
