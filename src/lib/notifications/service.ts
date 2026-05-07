@@ -7,6 +7,7 @@ import {
   NotificationAttemptStatus,
   NotificationAudience,
   NotificationChannel,
+  NotificationDispatch,
   NotificationDispatchStatus,
   NotificationRecipient,
   NotificationTemplate,
@@ -21,6 +22,7 @@ import {
   type SIXFLPaymentSummary,
 } from "@/lib/email/buildEmail";
 import { getEmailReplyDomain } from "@/lib/resend/client";
+import { getPublicSiteUrl } from "@/lib/stripe/client";
 import { getNotificationRecipientById } from "./recipients";
 import {
   renderNotificationText,
@@ -67,23 +69,41 @@ type ResolvedQueuedContent = {
   bodyHtml: string | null;
 };
 
-const SIXFL_SMS_SIGNATURE = "— SIXFL";
+type SmsShortLink = {
+  token: string;
+  url: string;
+};
+
+const SIXFL_SMS_SIGNATURE = "SIXFL";
 const SMS_QUIET_HOURS_START_HOUR = 21;
 const SMS_QUIET_HOURS_END_HOUR = 9;
 const SMS_QUIET_HOURS_TIME_ZONE = "Europe/London";
+const SMS_URL_PATTERN = /https?:\/\/[^\s<>()"']+/gi;
+
+function normaliseSmsText(body: string) {
+  return body
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2022\u00B7]/g, "-")
+    .replace(/\u00A0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 function appendSIXFLSmsSignature(body: string) {
-  const trimmedBody = body.trim();
+  const trimmedBody = normaliseSmsText(body);
 
   if (!trimmedBody) {
     return SIXFL_SMS_SIGNATURE;
   }
 
   const withoutExistingSignature = trimmedBody
-    .replace(/\n?\n?—\s*SIXFL\s*$/i, "")
+    .replace(/\n?\n?[\u2014\-]?\s*SIXFL\s*$/i, "")
     .trim();
 
-  return `${withoutExistingSignature}\n\n${SIXFL_SMS_SIGNATURE}`.trim();
+  return normaliseSmsText(`${withoutExistingSignature}\n\n${SIXFL_SMS_SIGNATURE}`);
 }
 
 function getUkDateParts(value: Date) {
@@ -222,6 +242,80 @@ function coerceVariables(
 
 function ensureEmailRepliesConfigured() {
   getEmailReplyDomain();
+}
+
+function getMetadataObject(value: Prisma.JsonValue | null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {} as Record<string, Prisma.JsonValue>;
+  }
+
+  return value as Record<string, Prisma.JsonValue>;
+}
+
+function trimTrailingUrlPunctuation(url: string) {
+  return url.replace(/[.,;:!?]+$/g, "");
+}
+
+function shortenSmsBodyLinks(input: {
+  dispatchId: string;
+  bodyText: string;
+}) {
+  const matches = Array.from(input.bodyText.matchAll(SMS_URL_PATTERN));
+  if (matches.length === 0) {
+    return {
+      bodyText: normaliseSmsText(input.bodyText),
+      links: [] as SmsShortLink[],
+    };
+  }
+
+  const links: SmsShortLink[] = [];
+  let bodyText = input.bodyText;
+
+  matches.forEach((match, index) => {
+    const original = match[0];
+    const url = trimTrailingUrlPunctuation(original);
+    const punctuation = original.slice(url.length);
+    const token = `${input.dispatchId}-${index}`;
+    const shortUrl = new URL(`/s/${token}`, `${getPublicSiteUrl()}/`).toString();
+
+    links.push({ token, url });
+    bodyText = bodyText.replace(original, `${shortUrl}${punctuation}`);
+  });
+
+  return {
+    bodyText: normaliseSmsText(bodyText),
+    links,
+  };
+}
+
+async function applySmsShortLinks<T extends Pick<NotificationDispatch, "id" | "channel" | "bodyText" | "metadata">>(
+  dispatch: T,
+): Promise<T> {
+  if (dispatch.channel !== NotificationChannel.SMS) {
+    return dispatch;
+  }
+
+  const shortened = shortenSmsBodyLinks({
+    dispatchId: dispatch.id,
+    bodyText: dispatch.bodyText,
+  });
+
+  if (shortened.links.length === 0 && shortened.bodyText === dispatch.bodyText) {
+    return dispatch;
+  }
+
+  const metadata = getMetadataObject(dispatch.metadata);
+
+  return prisma.notificationDispatch.update({
+    where: { id: dispatch.id },
+    data: {
+      bodyText: shortened.bodyText,
+      metadata: {
+        ...metadata,
+        smsShortLinks: shortened.links,
+      } satisfies Prisma.InputJsonValue,
+    },
+  }) as Promise<T>;
 }
 
 function buildQueuedContentFromTemplate(input: {
@@ -442,7 +536,7 @@ export async function queueNotificationFromTemplate(
   });
 
   if (!allowed.ok) {
-    return prisma.notificationDispatch.create({
+    const dispatch = await prisma.notificationDispatch.create({
       data: {
         recipientId: recipient.id,
         templateId: template.id,
@@ -462,13 +556,15 @@ export async function queueNotificationFromTemplate(
         createdByUserId: input.createdByUserId?.trim() || null,
       },
     });
+
+    return applySmsShortLinks(dispatch);
   }
 
   if (template.channel === NotificationChannel.EMAIL) {
     ensureEmailRepliesConfigured();
   }
 
-  return prisma.notificationDispatch.create({
+  const dispatch = await prisma.notificationDispatch.create({
     data: {
       recipientId: recipient.id,
       templateId: template.id,
@@ -487,6 +583,8 @@ export async function queueNotificationFromTemplate(
       createdByUserId: input.createdByUserId?.trim() || null,
     },
   });
+
+  return applySmsShortLinks(dispatch);
 }
 
 export async function queueDirectNotification(input: QueueDirectNotificationInput) {
@@ -518,7 +616,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
   });
 
   if (!allowed.ok) {
-    return prisma.notificationDispatch.create({
+    const dispatch = await prisma.notificationDispatch.create({
       data: {
         recipientId: recipient.id,
         channel: input.channel,
@@ -537,13 +635,15 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
         createdByUserId: input.createdByUserId?.trim() || null,
       },
     });
+
+    return applySmsShortLinks(dispatch);
   }
 
   if (input.channel === NotificationChannel.EMAIL) {
     ensureEmailRepliesConfigured();
   }
 
-  return prisma.notificationDispatch.create({
+  const dispatch = await prisma.notificationDispatch.create({
     data: {
       recipientId: recipient.id,
       channel: input.channel,
@@ -561,6 +661,8 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       createdByUserId: input.createdByUserId?.trim() || null,
     },
   });
+
+  return applySmsShortLinks(dispatch);
 }
 
 export async function getDueNotificationDispatches(limit = 50) {
