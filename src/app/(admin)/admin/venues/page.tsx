@@ -2,11 +2,15 @@
 // File: src/app/admin/venues/page.tsx
 // ========================================
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import VenueForm from "@/components/admin/venues/VenueForm";
-import { deleteVenueAction } from "./actions";
+import { deleteVenueAction, updateVenueAction } from "./actions";
+
+const adminInputClassName =
+  "h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20";
 
 function MetricCard({
   label,
@@ -41,7 +45,7 @@ function VenueLinkButton({
   children,
 }: {
   href?: string | null;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   if (!href) return null;
 
@@ -57,11 +61,41 @@ function VenueLinkButton({
   );
 }
 
+function EditField({
+  label,
+  name,
+  defaultValue,
+  placeholder,
+  className,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string | null;
+  placeholder: string;
+  className?: string;
+}) {
+  return (
+    <label className={className}>
+      <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">
+        {label}
+      </span>
+      <input
+        type="text"
+        name={name}
+        defaultValue={defaultValue ?? ""}
+        placeholder={placeholder}
+        className={adminInputClassName}
+      />
+    </label>
+  );
+}
+
 export default async function AdminVenuesPage({
   searchParams,
 }: {
   searchParams?: Promise<{
     deleted?: string;
+    updated?: string;
     error?: string;
   }>;
 }) {
@@ -93,9 +127,12 @@ export default async function AdminVenuesPage({
       ? "That venue cannot be deleted because fixtures are already linked to it."
       : sp.error === "missing-id"
         ? "No venue ID was provided."
-        : null;
+        : sp.error === "missing-name"
+          ? "Venue name is required before a venue can be updated."
+          : null;
 
   const deleted = sp.deleted === "1";
+  const updated = sp.updated === "1";
 
   return (
     <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
@@ -136,6 +173,12 @@ export default async function AdminVenuesPage({
         {deleted && (
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             Venue deleted successfully.
+          </div>
+        )}
+
+        {updated && (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            Venue updated successfully.
           </div>
         )}
 
@@ -297,6 +340,105 @@ export default async function AdminVenuesPage({
                             ) : null}
                           </div>
                         )}
+
+                        <details className="group rounded-2xl border border-white/10 bg-black/20">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white marker:hidden">
+                            <span>Edit venue details</span>
+                            <span className="text-xs uppercase tracking-[0.16em] text-emerald-300/80 group-open:hidden">
+                              Open
+                            </span>
+                            <span className="hidden text-xs uppercase tracking-[0.16em] text-emerald-300/80 group-open:inline">
+                              Close
+                            </span>
+                          </summary>
+
+                          <form
+                            action={updateVenueAction}
+                            className="border-t border-white/10 p-4"
+                          >
+                            <input type="hidden" name="id" value={venue.id} />
+
+                            <div className="grid gap-4 lg:grid-cols-2">
+                              <EditField
+                                label="Venue name"
+                                name="name"
+                                defaultValue={venue.name}
+                                placeholder="e.g. Northallerton Leisure Centre"
+                                className="lg:col-span-2"
+                              />
+                              <EditField
+                                label="Address"
+                                name="address"
+                                defaultValue={venue.address}
+                                placeholder="e.g. Rotary Way, Brompton, Northallerton"
+                                className="lg:col-span-2"
+                              />
+                              <EditField
+                                label="Postcode"
+                                name="postcode"
+                                defaultValue={venue.postcode}
+                                placeholder="e.g. DL6 2UZ"
+                              />
+                              <EditField
+                                label="Notes"
+                                name="notes"
+                                defaultValue={venue.notes}
+                                placeholder="e.g. Wednesday league venue"
+                              />
+                              <EditField
+                                label="Image URL"
+                                name="imageUrl"
+                                defaultValue={venue.imageUrl}
+                                placeholder="https://www.sixfl.co.uk/venues/northallerton-leisure-centre.jpg"
+                                className="lg:col-span-2"
+                              />
+                              <EditField
+                                label="Website URL"
+                                name="websiteUrl"
+                                defaultValue={venue.websiteUrl}
+                                placeholder="https://..."
+                              />
+                              <EditField
+                                label="Google Maps URL"
+                                name="googleMapsUrl"
+                                defaultValue={venue.googleMapsUrl}
+                                placeholder="https://maps.google.com/..."
+                              />
+                              <EditField
+                                label="Parking notes"
+                                name="parkingNotes"
+                                defaultValue={venue.parkingNotes}
+                                placeholder="e.g. Free parking available on site"
+                                className="lg:col-span-2"
+                              />
+                              <EditField
+                                label="Pitch notes"
+                                name="pitchNotes"
+                                defaultValue={venue.pitchNotes}
+                                placeholder="e.g. 3G pitch, moulded boots recommended"
+                              />
+                              <EditField
+                                label="Facilities"
+                                name="facilities"
+                                defaultValue={venue.facilities}
+                                placeholder="e.g. Changing rooms, toilets, floodlights"
+                              />
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                              <p className="text-xs leading-5 text-white/40">
+                                Updating these details affects admin venue previews and
+                                future public league venue sections.
+                              </p>
+                              <button
+                                type="submit"
+                                className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300"
+                              >
+                                Save venue
+                              </button>
+                            </div>
+                          </form>
+                        </details>
                       </div>
                     </div>
                   </div>
