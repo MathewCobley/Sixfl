@@ -31,6 +31,12 @@ export async function createVenueAction(
   const address = getString(formData, "address");
   const postcode = getString(formData, "postcode");
   const notes = getString(formData, "notes");
+  const imageUrl = getString(formData, "imageUrl");
+  const websiteUrl = getString(formData, "websiteUrl");
+  const googleMapsUrl = getString(formData, "googleMapsUrl");
+  const parkingNotes = getString(formData, "parkingNotes");
+  const pitchNotes = getString(formData, "pitchNotes");
+  const facilities = getString(formData, "facilities");
 
   const errors: Record<string, string[]> = {};
 
@@ -51,11 +57,18 @@ export async function createVenueAction(
       address: address || null,
       postcode: postcode || null,
       notes: notes || null,
+      imageUrl: imageUrl || null,
+      websiteUrl: websiteUrl || null,
+      googleMapsUrl: googleMapsUrl || null,
+      parkingNotes: parkingNotes || null,
+      pitchNotes: pitchNotes || null,
+      facilities: facilities || null,
     },
   });
 
   revalidatePath("/admin/venues");
   revalidatePath("/admin/fixtures");
+  revalidatePath("/venues");
 
   return {
     success: true,
@@ -88,6 +101,7 @@ export async function deleteVenueAction(formData: FormData) {
 
   revalidatePath("/admin/venues");
   revalidatePath("/admin/fixtures");
+  revalidatePath("/venues");
 
   redirect("/admin/venues?deleted=1");
 }
