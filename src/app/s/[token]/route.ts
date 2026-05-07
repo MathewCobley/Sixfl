@@ -36,11 +36,14 @@ function isSafeRedirectUrl(value: string) {
 
 export const dynamic = "force-dynamic";
 
-export async function GET({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
+export async function GET(
+  _request: Request,
+  {
+    params,
+  }: {
+    params: Promise<{ token: string }>;
+  },
+) {
   const { token } = await params;
   const trimmedToken = token.trim();
 
