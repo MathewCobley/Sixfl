@@ -2,10 +2,25 @@
 // File: src/app/venues/page.tsx
 // ========================================
 
-import Image from "next/image";
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 
-const venues = [
+type VenueCardData = {
+  name: string;
+  league: string;
+  location: string;
+  address: string[];
+  image: string;
+  imageAlt: string;
+  description: string;
+  features: string[];
+  ctaHref: string;
+  infoHref?: string | null;
+  mapEmbedUrl: string;
+  mapsHref?: string | null;
+};
+
+const curatedVenues: VenueCardData[] = [
   {
     name: "Rossett Sports Centre",
     league: "Harrogate Tuesday League",
@@ -26,6 +41,8 @@ const venues = [
     infoHref: "https://www.rossettsportscentre.co.uk/",
     mapEmbedUrl:
       "https://www.google.com/maps?q=Rossett+Sports+Centre,+Pannal+Ash+Road,+Harrogate,+HG2+9PH&output=embed",
+    mapsHref:
+      "https://www.google.com/maps/search/?api=1&query=Rossett+Sports+Centre,+Pannal+Ash+Road,+Harrogate,+HG2+9PH",
   },
   {
     name: "St John Fisher 3G Pitch",
@@ -47,6 +64,8 @@ const venues = [
     infoHref: "https://www.stjohnfisher.org.uk/3G-Astro-Turf/",
     mapEmbedUrl:
       "https://www.google.com/maps?q=St+John+Fisher+Catholic+High+School+Harrogate&output=embed",
+    mapsHref:
+      "https://www.google.com/maps/search/?api=1&query=St+John+Fisher+Catholic+High+School+Harrogate",
   },
   {
     name: "Ripon Grammar School 3G Pitch",
@@ -68,6 +87,8 @@ const venues = [
     infoHref: "https://www.ripongrammar.co.uk/about/community-lettings/",
     mapEmbedUrl:
       "https://www.google.com/maps?q=Ripon+Grammar+School,+Ripon&output=embed",
+    mapsHref:
+      "https://www.google.com/maps/search/?api=1&query=Ripon+Grammar+School,+Ripon",
   },
   {
     name: "King James’s School 3G Pitch",
@@ -90,10 +111,126 @@ const venues = [
       "https://king-jamess.schoolbookings.co.uk/venues/397-king-jamess-school/5232-3g-floodlit-pitch",
     mapEmbedUrl:
       "https://www.google.com/maps?q=King+James's+School+Knaresborough&output=embed",
+    mapsHref:
+      "https://www.google.com/maps/search/?api=1&query=King+James's+School+Knaresborough",
   },
 ];
 
-export default function VenuesPage() {
+function normaliseName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function compactAddress(parts: Array<string | null | undefined>) {
+  return parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+}
+
+function buildMapUrl(name: string, address: string[]) {
+  const query = encodeURIComponent([name, ...address].join(", "));
+  return `https://www.google.com/maps?q=${query}&output=embed`;
+}
+
+function buildMapsHref(name: string, address: string[]) {
+  const query = encodeURIComponent([name, ...address].join(", "));
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
+}
+
+function getLocationFromVenue(venue: {
+  name: string;
+  address: string | null;
+  postcode: string | null;
+}) {
+  const combined = [venue.name, venue.address, venue.postcode]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (combined.includes("northallerton")) return "Northallerton";
+  if (combined.includes("harrogate")) return "Harrogate";
+  if (combined.includes("ripon")) return "Ripon";
+  if (combined.includes("knaresborough")) return "Knaresborough";
+  if (combined.includes("york")) return "York";
+  if (combined.includes("leeds")) return "Leeds";
+
+  return "SIXFL venue";
+}
+
+function getLeagueLabel(location: string) {
+  if (location === "Northallerton") return "Northallerton Wednesday League";
+  if (location === "Harrogate") return "Harrogate League Venue";
+  if (location === "Ripon") return "Ripon League Venue";
+  if (location === "Knaresborough") return "Knaresborough League Venue";
+
+  return "SIXFL League Venue";
+}
+
+function getVenueDescription(venue: {
+  name: string;
+  notes: string | null;
+  pitchNotes: string | null;
+  parkingNotes: string | null;
+  facilities: string | null;
+}) {
+  if (venue.notes) return venue.notes;
+
+  return `${venue.name} is part of the SIXFL venue network, supporting organised small-sided football with reliable fixtures, clear venue details and a proper match-night setup.`;
+}
+
+function getVenueFeatures(venue: {
+  parkingNotes: string | null;
+  pitchNotes: string | null;
+  facilities: string | null;
+}) {
+  const features = [
+    venue.pitchNotes,
+    venue.parkingNotes,
+    venue.facilities,
+    "SIXFL league venue",
+  ].filter((feature): feature is string => Boolean(feature));
+
+  return [...new Set(features)].slice(0, 5);
+}
+
+async function getVenues() {
+  const databaseVenues = await prisma.venue.findMany({
+    orderBy: [{ name: "asc" }],
+  });
+
+  const curatedNames = new Set(curatedVenues.map((venue) => normaliseName(venue.name)));
+
+  const adminVenues: VenueCardData[] = databaseVenues
+    .filter((venue) => !curatedNames.has(normaliseName(venue.name)))
+    .map((venue) => {
+      const address = compactAddress([venue.address, venue.postcode]);
+      const location = getLocationFromVenue(venue);
+      const mapEmbedUrl = buildMapUrl(venue.name, address);
+
+      return {
+        name: venue.name,
+        league: getLeagueLabel(location),
+        location,
+        address: address.length > 0 ? address : [location],
+        image: venue.imageUrl || "/venues/rossett.jpg",
+        imageAlt: `${venue.name} venue image`,
+        description: getVenueDescription(venue),
+        features: getVenueFeatures(venue),
+        ctaHref:
+          location === "Northallerton"
+            ? "/register-interest?type=team&area=Northallerton&night=Wednesday"
+            : "/register-interest?type=team",
+        infoHref: venue.websiteUrl,
+        mapEmbedUrl,
+        mapsHref: venue.googleMapsUrl || buildMapsHref(venue.name, address),
+      };
+    });
+
+  return [...adminVenues, ...curatedVenues];
+}
+
+export default async function VenuesPage() {
+  const venues = await getVenues();
+
   return (
     <main className="min-h-screen bg-black text-white">
       {/* HERO */}
@@ -121,7 +258,7 @@ export default function VenuesPage() {
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid gap-10">
           {venues.map((venue) => (
-            <VenueCard key={venue.name} {...venue} />
+            <VenueCard key={`${venue.location}-${venue.name}`} {...venue} />
           ))}
         </div>
       </section>
@@ -177,33 +314,20 @@ function VenueCard({
   ctaHref,
   infoHref,
   mapEmbedUrl,
-}: {
-  name: string;
-  league: string;
-  location: string;
-  address: string[];
-  image: string;
-  imageAlt: string;
-  description: string;
-  features: string[];
-  ctaHref: string;
-  infoHref: string;
-  mapEmbedUrl: string;
-}) {
+  mapsHref,
+}: VenueCardData) {
   return (
     <div className="group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.05] shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl transition hover:border-emerald-500/30 hover:shadow-[0_30px_110px_rgba(16,185,129,0.15)]">
       {/* IMAGE HEADER */}
-      <div className="relative aspect-[16/8] w-full overflow-hidden border-b border-white/10">
-        <Image
-          src={image}
-          alt={imageAlt}
-          fill
-          className="object-cover transition-transform duration-[1600ms] ease-out group-hover:scale-105"
-          priority
-        />
-
-        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.85),rgba(0,0,0,0.2),rgba(0,0,0,0.2))]" />
-
+      <div
+        className="relative aspect-[16/8] w-full overflow-hidden border-b border-white/10 bg-cover bg-center bg-no-repeat transition-transform duration-[1600ms] ease-out group-hover:scale-[1.01]"
+        style={{
+          backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url(${JSON.stringify(
+            image
+          )})`,
+        }}
+        aria-label={imageAlt}
+      >
         <div className="absolute bottom-0 left-0 right-0 p-6">
           <div className="text-xs font-bold tracking-[0.2em] text-emerald-300">
             {league}
@@ -233,7 +357,7 @@ function VenueCard({
             ))}
           </div>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href={ctaHref}
               className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:bg-emerald-400"
@@ -241,14 +365,27 @@ function VenueCard({
               REGISTER YOUR TEAM
             </Link>
 
-            <a
-              href={infoHref}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-bold tracking-wide text-white transition hover:bg-white/10"
-            >
-              VENUE WEBSITE
-            </a>
+            {infoHref ? (
+              <a
+                href={infoHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-bold tracking-wide text-white transition hover:bg-white/10"
+              >
+                VENUE WEBSITE
+              </a>
+            ) : null}
+
+            {mapsHref ? (
+              <a
+                href={mapsHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-bold tracking-wide text-white transition hover:bg-white/10"
+              >
+                OPEN MAPS
+              </a>
+            ) : null}
           </div>
         </div>
 
