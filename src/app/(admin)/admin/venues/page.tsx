@@ -25,6 +25,38 @@ function MetricCard({
   );
 }
 
+function DetailLine({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+
+  return (
+    <p>
+      <span className="font-semibold text-white/70">{label}: </span>
+      {value}
+    </p>
+  );
+}
+
+function VenueLinkButton({
+  href,
+  children,
+}: {
+  href?: string | null;
+  children: React.ReactNode;
+}) {
+  if (!href) return null;
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:border-emerald-400/30 hover:bg-emerald-400/10 hover:text-emerald-100"
+    >
+      {children}
+    </a>
+  );
+}
+
 export default async function AdminVenuesPage({
   searchParams,
 }: {
@@ -53,6 +85,9 @@ export default async function AdminVenuesPage({
     0
   );
 
+  const venuesWithImages = venues.filter((venue) => venue.imageUrl).length;
+  const venuesWithDirections = venues.filter((venue) => venue.googleMapsUrl).length;
+
   const errorMessage =
     sp.error === "in-use"
       ? "That venue cannot be deleted because fixtures are already linked to it."
@@ -77,18 +112,17 @@ export default async function AdminVenuesPage({
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
                   Add match locations once, then reuse them across league setup,
-                  manual fixture creation, and fixture generation.
+                  manual fixture creation, fixture generation, and public launch
+                  pages.
                 </p>
               </div>
             </div>
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[520px] lg:grid-cols-3">
+            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[680px] lg:grid-cols-4">
               <MetricCard label="Venues" value={venues.length} />
               <MetricCard label="Linked fixtures" value={totalFixturesUsingVenues} />
-              <MetricCard
-                label="Unused venues"
-                value={venues.filter((venue) => venue._count.fixtures === 0).length}
-              />
+              <MetricCard label="Images added" value={venuesWithImages} />
+              <MetricCard label="Map links" value={venuesWithDirections} />
             </div>
           </div>
         </div>
@@ -116,8 +150,8 @@ export default async function AdminVenuesPage({
                   Create venue
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                  Add the venue details once so admins can select them everywhere
-                  fixtures are managed.
+                  Add the core details, public image, directions and facilities so
+                  each venue can support league recruitment as well as fixtures.
                 </p>
               </div>
             </div>
@@ -137,7 +171,8 @@ export default async function AdminVenuesPage({
                   Existing venues
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                  Review venue usage before removing anything from the system.
+                  Review venue usage, public images, directions and captain-facing
+                  details before using a venue for a new league launch.
                 </p>
               </div>
             </div>
@@ -160,49 +195,109 @@ export default async function AdminVenuesPage({
             ) : (
               <div className="divide-y divide-white/5">
                 {venues.map((venue) => (
-                  <div
-                    key={venue.id}
-                    className="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-start md:justify-between md:px-8"
-                  >
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-white">
-                          {venue.name}
-                        </h3>
-                        <span className="inline-flex rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-semibold text-white/70">
-                          {venue._count.fixtures} fixture
-                          {venue._count.fixtures === 1 ? "" : "s"}
-                        </span>
+                  <div key={venue.id} className="px-6 py-5 md:px-8">
+                    <div className="grid gap-5 xl:grid-cols-[180px_minmax(0,1fr)]">
+                      {venue.imageUrl ? (
+                        <div
+                          className="min-h-36 overflow-hidden rounded-3xl border border-white/10 bg-cover bg-center bg-no-repeat shadow-[inset_0_-50px_90px_rgba(0,0,0,0.55)] xl:min-h-32"
+                          style={{
+                            backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.48), rgba(0,0,0,0.05)), url(${JSON.stringify(
+                              venue.imageUrl
+                            )})`,
+                          }}
+                          aria-label={`${venue.name} image preview`}
+                        />
+                      ) : (
+                        <div className="flex min-h-36 items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/25 text-sm font-semibold text-white/35 xl:min-h-32">
+                          No image
+                        </div>
+                      )}
+
+                      <div className="min-w-0 space-y-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-semibold text-white">
+                                {venue.name}
+                              </h3>
+                              <span className="inline-flex rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-semibold text-white/70">
+                                {venue._count.fixtures} fixture
+                                {venue._count.fixtures === 1 ? "" : "s"}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1 text-sm leading-6 text-white/55">
+                              <DetailLine label="Address" value={venue.address} />
+                              <DetailLine label="Postcode" value={venue.postcode} />
+                              <DetailLine label="Notes" value={venue.notes} />
+                              <DetailLine label="Parking" value={venue.parkingNotes} />
+                              <DetailLine label="Pitch" value={venue.pitchNotes} />
+                              <DetailLine label="Facilities" value={venue.facilities} />
+
+                              {!venue.address &&
+                              !venue.postcode &&
+                              !venue.notes &&
+                              !venue.parkingNotes &&
+                              !venue.pitchNotes &&
+                              !venue.facilities ? (
+                                <p className="text-white/35">
+                                  No extra venue details added.
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 flex-wrap items-center gap-3 lg:justify-end">
+                            <VenueLinkButton href={venue.googleMapsUrl}>
+                              Map
+                            </VenueLinkButton>
+                            <VenueLinkButton href={venue.websiteUrl}>
+                              Website
+                            </VenueLinkButton>
+
+                            <Link
+                              href="/admin/fixtures"
+                              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+                            >
+                              Use in fixtures
+                            </Link>
+
+                            <form action={deleteVenueAction}>
+                              <input type="hidden" name="id" value={venue.id} />
+                              <button
+                                type="submit"
+                                disabled={venue._count.fixtures > 0}
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                Delete
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+
+                        {(venue.imageUrl || venue.websiteUrl || venue.googleMapsUrl) && (
+                          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-white/40">
+                            {venue.imageUrl ? (
+                              <p className="truncate">
+                                <span className="font-semibold text-white/55">Image:</span>{" "}
+                                {venue.imageUrl}
+                              </p>
+                            ) : null}
+                            {venue.googleMapsUrl ? (
+                              <p className="truncate">
+                                <span className="font-semibold text-white/55">Map:</span>{" "}
+                                {venue.googleMapsUrl}
+                              </p>
+                            ) : null}
+                            {venue.websiteUrl ? (
+                              <p className="truncate">
+                                <span className="font-semibold text-white/55">Website:</span>{" "}
+                                {venue.websiteUrl}
+                              </p>
+                            ) : null}
+                          </div>
+                        )}
                       </div>
-
-                      <div className="space-y-1 text-sm text-white/55">
-                        {venue.address ? <p>{venue.address}</p> : null}
-                        {venue.postcode ? <p>{venue.postcode}</p> : null}
-                        {venue.notes ? <p>{venue.notes}</p> : null}
-                        {!venue.address && !venue.postcode && !venue.notes ? (
-                          <p className="text-white/35">No extra venue details added.</p>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-3">
-                      <Link
-                        href="/admin/fixtures"
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
-                      >
-                        Use in fixtures
-                      </Link>
-
-                      <form action={deleteVenueAction}>
-                        <input type="hidden" name="id" value={venue.id} />
-                        <button
-                          type="submit"
-                          disabled={venue._count.fixtures > 0}
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Delete
-                        </button>
-                      </form>
                     </div>
                   </div>
                 ))}
