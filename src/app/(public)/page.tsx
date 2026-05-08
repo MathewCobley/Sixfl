@@ -6,13 +6,15 @@ import Link from "next/link";
 
 export const metadata = {
   title:
-    "SIXFL | Northallerton Wednesday 6-a-side football league recruiting now",
+    "SIXFL | Northallerton Wednesday recruiting now plus Harrogate 6-a-side league",
   description:
-    "SIXFL is recruiting teams for a new Wednesday 6-a-side football league in Northallerton, with proper fixtures, qualified referees and a cleaner experience for captains.",
+    "SIXFL is recruiting teams for a new Wednesday 6-a-side football league in Northallerton, while continuing to run the Harrogate league at Rossett Sports Centre.",
 };
 
 const northallertonTeamLink =
   "/register-interest?type=team&area=Northallerton&night=Wednesday";
+
+const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
 
 const launchAreas = ["Northallerton", "Harrogate", "Ripon", "York", "Leeds"];
 
@@ -113,10 +115,10 @@ export default function HomePage() {
               </Link>
 
               <Link
-                href="/register-interest?type=player&area=Northallerton&night=Wednesday"
+                href={harrogateLeagueLink}
                 className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-[13px] font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
-                JOIN AS A PLAYER
+                VIEW HARROGATE LEAGUE
               </Link>
             </div>
 
@@ -127,6 +129,17 @@ export default function HomePage() {
               we are looking for local teams, groups of mates, work teams and
               existing football teams who want a properly organised weekly
               league.
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm leading-6 text-white/70">
+              Already looking for an active SIXFL league? Our{" "}
+              <Link
+                href={harrogateLeagueLink}
+                className="font-semibold text-emerald-300 underline underline-offset-4 transition hover:text-emerald-200"
+              >
+                Harrogate 6-a-side league at Rossett Sports Centre
+              </Link>{" "}
+              remains live with fixtures, teams and league updates.
             </div>
           </div>
 
@@ -174,6 +187,13 @@ export default function HomePage() {
                     href="/register-interest?type=referee&area=Northallerton&night=Wednesday"
                     cta="Referee interest"
                   />
+
+                  <FunnelCard
+                    title="View Harrogate"
+                    desc="See the live SIXFL Harrogate league at Rossett Sports Centre."
+                    href={harrogateLeagueLink}
+                    cta="Open Harrogate league"
+                  />
                 </div>
               </div>
             </div>
@@ -184,7 +204,7 @@ export default function HomePage() {
           <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
             <StripItem label="NEW LEAGUE" value="Northallerton" />
             <StripItem label="MATCH NIGHT" value="Wednesday" />
-            <StripItem label="STATUS" value="Recruiting" />
+            <StripItem label="LIVE LEAGUE" value="Harrogate" />
             <StripItem label="FORMAT" value="6-a-side" />
           </div>
         </section>
@@ -212,6 +232,35 @@ export default function HomePage() {
                   className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
                 >
                   REGISTER YOUR TEAM
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+            <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
+              <div className="lg:col-span-8">
+                <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
+                  LIVE SIXFL LEAGUE
+                </div>
+                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                  Harrogate Tuesday league at Rossett Sports Centre
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
+                  SIXFL also continues to run the Harrogate league, with live
+                  fixtures, results, teams and league table updates available on
+                  the public league page.
+                </p>
+              </div>
+
+              <div className="lg:col-span-4">
+                <Link
+                  href={harrogateLeagueLink}
+                  className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+                >
+                  VIEW HARROGATE LEAGUE
                 </Link>
               </div>
             </div>
