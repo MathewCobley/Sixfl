@@ -90,6 +90,22 @@ function getLeagueInitials(name: string) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "LG";
 }
 
+function normaliseLeagueBadgeUrl(value?: string | null) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) return null;
+
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("/")
+  ) {
+    return trimmed;
+  }
+
+  return `/${trimmed}`;
+}
+
 function getContactName(team: TeamListItem) {
   return (
     team.contactName ||
@@ -436,6 +452,7 @@ export default async function AdminTeamsPage({
               ? "Linked teams in this live league"
               : "Linked teams in this inactive league"
             : "Teams waiting to be assigned to a league";
+          const leagueBadgeUrl = normaliseLeagueBadgeUrl(group.league?.badgeUrl);
 
           return (
             <section
@@ -444,12 +461,12 @@ export default async function AdminTeamsPage({
             >
               <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:flex-row md:items-center md:justify-between">
                 <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-emerald-500/10 text-lg font-semibold text-emerald-200">
-                    {group.league?.badgeUrl ? (
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 text-lg font-semibold text-emerald-200">
+                    {leagueBadgeUrl ? (
                       <img
-                        src={group.league.badgeUrl}
-                        alt={leagueLabel}
-                        className="h-full w-full object-cover"
+                        src={leagueBadgeUrl}
+                        alt=""
+                        className="max-h-full max-w-full object-contain"
                       />
                     ) : (
                       getLeagueInitials(group.league?.name ?? "No League")
