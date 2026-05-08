@@ -64,3 +64,75 @@ body {
 .animate-glow {
   animation: glowPulse 3.2s ease-in-out infinite;
 }
+
+/* Public league hero badge treatment
+   The league landing page already has a strong two-column hero. This moves the
+   league badge into the open right-hand space on desktop and gives detailed
+   shield badges enough room to breathe without changing the database/content. */
+@media (min-width: 1280px) {
+  body:has(a[href="#table"]) section.relative.isolate > div.relative > div > div.grid {
+    position: relative;
+  }
+
+  body:has(a[href="#table"])
+    section.relative.isolate
+    > div.relative
+    > div
+    > div.grid
+    > div:first-child {
+    padding-right: clamp(15rem, 23vw, 21rem);
+  }
+
+  body:has(a[href="#table"])
+    section.relative.isolate
+    > div.relative
+    > div
+    > div.grid
+    > div:first-child
+    > div:first-child
+    > div:first-child {
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 10;
+  }
+
+  body:has(a[href="#table"])
+    section.relative.isolate
+    > div.relative
+    > div
+    > div.grid
+    > div:first-child
+    > div:first-child
+    > div:first-child
+    > div:last-child {
+    height: clamp(13.5rem, 18vw, 18.5rem) !important;
+    width: clamp(13.5rem, 18vw, 18.5rem) !important;
+    padding: 1rem !important;
+    border-radius: 1.75rem !important;
+  }
+
+  body:has(a[href="#table"])
+    section.relative.isolate
+    > div.relative
+    > div
+    > div.grid
+    > div:last-child {
+    margin-top: clamp(14rem, 18vw, 18rem);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  body:has(a[href="#table"])
+    section.relative.isolate
+    > div.relative
+    > div
+    > div.grid
+    > div:first-child
+    > div:first-child
+    > div:first-child
+    > div:last-child {
+    height: 11rem !important;
+    width: 11rem !important;
+  }
+}
