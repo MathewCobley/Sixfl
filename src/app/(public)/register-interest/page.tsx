@@ -9,6 +9,8 @@ type SearchParams = Promise<{
   success?: string;
   error?: string;
   type?: string;
+  area?: string;
+  night?: string;
 }>;
 
 type InterestTypeValue = "TEAM" | "PLAYER" | "REFEREE";
@@ -29,6 +31,25 @@ type LeadTypeConfig = {
   notesLabel: string;
   notesPlaceholder: string;
 };
+
+const areaOptions = [
+  "Northallerton",
+  "Harrogate",
+  "Ripon",
+  "York",
+  "Leeds",
+  "Other",
+] as const;
+
+const preferredNightOptions = [
+  { label: "Monday", value: "MONDAY" },
+  { label: "Tuesday", value: "TUESDAY" },
+  { label: "Wednesday", value: "WEDNESDAY" },
+  { label: "Thursday", value: "THURSDAY" },
+  { label: "Friday", value: "FRIDAY" },
+  { label: "Saturday", value: "SATURDAY" },
+  { label: "Sunday", value: "SUNDAY" },
+] as const;
 
 const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
   TEAM: {
@@ -90,22 +111,28 @@ const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
   },
 };
 
-const preferredNightOptions = [
-  { label: "Monday", value: "MONDAY" },
-  { label: "Tuesday", value: "TUESDAY" },
-  { label: "Wednesday", value: "WEDNESDAY" },
-  { label: "Thursday", value: "THURSDAY" },
-  { label: "Friday", value: "FRIDAY" },
-  { label: "Saturday", value: "SATURDAY" },
-  { label: "Sunday", value: "SUNDAY" },
-] as const;
-
 function getLeadType(rawType?: string): InterestTypeValue {
   const value = String(rawType ?? "").trim().toUpperCase();
 
   if (value === "PLAYER") return "PLAYER";
   if (value === "REFEREE") return "REFEREE";
   return "TEAM";
+}
+
+function getDefaultArea(rawArea?: string) {
+  const value = String(rawArea ?? "").trim();
+  const match = areaOptions.find(
+    (area) => area.toLowerCase() === value.toLowerCase(),
+  );
+
+  return match ?? "";
+}
+
+function getDefaultNight(rawNight?: string) {
+  const value = String(rawNight ?? "").trim().toUpperCase();
+  const match = preferredNightOptions.find((night) => night.value === value);
+
+  return match?.value ?? "";
 }
 
 function getErrorMessage(rawError?: string): string | null {
@@ -127,6 +154,8 @@ export default async function RegisterInterestPage({
   const leadType = getLeadType(sp.type);
   const config = leadTypeConfig[leadType];
   const errorMessage = getErrorMessage(sp.error);
+  const defaultArea = getDefaultArea(sp.area);
+  const defaultNight = getDefaultNight(sp.night);
 
   if (success) {
     return (
@@ -139,24 +168,6 @@ export default async function RegisterInterestPage({
             >
               ← Back to home
             </Link>
-
-            <div className="flex flex-wrap gap-2">
-              <TypeLink
-                href="/register-interest?type=team"
-                label="Team"
-                active={leadType === "TEAM"}
-              />
-              <TypeLink
-                href="/register-interest?type=player"
-                label="Player"
-                active={leadType === "PLAYER"}
-              />
-              <TypeLink
-                href="/register-interest?type=referee"
-                label="Referee"
-                active={leadType === "REFEREE"}
-              />
-            </div>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8">
@@ -170,11 +181,6 @@ export default async function RegisterInterestPage({
 
             <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-emerald-200">
               <p className="text-base leading-7">{config.successBody}</p>
-            </div>
-
-            <div className="mt-6 text-sm leading-7 text-white/65">
-              We’ve saved your details and will contact you as launch plans
-              develop.
             </div>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -269,7 +275,15 @@ export default async function RegisterInterestPage({
 
           <form action={submitRegisterInterest} className="mt-8 grid gap-4">
             <input type="hidden" name="interestType" value={config.type} />
-            <input type="hidden" name="source" value="register-interest-page" />
+            <input
+              type="hidden"
+              name="source"
+              value={
+                defaultArea === "Northallerton" && defaultNight === "WEDNESDAY"
+                  ? "northallerton-wednesday-launch"
+                  : "register-interest-page"
+              }
+            />
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -314,7 +328,8 @@ export default async function RegisterInterestPage({
                 label="Area"
                 name="area"
                 required
-                options={["York", "Leeds", "Harrogate", "Ripon", "Other"]}
+                options={areaOptions.map((area) => ({ label: area, value: area }))}
+                defaultValue={defaultArea}
               />
 
               {config.showLeagueType ? (
@@ -331,7 +346,7 @@ export default async function RegisterInterestPage({
               ) : null}
             </div>
 
-            <PreferredNightsField />
+            <PreferredNightsField defaultNight={defaultNight} />
 
             {config.showExperience ? (
               <SelectField
@@ -450,11 +465,13 @@ function SelectField({
   name,
   options,
   required = false,
+  defaultValue = "",
 }: {
   label: string;
   name: string;
   options: Array<string | { label: string; value: string }>;
   required?: boolean;
+  defaultValue?: string;
 }) {
   return (
     <div>
@@ -464,7 +481,7 @@ function SelectField({
       <select
         name={name}
         required={required}
-        defaultValue=""
+        defaultValue={defaultValue}
         className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-500/50"
       >
         <option value="" disabled className="bg-black text-white/60">
@@ -491,13 +508,7 @@ function SelectField({
   );
 }
 
-function CheckboxField({
-  name,
-  label,
-}: {
-  name: string;
-  label: string;
-}) {
+function CheckboxField({ name, label }: { name: string; label: string }) {
   return (
     <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/80">
       <input
@@ -511,7 +522,7 @@ function CheckboxField({
   );
 }
 
-function PreferredNightsField() {
+function PreferredNightsField({ defaultNight = "" }: { defaultNight?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
       <div className="flex flex-col gap-1">
@@ -533,6 +544,7 @@ function PreferredNightsField() {
               type="checkbox"
               name="preferredNights"
               value={option.value}
+              defaultChecked={defaultNight === option.value}
               className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-500"
             />
             <span>{option.label}</span>
