@@ -195,6 +195,7 @@ export default async function EditLeaguePage({
                 surface: league.surface ?? "",
                 description: league.description ?? "",
                 heroImageUrl: league.heroImageUrl ?? "",
+                badgeUrl: league.badgeUrl ?? "",
                 ctaText: league.ctaText ?? "",
               }}
             />
