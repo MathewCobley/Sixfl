@@ -592,10 +592,12 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     throw new Error("Notification recipient not found.");
   }
 
+  const isTransactional = true;
+
   const allowed = canQueueForRecipient({
     recipient,
     channel: input.channel,
-    isTransactional: input.isTransactional ?? true,
+    isTransactional,
   });
 
   const rendered = buildQueuedContentDirect({
@@ -620,7 +622,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
         channel: input.channel,
         audience: input.audience,
         status: NotificationDispatchStatus.SKIPPED,
-        isTransactional: input.isTransactional ?? true,
+        isTransactional,
         subject: rendered.subject,
         bodyText: rendered.bodyText,
         bodyHtml: rendered.bodyHtml,
@@ -647,7 +649,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       channel: input.channel,
       audience: input.audience,
       status: NotificationDispatchStatus.QUEUED,
-      isTransactional: input.isTransactional ?? true,
+      isTransactional,
       subject: rendered.subject,
       bodyText: rendered.bodyText,
       bodyHtml: rendered.bodyHtml,
