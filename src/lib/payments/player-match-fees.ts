@@ -579,6 +579,13 @@ export async function queuePlayerMatchFeeReminder(input: {
     else skipped += 1;
   }
 
+  if (queued > 0) {
+    await prisma.playerMatchFee.update({
+      where: { id: fee.id },
+      data: { lastChasedAt: new Date() },
+    });
+  }
+
   return { queued, skipped, status: queued > 0 ? "queued" as const : "already_sent" as const };
 }
 
