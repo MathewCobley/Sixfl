@@ -6,6 +6,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 
+const SHORT_TOKEN_DISPATCH_PREFIX_LENGTH = 10;
+
 type SmsShortLink = {
   token?: unknown;
   url?: unknown;
@@ -34,6 +36,50 @@ function isSafeRedirectUrl(value: string) {
   }
 }
 
+async function findDispatchForShortToken(token: string) {
+  if (token.includes("-")) {
+    const dispatchId = token.split("-")[0];
+
+    if (!dispatchId) return null;
+
+    return prisma.notificationDispatch.findUnique({
+      where: { id: dispatchId },
+      select: {
+        metadata: true,
+      },
+    });
+  }
+
+  const dispatchIdPrefix = token.slice(0, SHORT_TOKEN_DISPATCH_PREFIX_LENGTH);
+
+  if (dispatchIdPrefix.length < SHORT_TOKEN_DISPATCH_PREFIX_LENGTH) {
+    return null;
+  }
+
+  const candidates = await prisma.notificationDispatch.findMany({
+    where: {
+      id: {
+        startsWith: dispatchIdPrefix,
+      },
+    },
+    select: {
+      metadata: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 10,
+  });
+
+  return (
+    candidates.find((candidate) =>
+      getShortLinksFromMetadata(candidate.metadata).some(
+        (link) => link.token === token,
+      ),
+    ) ?? null
+  );
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(
@@ -49,16 +95,7 @@ export async function GET(
 
   if (!trimmedToken) notFound();
 
-  const dispatchId = trimmedToken.split("-")[0];
-
-  if (!dispatchId) notFound();
-
-  const dispatch = await prisma.notificationDispatch.findUnique({
-    where: { id: dispatchId },
-    select: {
-      metadata: true,
-    },
-  });
+  const dispatch = await findDispatchForShortToken(trimmedToken);
 
   if (!dispatch) notFound();
 
