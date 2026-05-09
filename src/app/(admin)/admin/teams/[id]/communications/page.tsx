@@ -51,6 +51,32 @@ function getDirectionLabel(value: string) {
   return value === "INBOUND" ? "Inbound" : "Outbound";
 }
 
+function formatMessageStatus(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase();
+
+  switch (normalized) {
+    case "queued":
+      return "Queued";
+    case "processing":
+      return "Processing";
+    case "sent":
+      return "Sent";
+    case "delivered":
+      return "Delivered";
+    case "received":
+      return "Received";
+    case "failed":
+      return "Failed";
+    case "cancelled":
+    case "canceled":
+      return "Cancelled";
+    case "skipped":
+      return "Skipped";
+    default:
+      return "Recorded";
+  }
+}
+
 function formatDispatchStatus(status: NotificationDispatchStatus) {
   switch (status) {
     case "QUEUED":
@@ -182,6 +208,8 @@ function getStatusChipTone(statusLabel: string) {
     case "Processing":
       return "border-sky-400/20 bg-sky-500/10 text-sky-100";
     case "Sent":
+    case "Delivered":
+    case "Received":
       return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
     case "Failed":
       return "border-red-400/20 bg-red-500/10 text-red-200";
@@ -205,7 +233,13 @@ function getPrimaryTypeLabel(item: TimelineItem) {
   }
 
   if (item.source === "message") {
-    return item.channel === NotificationChannel.EMAIL ? "Inbox email" : "Inbox SMS";
+    if (item.channel === NotificationChannel.EMAIL) {
+      return item.directionLabel === "Inbound" ? "Inbox email" : "Thread email";
+    }
+
+    if (item.channel === NotificationChannel.SMS) {
+      return item.directionLabel === "Inbound" ? "Inbox SMS" : "Thread SMS";
+    }
   }
 
   if (item.source === "legacyLeadEmail") {
@@ -401,24 +435,29 @@ export default async function AdminTeamCommunicationsPage({
       };
     }),
     ...threads.flatMap((thread) =>
-      thread.messages.map((message) => ({
-        id: `message-${message.id}`,
-        source: "message" as const,
-        channel: message.channel,
-        directionLabel: getDirectionLabel(message.direction),
-        statusLabel: message.providerStatus || "Recorded",
-        sourceLabel: "Inbox thread",
-        templateName: null,
-        templateKey: null,
-        subject: message.subject || `${message.channel} message`,
-        bodyText: message.textBody || message.body || "",
-        bodyHtml: message.channel === "EMAIL" ? message.htmlBody || null : null,
-        contactLabel: thread.contactName || snapshot.teamName || team.name,
-        contactValue: message.toEmail || message.toNumber || message.fromNumber || null,
-        occurredAt: message.receivedAt ?? message.sentAt ?? message.createdAt,
-        failureReason: null,
-        cta: null,
-      })),
+      thread.messages.map((message) => {
+        const directionLabel = getDirectionLabel(message.direction);
+
+        return {
+          id: `message-${message.id}`,
+          source: "message" as const,
+          channel: message.channel,
+          directionLabel,
+          statusLabel: formatMessageStatus(message.providerStatus),
+          sourceLabel:
+            directionLabel === "Inbound" ? "Inbox thread" : "Message thread",
+          templateName: null,
+          templateKey: null,
+          subject: message.subject || `${message.channel} message`,
+          bodyText: message.textBody || message.body || "",
+          bodyHtml: message.channel === "EMAIL" ? message.htmlBody || null : null,
+          contactLabel: thread.contactName || snapshot.teamName || team.name,
+          contactValue: message.toEmail || message.toNumber || message.fromNumber || null,
+          occurredAt: message.receivedAt ?? message.sentAt ?? message.createdAt,
+          failureReason: null,
+          cta: null,
+        };
+      }),
     ),
     ...(team.convertedFromLead?.emails ?? []).map((email) => ({
       id: `lead-email-${email.id}`,
