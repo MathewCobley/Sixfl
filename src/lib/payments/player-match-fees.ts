@@ -11,6 +11,7 @@ import {
   PlayerMatchFeeStatus,
 } from "@prisma/client";
 
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getPhoneDisplayValue } from "@/lib/notifications/phone";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
@@ -553,6 +554,8 @@ export async function queuePlayerMatchFeeReminder(input: {
       },
     });
 
+    await logNotificationDispatchToThread({ dispatch, recipient });
+
     if (dispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
     else skipped += 1;
   }
@@ -574,6 +577,8 @@ export async function queuePlayerMatchFeeReminder(input: {
         paymentUrl: fee.paymentUrl,
       },
     });
+
+    await logNotificationDispatchToThread({ dispatch, recipient });
 
     if (dispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
     else skipped += 1;
