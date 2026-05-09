@@ -9,7 +9,6 @@ import {
   NotificationDispatchStatus,
   NotificationTemplateKind,
 } from "@prisma/client";
-import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
@@ -35,6 +34,15 @@ export type QueueFixtureConfirmationSmsResult =
       teamName?: string;
     };
 
+const DEFAULT_CONFIRMATION_SMS_BODY =
+  "SIXFL: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}}. {{link}}";
+const DEFAULT_URGENT_CONFIRMATION_SMS_BODY =
+  "SIXFL URGENT: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}} now. {{link}}";
+const LEGACY_CONFIRMATION_SMS_BODY =
+  "SIXFL: Please confirm your fixture for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Confirm here: {{link}}";
+const LEGACY_URGENT_CONFIRMATION_SMS_BODY =
+  "SIXFL URGENT: We still need fixture confirmation for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Please confirm now: {{link}}";
+
 function getSiteUrl() {
   return (
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
@@ -50,13 +58,24 @@ function buildAbsoluteUrl(path: string) {
 }
 
 function formatKickoff(date: Date) {
-  return formatDateTimeInLondon(date, {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
     weekday: "short",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  });
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const partMap = new Map(parts.map((part) => [part.type, part.value]));
+  const weekday = partMap.get("weekday") ?? "";
+  const day = Number(partMap.get("day") ?? "0");
+  const month = partMap.get("month") ?? "";
+  const hour = partMap.get("hour") ?? "";
+  const minute = partMap.get("minute") ?? "";
+
+  return `${weekday} ${day} ${month} ${hour}:${minute}`.trim();
 }
 
 function getSourceType(mode: FixtureConfirmationReminderMode) {
@@ -99,6 +118,32 @@ function getTemplateKey(mode: FixtureConfirmationReminderMode) {
     : "fixture-confirmation-reminder-sms";
 }
 
+function getDefaultTemplateBody(mode: FixtureConfirmationReminderMode) {
+  return mode === "auto24h"
+    ? DEFAULT_URGENT_CONFIRMATION_SMS_BODY
+    : DEFAULT_CONFIRMATION_SMS_BODY;
+}
+
+function resolveFixtureConfirmationTemplateBody(input: {
+  mode: FixtureConfirmationReminderMode;
+  body: string;
+}) {
+  const body = input.body.trim();
+
+  if (!body) {
+    return getDefaultTemplateBody(input.mode);
+  }
+
+  if (
+    body === LEGACY_CONFIRMATION_SMS_BODY ||
+    body === LEGACY_URGENT_CONFIRMATION_SMS_BODY
+  ) {
+    return getDefaultTemplateBody(input.mode);
+  }
+
+  return body;
+}
+
 function renderTemplateText(
   body: string,
   replacements: Record<string, string>,
@@ -134,7 +179,11 @@ async function buildSmsBody(input: {
   }
 
   const resolvedLink = input.captainFixturesUrl;
-  const rendered = renderTemplateText(template.body, {
+  const templateBody = resolveFixtureConfirmationTemplateBody({
+    mode: input.mode,
+    body: template.body,
+  });
+  const rendered = renderTemplateText(templateBody, {
     teamName: input.teamName,
     opponentName: input.opponentName,
     kickoffDateTime: formatKickoff(input.kickoffAt),
@@ -146,7 +195,7 @@ async function buildSmsBody(input: {
     return null;
   }
 
-  if (/{{\s*link\s*}}/i.test(template.body)) {
+  if (/{{\s*link\s*}}/i.test(templateBody)) {
     return rendered;
   }
 
