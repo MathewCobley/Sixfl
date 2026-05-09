@@ -346,8 +346,20 @@ export default async function AdminTeamCommunicationsPage({
       ]),
   );
 
+  const linkedMessageDispatchIds = new Set(
+    threads.flatMap((thread) =>
+      thread.messages
+        .map((message) => message.notificationDispatchId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const dispatchesForTimeline = dispatches.filter(
+    (dispatch) => !linkedMessageDispatchIds.has(dispatch.id),
+  );
+
   const timeline: TimelineItem[] = [
-    ...dispatches.map((dispatch) => {
+    ...dispatchesForTimeline.map((dispatch) => {
       const matchFeeCtaUrl =
         dispatch.sourceType === "FIXTURE_MATCH_FEE" ||
         dispatch.sourceType === "FIXTURE_MATCH_FEE_REMINDER"
