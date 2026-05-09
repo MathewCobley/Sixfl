@@ -1,6 +1,6 @@
 // ========================================
 // File: prisma/schema.prisma
-// FULL FILE - fixture captain confirmation added
+// FULL FILE - player lead pots added
 // ========================================
 
 generator client {
@@ -598,6 +598,7 @@ model PaymentTransaction {
   @@index([paidAt])
   @@index([method])
 }
+
 model PlayerMatchFee {
   id String @id @default(cuid())
 
@@ -641,6 +642,13 @@ model InterestLead {
   id           String       @id @default(cuid())
   interestType InterestType
   status       LeadStatus   @default(NEW)
+  leadPot      LeadPot      @default(NEW_INTEREST)
+
+  chaseStage                  Int       @default(0)
+  lastChasedAt                DateTime?
+  nextChaseDueAt              DateTime?
+  confirmedInterestAt         DateTime?
+  optionalDetailsRequestedAt  DateTime?
 
   contactName     String
   email           String?
@@ -674,11 +682,15 @@ model InterestLead {
 
   @@index([interestType])
   @@index([status])
+  @@index([leadPot])
   @@index([area])
   @@index([leagueType])
   @@index([createdAt])
   @@index([leagueId])
+  @@index([leagueId, leadPot])
+  @@index([interestType, leadPot])
   @@index([phoneNormalized])
+  @@index([nextChaseDueAt])
 }
 
 model InterestLeadPreferredNight {
@@ -747,6 +759,19 @@ enum LeadStatus {
   CONTACTED
   QUALIFIED
   CLOSED
+}
+
+enum LeadPot {
+  NEW_INTEREST
+  MOBILE_ONLY_NEEDS_EMAIL
+  EMAIL_REQUESTED
+  NEEDS_YES_CONFIRMATION
+  CONFIRMED_INTEREST
+  OPTIONAL_DETAILS_REQUESTED
+  READY_TO_PLACE
+  ADDED_TO_SQUAD
+  DORMANT
+  NOT_NOW
 }
 
 enum LeagueType {
