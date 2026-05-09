@@ -23,6 +23,12 @@ type RecipientSnapshot = Pick<
   | "phoneNormalized"
 >;
 
+const PLAYER_MATCH_FEE_SOURCE_TYPES = new Set([
+  "PLAYER_MATCH_FEE_REQUEST",
+  "PLAYER_MATCH_FEE_CHASE_24H",
+  "PLAYER_MATCH_FEE_CHASE_72H",
+]);
+
 function getMessageChannel(channel: NotificationChannel): MessageChannel {
   return channel === "SMS" ? "SMS" : "EMAIL";
 }
@@ -45,6 +51,20 @@ function buildPreview(bodyText: string) {
   const trimmed = bodyText.replace(/\s+/g, " ").trim();
   if (!trimmed) return null;
   return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
+}
+
+function getMetadataRecord(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  return metadata as Record<string, unknown>;
+}
+
+function getMetadataString(metadata: unknown, key: string) {
+  const record = getMetadataRecord(metadata);
+  const value = record?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 async function resolveThreadContext(dispatch: NotificationDispatch) {
@@ -106,6 +126,77 @@ async function resolveThreadContext(dispatch: NotificationDispatch) {
         contactEmail: prospect.email,
         contactPhone: prospect.phone,
       };
+    }
+  }
+
+  if (dispatch.sourceType && PLAYER_MATCH_FEE_SOURCE_TYPES.has(dispatch.sourceType)) {
+    const playerMatchFeeId =
+      getMetadataString(dispatch.metadata, "playerMatchFeeId") ??
+      dispatch.sourceId?.trim() ??
+      null;
+
+    if (playerMatchFeeId) {
+      const fee = await prisma.playerMatchFee.findUnique({
+        where: { id: playerMatchFeeId },
+        select: {
+          id: true,
+          teamId: true,
+          team: {
+            select: {
+              leagueId: true,
+            },
+          },
+          prospect: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+          teamMember: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (fee?.prospect) {
+        const displayName = [fee.prospect.firstName, fee.prospect.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+        return {
+          sourceType: "TEAM_PLAYER_PROSPECT",
+          sourceId: fee.prospect.id,
+          teamId: fee.teamId,
+          leagueId: fee.team?.leagueId ?? null,
+          contactName: displayName || fee.prospect.firstName,
+          contactEmail: fee.prospect.email,
+          contactPhone: fee.prospect.phone,
+        };
+      }
+
+      if (fee?.teamMember) {
+        return {
+          sourceType: "TEAM_MEMBER",
+          sourceId: fee.teamMember.id,
+          teamId: fee.teamId,
+          leagueId: fee.team?.leagueId ?? null,
+          contactName: fee.teamMember.user.name ?? fee.teamMember.user.email ?? null,
+          contactEmail: fee.teamMember.user.email,
+          contactPhone: null,
+        };
+      }
     }
   }
 
