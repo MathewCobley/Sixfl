@@ -593,7 +593,7 @@ export async function sendProspectSmsAction(formData: FormData) {
     channel: NotificationChannel.SMS,
     audience: NotificationAudience.PLAYER,
     body: personalisedBody,
-    isTransactional: false,
+    isTransactional: true,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
     metadata: {
