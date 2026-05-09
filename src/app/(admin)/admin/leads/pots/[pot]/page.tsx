@@ -9,11 +9,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import AdminCard from "@/components/admin/AdminCard";
 import {
+  PLAYER_LEAD_POTS,
   getPlayerLeadPotDefinition,
   isPlayerLeadPotKey,
   playerLeadPotToneClasses,
   type PlayerLeadPotKey,
 } from "@/lib/leads/playerLeadPots";
+import { movePlayerLeadPotAction } from "../actions";
 
 type PageParams = Promise<{
   pot: string;
@@ -69,6 +71,13 @@ function formatLeagueLabel(league: LeagueOption) {
   }`;
 }
 
+function buildPotReturnPath(pot: PlayerLeadPotKey, leagueId?: string) {
+  const search = new URLSearchParams();
+  if (leagueId) search.set("leagueId", leagueId);
+  const query = search.toString();
+  return `/admin/leads/pots/${pot}${query ? `?${query}` : ""}`;
+}
+
 function LeagueChip({
   href,
   label,
@@ -106,6 +115,42 @@ function DetailPill({ label, value }: { label: string; value: string }) {
   );
 }
 
+function MovePotButton({
+  leadId,
+  nextPot,
+  currentPot,
+  returnTo,
+}: {
+  leadId: string;
+  nextPot: PlayerLeadPotKey;
+  currentPot: PlayerLeadPotKey;
+  returnTo: string;
+}) {
+  const definition = getPlayerLeadPotDefinition(nextPot);
+  const classes = playerLeadPotToneClasses(definition.tone);
+  const isActive = nextPot === currentPot;
+
+  return (
+    <form action={movePlayerLeadPotAction}>
+      <input type="hidden" name="leadId" value={leadId} />
+      <input type="hidden" name="nextPot" value={nextPot} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <button
+        type="submit"
+        disabled={isActive}
+        className={[
+          "inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-[0.12em] transition",
+          isActive
+            ? `${classes.badge} cursor-default`
+            : "border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white",
+        ].join(" ")}
+      >
+        {definition.shortTitle}
+      </button>
+    </form>
+  );
+}
+
 export default async function AdminLeadPotDetailPage({
   params,
   searchParams,
@@ -126,6 +171,7 @@ export default async function AdminLeadPotDetailPage({
   const selectedLeagueId = sp.leagueId?.trim() || undefined;
   const definition = getPlayerLeadPotDefinition(pot);
   const classes = playerLeadPotToneClasses(definition.tone);
+  const returnTo = buildPotReturnPath(pot, selectedLeagueId);
 
   const leagues = await prisma.league.findMany({
     where: {
@@ -324,6 +370,23 @@ export default async function AdminLeadPotDetailPage({
                   <DetailPill label="Last chased" value={formatDate(lead.lastChasedAt)} />
                   <DetailPill label="Next chase" value={formatDate(lead.nextChaseDueAt)} />
                   <DetailPill label="Created" value={formatDate(lead.createdAt)} />
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+                    Move player to pot
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {PLAYER_LEAD_POTS.map((targetPot) => (
+                      <MovePotButton
+                        key={`${lead.id}-${targetPot.key}`}
+                        leadId={lead.id}
+                        nextPot={targetPot.key}
+                        currentPot={lead.leadPot}
+                        returnTo={returnTo}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}
