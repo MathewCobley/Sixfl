@@ -337,6 +337,19 @@ export default async function AdminTeamCommunicationsPage({
         messages: {
           orderBy: [{ createdAt: "desc" }],
           take: 250,
+          include: {
+            dispatch: {
+              select: {
+                template: {
+                  select: {
+                    id: true,
+                    name: true,
+                    key: true,
+                  },
+                },
+              },
+            },
+          },
         },
       },
       orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
@@ -446,8 +459,8 @@ export default async function AdminTeamCommunicationsPage({
           statusLabel: formatMessageStatus(message.providerStatus),
           sourceLabel:
             directionLabel === "Inbound" ? "Inbox thread" : "Message thread",
-          templateName: null,
-          templateKey: null,
+          templateName: message.dispatch?.template?.name ?? null,
+          templateKey: message.dispatch?.template?.key ?? null,
           subject: message.subject || `${message.channel} message`,
           bodyText: message.textBody || message.body || "",
           bodyHtml: message.channel === "EMAIL" ? message.htmlBody || null : null,
