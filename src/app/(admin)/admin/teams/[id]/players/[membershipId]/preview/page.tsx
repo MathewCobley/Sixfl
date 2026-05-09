@@ -143,6 +143,35 @@ export default async function AdminPlayerDashboardPreviewPage({
 
   const team = membership.team;
   const playerName = membership.user.name?.trim() || membership.user.email?.trim() || "Player";
+  const playerEmail = membership.user.email?.trim().toLowerCase() || null;
+  const linkedMemberships = await prisma.teamMember.findMany({
+    where: { userId: membership.user.id },
+    select: { id: true },
+  });
+  const linkedMembershipIds = linkedMemberships.map((item) => item.id);
+  const playerFeeIdentityFilter = [
+    ...(linkedMembershipIds.length > 0
+      ? [
+          {
+            teamMemberId: {
+              in: linkedMembershipIds,
+            },
+          },
+        ]
+      : []),
+    ...(playerEmail
+      ? [
+          {
+            prospect: {
+              email: {
+                equals: playerEmail,
+                mode: "insensitive" as const,
+              },
+            },
+          },
+        ]
+      : []),
+  ];
 
   const [upcomingFixtures, recentFixtures, squadMembers, playerFees] = await Promise.all([
     prisma.fixture.findMany({
@@ -190,34 +219,41 @@ export default async function AdminPlayerDashboardPreviewPage({
         user: { select: { name: true } },
       },
     }),
-    prisma.playerMatchFee.findMany({
-      where: {
-        teamId: teamid,
-        teamMemberId: membership.id,
-        status: {
-          in: [PlayerMatchFeeStatus.OPEN, PlayerMatchFeeStatus.PAID, PlayerMatchFeeStatus.WAIVED],
-        },
-      },
-      orderBy: [{ createdAt: "desc" }],
-      take: 10,
-      select: {
-        id: true,
-        fixtureId: true,
-        amountPence: true,
-        status: true,
-        paymentUrl: true,
-        createdAt: true,
-        paidAt: true,
-        fixture: {
-          select: {
-            kickoffAt: true,
-            homeTeamId: true,
-            homeTeam: { select: { name: true } },
-            awayTeam: { select: { name: true } },
+    playerFeeIdentityFilter.length > 0
+      ? prisma.playerMatchFee.findMany({
+          where: {
+            OR: playerFeeIdentityFilter,
+            status: {
+              in: [PlayerMatchFeeStatus.OPEN, PlayerMatchFeeStatus.PAID, PlayerMatchFeeStatus.WAIVED],
+            },
           },
-        },
-      },
-    }),
+          orderBy: [{ createdAt: "desc" }],
+          take: 20,
+          select: {
+            id: true,
+            fixtureId: true,
+            teamId: true,
+            amountPence: true,
+            status: true,
+            paymentUrl: true,
+            createdAt: true,
+            paidAt: true,
+            team: {
+              select: {
+                name: true,
+              },
+            },
+            fixture: {
+              select: {
+                kickoffAt: true,
+                homeTeamId: true,
+                homeTeam: { select: { name: true } },
+                awayTeam: { select: { name: true } },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const openFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.OPEN);
@@ -225,7 +261,11 @@ export default async function AdminPlayerDashboardPreviewPage({
   const nextOpenFee = openFees
     .slice()
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
-  const feesByFixtureId = new Map(playerFees.map((fee) => [fee.fixtureId, fee]));
+  const feesByFixtureId = new Map(
+    playerFees
+      .filter((fee) => fee.teamId === teamid)
+      .map((fee) => [fee.fixtureId, fee]),
+  );
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
@@ -339,9 +379,18 @@ export default async function AdminPlayerDashboardPreviewPage({
             </h2>
             <p className="mt-2 text-sm leading-6 text-amber-100/70">
               {outstandingPence > 0
-                ? `${openFees.length} open fee${openFees.length === 1 ? "" : "s"} on this player account.`
+                ? `${openFees.length} open fee${openFees.length === 1 ? "" : "s"} linked to this player account, including previous teams.`
                 : "No outstanding player match fees are showing for this player."}
             </p>
+            {nextOpenFee ? (
+              <div className="mt-3 rounded-2xl border border-amber-400/15 bg-black/20 p-3 text-xs text-amber-100/75">
+                <span className="font-semibold text-amber-100">Next due:</span>{" "}
+                {formatMoney(nextOpenFee.amountPence)} · {nextOpenFee.team.name} · {getFixtureLabel({
+                  homeTeamName: nextOpenFee.fixture.homeTeam.name,
+                  awayTeamName: nextOpenFee.fixture.awayTeam.name,
+                })}
+              </div>
+            ) : null}
             {nextOpenFee?.paymentUrl ? (
               <Link
                 href={nextOpenFee.paymentUrl}
