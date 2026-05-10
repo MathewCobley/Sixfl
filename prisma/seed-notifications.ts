@@ -236,7 +236,7 @@ Please make sure your team is ready for kickoff.
     channel: NotificationChannel.SMS,
     audience: NotificationAudience.TEAM,
     subject: null,
-    body: "SIXFL: Please confirm your fixture for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Confirm here: {{link}}",
+    body: "SIXFL: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}}. {{link}}",
   });
 
   await upsertTemplate({
@@ -247,7 +247,7 @@ Please make sure your team is ready for kickoff.
     channel: NotificationChannel.SMS,
     audience: NotificationAudience.TEAM,
     subject: null,
-    body: "SIXFL URGENT: We still need fixture confirmation for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Please confirm now: {{link}}",
+    body: "SIXFL URGENT: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}} now. {{link}}",
   });
 
   await upsertTemplate({

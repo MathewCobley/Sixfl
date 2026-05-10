@@ -1,4 +1,3 @@
-
 // ========================================
 // File: src/lib/notifications/service.ts
 // ========================================
@@ -22,7 +21,7 @@ import {
   type SIXFLPaymentSummary,
 } from "@/lib/email/buildEmail";
 import { getEmailReplyDomain } from "@/lib/resend/client";
-import { getPublicSiteUrl } from "@/lib/stripe/client";
+import { shortenSmsBodyLinks } from "./sms-short-links";
 import { getNotificationRecipientById } from "./recipients";
 import {
   renderNotificationText,
@@ -69,16 +68,10 @@ type ResolvedQueuedContent = {
   bodyHtml: string | null;
 };
 
-type SmsShortLink = {
-  token: string;
-  url: string;
-};
-
 const SIXFL_SMS_SIGNATURE = "SIXFL";
 const SMS_QUIET_HOURS_START_HOUR = 21;
 const SMS_QUIET_HOURS_END_HOUR = 9;
 const SMS_QUIET_HOURS_TIME_ZONE = "Europe/London";
-const SMS_URL_PATTERN = /https?:\/\/[^\s<>()"']+/gi;
 
 function normaliseSmsText(body: string) {
   return body
@@ -252,42 +245,6 @@ function getMetadataObject(value: Prisma.JsonValue | null) {
   return value as Record<string, Prisma.JsonValue>;
 }
 
-function trimTrailingUrlPunctuation(url: string) {
-  return url.replace(/[.,;:!?]+$/g, "");
-}
-
-function shortenSmsBodyLinks(input: {
-  dispatchId: string;
-  bodyText: string;
-}) {
-  const matches = Array.from(input.bodyText.matchAll(SMS_URL_PATTERN));
-  if (matches.length === 0) {
-    return {
-      bodyText: normaliseSmsText(input.bodyText),
-      links: [] as SmsShortLink[],
-    };
-  }
-
-  const links: SmsShortLink[] = [];
-  let bodyText = input.bodyText;
-
-  matches.forEach((match, index) => {
-    const original = match[0];
-    const url = trimTrailingUrlPunctuation(original);
-    const punctuation = original.slice(url.length);
-    const token = `${input.dispatchId}-${index}`;
-    const shortUrl = new URL(`/s/${token}`, `${getPublicSiteUrl()}/`).toString();
-
-    links.push({ token, url });
-    bodyText = bodyText.replace(original, `${shortUrl}${punctuation}`);
-  });
-
-  return {
-    bodyText: normaliseSmsText(bodyText),
-    links,
-  };
-}
-
 async function applySmsShortLinks(dispatch: NotificationDispatch) {
   if (dispatch.channel !== NotificationChannel.SMS) {
     return dispatch;
@@ -296,6 +253,7 @@ async function applySmsShortLinks(dispatch: NotificationDispatch) {
   const shortened = shortenSmsBodyLinks({
     dispatchId: dispatch.id,
     bodyText: dispatch.bodyText,
+    normaliseSmsText,
   });
 
   if (shortened.links.length === 0 && shortened.bodyText === dispatch.bodyText) {

@@ -565,6 +565,19 @@ export default async function AdminMessagesPage({
                     receivedAt: message.receivedAt?.toISOString() ?? null,
                     readAt: message.readAt?.toISOString() ?? null,
                     createdAt: message.createdAt.toISOString(),
+                    dispatch: message.dispatch
+                      ? {
+                          id: message.dispatch.id,
+                          template: message.dispatch.template
+                            ? {
+                                id: message.dispatch.template.id,
+                                name: message.dispatch.template.name,
+                                key: message.dispatch.template.key,
+                              }
+                            : null,
+                          metadata: message.dispatch.metadata,
+                        }
+                      : null,
                   })),
                 }
               : null
