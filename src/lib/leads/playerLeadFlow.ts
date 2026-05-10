@@ -8,8 +8,7 @@ export type PlayerLeadFlowStatusKey =
   | "PRE_ACTIVATION_SQUAD_PLAYER"
   | "ACTIVE_SQUAD_PLAYER"
   | "UNRESPONSIVE"
-  | "UNRESPONSIVE_SQUAD_PLAYER"
-  | "MOVED";
+  | "UNRESPONSIVE_SQUAD_PLAYER";
 
 export type LeadPotStorageKey =
   | "NEW_INTEREST"
@@ -120,18 +119,6 @@ export const PLAYER_LEAD_FLOW_STATUSES: PlayerLeadFlowStatusDefinition[] = [
     actionLabel: "Availability chase",
     chaseRule: "Reminder, 72 hours, 1 week, final removal notice",
     tone: "blue",
-    storageStatuses: ["DORMANT"],
-    moveToStorageStatus: "DORMANT",
-  },
-  {
-    key: "MOVED",
-    title: "Moved",
-    shortTitle: "Moved",
-    description:
-      "A player who has been moved out of the active flow, for example because they are no longer relevant to the current league build.",
-    actionLabel: "Leave moved",
-    chaseRule: "No active chase",
-    tone: "slate",
     storageStatuses: ["NOT_NOW"],
     moveToStorageStatus: "NOT_NOW",
   },
@@ -155,6 +142,16 @@ export function getPlayerLeadFlowStatusDefinition(
   return (
     PLAYER_LEAD_FLOW_STATUSES.find((status) => status.key === key) ??
     PLAYER_LEAD_FLOW_STATUSES[0]
+  );
+}
+
+export function getPlayerLeadFlowStatusForStorageStatus(
+  storageStatus: LeadPotStorageKey,
+) {
+  return (
+    PLAYER_LEAD_FLOW_STATUSES.find((status) =>
+      status.storageStatuses.includes(storageStatus),
+    ) ?? PLAYER_LEAD_FLOW_STATUSES[0]
   );
 }
 
