@@ -14,7 +14,7 @@ export default function PublicLayout({
   return (
     <>
       <AppHeader variant="public" />
-      <main className="mx-auto max-w-6xl px-4 pt-6 pb-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 pb-8 pt-0">{children}</main>
       <SiteFooter />
     </>
   );
