@@ -19,27 +19,18 @@ function replaceSnapshotWithPricing() {
     card.setAttribute("data-sixfl-pricing-card", "true");
     card.innerHTML = `
       <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">Player pricing</p>
-      <div class="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-5">
-        <div class="text-sm font-semibold text-emerald-200">Weekly match fee</div>
-        <div class="mt-2 flex items-end gap-2">
+      <h2 class="mt-4 text-2xl font-bold text-white sm:text-3xl">Simple weekly pricing</h2>
+      <div class="mt-6 rounded-3xl border border-white/10 bg-black/25 p-6">
+        <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
           <span class="text-5xl font-black tracking-tight text-white">£6</span>
-          <span class="pb-2 text-sm font-medium text-white/65">per player, per match</span>
+          <span class="pb-2 text-base font-bold text-white/55">per player / match</span>
         </div>
-        <p class="mt-3 text-sm leading-6 text-white/65">Simple weekly pricing. Players only pay when they are due to play.</p>
+        <p class="mt-5 text-base leading-7 text-white/70">A simple weekly player match fee. Players only pay when they are due to play, with a secure payment link sent directly to them.</p>
       </div>
-      <div class="mt-4 grid gap-3 text-sm text-white/70">
-        <div class="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
-          <span>Cost per match</span>
-          <span class="font-semibold text-white">£6</span>
-        </div>
-        <div class="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
-          <span>Payment type</span>
-          <span class="font-semibold text-white">Player match fee</span>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <span>Paid</span>
-          <span class="font-semibold text-white">Weekly</span>
-        </div>
+      <div class="mt-5 grid gap-3 text-sm text-white/80">
+        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">£6 per player, per match</div>
+        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">Secure online payment link</div>
+        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">Only charged when selected to play</div>
       </div>
     `;
   }
