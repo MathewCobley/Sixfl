@@ -254,6 +254,11 @@ body {
     width: 100% !important;
   }
 
+  body:has(a[href="#table"]) #table .divide-y > div {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
   body:has(a[href="#table"])
     #table
     div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"] {
