@@ -23,6 +23,11 @@ type SearchParams = Promise<{
 
 type TemplateConsoleType = "campaign" | "system";
 
+type LastUsedRow = {
+  id: string;
+  lastUsedAt: Date | null;
+};
+
 type UnifiedTemplateRow = {
   id: string;
   key: string;
@@ -34,6 +39,7 @@ type UnifiedTemplateRow = {
   subject: string | null;
   body: string;
   isActive: boolean;
+  lastUsedAt: Date | null;
   updatedAt: Date;
   type: TemplateConsoleType;
   source: "email" | "notification";
@@ -45,6 +51,10 @@ function formatDate(value: Date) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(value);
+}
+
+function formatNullableDate(value: Date | null) {
+  return value ? formatDate(value) : "Never";
 }
 
 function formatAudience(value: string) {
@@ -126,6 +136,10 @@ function buildFilterHref(type: TemplateConsoleType, channel?: "EMAIL" | "SMS") {
   return `/admin/templates?${params.toString()}`;
 }
 
+function buildLastUsedMap(rows: LastUsedRow[]) {
+  return new Map(rows.map((row) => [row.id, row.lastUsedAt]));
+}
+
 export default async function AdminTemplatesPage({
   searchParams,
 }: {
@@ -142,7 +156,13 @@ export default async function AdminTemplatesPage({
   const selectedType = isTemplateConsoleType(typeParam) ? typeParam : "campaign";
   const selectedChannel = isChannelFilter(channelParam) ? channelParam : undefined;
 
-  const [emailTemplates, smsTemplates, systemTemplatesRaw] = await Promise.all([
+  const [
+    emailTemplates,
+    smsTemplates,
+    systemTemplatesRaw,
+    emailLastUsedRows,
+    notificationLastUsedRows,
+  ] = await Promise.all([
     prisma.emailTemplate.findMany({
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
     }),
@@ -169,7 +189,24 @@ export default async function AdminTemplatesPage({
       },
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
     }),
+    prisma.$queryRaw<LastUsedRow[]>`
+      SELECT "id", "lastUsedAt"
+      FROM "EmailTemplate"
+    `,
+    prisma.$queryRaw<LastUsedRow[]>`
+      SELECT
+        template."id",
+        MAX(dispatch."sentAt") AS "lastUsedAt"
+      FROM "NotificationTemplate" template
+      LEFT JOIN "NotificationDispatch" dispatch
+        ON dispatch."templateId" = template."id"
+        AND dispatch."status" = 'SENT'
+      GROUP BY template."id"
+    `,
   ]);
+
+  const emailLastUsedById = buildLastUsedMap(emailLastUsedRows);
+  const notificationLastUsedById = buildLastUsedMap(notificationLastUsedRows);
 
   const campaignTemplates: UnifiedTemplateRow[] = [
     ...emailTemplates.map((template) => ({
@@ -183,6 +220,7 @@ export default async function AdminTemplatesPage({
       subject: template.subject,
       body: template.body,
       isActive: template.isActive,
+      lastUsedAt: emailLastUsedById.get(template.id) ?? null,
       updatedAt: template.updatedAt,
       type: "campaign" as const,
       source: "email" as const,
@@ -199,6 +237,7 @@ export default async function AdminTemplatesPage({
       subject: template.subject,
       body: template.body,
       isActive: template.isActive,
+      lastUsedAt: notificationLastUsedById.get(template.id) ?? null,
       updatedAt: template.updatedAt,
       type: "campaign" as const,
       source: "notification" as const,
@@ -233,6 +272,7 @@ export default async function AdminTemplatesPage({
       subject: template.subject,
       body: template.body,
       isActive: template.isActive,
+      lastUsedAt: notificationLastUsedById.get(template.id) ?? null,
       updatedAt: template.updatedAt,
       type: "system" as const,
       source: "notification" as const,
@@ -262,6 +302,7 @@ export default async function AdminTemplatesPage({
   const activeCount = templates.filter((template) => template.isActive).length;
   const emailCount = templates.filter((template) => template.channel === "EMAIL").length;
   const smsCount = templates.filter((template) => template.channel === "SMS").length;
+  const usedCount = templates.filter((template) => template.lastUsedAt).length;
 
   return (
     <AdminCard title="Templates">
@@ -361,22 +402,22 @@ export default async function AdminTemplatesPage({
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-            <div className="text-sm font-medium text-white/55">Email</div>
+            <div className="text-sm font-medium text-white/55">Used</div>
             <div className="mt-2 text-3xl font-semibold text-white">
-              {emailCount}
+              {usedCount}
             </div>
             <div className="mt-2 text-sm text-white/60">
-              Branded email templates
+              Templates with sent history
             </div>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-            <div className="text-sm font-medium text-white/55">SMS</div>
+            <div className="text-sm font-medium text-white/55">Channels</div>
             <div className="mt-2 text-3xl font-semibold text-white">
-              {smsCount}
+              {emailCount}/{smsCount}
             </div>
             <div className="mt-2 text-sm text-white/60">
-              Reusable text messaging
+              Email / SMS visible
             </div>
           </div>
         </div>
@@ -433,6 +474,7 @@ export default async function AdminTemplatesPage({
                     <th className="px-4 py-3 font-semibold">Key</th>
                     <th className="px-4 py-3 font-semibold">Length</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Last used</th>
                     <th className="px-4 py-3 font-semibold">Updated</th>
                     <th className="px-4 py-3 font-semibold">Action</th>
                   </tr>
@@ -492,6 +534,10 @@ export default async function AdminTemplatesPage({
                           >
                             {template.isActive ? "Active" : "Inactive"}
                           </span>
+                        </td>
+
+                        <td className="px-4 py-4 text-white/55">
+                          {formatNullableDate(template.lastUsedAt)}
                         </td>
 
                         <td className="px-4 py-4 text-white/55">{formatDate(template.updatedAt)}</td>
@@ -574,7 +620,7 @@ export default async function AdminTemplatesPage({
                 <div className="mt-3 space-y-2 text-sm leading-6 text-white/70">
                   <div>Use inactive instead of deleting</div>
                   <div>Keep keys stable once wired into flows</div>
-                  <div>Use CTA placement only once in the email body</div>
+                  <div>Last used updates after successful sends</div>
                 </div>
               </div>
             </div>
