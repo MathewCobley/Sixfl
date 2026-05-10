@@ -11,14 +11,23 @@ export const metadata = {
     "SIXFL is recruiting teams for a new Wednesday 6-a-side football league in Northallerton, while continuing to run the Harrogate league at Rossett Sports Centre.",
 };
 
+const northallertonLeagueLink = "/leagues/northallerton-mens-wednesday";
 const northallertonTeamLink =
   "/register-interest?type=team&area=Northallerton&night=Wednesday";
-
+const northallertonPlayerLink =
+  "/register-interest?type=player&area=Northallerton&night=Wednesday";
+const northallertonRefereeLink =
+  "/register-interest?type=referee&area=Northallerton&night=Wednesday";
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
 
-const launchAreas = ["Northallerton", "Harrogate", "Ripon", "York", "Leeds"];
-
 const leagueTypes = ["MEN’S LEAGUES", "WOMEN’S LEAGUES", "YOUTH LEAGUES"];
+
+const homeStats = [
+  { label: "Launch area", value: "Northallerton" },
+  { label: "Match night", value: "Wednesday" },
+  { label: "Live league", value: "Harrogate" },
+  { label: "Format", value: "6-a-side" },
+];
 
 const whySixflPoints = [
   {
@@ -31,7 +40,7 @@ const whySixflPoints = [
   },
   {
     title: "Proper match nights",
-    desc: "Qualified referees, clear scheduling and a stronger standard of league management from day one.",
+    desc: "Qualified referees, clear scheduling and stronger league management from day one.",
   },
 ];
 
@@ -53,22 +62,24 @@ const joinSteps = [
   },
 ];
 
+const launchAreas = ["Northallerton", "Harrogate", "Ripon", "York", "Leeds"];
+
 export default function HomePage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-black text-white">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(16,185,129,0.16),transparent_24%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_18%,rgba(16,185,129,0.10),transparent_18%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_14%,rgba(16,185,129,0.10),transparent_20%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.08),transparent_28%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04),transparent_20%,rgba(0,0,0,0.7))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04),transparent_20%,rgba(0,0,0,0.78))]" />
         <div className="absolute inset-0 opacity-[0.08] bg-[linear-gradient(90deg,rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:56px_56px]" />
         <div className="absolute inset-0 opacity-[0.06] bg-[linear-gradient(0deg,rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:56px_56px]" />
       </div>
 
-      <div className="pointer-events-none absolute left-1/2 top-24 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[120px]" />
+      <div className="pointer-events-none absolute left-1/2 top-20 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[130px]" />
 
-      <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-0">
-        <section className="grid gap-10 pt-6 lg:grid-cols-12 lg:items-start">
+      <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-6 sm:px-6 lg:px-8">
+        <section className="grid gap-10 lg:grid-cols-12 lg:items-start">
           <div className="lg:col-span-7">
             <div className="mb-5 inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-300">
               New league forming • Northallerton Wednesdays
@@ -83,16 +94,17 @@ export default function HomePage() {
               </span>
             </h1>
 
-            <p className="mt-5 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
-              SIXFL is now recruiting teams for a new Wednesday night 6-a-side
-              football league in Northallerton.
+            <p className="mt-5 max-w-2xl text-base leading-7 text-white/72 sm:text-lg">
+              SIXFL is recruiting teams for a new Wednesday night 6-a-side
+              football league in Northallerton, while continuing to run the
+              Harrogate league at Rossett Sports Centre.
             </p>
 
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">
               Weekly fixtures, proper organisation, qualified referees and a
-              cleaner experience for captains. The league will launch once
-              enough committed teams are signed up, so it runs properly from
-              week one.
+              cleaner experience for captains. The Northallerton league will
+              launch once enough committed teams are signed up, so it runs
+              properly from week one.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
@@ -108,17 +120,24 @@ export default function HomePage() {
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
-                href={northallertonTeamLink}
+                href={northallertonLeagueLink}
                 className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-500 px-5 text-[13px] font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
               >
-                REGISTER FOR NORTHALLERTON
+                VIEW NORTHALLERTON LAUNCH
+              </Link>
+
+              <Link
+                href={northallertonTeamLink}
+                className="inline-flex h-11 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-5 text-[13px] font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
+              >
+                REGISTER TEAM
               </Link>
 
               <Link
                 href={harrogateLeagueLink}
                 className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-[13px] font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
-                VIEW HARROGATE LEAGUE
+                VIEW HARROGATE
               </Link>
             </div>
 
@@ -126,27 +145,15 @@ export default function HomePage() {
               <span className="font-semibold text-emerald-200">
                 Northallerton Wednesday league:
               </span>{" "}
-              we are looking for local teams, groups of mates, work teams and
-              existing football teams who want a properly organised weekly
-              league.
-            </div>
-
-            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm leading-6 text-white/70">
-              Already looking for an active SIXFL league? Our{" "}
-              <Link
-                href={harrogateLeagueLink}
-                className="font-semibold text-emerald-300 underline underline-offset-4 transition hover:text-emerald-200"
-              >
-                Harrogate 6-a-side league at Rossett Sports Centre
-              </Link>{" "}
-              remains live with fixtures, teams and league updates.
+              looking for local teams, groups of mates, work teams and existing
+              football teams who want a properly organised weekly league.
             </div>
           </div>
 
           <div className="lg:col-span-5">
             <div className="lg:sticky lg:top-24">
               <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div className="text-[11px] font-bold tracking-[0.24em] text-white/65">
                     NORTHALLERTON LAUNCH
                   </div>
@@ -161,38 +168,38 @@ export default function HomePage() {
                 </h2>
 
                 <p className="mt-2 text-sm leading-7 text-white/60">
-                  Register now to be part of the first Northallerton Wednesday
-                  SIXFL league. Early teams will get launch updates first.
+                  Start with the launch page, then choose the right route for
+                  team captains, players or referees.
                 </p>
 
                 <div className="mt-6 grid gap-3">
                   <FunnelCard
+                    title="View Northallerton launch"
+                    desc="See the dedicated launch page before registering."
+                    href={northallertonLeagueLink}
+                    cta="Open launch page"
+                    featured
+                  />
+
+                  <FunnelCard
                     title="I have a team"
                     desc="Register your team for the new Northallerton Wednesday league."
                     href={northallertonTeamLink}
-                    cta="Register for Northallerton"
-                    featured
+                    cta="Register team"
                   />
 
                   <FunnelCard
                     title="I need a team"
                     desc="Join the player list and hear when squads or teams need extra players."
-                    href="/register-interest?type=player&area=Northallerton&night=Wednesday"
+                    href={northallertonPlayerLink}
                     cta="Join as player"
                   />
 
                   <FunnelCard
                     title="I can referee"
                     desc="Register interest to referee in SIXFL leagues from launch."
-                    href="/register-interest?type=referee&area=Northallerton&night=Wednesday"
+                    href={northallertonRefereeLink}
                     cta="Referee interest"
-                  />
-
-                  <FunnelCard
-                    title="View Harrogate"
-                    desc="See the live SIXFL Harrogate league at Rossett Sports Centre."
-                    href={harrogateLeagueLink}
-                    cta="Open Harrogate league"
                   />
                 </div>
               </div>
@@ -202,69 +209,15 @@ export default function HomePage() {
 
         <section className="mt-10">
           <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
-            <StripItem label="NEW LEAGUE" value="Northallerton" />
-            <StripItem label="MATCH NIGHT" value="Wednesday" />
-            <StripItem label="LIVE LEAGUE" value="Harrogate" />
-            <StripItem label="FORMAT" value="6-a-side" />
+            {homeStats.map((stat) => (
+              <StripItem key={stat.label} label={stat.label} value={stat.value} />
+            ))}
           </div>
         </section>
 
-        <section className="mt-16">
-          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-            <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
-              <div className="lg:col-span-8">
-                <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-                  FEATURED LAUNCH LEAGUE
-                </div>
-                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Play 6-a-side football in Northallerton on Wednesdays
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  SIXFL is building a new Wednesday night league in
-                  Northallerton. Register your team now and we will contact you
-                  with venue, start date and launch details as the league builds.
-                </p>
-              </div>
-
-              <div className="lg:col-span-4">
-                <Link
-                  href={northallertonTeamLink}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
-                >
-                  REGISTER YOUR TEAM
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-6">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-            <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
-              <div className="lg:col-span-8">
-                <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
-                  LIVE SIXFL LEAGUE
-                </div>
-                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Harrogate Tuesday league at Rossett Sports Centre
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
-                  SIXFL also continues to run the Harrogate league, with live
-                  fixtures, results, teams and league table updates available on
-                  the public league page.
-                </p>
-              </div>
-
-              <div className="lg:col-span-4">
-                <Link
-                  href={harrogateLeagueLink}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
-                >
-                  VIEW HARROGATE LEAGUE
-                </Link>
-              </div>
-            </div>
-          </div>
+        <section className="mt-16 grid gap-6 lg:grid-cols-2">
+          <LaunchPanel />
+          <HarrogatePanel />
         </section>
 
         <section id="why-sixfl" className="mt-16">
@@ -303,8 +256,8 @@ export default function HomePage() {
               </h2>
               <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
                 Whether you already have a team, need a team, or want to
-                referee, the process is straightforward. Register your interest,
-                tell us your area, and we will guide you through the next steps.
+                referee, the Northallerton funnel routes people into the right
+                lead source from the start.
               </p>
             </div>
 
@@ -321,87 +274,25 @@ export default function HomePage() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
-                href={northallertonTeamLink}
+                href={northallertonLeagueLink}
                 className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+              >
+                VIEW NORTHALLERTON LAUNCH
+              </Link>
+
+              <Link
+                href={northallertonTeamLink}
+                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
                 REGISTER YOUR TEAM
               </Link>
 
               <Link
-                href="/register-interest?type=player&area=Northallerton&night=Wednesday"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
-              >
-                JOIN AS A PLAYER
-              </Link>
-
-              <Link
-                href="/faq"
+                href={northallertonPlayerLink}
                 className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
               >
-                READ FAQS
+                JOIN AS PLAYER
               </Link>
-            </div>
-          </div>
-        </section>
-
-        <section id="founding-teams" className="mt-16">
-          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-            <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
-              <div className="lg:col-span-7">
-                <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-                  FOUNDING TEAM OFFER
-                </div>
-                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Early teams may be considered for a free SIXFL kit.
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/75 sm:text-base">
-                  To mark the Northallerton launch, a limited number of founding
-                  teams may qualify for a free team kit offer. Register early to
-                  be considered and to get priority launch updates.
-                </p>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <BenefitPill text="Limited launch offer" />
-                  <BenefitPill text="Priority Northallerton updates" />
-                  <BenefitPill text="Early league access" />
-                  <BenefitPill text="Founding team status" />
-                </div>
-
-                <div className="mt-6 text-xs font-bold tracking-[0.16em] text-white/55">
-                  SELECTED TEAMS ONLY • SUBJECT TO AVAILABILITY • LAUNCH LEAGUE
-                </div>
-              </div>
-
-              <div className="lg:col-span-5">
-                <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
-                  <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300">
-                    TEAM CAPTAINS
-                  </div>
-                  <div className="mt-2 text-xl font-black text-white">
-                    Want to join the Northallerton launch?
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-white/65">
-                    Register your team now and we will contact you as the
-                    Wednesday league builds.
-                  </p>
-
-                  <div className="mt-5 grid gap-3">
-                    <Link
-                      href={northallertonTeamLink}
-                      className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
-                    >
-                      REGISTER YOUR TEAM
-                    </Link>
-
-                    <Link
-                      href="/founding-teams"
-                      className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-bold tracking-wide text-white transition hover:bg-white/10"
-                    >
-                      LEARN ABOUT THE OFFER
-                    </Link>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </section>
@@ -453,14 +344,14 @@ export default function HomePage() {
                     </Link>
 
                     <Link
-                      href="/register-interest?type=player&area=Northallerton&night=Wednesday"
+                      href={northallertonPlayerLink}
                       className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
                     >
                       JOIN AS A PLAYER
                     </Link>
 
                     <Link
-                      href="/register-interest?type=referee&area=Northallerton&night=Wednesday"
+                      href={northallertonRefereeLink}
                       className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
                     >
                       REFEREE FOR SIXFL
@@ -472,6 +363,68 @@ export default function HomePage() {
           </div>
         </section>
       </main>
+    </div>
+  );
+}
+
+function LaunchPanel() {
+  return (
+    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+      <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
+        FEATURED LAUNCH LEAGUE
+      </div>
+      <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+        Play 6-a-side football in Northallerton on Wednesdays.
+      </h2>
+      <p className="mt-3 text-sm leading-7 text-white/70 sm:text-base">
+        SIXFL is building a new Wednesday night league in Northallerton.
+        Register your team now and we will contact you with venue, start date
+        and launch details as the league builds.
+      </p>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <BenefitPill text="No payment today" />
+        <BenefitPill text="Team captains wanted" />
+        <BenefitPill text="Launch updates first" />
+        <BenefitPill text="Founding teams list" />
+      </div>
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <Link
+          href={northallertonLeagueLink}
+          className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+        >
+          VIEW LAUNCH PAGE
+        </Link>
+        <Link
+          href={northallertonTeamLink}
+          className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+        >
+          REGISTER TEAM
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function HarrogatePanel() {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+      <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
+        LIVE SIXFL LEAGUE
+      </div>
+      <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+        Harrogate Tuesday league at Rossett Sports Centre.
+      </h2>
+      <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
+        SIXFL also continues to run the Harrogate league, with live fixtures,
+        results, teams and league table updates available on the public league
+        page.
+      </p>
+      <Link
+        href={harrogateLeagueLink}
+        className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto"
+      >
+        VIEW HARROGATE LEAGUE
+      </Link>
     </div>
   );
 }
@@ -510,7 +463,7 @@ function FunnelCard({
 function StripItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/35 px-4 py-5">
-      <div className="text-[10px] font-bold tracking-[0.18em] text-white/45">
+      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
         {label}
       </div>
       <div className="mt-2 text-2xl font-black tracking-tight text-white">
