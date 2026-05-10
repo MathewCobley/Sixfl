@@ -68,6 +68,36 @@ function relabelPlayerFeePayments(labels: PlayerFeePaymentLabel[]) {
   });
 }
 
+function relabelPlayerFeeReminderBadges() {
+  const playerFeeHeadings = Array.from(document.querySelectorAll("h2")).filter(
+    (heading) => heading.textContent?.includes("pending from players"),
+  );
+
+  for (const heading of playerFeeHeadings) {
+    const section = heading.closest("section");
+    if (!section) continue;
+
+    const badgeElements = Array.from(section.querySelectorAll("div, span")).filter(
+      (element) => element.textContent?.trim().startsWith("Last chased:"),
+    );
+
+    for (const badge of badgeElements) {
+      const text = badge.textContent?.trim() ?? "";
+
+      if (text === "Last chased: not chased yet") {
+        badge.textContent = "Payment request: see history · Chase: not sent yet";
+        badge.classList.remove("text-white/55");
+        badge.classList.add("text-amber-100");
+        continue;
+      }
+
+      if (text.startsWith("Last chased:")) {
+        badge.textContent = text.replace("Last chased:", "Last request/chase:");
+      }
+    }
+  }
+}
+
 async function loadPlayerFeePaymentLabels() {
   const response = await fetch("/api/admin/payments/player-fee-labels", {
     cache: "no-store",
@@ -92,12 +122,17 @@ export default function AdminPlayerFeePaymentLabelsBridge() {
       if (cancelled) return;
       labels = loadedLabels;
       relabelPlayerFeePayments(labels);
+      relabelPlayerFeeReminderBadges();
     });
+
+    relabelPlayerFeeReminderBadges();
 
     const observer = new MutationObserver(() => {
       if (labels.length > 0) {
         relabelPlayerFeePayments(labels);
       }
+
+      relabelPlayerFeeReminderBadges();
     });
 
     observer.observe(document.body, {
