@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/(admin)/admin/leads/pots/actions.ts
+// File: src/app/(admin)/admin/leads/player-flow/actions.ts
 // ========================================
 
 "use server";
@@ -7,24 +7,26 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { isPlayerLeadPotKey } from "@/lib/leads/playerLeadPots";
+import {
+  getPlayerLeadFlowStatusDefinition,
+  isPlayerLeadFlowStatusKey,
+} from "@/lib/leads/playerLeadFlow";
 
-export async function movePlayerLeadPotAction(
+export async function movePlayerLeadFlowStatusAction(
   formData: FormData,
 ): Promise<void> {
   await requireAdmin();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
-  const nextPot = String(formData.get("nextPot") ?? "").trim().toUpperCase();
+  const nextStatus = String(formData.get("nextStatus") ?? "")
+    .trim()
+    .toUpperCase();
   const returnTo = String(formData.get("returnTo") ?? "").trim();
 
-  if (!leadId) {
-    throw new Error("Missing lead id.");
-  }
+  if (!leadId) return;
+  if (!isPlayerLeadFlowStatusKey(nextStatus)) return;
 
-  if (!isPlayerLeadPotKey(nextPot)) {
-    throw new Error("Invalid player lead pot.");
-  }
+  const flowStatus = getPlayerLeadFlowStatusDefinition(nextStatus);
 
   const lead = await prisma.interestLead.findUnique({
     where: { id: leadId },
@@ -36,36 +38,32 @@ export async function movePlayerLeadPotAction(
     },
   });
 
-  if (!lead) {
-    throw new Error("Lead not found.");
-  }
-
-  if (lead.interestType !== "PLAYER") {
-    throw new Error("Only player leads can be moved through player pots.");
-  }
+  if (!lead || lead.interestType !== "PLAYER") return;
 
   const now = new Date();
+  const nextStorageStatus = flowStatus.moveToStorageStatus;
 
   await prisma.interestLead.update({
     where: { id: lead.id },
     data: {
-      leadPot: nextPot,
-      ...(nextPot === "CONFIRMED_INTEREST" && !lead.confirmedInterestAt
+      leadPot: nextStorageStatus,
+      ...(nextStorageStatus === "CONFIRMED_INTEREST" &&
+      !lead.confirmedInterestAt
         ? { confirmedInterestAt: now }
         : {}),
-      ...(nextPot === "OPTIONAL_DETAILS_REQUESTED" &&
+      ...(nextStorageStatus === "OPTIONAL_DETAILS_REQUESTED" &&
       !lead.optionalDetailsRequestedAt
         ? { optionalDetailsRequestedAt: now }
         : {}),
-      ...(nextPot === "DORMANT" || nextPot === "NOT_NOW"
+      ...(nextStorageStatus === "DORMANT" || nextStorageStatus === "NOT_NOW"
         ? { nextChaseDueAt: null }
         : {}),
     },
   });
 
   revalidatePath("/admin/leads");
-  revalidatePath("/admin/leads/pots");
-  revalidatePath(`/admin/leads/pots/${nextPot}`);
+  revalidatePath("/admin/leads/player-flow");
+  revalidatePath(`/admin/leads/player-flow/${nextStatus}`);
   revalidatePath(`/admin/leads/${lead.id}`);
 
   if (returnTo) {

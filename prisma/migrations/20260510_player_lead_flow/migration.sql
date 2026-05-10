@@ -19,38 +19,6 @@ ALTER TABLE "InterestLead"
   ADD COLUMN "confirmedInterestAt" TIMESTAMP(3),
   ADD COLUMN "optionalDetailsRequestedAt" TIMESTAMP(3);
 
-UPDATE "InterestLead"
-SET "leadPot" = 'MOBILE_ONLY_NEEDS_EMAIL'
-WHERE "interestType" = 'PLAYER'
-  AND COALESCE(NULLIF(TRIM("phone"), ''), '') <> ''
-  AND COALESCE(NULLIF(TRIM("email"), ''), '') = ''
-  AND "convertedAt" IS NULL
-  AND "status" <> 'CLOSED';
-
-UPDATE "InterestLead"
-SET "leadPot" = 'NEEDS_YES_CONFIRMATION'
-WHERE "interestType" = 'PLAYER'
-  AND COALESCE(NULLIF(TRIM("email"), ''), '') <> ''
-  AND "status" IN ('NEW', 'CONTACTED')
-  AND "convertedAt" IS NULL;
-
-UPDATE "InterestLead"
-SET "leadPot" = 'READY_TO_PLACE'
-WHERE "interestType" = 'PLAYER'
-  AND "status" = 'QUALIFIED'
-  AND "convertedAt" IS NULL;
-
-UPDATE "InterestLead"
-SET "leadPot" = 'ADDED_TO_SQUAD'
-WHERE "interestType" = 'PLAYER'
-  AND "convertedAt" IS NOT NULL;
-
-UPDATE "InterestLead"
-SET "leadPot" = 'DORMANT'
-WHERE "interestType" = 'PLAYER'
-  AND "status" = 'CLOSED'
-  AND "convertedAt" IS NULL;
-
 CREATE INDEX "InterestLead_leadPot_idx" ON "InterestLead"("leadPot");
 CREATE INDEX "InterestLead_leagueId_leadPot_idx" ON "InterestLead"("leagueId", "leadPot");
 CREATE INDEX "InterestLead_interestType_leadPot_idx" ON "InterestLead"("interestType", "leadPot");
