@@ -9,7 +9,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { isPlayerLeadPotKey } from "@/lib/leads/playerLeadPots";
 
-export async function movePlayerLeadPotAction(formData: FormData) {
+export async function movePlayerLeadPotAction(
+  formData: FormData,
+): Promise<void> {
   await requireAdmin();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
@@ -17,11 +19,11 @@ export async function movePlayerLeadPotAction(formData: FormData) {
   const returnTo = String(formData.get("returnTo") ?? "").trim();
 
   if (!leadId) {
-    return { ok: false, error: "Missing lead id." };
+    throw new Error("Missing lead id.");
   }
 
   if (!isPlayerLeadPotKey(nextPot)) {
-    return { ok: false, error: "Invalid player lead pot." };
+    throw new Error("Invalid player lead pot.");
   }
 
   const lead = await prisma.interestLead.findUnique({
@@ -35,14 +37,11 @@ export async function movePlayerLeadPotAction(formData: FormData) {
   });
 
   if (!lead) {
-    return { ok: false, error: "Lead not found." };
+    throw new Error("Lead not found.");
   }
 
   if (lead.interestType !== "PLAYER") {
-    return {
-      ok: false,
-      error: "Only player leads can be moved through player pots.",
-    };
+    throw new Error("Only player leads can be moved through player pots.");
   }
 
   const now = new Date();
@@ -72,6 +71,4 @@ export async function movePlayerLeadPotAction(formData: FormData) {
   if (returnTo) {
     revalidatePath(returnTo);
   }
-
-  return { ok: true };
 }
