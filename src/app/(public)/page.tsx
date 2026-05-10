@@ -110,12 +110,12 @@ export default function HomePage() {
 
       <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-6 sm:px-6 lg:px-8">
         <section className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:p-8 lg:p-10">
-          <div className="mx-auto max-w-4xl text-center">
+          <div className="max-w-5xl text-left">
             <div className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-300">
               Harrogate live now • Northallerton recruiting now
             </div>
 
-            <h1 className="mt-6 text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
+            <h1 className="mt-6 max-w-4xl text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
               6-a-side football in Harrogate and Northallerton.
               <br />
               <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.55)]">
@@ -123,13 +123,13 @@ export default function HomePage() {
               </span>
             </h1>
 
-            <p className="mx-auto mt-6 max-w-3xl text-base leading-8 text-white/72 sm:text-lg">
+            <p className="mt-6 max-w-3xl text-base leading-8 text-white/72 sm:text-lg">
               Play in the live Harrogate Tuesday league at Rossett Sports Centre,
               or register your team for the new Northallerton Wednesday launch
               league.
             </p>
 
-            <div className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
+            <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
               {leagueTypes.map((type, index) => (
                 <span key={type} className="inline-flex items-center">
                   {type}
@@ -140,7 +140,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href={harrogateLeagueLink}
                 className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
