@@ -242,9 +242,8 @@ body {
 }
 
 /* Public league table refinement.
-   The original desktop league table forced a 1240px minimum width, which made
-   the table horizontally scroll and pushed the Pts column out of view on common
-   laptop/desktop widths. This keeps the table inside the visible card. */
+   Keeps the table inside the visible card and aligns every header with the same
+   column template used by each desktop row. */
 @media (min-width: 1024px) {
   body:has(a[href="#table"]) #table div[class*="overflow-x-auto"] {
     overflow-x: visible !important;
@@ -259,12 +258,12 @@ body {
     #table
     div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"] {
     grid-template-columns:
-      3rem minmax(12rem, 1.45fr) minmax(7.5rem, 0.9fr)
-      repeat(4, minmax(2.45rem, 0.38fr))
-      repeat(3, minmax(2.9rem, 0.46fr)) minmax(3.35rem, 0.52fr) !important;
-    gap: 0.55rem !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
+      3.2rem minmax(13rem, 1.5fr) minmax(8.5rem, 0.95fr)
+      repeat(4, minmax(2.7rem, 0.38fr))
+      repeat(3, minmax(3rem, 0.42fr)) minmax(3.6rem, 0.48fr) !important;
+    column-gap: 0.8rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
   }
 
   body:has(a[href="#table"])
@@ -272,6 +271,30 @@ body {
     div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
     > div {
     min-width: 0 !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    > div:nth-child(1),
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    > div:nth-child(3),
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    > div:nth-child(n + 4) {
+    justify-self: center !important;
+    text-align: center !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    > div:nth-child(2) {
+    justify-self: stretch !important;
+    text-align: left !important;
   }
 
   body:has(a[href="#table"])
