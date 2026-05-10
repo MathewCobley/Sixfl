@@ -45,6 +45,29 @@ function replaceSnapshotWithPricing() {
   }
 }
 
+function ensureRegisterModalCloseButton(registerSection: HTMLElement) {
+  if (registerSection.querySelector(".sixfl-register-modal-close")) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "sixfl-register-modal-close";
+  button.setAttribute("aria-label", "Close registration form");
+  button.textContent = "Close";
+  button.addEventListener("click", () => {
+    document.body.classList.remove("sixfl-register-modal-open");
+  });
+
+  registerSection.prepend(button);
+}
+
+function openRegisterModal() {
+  const registerSection = document.getElementById("register");
+  if (!registerSection) return;
+
+  ensureRegisterModalCloseButton(registerSection);
+  document.body.classList.add("sixfl-register-modal-open");
+}
+
 export default function PublicLeagueLandingSpacingBridge() {
   const pathname = usePathname();
 
@@ -52,6 +75,34 @@ export default function PublicLeagueLandingSpacingBridge() {
     if (!pathname?.startsWith("/leagues/")) return;
 
     replaceSnapshotWithPricing();
+
+    function handleClick(event: MouseEvent) {
+      const target = event.target instanceof Element ? event.target : null;
+      const registerLink = target?.closest('a[href="#register"]');
+
+      if (registerLink) {
+        event.preventDefault();
+        openRegisterModal();
+        return;
+      }
+
+      if (
+        document.body.classList.contains("sixfl-register-modal-open") &&
+        event.target instanceof HTMLElement &&
+        event.target.id === "register"
+      ) {
+        document.body.classList.remove("sixfl-register-modal-open");
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        document.body.classList.remove("sixfl-register-modal-open");
+      }
+    }
+
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
 
     const observer = new MutationObserver(() => {
       replaceSnapshotWithPricing();
@@ -62,7 +113,12 @@ export default function PublicLeagueLandingSpacingBridge() {
       subtree: true,
     });
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.classList.remove("sixfl-register-modal-open");
+    };
   }, [pathname]);
 
   if (!pathname?.startsWith("/leagues/")) {
@@ -84,6 +140,52 @@ export default function PublicLeagueLandingSpacingBridge() {
 
       main > div.min-h-screen > section:first-child.relative.isolate + section {
         margin-top: 0 !important;
+      }
+
+      body.sixfl-register-modal-open {
+        overflow: hidden !important;
+      }
+
+      body.sixfl-register-modal-open #register {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 9999 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow-y: auto !important;
+        margin: 0 !important;
+        padding: 1rem !important;
+        background: radial-gradient(circle at top, rgba(16, 185, 129, 0.18), transparent 34%), rgba(0, 0, 0, 0.84) !important;
+        backdrop-filter: blur(14px) !important;
+      }
+
+      body.sixfl-register-modal-open #register > :not(.sixfl-register-modal-close) {
+        width: min(920px, 100%) !important;
+        max-height: calc(100vh - 2rem) !important;
+        overflow-y: auto !important;
+        border-radius: 1.75rem !important;
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58) !important;
+      }
+
+      .sixfl-register-modal-close {
+        position: fixed !important;
+        top: 1rem !important;
+        right: 1rem !important;
+        z-index: 10000 !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+        border-radius: 999px !important;
+        background: rgba(0, 0, 0, 0.72) !important;
+        color: white !important;
+        padding: 0.75rem 1rem !important;
+        font-size: 0.875rem !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+      }
+
+      .sixfl-register-modal-close:hover {
+        background: rgba(16, 185, 129, 0.18) !important;
+        border-color: rgba(16, 185, 129, 0.38) !important;
       }
 
       @media (min-width: 640px) {
