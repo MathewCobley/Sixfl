@@ -240,3 +240,73 @@ body {
     width: 11rem !important;
   }
 }
+
+/* Public league table refinement.
+   The original desktop league table forced a 1240px minimum width, which made
+   the table horizontally scroll and pushed the Pts column out of view on common
+   laptop/desktop widths. This keeps the table inside the visible card. */
+@media (min-width: 1024px) {
+  body:has(a[href="#table"]) #table div[class*="overflow-x-auto"] {
+    overflow-x: visible !important;
+  }
+
+  body:has(a[href="#table"]) #table div[class*="lg:min-w-[1240px]"] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"] {
+    grid-template-columns:
+      3rem minmax(12rem, 1.45fr) minmax(7.5rem, 0.9fr)
+      repeat(4, minmax(2.45rem, 0.38fr))
+      repeat(3, minmax(2.9rem, 0.46fr)) minmax(3.35rem, 0.52fr) !important;
+    gap: 0.55rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    > div {
+    min-width: 0 !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    a {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    [class*="h-14"][class*="w-14"] {
+    height: 2.5rem !important;
+    width: 2.5rem !important;
+    border-radius: 0.9rem !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    [class*="h-11"][class*="w-11"] {
+    height: 2.25rem !important;
+    width: 2.25rem !important;
+    border-radius: 0.8rem !important;
+  }
+
+  body:has(a[href="#table"])
+    #table
+    div[class*="grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]"]
+    [class*="h-7"][class*="w-7"] {
+    height: 1.45rem !important;
+    width: 1.45rem !important;
+    font-size: 0.68rem !important;
+  }
+}
