@@ -13,11 +13,11 @@ export default function PublicLayout({
   children: ReactNode;
 }) {
   return (
-    <>
+    <div className="min-h-screen bg-black text-white">
       <AppHeader variant="public" />
       <PublicLeagueLandingSpacingBridge />
-      <main className="mx-auto max-w-6xl px-4 pb-8 pt-0">{children}</main>
+      <main className="bg-black">{children}</main>
       <SiteFooter />
-    </>
+    </div>
   );
 }
