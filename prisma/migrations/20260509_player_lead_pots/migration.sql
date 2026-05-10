@@ -1,18 +1,15 @@
-CREATE TYPE "LeadPot" AS ENUM (
-  'NEW_INTEREST',
-  'MOBILE_ONLY_NEEDS_EMAIL',
-  'EMAIL_REQUESTED',
-  'NEEDS_YES_CONFIRMATION',
-  'CONFIRMED_INTEREST',
-  'OPTIONAL_DETAILS_REQUESTED',
-  'READY_TO_PLACE',
-  'ADDED_TO_SQUAD',
-  'DORMANT',
-  'NOT_NOW'
+CREATE TYPE "PlayerJourneyStatus" AS ENUM (
+  'SMS_LEAD',
+  'ACTIVE_LEAD',
+  'PRE_ACTIVATION_SQUAD_PLAYER',
+  'ACTIVE_SQUAD_PLAYER',
+  'QUIET_LEAD',
+  'QUIET_SQUAD_PLAYER',
+  'MOVED'
 );
 
 ALTER TABLE "InterestLead"
-  ADD COLUMN "leadPot" "LeadPot" NOT NULL DEFAULT 'NEW_INTEREST',
+  ADD COLUMN "playerJourneyStatus" "PlayerJourneyStatus" NOT NULL DEFAULT 'ACTIVE_LEAD',
   ADD COLUMN "chaseStage" INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN "lastChasedAt" TIMESTAMP(3),
   ADD COLUMN "nextChaseDueAt" TIMESTAMP(3),
@@ -20,7 +17,7 @@ ALTER TABLE "InterestLead"
   ADD COLUMN "optionalDetailsRequestedAt" TIMESTAMP(3);
 
 UPDATE "InterestLead"
-SET "leadPot" = 'MOBILE_ONLY_NEEDS_EMAIL'
+SET "playerJourneyStatus" = 'SMS_LEAD'
 WHERE "interestType" = 'PLAYER'
   AND COALESCE(NULLIF(TRIM("phone"), ''), '') <> ''
   AND COALESCE(NULLIF(TRIM("email"), ''), '') = ''
@@ -28,30 +25,30 @@ WHERE "interestType" = 'PLAYER'
   AND "status" <> 'CLOSED';
 
 UPDATE "InterestLead"
-SET "leadPot" = 'NEEDS_YES_CONFIRMATION'
+SET "playerJourneyStatus" = 'ACTIVE_LEAD'
 WHERE "interestType" = 'PLAYER'
   AND COALESCE(NULLIF(TRIM("email"), ''), '') <> ''
   AND "status" IN ('NEW', 'CONTACTED')
   AND "convertedAt" IS NULL;
 
 UPDATE "InterestLead"
-SET "leadPot" = 'READY_TO_PLACE'
+SET "playerJourneyStatus" = 'PRE_ACTIVATION_SQUAD_PLAYER'
 WHERE "interestType" = 'PLAYER'
   AND "status" = 'QUALIFIED'
   AND "convertedAt" IS NULL;
 
 UPDATE "InterestLead"
-SET "leadPot" = 'ADDED_TO_SQUAD'
+SET "playerJourneyStatus" = 'ACTIVE_SQUAD_PLAYER'
 WHERE "interestType" = 'PLAYER'
   AND "convertedAt" IS NOT NULL;
 
 UPDATE "InterestLead"
-SET "leadPot" = 'DORMANT'
+SET "playerJourneyStatus" = 'QUIET_LEAD'
 WHERE "interestType" = 'PLAYER'
   AND "status" = 'CLOSED'
   AND "convertedAt" IS NULL;
 
-CREATE INDEX "InterestLead_leadPot_idx" ON "InterestLead"("leadPot");
-CREATE INDEX "InterestLead_leagueId_leadPot_idx" ON "InterestLead"("leagueId", "leadPot");
-CREATE INDEX "InterestLead_interestType_leadPot_idx" ON "InterestLead"("interestType", "leadPot");
+CREATE INDEX "InterestLead_playerJourneyStatus_idx" ON "InterestLead"("playerJourneyStatus");
+CREATE INDEX "InterestLead_leagueId_playerJourneyStatus_idx" ON "InterestLead"("leagueId", "playerJourneyStatus");
+CREATE INDEX "InterestLead_interestType_playerJourneyStatus_idx" ON "InterestLead"("interestType", "playerJourneyStatus");
 CREATE INDEX "InterestLead_nextChaseDueAt_idx" ON "InterestLead"("nextChaseDueAt");
