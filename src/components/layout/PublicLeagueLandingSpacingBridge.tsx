@@ -8,31 +8,53 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 function replaceSnapshotWithPricing() {
+  const teamEntryHeadings = Array.from(document.querySelectorAll("p")).filter(
+    (element) => element.textContent?.trim().toUpperCase() === "TEAM ENTRY",
+  );
+
+  for (const heading of teamEntryHeadings) {
+    const card = heading.closest("div.rounded-3xl");
+    if (!card || card.getAttribute("data-sixfl-combined-pricing-card") === "true") continue;
+
+    card.setAttribute("data-sixfl-combined-pricing-card", "true");
+    card.innerHTML = `
+      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">Simple weekly pricing</p>
+      <h2 class="mt-4 text-2xl font-bold text-white sm:text-3xl">Team and player fees</h2>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2">
+        <div class="rounded-3xl border border-white/10 bg-black/25 p-6">
+          <div class="text-sm font-semibold text-white/55">Team entry</div>
+          <div class="mt-3 flex flex-wrap items-end gap-x-3 gap-y-1">
+            <span class="text-5xl font-black tracking-tight text-white">£40</span>
+            <span class="pb-2 text-base font-bold text-white/55">per team / week</span>
+          </div>
+          <p class="mt-5 text-sm leading-6 text-white/65">Covers the weekly league operation, referees, fixtures, results and standings.</p>
+        </div>
+        <div class="rounded-3xl border border-white/10 bg-black/25 p-6">
+          <div class="text-sm font-semibold text-white/55">Player match fee</div>
+          <div class="mt-3 flex flex-wrap items-end gap-x-3 gap-y-1">
+            <span class="text-5xl font-black tracking-tight text-white">£6</span>
+            <span class="pb-2 text-base font-bold text-white/55">per player / match</span>
+          </div>
+          <p class="mt-5 text-sm leading-6 text-white/65">Players only pay when selected to play, using their secure payment link.</p>
+        </div>
+      </div>
+      <div class="mt-5 grid gap-3 text-sm text-white/80">
+        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">Fixed weekly fixtures</div>
+        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">Qualified referees, live results and league table</div>
+        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">Simple team fee plus player match fees</div>
+      </div>
+    `;
+  }
+
   const snapshotHeadings = Array.from(document.querySelectorAll("p")).filter(
     (element) => element.textContent?.trim().toUpperCase() === "SNAPSHOT",
   );
 
   for (const heading of snapshotHeadings) {
     const card = heading.closest("div.rounded-3xl");
-    if (!card || card.getAttribute("data-sixfl-pricing-card") === "true") continue;
+    if (!card) continue;
 
-    card.setAttribute("data-sixfl-pricing-card", "true");
-    card.innerHTML = `
-      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">Player pricing</p>
-      <h2 class="mt-4 text-2xl font-bold text-white sm:text-3xl">Simple weekly pricing</h2>
-      <div class="mt-6 rounded-3xl border border-white/10 bg-black/25 p-6">
-        <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
-          <span class="text-5xl font-black tracking-tight text-white">£6</span>
-          <span class="pb-2 text-base font-bold text-white/55">per player / match</span>
-        </div>
-        <p class="mt-5 text-base leading-7 text-white/70">A simple weekly player match fee. Players only pay when they are due to play, with a secure payment link sent directly to them.</p>
-      </div>
-      <div class="mt-5 grid gap-3 text-sm text-white/80">
-        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">£6 per player, per match</div>
-        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">Secure online payment link</div>
-        <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">Only charged when selected to play</div>
-      </div>
-    `;
+    card.remove();
   }
 }
 
