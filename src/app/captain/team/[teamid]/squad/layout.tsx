@@ -2,11 +2,14 @@
 // File: src/app/captain/team/[teamid]/squad/layout.tsx
 // ========================================
 
+import type { ReactNode } from "react";
+
 import { prisma } from "@/lib/prisma";
+import { requireCaptain } from "@/lib/requireCaptain";
 import WhatsAppSquadBadges from "./WhatsAppSquadBadges";
 
 type CaptainSquadLayoutProps = {
-  children: React.ReactNode;
+  children: ReactNode;
   params: Promise<{ teamid: string }>;
 };
 
@@ -15,6 +18,7 @@ export default async function CaptainSquadLayout({
   params,
 }: CaptainSquadLayoutProps) {
   const { teamid } = await params;
+  await requireCaptain(teamid);
 
   const whatsappEntries = await prisma.$queryRaw<
     Array<{ id: string; name: string | null; email: string | null }>
