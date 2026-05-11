@@ -167,6 +167,26 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
         redirect(buildMessagesHref({ filter, threadId, extras: { error: "missing_contact" } }));
       }
 
+      await prisma.notificationRecipient.update({
+        where: { id: recipientId },
+        data: {
+          phone: toNumber,
+          phoneNormalized: toNumber,
+          transactionalSmsOptIn: true,
+          preferences: {
+            upsert: {
+              create: {
+                smsEnabled: true,
+              },
+              update: {
+                smsEnabled: true,
+              },
+            },
+          },
+          lastSyncedAt: new Date(),
+        },
+      });
+
       const dispatch = await queueDirectNotification({
         recipientId,
         channel: NotificationChannel.SMS,
