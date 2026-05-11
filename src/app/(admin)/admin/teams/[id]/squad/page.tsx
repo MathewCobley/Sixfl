@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TeamRole } from "@prisma/client";
+import { Prisma, TeamRole } from "@prisma/client";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -159,6 +159,19 @@ export default async function AdminTeamSquadPage({
   if (!team) {
     notFound();
   }
+
+  const memberUserIds = team.members.map((member) => member.user.id);
+  const whatsappRows = memberUserIds.length
+    ? await prisma.$queryRaw<Array<{ id: string; usesWhatsapp: boolean }>>`
+        SELECT id, "usesWhatsapp"
+        FROM "User"
+        WHERE id IN (${Prisma.join(memberUserIds)})
+      `
+    : [];
+
+  const whatsappByUserId = new Map(
+    whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
+  );
 
   const captainCount = team.members.filter(
     (member) => member.role === "CAPTAIN",
@@ -322,87 +335,105 @@ export default async function AdminTeamSquadPage({
                 No squad members are attached to this team yet.
               </div>
             ) : (
-              team.members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-center xl:justify-between"
-                >
-                  <div className="flex min-w-0 items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
-                      {getInitials(member.user.name, member.user.email)}
-                    </div>
+              team.members.map((member) => {
+                const usesWhatsapp = whatsappByUserId.get(member.user.id) ?? false;
 
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="truncate text-base font-semibold text-white">
-                          {member.user.name || "Unnamed user"}
+                return (
+                  <div
+                    key={member.id}
+                    className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-center xl:justify-between"
+                  >
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
+                        {getInitials(member.user.name, member.user.email)}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="truncate text-base font-semibold text-white">
+                              {member.user.name || "Unnamed user"}
+                            </div>
+                            {usesWhatsapp ? (
+                              <span
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10"
+                                title="Uses WhatsApp"
+                              >
+                                <img
+                                  src="/WhatsApp-Logo.png"
+                                  alt="WhatsApp"
+                                  className="h-4 w-4 object-contain"
+                                />
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(
+                              member.role,
+                            )}`}
+                          >
+                            {getRoleLabel(member.role)}
+                          </span>
                         </div>
 
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(
-                            member.role,
-                          )}`}
-                        >
-                          {getRoleLabel(member.role)}
-                        </span>
-                      </div>
+                        <div className="mt-2 text-sm text-white/65">
+                          {member.user.email || "No email on account"}
+                        </div>
 
-                      <div className="mt-2 text-sm text-white/65">
-                        {member.user.email || "No email on account"}
-                      </div>
-
-                      <div className="mt-1 text-xs text-white/45">
-                        Added {formatUkDateTime(member.createdAt)}
+                        <div className="mt-1 text-xs text-white/45">
+                          Added {formatUkDateTime(member.createdAt)}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
-                    <form
-                      action={updateAdminSquadMemberRoleAction}
-                      className="flex flex-wrap items-center gap-3"
-                    >
-                      <input type="hidden" name="teamId" value={team.id} />
-                      <input
-                        type="hidden"
-                        name="membershipId"
-                        value={member.id}
-                      />
-
-                      <div className="min-w-[240px]">
-                        <FormListboxField
-                          name="role"
-                          value={member.role}
-                          options={roleOptions}
-                          placeholder="Select role"
+                    <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
+                      <form
+                        action={updateAdminSquadMemberRoleAction}
+                        className="flex flex-wrap items-center gap-3"
+                      >
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input
+                          type="hidden"
+                          name="membershipId"
+                          value={member.id}
                         />
-                      </div>
 
-                      <button
-                        type="submit"
-                        className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                      >
-                        Update role
-                      </button>
-                    </form>
+                        <div className="min-w-[240px]">
+                          <FormListboxField
+                            name="role"
+                            value={member.role}
+                            options={roleOptions}
+                            placeholder="Select role"
+                          />
+                        </div>
 
-                    <form action={removeAdminSquadMemberAction}>
-                      <input type="hidden" name="teamId" value={team.id} />
-                      <input
-                        type="hidden"
-                        name="membershipId"
-                        value={member.id}
-                      />
-                      <button
-                        type="submit"
-                        className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
-                      >
-                        Remove
-                      </button>
-                    </form>
+                        <button
+                          type="submit"
+                          className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                        >
+                          Update role
+                        </button>
+                      </form>
+
+                      <form action={removeAdminSquadMemberAction}>
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input
+                          type="hidden"
+                          name="membershipId"
+                          value={member.id}
+                        />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
+                        >
+                          Remove
+                        </button>
+                      </form>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
