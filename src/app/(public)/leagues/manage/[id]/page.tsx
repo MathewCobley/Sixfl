@@ -1,9 +1,12 @@
-// src/app/leagues/[id]/page.tsx
+// ========================================
+// File: src/app/(public)/leagues/manage/[id]/page.tsx
+// ========================================
 
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getLeagueTable } from "@/lib/leagueTable";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import LeagueTableCard from "@/components/leagues/LeagueTableCard";
 
 function formatDate(d: Date) {
   return formatDateTimeInLondon(d, {
@@ -140,63 +143,14 @@ export default async function LeaguePage({
         </p>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold text-white">League Table</h2>
-          <div className="text-xs text-white/50">
-            Sorted by points, goal difference, goals for
-          </div>
-        </div>
-
-        {table.length === 0 ? (
-          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
-            No completed results yet, so the table is still empty.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-left text-white/60">
-                  <th className="px-3 py-3">#</th>
-                  <th className="px-3 py-3">Team</th>
-                  <th className="px-3 py-3">P</th>
-                  <th className="px-3 py-3">W</th>
-                  <th className="px-3 py-3">D</th>
-                  <th className="px-3 py-3">L</th>
-                  <th className="px-3 py-3">GF</th>
-                  <th className="px-3 py-3">GA</th>
-                  <th className="px-3 py-3">GD</th>
-                  <th className="px-3 py-3">PTS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {table.map((row, index) => (
-                  <tr
-                    key={row.teamId}
-                    className="border-b border-white/5 text-white/90"
-                  >
-                    <td className="px-3 py-3 text-white/60">{index + 1}</td>
-                    <td className="px-3 py-3 font-medium">{row.teamName}</td>
-                    <td className="px-3 py-3">{row.played}</td>
-                    <td className="px-3 py-3">{row.won}</td>
-                    <td className="px-3 py-3">{row.drawn}</td>
-                    <td className="px-3 py-3">{row.lost}</td>
-                    <td className="px-3 py-3">{row.goalsFor}</td>
-                    <td className="px-3 py-3">{row.goalsAgainst}</td>
-                    <td className="px-3 py-3">
-                      {row.goalDifference > 0 ? "+" : ""}
-                      {row.goalDifference}
-                    </td>
-                    <td className="px-3 py-3 font-semibold text-emerald-300">
-                      {row.points}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <LeagueTableCard
+        rows={table}
+        title="League table"
+        eyebrow="Standings"
+        description="Sorted by points, goal difference and goals for."
+        emptyMessage="No completed results yet, so the table is still empty."
+        compactHeader
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">

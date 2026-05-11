@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/users/page.tsx
 // ========================================
 
+import { Prisma } from "@prisma/client";
 import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
@@ -68,6 +69,18 @@ export default async function AdminUsersPage({
     },
   });
 
+  const whatsappRows = users.length
+    ? await prisma.$queryRaw<Array<{ id: string; usesWhatsapp: boolean }>>`
+        SELECT id, "usesWhatsapp"
+        FROM "User"
+        WHERE id IN (${Prisma.join(users.map((user) => user.id))})
+      `
+    : [];
+
+  const whatsappByUserId = new Map(
+    whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
+  );
+
   const emails = users
     .map((user) => normaliseEmail(user.email))
     .filter((email): email is string => Boolean(email));
@@ -96,7 +109,7 @@ export default async function AdminUsersPage({
 
   const savedMessage = sp.saved
     ? sp.saved === "1"
-      ? "User name updated."
+      ? "User details updated."
       : decodeURIComponent(sp.saved)
     : null;
 
@@ -111,7 +124,7 @@ export default async function AdminUsersPage({
             Users
           </h1>
           <p className="max-w-3xl text-sm text-white/60 sm:text-base">
-            Search users, fix missing names, and link user accounts to matching squad prospects.
+            Search users, fix missing names, mark WhatsApp contacts, and link user accounts to matching squad prospects.
           </p>
         </div>
 
@@ -170,6 +183,7 @@ export default async function AdminUsersPage({
             const email = normaliseEmail(user.email);
             const prospects = email ? prospectsByEmail.get(email) ?? [] : [];
             const isLinked = user.teamMembers.length > 0;
+            const usesWhatsapp = whatsappByUserId.get(user.id) ?? false;
             const repairHref = email
               ? `/admin/users/link-prospect?email=${encodeURIComponent(email)}`
               : "/admin/users/link-prospect";
@@ -183,8 +197,22 @@ export default async function AdminUsersPage({
 
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="truncate text-base font-semibold text-white">
-                        {user.name || "Unnamed user"}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="truncate text-base font-semibold text-white">
+                          {user.name || "Unnamed user"}
+                        </div>
+                        {usesWhatsapp ? (
+                          <span
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10"
+                            title="Uses WhatsApp"
+                          >
+                            <img
+                              src="/WhatsApp-Logo.png"
+                              alt="WhatsApp"
+                              className="h-4 w-4 object-contain"
+                            />
+                          </span>
+                        ) : null}
                       </div>
                       <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/70">
                         {user.role}
@@ -273,11 +301,36 @@ export default async function AdminUsersPage({
                     />
                   </div>
 
+                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 transition hover:bg-white/[0.06]">
+                    <span className="flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10">
+                        <img
+                          src="/WhatsApp-Logo.png"
+                          alt=""
+                          className="h-5 w-5 object-contain"
+                        />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-white">Show WhatsApp logo</span>
+                        <span className="block text-xs text-white/45">Adds the WhatsApp icon beside this user&apos;s name.</span>
+                      </span>
+                    </span>
+                    <span className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-white/10 bg-black/30 p-0.5">
+                      <input
+                        type="checkbox"
+                        name="usesWhatsapp"
+                        defaultChecked={usesWhatsapp}
+                        className="peer sr-only"
+                      />
+                      <span className="h-5 w-5 rounded-full bg-white/45 transition peer-checked:translate-x-5 peer-checked:bg-emerald-300" />
+                    </span>
+                  </label>
+
                   <button
                     type="submit"
                     className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
                   >
-                    Save name
+                    Save user
                   </button>
                 </form>
               </div>
