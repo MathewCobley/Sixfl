@@ -24,6 +24,52 @@ function getTeamInitials(name: string) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "S";
 }
 
+function CaptainLeagueTableFitStyles() {
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: `
+          @media (min-width: 1024px) {
+            #captain-league-table [class*="lg:min-w-[1240px]"] {
+              min-width: 0 !important;
+              width: 100% !important;
+            }
+
+            #captain-league-table [class*="grid-cols-[72px_minmax(280px,2fr)_170px"] {
+              grid-template-columns: 48px minmax(170px,1.4fr) 108px repeat(8,minmax(34px,44px)) !important;
+              gap: 0.5rem !important;
+              padding-left: 1rem !important;
+              padding-right: 1rem !important;
+            }
+
+            #captain-league-table [class*="h-14"][class*="w-14"] {
+              height: 2.5rem !important;
+              width: 2.5rem !important;
+              border-radius: 0.875rem !important;
+            }
+
+            #captain-league-table [class*="h-11"][class*="w-11"] {
+              height: 2.25rem !important;
+              width: 2.25rem !important;
+              border-radius: 0.875rem !important;
+            }
+
+            #captain-league-table [class*="h-7"][class*="w-7"] {
+              height: 1.35rem !important;
+              width: 1.35rem !important;
+              font-size: 0.68rem !important;
+            }
+
+            #captain-league-table [class*="text-center"] {
+              font-size: 0.82rem;
+            }
+          }
+        `,
+      }}
+    />
+  );
+}
+
 export default async function CaptainTeamLayout({
   children,
   params,
@@ -73,6 +119,7 @@ export default async function CaptainTeamLayout({
 
   return (
     <div className="min-h-screen bg-[#07130f] text-white">
+      <CaptainLeagueTableFitStyles />
       <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
       <CaptainFixtureBadgesBridge />
