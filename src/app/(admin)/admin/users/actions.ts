@@ -36,6 +36,7 @@ export async function updateAdminUserProfileAction(formData: FormData) {
 
   const userId = String(formData.get("userId") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
+  const usesWhatsapp = formData.get("usesWhatsapp") === "on";
   const from = getSafeRedirectPath(formData.get("from"), "/admin/users");
 
   if (!userId) {
@@ -46,14 +47,25 @@ export async function updateAdminUserProfileAction(formData: FormData) {
     redirect(appendStatusToPath(from, "error", "Name is required."));
   }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      name,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        name,
+      },
+    });
+
+    await tx.$executeRaw`
+      UPDATE "User"
+      SET "usesWhatsapp" = ${usesWhatsapp}
+      WHERE id = ${userId}
+    `;
   });
 
   revalidatePath("/admin/users");
+  revalidatePath("/admin/captains");
+  revalidatePath("/admin/teams");
+  revalidatePath("/captain");
   redirect(appendStatusToPath(from, "saved", "1"));
 }
 
