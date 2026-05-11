@@ -6,7 +6,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { NotificationDispatchStatus } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationChannel,
+  NotificationDispatchStatus,
+  NotificationRecipientSourceType,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -18,13 +23,11 @@ import {
   recordOutboundSms,
   reopenMessageThread,
 } from "@/lib/messaging/service";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { sendEmailWithResend } from "@/lib/notifications/providers/resend";
-import { sendSmsWithTwilio } from "@/lib/notifications/providers/twilio";
+import { queueDirectNotification } from "@/lib/notifications/service";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
-const SMS_QUIET_HOURS_START_HOUR = 21;
-const SMS_QUIET_HOURS_END_HOUR = 9;
-const SMS_QUIET_HOURS_TIME_ZONE = "Europe/London";
 
 function getStringValue(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value : "";
@@ -32,21 +35,6 @@ function getStringValue(value: FormDataEntryValue | null): string {
 
 function getTrimmedValue(value: FormDataEntryValue | null): string {
   return getStringValue(value).trim();
-}
-
-function getUkHour(value: Date) {
-  const hour = new Intl.DateTimeFormat("en-GB", {
-    timeZone: SMS_QUIET_HOURS_TIME_ZONE,
-    hour: "2-digit",
-    hourCycle: "h23",
-  }).format(value);
-
-  return Number(hour);
-}
-
-function isWithinSmsQuietHours(value: Date) {
-  const hour = getUkHour(value);
-  return hour >= SMS_QUIET_HOURS_START_HOUR || hour < SMS_QUIET_HOURS_END_HOUR;
 }
 
 function buildMessagesHref(params: {
@@ -153,17 +141,76 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
 
   try {
     if (toNumber) {
-      if (isWithinSmsQuietHours(new Date())) {
-        redirect(buildMessagesHref({ filter, threadId, extras: { error: "sms_quiet_hours" } }));
+      const recipient = thread.recipientId
+        ? thread.recipient
+        : await upsertNotificationRecipient({
+            sourceType: NotificationRecipientSourceType.GENERAL,
+            sourceId: thread.id,
+            audience: NotificationAudience.GENERAL,
+            displayName:
+              thread.contactName ?? thread.team?.name ?? thread.recipient?.displayName ?? null,
+            email: toEmail,
+            phone: toNumber,
+            transactionalSmsOptIn: true,
+            metadata: {
+              threadId: thread.id,
+              teamId: thread.teamId,
+              leagueId: thread.leagueId,
+              contactName: thread.contactName ?? thread.team?.name ?? null,
+              manualReplyRecipient: true,
+            },
+          });
+
+      const recipientId = thread.recipientId ?? recipient?.id;
+
+      if (!recipientId) {
+        redirect(buildMessagesHref({ filter, threadId, extras: { error: "missing_contact" } }));
       }
 
-      const sendResult = await sendSmsWithTwilio({
-        to: toNumber,
-        body,
+      await prisma.notificationRecipient.update({
+        where: { id: recipientId },
+        data: {
+          phone: toNumber,
+          phoneNormalized: toNumber,
+          transactionalSmsOptIn: true,
+          preferences: {
+            upsert: {
+              create: {
+                smsEnabled: true,
+              },
+              update: {
+                smsEnabled: true,
+              },
+            },
+          },
+          lastSyncedAt: new Date(),
+        },
       });
 
+      const dispatch = await queueDirectNotification({
+        recipientId,
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.GENERAL,
+        body,
+        sourceType: thread.sourceType ?? "MESSAGE_THREAD",
+        sourceId: thread.sourceId ?? thread.id,
+        metadata: {
+          threadId: thread.id,
+          teamId: thread.teamId,
+          leagueId: thread.leagueId,
+          contactName: thread.contactName ?? thread.team?.name ?? null,
+          manualSmsReply: true,
+        },
+        createdByUserId: user?.id ?? null,
+      });
+
+      if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
+        redirect(buildMessagesHref({ filter, threadId, extras: { error: "send_failed" } }));
+      }
+
       await recordOutboundSms({
-        recipientId: thread.recipientId,
+        notificationDispatchId: dispatch.id,
+        recipientId,
         teamId: thread.teamId,
         leagueId: thread.leagueId,
         sourceType: thread.sourceType,
@@ -171,15 +218,12 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
         contactName:
           thread.contactName ?? thread.recipient?.displayName ?? thread.team?.name ?? null,
         phone: toNumber,
-        body,
-        fromNumber: sendResult.fromNumber,
+        body: dispatch.bodyText,
         toNumber,
-        provider: sendResult.provider,
-        providerMessageId: sendResult.providerMessageId,
-        providerStatus: "sent",
-        twilioMessageSid: sendResult.providerMessageId,
+        provider: "twilio",
+        providerStatus: "queued",
         createdByUserId: user?.id ?? null,
-        sentAt: new Date(),
+        sentAt: null,
       });
     } else if (toEmail) {
       const now = new Date();
@@ -225,14 +269,14 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
       });
     }
   } catch (error) {
-    console.error("Failed to send admin message reply", { threadId, error });
+    console.error("Failed to queue admin message reply", { threadId, error });
 
     redirect(buildMessagesHref({ filter, threadId, extras: { error: "send_failed" } }));
   }
 
   await revalidateMessageViews(threadId);
 
-  redirect(buildMessagesHref({ filter, threadId, extras: { sent: 1 } }));
+  redirect(buildMessagesHref({ filter, threadId, extras: { queued: 1 } }));
 }
 
 export async function cancelQueuedSmsMessageAction(formData: FormData) {
