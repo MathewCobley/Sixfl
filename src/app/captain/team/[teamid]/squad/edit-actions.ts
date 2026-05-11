@@ -62,6 +62,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   const displayName = getNullableString(formData.get("displayName"));
   const email = getEmailValue(formData.get("email"));
   const phone = getNullableString(formData.get("phone"));
+  const usesWhatsapp = formData.get("usesWhatsapp") === "on";
   const playerMatchFeeOverride = parsePlayerMatchFeeOverride(
     formData.get("playerMatchFeeOverride"),
   );
@@ -168,6 +169,12 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
     });
 
     await tx.$executeRaw`
+      UPDATE "User"
+      SET "usesWhatsapp" = ${usesWhatsapp}
+      WHERE id = ${membership.userId}
+    `;
+
+    await tx.$executeRaw`
       INSERT INTO "TeamMemberProfile" (
         "id",
         "teamMemberId",
@@ -251,6 +258,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
           teamName: membership.team.name,
           userId: membership.userId,
           managedTeamPlayer: true,
+          usesWhatsapp,
         },
         lastSyncedAt: new Date(),
       },
@@ -270,6 +278,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
           teamName: membership.team.name,
           userId: membership.userId,
           managedTeamPlayer: true,
+          usesWhatsapp,
         },
         lastSyncedAt: new Date(),
       },
@@ -281,7 +290,9 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   revalidatePath(`/captain/team/${teamid}/fixtures`);
   revalidatePath(`/captain/team/${teamid}/match-fees`);
   revalidatePath(`/admin/teams/${teamid}`);
+  revalidatePath(`/admin/teams/${teamid}/squad`);
   revalidatePath(`/admin/teams/${teamid}/communications`);
+  revalidatePath("/admin/users");
 
   redirect(getSuccessRedirect(teamid));
 }

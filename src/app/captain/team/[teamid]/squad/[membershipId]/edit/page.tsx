@@ -106,6 +106,34 @@ function TextArea({
   );
 }
 
+function WhatsAppToggle({ defaultChecked }: { defaultChecked: boolean }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 transition hover:border-emerald-400/30 hover:bg-emerald-500/[0.06] md:col-span-2">
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10">
+          <img src="/WhatsApp-Logo.png" alt="" className="h-6 w-6 object-contain" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-white">Show WhatsApp logo</span>
+          <span className="mt-1 block text-xs font-normal leading-5 text-white/45">
+            Tick this when the player uses WhatsApp. The logo will appear beside their name on squad screens.
+          </span>
+        </span>
+      </span>
+
+      <span className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-white/10 bg-black/40 p-0.5">
+        <input
+          type="checkbox"
+          name="usesWhatsapp"
+          defaultChecked={defaultChecked}
+          className="peer sr-only"
+        />
+        <span className="h-5 w-5 rounded-full bg-white/45 transition peer-checked:translate-x-5 peer-checked:bg-emerald-300" />
+      </span>
+    </label>
+  );
+}
+
 export default async function EditSquadPlayerPage({
   params,
 }: {
@@ -151,6 +179,15 @@ export default async function EditSquadPlayerPage({
   });
 
   if (!membership) notFound();
+
+  const whatsappRows = await prisma.$queryRaw<Array<{ usesWhatsapp: boolean }>>`
+    SELECT "usesWhatsapp"
+    FROM "User"
+    WHERE id = ${membership.user.id}
+    LIMIT 1
+  `;
+
+  const usesWhatsapp = Boolean(whatsappRows[0]?.usesWhatsapp);
 
   const profiles = await getTeamMemberProfilesByTeamMemberIds([membership.id]);
   const profile = profiles.get(membership.id) ?? null;
@@ -251,6 +288,7 @@ export default async function EditSquadPlayerPage({
                   defaultValue={profile?.phone}
                   placeholder="Mobile number"
                 />
+                <WhatsAppToggle defaultChecked={usesWhatsapp} />
               </div>
             </div>
 
