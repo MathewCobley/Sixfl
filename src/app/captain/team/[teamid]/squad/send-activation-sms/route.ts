@@ -58,6 +58,13 @@ function getSquadRedirectUrl(request: NextRequest, teamid: string, query: string
   );
 }
 
+function getCaptainSquadRedirectUrl(request: NextRequest, teamid: string, query: string) {
+  return new URL(
+    `/captain/team/${teamid}/captain-squad${query}`,
+    getPublicRequestOrigin(request),
+  );
+}
+
 function getDisplayName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
@@ -164,7 +171,18 @@ export async function POST(
   const { teamid } = await context.params;
   const formData = await request.formData();
   const prospectId = String(formData.get("prospectId") ?? "").trim();
-  const { user } = await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
+  const { user } = access;
+
+  if (!access.isAdmin) {
+    return NextResponse.redirect(
+      getCaptainSquadRedirectUrl(
+        request,
+        teamid,
+        "?error=Only%20SIXFL%20admin%20can%20send%20activation%20SMS%20messages.",
+      ),
+    );
+  }
 
   if (!teamid || !prospectId) {
     return NextResponse.redirect(getSquadRedirectUrl(request, teamid, "?error=Missing%20prospect%20details.#pending-activation"));
@@ -220,8 +238,8 @@ export async function POST(
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
     metadata: {
-      origin: "captain_squad_activation_sms",
-      originLabel: "Activation SMS chase sent from captain squad page",
+      origin: "admin_managed_squad_activation_sms",
+      originLabel: "Activation SMS chase sent from admin managed squad view",
       teamId: teamid,
       prospectId: prospect.id,
       contactName,
@@ -253,6 +271,7 @@ export async function POST(
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   revalidatePath(`/captain/team/${teamid}/prospects`);
 
   return NextResponse.redirect(
