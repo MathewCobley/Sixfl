@@ -30,6 +30,22 @@ function getSafeRedirectPath(value: FormDataEntryValue | null, fallback: string)
   return text || fallback;
 }
 
+function appendRedirectParams(path: string, params: Record<string, string | number | null | undefined>) {
+  const entries = Object.entries(params).filter((entry): entry is [string, string | number] => {
+    const value = entry[1];
+    return value !== null && value !== undefined && String(value).trim() !== "";
+  });
+
+  if (entries.length === 0) return path;
+
+  const separator = path.includes("?") ? "&" : "?";
+  const query = entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join("&");
+
+  return `${path}${separator}${query}`;
+}
+
 function getFullName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
@@ -284,13 +300,13 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   }
 
   if (!body) {
-    redirect(`${from}?error=Message%20body%20is%20required.`);
+    redirect(appendRedirectParams(from, { error: "Message body is required." }));
   }
 
   const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
 
   if (channel === NotificationChannel.EMAIL && !subject) {
-    redirect(`${from}?error=Email%20subject%20is%20required.`);
+    redirect(appendRedirectParams(from, { error: "Email subject is required." }));
   }
 
   let queuedCount = 0;
@@ -383,18 +399,21 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   if (queuedCount === 0) {
     const reason = skippedMissingContactCount > 0
       ? channel === NotificationChannel.SMS
-        ? "Selected%20recipients%20do%20not%20have%20mobile%20numbers."
-        : "Selected%20recipients%20do%20not%20have%20email%20addresses."
-      : "No%20valid%20recipients%20selected.";
+        ? "Selected recipients do not have mobile numbers."
+        : "Selected recipients do not have email addresses."
+      : "No valid recipients selected.";
 
-    redirect(`${from}?error=${reason}`);
+    redirect(appendRedirectParams(from, { error: reason }));
   }
 
   await processJustQueuedMessages(queuedCount);
 
   redirect(
-    `${from}?saved=queued&channel=${channel.toLowerCase()}&count=${queuedCount}${
-      skippedMissingContactCount ? `&skipped=${skippedMissingContactCount}` : ""
-    }`,
+    appendRedirectParams(from, {
+      saved: "queued",
+      channel: channel.toLowerCase(),
+      count: queuedCount,
+      skipped: skippedMissingContactCount || null,
+    }),
   );
 }
