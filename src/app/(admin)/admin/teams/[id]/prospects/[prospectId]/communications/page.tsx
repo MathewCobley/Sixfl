@@ -50,6 +50,12 @@ type TimelineItem = {
   canCancelQueuedSms: boolean;
 };
 
+const PLAYER_MATCH_FEE_SOURCE_TYPES = [
+  "PLAYER_MATCH_FEE_REQUEST",
+  "PLAYER_MATCH_FEE_CHASE_24H",
+  "PLAYER_MATCH_FEE_CHASE_72H",
+];
+
 function getChannelLabel(value?: string) {
   return value === "sms" ? "SMS" : "email";
 }
@@ -111,6 +117,18 @@ function getOriginLabel(metadata: unknown) {
   return "Notification dispatch";
 }
 
+function getSourceLabel(input: { metadata: unknown; sourceType?: string | null }) {
+  const originLabel = getOriginLabel(input.metadata);
+
+  if (originLabel !== "Notification dispatch") {
+    return originLabel;
+  }
+
+  return input.sourceType && PLAYER_MATCH_FEE_SOURCE_TYPES.includes(input.sourceType)
+    ? "Player match fee automation"
+    : originLabel;
+}
+
 export default async function AdminProspectCommunicationsPage({
   params,
   searchParams,
@@ -159,11 +177,38 @@ export default async function AdminProspectCommunicationsPage({
     notFound();
   }
 
+  const playerMatchFees = await prisma.playerMatchFee.findMany({
+    where: {
+      prospectId: prospect.id,
+    },
+    select: {
+      id: true,
+    },
+  });
+  const playerMatchFeeIds = playerMatchFees.map((fee) => fee.id);
+  const communicationSourceFilters = [
+    {
+      sourceType: "TEAM_PLAYER_PROSPECT",
+      sourceId: prospect.id,
+    },
+    ...(playerMatchFeeIds.length > 0
+      ? [
+          {
+            sourceType: {
+              in: PLAYER_MATCH_FEE_SOURCE_TYPES,
+            },
+            sourceId: {
+              in: playerMatchFeeIds,
+            },
+          },
+        ]
+      : []),
+  ];
+
   const [threads, dispatches, emailTemplates, smsTemplates] = await Promise.all([
     prisma.messageThread.findMany({
       where: {
-        sourceType: "TEAM_PLAYER_PROSPECT",
-        sourceId: prospect.id,
+        OR: communicationSourceFilters,
       },
       include: {
         messages: {
@@ -174,6 +219,7 @@ export default async function AdminProspectCommunicationsPage({
               select: {
                 id: true,
                 metadata: true,
+                sourceType: true,
                 template: {
                   select: {
                     id: true,
@@ -190,8 +236,7 @@ export default async function AdminProspectCommunicationsPage({
     }),
     prisma.notificationDispatch.findMany({
       where: {
-        sourceType: "TEAM_PLAYER_PROSPECT",
-        sourceId: prospect.id,
+        OR: communicationSourceFilters,
       },
       include: {
         recipient: true,
@@ -264,7 +309,12 @@ export default async function AdminProspectCommunicationsPage({
         channel: message.channel,
         direction: message.direction,
         statusLabel,
-        sourceLabel: message.dispatch ? getOriginLabel(message.dispatch.metadata) : "Inbox thread",
+        sourceLabel: message.dispatch
+          ? getSourceLabel({
+              metadata: message.dispatch.metadata,
+              sourceType: message.dispatch.sourceType,
+            })
+          : "Inbox thread",
         templateName: message.dispatch?.template?.name ?? null,
         templateKey: message.dispatch?.template?.key ?? null,
         subject: message.subject || `${message.channel} message`,
@@ -295,7 +345,10 @@ export default async function AdminProspectCommunicationsPage({
       channel: dispatch.channel,
       direction: "OUTBOUND" as const,
       statusLabel: formatDispatchStatus(dispatch.status),
-      sourceLabel: getOriginLabel(dispatch.metadata),
+      sourceLabel: getSourceLabel({
+        metadata: dispatch.metadata,
+        sourceType: dispatch.sourceType,
+      }),
       templateName: dispatch.template?.name ?? null,
       templateKey: dispatch.template?.key ?? null,
       subject:
