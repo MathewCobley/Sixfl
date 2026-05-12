@@ -23,6 +23,8 @@ const ALLOWED_ROLES: TeamRole[] = [
   "MANAGER",
   "PLAYER",
   "COACH",
+  "VICE_CAPTAIN",
+  "BACKUP_PLAYER",
 ];
 
 function getRoleValue(input: FormDataEntryValue | null): TeamRole {
@@ -41,6 +43,24 @@ function getErrorRedirect(teamid: string, message: string) {
 
 function getSuccessRedirect(teamid: string, saved = "1") {
   return `/captain/team/${teamid}/squad?saved=${encodeURIComponent(saved)}`;
+}
+
+async function requireAdminSquadAccess(teamid: string) {
+  if (!teamid) {
+    redirect("/captain");
+  }
+
+  const access = await requireCaptain(teamid);
+
+  if (!access.isAdmin) {
+    redirect(
+      `/captain/team/${teamid}/captain-squad?error=${encodeURIComponent(
+        "Only SIXFL admins can use managed squad tools.",
+      )}`,
+    );
+  }
+
+  return access;
 }
 
 function getNullableString(value: FormDataEntryValue | null) {
@@ -150,11 +170,7 @@ export async function addSquadMemberAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = getRoleValue(formData.get("role"));
 
-  await requireCaptain(teamid);
-
-  if (!teamid) {
-    redirect("/captain");
-  }
+  await requireAdminSquadAccess(teamid);
 
   if (!email) {
     redirect(getErrorRedirect(teamid, "Enter an email address."));
@@ -202,6 +218,7 @@ export async function addSquadMemberAction(formData: FormData) {
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   redirect(getSuccessRedirect(teamid, "member-added"));
 }
 
@@ -210,9 +227,9 @@ export async function updateSquadMemberRoleAction(formData: FormData) {
   const membershipId = String(formData.get("membershipId") ?? "").trim();
   const role = getRoleValue(formData.get("role"));
 
-  await requireCaptain(teamid);
+  await requireAdminSquadAccess(teamid);
 
-  if (!teamid || !membershipId) {
+  if (!membershipId) {
     redirect("/captain");
   }
 
@@ -249,7 +266,7 @@ export async function updateSquadMemberRoleAction(formData: FormData) {
         data: {
           captainUserId: membership.userId,
           captainLinkedAt: new Date(),
-          captainLinkedSource: "captain-squad-page",
+          captainLinkedSource: "admin-managed-squad-tools",
         },
       });
     } else if (
@@ -267,6 +284,7 @@ export async function updateSquadMemberRoleAction(formData: FormData) {
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   redirect(getSuccessRedirect(teamid, "role-updated"));
 }
 
@@ -274,9 +292,9 @@ export async function removeSquadMemberAction(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "").trim();
   const membershipId = String(formData.get("membershipId") ?? "").trim();
 
-  await requireCaptain(teamid);
+  await requireAdminSquadAccess(teamid);
 
-  if (!teamid || !membershipId) {
+  if (!membershipId) {
     redirect("/captain");
   }
 
@@ -318,6 +336,7 @@ export async function removeSquadMemberAction(formData: FormData) {
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   redirect(getSuccessRedirect(teamid, "member-removed"));
 }
 
@@ -326,9 +345,9 @@ export async function updateSquadMemberSmsAction(formData: FormData) {
   const membershipId = String(formData.get("membershipId") ?? "").trim();
   const phone = getNullableString(formData.get("phone"));
 
-  await requireCaptain(teamid);
+  await requireAdminSquadAccess(teamid);
 
-  if (!teamid || !membershipId) {
+  if (!membershipId) {
     redirect("/captain");
   }
 
@@ -369,6 +388,7 @@ export async function updateSquadMemberSmsAction(formData: FormData) {
   });
 
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   redirect(getSuccessRedirect(teamid, "member-sms-linked"));
 }
 
@@ -383,11 +403,7 @@ export async function sendSquadEmailAction(formData: FormData) {
   const templateId = getNullableString(formData.get("templateId"));
   const templateKey = getNullableString(formData.get("templateKey"));
 
-  const { user } = await requireCaptain(teamid);
-
-  if (!teamid) {
-    redirect("/captain");
-  }
+  const { user } = await requireAdminSquadAccess(teamid);
 
   if (!subject) {
     redirect(getErrorRedirect(teamid, "Email subject is required."));
@@ -469,8 +485,8 @@ export async function sendSquadEmailAction(formData: FormData) {
       sourceType: "TEAM",
       sourceId: teamid,
       metadata: {
-        origin: "captain_squad_email",
-        originLabel: "Sent to squad from captain hub",
+        origin: "admin_managed_squad_email",
+        originLabel: "Sent to squad from admin managed squad tools",
         teamId: teamid,
         membershipId: member.id,
         userId: member.user.id,
@@ -482,6 +498,7 @@ export async function sendSquadEmailAction(formData: FormData) {
   }
 
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   redirect(getSuccessRedirect(teamid, `squad-email-sent`));
 }
 
@@ -493,11 +510,7 @@ export async function sendSquadSmsAction(formData: FormData) {
     .map((value) => String(value).trim())
     .filter(Boolean);
 
-  const { user } = await requireCaptain(teamid);
-
-  if (!teamid) {
-    redirect("/captain");
-  }
+  const { user } = await requireAdminSquadAccess(teamid);
 
   if (!body) {
     redirect(getErrorRedirect(teamid, "SMS body is required."));
@@ -579,8 +592,8 @@ export async function sendSquadSmsAction(formData: FormData) {
       sourceType: "TEAM",
       sourceId: teamid,
       metadata: {
-        origin: "captain_squad_sms",
-        originLabel: "Sent to squad from captain hub",
+        origin: "admin_managed_squad_sms",
+        originLabel: "Sent to squad from admin managed squad tools",
         teamId: teamid,
         membershipId: item.member.id,
         userId: item.member.user.id,
@@ -590,5 +603,6 @@ export async function sendSquadSmsAction(formData: FormData) {
   }
 
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   redirect(getSuccessRedirect(teamid, `squad-sms-sent`));
 }
