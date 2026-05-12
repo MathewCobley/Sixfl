@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
 import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
@@ -32,6 +33,7 @@ export default async function AdminLayout({
       <QueuedSmsReasonHints />
       <FixtureChangeNotificationSubmitBridge />
       <ProspectCommunicationCtaBridge />
+      <AdminTeamContactPhoneFallbackBridge />
       <AdminVoidPaymentChargesBridge />
       <AdminPlayerFeePaymentLabelsBridge />
       <AdminSocialResultsGeneratorLinksBridge />
