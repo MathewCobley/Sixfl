@@ -67,6 +67,12 @@ function getMetadataString(metadata: unknown, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function isPlayerMatchFeeDispatch(dispatch: NotificationDispatch) {
+  return Boolean(
+    dispatch.sourceType && PLAYER_MATCH_FEE_SOURCE_TYPES.has(dispatch.sourceType),
+  );
+}
+
 async function resolveThreadContext(dispatch: NotificationDispatch) {
   if (dispatch.sourceType === "TEAM" && dispatch.sourceId) {
     const team = await prisma.team.findUnique({
@@ -129,7 +135,7 @@ async function resolveThreadContext(dispatch: NotificationDispatch) {
     }
   }
 
-  if (dispatch.sourceType && PLAYER_MATCH_FEE_SOURCE_TYPES.has(dispatch.sourceType)) {
+  if (isPlayerMatchFeeDispatch(dispatch)) {
     const playerMatchFeeId =
       getMetadataString(dispatch.metadata, "playerMatchFeeId") ??
       dispatch.sourceId?.trim() ??
@@ -235,6 +241,38 @@ async function resolveThreadContext(dispatch: NotificationDispatch) {
   };
 }
 
+function buildThreadLookupFilters(input: {
+  channel: MessageChannel;
+  context: Awaited<ReturnType<typeof resolveThreadContext>>;
+  dispatch: NotificationDispatch;
+}) {
+  const filters: Array<{
+    channel: MessageChannel;
+    sourceType: string | null;
+    sourceId: string | null;
+  }> = [
+    {
+      channel: input.channel,
+      sourceType: input.context.sourceType,
+      sourceId: input.context.sourceId,
+    },
+  ];
+
+  // Earlier player match fee automations could create a thread against the fee
+  // dispatch itself. Also look for that legacy thread so the next log/update
+  // moves it onto the actual player/prospect history instead of leaving it only
+  // visible in the central comms inbox.
+  if (isPlayerMatchFeeDispatch(input.dispatch) && input.dispatch.sourceType && input.dispatch.sourceId) {
+    filters.push({
+      channel: input.channel,
+      sourceType: input.dispatch.sourceType,
+      sourceId: input.dispatch.sourceId,
+    });
+  }
+
+  return filters;
+}
+
 export async function logNotificationDispatchToThread(input: {
   dispatch: NotificationDispatch;
   recipient: RecipientSnapshot;
@@ -247,9 +285,7 @@ export async function logNotificationDispatchToThread(input: {
 
   const existingThread = await prisma.messageThread.findFirst({
     where: {
-      channel,
-      sourceType: context.sourceType,
-      sourceId: context.sourceId,
+      OR: buildThreadLookupFilters({ channel, context, dispatch }),
     },
     select: {
       id: true,
@@ -263,6 +299,8 @@ export async function logNotificationDispatchToThread(input: {
           recipientId: recipient.id,
           teamId: context.teamId,
           leagueId: context.leagueId,
+          sourceType: context.sourceType,
+          sourceId: context.sourceId,
           contactName: context.contactName ?? recipient.displayName ?? null,
           contactEmail: context.contactEmail ?? recipient.email ?? null,
           emailNormalized: recipient.emailNormalized ?? null,
