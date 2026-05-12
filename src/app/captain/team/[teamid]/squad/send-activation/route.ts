@@ -57,6 +57,13 @@ function getSquadRedirectUrl(request: NextRequest, teamid: string, query: string
   );
 }
 
+function getCaptainSquadRedirectUrl(request: NextRequest, teamid: string, query: string) {
+  return new URL(
+    `/captain/team/${teamid}/captain-squad${query}`,
+    getPublicRequestOrigin(request),
+  );
+}
+
 function getDisplayName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
@@ -179,7 +186,18 @@ export async function POST(
   const { teamid } = await context.params;
   const formData = await request.formData();
   const prospectId = String(formData.get("prospectId") ?? "").trim();
-  const { user } = await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
+  const { user } = access;
+
+  if (!access.isAdmin) {
+    return NextResponse.redirect(
+      getCaptainSquadRedirectUrl(
+        request,
+        teamid,
+        "?error=Only%20SIXFL%20admin%20can%20send%20activation%20emails.",
+      ),
+    );
+  }
 
   if (!teamid || !prospectId) {
     return NextResponse.redirect(
@@ -269,8 +287,8 @@ export async function POST(
       leagueName: team.league?.name ?? null,
     },
     metadata: {
-      origin: "captain_squad_activation_email",
-      originLabel: "Activation email sent from captain squad page",
+      origin: "admin_managed_squad_activation_email",
+      originLabel: "Activation email sent from admin managed squad view",
       teamId: teamid,
       prospectId: prospect.id,
       contactName,
@@ -291,6 +309,7 @@ export async function POST(
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   revalidatePath(`/captain/team/${teamid}/prospects`);
   revalidatePath(`/admin/teams/${teamid}/prospects/${prospect.id}/communications`);
   revalidatePath("/admin/messaging");
