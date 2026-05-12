@@ -6,14 +6,15 @@
 
 import { useEffect } from "react";
 
-function replaceClassTokens(element: HTMLElement, replacements: Array<[string, string]>) {
-  let className = element.className;
+function replaceClassToken(element: HTMLElement, from: string, to: string) {
+  if (element.className.includes(to)) return;
+  element.className = element.className.replaceAll(from, to);
+}
 
-  for (const [from, to] of replacements) {
-    className = className.replaceAll(from, to);
+function ensureClassToken(element: HTMLElement, token: string) {
+  if (!element.className.includes(token)) {
+    element.className = `${element.className} ${token}`.trim();
   }
-
-  element.className = className;
 }
 
 function getPublicTableTitle(rawLeagueText: string) {
@@ -38,25 +39,28 @@ function getPublicTableTitle(rawLeagueText: string) {
 }
 
 function normalisePositionBadge(element: HTMLElement, isTopRow: boolean) {
-  replaceClassTokens(element, [
-    ["border-emerald-400/30", isTopRow ? "border-emerald-400/30" : "border-white/10"],
-    ["bg-emerald-500/10", isTopRow ? "bg-emerald-500/10" : "bg-white/[0.04]"],
-    ["text-emerald-300", isTopRow ? "text-emerald-300" : "text-white/70"],
-  ]);
-
-  if (!element.className.includes("border-")) {
-    element.className += isTopRow
-      ? " border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-      : " border-white/10 bg-white/[0.04] text-white/70";
+  if (isTopRow) {
+    ensureClassToken(element, "border-emerald-400/30");
+    ensureClassToken(element, "bg-emerald-500/10");
+    ensureClassToken(element, "text-emerald-300");
+    return;
   }
+
+  replaceClassToken(element, "border-emerald-400/30", "border-white/10");
+  replaceClassToken(element, "bg-emerald-500/10", "bg-white/[0.04]");
+  replaceClassToken(element, "text-emerald-300", "text-white/70");
+  ensureClassToken(element, "border-white/10");
+  ensureClassToken(element, "bg-white/[0.04]");
+  ensureClassToken(element, "text-white/70");
 }
 
 function applyPublicLeagueTableChrome() {
-  const table = document.getElementById("captain-league-table");
-  if (!table) return;
+  const table = document.getElementById("captain-league-table") as HTMLElement | null;
+  if (!table || table.dataset.publicChromeApplied === "true") return;
 
-  table.classList.remove("bg-white/[0.04]");
-  table.classList.add("bg-white/[0.03]");
+  table.dataset.publicChromeApplied = "true";
+  replaceClassToken(table, "bg-white/[0.04]", "bg-white/[0.03]");
+  ensureClassToken(table, "bg-white/[0.03]");
 
   const header = table.firstElementChild as HTMLElement | null;
   const headerTextBlock = header?.firstElementChild as HTMLElement | null;
@@ -94,13 +98,9 @@ function applyPublicLeagueTableChrome() {
 
   Array.from(body.children).forEach((child, index) => {
     const row = child as HTMLElement;
-    row.className = row.className
-      .replaceAll("bg-emerald-500/10", "bg-black/20")
-      .replaceAll("bg-white/[0.04]", "bg-black/20");
-
-    if (!row.className.includes("bg-black/20")) {
-      row.className += " bg-black/20";
-    }
+    replaceClassToken(row, "bg-emerald-500/10", "bg-black/20");
+    replaceClassToken(row, "bg-white/[0.04]", "bg-black/20");
+    ensureClassToken(row, "bg-black/20");
 
     Array.from(row.querySelectorAll("span")).forEach((span) => {
       if (span.textContent?.trim().toLowerCase() === "your team") {
@@ -123,12 +123,9 @@ function applyPublicLeagueTableChrome() {
 
 export default function CaptainLeagueTablePublicChrome() {
   useEffect(() => {
-    applyPublicLeagueTableChrome();
+    const animationFrame = window.requestAnimationFrame(applyPublicLeagueTableChrome);
 
-    const observer = new MutationObserver(applyPublicLeagueTableChrome);
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    return () => observer.disconnect();
+    return () => window.cancelAnimationFrame(animationFrame);
   }, []);
 
   return null;
