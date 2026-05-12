@@ -58,7 +58,7 @@ export default async function CaptainTeamLayout({
 
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
-    { href: `/captain/team/${teamid}/squad`, label: "Squad" },
+    { href: `/captain/team/${teamid}/captain-squad`, label: "Squad" },
     ...(team.teamMode === "MANAGED"
       ? [
           { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
@@ -128,6 +128,15 @@ export default async function CaptainTeamLayout({
                     className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
                   >
                     Back to admin team
+                  </Link>
+                ) : null}
+
+                {access.isAdmin ? (
+                  <Link
+                    href={`/admin/teams/${team.id}/squad`}
+                    className="inline-flex items-center rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-500/15"
+                  >
+                    Admin squad console
                   </Link>
                 ) : null}
 
