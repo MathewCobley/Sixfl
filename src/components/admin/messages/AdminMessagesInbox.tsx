@@ -6,9 +6,8 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import CommunicationStatusBadge from "@/components/admin/communications/CommunicationStatusBadge";
-import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
-import CancelQueuedSmsButton from "@/components/admin/messages/CancelQueuedSmsButton";
+
+import AdminMessageThreadReplyRouter from "@/components/admin/messages/AdminMessageThreadReplyRouter";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
 
@@ -122,120 +121,47 @@ type AdminMessagesInboxProps = {
   leagues: InboxLeague[];
 };
 
-function formatDateTime(value: string | null): string {
+function formatDateTime(value: string | null) {
   if (!value) return "No activity yet";
-
-  const date = new Date(value);
-
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  }).format(new Date(value));
 }
 
-function formatPhone(value: string | null): string {
-  if (!value) return "No phone";
-
-  if (value.startsWith("+44") && value.length === 13) {
-    const local = `0${value.slice(3)}`;
-    return `${local.slice(0, 5)} ${local.slice(5, 8)} ${local.slice(8)}`;
-  }
-
-  return value;
-}
-
-function getPrimaryContactLabel(thread: InboxThreadListItem): string | null {
-  if (thread.contactName?.trim()) return thread.contactName.trim();
-  if (thread.channel === "EMAIL") {
-    return thread.contactEmail || thread.emailNormalized || null;
-  }
-
-  if (thread.contactPhone) return formatPhone(thread.contactPhone);
-  return thread.phoneNormalized || null;
-}
-
-function getThreadTitle(thread: InboxThreadListItem): string {
-  const isManagedTeam = thread.team?.teamMode === "MANAGED";
-  const primaryContact = getPrimaryContactLabel(thread);
-
-  if (isManagedTeam) {
-    return primaryContact || thread.team?.name || "Unknown contact";
+function getThreadTitle(thread: InboxThreadListItem) {
+  if (thread.team?.teamMode === "MANAGED") {
+    return thread.contactName || thread.contactEmail || thread.contactPhone || thread.team.name;
   }
 
   return (
     thread.team?.name ||
-    primaryContact ||
+    thread.contactName ||
     thread.contactEmail ||
-    thread.emailNormalized ||
     thread.contactPhone ||
-    thread.phoneNormalized ||
     "Unknown contact"
   );
 }
 
-function getThreadSubtitle(thread: InboxThreadListItem): string {
-  const isManagedTeam = thread.team?.teamMode === "MANAGED";
-  const primaryContact = getPrimaryContactLabel(thread);
-  const leagueLabel = thread.league
+function getThreadSubtitle(thread: InboxThreadListItem) {
+  const league = thread.league
     ? thread.league.season
       ? `${thread.league.name} · ${thread.league.season}`
       : thread.league.name
     : null;
 
-  if (isManagedTeam && thread.team) {
-    return [
-      `Managed team: ${thread.team.name}`,
-      leagueLabel,
-      primaryContact && primaryContact !== getThreadTitle(thread)
-        ? primaryContact
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
+  const managed = thread.team?.teamMode === "MANAGED" && thread.team
+    ? `Managed team: ${thread.team.name}`
+    : null;
 
-  const parts = [leagueLabel, primaryContact].filter(Boolean);
-
-  if (parts.length > 0) {
-    return parts.join(" · ");
-  }
-
-  return thread.channel === "EMAIL" ? "General email contact" : "General SMS contact";
+  return [managed, league].filter(Boolean).join(" · ") ||
+    (thread.channel === "EMAIL" ? "Email conversation" : "SMS conversation");
 }
 
-function getAvatarLabel(thread: InboxThreadListItem): string {
-  const isManagedTeam = thread.team?.teamMode === "MANAGED";
-  const label = isManagedTeam
-    ? getPrimaryContactLabel(thread) || thread.team?.name
-    : thread.team?.name || getPrimaryContactLabel(thread) || thread.contactEmail;
-
-  return (label || "M").slice(0, 2).toUpperCase();
-}
-
-function getStatusLabel(status: InboxThreadListItem["status"]): string {
-  switch (status) {
-    case "ARCHIVED":
-      return "Archived";
-    case "CLOSED":
-      return "Closed";
-    default:
-      return "Open";
-  }
-}
-
-function getFilterHref(filter: AdminMessagesInboxProps["selectedFilter"]): string {
-  return `${ADMIN_MESSAGES_BASE_PATH}?filter=${filter}`;
-}
-
-function isQueuedSms(message: NonNullable<SelectedThread>["messages"][number]) {
-  return (
-    message.channel === "SMS" &&
-    message.direction === "OUTBOUND" &&
-    Boolean(message.dispatch?.id) &&
-    Boolean(message.providerStatus?.trim().toUpperCase().startsWith("QUEUED"))
-  );
+function getAvatarLabel(thread: InboxThreadListItem) {
+  return getThreadTitle(thread).slice(0, 2).toUpperCase();
 }
 
 export default function AdminMessagesInbox({
@@ -247,40 +173,13 @@ export default function AdminMessagesInbox({
 }: AdminMessagesInboxProps) {
   const filterItems = useMemo(
     () => [
-      {
-        key: "unread" as const,
-        label: "Unread",
-        count: threads.filter((thread) => thread.unreadForAdminCount > 0).length,
-      },
-      {
-        key: "open" as const,
-        label: "Open",
-        count: threads.filter((thread) => thread.status === "OPEN").length,
-      },
-      {
-        key: "archived" as const,
-        label: "Archived",
-        count: threads.filter((thread) => thread.status === "ARCHIVED").length,
-      },
-      {
-        key: "all" as const,
-        label: "All",
-        count: threads.length,
-      },
+      { key: "unread" as const, label: "Unread", count: threads.filter((thread) => thread.unreadForAdminCount > 0).length },
+      { key: "open" as const, label: "Open", count: threads.filter((thread) => thread.status === "OPEN").length },
+      { key: "archived" as const, label: "Archived", count: threads.filter((thread) => thread.status === "ARCHIVED").length },
+      { key: "all" as const, label: "All", count: threads.length },
     ],
     [threads],
   );
-
-  const queuedSmsMessages = useMemo(() => {
-    if (!selectedThread) return [];
-
-    return selectedThread.messages
-      .filter(isQueuedSms)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-  }, [selectedThread]);
 
   return (
     <section className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
@@ -288,52 +187,33 @@ export default function AdminMessagesInbox({
         <div className="border-b border-white/10 p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-                Inbox
-              </div>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                Team conversations
-              </h2>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Inbox</div>
+              <h2 className="mt-2 text-xl font-semibold text-white">Team conversations</h2>
               <p className="mt-2 text-sm text-white/55">
-                Replies are grouped into threads so you can track each team and
-                contact properly across SMS and email.
+                Replies are grouped into threads across email and SMS.
               </p>
             </div>
-
             <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-right">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-300/80">
-                Leagues
-              </div>
-              <div className="mt-1 text-lg font-semibold text-white">
-                {leagues.length}
-              </div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-300/80">Leagues</div>
+              <div className="mt-1 text-lg font-semibold text-white">{leagues.length}</div>
             </div>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {filterItems.map((item) => {
               const active = selectedFilter === item.key;
-
               return (
                 <Link
                   key={item.key}
-                  href={getFilterHref(item.key)}
-                  className={[
-                    "inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition",
+                  href={`${ADMIN_MESSAGES_BASE_PATH}?filter=${item.key}`}
+                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
                     active
                       ? "border-emerald-400/30 bg-emerald-400/12 text-white"
-                      : "border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06] hover:text-white",
-                  ].join(" ")}
+                      : "border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06] hover:text-white"
+                  }`}
                 >
                   <span>{item.label}</span>
-                  <span
-                    className={[
-                      "inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px]",
-                      active
-                        ? "bg-emerald-400/20 text-emerald-200"
-                        : "bg-white/10 text-white/60",
-                    ].join(" ")}
-                  >
+                  <span className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] ${active ? "bg-emerald-400/20 text-emerald-200" : "bg-white/10 text-white/60"}`}>
                     {item.count}
                   </span>
                 </Link>
@@ -345,8 +225,7 @@ export default function AdminMessagesInbox({
         <div className="max-h-[72vh] overflow-y-auto p-3">
           {threads.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">
-              No message threads yet. Once replies arrive from SMS or email, they
-              will appear here.
+              No message threads yet.
             </div>
           ) : (
             <div className="space-y-3">
@@ -358,22 +237,17 @@ export default function AdminMessagesInbox({
                   <Link
                     key={thread.id}
                     href={`${ADMIN_MESSAGES_BASE_PATH}?filter=${selectedFilter}&thread=${thread.id}`}
-                    className={[
-                      "block rounded-3xl border p-4 transition",
+                    className={`block rounded-3xl border p-4 transition ${
                       isSelected
                         ? "border-emerald-400/30 bg-emerald-400/10 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
-                        : "border-white/10 bg-black/20 hover:border-white/15 hover:bg-white/[0.04]",
-                    ].join(" ")}
+                        : "border-white/10 bg-black/20 hover:border-white/15 hover:bg-white/[0.04]"
+                    }`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-white">
                         {thread.team?.logoUrl && !isManagedTeam ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={thread.team.logoUrl}
-                            alt={thread.team.name}
-                            className="h-full w-full rounded-2xl object-cover"
-                          />
+                          <img src={thread.team.logoUrl} alt={thread.team.name} className="h-full w-full rounded-2xl object-cover" />
                         ) : (
                           <span>{getAvatarLabel(thread)}</span>
                         )}
@@ -383,37 +257,21 @@ export default function AdminMessagesInbox({
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex min-w-0 items-center gap-2">
-                              <div className="truncate text-sm font-semibold text-white">
-                                {getThreadTitle(thread)}
-                              </div>
+                              <div className="truncate text-sm font-semibold text-white">{getThreadTitle(thread)}</div>
                               {isManagedTeam ? (
                                 <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200">
                                   Managed
                                 </span>
                               ) : null}
                             </div>
-                            <div className="mt-1 truncate text-xs text-white/45">
-                              {getThreadSubtitle(thread)}
-                            </div>
+                            <div className="mt-1 truncate text-xs text-white/45">{getThreadSubtitle(thread)}</div>
                           </div>
 
                           <div className="flex flex-col items-end gap-2">
                             <div className="flex items-center gap-2">
-                              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">
-                                {thread.channel}
-                              </span>
-                              <span
-                                className={[
-                                  "rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
-                                  thread.status === "ARCHIVED"
-                                    ? "bg-white/10 text-white/55"
-                                    : "bg-emerald-400/15 text-emerald-300",
-                                ].join(" ")}
-                              >
-                                {getStatusLabel(thread.status)}
-                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">{thread.channel}</span>
+                              <span className="rounded-full bg-emerald-400/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300">{thread.status}</span>
                             </div>
-
                             {thread.unreadForAdminCount > 0 ? (
                               <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-emerald-400 px-2 py-1 text-[11px] font-bold text-black">
                                 {thread.unreadForAdminCount}
@@ -425,13 +283,8 @@ export default function AdminMessagesInbox({
                         <div className="mt-3 line-clamp-2 text-sm leading-6 text-white/65">
                           {thread.lastMessagePreview || "No preview available yet."}
                         </div>
-
                         <div className="mt-3 flex items-center justify-between gap-3 text-xs text-white/40">
-                          <span>
-                            {thread.latestMessage?.direction === "INBOUND"
-                              ? "Latest: inbound"
-                              : "Latest: outbound"}
-                          </span>
+                          <span>{thread.latestMessage?.direction === "INBOUND" ? "Latest: inbound" : "Latest: outbound"}</span>
                           <span>{formatDateTime(thread.latestMessageAt)}</span>
                         </div>
                       </div>
@@ -444,57 +297,7 @@ export default function AdminMessagesInbox({
         </div>
       </div>
 
-      <div className="space-y-4">
-        {selectedThread && queuedSmsMessages.length > 0 ? (
-          <div className="rounded-3xl border border-amber-400/25 bg-amber-500/10 p-4 text-amber-50 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
-                  Queued SMS in this thread
-                </div>
-                <div className="mt-1 text-sm text-amber-100/85">
-                  These SMS messages have not been sent yet. Cancel them here before the notification worker processes them.
-                </div>
-              </div>
-              <span className="inline-flex w-fit rounded-full border border-amber-400/25 bg-black/20 px-3 py-1 text-xs font-semibold text-amber-100">
-                {queuedSmsMessages.length} queued
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {queuedSmsMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className="grid gap-3 rounded-2xl border border-amber-400/20 bg-black/25 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
-                >
-                  <div>
-                    <CommunicationStatusBadge status={message.providerStatus || "QUEUED"} />
-                    <div className="mt-2 line-clamp-2 text-sm leading-6 text-white/80">
-                      {message.body}
-                    </div>
-                    <div className="mt-1 text-xs text-white/45">
-                      Queued {formatDateTime(message.createdAt)}
-                      {message.toNumber ? ` · To ${formatPhone(message.toNumber)}` : ""}
-                    </div>
-                  </div>
-
-                  <CancelQueuedSmsButton
-                    messageId={message.id}
-                    threadId={selectedThread.id}
-                    filter={selectedFilter}
-                    compact
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <AdminMessageThread
-          selectedFilter={selectedFilter}
-          thread={selectedThread}
-        />
-      </div>
+      <AdminMessageThreadReplyRouter selectedFilter={selectedFilter} thread={selectedThread} />
     </section>
   );
 }
