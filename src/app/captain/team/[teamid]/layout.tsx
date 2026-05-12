@@ -57,9 +57,13 @@ export default async function CaptainTeamLayout({
     notFound();
   }
 
+  const squadHref = access.isAdmin
+    ? `/captain/team/${teamid}/squad`
+    : `/captain/team/${teamid}/captain-squad`;
+
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
-    { href: `/captain/team/${teamid}/captain-squad`, label: "Squad" },
+    { href: squadHref, label: "Squad" },
     ...(team.teamMode === "MANAGED"
       ? [
           { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
@@ -130,6 +134,15 @@ export default async function CaptainTeamLayout({
                     className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
                   >
                     Back to admin team
+                  </Link>
+                ) : null}
+
+                {access.isAdmin ? (
+                  <Link
+                    href={`/captain/team/${team.id}/captain-squad`}
+                    className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
+                  >
+                    Preview weaker captain view
                   </Link>
                 ) : null}
 
