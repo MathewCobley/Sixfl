@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Admin Team Squad | SIXFL",
+  title: "Admin Squad Console | SIXFL",
 };
 
 type SearchParams = {
@@ -191,21 +191,27 @@ export default async function AdminTeamSquadPage({
           </Link>
 
           <h1 className="text-3xl font-semibold text-white">
-            {team.name} squad
+            {team.name} admin squad console
           </h1>
 
           <p className="text-sm text-white/60">
-            Admin control for team membership, leadership roles, and organiser
-            structure.
+            Full SIXFL admin control for team membership, leadership roles, organiser structure and managed squad maintenance.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
           <Link
+            href={`/captain/team/${team.id}/captain-squad`}
+            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+          >
+            Preview weaker captain view
+          </Link>
+
+          <Link
             href={`/captain/team/${team.id}/squad`}
             className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
           >
-            Captain squad view
+            Open managed squad tools
           </Link>
 
           <Link
@@ -233,7 +239,7 @@ export default async function AdminTeamSquadPage({
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              Team structure
+              Admin squad console
             </p>
 
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
@@ -473,10 +479,17 @@ export default async function AdminTeamSquadPage({
               </Link>
 
               <Link
+                href={`/captain/team/${team.id}/captain-squad`}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+              >
+                Preview weaker captain view
+              </Link>
+
+              <Link
                 href={`/captain/team/${team.id}/squad`}
                 className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
               >
-                Open captain squad view
+                Open managed squad tools
               </Link>
             </div>
           </section>
