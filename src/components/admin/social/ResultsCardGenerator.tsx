@@ -25,7 +25,8 @@ type ResultsCardGeneratorProps = {
 };
 
 const CANVAS_SIZE = 1080;
-const ROWS = [445, 570, 695];
+const THREE_FIXTURE_ROWS = [445, 570, 695];
+const FOUR_FIXTURE_ROWS = [445, 570, 695, 820];
 const HOME_BADGE_X = 76;
 const HOME_NAME_X = 130;
 const HOME_SCORE_X = 438;
@@ -198,9 +199,11 @@ export default function ResultsCardGenerator({
       setDownloadUrl(null);
 
       try {
+        const rowYValues = fixtures.length >= 4 ? FOUR_FIXTURE_ROWS : THREE_FIXTURE_ROWS;
+        const visibleFixtures = fixtures.slice(0, rowYValues.length);
         const template = await loadImage(templateUrl);
         const badgeEntries = await Promise.all(
-          fixtures.slice(0, 3).flatMap((fixture) => [
+          visibleFixtures.flatMap((fixture) => [
             normaliseLogoUrl(fixture.homeTeamLogoUrl),
             normaliseLogoUrl(fixture.awayTeamLogoUrl),
           ]).map(async (url) => {
@@ -218,8 +221,8 @@ export default function ResultsCardGenerator({
         ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
         ctx.drawImage(template, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-        fixtures.slice(0, 3).forEach((fixture, index) => {
-          const y = ROWS[index];
+        visibleFixtures.forEach((fixture, index) => {
+          const y = rowYValues[index];
           const homeBadge = badgeEntries[index * 2] ?? null;
           const awayBadge = badgeEntries[index * 2 + 1] ?? null;
 
