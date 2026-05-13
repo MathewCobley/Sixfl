@@ -13,7 +13,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const TEMPLATE_URL = "/social/templates/match-results-template.png";
+const TEMPLATE_URL = "/social/templates/result-card-master.png";
 
 type SearchParams = {
   leagueId?: string;
@@ -198,7 +198,7 @@ export default async function AdminResultsCardGeneratorPage({
               Match results card
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              Generate a square Instagram/Facebook results graphic using the Canva template saved at <span className="font-mono text-white/80">public/social/templates/match-results-template.png</span>.
+              Generate a square Instagram/Facebook results graphic using the 3-fixture Canva template saved at <span className="font-mono text-white/80">public/social/templates/result-card-master.png</span>.
             </p>
           </div>
 
