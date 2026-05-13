@@ -13,7 +13,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const THREE_FIXTURE_TEMPLATE_URL = "/social/templates/match-results-template.png";
+const THREE_FIXTURE_TEMPLATE_URL = "/social/templates/match-results-template-new.png";
 const FOUR_FIXTURE_TEMPLATE_URL = "/social/templates/match-results-template-4.png";
 
 type SearchParams = {
@@ -185,7 +185,7 @@ export default async function AdminResultsCardGeneratorPage({
   const templateUrl =
     resultCardFixtures.length >= 4 ? FOUR_FIXTURE_TEMPLATE_URL : THREE_FIXTURE_TEMPLATE_URL;
   const templateFileName =
-    resultCardFixtures.length >= 4 ? "match-results-template-4.png" : "match-results-template.png";
+    resultCardFixtures.length >= 4 ? "match-results-template-4.png" : "match-results-template-new.png";
   const leagueOptions = leagues.map((league) => ({
     value: league.id,
     label: league.season ? `${league.name} · ${league.season}` : league.name,
@@ -203,7 +203,7 @@ export default async function AdminResultsCardGeneratorPage({
               Match results card
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              Generate a square Instagram/Facebook results graphic. 3-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template.png</span>; 4-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-4.png</span>.
+              Generate a square Instagram/Facebook results graphic. 3-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-new.png</span>; 4-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-4.png</span>.
             </p>
           </div>
 
