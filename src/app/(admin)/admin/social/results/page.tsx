@@ -13,7 +13,8 @@ import { requireAdmin } from "@/lib/requireAdmin";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const TEMPLATE_URL = "/social/templates/result-card-master.png";
+const THREE_FIXTURE_TEMPLATE_URL = "/social/templates/match-results-template.png";
+const FOUR_FIXTURE_TEMPLATE_URL = "/social/templates/match-results-template-4.png";
 
 type SearchParams = {
   leagueId?: string;
@@ -163,7 +164,7 @@ export default async function AdminResultsCardGeneratorPage({
   const fixtures = dateRange
     ? fixturesRaw
         .filter((fixture) => toLondonDateInputValue(fixture.kickoffAt) === dateRange.londonDateInput)
-        .slice(0, 3)
+        .slice(0, 4)
     : [];
 
   const resultCardFixtures = fixtures
@@ -181,6 +182,10 @@ export default async function AdminResultsCardGeneratorPage({
   const selectedDate = dateRange?.displayDate ?? new Date();
   const fixtureMatchweek = getFixtureMatchweek(fixtures);
   const matchweekValue = sp.matchweek?.trim() || fixtureMatchweek || "";
+  const templateUrl =
+    resultCardFixtures.length >= 4 ? FOUR_FIXTURE_TEMPLATE_URL : THREE_FIXTURE_TEMPLATE_URL;
+  const templateFileName =
+    resultCardFixtures.length >= 4 ? "match-results-template-4.png" : "match-results-template.png";
   const leagueOptions = leagues.map((league) => ({
     value: league.id,
     label: league.season ? `${league.name} · ${league.season}` : league.name,
@@ -198,7 +203,7 @@ export default async function AdminResultsCardGeneratorPage({
               Match results card
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              Generate a square Instagram/Facebook results graphic using the 3-fixture Canva template saved at <span className="font-mono text-white/80">public/social/templates/result-card-master.png</span>.
+              Generate a square Instagram/Facebook results graphic. 3-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template.png</span>; 4-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-4.png</span>.
             </p>
           </div>
 
@@ -260,6 +265,7 @@ export default async function AdminResultsCardGeneratorPage({
             <div className="mt-1">
               {resultCardFixtures.length} completed fixture{resultCardFixtures.length === 1 ? "" : "s"} found for this card.
             </div>
+            <div className="mt-1 text-white/45">Template: {templateFileName}</div>
             {fixtureMatchweek ? (
               <div className="mt-1 text-white/45">Fixture round: matchweek {fixtureMatchweek}</div>
             ) : null}
@@ -268,13 +274,18 @@ export default async function AdminResultsCardGeneratorPage({
                 This template has room for 3 rows. Add/complete more results if you want all rows filled.
               </div>
             ) : null}
+            {resultCardFixtures.length > 4 ? (
+              <div className="mt-2 text-amber-100/80">
+                This card can show a maximum of 4 results. Only the first 4 fixtures are shown.
+              </div>
+            ) : null}
           </div>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
           {resultCardFixtures.length > 0 ? (
             <ResultsCardGenerator
-              templateUrl={TEMPLATE_URL}
+              templateUrl={templateUrl}
               leagueName={selectedLeague?.name ?? "SIXFL"}
               matchweekLabel={getMatchweekLabel(matchweekValue)}
               dateLabel={formatDisplayDate(selectedDate)}
