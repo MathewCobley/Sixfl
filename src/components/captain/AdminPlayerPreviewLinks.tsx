@@ -12,6 +12,36 @@ function getTeamIdFromPathname(pathname: string) {
   return match?.[1] ?? null;
 }
 
+function getPlayerCommunicationsHref(input: { teamId: string; membershipId: string }) {
+  return `/admin/teams/${input.teamId}/players/${input.membershipId}/communications`;
+}
+
+function normaliseExistingCommsLink(input: {
+  actionsContainer: HTMLElement;
+  teamId: string;
+  membershipId: string;
+}) {
+  const { actionsContainer, teamId, membershipId } = input;
+  const playerCommsHref = getPlayerCommunicationsHref({ teamId, membershipId });
+
+  const commsLinks = Array.from(actionsContainer.querySelectorAll<HTMLAnchorElement>("a"))
+    .filter((link) => {
+      const href = link.getAttribute("href") ?? "";
+      return (
+        href === `/admin/teams/${teamId}/communications` ||
+        /^\/admin\/teams\/[^/]+\/prospects\/[^/]+\/communications$/.test(href)
+      );
+    });
+
+  for (const link of commsLinks) {
+    link.href = playerCommsHref;
+    link.textContent = "Player comms";
+    link.dataset.adminPlayerCommsLink = membershipId;
+    link.className =
+      "inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15";
+  }
+}
+
 function addPreviewLinks(pathname: string) {
   const teamId = getTeamIdFromPathname(pathname);
   if (!teamId) return;
@@ -32,6 +62,8 @@ function addPreviewLinks(pathname: string) {
 
     const actionsContainer = form.parentElement;
     if (!(actionsContainer instanceof HTMLElement)) continue;
+
+    normaliseExistingCommsLink({ actionsContainer, teamId, membershipId });
 
     const existingLink = actionsContainer.querySelector(
       `a[data-admin-player-preview-link="${membershipId}"]`,
