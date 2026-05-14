@@ -125,7 +125,6 @@ async function confirmManagedSquadJoinAction(formData: FormData) {
       where: { email },
       update: {
         name: fullName,
-        createdFromLeadId: undefined,
       },
       create: {
         email,
