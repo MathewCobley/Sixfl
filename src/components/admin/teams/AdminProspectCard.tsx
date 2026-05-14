@@ -9,6 +9,7 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import {
   convertAdminProspectToMemberAction,
   moveAdminProspectToTeamAction,
+  sendAdminProspectJoinConfirmationAction,
   updateAdminProspectDetailsAction,
   updateAdminProspectNotesAction,
   updateAdminProspectStatusAction,
@@ -160,6 +161,7 @@ export default function AdminProspectCard({
   const preferredNights = getPreferredNightsDisplay(prospect.preferredNights);
   const isFormComplete = hasCompletedProspectForm(prospect);
   const completionScore = countCompletedProfileFields(prospect);
+  const hasEmail = Boolean(prospect.email?.trim());
 
   return (
     <div className="space-y-5 px-6 py-5">
@@ -241,7 +243,7 @@ export default function AdminProspectCard({
           ) : null}
         </div>
 
-        <div className="w-full lg:w-[260px] lg:shrink-0">
+        <div className="w-full space-y-3 lg:w-[260px] lg:shrink-0">
           <form action={updateAdminProspectStatusAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <input type="hidden" name="teamId" value={teamId} />
             <input type="hidden" name="prospectId" value={prospect.id} />
@@ -268,6 +270,24 @@ export default function AdminProspectCard({
                 Communications
               </Link>
             </div>
+          </form>
+
+          <form action={sendAdminProspectJoinConfirmationAction} className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+            <input type="hidden" name="teamId" value={teamId} />
+            <input type="hidden" name="prospectId" value={prospect.id} />
+            <div className="text-sm font-semibold text-emerald-50">
+              Join confirmation
+            </div>
+            <p className="mt-2 text-xs leading-5 text-emerald-100/65">
+              Sends the low-friction “Yes, I want to join” email.
+            </p>
+            <button
+              type="submit"
+              disabled={!hasEmail || prospect.status === "ACTIVE_SQUAD"}
+              className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/35"
+            >
+              Send join email
+            </button>
           </form>
         </div>
       </div>
