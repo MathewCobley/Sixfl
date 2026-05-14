@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { queueManagedSquadJoinConfirmationEmail } from "@/lib/managed-squad/prospectJoinConfirmation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -136,6 +137,48 @@ export async function updateAdminProspectDetailsAction(formData: FormData) {
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath(`/admin/teams/${teamId}/prospects`);
   redirect(buildRedirect(teamId, "?saved=details-updated"));
+}
+
+export async function sendAdminProspectJoinConfirmationAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+
+  if (!teamId || !prospectId) {
+    redirect("/admin/teams");
+  }
+
+  const prospect = await prisma.teamPlayerProspect.findFirst({
+    where: {
+      id: prospectId,
+      teamId,
+    },
+    select: {
+      id: true,
+      email: true,
+    },
+  });
+
+  if (!prospect) {
+    redirect(buildRedirect(teamId, "?error=Prospect%20not%20found."));
+  }
+
+  if (!prospect.email?.trim()) {
+    redirect(buildRedirect(teamId, "?error=This%20prospect%20needs%20an%20email%20address%20before%20you%20can%20send%20the%20join%20confirmation."));
+  }
+
+  const result = await queueManagedSquadJoinConfirmationEmail({
+    prospectId: prospect.id,
+    createdByUserId: user?.id ?? null,
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/prospects`);
+  revalidatePath(`/admin/teams/${teamId}/prospects/${prospect.id}/communications`);
+  revalidatePath("/admin/messaging");
+
+  redirect(buildRedirect(teamId, `?saved=join-confirmation-${result.status}`));
 }
 
 export async function updateAdminProspectStatusAction(formData: FormData) {
