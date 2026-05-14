@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
+import { queueManagedSquadJoinConfirmationEmail } from "@/lib/managed-squad/prospectJoinConfirmation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import type { ConvertLeadToTeamState } from "./convert-action-state";
@@ -69,6 +70,19 @@ async function generateUniqueClaimCode(tx: Prisma.TransactionClient) {
   }
 
   throw new Error("Failed to generate a unique team claim code.");
+}
+
+async function queueJoinConfirmationSafely(input: {
+  prospectId: string;
+  createdByUserId?: string | null;
+}) {
+  try {
+    const result = await queueManagedSquadJoinConfirmationEmail(input);
+    return result.status;
+  } catch (error) {
+    console.error("Failed to queue managed squad join confirmation email", error);
+    return "error";
+  }
 }
 
 export async function convertLeadToTeamAction(
@@ -233,7 +247,7 @@ export async function convertLeadToTeamAction(
 }
 
 export async function convertLeadToManagedSquadPlayerAction(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
   const teamId = String(formData.get("teamId") ?? "").trim();
@@ -358,13 +372,20 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
       },
     });
 
+    const joinEmailStatus = await queueJoinConfirmationSafely({
+      prospectId: duplicate.id,
+      createdByUserId: user?.id ?? null,
+    });
+
     revalidatePath("/admin/leads");
     revalidatePath(`/admin/leads/${lead.id}`);
     revalidatePath("/admin/teams");
     revalidatePath(`/admin/teams/${team.id}`);
+    revalidatePath(`/admin/teams/${team.id}/prospects/${duplicate.id}/communications`);
+    revalidatePath("/admin/messaging");
 
     redirect(
-      `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&existingProspect=1&prospect=${duplicate.id}`,
+      `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&existingProspect=1&prospect=${duplicate.id}&joinEmail=${joinEmailStatus}`,
     );
   }
 
@@ -400,12 +421,19 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
     return createdProspect;
   });
 
+  const joinEmailStatus = await queueJoinConfirmationSafely({
+    prospectId: prospect.id,
+    createdByUserId: user?.id ?? null,
+  });
+
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${lead.id}`);
   revalidatePath("/admin/teams");
   revalidatePath(`/admin/teams/${team.id}`);
+  revalidatePath(`/admin/teams/${team.id}/prospects/${prospect.id}/communications`);
+  revalidatePath("/admin/messaging");
 
   redirect(
-    `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&prospect=${prospect.id}`,
+    `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&prospect=${prospect.id}&joinEmail=${joinEmailStatus}`,
   );
 }
