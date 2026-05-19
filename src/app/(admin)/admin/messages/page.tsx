@@ -11,6 +11,7 @@ import {
   getMessageThreadById,
 } from "@/lib/messaging/service";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
 
@@ -217,6 +218,19 @@ export default async function AdminMessagesPage({
     ? await getTeamMemberProfilesByTeamMemberIds(composeTeam.members.map((member) => member.id))
     : new Map();
 
+  const composeTeamContactSnapshot = composeTeam
+    ? (await upsertTeamNotificationRecipient(composeTeam.id)).snapshot
+    : null;
+
+  const composePrimaryContactEmail =
+    composeTeamContactSnapshot?.primaryContact.email ?? composeTeam?.contactEmail ?? null;
+
+  const composePrimaryContactPhone =
+    composeTeamContactSnapshot?.primaryContact.phone ?? composeTeam?.contactPhone ?? null;
+
+  const composePrimaryContactName =
+    composeTeamContactSnapshot?.primaryContact.name ?? composeTeam?.contactName ?? null;
+
   const linkedMemberEmails = new Set(
     (composeTeam?.members ?? [])
       .map((member) => normaliseEmail(member.user.email))
@@ -237,8 +251,8 @@ export default async function AdminMessagesPage({
           const phone = getLinkedMemberPhoneFallback({
             memberEmail: member.user.email,
             profilePhone: profile?.phone,
-            teamContactEmail: composeTeam.contactEmail,
-            teamContactPhone: composeTeam.contactPhone,
+            teamContactEmail: composePrimaryContactEmail,
+            teamContactPhone: composePrimaryContactPhone,
           });
 
           return {
@@ -469,10 +483,10 @@ export default async function AdminMessagesPage({
 
                 <div className="flex flex-wrap gap-2 text-xs text-white/60">
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                    Email: {composeTeam.contactEmail || "—"}
+                    Email: {composePrimaryContactEmail || "—"}
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                    SMS: {composeTeam.contactPhone || "—"}
+                    SMS: {composePrimaryContactPhone || "—"}
                   </span>
                   {composeTeam.league ? (
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
@@ -485,9 +499,9 @@ export default async function AdminMessagesPage({
               <TeamCommunicationsComposer
                 teamId={composeTeam.id}
                 fromPath={`/admin/messages?composeTeam=${composeTeam.id}`}
-                toEmail={composeTeam.contactEmail ?? null}
-                toPhone={composeTeam.contactPhone ?? null}
-                contactName={composeTeam.contactName ?? null}
+                toEmail={composePrimaryContactEmail}
+                toPhone={composePrimaryContactPhone}
+                contactName={composePrimaryContactName}
                 teamName={composeTeam.name}
                 leagueName={composeTeam.league ? `${composeTeam.league.name}${composeTeam.league.season ? ` — ${composeTeam.league.season}` : ""}` : null}
                 claimCode={composeTeam.claimCode}
