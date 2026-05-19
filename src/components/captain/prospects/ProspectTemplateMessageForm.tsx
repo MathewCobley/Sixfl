@@ -63,6 +63,16 @@ function personaliseText(
     .replace(/{{email}}/gi, context.email);
 }
 
+function buildSignupEmailPreset(context: {
+  firstName: string;
+  teamName: string;
+}) {
+  return {
+    subject: `Join ${context.teamName} on SIXFL`,
+    body: `Hi ${context.firstName || "there"},\n\nYou've been added to ${context.teamName}'s SIXFL squad list.\n\nPlease use the button below to register as a player so we can link you to the team properly.\n\n{{cta}}\n\nThanks,\nSIXFL`,
+  };
+}
+
 export default function ProspectTemplateMessageForm({
   channel,
   title,
@@ -92,6 +102,14 @@ export default function ProspectTemplateMessageForm({
     };
   }, [hiddenFields]);
 
+  const isIndividualProspectEmail =
+    channel === "EMAIL" && hiddenFields.some((field) => field.name === "prospectId");
+
+  const signupEmailPreset = useMemo(
+    () => buildSignupEmailPreset({ firstName: context.firstName, teamName: context.teamName }),
+    [context.firstName, context.teamName],
+  );
+
   const templates = channel === "EMAIL" ? emailTemplates : smsTemplates;
   const templateOptions = templates.map((template) => ({
     value: template.id,
@@ -102,6 +120,13 @@ export default function ProspectTemplateMessageForm({
     () => templates.find((template) => template.id === selectedTemplateId) ?? null,
     [templates, selectedTemplateId],
   );
+
+  useEffect(() => {
+    if (!isIndividualProspectEmail || selectedTemplateId) return;
+
+    setSubject(signupEmailPreset.subject);
+    setBody(signupEmailPreset.body);
+  }, [isIndividualProspectEmail, selectedTemplateId, signupEmailPreset]);
 
   useEffect(() => {
     if (!selectedTemplate) return;
@@ -125,6 +150,12 @@ export default function ProspectTemplateMessageForm({
     );
   }, [applyPersonalization, channel, context, selectedTemplate]);
 
+  function useSignupEmailPreset() {
+    setSelectedTemplateId("");
+    setSubject(signupEmailPreset.subject);
+    setBody(signupEmailPreset.body);
+  }
+
   const buttonClass =
     variant === "primary"
       ? "mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
@@ -138,6 +169,24 @@ export default function ProspectTemplateMessageForm({
 
       <div className="text-sm font-semibold text-white">{title}</div>
       {subtitle ? <div className="mt-1 text-xs text-white/45">{subtitle}</div> : null}
+
+      {isIndividualProspectEmail ? (
+        <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/80">
+            Quick signup email
+          </div>
+          <p className="mt-2 text-xs leading-5 text-emerald-50/70">
+            This pre-fills a simple player registration email with the team signup button.
+          </p>
+          <button
+            type="button"
+            onClick={useSignupEmailPreset}
+            className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+          >
+            Use signup email
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-4 space-y-3">
         <TemplateSelect
@@ -173,7 +222,7 @@ export default function ProspectTemplateMessageForm({
       </div>
 
       <button type="submit" className={buttonClass}>
-        {submitLabel}
+        {isIndividualProspectEmail ? "Send signup email" : submitLabel}
       </button>
     </form>
   );
