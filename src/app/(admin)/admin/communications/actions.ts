@@ -34,6 +34,14 @@ function getFullName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return "Unknown error";
+}
+
 type CommunicationRecipientContext = {
   recipient: Awaited<ReturnType<typeof upsertNotificationRecipient>>;
   audience: NotificationAudience;
@@ -528,7 +536,10 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
           }
         : {}),
     },
-    select: { id: true },
+    select: {
+      id: true,
+      name: true,
+    },
     orderBy: [{ name: "asc" }],
   });
 
@@ -537,30 +548,76 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   }
 
   let deliveredCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
+  const failedTeamNames: string[] = [];
 
   for (const team of teams) {
-    const result = await sendTeamBroadcastMessage({
-      teamId: team.id,
-      channel,
-      subject: channel === NotificationChannel.EMAIL ? subject : null,
-      body,
-      templateId,
-      templateKey,
-      ctaLabel,
-      ctaUrl,
-      origin: "league_communications_hub",
-      originLabel: "Sent from league communications hub",
-      metadata: {
-        leagueId,
-        broadcastType: "league",
-      },
-      createdByUserId: user?.id ?? null,
-    });
+    try {
+      const result = await sendTeamBroadcastMessage({
+        teamId: team.id,
+        channel,
+        subject: channel === NotificationChannel.EMAIL ? subject : null,
+        body,
+        templateId,
+        templateKey,
+        ctaLabel,
+        ctaUrl,
+        origin: "league_communications_hub",
+        originLabel: "Sent from league communications hub",
+        metadata: {
+          leagueId,
+          broadcastType: "league",
+        },
+        createdByUserId: user?.id ?? null,
+      });
 
-    if (!result.skipped) {
-      deliveredCount += 1;
+      if (result.skipped) {
+        skippedCount += 1;
+      } else {
+        deliveredCount += 1;
+      }
+    } catch (error) {
+      failedCount += 1;
+      failedTeamNames.push(team.name);
+
+      console.error("League communication failed for team", {
+        leagueId,
+        teamId: team.id,
+        teamName: team.name,
+        channel,
+        error: getErrorMessage(error),
+      });
     }
   }
 
-  redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}&count=${deliveredCount}`);
+  if (deliveredCount === 0 && failedCount > 0) {
+    const failedNames = failedTeamNames.slice(0, 3).join(", ");
+    const suffix = failedTeamNames.length > 3 ? ` and ${failedTeamNames.length - 3} more` : "";
+
+    redirect(
+      `${from}?error=${encodeURIComponent(
+        `No ${channel.toLowerCase()} messages were queued. ${failedCount} team${failedCount === 1 ? "" : "s"} failed${failedNames ? `: ${failedNames}${suffix}` : ""}. Check the server logs for the exact error.`,
+      )}`,
+    );
+  }
+
+  const params = new URLSearchParams({
+    saved: "queued",
+    channel: channel.toLowerCase(),
+    count: String(deliveredCount),
+    skipped: String(skippedCount),
+    failed: String(failedCount),
+  });
+
+  if (failedCount > 0) {
+    const failedNames = failedTeamNames.slice(0, 3).join(", ");
+    const suffix = failedTeamNames.length > 3 ? ` and ${failedTeamNames.length - 3} more` : "";
+    params.set(
+      "warning",
+      `${failedCount} team${failedCount === 1 ? "" : "s"} failed${failedNames ? `: ${failedNames}${suffix}` : ""}.`,
+    );
+  }
+
+  redirect(`${from}?${params.toString()}`);
 }
