@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { NotificationChannel, NotificationDispatchStatus } from "@prisma/client";
 
 import LeagueCommunicationsComposer from "@/components/admin/communications/LeagueCommunicationsComposer";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -40,6 +41,19 @@ function formatUkDateTime(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getDispatchStatusLabel(status: NotificationDispatchStatus) {
+  switch (status) {
+    case NotificationDispatchStatus.FAILED:
+      return "Failed";
+    case NotificationDispatchStatus.SKIPPED:
+      return "Skipped";
+    case NotificationDispatchStatus.CANCELLED:
+      return "Cancelled";
+    default:
+      return status;
+  }
 }
 
 export default async function AdminLeagueCommunicationsPage({
@@ -87,7 +101,10 @@ export default async function AdminLeagueCommunicationsPage({
     }
   }
 
-  const [emailTemplates, smsTemplates, teamThreads] = await Promise.all([
+  const leagueTeamIds = league.teams.map((team) => team.id);
+  const recentDeliveryCutoff = new Date(Date.now() - 1000 * 60 * 60 * 24);
+
+  const [emailTemplates, smsTemplates, teamThreads, recentEmailProblemDispatches] = await Promise.all([
     prisma.emailTemplate.findMany({
       where: {
         isActive: true,
@@ -144,6 +161,37 @@ export default async function AdminLeagueCommunicationsPage({
       orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
       take: 40,
     }),
+    leagueTeamIds.length
+      ? prisma.notificationDispatch.findMany({
+          where: {
+            channel: NotificationChannel.EMAIL,
+            sourceType: "TEAM",
+            sourceId: {
+              in: leagueTeamIds,
+            },
+            status: {
+              in: [
+                NotificationDispatchStatus.FAILED,
+                NotificationDispatchStatus.SKIPPED,
+                NotificationDispatchStatus.CANCELLED,
+              ],
+            },
+            createdAt: {
+              gte: recentDeliveryCutoff,
+            },
+          },
+          include: {
+            recipient: {
+              select: {
+                displayName: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: [{ createdAt: "desc" }],
+          take: 12,
+        })
+      : [],
   ]);
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -192,6 +240,8 @@ export default async function AdminLeagueCommunicationsPage({
     return Boolean(snapshot?.primaryContact.phone?.trim());
   }).length;
 
+  const teamNameById = new Map(league.teams.map((team) => [team.id, team.name]));
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -237,6 +287,44 @@ export default async function AdminLeagueCommunicationsPage({
 
       {errorMessage ? (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</div>
+      ) : null}
+
+      {recentEmailProblemDispatches.length > 0 ? (
+        <section className="rounded-3xl border border-red-500/25 bg-red-500/10 p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-200/80">Recent email delivery issues</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                {recentEmailProblemDispatches.length} email issue{recentEmailProblemDispatches.length === 1 ? "" : "s"} in the last 24 hours
+              </h2>
+              <p className="mt-1 text-sm text-red-100/75">
+                These teams either failed, were skipped, or were cancelled after a league/team email was queued.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 divide-y divide-red-200/10 rounded-2xl border border-red-200/10 bg-black/20">
+            {recentEmailProblemDispatches.map((dispatch) => (
+              <div key={dispatch.id} className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[1fr_0.7fr_1.4fr] md:items-center">
+                <div>
+                  <div className="font-semibold text-white">
+                    {dispatch.sourceId ? teamNameById.get(dispatch.sourceId) ?? dispatch.recipient.displayName ?? "Team" : dispatch.recipient.displayName ?? "Team"}
+                  </div>
+                  <div className="mt-1 break-all text-xs text-white/50">{dispatch.recipient.email || "No email stored"}</div>
+                </div>
+                <div>
+                  <span className="inline-flex rounded-full border border-red-200/20 bg-red-500/15 px-2.5 py-1 text-xs font-semibold text-red-100">
+                    {getDispatchStatusLabel(dispatch.status)}
+                  </span>
+                  <div className="mt-1 text-xs text-white/45">{formatUkDateTime(dispatch.createdAt)}</div>
+                </div>
+                <div className="text-xs leading-5 text-red-100/80">
+                  {dispatch.failureReason || "No failure reason was recorded."}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
