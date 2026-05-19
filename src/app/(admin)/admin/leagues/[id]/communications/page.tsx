@@ -22,7 +22,10 @@ type SearchParams = {
   saved?: string;
   channel?: string;
   error?: string;
+  warning?: string;
   count?: string;
+  skipped?: string;
+  failed?: string;
 };
 
 function getChannelLabel(value?: string) {
@@ -166,11 +169,15 @@ export default async function AdminLeagueCommunicationsPage({
     };
   });
 
+  const queuedCount = filters.count || "0";
+  const skippedCount = filters.skipped || "0";
+  const failedCount = filters.failed || "0";
   const successMessage =
     filters.saved === "queued"
-      ? `${getChannelLabel(filters.channel)} queued to ${filters.count || "0"} team${filters.count === "1" ? "" : "s"}.`
+      ? `${getChannelLabel(filters.channel)} queued to ${queuedCount} team${queuedCount === "1" ? "" : "s"}. Skipped: ${skippedCount}. Failed: ${failedCount}.`
       : null;
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
+  const warningMessage = filters.warning ? decodeURIComponent(filters.warning) : null;
 
   const messages = teamThreads
     .flatMap((thread) => thread.messages.map((message) => ({ thread, message })))
@@ -222,6 +229,10 @@ export default async function AdminLeagueCommunicationsPage({
 
       {successMessage ? (
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">{successMessage}</div>
+      ) : null}
+
+      {warningMessage ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">{warningMessage}</div>
       ) : null}
 
       {errorMessage ? (
