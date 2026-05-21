@@ -2,11 +2,11 @@
 // File: src/app/captain/team/[teamid]/page.tsx
 // ========================================
 
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
+import LeagueTableCard from "@/components/leagues/LeagueTableCard";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getLeagueTable } from "@/lib/leagueTable";
 import { prisma } from "@/lib/prisma";
@@ -45,10 +45,6 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
-function formatGoalDifference(value: number) {
-  return value > 0 ? `+${value}` : `${value}`;
-}
-
 function formatOrdinal(value: number) {
   const mod10 = value % 10;
   const mod100 = value % 100;
@@ -57,48 +53,6 @@ function formatOrdinal(value: number) {
   if (mod10 === 2 && mod100 !== 12) return `${value}nd`;
   if (mod10 === 3 && mod100 !== 13) return `${value}rd`;
   return `${value}th`;
-}
-
-function getInitials(name: string) {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  if (!parts.length) return "?";
-
-  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
-}
-
-function normaliseLogoUrl(value?: string | null) {
-  if (!value) return null;
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  if (
-    trimmed.startsWith("http://") ||
-    trimmed.startsWith("https://") ||
-    trimmed.startsWith("/")
-  ) {
-    return trimmed;
-  }
-
-  return `/${trimmed}`;
-}
-
-function getFormBadgeClasses(result: "W" | "D" | "L") {
-  switch (result) {
-    case "W":
-      return "border-emerald-400/30 bg-emerald-500/15 text-emerald-200";
-    case "D":
-      return "border-white/10 bg-white/[0.06] text-white/75";
-    case "L":
-      return "border-red-400/30 bg-red-500/15 text-red-200";
-    default:
-      return "border-white/10 bg-white/[0.06] text-white/75";
-  }
 }
 
 function getFixtureLabel(input: {
@@ -123,17 +77,9 @@ function getFixtureCountdownLabel(kickoffAt: Date) {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffHours / 24);
 
-  if (diffDays >= 2) {
-    return `${diffDays} days to go`;
-  }
-
-  if (diffHours >= 24) {
-    return "Tomorrow";
-  }
-
-  if (diffHours >= 1) {
-    return `${diffHours} hour${diffHours === 1 ? "" : "s"} to go`;
-  }
+  if (diffDays >= 2) return `${diffDays} days to go`;
+  if (diffHours >= 24) return "Tomorrow";
+  if (diffHours >= 1) return `${diffHours} hour${diffHours === 1 ? "" : "s"} to go`;
 
   return "Today";
 }
@@ -217,6 +163,32 @@ function getToneClasses(tone: "emerald" | "amber" | "red" | "neutral") {
     default:
       return "border-white/10 bg-white/5 text-white/75";
   }
+}
+
+function getPublicLeagueTableTitle(leagueName?: string | null) {
+  const compactLeagueText = (leagueName ?? "").replace(/·/g, " ").replace(/\s+/g, " ").trim();
+
+  if (/Harrogate\s+West/i.test(compactLeagueText)) {
+    return "Current Harrogate West 6 a side table";
+  }
+
+  const beforeSeason = compactLeagueText.split(/Spring|Summer|Autumn|Winter|Season/i)[0]?.trim();
+  const cleaned = beforeSeason
+    ?.replace(/^SIXFL\s+/i, "")
+    .replace(/\bMens\b/i, "")
+    .replace(/\bWomens\b/i, "")
+    .replace(/\bLeague\b/gi, "")
+    .replace(/\bTuesday\b|\bWednesday\b|\bThursday\b|\bMonday\b|\bFriday\b|\bSaturday\b|\bSunday\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned ? `Current ${cleaned} 6 a side table` : "Current league table";
+}
+
+function getPublicLeagueTableDescription(title: string) {
+  const location = title.replace(/^Current\s+/i, "").replace(/\s+6 a side table$/i, "");
+
+  return `Follow the latest standings, points, goal difference and recent form in this ${location} 6 a side football league.`;
 }
 
 export default async function CaptainOverviewPage({
@@ -360,6 +332,8 @@ export default async function CaptainOverviewPage({
   const currentTeamPosition = leagueTable.findIndex((row) => row.teamId === teamid);
   const currentTeamRow =
     currentTeamPosition >= 0 ? leagueTable[currentTeamPosition] : null;
+  const leagueTableTitle = getPublicLeagueTableTitle(team.league?.name);
+  const leagueTableDescription = getPublicLeagueTableDescription(leagueTableTitle);
 
   const nextFixture = upcomingFixtures[0] ?? null;
   const nextFixtureConfirmation = nextFixture?.captainConfirmations[0] ?? null;
@@ -374,18 +348,12 @@ export default async function CaptainOverviewPage({
     if (!fixture.result) return false;
 
     const isHome = fixture.homeTeamId === teamid;
-    const goalsFor = isHome
-      ? fixture.result.homeScore
-      : fixture.result.awayScore;
-
+    const goalsFor = isHome ? fixture.result.homeScore : fixture.result.awayScore;
     const teamMeta = fixture.result.teamMetadata[0] ?? null;
     const goalsRecorded = teamMeta?.goalsRecorded ?? 0;
     const playerOfMatchName = teamMeta?.playerOfMatchName ?? null;
 
-    const needsScorers = goalsRecorded < goalsFor;
-    const needsPom = !playerOfMatchName;
-
-    return needsScorers || needsPom;
+    return goalsRecorded < goalsFor || !playerOfMatchName;
   }).length;
 
   const outstandingBalance = paymentCharges.reduce((sum, charge) => {
@@ -420,9 +388,7 @@ export default async function CaptainOverviewPage({
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
               {nextFixture
                 ? `${formatDateTime(nextFixture.kickoffAt)} · ${
-                    nextFixture.venue?.name ??
-                    team.league?.venueName ??
-                    "Venue TBC"
+                    nextFixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"
                   }`
                 : "As soon as your next match is scheduled, it will appear here."}
             </p>
@@ -489,8 +455,7 @@ export default async function CaptainOverviewPage({
                 {needsCompletionCount}
               </p>
               <p className="mt-2 text-sm text-amber-100/75">
-                Result{needsCompletionCount === 1 ? "" : "s"} still need scorers
-                or Player of the Match.
+                Result{needsCompletionCount === 1 ? "" : "s"} still need scorers or Player of the Match.
               </p>
             </div>
 
@@ -502,8 +467,7 @@ export default async function CaptainOverviewPage({
                 {activeDisputeCount}
               </p>
               <p className="mt-2 text-sm text-red-100/75">
-                Dispute{activeDisputeCount === 1 ? "" : "s"} open or under
-                review.
+                Dispute{activeDisputeCount === 1 ? "" : "s"} open or under review.
               </p>
             </div>
 
@@ -586,16 +550,10 @@ export default async function CaptainOverviewPage({
 
                     <div className="text-sm sm:text-right">
                       <div className="text-white/65">
-                        {fixture.venue?.name ??
-                          team.league?.venueName ??
-                          "Venue TBC"}
+                        {fixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}
                       </div>
                       <div className="mt-2">
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getToneClasses(
-                            status.tone,
-                          )}`}
-                        >
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getToneClasses(status.tone)}`}>
                           {status.label}
                         </span>
                       </div>
@@ -634,18 +592,11 @@ export default async function CaptainOverviewPage({
             ) : (
               recentResults.map((fixture) => {
                 const isHome = fixture.homeTeamId === teamid;
-                const opponent = isHome
-                  ? fixture.awayTeam.name
-                  : fixture.homeTeam.name;
-                const goalsFor = isHome
-                  ? fixture.result!.homeScore
-                  : fixture.result!.awayScore;
-                const goalsAgainst = isHome
-                  ? fixture.result!.awayScore
-                  : fixture.result!.homeScore;
+                const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
+                const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
+                const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
                 const resultLabel = getResultLabel(goalsFor, goalsAgainst);
-                const hasActiveDispute =
-                  (fixture.result?.disputes?.length ?? 0) > 0;
+                const hasActiveDispute = (fixture.result?.disputes?.length ?? 0) > 0;
 
                 return (
                   <div key={fixture.id} className="px-6 py-5">
@@ -685,291 +636,20 @@ export default async function CaptainOverviewPage({
         </div>
       </section>
 
-      <section
-        id="captain-league-table"
-        className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-[0_24px_80px_rgba(0,0,0,0.2)]"
-      >
-        <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Standings
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
-              League table
-            </h2>
-            <p className="mt-2 text-sm text-white/55">
-              {team.league
-                ? `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`
-                : "Current standings"}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {team.league?.season ? (
-              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/75">
-                {team.league.season}
-              </span>
-            ) : null}
-
-            {currentTeamPosition >= 0 ? (
-              <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                Your position: {formatOrdinal(currentTeamPosition + 1)}
-              </span>
-            ) : null}
-
-            {currentTeamRow ? (
-              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/75">
-                {currentTeamRow.points} pts
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        {!team.leagueId ? (
-          <div className="px-6 py-10 text-sm text-white/55">
-            Your team is not assigned to a league yet, so there is no table to
-            show here.
-          </div>
-        ) : leagueTable.length === 0 ? (
-          <div className="px-6 py-10 text-sm text-white/55">
-            The league table will appear here once teams have been added.
-          </div>
-        ) : (
-          <div className="lg:overflow-x-auto">
-            <div className="lg:min-w-[1240px]">
-              <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
-                <div>Pos</div>
-                <div>Team</div>
-                <div>Form</div>
-                <div className="text-center">P</div>
-                <div className="text-center">W</div>
-                <div className="text-center">D</div>
-                <div className="text-center">L</div>
-                <div className="text-center">GF</div>
-                <div className="text-center">GA</div>
-                <div className="text-center">GD</div>
-                <div className="text-center">Pts</div>
-              </div>
-
-              <div className="divide-y divide-white/10">
-                {leagueTable.map((row, index) => {
-                  const isCurrentTeam = row.teamId === teamid;
-                  const logoUrl = normaliseLogoUrl(row.teamLogoUrl);
-
-                  const mobileTopStats = [
-                    { label: "P", value: row.played },
-                    { label: "W", value: row.won },
-                    { label: "D", value: row.drawn },
-                    { label: "L", value: row.lost },
-                  ];
-
-                  const mobileBottomStats = [
-                    { label: "GF", value: row.goalsFor },
-                    { label: "GA", value: row.goalsAgainst },
-                    { label: "GD", value: formatGoalDifference(row.goalDifference) },
-                    { label: "PTS", value: row.points },
-                  ];
-
-                  return (
-                    <div
-                      key={row.teamId}
-                      className={`px-4 py-5 sm:px-6 lg:px-8 ${
-                        isCurrentTeam ? "bg-emerald-500/10" : "bg-black/20"
-                      }`}
-                    >
-                      <div className="lg:hidden">
-                        <div className="flex items-start gap-4">
-                          <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-black ${
-                              isCurrentTeam
-                                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-                                : "border-white/10 bg-white/[0.04] text-white/70"
-                            }`}
-                          >
-                            {index + 1}
-                          </div>
-
-                          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-                            {logoUrl ? (
-                              <Image
-                                src={logoUrl}
-                                alt={`${row.teamName} badge`}
-                                fill
-                                sizes="48px"
-                                className="object-contain p-1.5"
-                                unoptimized
-                              />
-                            ) : (
-                              <span className="text-sm font-black text-white/60">
-                                {getInitials(row.teamName)}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="text-base font-semibold leading-5 text-white">
-                                {row.teamName}
-                              </div>
-
-                              {isCurrentTeam ? (
-                                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100">
-                                  Your team
-                                </span>
-                              ) : null}
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                                Form
-                              </span>
-                              {row.recentForm.length > 0 ? (
-                                row.recentForm.map((result, formIndex) => (
-                                  <span
-                                    key={`${row.teamId}-mobile-form-${formIndex}`}
-                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-black ${getFormBadgeClasses(
-                                      result,
-                                    )}`}
-                                  >
-                                    {result}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-white/40">—</span>
-                              )}
-                            </div>
-
-                            <div className="mt-3 grid grid-cols-4 gap-2">
-                              {mobileTopStats.map((stat) => (
-                                <div
-                                  key={`${row.teamId}-${stat.label}`}
-                                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center"
-                                >
-                                  <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                                    {stat.label}
-                                  </div>
-                                  <div className="mt-1 text-sm font-bold text-white">
-                                    {stat.value}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                            <div className="mt-2 grid grid-cols-4 gap-2">
-                              {mobileBottomStats.map((stat) => (
-                                <div
-                                  key={`${row.teamId}-${stat.label}`}
-                                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center"
-                                >
-                                  <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                                    {stat.label}
-                                  </div>
-                                  <div className="mt-1 text-sm font-bold text-white">
-                                    {stat.value}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
-                        <div>
-                          <div
-                            className={`flex h-11 w-11 items-center justify-center rounded-2xl border text-sm font-black ${
-                              isCurrentTeam
-                                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
-                                : "border-white/10 bg-white/[0.04] text-white/70"
-                            }`}
-                          >
-                            {index + 1}
-                          </div>
-                        </div>
-
-                        <div className="flex min-w-0 items-center gap-4">
-                          <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-                            {logoUrl ? (
-                              <Image
-                                src={logoUrl}
-                                alt={`${row.teamName} badge`}
-                                fill
-                                sizes="56px"
-                                className="object-contain p-2"
-                                unoptimized
-                              />
-                            ) : (
-                              <span className="text-base font-black text-white/60">
-                                {getInitials(row.teamName)}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="block min-w-0 font-semibold leading-5 text-white">
-                                {row.teamName}
-                              </div>
-
-                              {isCurrentTeam ? (
-                                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100">
-                                  Your team
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          {row.recentForm.length > 0 ? (
-                            row.recentForm.map((result, formIndex) => (
-                              <span
-                                key={`${row.teamId}-form-${formIndex}`}
-                                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-black ${getFormBadgeClasses(
-                                  result,
-                                )}`}
-                              >
-                                {result}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-sm text-white/40">—</span>
-                          )}
-                        </div>
-
-                        <div className="text-center font-medium text-white/80">
-                          {row.played}
-                        </div>
-                        <div className="text-center font-medium text-white/80">
-                          {row.won}
-                        </div>
-                        <div className="text-center font-medium text-white/80">
-                          {row.drawn}
-                        </div>
-                        <div className="text-center font-medium text-white/80">
-                          {row.lost}
-                        </div>
-                        <div className="text-center font-medium text-white/80">
-                          {row.goalsFor}
-                        </div>
-                        <div className="text-center font-medium text-white/80">
-                          {row.goalsAgainst}
-                        </div>
-                        <div className="text-center font-medium text-white/80">
-                          {formatGoalDifference(row.goalDifference)}
-                        </div>
-                        <div className="text-center text-base font-black text-white">
-                          {row.points}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
+      <div id="captain-league-table">
+        <LeagueTableCard
+          rows={leagueTable}
+          eyebrow="Standings"
+          title={leagueTableTitle}
+          description={leagueTableDescription}
+          emptyMessage={
+            team.leagueId
+              ? "The league table will appear here once teams have been added."
+              : "Your team is not assigned to a league yet, so there is no table to show here."
+          }
+          showTeamLinks={false}
+        />
+      </div>
     </div>
   );
 }
