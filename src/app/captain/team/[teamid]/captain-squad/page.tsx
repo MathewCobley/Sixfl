@@ -27,14 +27,16 @@ type WhatsappPreferenceRow = {
   usesWhatsapp: boolean | null;
 };
 
-type ScorerRow = {
+type ContributionRow = {
   name: string;
   goals: number;
+  assists: number;
   teamMemberId?: string;
 };
 
 type PlayerStats = {
   goals: number;
+  assists: number;
   playerOfMatchAwards: number;
 };
 
@@ -119,32 +121,42 @@ function normalisePlayerName(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
-function parseStoredScorers(value: unknown): ScorerRow[] {
+function parseStoredContributions(value: unknown): ContributionRow[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item): ScorerRow | null => {
+    .map((item): ContributionRow | null => {
       if (!item || typeof item !== "object") return null;
 
-      const row = item as Partial<ScorerRow>;
+      const row = item as Partial<ContributionRow>;
       const name = typeof row.name === "string" ? row.name.trim() : "";
-      const goals = Number(row.goals);
+      const goals = Number(row.goals ?? 0);
+      const assists = Number(row.assists ?? 0);
 
-      if (!name || !Number.isInteger(goals) || goals < 1) return null;
-
-      const scorer: ScorerRow = { name, goals };
-
-      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
-        scorer.teamMemberId = row.teamMemberId;
+      if (
+        !name ||
+        !Number.isInteger(goals) ||
+        goals < 0 ||
+        !Number.isInteger(assists) ||
+        assists < 0 ||
+        goals + assists < 1
+      ) {
+        return null;
       }
 
-      return scorer;
+      const contribution: ContributionRow = { name, goals, assists };
+
+      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
+        contribution.teamMemberId = row.teamMemberId;
+      }
+
+      return contribution;
     })
-    .filter((item): item is ScorerRow => item !== null);
+    .filter((item): item is ContributionRow => item !== null);
 }
 
 function emptyPlayerStats(): PlayerStats {
-  return { goals: 0, playerOfMatchAwards: 0 };
+  return { goals: 0, assists: 0, playerOfMatchAwards: 0 };
 }
 
 function getWhatsAppUrl(phone: string | null | undefined) {
@@ -285,9 +297,6 @@ export default async function CaptainSquadViewPage({
   const usesWhatsappByUserId = new Map(
     whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
   );
-  const playerNameByMemberId = new Map(
-    team.members.map((member) => [member.id, member.user.name ?? ""]),
-  );
   const memberIdByPlayerName = new Map(
     team.members.map((member) => [normalisePlayerName(member.user.name), member.id]),
   );
@@ -298,12 +307,13 @@ export default async function CaptainSquadViewPage({
   });
 
   matchDetails.forEach((details) => {
-    parseStoredScorers(details.scorers).forEach((scorer) => {
-      const memberId = scorer.teamMemberId || memberIdByPlayerName.get(normalisePlayerName(scorer.name));
+    parseStoredContributions(details.scorers).forEach((contribution) => {
+      const memberId = contribution.teamMemberId || memberIdByPlayerName.get(normalisePlayerName(contribution.name));
       if (!memberId) return;
 
       const stats = statsByMemberId.get(memberId) ?? emptyPlayerStats();
-      stats.goals += scorer.goals;
+      stats.goals += contribution.goals;
+      stats.assists += contribution.assists;
       statsByMemberId.set(memberId, stats);
     });
 
@@ -451,6 +461,7 @@ export default async function CaptainSquadViewPage({
 
                       <div className="mt-3 flex flex-wrap gap-2">
                         <StatPill label="goal scored" value={playerStats.goals} />
+                        <StatPill label="assist" value={playerStats.assists} />
                         <StatPill label="Player of the Match" value={playerStats.playerOfMatchAwards} />
                       </div>
 
