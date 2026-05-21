@@ -27,6 +27,19 @@ type SearchParams = {
   error?: string;
 };
 
+type ContributionRow = {
+  name: string;
+  goals: number;
+  assists: number;
+  teamMemberId?: string;
+};
+
+type PlayerStats = {
+  goals: number;
+  assists: number;
+  playerOfMatchAwards: number;
+};
+
 const responseOptions = [
   { value: "AVAILABLE", label: "Available" },
   { value: "MAYBE", label: "Maybe" },
@@ -124,6 +137,57 @@ function getSmsStatusText(dispatch?: {
   }
 }
 
+function normalisePlayerName(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function parseStoredContributions(value: unknown): ContributionRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): ContributionRow | null => {
+      if (!item || typeof item !== "object") return null;
+
+      const row = item as Partial<ContributionRow>;
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const goals = Number(row.goals ?? 0);
+      const assists = Number(row.assists ?? 0);
+
+      if (
+        !name ||
+        !Number.isInteger(goals) ||
+        goals < 0 ||
+        !Number.isInteger(assists) ||
+        assists < 0 ||
+        goals + assists < 1
+      ) {
+        return null;
+      }
+
+      const contribution: ContributionRow = { name, goals, assists };
+
+      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
+        contribution.teamMemberId = row.teamMemberId;
+      }
+
+      return contribution;
+    })
+    .filter((item): item is ContributionRow => item !== null);
+}
+
+function emptyPlayerStats(): PlayerStats {
+  return { goals: 0, assists: 0, playerOfMatchAwards: 0 };
+}
+
+function StatPill({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-100/85">
+      <span className="font-semibold text-emerald-100">{value}</span>
+      <span className="ml-1 text-emerald-100/65">{label}</span>
+    </span>
+  );
+}
+
 export default async function CaptainAvailabilityPage({
   params,
   searchParams,
@@ -199,29 +263,38 @@ export default async function CaptainAvailabilityPage({
 
   const fixtureIds = fixtures.map((fixture) => fixture.id);
   const teamMemberIds = team.members.map((member) => member.id);
-  const teamMemberProfilesByMemberId =
-    await getTeamMemberProfilesByTeamMemberIds(teamMemberIds);
-  const smsDispatches = fixtureIds.length && teamMemberIds.length
-    ? await prisma.notificationDispatch.findMany({
-        where: {
-          sourceType: AVAILABILITY_SMS_CHASE_SOURCE_TYPE,
-          OR: fixtureIds.flatMap((fixtureId) =>
-            teamMemberIds.map((teamMemberId) => ({
-              sourceId: getSmsSourceId({ fixtureId, teamMemberId }),
-            })),
-          ),
-        },
-        select: {
-          sourceId: true,
-          status: true,
-          createdAt: true,
-          scheduledFor: true,
-          sentAt: true,
-          failedAt: true,
-        },
-        orderBy: [{ createdAt: "desc" }],
-      })
-    : [];
+
+  const [teamMemberProfilesByMemberId, smsDispatches, matchDetails] = await Promise.all([
+    getTeamMemberProfilesByTeamMemberIds(teamMemberIds),
+    fixtureIds.length && teamMemberIds.length
+      ? prisma.notificationDispatch.findMany({
+          where: {
+            sourceType: AVAILABILITY_SMS_CHASE_SOURCE_TYPE,
+            OR: fixtureIds.flatMap((fixtureId) =>
+              teamMemberIds.map((teamMemberId) => ({
+                sourceId: getSmsSourceId({ fixtureId, teamMemberId }),
+              })),
+            ),
+          },
+          select: {
+            sourceId: true,
+            status: true,
+            createdAt: true,
+            scheduledFor: true,
+            sentAt: true,
+            failedAt: true,
+          },
+          orderBy: [{ createdAt: "desc" }],
+        })
+      : Promise.resolve([]),
+    prisma.matchResultTeamMeta.findMany({
+      where: { teamId: teamid },
+      select: {
+        scorers: true,
+        playerOfMatchName: true,
+      },
+    }),
+  ]);
 
   const smsDispatchBySourceId = new Map<string, (typeof smsDispatches)[number]>();
   for (const dispatch of smsDispatches) {
@@ -229,6 +302,35 @@ export default async function CaptainAvailabilityPage({
       smsDispatchBySourceId.set(dispatch.sourceId, dispatch);
     }
   }
+
+  const memberIdByPlayerName = new Map(
+    team.members.map((member) => [normalisePlayerName(member.user.name), member.id]),
+  );
+  const statsByMemberId = new Map<string, PlayerStats>();
+
+  team.members.forEach((member) => {
+    statsByMemberId.set(member.id, emptyPlayerStats());
+  });
+
+  matchDetails.forEach((details) => {
+    parseStoredContributions(details.scorers).forEach((contribution) => {
+      const memberId = contribution.teamMemberId || memberIdByPlayerName.get(normalisePlayerName(contribution.name));
+      if (!memberId) return;
+
+      const stats = statsByMemberId.get(memberId) ?? emptyPlayerStats();
+      stats.goals += contribution.goals;
+      stats.assists += contribution.assists;
+      statsByMemberId.set(memberId, stats);
+    });
+
+    const playerOfMatchMemberId = memberIdByPlayerName.get(normalisePlayerName(details.playerOfMatchName));
+
+    if (playerOfMatchMemberId) {
+      const stats = statsByMemberId.get(playerOfMatchMemberId) ?? emptyPlayerStats();
+      stats.playerOfMatchAwards += 1;
+      statsByMemberId.set(playerOfMatchMemberId, stats);
+    }
+  });
 
   const totalFixtureSlots = fixtures.length * team.members.length;
   const totalAvailable = fixtures.reduce(
@@ -481,10 +583,10 @@ export default async function CaptainAvailabilityPage({
                   {team.members.map((member) => {
                     const availability = availabilityByMemberId.get(member.id);
                     const response = availability?.response ?? "NO_RESPONSE";
-                    const memberName =
-                      member.user.name || member.user.email || "Unnamed user";
+                    const memberName = member.user.name || member.user.email || "Unnamed user";
                     const memberProfile = teamMemberProfilesByMemberId.get(member.id);
                     const memberPhone = memberProfile?.phone?.trim() || null;
+                    const memberStats = statsByMemberId.get(member.id) ?? emptyPlayerStats();
                     const smsDispatch = smsDispatchBySourceId.get(
                       getSmsSourceId({ fixtureId: fixture.id, teamMemberId: member.id }),
                     );
@@ -506,6 +608,12 @@ export default async function CaptainAvailabilityPage({
                             >
                               {response.replace("_", " ")}
                             </span>
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <StatPill label="goal scored" value={memberStats.goals} />
+                            <StatPill label="assist" value={memberStats.assists} />
+                            <StatPill label="Player of the Match" value={memberStats.playerOfMatchAwards} />
                           </div>
 
                           <div className="mt-2 space-y-1 text-sm text-white/60">
