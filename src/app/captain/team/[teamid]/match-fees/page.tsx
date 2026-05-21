@@ -158,7 +158,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
 }: Props) {
   const { teamid } = await params;
   const access = await requireCaptain(teamid);
-  const isAdmin = access.isAdmin;
+  const isAdmin = access.isAdmin && access.accessMode !== "admin-preview";
 
   const sp = (await searchParams) ?? {};
   const team = await prisma.team.findUnique({
@@ -415,6 +415,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
             <form action={createCaptainPlayerMatchFeesAction} className="mt-5 space-y-5">
               <input type="hidden" name="teamId" value={team.id} />
               <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+              {!isAdmin ? <input type="hidden" name="amount" value="6.00" /> : null}
 
               {isAdmin ? (
                 <div className="grid gap-4 md:grid-cols-[180px_1fr]">
