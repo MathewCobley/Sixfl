@@ -67,7 +67,7 @@ export default async function CaptainTeamLayout({
     ...(team.teamMode === "MANAGED"
       ? [
           { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
-          { href: `/captain/team/${teamid}/match-fees`, label: "Player fees" },
+          { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
         ]
       : []),
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
