@@ -59,7 +59,12 @@ function getRoleBadgeClasses(role: TeamRole) {
 }
 
 function getInitials(name: string | null | undefined) {
-  const parts = (name || "Player").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  const parts = (name || "Player")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "P";
 }
 
@@ -91,6 +96,14 @@ function formatPreferredNights(value: unknown) {
   return String(value);
 }
 
+function formatAvailabilitySummary(value: string | null | undefined) {
+  const cleaned = value
+    ?.replace(/^\s*availability\s*:\s*/i, "")
+    .trim();
+
+  return cleaned || null;
+}
+
 function DetailPill({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value?.trim()) return null;
 
@@ -99,25 +112,6 @@ function DetailPill({ label, value }: { label: string; value: string | null | un
       <span className="text-white/40">{label}:</span>
       <span className="ml-1 text-white/80">{value}</span>
     </span>
-  );
-}
-
-function MetricCard({ label, value, copy, tone }: { label: string; value: number; copy: string; tone: "emerald" | "amber" | "white" | "sky" }) {
-  const toneClasses =
-    tone === "amber"
-      ? "border-amber-400/20 bg-amber-500/10 text-amber-100/70"
-      : tone === "emerald"
-        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
-        : tone === "sky"
-          ? "border-sky-400/20 bg-sky-500/10 text-sky-100/70"
-          : "border-white/10 bg-white/5 text-white/55";
-
-  return (
-    <div className={`rounded-3xl border p-5 ${toneClasses}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{label}</p>
-      <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
-      <p className="mt-2 text-sm text-white/65">{copy}</p>
-    </div>
   );
 }
 
@@ -158,6 +152,18 @@ export default async function CaptainSquadViewPage({
           },
         },
       },
+      prospects: {
+        where: {
+          status: "ACTIVE_SQUAD",
+        },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 
@@ -172,7 +178,8 @@ export default async function CaptainSquadViewPage({
   ).length;
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
   const backupCount = team.members.filter((member) => member.role === "BACKUP_PLAYER").length;
-  const totalSquadCount = team.members.length;
+  const pendingAccountCount = team.prospects.length;
+  const totalSquadCount = team.members.length + pendingAccountCount;
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
   return (
@@ -181,13 +188,13 @@ export default async function CaptainSquadViewPage({
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              Captain squad view
+              Team squad
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Team squad
+              Your squad
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              A captain-safe view of your linked squad. You can see who is attached to the team and check public profile details, but player records, role changes, activation messages and internal notes stay with SIXFL admin.
+              See who is currently in your team, check player availability details and keep track of anyone still finishing their SIXFL account setup.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -196,8 +203,13 @@ export default async function CaptainSquadViewPage({
                 {team.league?.season ? ` · ${team.league.season}` : ""}
               </span>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                {totalSquadCount} linked squad player{totalSquadCount === 1 ? "" : "s"}
+                {totalSquadCount} squad player{totalSquadCount === 1 ? "" : "s"}
               </span>
+              {pendingAccountCount > 0 ? (
+                <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
+                  {pendingAccountCount} account setup pending
+                </span>
+              ) : null}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -218,17 +230,38 @@ export default async function CaptainSquadViewPage({
                   href={`/admin/teams/${teamid}/squad`}
                   className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-5 py-3 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
                 >
-                  Open admin squad console
+                  Open squad console
                 </Link>
               ) : null}
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-            <MetricCard label="Total squad" value={totalSquadCount} copy="Linked players attached to this team." tone="emerald" />
-            <MetricCard label="Organisers" value={organiserCount} copy="Captain, manager and vice-captain roles." tone="amber" />
-            <MetricCard label="Players" value={playerCount} copy="Regular linked player roles." tone="white" />
-            <MetricCard label="Backups" value={backupCount} copy="Backup player roles." tone="sky" />
+            {[
+              { label: "Total squad", value: totalSquadCount, copy: "Players currently connected to your squad.", tone: "emerald" },
+              { label: "Organisers", value: organiserCount, copy: "Captain and support roles.", tone: "amber" },
+              { label: "Players", value: playerCount, copy: "Regular squad players.", tone: "white" },
+              { label: "Backups", value: backupCount, copy: "Backup players available if needed.", tone: "sky" },
+            ].map((metric) => {
+              const toneClasses =
+                metric.tone === "amber"
+                  ? "border-amber-400/20 bg-amber-500/10 text-amber-100/70"
+                  : metric.tone === "emerald"
+                    ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
+                    : metric.tone === "sky"
+                      ? "border-sky-400/20 bg-sky-500/10 text-sky-100/70"
+                      : "border-white/10 bg-white/5 text-white/55";
+
+              return (
+                <div key={metric.label} className={`rounded-3xl border p-5 ${toneClasses}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                    {metric.label}
+                  </p>
+                  <p className="mt-3 text-3xl font-semibold text-white">{metric.value}</p>
+                  <p className="mt-2 text-sm text-white/65">{metric.copy}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -246,30 +279,31 @@ export default async function CaptainSquadViewPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Current squad
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Players and roles</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">Squad list</h2>
             </div>
             <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70">
-              {team.members.length} linked
+              {team.members.length} active
             </div>
           </div>
 
           <div className="divide-y divide-white/10">
             {team.members.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">
-                No linked squad members are attached to this team yet.
+                No active squad members are attached to this team yet.
               </div>
             ) : null}
 
             {team.members.map((member) => {
               const profile = profileByMemberId.get(member.id);
               const preferredNights = formatPreferredNights(profile?.preferredNights);
+              const availabilitySummary = formatAvailabilitySummary(profile?.availabilitySummary);
               const hasPublicProfileDetails = Boolean(
                 profile?.ageBand ||
                   profile?.preferredPositions ||
                   profile?.experienceSummary ||
                   profile?.availabilityLevel ||
                   preferredNights ||
-                  profile?.availabilitySummary,
+                  availabilitySummary,
               );
 
               return (
@@ -301,15 +335,15 @@ export default async function CaptainSquadViewPage({
                             <DetailPill label="Nights" value={preferredNights} />
                           </div>
 
-                          {profile?.availabilitySummary ? (
+                          {availabilitySummary ? (
                             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/60">
-                              <span className="font-semibold text-white/70">Availability:</span> {profile.availabilitySummary}
+                              <span className="font-semibold text-white/70">Availability notes:</span> {availabilitySummary}
                             </div>
                           ) : null}
                         </div>
                       ) : (
                         <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/45">
-                          No public squad profile details saved yet.
+                          No availability details saved yet.
                         </div>
                       )}
                     </div>
@@ -323,15 +357,41 @@ export default async function CaptainSquadViewPage({
         <div className="space-y-6">
           <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Captain limits
+              Squad tools
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">What you can do here</h2>
+            <h2 className="mt-2 text-xl font-semibold text-white">What this page is for</h2>
             <div className="mt-4 space-y-3 text-sm text-white/65">
-              <p>This view is intentionally lighter than the SIXFL admin console.</p>
-              <p>You can review the squad, check public availability details and use the availability page to manage matchday responses.</p>
-              <p>Only SIXFL admin can edit player records, change roles, remove players, send activation messages or view internal notes.</p>
+              <p>Use this page to check who is in your squad and see the availability details saved for each player.</p>
+              <p>For matchday planning, use the availability page to see who can play and chase any missing responses.</p>
+              <p>Need a name, role or player changed? Message SIXFL and we will update the squad for you.</p>
             </div>
           </section>
+
+          {pendingAccountCount > 0 ? (
+            <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+                Account setup pending
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Players still being linked</h2>
+              <p className="mt-2 text-sm text-amber-100/75">
+                These players are part of your squad, but their SIXFL account setup still needs finishing.
+              </p>
+              <div className="mt-4 space-y-3">
+                {team.prospects.map((prospect) => {
+                  const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+
+                  return (
+                    <div key={prospect.id} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="font-semibold text-white">{fullName || "Unnamed player"}</div>
+                      <div className="mt-1 text-xs text-white/45">
+                        Added {formatUkDate(prospect.updatedAt)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
