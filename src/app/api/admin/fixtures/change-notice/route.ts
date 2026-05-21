@@ -334,8 +334,9 @@ export async function POST(request: Request) {
       "Updated fixture:",
       newFixtureSummary,
       "",
-      "Please check your SIXFL dashboard and reconfirm the fixture if required:",
-      dashboardUrl,
+      "Please check your SIXFL dashboard and reconfirm the fixture if required.",
+      "",
+      "{{cta}}",
       "",
       "If this creates a problem, contact SIXFL rather than the other team so we can manage it properly.",
     ].join("\n");
