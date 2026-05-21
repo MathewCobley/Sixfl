@@ -247,7 +247,7 @@ export default async function CaptainSquadViewPage({
               Your squad
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              View your players, check their availability details and quickly open the tools you need for matchday.
+              View your players, check their availability details and quickly open the tools you need for matchdays.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
