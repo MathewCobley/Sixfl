@@ -27,6 +27,17 @@ type WhatsappPreferenceRow = {
   usesWhatsapp: boolean | null;
 };
 
+type ScorerRow = {
+  name: string;
+  goals: number;
+  teamMemberId?: string;
+};
+
+type PlayerStats = {
+  goals: number;
+  playerOfMatchAwards: number;
+};
+
 function getRoleLabel(role: TeamRole) {
   switch (role) {
     case "CAPTAIN":
@@ -104,6 +115,38 @@ function formatAvailabilitySummary(value: string | null | undefined) {
   return cleaned || null;
 }
 
+function normalisePlayerName(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function parseStoredScorers(value: unknown): ScorerRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): ScorerRow | null => {
+      if (!item || typeof item !== "object") return null;
+
+      const row = item as Partial<ScorerRow>;
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const goals = Number(row.goals);
+
+      if (!name || !Number.isInteger(goals) || goals < 1) return null;
+
+      const scorer: ScorerRow = { name, goals };
+
+      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
+        scorer.teamMemberId = row.teamMemberId;
+      }
+
+      return scorer;
+    })
+    .filter((item): item is ScorerRow => item !== null);
+}
+
+function emptyPlayerStats(): PlayerStats {
+  return { goals: 0, playerOfMatchAwards: 0 };
+}
+
 function getWhatsAppUrl(phone: string | null | undefined) {
   const digits = phone?.replace(/\D/g, "") ?? "";
 
@@ -127,6 +170,15 @@ function DetailPill({ label, value }: { label: string; value: string | null | un
     <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70">
       <span className="text-white/40">{label}:</span>
       <span className="ml-1 text-white/80">{value}</span>
+    </span>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-100/85">
+      <span className="font-semibold text-emerald-100">{value}</span>
+      <span className="ml-1 text-emerald-100/65">{label}</span>
     </span>
   );
 }
@@ -212,7 +264,7 @@ export default async function CaptainSquadViewPage({
 
   const userIds = team.members.map((member) => member.user.id);
 
-  const [profileByMemberId, whatsappRows] = await Promise.all([
+  const [profileByMemberId, whatsappRows, matchDetails] = await Promise.all([
     getTeamMemberProfilesByTeamMemberIds(team.members.map((member) => member.id)),
     userIds.length > 0
       ? prisma.$queryRaw<WhatsappPreferenceRow[]>`
@@ -221,11 +273,49 @@ export default async function CaptainSquadViewPage({
           WHERE id = ANY(${userIds})
         `
       : Promise.resolve([] as WhatsappPreferenceRow[]),
+    prisma.matchResultTeamMeta.findMany({
+      where: { teamId: teamid },
+      select: {
+        scorers: true,
+        playerOfMatchName: true,
+      },
+    }),
   ]);
 
   const usesWhatsappByUserId = new Map(
     whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
   );
+  const playerNameByMemberId = new Map(
+    team.members.map((member) => [member.id, member.user.name ?? ""]),
+  );
+  const memberIdByPlayerName = new Map(
+    team.members.map((member) => [normalisePlayerName(member.user.name), member.id]),
+  );
+  const statsByMemberId = new Map<string, PlayerStats>();
+
+  team.members.forEach((member) => {
+    statsByMemberId.set(member.id, emptyPlayerStats());
+  });
+
+  matchDetails.forEach((details) => {
+    parseStoredScorers(details.scorers).forEach((scorer) => {
+      const memberId = scorer.teamMemberId || memberIdByPlayerName.get(normalisePlayerName(scorer.name));
+      if (!memberId) return;
+
+      const stats = statsByMemberId.get(memberId) ?? emptyPlayerStats();
+      stats.goals += scorer.goals;
+      statsByMemberId.set(memberId, stats);
+    });
+
+    const playerOfMatchName = normalisePlayerName(details.playerOfMatchName);
+    const playerOfMatchMemberId = memberIdByPlayerName.get(playerOfMatchName);
+
+    if (playerOfMatchMemberId) {
+      const stats = statsByMemberId.get(playerOfMatchMemberId) ?? emptyPlayerStats();
+      stats.playerOfMatchAwards += 1;
+      statsByMemberId.set(playerOfMatchMemberId, stats);
+    }
+  });
 
   const organiserCount = team.members.filter((member) =>
     ["CAPTAIN", "MANAGER", "VICE_CAPTAIN"].includes(member.role),
@@ -327,6 +417,7 @@ export default async function CaptainSquadViewPage({
               const playerUsesWhatsapp = usesWhatsappByUserId.get(member.user.id) === true;
               const whatsAppUrl = playerUsesWhatsapp ? getWhatsAppUrl(profile?.phone) : null;
               const playerName = member.user.name || "player";
+              const playerStats = statsByMemberId.get(member.id) ?? emptyPlayerStats();
               const hasPublicProfileDetails = Boolean(
                 profile?.ageBand ||
                   profile?.preferredPositions ||
@@ -356,6 +447,11 @@ export default async function CaptainSquadViewPage({
                       </div>
                       <div className="mt-1 text-xs text-white/45">
                         Added {formatUkDate(member.createdAt)}
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <StatPill label="goal scored" value={playerStats.goals} />
+                        <StatPill label="Player of the Match" value={playerStats.playerOfMatchAwards} />
                       </div>
 
                       {hasPublicProfileDetails ? (
