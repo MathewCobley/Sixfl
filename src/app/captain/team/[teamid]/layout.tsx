@@ -58,7 +58,8 @@ export default async function CaptainTeamLayout({
   }
 
   const isManagedTeam = team.teamMode === "MANAGED";
-  const showTeamPayments = !isManagedTeam || (access.isAdmin && access.accessMode !== "admin-preview");
+  const isLimitedCaptainPreview = access.accessMode === "admin-preview";
+  const showTeamPayments = !isManagedTeam || (access.isAdmin && !isLimitedCaptainPreview);
 
   const squadHref = access.isAdmin
     ? `/captain/team/${teamid}/squad`
@@ -113,7 +114,7 @@ export default async function CaptainTeamLayout({
 
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-                    SIXFL Captain Hub
+                    {isLimitedCaptainPreview ? "Limited captain preview" : "SIXFL Captain Hub"}
                   </p>
 
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
@@ -121,9 +122,11 @@ export default async function CaptainTeamLayout({
                   </h1>
 
                   <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                    {isManagedTeam && !showTeamPayments
-                      ? "Matchday control, fixtures and results for your team."
-                      : "Matchday control, fixtures, results and payments for your team."}
+                    {isLimitedCaptainPreview
+                      ? "You are viewing this exactly as a managed-squad captain sees it. Admin-only tabs and payment controls are hidden."
+                      : isManagedTeam
+                        ? "Full admin view: matchday control, fixtures, results and payments for your team."
+                        : "Matchday control, fixtures, results and payments for your team."}
                   </p>
 
                   <p className="mt-3 text-sm text-white/55">
@@ -144,12 +147,21 @@ export default async function CaptainTeamLayout({
                   </Link>
                 ) : null}
 
-                {access.isAdmin ? (
+                {access.isAdmin && !isLimitedCaptainPreview ? (
                   <Link
                     href={`/captain/team/${team.id}/captain-squad`}
                     className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
                   >
-                    Preview weaker captain view
+                    Preview limited captain view
+                  </Link>
+                ) : null}
+
+                {isLimitedCaptainPreview ? (
+                  <Link
+                    href={`/captain/team/${team.id}`}
+                    className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
+                  >
+                    Return to full admin view
                   </Link>
                 ) : null}
 
@@ -162,16 +174,23 @@ export default async function CaptainTeamLayout({
                   </Link>
                 ) : null}
 
-                {access.accessMode === "admin-preview" ? (
-                  <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
-                    <div className="font-medium text-white">Admin preview</div>
+                {isLimitedCaptainPreview ? (
+                  <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
+                    <div className="font-medium text-white">Viewing as captain</div>
                     <div className="mt-1 text-amber-100/75">
-                      Viewing the captain area as admin.
+                      Limited preview mode.
+                    </div>
+                  </div>
+                ) : access.isAdmin ? (
+                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
+                    <div className="font-medium text-white">Full admin view</div>
+                    <div className="mt-1 text-emerald-100/70">
+                      Admin tabs and payment tools are visible.
                     </div>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-                    <div className="font-medium text-white">Captain access</div>
+                    <div className="font-medium text-white">Captain view</div>
                     <div className="mt-1 text-emerald-100/70">
                       You are signed in to manage this team.
                     </div>
