@@ -91,6 +91,22 @@ function formatPreferredNights(value: unknown) {
   return String(value);
 }
 
+function getWhatsAppUrl(phone: string | null | undefined) {
+  const digits = phone?.replace(/\D/g, "") ?? "";
+
+  if (!digits) return null;
+
+  const normalized = digits.startsWith("44")
+    ? digits
+    : digits.startsWith("0")
+      ? `44${digits.slice(1)}`
+      : digits.length === 10
+        ? `44${digits}`
+        : digits;
+
+  return `https://wa.me/${normalized}`;
+}
+
 function DetailPill({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value?.trim()) return null;
 
@@ -99,6 +115,23 @@ function DetailPill({ label, value }: { label: string; value: string | null | un
       <span className="text-white/40">{label}:</span>
       <span className="ml-1 text-white/80">{value}</span>
     </span>
+  );
+}
+
+function WhatsAppLink({ href, playerName }: { href: string; playerName: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title={`WhatsApp ${playerName}`}
+      aria-label={`WhatsApp ${playerName}`}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/15 text-emerald-100 transition hover:bg-emerald-500/25"
+    >
+      <svg viewBox="0 0 32 32" aria-hidden="true" className="h-4 w-4 fill-current">
+        <path d="M16.04 3.2A12.68 12.68 0 0 0 5.15 22.4L3.6 28.8l6.55-1.52A12.67 12.67 0 1 0 16.04 3.2Zm0 2.24a10.43 10.43 0 0 1 8.86 15.95 10.42 10.42 0 0 1-13.95 3.7l-.47-.24-3.9.9.92-3.78-.27-.49A10.43 10.43 0 0 1 16.04 5.44Zm-4.2 5.22c-.24 0-.62.09-.94.44-.33.36-1.24 1.22-1.24 2.96 0 1.75 1.27 3.44 1.45 3.68.18.24 2.46 3.94 6.06 5.36 3 .95 3.61.76 4.26.71.65-.05 2.08-.85 2.38-1.68.29-.82.29-1.53.2-1.68-.08-.15-.32-.24-.67-.42-.35-.17-2.08-1.03-2.4-1.15-.32-.12-.56-.18-.8.18-.23.35-.91 1.15-1.12 1.39-.2.24-.41.27-.76.09-.35-.17-1.48-.55-2.82-1.74-1.04-.93-1.74-2.08-1.95-2.43-.2-.35-.02-.54.16-.72.16-.16.35-.42.53-.62.18-.2.24-.35.36-.59.12-.24.06-.44-.03-.62-.09-.17-.78-1.9-1.08-2.6-.28-.68-.57-.59-.8-.6h-.65Z" />
+      </svg>
+    </a>
   );
 }
 
@@ -263,6 +296,8 @@ export default async function CaptainSquadViewPage({
             {team.members.map((member) => {
               const profile = profileByMemberId.get(member.id);
               const preferredNights = formatPreferredNights(profile?.preferredNights);
+              const whatsAppUrl = getWhatsAppUrl(profile?.phone);
+              const playerName = member.user.name || "player";
               const hasPublicProfileDetails = Boolean(
                 profile?.ageBand ||
                   profile?.preferredPositions ||
@@ -286,6 +321,9 @@ export default async function CaptainSquadViewPage({
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
+                        {whatsAppUrl ? (
+                          <WhatsAppLink href={whatsAppUrl} playerName={playerName} />
+                        ) : null}
                       </div>
                       <div className="mt-1 text-xs text-white/45">
                         Added {formatUkDate(member.createdAt)}
