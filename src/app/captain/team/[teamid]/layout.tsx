@@ -58,6 +58,7 @@ export default async function CaptainTeamLayout({
   }
 
   const isManagedTeam = team.teamMode === "MANAGED";
+  const showTeamPayments = !isManagedTeam || (access.isAdmin && access.accessMode !== "admin-preview");
 
   const squadHref = access.isAdmin
     ? `/captain/team/${teamid}/squad`
@@ -75,7 +76,7 @@ export default async function CaptainTeamLayout({
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
-    ...(!isManagedTeam
+    ...(showTeamPayments
       ? [{ href: `/captain/team/${teamid}/payments`, label: "Team payments" }]
       : []),
   ];
@@ -120,7 +121,7 @@ export default async function CaptainTeamLayout({
                   </h1>
 
                   <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                    {isManagedTeam
+                    {isManagedTeam && !showTeamPayments
                       ? "Matchday control, fixtures and results for your team."
                       : "Matchday control, fixtures, results and payments for your team."}
                   </p>
