@@ -17,6 +17,12 @@ export const metadata = {
   title: "Player Dashboard Preview | SIXFL Admin",
 };
 
+type ScorerRow = {
+  name: string;
+  goals: number;
+  teamMemberId?: string;
+};
+
 function formatFixtureDate(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
@@ -103,6 +109,34 @@ function getFixtureStatusClasses(status: FixtureStatus) {
   }
 }
 
+function normalisePlayerName(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function parseStoredScorers(value: unknown): ScorerRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): ScorerRow | null => {
+      if (!item || typeof item !== "object") return null;
+
+      const row = item as Partial<ScorerRow>;
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const goals = Number(row.goals);
+
+      if (!name || !Number.isInteger(goals) || goals < 1) return null;
+
+      const scorer: ScorerRow = { name, goals };
+
+      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
+        scorer.teamMemberId = row.teamMemberId;
+      }
+
+      return scorer;
+    })
+    .filter((item): item is ScorerRow => item !== null);
+}
+
 export default async function AdminPlayerDashboardPreviewPage({
   params,
 }: {
@@ -173,7 +207,7 @@ export default async function AdminPlayerDashboardPreviewPage({
       : []),
   ];
 
-  const [upcomingFixtures, recentFixtures, squadMembers, playerFees] = await Promise.all([
+  const [upcomingFixtures, recentFixtures, squadMembers, playerFees, matchDetails] = await Promise.all([
     prisma.fixture.findMany({
       where: {
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
@@ -254,7 +288,31 @@ export default async function AdminPlayerDashboardPreviewPage({
           },
         })
       : Promise.resolve([]),
+    prisma.matchResultTeamMeta.findMany({
+      where: { teamId: teamid },
+      select: {
+        scorers: true,
+        playerOfMatchName: true,
+      },
+    }),
   ]);
+
+  const playerNameKey = normalisePlayerName(playerName);
+  const playerGoals = matchDetails.reduce((sum, details) => {
+    const goalsForMatch = parseStoredScorers(details.scorers).reduce((goalsSum, scorer) => {
+      const matchesById = scorer.teamMemberId
+        ? linkedMembershipIds.includes(scorer.teamMemberId)
+        : false;
+      const matchesByName = normalisePlayerName(scorer.name) === playerNameKey;
+
+      return matchesById || matchesByName ? goalsSum + scorer.goals : goalsSum;
+    }, 0);
+
+    return sum + goalsForMatch;
+  }, 0);
+  const playerOfMatchAwards = matchDetails.filter(
+    (details) => normalisePlayerName(details.playerOfMatchName) === playerNameKey,
+  ).length;
 
   const openFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.OPEN);
   const outstandingPence = openFees.reduce((sum, fee) => sum + fee.amountPence, 0);
@@ -280,7 +338,7 @@ export default async function AdminPlayerDashboardPreviewPage({
                 Viewing {playerName}'s player dashboard
               </h1>
               <p className="mt-1 text-sm text-amber-100/75">
-                This shows the fixtures, availability actions, and match fees linked to this player.
+                This shows the fixtures, availability actions, match fees and player stats linked to this player.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -359,7 +417,7 @@ export default async function AdminPlayerDashboardPreviewPage({
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-4">
           <div className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">
               Next action
@@ -367,6 +425,18 @@ export default async function AdminPlayerDashboardPreviewPage({
             <h2 className="mt-2 text-xl font-semibold text-white">Confirm availability</h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
               Fixture-specific availability links are shown below.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+              Player stats
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              {playerGoals} goal{playerGoals === 1 ? "" : "s"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-emerald-100/70">
+              {playerOfMatchAwards} Player of the Match award{playerOfMatchAwards === 1 ? "" : "s"} recorded for this team.
             </p>
           </div>
 
