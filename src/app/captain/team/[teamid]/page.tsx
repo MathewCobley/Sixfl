@@ -6,7 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
-import LeagueTableCard from "@/components/leagues/LeagueTableCard";
+import CaptainDashboardLeagueTable from "@/components/captain/CaptainDashboardLeagueTable";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getLeagueTable } from "@/lib/leagueTable";
 import { prisma } from "@/lib/prisma";
@@ -330,8 +330,6 @@ export default async function CaptainOverviewPage({
 
   const leagueTable = team.leagueId ? await getLeagueTable(team.leagueId) : [];
   const currentTeamPosition = leagueTable.findIndex((row) => row.teamId === teamid);
-  const currentTeamRow =
-    currentTeamPosition >= 0 ? leagueTable[currentTeamPosition] : null;
   const leagueTableTitle = getPublicLeagueTableTitle(team.league?.name);
   const leagueTableDescription = getPublicLeagueTableDescription(leagueTableTitle);
 
@@ -637,9 +635,8 @@ export default async function CaptainOverviewPage({
       </section>
 
       <div id="captain-league-table">
-        <LeagueTableCard
+        <CaptainDashboardLeagueTable
           rows={leagueTable}
-          eyebrow="Standings"
           title={leagueTableTitle}
           description={leagueTableDescription}
           emptyMessage={
@@ -647,7 +644,6 @@ export default async function CaptainOverviewPage({
               ? "The league table will appear here once teams have been added."
               : "Your team is not assigned to a league yet, so there is no table to show here."
           }
-          showTeamLinks={false}
         />
       </div>
     </div>
