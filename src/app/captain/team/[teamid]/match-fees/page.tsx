@@ -193,7 +193,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
     prisma.teamPlayerProspect.findMany({
       where: {
         teamId: teamid,
-        status: { in: ["ACTIVE_SQUAD", "QUALIFIED", "CONTACTED", "NEW"] },
+        status: { in: ["QUALIFIED", "CONTACTED", "NEW"] },
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       select: {
@@ -207,6 +207,16 @@ export default async function CaptainManagedPlayerMatchFeesPage({
       },
     }),
   ]);
+
+  const linkedMemberKeys = new Set(
+    members.flatMap((member) => [member.user.email?.trim().toLowerCase(), member.user.name?.trim().toLowerCase()].filter(Boolean) as string[]),
+  );
+
+  const selectableProspects = prospects.filter((prospect) => {
+    const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+    const email = prospect.email?.trim().toLowerCase();
+    return !((email && linkedMemberKeys.has(email)) || (fullName && linkedMemberKeys.has(fullName)));
+  });
 
   const selectedFixture =
     fixtures.find((fixture) => fixture.id === sp.fixtureId) ??
@@ -430,7 +440,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                 </div>
               ) : null}
 
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className={`grid gap-4 ${selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <h3 className="font-semibold text-white">Linked squad members</h3>
                   <div className="mt-3 space-y-2">
@@ -452,30 +462,32 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <h3 className="font-semibold text-white">Pending / prospect players</h3>
-                  <div className="mt-3 space-y-2">
-                    {prospects.length === 0 ? <div className="text-sm text-white/45">No prospects in this team yet.</div> : null}
-                    {prospects.map((prospect) => {
-                      const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
-                      const existingFee = feeByProspectId.get(prospect.id);
-                      return (
-                        <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                          <input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
-                          <span>
-                            <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed prospect"}</span>
-                            <span className="block text-xs text-white/45">
-                              {isAdmin
-                                ? `${prospect.email || "No email"}${prospect.phone ? ` · ${prospect.phone}` : ""}`
-                                : "Account setup pending"}
-                              {existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
+                {selectableProspects.length > 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <h3 className="font-semibold text-white">Unlinked extra players</h3>
+                    <p className="mt-1 text-xs text-white/45">Only use this for someone who played but is not yet in the linked squad list.</p>
+                    <div className="mt-3 space-y-2">
+                      {selectableProspects.map((prospect) => {
+                        const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+                        const existingFee = feeByProspectId.get(prospect.id);
+                        return (
+                          <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
+                            <input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
+                            <span>
+                              <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed prospect"}</span>
+                              <span className="block text-xs text-white/45">
+                                {isAdmin
+                                  ? `${prospect.email || "No email"}${prospect.phone ? ` · ${prospect.phone}` : ""}`
+                                  : "Not yet linked to the squad"}
+                                {existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
+                              </span>
                             </span>
-                          </span>
-                        </label>
-                      );
-                    })}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
 
               <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">
