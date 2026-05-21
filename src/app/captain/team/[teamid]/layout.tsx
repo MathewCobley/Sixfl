@@ -8,7 +8,6 @@ import { notFound } from "next/navigation";
 
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
-import CaptainLeagueTablePublicChrome from "@/components/captain/CaptainLeagueTablePublicChrome";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
 import ManagedProspectMoveLinks from "@/components/captain/ManagedProspectMoveLinks";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
@@ -83,7 +82,6 @@ export default async function CaptainTeamLayout({
 
   return (
     <div className="min-h-screen bg-[#07130f] text-white">
-      <CaptainLeagueTablePublicChrome />
       <CaptainRedirectErrorNoticeFix />
       <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
