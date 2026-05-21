@@ -4,7 +4,7 @@
 
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
-import { ResultDisputeStatus, ResultDisputeType } from "@prisma/client";
+import { Prisma, ResultDisputeStatus, ResultDisputeType } from "@prisma/client";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -40,8 +40,7 @@ type MatchPlayerOption = {
 };
 
 const RESULT_DISPUTE_WINDOW_HOURS = 72;
-const RESULT_DISPUTE_WINDOW_MS =
-  RESULT_DISPUTE_WINDOW_HOURS * 60 * 60 * 1000;
+const RESULT_DISPUTE_WINDOW_MS = RESULT_DISPUTE_WINDOW_HOURS * 60 * 60 * 1000;
 
 const outcomeOptions = [
   { value: "", label: "All outcomes" },
@@ -83,17 +82,11 @@ function isResultDisputeWindowOpen(enteredAt: Date, now = new Date()) {
   return now.getTime() <= getResultDisputeDeadline(enteredAt).getTime();
 }
 
-function getGoalsFor(
-  result: { homeScore: number; awayScore: number },
-  isHome: boolean,
-) {
+function getGoalsFor(result: { homeScore: number; awayScore: number }, isHome: boolean) {
   return isHome ? result.homeScore : result.awayScore;
 }
 
-function getGoalsAgainst(
-  result: { homeScore: number; awayScore: number },
-  isHome: boolean,
-) {
+function getGoalsAgainst(result: { homeScore: number; awayScore: number }, isHome: boolean) {
   return isHome ? result.awayScore : result.homeScore;
 }
 
@@ -113,10 +106,7 @@ function normalisePlayerName(value: string) {
   return value.trim().toLowerCase();
 }
 
-function getRecordedGoalsForPlayer(
-  scorers: ScorerRow[],
-  player: MatchPlayerOption,
-) {
+function getRecordedGoalsForPlayer(scorers: ScorerRow[], player: MatchPlayerOption) {
   const byId = scorers.find((scorer) => scorer.teamMemberId === player.id);
 
   if (byId) {
@@ -138,34 +128,33 @@ function getSelectedPomMemberId(
 
   return (
     players.find(
-      (player) =>
-        normalisePlayerName(player.name) === normalisePlayerName(playerOfMatchName),
+      (player) => normalisePlayerName(player.name) === normalisePlayerName(playerOfMatchName),
     )?.id ?? ""
   );
 }
 
-function parseStoredScorers(value: unknown) {
+function parseStoredScorers(value: unknown): ScorerRow[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item) => {
+    .map((item): ScorerRow | null => {
       if (!item || typeof item !== "object") return null;
 
       const row = item as Partial<ScorerRow>;
       const name = typeof row.name === "string" ? row.name.trim() : "";
       const goals = Number(row.goals);
-      const teamMemberId =
-        typeof row.teamMemberId === "string" ? row.teamMemberId : undefined;
 
       if (!name || !Number.isInteger(goals) || goals < 1) return null;
 
-      return {
-        name,
-        goals,
-        teamMemberId,
-      } satisfies ScorerRow;
+      const scorer: ScorerRow = { name, goals };
+
+      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
+        scorer.teamMemberId = row.teamMemberId;
+      }
+
+      return scorer;
     })
-    .filter((item): item is ScorerRow => Boolean(item));
+    .filter((item): item is ScorerRow => item !== null);
 }
 
 function getFriendlyErrorMessage(error: unknown) {
@@ -227,11 +216,7 @@ async function saveTeamMatchDetails(formData: FormData) {
           fixture: {
             include: {
               selections: {
-                where: {
-                  teamMember: {
-                    teamId: teamid,
-                  },
-                },
+                where: { teamMember: { teamId: teamid } },
                 select: {
                   teamMemberId: true,
                   selectionStatus: true,
@@ -239,12 +224,7 @@ async function saveTeamMatchDetails(formData: FormData) {
                     select: {
                       id: true,
                       role: true,
-                      user: {
-                        select: {
-                          name: true,
-                          email: true,
-                        },
-                      },
+                      user: { select: { name: true, email: true } },
                     },
                   },
                 },
@@ -261,12 +241,7 @@ async function saveTeamMatchDetails(formData: FormData) {
             select: {
               id: true,
               role: true,
-              user: {
-                select: {
-                  name: true,
-                  email: true,
-                },
-              },
+              user: { select: { name: true, email: true } },
             },
           },
         },
@@ -281,14 +256,11 @@ async function saveTeamMatchDetails(formData: FormData) {
       throw new Error("Team not found.");
     }
 
-    if (
-      result.fixture.homeTeamId !== teamid &&
-      result.fixture.awayTeamId !== teamid
-    ) {
+    if (result.fixture.homeTeamId !== teamid && result.fixture.awayTeamId !== teamid) {
       throw new Error("This result does not belong to the selected team.");
     }
 
-    const selectedPlayers = result.fixture.selections
+    const selectedPlayers: MatchPlayerOption[] = result.fixture.selections
       .filter((selection) => selection.selectionStatus === "SELECTED")
       .map((selection) => ({
         id: selection.teamMember.id,
@@ -298,7 +270,7 @@ async function saveTeamMatchDetails(formData: FormData) {
         isSelectedForFixture: true,
       }));
 
-    const fallbackPlayers = team.members.map((member) => ({
+    const fallbackPlayers: MatchPlayerOption[] = team.members.map((member) => ({
       id: member.id,
       name: getPlayerDisplayName(member),
       email: member.user.email,
@@ -309,8 +281,8 @@ async function saveTeamMatchDetails(formData: FormData) {
     const players = selectedPlayers.length > 0 ? selectedPlayers : fallbackPlayers;
     const playerById = new Map(players.map((player) => [player.id, player]));
 
-    const scorers = players
-      .map((player) => {
+    const scorers: ScorerRow[] = players
+      .map((player): ScorerRow | null => {
         const rawGoals = String(formData.get(`scorerGoals_${player.id}`) ?? "0");
         const goals = Number(rawGoals);
 
@@ -324,18 +296,16 @@ async function saveTeamMatchDetails(formData: FormData) {
           teamMemberId: player.id,
           name: player.name,
           goals,
-        } satisfies ScorerRow;
+        };
       })
-      .filter((item): item is ScorerRow => Boolean(item));
+      .filter((item): item is ScorerRow => item !== null);
 
     const isHome = result.fixture.homeTeamId === teamid;
     const goalsExpected = isHome ? result.homeScore : result.awayScore;
     const goalsRecorded = scorers.reduce((sum, row) => sum + row.goals, 0);
 
     if (goalsRecorded > goalsExpected) {
-      throw new Error(
-        "Recorded scorer goals cannot exceed the official result.",
-      );
+      throw new Error("Recorded scorer goals cannot exceed the official result.");
     }
 
     let playerOfMatchName: string | null = null;
@@ -350,6 +320,8 @@ async function saveTeamMatchDetails(formData: FormData) {
       playerOfMatchName = playerOfMatch.name;
     }
 
+    const scorersJson = scorers as Prisma.InputJsonValue;
+
     await prisma.matchResultTeamMeta.upsert({
       where: {
         matchResultId_teamId: {
@@ -358,14 +330,14 @@ async function saveTeamMatchDetails(formData: FormData) {
         },
       },
       update: {
-        scorers,
+        scorers: scorersJson,
         goalsRecorded,
         playerOfMatchName,
       },
       create: {
         matchResultId: resultId,
         teamId: teamid,
-        scorers,
+        scorers: scorersJson,
         goalsRecorded,
         playerOfMatchName,
       },
@@ -394,12 +366,7 @@ async function createResultDispute(formData: FormData) {
     const result = await prisma.matchResult.findUnique({
       where: { id: resultId },
       include: {
-        fixture: {
-          select: {
-            homeTeamId: true,
-            awayTeamId: true,
-          },
-        },
+        fixture: { select: { homeTeamId: true, awayTeamId: true } },
       },
     });
 
@@ -407,10 +374,7 @@ async function createResultDispute(formData: FormData) {
       throw new Error("Result not found.");
     }
 
-    if (
-      result.fixture.homeTeamId !== teamid &&
-      result.fixture.awayTeamId !== teamid
-    ) {
+    if (result.fixture.homeTeamId !== teamid && result.fixture.awayTeamId !== teamid) {
       throw new Error("This result does not belong to the selected team.");
     }
 
@@ -426,9 +390,7 @@ async function createResultDispute(formData: FormData) {
       where: {
         matchResultId: resultId,
         teamId: teamid,
-        status: {
-          in: [ResultDisputeStatus.OPEN, ResultDisputeStatus.REVIEW],
-        },
+        status: { in: [ResultDisputeStatus.OPEN, ResultDisputeStatus.REVIEW] },
       },
       select: { id: true },
     });
@@ -484,12 +446,7 @@ export default async function CaptainResultsPage({
         select: {
           id: true,
           role: true,
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
+          user: { select: { name: true, email: true } },
         },
       },
     },
@@ -509,11 +466,7 @@ export default async function CaptainResultsPage({
       homeTeam: { select: { name: true } },
       awayTeam: { select: { name: true } },
       selections: {
-        where: {
-          teamMember: {
-            teamId: teamid,
-          },
-        },
+        where: { teamMember: { teamId: teamid } },
         select: {
           teamMemberId: true,
           selectionStatus: true,
@@ -521,12 +474,7 @@ export default async function CaptainResultsPage({
             select: {
               id: true,
               role: true,
-              user: {
-                select: {
-                  name: true,
-                  email: true,
-                },
-              },
+              user: { select: { name: true, email: true } },
             },
           },
         },
@@ -535,12 +483,8 @@ export default async function CaptainResultsPage({
         include: {
           teamMetadata: true,
           disputes: {
-            where: {
-              teamId: teamid,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
+            where: { teamId: teamid },
+            orderBy: { createdAt: "desc" },
           },
         },
       },
@@ -565,19 +509,14 @@ export default async function CaptainResultsPage({
       const outcome = getOutcome(goalsFor, goalsAgainst);
       const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
       const matchDetails =
-        fixture.result!.teamMetadata.find((item) => item.teamId === teamid) ??
-        null;
+        fixture.result!.teamMetadata.find((item) => item.teamId === teamid) ?? null;
       const latestDispute = fixture.result!.disputes[0] ?? null;
       const scorers = parseStoredScorers(matchDetails?.scorers);
       const needsScorers = (matchDetails?.goalsRecorded ?? 0) < goalsFor;
       const needsPom = !matchDetails?.playerOfMatchName;
-      const disputeDeadlineAt = getResultDisputeDeadline(
-        fixture.result!.enteredAt,
-      );
-      const isDisputeWindowOpenNow = isResultDisputeWindowOpen(
-        fixture.result!.enteredAt,
-      );
-      const selectedPlayers = fixture.selections
+      const disputeDeadlineAt = getResultDisputeDeadline(fixture.result!.enteredAt);
+      const isDisputeWindowOpenNow = isResultDisputeWindowOpen(fixture.result!.enteredAt);
+      const selectedPlayers: MatchPlayerOption[] = fixture.selections
         .filter((selection) => selection.selectionStatus === "SELECTED")
         .map((selection) => ({
           id: selection.teamMember.id,
@@ -585,9 +524,8 @@ export default async function CaptainResultsPage({
           email: selection.teamMember.user.email,
           role: selection.teamMember.role,
           isSelectedForFixture: true,
-        } satisfies MatchPlayerOption));
-      const matchPlayers =
-        selectedPlayers.length > 0 ? selectedPlayers : teamMembersAsPlayers;
+        }));
+      const matchPlayers = selectedPlayers.length > 0 ? selectedPlayers : teamMembersAsPlayers;
       const isUsingSelectedPlayers = selectedPlayers.length > 0;
 
       return {
@@ -609,10 +547,7 @@ export default async function CaptainResultsPage({
     })
     .filter((row) => {
       if (filters.outcome && row.outcome !== filters.outcome) return false;
-      if (
-        filters.needsCompletion === "1" &&
-        !(row.needsScorers || row.needsPom)
-      ) {
+      if (filters.needsCompletion === "1" && !(row.needsScorers || row.needsPom)) {
         return false;
       }
       if (!query) return true;
@@ -638,9 +573,7 @@ export default async function CaptainResultsPage({
             Match details
           </h1>
           <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-            Add your scorers and choose Player of the Match from your selected
-            squad. The official score stays locked, and any score dispute must
-            be raised within 72 hours.
+            Add your scorers and choose Player of the Match from your selected squad. The official score stays locked, and any score dispute must be raised within 72 hours.
           </p>
         </div>
       </section>
@@ -711,10 +644,7 @@ export default async function CaptainResultsPage({
           rows.map((row) => {
             const playerOfMatchOptions = [
               { value: "", label: "No Player of the Match yet" },
-              ...row.matchPlayers.map((player) => ({
-                value: player.id,
-                label: player.name,
-              })),
+              ...row.matchPlayers.map((player) => ({ value: player.id, label: player.name })),
             ];
             const selectedPomMemberId = getSelectedPomMemberId(
               row.matchPlayers,
@@ -733,16 +663,12 @@ export default async function CaptainResultsPage({
                 <div className="border-b border-white/10 px-6 py-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                      <p className="text-sm text-white/55">
-                        {formatDate(row.fixture.kickoffAt)}
-                      </p>
+                      <p className="text-sm text-white/55">{formatDate(row.fixture.kickoffAt)}</p>
                       <h3 className="mt-1 text-2xl font-semibold text-white">
                         {row.fixture.homeTeam.name} {row.fixture.result!.homeScore}-
                         {row.fixture.result!.awayScore} {row.fixture.awayTeam.name}
                       </h3>
-                      <p className="mt-2 text-sm text-white/65">
-                        Your opponent: {row.opponent}
-                      </p>
+                      <p className="mt-2 text-sm text-white/65">Your opponent: {row.opponent}</p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -750,9 +676,7 @@ export default async function CaptainResultsPage({
                         {row.outcome}
                       </span>
                       <span className="rounded-full border border-white/10 px-3 py-1 text-sm text-white/70">
-                        {row.needsScorers || row.needsPom
-                          ? "Needs completion"
-                          : "Complete"}
+                        {row.needsScorers || row.needsPom ? "Needs completion" : "Complete"}
                       </span>
                       {row.latestDispute ? (
                         <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-sm text-amber-100">
@@ -795,9 +719,7 @@ export default async function CaptainResultsPage({
                               ))}
                             </div>
                           ) : (
-                            <p className="mt-2 text-sm text-white/60">
-                              No scorers added yet.
-                            </p>
+                            <p className="mt-2 text-sm text-white/60">No scorers added yet.</p>
                           )}
                         </div>
 
@@ -806,14 +728,12 @@ export default async function CaptainResultsPage({
                             Player of the Match
                           </p>
                           <p className="mt-2 text-sm text-white/80">
-                            {row.matchDetails?.playerOfMatchName ??
-                              "No Player of the Match selected yet."}
+                            {row.matchDetails?.playerOfMatchName ?? "No Player of the Match selected yet."}
                           </p>
                         </div>
 
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/65">
-                          Recorded {recordedGoalTotal} of {row.goalsFor} team
-                          goals.
+                          Recorded {recordedGoalTotal} of {row.goalsFor} team goals.
                         </div>
                       </div>
                     </div>
@@ -825,43 +745,23 @@ export default async function CaptainResultsPage({
 
                       {row.latestDispute ? (
                         <div className="mt-3 space-y-2 text-sm text-white/75">
-                          <p>
-                            <span className="text-white/45">Status:</span>{" "}
-                            {row.latestDispute.status}
-                          </p>
-                          <p>
-                            <span className="text-white/45">Type:</span>{" "}
-                            {row.latestDispute.type}
-                          </p>
-                          <p>
-                            <span className="text-white/45">Reason:</span>{" "}
-                            {row.latestDispute.description}
-                          </p>
-                          <p>
-                            <span className="text-white/45">Raised:</span>{" "}
-                            {formatDateTime(row.latestDispute.createdAt)}
-                          </p>
+                          <p><span className="text-white/45">Status:</span> {row.latestDispute.status}</p>
+                          <p><span className="text-white/45">Type:</span> {row.latestDispute.type}</p>
+                          <p><span className="text-white/45">Reason:</span> {row.latestDispute.description}</p>
+                          <p><span className="text-white/45">Raised:</span> {formatDateTime(row.latestDispute.createdAt)}</p>
                           {row.latestDispute.adminNote ? (
-                            <p>
-                              <span className="text-white/45">Admin note:</span>{" "}
-                              {row.latestDispute.adminNote}
-                            </p>
+                            <p><span className="text-white/45">Admin note:</span> {row.latestDispute.adminNote}</p>
                           ) : null}
                         </div>
                       ) : row.isDisputeWindowOpenNow ? (
                         <>
                           <p className="mt-3 text-sm text-white/60">
-                            You can raise a dispute until{" "}
-                            {formatDateTime(row.disputeDeadlineAt)}.
+                            You can raise a dispute until {formatDateTime(row.disputeDeadlineAt)}.
                           </p>
 
                           <form action={createResultDispute} className="mt-3">
                             <input type="hidden" name="teamid" value={team.id} />
-                            <input
-                              type="hidden"
-                              name="resultId"
-                              value={row.fixture.result!.id}
-                            />
+                            <input type="hidden" name="resultId" value={row.fixture.result!.id} />
 
                             <FormListboxField
                               name="type"
@@ -887,9 +787,7 @@ export default async function CaptainResultsPage({
                         </>
                       ) : (
                         <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/65">
-                          This result can no longer be disputed. The 72-hour
-                          dispute window closed on{" "}
-                          {formatDateTime(row.disputeDeadlineAt)}.
+                          This result can no longer be disputed. The 72-hour dispute window closed on {formatDateTime(row.disputeDeadlineAt)}.
                         </div>
                       )}
                     </div>
@@ -897,11 +795,7 @@ export default async function CaptainResultsPage({
 
                   <form action={saveTeamMatchDetails} className="p-6">
                     <input type="hidden" name="teamid" value={team.id} />
-                    <input
-                      type="hidden"
-                      name="resultId"
-                      value={row.fixture.result!.id}
-                    />
+                    <input type="hidden" name="resultId" value={row.fixture.result!.id} />
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -909,14 +803,11 @@ export default async function CaptainResultsPage({
                           Update scorers & Player of the Match
                         </h4>
                         <p className="mt-2 max-w-2xl text-sm text-white/60">
-                          Use the squad list below instead of typing names. This
-                          keeps names consistent and avoids spelling mistakes.
+                          Use the squad list below instead of typing names. This keeps names consistent and avoids spelling mistakes.
                         </p>
                       </div>
                       <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65">
-                        {row.isUsingSelectedPlayers
-                          ? "Selected squad"
-                          : "Full squad fallback"}
+                        {row.isUsingSelectedPlayers ? "Selected squad" : "Full squad fallback"}
                       </span>
                     </div>
 
@@ -934,9 +825,7 @@ export default async function CaptainResultsPage({
                               className="grid grid-cols-[1fr_96px] items-center gap-3 px-4 py-3"
                             >
                               <span>
-                                <span className="block text-sm font-medium text-white">
-                                  {player.name}
-                                </span>
+                                <span className="block text-sm font-medium text-white">{player.name}</span>
                                 <span className="block text-xs text-white/45">
                                   {player.role.replace("_", " ").toLowerCase()}
                                   {player.email ? ` · ${player.email}` : ""}
@@ -945,10 +834,7 @@ export default async function CaptainResultsPage({
                               <input
                                 type="number"
                                 name={`scorerGoals_${player.id}`}
-                                defaultValue={getRecordedGoalsForPlayer(
-                                  row.scorers,
-                                  player,
-                                )}
+                                defaultValue={getRecordedGoalsForPlayer(row.scorers, player)}
                                 min={0}
                                 max={row.goalsFor}
                                 inputMode="numeric"
@@ -977,8 +863,7 @@ export default async function CaptainResultsPage({
 
                     <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4 text-sm text-emerald-50/80 sm:flex-row sm:items-center sm:justify-between">
                       <span>
-                        Total scorer goals must not be higher than the official
-                        {" "}score of {row.goalsFor}.
+                        Total scorer goals must not be higher than the official score of {row.goalsFor}.
                       </span>
                       <button
                         type="submit"
