@@ -22,6 +22,11 @@ type SearchParams = {
   error?: string;
 };
 
+type WhatsappPreferenceRow = {
+  id: string;
+  usesWhatsapp: boolean | null;
+};
+
 function getRoleLabel(role: TeamRole) {
   switch (role) {
     case "CAPTAIN":
@@ -196,8 +201,21 @@ export default async function CaptainSquadViewPage({
 
   if (!team) notFound();
 
-  const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(
-    team.members.map((member) => member.id),
+  const userIds = team.members.map((member) => member.user.id);
+
+  const [profileByMemberId, whatsappRows] = await Promise.all([
+    getTeamMemberProfilesByTeamMemberIds(team.members.map((member) => member.id)),
+    userIds.length > 0
+      ? prisma.$queryRaw<WhatsappPreferenceRow[]>`
+          SELECT id, "usesWhatsapp"
+          FROM "User"
+          WHERE id = ANY(${userIds})
+        `
+      : Promise.resolve([] as WhatsappPreferenceRow[]),
+  ]);
+
+  const usesWhatsappByUserId = new Map(
+    whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
   );
 
   const organiserCount = team.members.filter((member) =>
@@ -296,7 +314,8 @@ export default async function CaptainSquadViewPage({
             {team.members.map((member) => {
               const profile = profileByMemberId.get(member.id);
               const preferredNights = formatPreferredNights(profile?.preferredNights);
-              const whatsAppUrl = getWhatsAppUrl(profile?.phone);
+              const playerUsesWhatsapp = usesWhatsappByUserId.get(member.user.id) === true;
+              const whatsAppUrl = playerUsesWhatsapp ? getWhatsAppUrl(profile?.phone) : null;
               const playerName = member.user.name || "player";
               const hasPublicProfileDetails = Boolean(
                 profile?.ageBand ||
