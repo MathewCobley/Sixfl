@@ -6,6 +6,12 @@
 
 import { useEffect } from "react";
 
+const WIDE_TABLE_GRID =
+  "grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px]";
+
+const FIT_TABLE_GRID =
+  "grid-cols-[52px_minmax(170px,1.8fr)_112px_repeat(4,44px)_repeat(3,52px)_58px] xl:grid-cols-[56px_minmax(210px,2fr)_130px_repeat(4,50px)_repeat(3,60px)_64px]";
+
 function replaceClassToken(element: HTMLElement, from: string, to: string) {
   if (element.className.includes(to)) return;
   element.className = element.className.replaceAll(from, to);
@@ -54,6 +60,44 @@ function normalisePositionBadge(element: HTMLElement, isTopRow: boolean) {
   ensureClassToken(element, "text-white/70");
 }
 
+function fitCaptainLeagueTableToDashboard(table: HTMLElement) {
+  const desktopScrollWrapper = table.querySelector(".lg\\:overflow-x-auto") as HTMLElement | null;
+  const desktopWidthWrapper = table.querySelector(".lg\\:min-w-\\[1240px\\]") as HTMLElement | null;
+
+  if (desktopScrollWrapper) {
+    replaceClassToken(desktopScrollWrapper, "lg:overflow-x-auto", "w-full overflow-hidden");
+    ensureClassToken(desktopScrollWrapper, "w-full");
+    ensureClassToken(desktopScrollWrapper, "overflow-hidden");
+  }
+
+  if (desktopWidthWrapper) {
+    replaceClassToken(desktopWidthWrapper, "lg:min-w-[1240px]", "w-full");
+    ensureClassToken(desktopWidthWrapper, "w-full");
+  }
+
+  Array.from(table.querySelectorAll<HTMLElement>(".lg\\:grid")).forEach((grid) => {
+    replaceClassToken(grid, WIDE_TABLE_GRID, FIT_TABLE_GRID);
+    replaceClassToken(grid, "gap-4", "gap-3");
+  });
+
+  const desktopHeader = table.querySelector<HTMLElement>(".bg-white\\/\\[0\\.02\\]");
+  if (desktopHeader) {
+    replaceClassToken(desktopHeader, "px-8", "px-5 xl:px-6");
+    replaceClassToken(desktopHeader, "text-xs", "text-[10px]");
+    replaceClassToken(desktopHeader, "tracking-[0.18em]", "tracking-[0.16em]");
+  }
+
+  Array.from(table.querySelectorAll<HTMLElement>(".divide-y > div")).forEach((row) => {
+    replaceClassToken(row, "py-5", "py-4");
+    replaceClassToken(row, "lg:px-8", "lg:px-5 xl:px-6");
+  });
+
+  Array.from(table.querySelectorAll<HTMLImageElement>("img[sizes='56px']")).forEach((image) => {
+    image.sizes = "44px";
+    replaceClassToken(image, "p-2", "p-1.5");
+  });
+}
+
 function applyPublicLeagueTableChrome() {
   const table = document.getElementById("captain-league-table") as HTMLElement | null;
   if (!table || table.dataset.publicChromeApplied === "true") return;
@@ -61,6 +105,7 @@ function applyPublicLeagueTableChrome() {
   table.dataset.publicChromeApplied = "true";
   replaceClassToken(table, "bg-white/[0.04]", "bg-white/[0.03]");
   ensureClassToken(table, "bg-white/[0.03]");
+  fitCaptainLeagueTableToDashboard(table);
 
   const header = table.firstElementChild as HTMLElement | null;
   const headerTextBlock = header?.firstElementChild as HTMLElement | null;
