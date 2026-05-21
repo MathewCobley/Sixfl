@@ -96,6 +96,14 @@ function formatPreferredNights(value: unknown) {
   return String(value);
 }
 
+function formatAvailabilitySummary(value: string | null | undefined) {
+  const cleaned = value
+    ?.replace(/^\s*availability\s*:\s*/i, "")
+    .trim();
+
+  return cleaned || null;
+}
+
 function getWhatsAppUrl(phone: string | null | undefined) {
   const digits = phone?.replace(/\D/g, "") ?? "";
 
@@ -169,6 +177,7 @@ export default async function CaptainSquadViewPage({
   const { teamid } = await params;
   const filters = await searchParams;
   const access = await requireCaptain(teamid);
+  const showAdminLinks = access.isAdmin && access.accessMode !== "admin-preview";
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
@@ -232,13 +241,13 @@ export default async function CaptainSquadViewPage({
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              Captain squad view
+              Your team
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Team squad
+              Your squad
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              A captain-safe view of your linked squad. You can see who is attached to the team and check public profile details, but player records, role changes, activation messages and internal notes stay with SIXFL admin.
+              View your players, check their availability details and quickly open the tools you need for matchday.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -247,7 +256,7 @@ export default async function CaptainSquadViewPage({
                 {team.league?.season ? ` · ${team.league.season}` : ""}
               </span>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                {totalSquadCount} linked squad player{totalSquadCount === 1 ? "" : "s"}
+                {totalSquadCount} player{totalSquadCount === 1 ? "" : "s"} in your squad
               </span>
             </div>
 
@@ -264,7 +273,7 @@ export default async function CaptainSquadViewPage({
               >
                 Open availability
               </Link>
-              {access.isAdmin ? (
+              {showAdminLinks ? (
                 <Link
                   href={`/admin/teams/${teamid}/squad`}
                   className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-5 py-3 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
@@ -276,10 +285,10 @@ export default async function CaptainSquadViewPage({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-            <MetricCard label="Total squad" value={totalSquadCount} copy="Linked players attached to this team." tone="emerald" />
-            <MetricCard label="Organisers" value={organiserCount} copy="Captain, manager and vice-captain roles." tone="amber" />
-            <MetricCard label="Players" value={playerCount} copy="Regular linked player roles." tone="white" />
-            <MetricCard label="Backups" value={backupCount} copy="Backup player roles." tone="sky" />
+            <MetricCard label="Your squad" value={totalSquadCount} copy="Players currently attached to your team." tone="emerald" />
+            <MetricCard label="Organisers" value={organiserCount} copy="Captain and support roles for your team." tone="amber" />
+            <MetricCard label="Players" value={playerCount} copy="Regular players in your squad." tone="white" />
+            <MetricCard label="Backups" value={backupCount} copy="Backup players available if needed." tone="sky" />
           </div>
         </div>
       </section>
@@ -295,25 +304,26 @@ export default async function CaptainSquadViewPage({
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Current squad
+                Your squad
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Players and roles</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">Players</h2>
             </div>
             <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70">
-              {team.members.length} linked
+              {team.members.length} player{team.members.length === 1 ? "" : "s"}
             </div>
           </div>
 
           <div className="divide-y divide-white/10">
             {team.members.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">
-                No linked squad members are attached to this team yet.
+                No players are attached to your team yet.
               </div>
             ) : null}
 
             {team.members.map((member) => {
               const profile = profileByMemberId.get(member.id);
               const preferredNights = formatPreferredNights(profile?.preferredNights);
+              const availabilitySummary = formatAvailabilitySummary(profile?.availabilitySummary);
               const playerUsesWhatsapp = usesWhatsappByUserId.get(member.user.id) === true;
               const whatsAppUrl = playerUsesWhatsapp ? getWhatsAppUrl(profile?.phone) : null;
               const playerName = member.user.name || "player";
@@ -323,7 +333,7 @@ export default async function CaptainSquadViewPage({
                   profile?.experienceSummary ||
                   profile?.availabilityLevel ||
                   preferredNights ||
-                  profile?.availabilitySummary,
+                  availabilitySummary,
               );
 
               return (
@@ -358,15 +368,15 @@ export default async function CaptainSquadViewPage({
                             <DetailPill label="Nights" value={preferredNights} />
                           </div>
 
-                          {profile?.availabilitySummary ? (
+                          {availabilitySummary ? (
                             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/60">
-                              <span className="font-semibold text-white/70">Availability:</span> {profile.availabilitySummary}
+                              <span className="font-semibold text-white/70">Availability notes:</span> {availabilitySummary}
                             </div>
                           ) : null}
                         </div>
                       ) : (
                         <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/45">
-                          No public squad profile details saved yet.
+                          No availability details saved yet.
                         </div>
                       )}
                     </div>
@@ -380,13 +390,13 @@ export default async function CaptainSquadViewPage({
         <div className="space-y-6">
           <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Captain limits
+              Matchday tools
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">What you can do here</h2>
+            <h2 className="mt-2 text-xl font-semibold text-white">Manage your team</h2>
             <div className="mt-4 space-y-3 text-sm text-white/65">
-              <p>This view is intentionally lighter than the SIXFL admin console.</p>
-              <p>You can review the squad, check public availability details and use the availability page to manage matchday responses.</p>
-              <p>Only SIXFL admin can edit player records, change roles, remove players, send activation messages or view internal notes.</p>
+              <p>Use this page to check your squad and see the availability details saved for each player.</p>
+              <p>For each fixture, use availability to see who can play and matchday squad to confirm who actually played.</p>
+              <p>Need a player added or something changed? Message SIXFL and we will update it for you.</p>
             </div>
           </section>
 
@@ -400,6 +410,12 @@ export default async function CaptainSquadViewPage({
                 className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
               >
                 Manage availability
+              </Link>
+              <Link
+                href={`/captain/team/${teamid}/match-fees`}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+              >
+                Open matchday squad
               </Link>
               <Link
                 href={`/captain/team/${teamid}/fixtures`}
