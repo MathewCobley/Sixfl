@@ -13,6 +13,8 @@ import { queuePlayerMatchFeeReminder } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
+const DEFAULT_PLAYER_MATCH_FEE_PENCE = 600;
+
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
@@ -112,16 +114,25 @@ function appendVoidNote(input: {
   return `${existingNote}\n${voidNote}`;
 }
 
+function redirectIfNotAdmin(input: {
+  isAdmin: boolean;
+  teamId: string;
+  fixtureId?: string;
+}) {
+  if (!input.isAdmin) {
+    redirect(getMatchFeesPath(input.teamId, input.fixtureId, "&error=admin_only"));
+  }
+}
+
 export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
 
-  if (teamId) {
-    await requireCaptain(teamId);
-  }
-
-  const amountPence = parseAmountPence(getString(formData, "amount"));
-  const note = getString(formData, "note") || null;
+  const access = teamId ? await requireCaptain(teamId) : null;
+  const amountPence = access?.isAdmin
+    ? parseAmountPence(getString(formData, "amount"))
+    : DEFAULT_PLAYER_MATCH_FEE_PENCE;
+  const note = access?.isAdmin ? getString(formData, "note") || null : "Submitted by captain";
   const players = getSelectedPlayers(formData);
 
   if (!teamId || !fixtureId) {
@@ -141,6 +152,13 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   if (!fixtureOk) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=fixture_not_found"));
   }
+
+  const selectedMemberIds = players
+    .filter((player) => player.type === "member")
+    .map((player) => player.id);
+  const selectedProspectIds = players
+    .filter((player) => player.type === "prospect")
+    .map((player) => player.id);
 
   for (const player of players) {
     if (player.type === "member") {
@@ -232,6 +250,49 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
     }
   }
 
+  const removableFees = await prisma.playerMatchFee.findMany({
+    where: {
+      teamId,
+      fixtureId,
+      status: { not: "PAID" },
+      OR: [
+        { teamMemberId: { not: null } },
+        { prospectId: { not: null } },
+      ],
+    },
+    select: {
+      id: true,
+      note: true,
+      teamMemberId: true,
+      prospectId: true,
+    },
+  });
+
+  for (const fee of removableFees) {
+    const isSelectedMember = fee.teamMemberId
+      ? selectedMemberIds.includes(fee.teamMemberId)
+      : false;
+    const isSelectedProspect = fee.prospectId
+      ? selectedProspectIds.includes(fee.prospectId)
+      : false;
+
+    if (isSelectedMember || isSelectedProspect) continue;
+
+    await prisma.playerMatchFee.update({
+      where: { id: fee.id },
+      data: {
+        status: "CANCELLED",
+        paidAt: null,
+        waivedAt: null,
+        cancelledAt: new Date(),
+        note: appendVoidNote({
+          existingNote: fee.note,
+          reason: "Removed from matchday squad selection",
+        }),
+      },
+    });
+  }
+
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fees_created"));
 }
@@ -242,9 +303,8 @@ export async function markCaptainPlayerMatchFeePaidAction(formData: FormData) {
   const feeId = getString(formData, "feeId");
   const method = getString(formData, "method");
 
-  if (teamId) {
-    await requireCaptain(teamId);
-  }
+  const access = teamId ? await requireCaptain(teamId) : null;
+  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
 
   if (!teamId || !fixtureId || !feeId) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
@@ -293,9 +353,8 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
   const feeId = getString(formData, "feeId");
   const status = getString(formData, "status") as PlayerMatchFeeStatus;
 
-  if (teamId) {
-    await requireCaptain(teamId);
-  }
+  const access = teamId ? await requireCaptain(teamId) : null;
+  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
 
   if (!teamId || !fixtureId || !feeId) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
@@ -334,9 +393,8 @@ export async function sendCaptainPlayerMatchFeeReminderAction(formData: FormData
   const fixtureId = getString(formData, "fixtureId");
   const feeId = getString(formData, "feeId");
 
-  if (teamId) {
-    await requireCaptain(teamId);
-  }
+  const access = teamId ? await requireCaptain(teamId) : null;
+  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
 
   if (!teamId || !fixtureId || !feeId) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
@@ -389,9 +447,8 @@ export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData
   const fixtureId = getString(formData, "fixtureId");
   const reason = getString(formData, "reason") || "Game conceded / fixture not played";
 
-  if (teamId) {
-    await requireCaptain(teamId);
-  }
+  const access = teamId ? await requireCaptain(teamId) : null;
+  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
 
   if (!teamId || !fixtureId) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fixture"));
@@ -448,9 +505,8 @@ export async function updateCaptainPlayerMatchFeeAmountAction(formData: FormData
   const feeId = getString(formData, "feeId");
   const amountPence = parseAmountPence(getString(formData, "amount"));
 
-  if (teamId) {
-    await requireCaptain(teamId);
-  }
+  const access = teamId ? await requireCaptain(teamId) : null;
+  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
 
   if (!teamId || !fixtureId || !feeId) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
