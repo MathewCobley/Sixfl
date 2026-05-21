@@ -17,9 +17,10 @@ export const metadata = {
   title: "Player Dashboard Preview | SIXFL Admin",
 };
 
-type ScorerRow = {
+type ContributionRow = {
   name: string;
   goals: number;
+  assists: number;
   teamMemberId?: string;
 };
 
@@ -113,28 +114,38 @@ function normalisePlayerName(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
-function parseStoredScorers(value: unknown): ScorerRow[] {
+function parseStoredContributions(value: unknown): ContributionRow[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item): ScorerRow | null => {
+    .map((item): ContributionRow | null => {
       if (!item || typeof item !== "object") return null;
 
-      const row = item as Partial<ScorerRow>;
+      const row = item as Partial<ContributionRow>;
       const name = typeof row.name === "string" ? row.name.trim() : "";
-      const goals = Number(row.goals);
+      const goals = Number(row.goals ?? 0);
+      const assists = Number(row.assists ?? 0);
 
-      if (!name || !Number.isInteger(goals) || goals < 1) return null;
-
-      const scorer: ScorerRow = { name, goals };
-
-      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
-        scorer.teamMemberId = row.teamMemberId;
+      if (
+        !name ||
+        !Number.isInteger(goals) ||
+        goals < 0 ||
+        !Number.isInteger(assists) ||
+        assists < 0 ||
+        goals + assists < 1
+      ) {
+        return null;
       }
 
-      return scorer;
+      const contribution: ContributionRow = { name, goals, assists };
+
+      if (typeof row.teamMemberId === "string" && row.teamMemberId.trim()) {
+        contribution.teamMemberId = row.teamMemberId;
+      }
+
+      return contribution;
     })
-    .filter((item): item is ScorerRow => item !== null);
+    .filter((item): item is ContributionRow => item !== null);
 }
 
 export default async function AdminPlayerDashboardPreviewPage({
@@ -298,18 +309,26 @@ export default async function AdminPlayerDashboardPreviewPage({
   ]);
 
   const playerNameKey = normalisePlayerName(playerName);
-  const playerGoals = matchDetails.reduce((sum, details) => {
-    const goalsForMatch = parseStoredScorers(details.scorers).reduce((goalsSum, scorer) => {
-      const matchesById = scorer.teamMemberId
-        ? linkedMembershipIds.includes(scorer.teamMemberId)
-        : false;
-      const matchesByName = normalisePlayerName(scorer.name) === playerNameKey;
+  const playerTotals = matchDetails.reduce(
+    (totals, details) => {
+      parseStoredContributions(details.scorers).forEach((contribution) => {
+        const matchesById = contribution.teamMemberId
+          ? linkedMembershipIds.includes(contribution.teamMemberId)
+          : false;
+        const matchesByName = normalisePlayerName(contribution.name) === playerNameKey;
 
-      return matchesById || matchesByName ? goalsSum + scorer.goals : goalsSum;
-    }, 0);
+        if (matchesById || matchesByName) {
+          totals.goals += contribution.goals;
+          totals.assists += contribution.assists;
+        }
+      });
 
-    return sum + goalsForMatch;
-  }, 0);
+      return totals;
+    },
+    { goals: 0, assists: 0 },
+  );
+  const playerGoals = playerTotals.goals;
+  const playerAssists = playerTotals.assists;
   const playerOfMatchAwards = matchDetails.filter(
     (details) => normalisePlayerName(details.playerOfMatchName) === playerNameKey,
   ).length;
@@ -436,7 +455,7 @@ export default async function AdminPlayerDashboardPreviewPage({
               {playerGoals} goal{playerGoals === 1 ? "" : "s"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-emerald-100/70">
-              {playerOfMatchAwards} Player of the Match award{playerOfMatchAwards === 1 ? "" : "s"} recorded for this team.
+              {playerAssists} assist{playerAssists === 1 ? "" : "s"} · {playerOfMatchAwards} Player of the Match award{playerOfMatchAwards === 1 ? "" : "s"}.
             </p>
           </div>
 
