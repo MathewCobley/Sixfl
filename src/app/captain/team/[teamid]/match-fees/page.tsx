@@ -208,6 +208,25 @@ export default async function CaptainManagedPlayerMatchFeesPage({
     }),
   ]);
 
+  const submittedFixtureRows = await prisma.playerMatchFee.findMany({
+    where: {
+      teamId: teamid,
+      status: {
+        not: "CANCELLED",
+      },
+    },
+    distinct: ["fixtureId"],
+    select: {
+      fixtureId: true,
+    },
+  });
+
+  const submittedFixtureIds = new Set(submittedFixtureRows.map((row) => row.fixtureId));
+  const now = new Date();
+  const visibleFixtures = isAdmin
+    ? fixtures
+    : fixtures.filter((fixture) => fixture.kickoffAt >= now || !submittedFixtureIds.has(fixture.id));
+
   const linkedMemberKeys = new Set(
     members.flatMap((member) => [member.user.email?.trim().toLowerCase(), member.user.name?.trim().toLowerCase()].filter(Boolean) as string[]),
   );
@@ -219,9 +238,9 @@ export default async function CaptainManagedPlayerMatchFeesPage({
   });
 
   const selectedFixture =
-    fixtures.find((fixture) => fixture.id === sp.fixtureId) ??
-    fixtures.find((fixture) => fixture.kickoffAt >= new Date()) ??
-    fixtures[0] ??
+    visibleFixtures.find((fixture) => fixture.id === sp.fixtureId) ??
+    visibleFixtures.find((fixture) => fixture.kickoffAt >= now) ??
+    visibleFixtures[0] ??
     null;
 
   const fees = selectedFixture
@@ -388,18 +407,26 @@ export default async function CaptainManagedPlayerMatchFeesPage({
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.3fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Choose fixture</h2>
-          <p className="mt-1 text-sm text-white/55">Pick the fixture you are selecting players for.</p>
+          <p className="mt-1 text-sm text-white/55">
+            {isAdmin
+              ? "Pick the fixture you are selecting players for. Admin can open past fixtures."
+              : "Past fixtures already submitted to SIXFL are hidden from this captain view."}
+          </p>
           <div className="mt-5 space-y-2">
-            {fixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No fixtures exist for this team yet.</div> : null}
-            {fixtures.map((fixture) => {
+            {visibleFixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No editable fixtures are available for this team.</div> : null}
+            {visibleFixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
+              const isPast = fixture.kickoffAt < now;
               return (
                 <Link
                   key={fixture.id}
                   href={`/captain/team/${team.id}/match-fees?fixtureId=${fixture.id}`}
                   className={`block rounded-2xl border p-4 transition ${isSelected ? "border-emerald-400/30 bg-emerald-500/10 text-white" : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.06]"}`}
                 >
-                  <div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>
+                    {isPast ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100">Past fixture</span> : null}
+                  </div>
                   <div className="mt-1 text-xs text-white/50">
                     {formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
                   </div>
