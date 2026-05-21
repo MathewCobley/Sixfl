@@ -58,6 +58,8 @@ export default async function CaptainTeamLayout({
     notFound();
   }
 
+  const isManagedTeam = team.teamMode === "MANAGED";
+
   const squadHref = access.isAdmin
     ? `/captain/team/${teamid}/squad`
     : `/captain/team/${teamid}/captain-squad`;
@@ -65,7 +67,7 @@ export default async function CaptainTeamLayout({
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: squadHref, label: "Squad" },
-    ...(team.teamMode === "MANAGED"
+    ...(isManagedTeam
       ? [
           { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
           { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
@@ -74,7 +76,9 @@ export default async function CaptainTeamLayout({
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
-    { href: `/captain/team/${teamid}/payments`, label: "Team payments" },
+    ...(!isManagedTeam
+      ? [{ href: `/captain/team/${teamid}/payments`, label: "Team payments" }]
+      : []),
   ];
 
   return (
@@ -84,10 +88,10 @@ export default async function CaptainTeamLayout({
       <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
       <CaptainFixtureBadgesBridge />
-      {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedSquadEditLinks /> : null}
-      {access.isAdmin && team.teamMode === "MANAGED" ? <ManagedProspectMoveLinks /> : null}
-      {access.isAdmin && team.teamMode === "MANAGED" ? <PendingActivationDeleteLinks /> : null}
-      {access.isAdmin && team.teamMode === "MANAGED" ? <AdminPlayerPreviewLinks /> : null}
+      {access.isAdmin && isManagedTeam ? <ManagedSquadEditLinks /> : null}
+      {access.isAdmin && isManagedTeam ? <ManagedProspectMoveLinks /> : null}
+      {access.isAdmin && isManagedTeam ? <PendingActivationDeleteLinks /> : null}
+      {access.isAdmin && isManagedTeam ? <AdminPlayerPreviewLinks /> : null}
 
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-8 px-6 py-6 sm:px-10">
         <header className="overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
@@ -118,7 +122,9 @@ export default async function CaptainTeamLayout({
                   </h1>
 
                   <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                    Matchday control, fixtures, results and payments for your team.
+                    {isManagedTeam
+                      ? "Matchday control, fixtures and results for your team."
+                      : "Matchday control, fixtures, results and payments for your team."}
                   </p>
 
                   <p className="mt-3 text-sm text-white/55">
