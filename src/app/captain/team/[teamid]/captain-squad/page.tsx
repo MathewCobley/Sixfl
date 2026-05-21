@@ -40,6 +40,10 @@ type PlayerStats = {
   playerOfMatchAwards: number;
 };
 
+function pluralise(value: number, singular: string, plural: string) {
+  return value === 1 ? singular : plural;
+}
+
 function getRoleLabel(role: TeamRole) {
   switch (role) {
     case "CAPTAIN":
@@ -460,9 +464,22 @@ export default async function CaptainSquadViewPage({
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <StatPill label="goal scored" value={playerStats.goals} />
-                        <StatPill label="assist" value={playerStats.assists} />
-                        <StatPill label="Player of the Match" value={playerStats.playerOfMatchAwards} />
+                        <StatPill
+                          label={pluralise(playerStats.goals, "goal", "goals")}
+                          value={playerStats.goals}
+                        />
+                        <StatPill
+                          label={pluralise(playerStats.assists, "assist", "assists")}
+                          value={playerStats.assists}
+                        />
+                        <StatPill
+                          label={pluralise(
+                            playerStats.playerOfMatchAwards,
+                            "Player of the Match",
+                            "Player of the Match",
+                          )}
+                          value={playerStats.playerOfMatchAwards}
+                        />
                       </div>
 
                       {hasPublicProfileDetails ? (
