@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
+import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
 import ManagedProspectMoveLinks from "@/components/captain/ManagedProspectMoveLinks";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
@@ -88,6 +89,7 @@ export default async function CaptainTeamLayout({
       <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
       <CaptainFixtureBadgesBridge />
+      <CaptainMatchdayAvailabilityBadgesBridge />
       {access.isAdmin && isManagedTeam ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && isManagedTeam ? <ManagedProspectMoveLinks /> : null}
       {access.isAdmin && isManagedTeam ? <PendingActivationDeleteLinks /> : null}
