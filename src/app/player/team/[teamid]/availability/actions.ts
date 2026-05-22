@@ -64,11 +64,42 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
       id: fixtureId,
       OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
     },
-    select: { id: true },
+    select: {
+      id: true,
+      team: {
+        select: {
+          matchdayTargetSize: true,
+        },
+      },
+      playerMatchFees: {
+        where: {
+          teamId,
+          status: {
+            not: "CANCELLED",
+          },
+        },
+        select: {
+          teamMemberId: true,
+        },
+      },
+    },
   });
 
   if (!fixture) {
     redirect(getAvailabilityPath(teamId, fixtureId, "fixture-not-found"));
+  }
+
+  const targetSize = fixture.team?.matchdayTargetSize ?? 0;
+  const selectedMemberIds = new Set(
+    fixture.playerMatchFees
+      .map((fee) => fee.teamMemberId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const squadIsFull = targetSize > 0 && selectedMemberIds.size >= targetSize;
+  const playerAlreadySelected = selectedMemberIds.has(teamMember.id);
+
+  if (response === "AVAILABLE" && squadIsFull && !playerAlreadySelected) {
+    redirect(getAvailabilityPath(teamId, fixtureId, "squad-full"));
   }
 
   await prisma.fixtureAvailability.upsert({
@@ -95,6 +126,7 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
   revalidatePath(`/player/team/${teamId}`);
   revalidatePath(getAvailabilityPath(teamId, fixtureId));
   revalidatePath(`/admin/teams/${teamId}/availability`);
+  revalidatePath(`/captain/team/${teamId}/availability`);
 
   redirect(getAvailabilityPath(teamId, fixtureId, "availability-updated"));
 }
