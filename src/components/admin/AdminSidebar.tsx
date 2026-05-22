@@ -88,6 +88,11 @@ const navigation = [
     icon: DocumentTextIcon,
   },
   {
+    name: "Queue",
+    href: "/admin/queue",
+    icon: Cog6ToothIcon,
+  },
+  {
     name: "Templates",
     href: "/admin/templates",
     icon: DocumentTextIcon,
@@ -188,6 +193,7 @@ export default function AdminSidebar({
                       (unreadCount > 0
                         ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
                         : "Email, SMS and history")}
+                    {item.name === "Queue" && "SMS and email dispatches"}
                     {item.name === "Templates" && "Email and SMS messaging"}
                   </div>
                 </div>
