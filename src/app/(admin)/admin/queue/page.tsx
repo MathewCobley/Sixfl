@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/queue/page.tsx
 // ========================================
 
+import Link from "next/link";
 import { NotificationDispatchStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -10,6 +11,49 @@ import { runQueueFromAdmin } from "./runner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+type QueueFilter = "all" | "queued" | "due" | "processing" | "sent" | "failed" | "skipped" | "cancelled";
+
+function normaliseFilter(value?: string | null): QueueFilter {
+  switch (value) {
+    case "queued":
+    case "due":
+    case "processing":
+    case "sent":
+    case "failed":
+    case "skipped":
+    case "cancelled":
+      return value;
+    default:
+      return "all";
+  }
+}
+
+function getFilteredWhere(filter: QueueFilter, now: Date) {
+  switch (filter) {
+    case "queued":
+      return { status: "QUEUED" as const };
+    case "due":
+      return {
+        status: "QUEUED" as const,
+        scheduledFor: {
+          lte: now,
+        },
+      };
+    case "processing":
+      return { status: "PROCESSING" as const };
+    case "sent":
+      return { status: "SENT" as const };
+    case "failed":
+      return { status: "FAILED" as const };
+    case "skipped":
+      return { status: "SKIPPED" as const };
+    case "cancelled":
+      return { status: "CANCELLED" as const };
+    default:
+      return {};
+  }
+}
 
 function formatDateTime(value: Date | null) {
   if (!value) return "—";
@@ -39,10 +83,20 @@ function getStatusClasses(status: NotificationDispatchStatus) {
   }
 }
 
+function getFilterTabClasses(active: boolean) {
+  return [
+    "inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition",
+    active
+      ? "border-emerald-400/30 bg-emerald-400/12 text-white"
+      : "border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06] hover:text-white",
+  ].join(" ");
+}
+
 export default async function AdminQueuePage({
   searchParams,
 }: {
   searchParams?: Promise<{
+    filter?: string;
     ran?: string;
     processed?: string;
     sent?: string;
@@ -53,9 +107,12 @@ export default async function AdminQueuePage({
 }) {
   await requireAdmin();
   const sp = (await searchParams) ?? {};
+  const activeFilter = normaliseFilter(sp.filter);
   const now = new Date();
+  const filteredWhere = getFilteredWhere(activeFilter, now);
 
-  const [queued, dueNow, processing, failed, recent] = await Promise.all([
+  const [all, queued, dueNow, processing, sent, failed, skipped, cancelled, recent] = await Promise.all([
+    prisma.notificationDispatch.count(),
     prisma.notificationDispatch.count({
       where: { status: "QUEUED" },
     }),
@@ -71,11 +128,21 @@ export default async function AdminQueuePage({
       where: { status: "PROCESSING" },
     }),
     prisma.notificationDispatch.count({
+      where: { status: "SENT" },
+    }),
+    prisma.notificationDispatch.count({
       where: { status: "FAILED" },
     }),
+    prisma.notificationDispatch.count({
+      where: { status: "SKIPPED" },
+    }),
+    prisma.notificationDispatch.count({
+      where: { status: "CANCELLED" },
+    }),
     prisma.notificationDispatch.findMany({
+      where: filteredWhere,
       orderBy: [{ createdAt: "desc" }],
-      take: 30,
+      take: 50,
       select: {
         id: true,
         channel: true,
@@ -102,6 +169,17 @@ export default async function AdminQueuePage({
       },
     }),
   ]);
+
+  const filterTabs: Array<{ key: QueueFilter; label: string; count: number }> = [
+    { key: "all", label: "All", count: all },
+    { key: "queued", label: "Queued", count: queued },
+    { key: "due", label: "Due now", count: dueNow },
+    { key: "processing", label: "Processing", count: processing },
+    { key: "sent", label: "Sent", count: sent },
+    { key: "failed", label: "Failed", count: failed },
+    { key: "skipped", label: "Skipped", count: skipped },
+    { key: "cancelled", label: "Cancelled", count: cancelled },
+  ];
 
   return (
     <div className="space-y-8">
@@ -160,10 +238,12 @@ export default async function AdminQueuePage({
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Recent dispatches</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Last 30 queue items</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Dispatches</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              {activeFilter === "all" ? "Last 50 queue items" : `${filterTabs.find((tab) => tab.key === activeFilter)?.label ?? "Filtered"} queue items`}
+            </h2>
           </div>
           <a
             href="/api/cron/notifications"
@@ -175,7 +255,28 @@ export default async function AdminQueuePage({
           </a>
         </div>
 
+        <div className="mt-5 flex flex-wrap gap-2">
+          {filterTabs.map((tab) => (
+            <Link
+              key={tab.key}
+              href={`/admin/queue?filter=${tab.key}`}
+              className={getFilterTabClasses(activeFilter === tab.key)}
+            >
+              <span>{tab.label}</span>
+              <span className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] ${activeFilter === tab.key ? "bg-emerald-400/20 text-emerald-200" : "bg-white/10 text-white/60"}`}>
+                {tab.count > 999 ? "999+" : tab.count}
+              </span>
+            </Link>
+          ))}
+        </div>
+
         <div className="mt-5 space-y-3">
+          {recent.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">
+              No dispatches match this filter.
+            </div>
+          ) : null}
+
           {recent.map((item) => {
             const preview = item.bodyText.trim().replace(/\s+/g, " ").slice(0, 160);
             const recipient = item.recipient.displayName || item.recipient.email || item.recipient.phone || "Unknown recipient";
