@@ -122,7 +122,7 @@ export default function CaptainDashboardLeagueTable({
                 return (
                   <div
                     key={row.teamId}
-                    className="bg-black/20 px-4 py-5 sm:px-6 lg:px-8"
+                    className="bg-black/20 px-4 py-4 sm:px-6 lg:px-8 lg:py-3"
                   >
                     <div className="lg:hidden">
                       <div className="flex items-start gap-4">
@@ -219,7 +219,7 @@ export default function CaptainDashboardLeagueTable({
                     <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
                       <div>
                         <div
-                          className={`flex h-11 w-11 items-center justify-center rounded-2xl border text-sm font-black ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-black ${
                             isTop
                               ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
                               : "border-white/10 bg-white/[0.04] text-white/70"
@@ -230,18 +230,18 @@ export default function CaptainDashboardLeagueTable({
                       </div>
 
                       <div className="flex min-w-0 items-center gap-4">
-                        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+                        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
                           {logoUrl ? (
                             <Image
                               src={logoUrl}
                               alt={`${row.teamName} badge`}
                               fill
-                              sizes="56px"
-                              className="object-contain p-2"
+                              sizes="40px"
+                              className="object-contain p-1.5"
                               unoptimized
                             />
                           ) : (
-                            <span className="text-base font-black text-white/60">
+                            <span className="text-sm font-black text-white/60">
                               {getInitials(row.teamName)}
                             </span>
                           )}
@@ -262,7 +262,7 @@ export default function CaptainDashboardLeagueTable({
                           row.recentForm.map((result, formIndex) => (
                             <span
                               key={`${row.teamId}-form-${formIndex}`}
-                              className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-black ${getFormBadgeClasses(
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-black ${getFormBadgeClasses(
                                 result,
                               )}`}
                             >
