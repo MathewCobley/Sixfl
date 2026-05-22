@@ -78,6 +78,32 @@ function getFeeStatusLabel(status: PlayerMatchFeeStatus) {
   }
 }
 
+function getAvailabilityLabel(response?: string | null) {
+  switch (response) {
+    case "AVAILABLE":
+      return "Available";
+    case "MAYBE":
+      return "Maybe";
+    case "UNAVAILABLE":
+      return "Unavailable";
+    default:
+      return "No response";
+  }
+}
+
+function getAvailabilityClasses(response?: string | null) {
+  switch (response) {
+    case "AVAILABLE":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "MAYBE":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    case "UNAVAILABLE":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/55";
+  }
+}
+
 function getSavedMessage(saved: string | undefined, isAdmin: boolean) {
   switch (saved) {
     case "fees_created":
@@ -243,20 +269,47 @@ export default async function CaptainManagedPlayerMatchFeesPage({
     visibleFixtures[0] ??
     null;
 
-  const fees = selectedFixture
-    ? await prisma.playerMatchFee.findMany({
-        where: { teamId: teamid, fixtureId: selectedFixture.id },
-        orderBy: [{ createdAt: "asc" }],
-        include: {
-          teamMember: {
-            include: { user: { select: { name: true, email: true } } },
+  const [fees, selectedFixtureAvailabilities] = selectedFixture
+    ? await Promise.all([
+        prisma.playerMatchFee.findMany({
+          where: { teamId: teamid, fixtureId: selectedFixture.id },
+          orderBy: [{ createdAt: "asc" }],
+          include: {
+            teamMember: {
+              include: { user: { select: { name: true, email: true } } },
+            },
+            prospect: {
+              select: { firstName: true, lastName: true, email: true, phone: true },
+            },
           },
-          prospect: {
-            select: { firstName: true, lastName: true, email: true, phone: true },
+        }),
+        prisma.fixtureAvailability.findMany({
+          where: {
+            fixtureId: selectedFixture.id,
+            teamMember: {
+              teamId: teamid,
+            },
           },
-        },
-      })
-    : [];
+          select: {
+            teamMemberId: true,
+            response: true,
+            note: true,
+            respondedAt: true,
+          },
+        }),
+      ])
+    : [[], []];
+
+  const availabilityByMemberId = new Map(
+    selectedFixtureAvailabilities.map((availability) => [availability.teamMemberId, availability]),
+  );
+
+  const availabilityCounts = {
+    available: selectedFixtureAvailabilities.filter((item) => item.response === "AVAILABLE").length,
+    maybe: selectedFixtureAvailabilities.filter((item) => item.response === "MAYBE").length,
+    unavailable: selectedFixtureAvailabilities.filter((item) => item.response === "UNAVAILABLE").length,
+  };
+  const noResponseCount = Math.max(members.length - selectedFixtureAvailabilities.filter((item) => item.response !== "NO_RESPONSE").length, 0);
 
   const activeFees = fees.filter((fee) => fee.status !== "CANCELLED");
   const feeByMemberId = new Map(
@@ -446,81 +499,106 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           <p className="mt-1 text-sm text-white/55">
             {isAdmin
               ? "Select who played. Fee rows are created at £6 per selected player unless you change the admin amount below."
-              : "Tick every player who actually played. This does not show payment details to captains."}
+              : "Tick every player who actually played. Availability responses are shown to help you pick the squad."}
           </p>
           {selectedFixture ? (
-            <form action={createCaptainPlayerMatchFeesAction} className="mt-5 space-y-5">
-              <input type="hidden" name="teamId" value={team.id} />
-              <input type="hidden" name="fixtureId" value={selectedFixture.id} />
-              {!isAdmin ? <input type="hidden" name="amount" value="6.00" /> : null}
+            <>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                  Available {availabilityCounts.available}
+                </span>
+                <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
+                  Maybe {availabilityCounts.maybe}
+                </span>
+                <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-100">
+                  Unavailable {availabilityCounts.unavailable}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/60">
+                  No response {noResponseCount}
+                </span>
+              </div>
+              <form action={createCaptainPlayerMatchFeesAction} className="mt-5 space-y-5">
+                <input type="hidden" name="teamId" value={team.id} />
+                <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                {!isAdmin ? <input type="hidden" name="amount" value="6.00" /> : null}
 
-              {isAdmin ? (
-                <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-                  <div className="space-y-2">
-                    <label htmlFor="amount" className="text-sm text-white/60">Fee per player</label>
-                    <input id="amount" name="amount" type="text" inputMode="decimal" defaultValue="6.00" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60" />
+                {isAdmin ? (
+                  <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                    <div className="space-y-2">
+                      <label htmlFor="amount" className="text-sm text-white/60">Fee per player</label>
+                      <input id="amount" name="amount" type="text" inputMode="decimal" defaultValue="6.00" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60" />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="note" className="text-sm text-white/60">Admin note</label>
+                      <input id="note" name="note" type="text" placeholder="Optional internal note" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60" />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label htmlFor="note" className="text-sm text-white/60">Admin note</label>
-                    <input id="note" name="note" type="text" placeholder="Optional internal note" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60" />
-                  </div>
-                </div>
-              ) : null}
+                ) : null}
 
-              <div className={`grid gap-4 ${selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <h3 className="font-semibold text-white">Linked squad members</h3>
-                  <div className="mt-3 space-y-2">
-                    {members.length === 0 ? <div className="text-sm text-white/45">No linked members yet.</div> : null}
-                    {members.map((member) => {
-                      const existingFee = feeByMemberId.get(member.id);
-                      return (
-                        <label key={member.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                          <input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
-                          <span>
-                            <span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>
-                            <span className="block text-xs text-white/45">
-                              {isAdmin ? member.user.email || "No email" : "Squad player"}{existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
-                            </span>
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {selectableProspects.length > 0 ? (
+                <div className={`grid gap-4 ${selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <h3 className="font-semibold text-white">Unlinked extra players</h3>
-                    <p className="mt-1 text-xs text-white/45">Only use this for someone who played but is not yet in the linked squad list.</p>
+                    <h3 className="font-semibold text-white">Linked squad members</h3>
                     <div className="mt-3 space-y-2">
-                      {selectableProspects.map((prospect) => {
-                        const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
-                        const existingFee = feeByProspectId.get(prospect.id);
+                      {members.length === 0 ? <div className="text-sm text-white/45">No linked members yet.</div> : null}
+                      {members.map((member) => {
+                        const existingFee = feeByMemberId.get(member.id);
+                        const availability = availabilityByMemberId.get(member.id);
                         return (
-                          <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                            <input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
-                            <span>
-                              <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed prospect"}</span>
-                              <span className="block text-xs text-white/45">
-                                {isAdmin
-                                  ? `${prospect.email || "No email"}${prospect.phone ? ` · ${prospect.phone}` : ""}`
-                                  : "Not yet linked to the squad"}
-                                {existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
+                          <label key={member.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
+                            <input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>
+                                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(availability?.response)}`}>
+                                  {getAvailabilityLabel(availability?.response)}
+                                </span>
                               </span>
+                              <span className="mt-1 block text-xs text-white/45">
+                                {isAdmin ? member.user.email || "No email" : "Squad player"}{existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
+                              </span>
+                              {availability?.note ? (
+                                <span className="mt-1 block text-xs text-white/45">Note: {availability.note}</span>
+                              ) : null}
                             </span>
                           </label>
                         );
                       })}
                     </div>
                   </div>
-                ) : null}
-              </div>
 
-              <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">
-                {isAdmin ? "Create / refresh fee rows" : "Submit matchday squad"}
-              </button>
-            </form>
+                  {selectableProspects.length > 0 ? (
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <h3 className="font-semibold text-white">Unlinked extra players</h3>
+                      <p className="mt-1 text-xs text-white/45">Only use this for someone who played but is not yet in the linked squad list.</p>
+                      <div className="mt-3 space-y-2">
+                        {selectableProspects.map((prospect) => {
+                          const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+                          const existingFee = feeByProspectId.get(prospect.id);
+                          return (
+                            <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
+                              <input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
+                              <span>
+                                <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed prospect"}</span>
+                                <span className="block text-xs text-white/45">
+                                  {isAdmin
+                                    ? `${prospect.email || "No email"}${prospect.phone ? ` · ${prospect.phone}` : ""}`
+                                    : "Not yet linked to the squad"}
+                                  {existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">
+                  {isAdmin ? "Create / refresh fee rows" : "Submit matchday squad"}
+                </button>
+              </form>
+            </>
           ) : (
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a fixture before selecting players.</div>
           )}
