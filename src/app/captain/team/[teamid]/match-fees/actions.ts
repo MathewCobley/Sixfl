@@ -6,14 +6,25 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { PlayerMatchFeeStatus } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationRecipientSourceType,
+  type PlayerMatchFeeStatus,
+} from "@prisma/client";
 
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { normalizePhoneNumber } from "@/lib/messaging/phone";
+import { processNotificationQueue } from "@/lib/notifications/processor";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { queueDirectNotification } from "@/lib/notifications/service";
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import { queuePlayerMatchFeeReminder } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 const DEFAULT_PLAYER_MATCH_FEE_PENCE = 600;
+const MATCHDAY_SQUAD_SELECTED_SOURCE_TYPE = "MATCHDAY_SQUAD_SELECTED";
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -124,6 +135,179 @@ function redirectIfNotAdmin(input: {
   }
 }
 
+function getFirstName(value: string) {
+  return value.trim().split(/\s+/)[0] || "there";
+}
+
+function getPlayerDisplayName(input: { name: string | null; email: string | null }) {
+  return input.name?.trim() || input.email?.trim() || "Player";
+}
+
+function formatSquadMessageFixtureDate(value: Date) {
+  return formatDateTimeInLondon(value, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getSquadSelectedSourceId(input: { fixtureId: string; teamMemberId: string }) {
+  return `${input.fixtureId}:${input.teamMemberId}`;
+}
+
+async function processSquadSelectedMessagesNow(queuedCount: number) {
+  if (queuedCount < 1) return;
+
+  try {
+    await processNotificationQueue(Math.max(queuedCount + 5, 10));
+  } catch (error) {
+    console.error("Failed to process matchday squad selected SMS immediately", error);
+  }
+}
+
+async function sendMatchdaySquadSelectedSms(input: {
+  teamId: string;
+  fixture: {
+    id: string;
+    leagueId: string;
+    kickoffAt: Date;
+    homeTeamId: string;
+    awayTeamId: string;
+    homeTeam: { id: string; name: string };
+    awayTeam: { id: string; name: string };
+    venue: { name: string } | null;
+  };
+  teamMemberIds: string[];
+  createdByUserId?: string | null;
+}) {
+  const uniqueMemberIds = Array.from(new Set(input.teamMemberIds)).filter(Boolean);
+
+  if (uniqueMemberIds.length === 0) return;
+
+  const existingSourceIds = new Set(
+    (
+      await prisma.notificationDispatch.findMany({
+        where: {
+          sourceType: MATCHDAY_SQUAD_SELECTED_SOURCE_TYPE,
+          sourceId: {
+            in: uniqueMemberIds.map((teamMemberId) =>
+              getSquadSelectedSourceId({ fixtureId: input.fixture.id, teamMemberId }),
+            ),
+          },
+        },
+        select: {
+          sourceId: true,
+        },
+      })
+    )
+      .map((dispatch) => dispatch.sourceId)
+      .filter((sourceId): sourceId is string => Boolean(sourceId)),
+  );
+
+  const members = await prisma.teamMember.findMany({
+    where: {
+      id: {
+        in: uniqueMemberIds,
+      },
+      teamId: input.teamId,
+    },
+    select: {
+      id: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  const profiles = await getTeamMemberProfilesByTeamMemberIds(
+    members.map((member) => member.id),
+  );
+
+  const isHome = input.fixture.homeTeamId === input.teamId;
+  const team = isHome ? input.fixture.homeTeam : input.fixture.awayTeam;
+  const opponent = isHome ? input.fixture.awayTeam : input.fixture.homeTeam;
+  const fixtureLabel = `${team.name} vs ${opponent.name} · ${formatSquadMessageFixtureDate(input.fixture.kickoffAt)}`;
+  const venueText = input.fixture.venue?.name ? ` at ${input.fixture.venue.name}` : "";
+  let queuedCount = 0;
+
+  for (const member of members) {
+    const sourceId = getSquadSelectedSourceId({
+      fixtureId: input.fixture.id,
+      teamMemberId: member.id,
+    });
+
+    if (existingSourceIds.has(sourceId)) continue;
+
+    const profile = profiles.get(member.id) ?? null;
+    const phone = profile?.phone?.trim() || null;
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    if (!phone || !normalizedPhone) continue;
+
+    const playerName = getPlayerDisplayName(member.user);
+    const recipient = await upsertNotificationRecipient({
+      sourceType: NotificationRecipientSourceType.GENERAL,
+      sourceId: `team-member:${member.id}`,
+      audience: NotificationAudience.PLAYER,
+      displayName: playerName,
+      email: member.user.email?.trim() || null,
+      phone,
+      marketingEmailOptIn: true,
+      marketingSmsOptIn: true,
+      transactionalEmailOptIn: true,
+      transactionalSmsOptIn: true,
+      metadata: {
+        teamId: input.teamId,
+        teamMemberId: member.id,
+        userId: member.user.id,
+        entityType: "TEAM_MEMBER",
+      },
+    });
+
+    await prisma.notificationPreference.upsert({
+      where: { recipientId: recipient.id },
+      update: { smsEnabled: true, urgentSmsEnabled: true },
+      create: {
+        recipientId: recipient.id,
+        emailEnabled: true,
+        smsEnabled: true,
+        urgentSmsEnabled: true,
+      },
+    });
+
+    const dispatch = await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: "SMS",
+      audience: NotificationAudience.PLAYER,
+      body: `SIXFL: Hi ${getFirstName(playerName)}, you are in the matchday squad for ${fixtureLabel}${venueText}. If this creates a problem, contact SIXFL as soon as possible.`,
+      sourceType: MATCHDAY_SQUAD_SELECTED_SOURCE_TYPE,
+      sourceId,
+      metadata: {
+        origin: "matchday_squad_selected",
+        originLabel: "Player picked for matchday squad",
+        teamId: input.teamId,
+        fixtureId: input.fixture.id,
+        teamMemberId: member.id,
+        userId: member.user.id,
+        leagueId: input.fixture.leagueId,
+        fixtureLabel,
+        venueName: input.fixture.venue?.name ?? null,
+      },
+      createdByUserId: input.createdByUserId?.trim() || null,
+    });
+
+    if (dispatch.status === "QUEUED") queuedCount += 1;
+  }
+
+  await processSquadSelectedMessagesNow(queuedCount);
+}
+
 export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
@@ -147,9 +331,24 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=no_players"));
   }
 
-  const fixtureOk = await assertFixtureBelongsToTeam({ fixtureId, teamId });
+  const fixture = await prisma.fixture.findFirst({
+    where: {
+      id: fixtureId,
+      OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+    },
+    select: {
+      id: true,
+      leagueId: true,
+      kickoffAt: true,
+      homeTeamId: true,
+      awayTeamId: true,
+      homeTeam: { select: { id: true, name: true } },
+      awayTeam: { select: { id: true, name: true } },
+      venue: { select: { name: true } },
+    },
+  });
 
-  if (!fixtureOk) {
+  if (!fixture) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=fixture_not_found"));
   }
 
@@ -159,6 +358,32 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   const selectedProspectIds = players
     .filter((player) => player.type === "prospect")
     .map((player) => player.id);
+
+  const existingActiveMemberFeeRows = selectedMemberIds.length
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          teamId,
+          fixtureId,
+          status: { not: "CANCELLED" },
+          teamMemberId: {
+            in: selectedMemberIds,
+          },
+        },
+        select: {
+          teamMemberId: true,
+        },
+      })
+    : [];
+
+  const existingActiveMemberIds = new Set(
+    existingActiveMemberFeeRows
+      .map((fee) => fee.teamMemberId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const newlySelectedMemberIds = selectedMemberIds.filter(
+    (teamMemberId) => !existingActiveMemberIds.has(teamMemberId),
+  );
 
   for (const player of players) {
     if (player.type === "member") {
@@ -292,6 +517,13 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
       },
     });
   }
+
+  await sendMatchdaySquadSelectedSms({
+    teamId,
+    fixture,
+    teamMemberIds: newlySelectedMemberIds,
+    createdByUserId: access?.user?.id ?? null,
+  });
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fees_created"));
