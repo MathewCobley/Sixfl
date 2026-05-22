@@ -108,9 +108,21 @@ function getSavedMessage(saved?: string) {
       return "You are not linked to this team.";
     case "fixture-not-found":
       return "That fixture could not be found.";
+    case "squad-full":
+      return "The matchday squad has already been picked for this fixture, so you cannot mark yourself as available now. You can still choose maybe or unavailable, or contact SIXFL if this is wrong.";
     default:
       return null;
   }
+}
+
+function getSelectedMemberIds(input: {
+  playerMatchFees: Array<{ teamMemberId: string | null }>;
+}) {
+  return new Set(
+    input.playerMatchFees
+      .map((fee) => fee.teamMemberId)
+      .filter((id): id is string => Boolean(id)),
+  );
 }
 
 export default async function PlayerAvailabilityPage({
@@ -144,6 +156,7 @@ export default async function PlayerAvailabilityPage({
               id: true,
               name: true,
               logoUrl: true,
+              matchdayTargetSize: true,
               league: {
                 select: {
                   id: true,
@@ -180,6 +193,7 @@ export default async function PlayerAvailabilityPage({
         id: true,
         name: true,
         logoUrl: true,
+        matchdayTargetSize: true,
         league: {
           select: {
             id: true,
@@ -213,6 +227,17 @@ export default async function PlayerAvailabilityPage({
       homeTeam: { select: { name: true } },
       awayTeam: { select: { name: true } },
       venue: { select: { name: true } },
+      playerMatchFees: {
+        where: {
+          teamId: teamid,
+          status: {
+            not: "CANCELLED",
+          },
+        },
+        select: {
+          teamMemberId: true,
+        },
+      },
       availabilities: membership
         ? {
             where: { teamMemberId: membership.id },
@@ -230,6 +255,14 @@ export default async function PlayerAvailabilityPage({
   const selectedFixture =
     fixtures.find((fixture) => fixture.id === sp.fixtureId) ?? fixtures[0] ?? null;
   const selectedAvailability = selectedFixture?.availabilities?.[0] ?? null;
+  const selectedMemberIds = selectedFixture
+    ? getSelectedMemberIds(selectedFixture)
+    : new Set<string>();
+  const targetSize = team.matchdayTargetSize ?? 0;
+  const selectedCount = selectedMemberIds.size;
+  const squadIsFull = targetSize > 0 && selectedCount >= targetSize;
+  const playerAlreadySelected = membership ? selectedMemberIds.has(membership.id) : false;
+  const availableOptionLocked = squadIsFull && !playerAlreadySelected;
   const savedMessage = getSavedMessage(sp.saved);
 
   return (
@@ -263,6 +296,11 @@ export default async function PlayerAvailabilityPage({
                     {getRoleLabel(membership.role)}
                   </span>
                 ) : null}
+                {targetSize > 0 ? (
+                  <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-100">
+                    Target squad: {targetSize}
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -286,7 +324,7 @@ export default async function PlayerAvailabilityPage({
         </section>
 
         {savedMessage ? (
-          <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          <section className={`rounded-2xl border p-4 text-sm ${sp.saved === "squad-full" ? "border-amber-400/25 bg-amber-500/10 text-amber-100" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"}`}>
             {savedMessage}
           </section>
         ) : null}
@@ -315,6 +353,10 @@ export default async function PlayerAvailabilityPage({
               {fixtures.map((fixture) => {
                 const availability = fixture.availabilities?.[0] ?? null;
                 const isSelected = selectedFixture?.id === fixture.id;
+                const fixtureSelectedMemberIds = getSelectedMemberIds(fixture);
+                const fixtureSelectedCount = fixtureSelectedMemberIds.size;
+                const fixtureSquadIsFull = targetSize > 0 && fixtureSelectedCount >= targetSize;
+                const fixturePlayerSelected = membership ? fixtureSelectedMemberIds.has(membership.id) : false;
 
                 return (
                   <Link
@@ -339,9 +381,20 @@ export default async function PlayerAvailabilityPage({
                       {fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
                       {fixture.pitch ? ` · ${fixture.pitch}` : ""}
                     </div>
-                    <span className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${getResponseClasses(availability?.response)}`}>
-                      {getResponseLabel(availability?.response)}
-                    </span>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${getResponseClasses(availability?.response)}`}>
+                        {getResponseLabel(availability?.response)}
+                      </span>
+                      {fixtureSquadIsFull ? (
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${fixturePlayerSelected ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>
+                          {fixturePlayerSelected ? "You are in the squad" : "Squad picked"}
+                        </span>
+                      ) : targetSize > 0 ? (
+                        <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/60">
+                          {fixtureSelectedCount}/{targetSize} picked
+                        </span>
+                      ) : null}
+                    </div>
                   </Link>
                 );
               })}
@@ -367,9 +420,27 @@ export default async function PlayerAvailabilityPage({
                   {selectedFixture.pitch ? ` · ${selectedFixture.pitch}` : ""}
                 </p>
 
-                <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getResponseClasses(selectedAvailability?.response)}`}>
-                  Current: {getResponseLabel(selectedAvailability?.response)}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getResponseClasses(selectedAvailability?.response)}`}>
+                    Current: {getResponseLabel(selectedAvailability?.response)}
+                  </span>
+                  {targetSize > 0 ? (
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/60">
+                      {selectedCount}/{targetSize} squad places picked
+                    </span>
+                  ) : null}
+                  {squadIsFull ? (
+                    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${playerAlreadySelected ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>
+                      {playerAlreadySelected ? "You are in the squad" : "Squad already picked"}
+                    </span>
+                  ) : null}
                 </div>
+
+                {squadIsFull && !playerAlreadySelected ? (
+                  <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
+                    The matchday squad has already been picked for this fixture. You can still mark yourself as maybe or unavailable, but you cannot mark yourself as available now.
+                  </div>
+                ) : null}
 
                 {selectedAvailability?.respondedAt ? (
                   <p className="mt-2 text-xs text-white/45">
@@ -383,25 +454,30 @@ export default async function PlayerAvailabilityPage({
 
                   <div className="grid gap-3 sm:grid-cols-3">
                     {[
-                      { value: "AVAILABLE", label: "Available", copy: "I can play", classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" },
+                      { value: "AVAILABLE", label: "Available", copy: availableOptionLocked ? "Squad already picked" : "I can play", classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" },
                       { value: "MAYBE", label: "Maybe", copy: "Not sure yet", classes: "border-amber-400/25 bg-amber-500/10 text-amber-100" },
                       { value: "UNAVAILABLE", label: "Unavailable", copy: "I cannot play", classes: "border-red-400/25 bg-red-500/10 text-red-100" },
-                    ].map((option) => (
-                      <label
-                        key={option.value}
-                        className={`flex cursor-pointer flex-col gap-2 rounded-2xl border p-4 transition hover:bg-white/[0.06] ${option.classes}`}
-                      >
-                        <input
-                          type="radio"
-                          name="response"
-                          value={option.value}
-                          defaultChecked={selectedAvailability?.response === option.value}
-                          required
-                        />
-                        <span className="text-base font-semibold">{option.label}</span>
-                        <span className="text-xs opacity-75">{option.copy}</span>
-                      </label>
-                    ))}
+                    ].map((option) => {
+                      const disabled = option.value === "AVAILABLE" && availableOptionLocked;
+
+                      return (
+                        <label
+                          key={option.value}
+                          className={`flex flex-col gap-2 rounded-2xl border p-4 transition ${option.classes} ${disabled ? "cursor-not-allowed opacity-45" : "cursor-pointer hover:bg-white/[0.06]"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="response"
+                            value={option.value}
+                            defaultChecked={selectedAvailability?.response === option.value}
+                            disabled={disabled}
+                            required
+                          />
+                          <span className="text-base font-semibold">{option.label}</span>
+                          <span className="text-xs opacity-75">{option.copy}</span>
+                        </label>
+                      );
+                    })}
                   </div>
 
                   <div className="space-y-2">
