@@ -4,6 +4,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { useFormStatus } from "react-dom";
 
 import { sendAdminEmailReplyAction } from "@/app/(admin)/admin/messages/email-reply-actions";
@@ -39,6 +40,30 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
 
   return (
     <div className="space-y-4">
+      {thread ? (
+        <div className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.06] p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+                Thread tools
+              </p>
+              <h3 className="mt-1 text-lg font-semibold text-white">
+                Wrong team showing?
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-white/60">
+                Move this conversation to the correct team, or unlink it from the old team without deleting messages.
+              </p>
+            </div>
+            <Link
+              href={`/admin/messaging/reassign/${thread.id}?filter=${selectedFilter}`}
+              className="inline-flex items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
+            >
+              Reassign / unlink thread
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       {showEmailReply ? (
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
           <h3 className="text-lg font-semibold text-white">Reply by email</h3>
