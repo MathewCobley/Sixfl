@@ -332,6 +332,59 @@ export async function cancelQueuedSmsMessageAction(formData: FormData) {
   redirect(buildMessagesHref({ filter, threadId, extras: { cancelled: 1 } }));
 }
 
+export async function reassignMessageThreadTeamAction(formData: FormData) {
+  await requireAdmin();
+
+  const threadId = getTrimmedValue(formData.get("threadId"));
+  const filter = getTrimmedValue(formData.get("filter")) || "open";
+  const teamId = getTrimmedValue(formData.get("teamId"));
+
+  if (!threadId) {
+    redirect(buildMessagesHref({ filter, extras: { error: "missing_thread" } }));
+  }
+
+  const currentThread = await getMessageThreadById(threadId);
+
+  if (!currentThread) {
+    redirect(buildMessagesHref({ filter, extras: { error: "missing_thread" } }));
+  }
+
+  const oldTeamId = currentThread.teamId;
+  const nextTeam = teamId
+    ? await prisma.team.findUnique({
+        where: { id: teamId },
+        select: {
+          id: true,
+          leagueId: true,
+        },
+      })
+    : null;
+
+  if (teamId && !nextTeam) {
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "team_not_found" } }));
+  }
+
+  await prisma.messageThread.update({
+    where: { id: threadId },
+    data: {
+      teamId: nextTeam?.id ?? null,
+      leagueId: nextTeam?.leagueId ?? null,
+    },
+  });
+
+  if (oldTeamId) {
+    revalidatePath(`/admin/teams/${oldTeamId}`);
+  }
+
+  if (nextTeam?.id) {
+    revalidatePath(`/admin/teams/${nextTeam.id}`);
+  }
+
+  await revalidateMessageViews(threadId);
+
+  redirect(buildMessagesHref({ filter, threadId, extras: { reassigned: 1 } }));
+}
+
 export async function archiveMessageThreadAction(formData: FormData) {
   await requireAdmin();
 
