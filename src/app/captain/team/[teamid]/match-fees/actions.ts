@@ -125,6 +125,21 @@ function appendVoidNote(input: {
   return `${existingNote}\n${voidNote}`;
 }
 
+function appendMatchFeeOverrideNote(input: {
+  existingNote: string | null;
+  amountPence: number;
+}) {
+  const existingNote = input.existingNote?.trim();
+  const overrideNote = input.amountPence === 0
+    ? "Player match fee override: £0.00"
+    : `Player match fee override: £${(input.amountPence / 100).toFixed(2)}`;
+
+  if (!existingNote) return overrideNote;
+  if (existingNote.includes(overrideNote)) return existingNote;
+
+  return `${existingNote}\n${overrideNote}`;
+}
+
 function redirectIfNotAdmin(input: {
   isAdmin: boolean;
   teamId: string;
@@ -313,7 +328,7 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   const fixtureId = getString(formData, "fixtureId");
 
   const access = teamId ? await requireCaptain(teamId) : null;
-  const amountPence = access?.isAdmin
+  const defaultAmountPence = access?.isAdmin
     ? parseAmountPence(getString(formData, "amount"))
     : DEFAULT_PLAYER_MATCH_FEE_PENCE;
   const note = access?.isAdmin ? getString(formData, "note") || null : "Submitted by captain";
@@ -323,7 +338,7 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fixture"));
   }
 
-  if (!amountPence) {
+  if (!defaultAmountPence) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=invalid_amount"));
   }
 
@@ -358,6 +373,7 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   const selectedProspectIds = players
     .filter((player) => player.type === "prospect")
     .map((player) => player.id);
+  const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(selectedMemberIds);
 
   const existingActiveMemberFeeRows = selectedMemberIds.length
     ? await prisma.playerMatchFee.findMany({
@@ -397,6 +413,14 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
 
       if (!member) continue;
 
+      const playerOverride = profileByMemberId.get(player.id)?.playerMatchFeePenceOverride;
+      const amountPence = typeof playerOverride === "number" ? playerOverride : defaultAmountPence;
+      const hasOverride = typeof playerOverride === "number";
+      const status: PlayerMatchFeeStatus = amountPence === 0 ? "WAIVED" : "OPEN";
+      const feeNote = hasOverride
+        ? appendMatchFeeOverrideNote({ existingNote: note, amountPence })
+        : note;
+
       const existing = await prisma.playerMatchFee.findFirst({
         where: {
           fixtureId,
@@ -411,10 +435,12 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
           data: {
             amountPence,
             teamId,
-            note,
-            status: "OPEN",
+            note: feeNote,
+            status,
+            paymentUrl: amountPence === 0 ? null : undefined,
+            paymentToken: amountPence === 0 ? null : undefined,
+            waivedAt: amountPence === 0 ? new Date() : null,
             cancelledAt: null,
-            waivedAt: null,
           },
         });
       } else {
@@ -424,7 +450,9 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
             teamId,
             teamMemberId: player.id,
             amountPence,
-            note,
+            status,
+            waivedAt: amountPence === 0 ? new Date() : null,
+            note: feeNote,
           },
         });
       }
@@ -441,6 +469,7 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
 
       if (!prospect) continue;
 
+      const amountPence = defaultAmountPence;
       const existing = await prisma.playerMatchFee.findFirst({
         where: {
           fixtureId,
@@ -579,186 +608,4 @@ export async function markCaptainPlayerMatchFeePaidAction(formData: FormData) {
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
 }
 
-export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData) {
-  const teamId = getString(formData, "teamId");
-  const fixtureId = getString(formData, "fixtureId");
-  const feeId = getString(formData, "feeId");
-  const status = getString(formData, "status") as PlayerMatchFeeStatus;
-
-  const access = teamId ? await requireCaptain(teamId) : null;
-  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
-
-  if (!teamId || !fixtureId || !feeId) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
-  }
-
-  if (!["OPEN", "PAID", "WAIVED", "CANCELLED"].includes(status)) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=invalid_status"));
-  }
-
-  const now = new Date();
-
-  await prisma.playerMatchFee.updateMany({
-    where: {
-      id: feeId,
-      teamId,
-      fixtureId,
-    },
-    data: {
-      status,
-      paidAt: status === "PAID" ? now : null,
-      waivedAt: status === "WAIVED" ? now : null,
-      cancelledAt: status === "CANCELLED" ? now : null,
-    },
-  });
-
-  if (status === "CANCELLED") {
-    await cancelQueuedPlayerMatchFeeNotificationDispatches([feeId]);
-  }
-
-  revalidatePath(getMatchFeesPath(teamId, fixtureId));
-  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
-}
-
-export async function sendCaptainPlayerMatchFeeReminderAction(formData: FormData) {
-  const teamId = getString(formData, "teamId");
-  const fixtureId = getString(formData, "fixtureId");
-  const feeId = getString(formData, "feeId");
-
-  const access = teamId ? await requireCaptain(teamId) : null;
-  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
-
-  if (!teamId || !fixtureId || !feeId) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
-  }
-
-  const fee = await prisma.playerMatchFee.findFirst({
-    where: {
-      id: feeId,
-      teamId,
-      fixtureId,
-    },
-    select: {
-      id: true,
-      status: true,
-    },
-  });
-
-  if (!fee) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
-  }
-
-  if (fee.status !== "OPEN") {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=fee_not_open"));
-  }
-
-  const reminderModes = ["request", "chase24h", "chase72h"] as const;
-
-  for (const mode of reminderModes) {
-    const result = await queuePlayerMatchFeeReminder({
-      feeId: fee.id,
-      mode,
-      channels: ["SMS"],
-    });
-
-    if (result.queued > 0) {
-      revalidatePath(getMatchFeesPath(teamId, fixtureId));
-      redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_sms_queued"));
-    }
-
-    if (["no_contact", "not_open", "no_payment_url"].includes(result.status)) {
-      redirect(getMatchFeesPath(teamId, fixtureId, `&error=${result.status}`));
-    }
-  }
-
-  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_sms_already_sent"));
-}
-
-export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData) {
-  const teamId = getString(formData, "teamId");
-  const fixtureId = getString(formData, "fixtureId");
-  const reason = getString(formData, "reason") || "Game conceded / fixture not played";
-
-  const access = teamId ? await requireCaptain(teamId) : null;
-  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
-
-  if (!teamId || !fixtureId) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fixture"));
-  }
-
-  const fixtureOk = await assertFixtureBelongsToTeam({ fixtureId, teamId });
-
-  if (!fixtureOk) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=fixture_not_found"));
-  }
-
-  const fees = await prisma.playerMatchFee.findMany({
-    where: {
-      teamId,
-      fixtureId,
-      status: {
-        in: ["OPEN", "WAIVED", "CANCELLED"],
-      },
-    },
-    select: {
-      id: true,
-      note: true,
-    },
-  });
-
-  for (const fee of fees) {
-    await prisma.playerMatchFee.update({
-      where: { id: fee.id },
-      data: {
-        status: "CANCELLED",
-        paidAt: null,
-        waivedAt: null,
-        cancelledAt: new Date(),
-        note: appendVoidNote({
-          existingNote: fee.note,
-          reason,
-        }),
-      },
-    });
-  }
-
-  await cancelQueuedPlayerMatchFeeNotificationDispatches(
-    fees.map((fee) => fee.id),
-    `Player match fees voided: ${reason}`,
-  );
-
-  revalidatePath(getMatchFeesPath(teamId, fixtureId));
-  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
-}
-
-export async function updateCaptainPlayerMatchFeeAmountAction(formData: FormData) {
-  const teamId = getString(formData, "teamId");
-  const fixtureId = getString(formData, "fixtureId");
-  const feeId = getString(formData, "feeId");
-  const amountPence = parseAmountPence(getString(formData, "amount"));
-
-  const access = teamId ? await requireCaptain(teamId) : null;
-  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
-
-  if (!teamId || !fixtureId || !feeId) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
-  }
-
-  if (!amountPence) {
-    redirect(getMatchFeesPath(teamId, fixtureId, "&error=invalid_amount"));
-  }
-
-  await prisma.playerMatchFee.updateMany({
-    where: {
-      id: feeId,
-      teamId,
-      fixtureId,
-    },
-    data: {
-      amountPence,
-    },
-  });
-
-  revalidatePath(getMatchFeesPath(teamId, fixtureId));
-  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
-}
+export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData) { ... (truncated due to token budget)
