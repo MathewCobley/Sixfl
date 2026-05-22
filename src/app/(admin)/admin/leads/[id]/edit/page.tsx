@@ -5,8 +5,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { LeadStatus } from "@prisma/client";
+import { InterestType, LeadStatus } from "@prisma/client";
 
+import FormListboxField from "@/components/ui/FormListboxField";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
@@ -25,6 +26,12 @@ const STATUS_OPTIONS: Array<{ value: LeadStatus; label: string }> = [
   { value: "CLOSED", label: "Closed" },
 ];
 
+const INTEREST_TYPE_OPTIONS: Array<{ value: InterestType; label: string }> = [
+  { value: "TEAM", label: "Team" },
+  { value: "PLAYER", label: "Player" },
+  { value: "REFEREE", label: "Referee" },
+];
+
 function cleanNullable(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
   return text || null;
@@ -34,6 +41,12 @@ function getLeadStatus(value: FormDataEntryValue | null) {
   const parsed = String(value ?? "").trim().toUpperCase();
   const allowed = STATUS_OPTIONS.map((option) => option.value);
   return allowed.includes(parsed as LeadStatus) ? (parsed as LeadStatus) : "NEW";
+}
+
+function getInterestType(value: FormDataEntryValue | null) {
+  const parsed = String(value ?? "").trim().toUpperCase();
+  const allowed = INTEREST_TYPE_OPTIONS.map((option) => option.value);
+  return allowed.includes(parsed as InterestType) ? (parsed as InterestType) : "TEAM";
 }
 
 function Field({
@@ -70,6 +83,7 @@ async function updateLeadDetailsAction(formData: FormData) {
   const email = cleanNullable(formData.get("email"))?.toLowerCase() ?? null;
   const phone = cleanNullable(formData.get("phone"));
   const status = getLeadStatus(formData.get("status"));
+  const interestType = getInterestType(formData.get("interestType"));
 
   if (!leadId) {
     redirect("/admin/leads?error=missing_lead");
@@ -85,6 +99,7 @@ async function updateLeadDetailsAction(formData: FormData) {
     where: { id: leadId },
     data: {
       contactName,
+      interestType,
       status,
       email,
       phone,
@@ -103,6 +118,7 @@ async function updateLeadDetailsAction(formData: FormData) {
       sourceId: leadId,
     },
     data: {
+      audience: interestType === "PLAYER" ? "PLAYER" : "LEAD",
       displayName: contactName,
       email,
       emailNormalized: email,
@@ -159,7 +175,7 @@ export default async function EditLeadPage({
         <div>
           <p className="text-sm text-white/55">Admin • Edit lead</p>
           <h1 className="mt-2 text-3xl font-black text-white">{lead.contactName}</h1>
-          <p className="mt-2 text-sm text-white/60">Update the contact details before emailing, texting or converting the lead.</p>
+          <p className="mt-2 text-sm text-white/60">Update the lead type and contact details before emailing, texting or converting the lead.</p>
         </div>
 
         <Link
@@ -179,22 +195,28 @@ export default async function EditLeadPage({
 
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Contact name" name="contactName" defaultValue={lead.contactName} />
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-white/60">Status</span>
-            <select
-              name="status"
-              defaultValue={lead.status}
-              className="h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-emerald-500/60"
-            >
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+          <FormListboxField
+            name="interestType"
+            label="Lead type"
+            value={lead.interestType}
+            options={INTEREST_TYPE_OPTIONS}
+            placeholder="Select lead type"
+          />
+          <FormListboxField
+            name="status"
+            label="Status"
+            value={lead.status}
+            options={STATUS_OPTIONS}
+            placeholder="Select status"
+          />
           <Field label="Email" name="email" type="email" defaultValue={lead.email} />
           <Field label="Mobile number" name="phone" defaultValue={lead.phone} />
           <Field label="Area" name="area" defaultValue={lead.area} />
           <Field label="Team name" name="teamName" defaultValue={lead.teamName} />
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100/80">
+          Changing <span className="font-semibold text-white">Lead type</span> controls which conversion action appears on the lead page. Use <span className="font-semibold text-white">Player</span> when someone wants to join a SIXFL squad as an individual.
         </div>
 
         <label className="mt-4 block space-y-2">
