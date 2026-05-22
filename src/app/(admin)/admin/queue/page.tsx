@@ -6,6 +6,7 @@ import { NotificationDispatchStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { runQueueFromAdmin } from "./runner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -54,9 +55,17 @@ export default async function AdminQueuePage({
   const sp = (await searchParams) ?? {};
   const now = new Date();
 
-  const [queued, processing, failed, recent] = await Promise.all([
+  const [queued, dueNow, processing, failed, recent] = await Promise.all([
     prisma.notificationDispatch.count({
       where: { status: "QUEUED" },
+    }),
+    prisma.notificationDispatch.count({
+      where: {
+        status: "QUEUED",
+        scheduledFor: {
+          lte: now,
+        },
+      },
     }),
     prisma.notificationDispatch.count({
       where: { status: "PROCESSING" },
@@ -97,28 +106,44 @@ export default async function AdminQueuePage({
   return (
     <div className="space-y-8">
       <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-          Operations
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-          Notification queue
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">
-          Check whether queued email and SMS dispatches are waiting, sent, failed, or scheduled for later.
-        </p>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+              Operations
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+              Notification queue
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">
+              Check whether queued email and SMS dispatches are waiting, sent, failed, or scheduled for later.
+            </p>
+          </div>
+          <form action={runQueueFromAdmin}>
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
+            >
+              Run notification queue now
+            </button>
+          </form>
+        </div>
       </section>
 
       {sp.ran === "1" ? (
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           Manual run result: processed {sp.processed ?? "0"}, sent {sp.sent ?? "0"}, failed {sp.failed ?? "0"}, skipped {sp.skipped ?? "0"}.
-          {sp.message ? <span className="block mt-2 text-amber-100">{sp.message}</span> : null}
+          {sp.message ? <span className="mt-2 block text-amber-100">{sp.message}</span> : null}
         </section>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-5">
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Queued</p>
           <p className="mt-3 text-3xl font-semibold text-white">{queued}</p>
+        </div>
+        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Due now</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{dueNow}</p>
         </div>
         <div className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">Processing</p>
