@@ -81,9 +81,9 @@ export default function CaptainDashboardLeagueTable({
       </div>
 
       {rows.length > 0 ? (
-        <div className="lg:overflow-x-auto">
-          <div className="lg:min-w-[1240px]">
-            <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
+        <div className="w-full overflow-hidden">
+          <div className="w-full">
+            <div className="hidden grid-cols-[48px_minmax(210px,1.9fr)_150px_52px_52px_52px_52px_64px_64px_64px_64px] gap-3 border-b border-white/10 bg-white/[0.02] px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid xl:grid-cols-[56px_minmax(250px,2fr)_160px_60px_60px_60px_60px_76px_76px_76px_80px] xl:gap-4 xl:px-8">
               <div>Pos</div>
               <div>Team</div>
               <div>Form</div>
@@ -122,7 +122,7 @@ export default function CaptainDashboardLeagueTable({
                 return (
                   <div
                     key={row.teamId}
-                    className="bg-black/20 px-4 py-4 sm:px-6 lg:px-8 lg:py-3"
+                    className="bg-black/20 px-4 py-4 sm:px-6 lg:px-6 lg:py-3 xl:px-8"
                   >
                     <div className="lg:hidden">
                       <div className="flex items-start gap-4">
@@ -216,7 +216,7 @@ export default function CaptainDashboardLeagueTable({
                       </div>
                     </div>
 
-                    <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] items-center gap-4 lg:grid">
+                    <div className="hidden grid-cols-[48px_minmax(210px,1.9fr)_150px_52px_52px_52px_52px_64px_64px_64px_64px] items-center gap-3 lg:grid xl:grid-cols-[56px_minmax(250px,2fr)_160px_60px_60px_60px_60px_76px_76px_76px_80px] xl:gap-4">
                       <div>
                         <div
                           className={`flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-black ${
@@ -229,7 +229,7 @@ export default function CaptainDashboardLeagueTable({
                         </div>
                       </div>
 
-                      <div className="flex min-w-0 items-center gap-4">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
                           {logoUrl ? (
                             <Image
@@ -250,7 +250,7 @@ export default function CaptainDashboardLeagueTable({
                         <div className="min-w-0 flex-1">
                           <Link
                             href={`/teams/${row.teamId}`}
-                            className="block min-w-0 font-semibold leading-5 text-white transition hover:text-emerald-400"
+                            className="block min-w-0 truncate font-semibold leading-5 text-white transition hover:text-emerald-400"
                           >
                             {row.teamName}
                           </Link>
