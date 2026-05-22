@@ -66,7 +66,14 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
     },
     select: {
       id: true,
-      team: {
+      homeTeamId: true,
+      awayTeamId: true,
+      homeTeam: {
+        select: {
+          matchdayTargetSize: true,
+        },
+      },
+      awayTeam: {
         select: {
           matchdayTargetSize: true,
         },
@@ -89,7 +96,10 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
     redirect(getAvailabilityPath(teamId, fixtureId, "fixture-not-found"));
   }
 
-  const targetSize = fixture.team?.matchdayTargetSize ?? 0;
+  const targetSize =
+    fixture.homeTeamId === teamId
+      ? fixture.homeTeam.matchdayTargetSize ?? 0
+      : fixture.awayTeam.matchdayTargetSize ?? 0;
   const selectedMemberIds = new Set(
     fixture.playerMatchFees
       .map((fee) => fee.teamMemberId)
