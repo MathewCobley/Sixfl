@@ -28,17 +28,20 @@ function getSizeClasses(size: TeamBadgeProps["size"] = "md") {
       return {
         outer: "h-10 w-10",
         inner: "text-[10px]",
+        logoPadding: "p-1",
       };
     case "lg":
       return {
         outer: "h-40 w-40", // bigger, but clean (no scaling tricks)
         inner: "text-2xl",
+        logoPadding: "p-2.5",
       };
     case "md":
     default:
       return {
         outer: "h-12 w-12",
         inner: "text-xs",
+        logoPadding: "p-1.5",
       };
   }
 }
@@ -77,7 +80,7 @@ function getTeamStyle(name: string) {
 
   const hash = Array.from(name).reduce(
     (acc, char) => acc + char.charCodeAt(0),
-    0
+    0,
   );
 
   return styles[hash % styles.length];
@@ -95,7 +98,7 @@ export default function TeamBadge({
   if (logoUrl) {
     return (
       <div
-        className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black shadow-sm ${sizeClasses.outer}`}
+        className={`flex shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-black/70 shadow-sm ring-1 ring-white/5 ${sizeClasses.outer} ${sizeClasses.logoPadding}`}
         title={`${name} badge`}
         aria-label={`${name} badge`}
       >
