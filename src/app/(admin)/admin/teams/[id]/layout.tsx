@@ -25,7 +25,7 @@ export default async function AdminTeamDetailLayout({
               Admin preview tools
             </p>
             <p className="mt-1 text-sm text-white/60">
-              Open the live role views for this team without needing to sign in as the captain or player.
+              Open the live role views and managed squad tools for this team.
             </p>
           </div>
 
@@ -35,6 +35,12 @@ export default async function AdminTeamDetailLayout({
               className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/5 hover:text-white"
             >
               Team overview
+            </Link>
+            <Link
+              href={`/admin/teams/${id}/managed-squad`}
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+            >
+              Managed squad
             </Link>
             <Link
               href={`/captain/team/${id}`}
