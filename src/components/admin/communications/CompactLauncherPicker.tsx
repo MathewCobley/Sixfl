@@ -37,14 +37,15 @@ export default function CompactLauncherPicker({
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!value) return options.slice(0, 10);
 
-    return options
-      .filter((option) => {
-        const haystack = `${option.title} ${option.subtitle ?? ""}`.toLowerCase();
-        return haystack.includes(value);
-      })
-      .slice(0, 12);
+    if (!value) {
+      return options;
+    }
+
+    return options.filter((option) => {
+      const haystack = `${option.title} ${option.subtitle ?? ""}`.toLowerCase();
+      return haystack.includes(value);
+    });
   }, [options, query]);
 
   return (
