@@ -27,6 +27,12 @@ type RawTeamSubscriptionRow = {
 
 export type TeamSubscriptionSnapshot = RawTeamSubscriptionRow;
 
+export type TeamSubscriptionListItem = RawTeamSubscriptionRow & {
+  name: string;
+  leagueName: string | null;
+  leagueSeason: string | null;
+};
+
 type StripeInvoiceLike = Stripe.Invoice & {
   subscription?: string | Stripe.Subscription | null;
   customer?: string | Stripe.Customer | null;
@@ -115,6 +121,41 @@ export async function getTeamSubscriptionSnapshot(
   `;
 
   return rows[0] ?? null;
+}
+
+export async function listTeamSubscriptionSnapshots(
+  db: TeamSubscriptionDb = prisma,
+) {
+  return db.$queryRaw<TeamSubscriptionListItem[]>`
+    SELECT
+      t."id",
+      t."name",
+      l."name" AS "leagueName",
+      l."season" AS "leagueSeason",
+      t."stripeCustomerId",
+      t."stripeSubscriptionId",
+      t."subscriptionStatus",
+      t."subscriptionPriceId",
+      t."subscriptionCurrentPeriodEnd",
+      t."subscriptionStartedAt",
+      t."subscriptionCancelledAt",
+      t."subscriptionLastInvoiceId",
+      t."subscriptionLastPaymentAt",
+      t."subscriptionLastPaymentFailedAt"
+    FROM "Team" t
+    LEFT JOIN "League" l ON l."id" = t."leagueId"
+    WHERE t."stripeCustomerId" IS NOT NULL
+      OR t."stripeSubscriptionId" IS NOT NULL
+      OR t."subscriptionStatus" IS NOT NULL
+    ORDER BY
+      CASE
+        WHEN t."subscriptionStatus" IN ('active', 'trialing') THEN 0
+        WHEN t."subscriptionStatus" IN ('past_due', 'unpaid', 'incomplete') THEN 1
+        WHEN t."subscriptionStatus" IS NULL THEN 3
+        ELSE 2
+      END,
+      t."name" ASC
+  `;
 }
 
 export async function setTeamStripeCustomerId(input: {
