@@ -13,6 +13,9 @@ ALTER TABLE "Team"
   ADD COLUMN IF NOT EXISTS "subscriptionLastPaymentAt" TIMESTAMP(3),
   ADD COLUMN IF NOT EXISTS "subscriptionLastPaymentFailedAt" TIMESTAMP(3);
 
+ALTER TABLE "PaymentTransaction"
+  ADD COLUMN IF NOT EXISTS "stripeInvoiceId" TEXT;
+
 CREATE UNIQUE INDEX IF NOT EXISTS "Team_stripeCustomerId_key"
   ON "Team"("stripeCustomerId")
   WHERE "stripeCustomerId" IS NOT NULL;
@@ -23,3 +26,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Team_stripeSubscriptionId_key"
 
 CREATE INDEX IF NOT EXISTS "Team_subscriptionStatus_idx"
   ON "Team"("subscriptionStatus");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "PaymentTransaction_stripeInvoiceId_key"
+  ON "PaymentTransaction"("stripeInvoiceId")
+  WHERE "stripeInvoiceId" IS NOT NULL;
