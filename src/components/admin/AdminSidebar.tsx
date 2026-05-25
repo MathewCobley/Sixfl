@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDaysIcon,
+  CreditCardIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
   MapPinIcon,
@@ -71,6 +72,11 @@ const navigation = [
     name: "Payments",
     href: "/admin/payments",
     icon: DocumentTextIcon,
+  },
+  {
+    name: "Subscriptions",
+    href: "/admin/payments/subscriptions",
+    icon: CreditCardIcon,
   },
   {
     name: "Referees",
@@ -187,6 +193,7 @@ export default function AdminSidebar({
                     {item.name === "Social" && "Drafts and publishing"}
                     {item.name === "Result Disputes" && "Captain-raised issues"}
                     {item.name === "Payments" && "Charges and payments"}
+                    {item.name === "Subscriptions" && "Recurring Stripe billing"}
                     {item.name === "Referees" && "Officials and assignments"}
                     {item.name === "Leads" && "Inbound enquiries"}
                     {item.name === "Communications" &&
