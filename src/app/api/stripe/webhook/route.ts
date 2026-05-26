@@ -2,6 +2,7 @@
 // File: src/app/api/stripe/webhook/route.ts
 // ========================================
 
+import type { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 
@@ -95,7 +96,7 @@ async function findExistingPlayerFeeTransaction(input: {
   playerMatchFeeId: string;
   paymentIntentId: string | null;
 }) {
-  const orFilters = [
+  const orFilters: Prisma.PaymentTransactionWhereInput[] = [
     {
       notes: {
         contains: `Player fee ID: ${input.playerMatchFeeId}`,
@@ -106,7 +107,7 @@ async function findExistingPlayerFeeTransaction(input: {
   if (input.paymentIntentId) {
     orFilters.push({
       stripePaymentIntentId: input.paymentIntentId,
-    } as (typeof orFilters)[number]);
+    });
   }
 
   return prisma.paymentTransaction.findFirst({
