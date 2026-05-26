@@ -41,12 +41,8 @@ function getStripeId(value: unknown): string | null {
 
 async function hasExistingTransaction(sessionId: string) {
   const existingTransaction = await prisma.paymentTransaction.findUnique({
-    where: {
-      stripeCheckoutSessionId: sessionId,
-    },
-    select: {
-      id: true,
-    },
+    where: { stripeCheckoutSessionId: sessionId },
+    select: { id: true },
   });
 
   return Boolean(existingTransaction);
@@ -85,10 +81,7 @@ async function closePlayerMatchFeeFromStripeSession(input: {
   paidAt: Date;
 }) {
   await prisma.playerMatchFee.updateMany({
-    where: {
-      id: input.playerMatchFeeId,
-      status: "OPEN",
-    },
+    where: { id: input.playerMatchFeeId, status: "OPEN" },
     data: {
       status: "PAID",
       paidAt: input.paidAt,
@@ -98,18 +91,39 @@ async function closePlayerMatchFeeFromStripeSession(input: {
   });
 }
 
+async function findExistingPlayerFeeTransaction(input: {
+  playerMatchFeeId: string;
+  paymentIntentId: string | null;
+}) {
+  const orFilters = [
+    {
+      notes: {
+        contains: `Player fee ID: ${input.playerMatchFeeId}`,
+      },
+    },
+  ];
+
+  if (input.paymentIntentId) {
+    orFilters.push({
+      stripePaymentIntentId: input.paymentIntentId,
+    } as (typeof orFilters)[number]);
+  }
+
+  return prisma.paymentTransaction.findFirst({
+    where: { OR: orFilters },
+    select: { id: true, paidAt: true },
+    orderBy: { paidAt: "desc" },
+  });
+}
+
 async function handleCompletedPlayerMatchFeeCheckoutSession(
   session: Stripe.Checkout.Session,
 ) {
   const playerMatchFeeId = session.metadata?.playerMatchFeeId?.trim();
 
-  if (!playerMatchFeeId) {
-    return false;
-  }
+  if (!playerMatchFeeId) return false;
 
-  const paidAt = new Date(
-    (session.created ?? Math.floor(Date.now() / 1000)) * 1000,
-  );
+  const paidAt = new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000);
 
   if (await hasExistingTransaction(session.id)) {
     await closePlayerMatchFeeFromStripeSession({ playerMatchFeeId, paidAt });
@@ -117,28 +131,28 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
   }
 
   const fee = await prisma.playerMatchFee.findUnique({
-    where: {
-      id: playerMatchFeeId,
-    },
-    select: {
-      id: true,
-      teamId: true,
-      amountPence: true,
-      status: true,
-    },
+    where: { id: playerMatchFeeId },
+    select: { id: true, teamId: true, amountPence: true, status: true },
   });
 
-  if (!fee || fee.status !== "OPEN") {
-    return true;
-  }
+  if (!fee || fee.status !== "OPEN") return true;
 
   const amountPence = session.amount_total ?? 0;
-
-  if (amountPence <= 0) {
-    return true;
-  }
+  if (amountPence <= 0) return true;
 
   const paymentIntentId = getPaymentIntentId(session);
+  const existingPlayerFeeTransaction = await findExistingPlayerFeeTransaction({
+    playerMatchFeeId: fee.id,
+    paymentIntentId,
+  });
+
+  if (existingPlayerFeeTransaction) {
+    await closePlayerMatchFeeFromStripeSession({
+      playerMatchFeeId: fee.id,
+      paidAt: existingPlayerFeeTransaction.paidAt,
+    });
+    return true;
+  }
 
   await ensurePaymentTransactionPlayerFeeColumn();
 
@@ -155,9 +169,7 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
         stripeCheckoutSessionId: session.id,
         stripePaymentIntentId: paymentIntentId,
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
 
     await tx.$executeRaw`
@@ -167,9 +179,7 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
     `;
 
     await tx.playerMatchFee.update({
-      where: {
-        id: fee.id,
-      },
+      where: { id: fee.id },
       data: {
         status: "PAID",
         paidAt,
@@ -189,16 +199,12 @@ async function handleCompletedTeamSubscriptionCheckoutSession(
   const isTeamSubscriptionSession =
     session.mode === "subscription" || session.metadata?.type === "team_subscription";
 
-  if (!isTeamSubscriptionSession) {
-    return false;
-  }
+  if (!isTeamSubscriptionSession) return false;
 
   const subscriptionId = getStripeId(session.subscription);
   const teamId = session.metadata?.teamId?.trim() || session.client_reference_id || null;
 
-  if (!subscriptionId) {
-    return true;
-  }
+  if (!subscriptionId) return true;
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   await syncTeamSubscriptionFromStripe({ subscription, teamId });
@@ -210,52 +216,29 @@ async function handleCompletedCheckoutSession(
   session: Stripe.Checkout.Session,
   stripe: Stripe,
 ) {
-  const handledTeamSubscription =
-    await handleCompletedTeamSubscriptionCheckoutSession(session, stripe);
+  const handledTeamSubscription = await handleCompletedTeamSubscriptionCheckoutSession(session, stripe);
 
-  if (handledTeamSubscription) {
-    return;
-  }
+  if (handledTeamSubscription) return;
 
-  const handledPlayerMatchFee =
-    await handleCompletedPlayerMatchFeeCheckoutSession(session);
+  const handledPlayerMatchFee = await handleCompletedPlayerMatchFeeCheckoutSession(session);
 
-  if (handledPlayerMatchFee) {
-    return;
-  }
+  if (handledPlayerMatchFee) return;
 
   const chargeId = session.metadata?.chargeId?.trim();
 
-  if (!chargeId) {
-    return;
-  }
-
-  if (await hasExistingTransaction(session.id)) {
-    return;
-  }
+  if (!chargeId) return;
+  if (await hasExistingTransaction(session.id)) return;
 
   const charge = await prisma.paymentCharge.findUnique({
-    where: {
-      id: chargeId,
-    },
-    include: {
-      transactions: {
-        select: {
-          amountPence: true,
-        },
-      },
-    },
+    where: { id: chargeId },
+    include: { transactions: { select: { amountPence: true } } },
   });
 
-  if (!charge) {
-    return;
-  }
+  if (!charge) return;
 
   const amountPence = session.amount_total ?? 0;
 
-  if (amountPence <= 0) {
-    return;
-  }
+  if (amountPence <= 0) return;
 
   const paymentIntentId = getPaymentIntentId(session);
 
@@ -274,18 +257,11 @@ async function handleCompletedCheckoutSession(
   });
 
   const paidTotalPence = getChargePaidTotal(charge.transactions) + amountPence;
-  const nextStatus = getChargeStatusFromAmounts(
-    charge.amountPence,
-    paidTotalPence,
-  );
+  const nextStatus = getChargeStatusFromAmounts(charge.amountPence, paidTotalPence);
 
   await prisma.paymentCharge.update({
-    where: {
-      id: charge.id,
-    },
-    data: {
-      status: nextStatus,
-    },
+    where: { id: charge.id },
+    data: { status: nextStatus },
   });
 
   if (nextStatus === "PAID") {
@@ -298,33 +274,19 @@ export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature")?.trim();
 
   if (!signature) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Missing Stripe signature header.",
-      },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: "Missing Stripe signature header." }, { status: 400 });
   }
 
   const payload = await request.text();
-
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      payload,
-      signature,
-      getStripeWebhookSecret(),
-    );
+    event = stripe.webhooks.constructEvent(payload, signature, getStripeWebhookSecret());
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Stripe webhook verification failed.",
+        error: error instanceof Error ? error.message : "Stripe webhook verification failed.",
       },
       { status: 400 },
     );
@@ -334,38 +296,25 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed":
       case "checkout.session.async_payment_succeeded": {
-        await handleCompletedCheckoutSession(
-          event.data.object as Stripe.Checkout.Session,
-          stripe,
-        );
+        await handleCompletedCheckoutSession(event.data.object as Stripe.Checkout.Session, stripe);
         break;
       }
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        await syncTeamSubscriptionFromStripe({
-          subscription: event.data.object as Stripe.Subscription,
-        });
+        await syncTeamSubscriptionFromStripe({ subscription: event.data.object as Stripe.Subscription });
         break;
       }
       case "customer.subscription.deleted": {
-        await markTeamSubscriptionDeleted({
-          subscription: event.data.object as Stripe.Subscription,
-        });
+        await markTeamSubscriptionDeleted({ subscription: event.data.object as Stripe.Subscription });
         break;
       }
       case "invoice.paid":
       case "invoice.payment_succeeded": {
-        await recordTeamSubscriptionInvoicePaid({
-          invoice: event.data.object as Stripe.Invoice,
-          stripe,
-        });
+        await recordTeamSubscriptionInvoicePaid({ invoice: event.data.object as Stripe.Invoice, stripe });
         break;
       }
       case "invoice.payment_failed": {
-        await markTeamSubscriptionInvoiceFailed({
-          invoice: event.data.object as Stripe.Invoice,
-          stripe,
-        });
+        await markTeamSubscriptionInvoiceFailed({ invoice: event.data.object as Stripe.Invoice, stripe });
         break;
       }
       default:
@@ -377,10 +326,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Stripe webhook processing failed.",
+        error: error instanceof Error ? error.message : "Stripe webhook processing failed.",
       },
       { status: 500 },
     );
