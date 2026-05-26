@@ -52,6 +52,25 @@ function getMetadataString(
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function getFixtureReminderFixtureId(input: {
+  metadata: Record<string, unknown> | null;
+  sourceId: string | null;
+}) {
+  const metadataFixtureId = getMetadataString(input.metadata, "fixtureId");
+
+  if (metadataFixtureId) {
+    return metadataFixtureId;
+  }
+
+  const sourceId = input.sourceId?.trim();
+
+  if (!sourceId) {
+    return null;
+  }
+
+  return sourceId.split(":")[0]?.trim() || null;
+}
+
 function buildLastMessagePreview(body: string): string {
   const trimmed = body.trim().replace(/\s+/g, " ");
   if (!trimmed) return "";
@@ -65,6 +84,10 @@ function isQueuedMatchFeeNotification(
     sourceType === "FIXTURE_MATCH_FEE" ||
     sourceType === "FIXTURE_MATCH_FEE_REMINDER"
   );
+}
+
+function isFixtureReminderNotification(sourceType: string | null | undefined) {
+  return sourceType === "FIXTURE_REMINDER";
 }
 
 function isFixtureConfirmationSmsNotification(
@@ -114,6 +137,52 @@ async function getQueuedMatchFeeCancellationReason(input: {
 
   if (outstandingPence <= 0) {
     return "Match fee charge was paid before queued payment email was sent.";
+  }
+
+  return null;
+}
+
+async function getQueuedFixtureReminderCancellationReason(input: {
+  sourceType: string | null;
+  sourceId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}) {
+  if (!isFixtureReminderNotification(input.sourceType)) {
+    return null;
+  }
+
+  const fixtureId = getFixtureReminderFixtureId({
+    metadata: input.metadata,
+    sourceId: input.sourceId,
+  });
+
+  if (!fixtureId) {
+    return "Fixture reminder is missing its fixture reference.";
+  }
+
+  const fixture = await prisma.fixture.findUnique({
+    where: {
+      id: fixtureId,
+    },
+    select: {
+      id: true,
+      updatedAt: true,
+      status: true,
+      kickoffAt: true,
+    },
+  });
+
+  if (!fixture) {
+    return "Fixture was deleted before queued reminder email was sent.";
+  }
+
+  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
+    return "Fixture is no longer scheduled before queued reminder email was sent.";
+  }
+
+  if (fixture.updatedAt.getTime() > input.createdAt.getTime()) {
+    return "Fixture was changed before queued reminder email was sent.";
   }
 
   return null;
@@ -289,6 +358,13 @@ export async function processNotificationQueue(limit = 25) {
           sourceType: dispatch.sourceType,
           sourceId: dispatch.sourceId,
         });
+      const queuedFixtureReminderCancellationReason =
+        await getQueuedFixtureReminderCancellationReason({
+          sourceType: dispatch.sourceType,
+          sourceId: dispatch.sourceId,
+          metadata,
+          createdAt: dispatch.createdAt,
+        });
       const queuedFixtureConfirmationSmsCancellationReason =
         await getQueuedFixtureConfirmationSmsCancellationReason({
           sourceType: dispatch.sourceType,
@@ -297,6 +373,7 @@ export async function processNotificationQueue(limit = 25) {
         });
       const cancellationReason =
         queuedMatchFeeCancellationReason ??
+        queuedFixtureReminderCancellationReason ??
         queuedFixtureConfirmationSmsCancellationReason;
 
       if (cancellationReason) {
