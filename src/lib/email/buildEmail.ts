@@ -19,6 +19,8 @@ const SIXFL_SIGNATURE_LINES = [
 ] as const;
 
 const CTA_PLACEHOLDER = "{{cta}}";
+const RESPONSE_BUTTONS_PATTERN =
+  /(?:^|\n)\s*YES,\s*I still want to play:\s*(https?:\/\/\S+)\s*\n\s*NO,\s*remove me from the squad list:\s*(https?:\/\/\S+)\s*(?:\n|$)/i;
 
 // ========================================
 // Types
@@ -231,6 +233,45 @@ function buildCtaHtml(cta?: SIXFLEmailCta) {
   `.trim();
 }
 
+function buildPlayerResponseButtonsHtml(input: { yesUrl: string; noUrl: string }) {
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0 0;border-collapse:separate;">
+      <tr>
+        <td bgcolor="#1E5A43" style="border-radius:12px;background:#1E5A43;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+          <a href="${escapeHtml(input.yesUrl)}" target="_blank" style="display:inline-block;background:#1E5A43;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">
+            YES, I still want to play
+          </a>
+        </td>
+        <td width="12" style="width:12px;font-size:1px;line-height:1px;">&nbsp;</td>
+        <td bgcolor="#7f1d1d" style="border-radius:12px;background:#7f1d1d;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.10);">
+          <a href="${escapeHtml(input.noUrl)}" target="_blank" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">
+            NO, remove me
+          </a>
+        </td>
+      </tr>
+    </table>
+  `.trim();
+}
+
+function extractPlayerResponseButtons(body: string) {
+  const match = body.match(RESPONSE_BUTTONS_PATTERN);
+
+  if (!match?.[1] || !match?.[2]) {
+    return {
+      body,
+      buttonsHtml: "",
+    };
+  }
+
+  return {
+    body: body.replace(RESPONSE_BUTTONS_PATTERN, "\n").replace(/\n{3,}/g, "\n\n").trim(),
+    buttonsHtml: buildPlayerResponseButtonsHtml({
+      yesUrl: match[1],
+      noUrl: match[2],
+    }),
+  };
+}
+
 function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
   const teamName = branding?.teamName?.trim();
   const teamLogoUrl = resolveEmailAssetUrl(branding?.teamLogoUrl);
@@ -356,16 +397,22 @@ function buildPaymentSummaryHtml(payment?: SIXFLPaymentSummary) {
 
 function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
   const cleanedBody = stripTrailingSIXFLSignature(body);
+  const responseButtons = extractPlayerResponseButtons(cleanedBody);
   const ctaHtml = buildCtaHtml(cta);
+  const bodyWithoutResponseButtons = responseButtons.body;
 
   if (!ctaHtml) {
-    return convertTextToHtml(stripCtaPlaceholder(cleanedBody));
+    const bodyHtml = convertTextToHtml(stripCtaPlaceholder(bodyWithoutResponseButtons));
+
+    return responseButtons.buttonsHtml
+      ? `${bodyHtml}<div style="margin:24px 0 28px 0;">${responseButtons.buttonsHtml}</div>`
+      : bodyHtml;
   }
 
-  if (cleanedBody.includes(CTA_PLACEHOLDER)) {
-    const parts = cleanedBody.split(CTA_PLACEHOLDER);
+  if (bodyWithoutResponseButtons.includes(CTA_PLACEHOLDER)) {
+    const parts = bodyWithoutResponseButtons.split(CTA_PLACEHOLDER);
 
-    return parts
+    const html = parts
       .map((part, index) => {
         const trimmedPart = part.trim();
         const partHtml = trimmedPart ? convertTextToHtml(trimmedPart) : "";
@@ -381,15 +428,24 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
         `.trim();
       })
       .join("");
+
+    return responseButtons.buttonsHtml
+      ? `${html}<div style="margin:24px 0 28px 0;">${responseButtons.buttonsHtml}</div>`
+      : html;
   }
 
-  const bodyHtml = convertTextToHtml(cleanedBody);
+  const bodyHtml = convertTextToHtml(bodyWithoutResponseButtons);
 
   return `
     ${bodyHtml}
     <div style="margin:28px 0 8px 0;">
       ${ctaHtml}
     </div>
+    ${
+      responseButtons.buttonsHtml
+        ? `<div style="margin:24px 0 28px 0;">${responseButtons.buttonsHtml}</div>`
+        : ""
+    }
   `.trim();
 }
 
