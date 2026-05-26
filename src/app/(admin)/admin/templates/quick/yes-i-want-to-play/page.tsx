@@ -15,9 +15,10 @@ const TEMPLATE_BODY = [
   "",
   "We’re checking who still wants to play in a SIXFL team.",
   "",
-  "Could you please reply to this email with YES if you still want to play?",
+  "Please click one of the buttons below so we can keep the squad list up to date.",
   "",
-  "If you no longer want to play, just reply NO and we’ll update our records.",
+  "YES, I still want to play: {{yesResponseUrl}}",
+  "NO, remove me from the squad list: {{noResponseUrl}}",
   "",
   "Thanks,",
   "",
@@ -32,7 +33,7 @@ export default async function YesIWantToPlayTemplateSetupPage() {
     update: {
       name: "Yes, I want to play",
       description:
-        "Simple squad-player email asking for a clear YES/NO reply so SIXFL knows who still wants to play.",
+        "Squad-player email with YES and NO buttons so SIXFL knows who still wants to play.",
       audience: "PLAYER",
       interestType: "PLAYER",
       subject: "Do you still want to play in a SIXFL team?",
@@ -45,7 +46,7 @@ export default async function YesIWantToPlayTemplateSetupPage() {
       key: "yes-i-want-to-play",
       name: "Yes, I want to play",
       description:
-        "Simple squad-player email asking for a clear YES/NO reply so SIXFL knows who still wants to play.",
+        "Squad-player email with YES and NO buttons so SIXFL knows who still wants to play.",
       audience: "PLAYER",
       interestType: "PLAYER",
       subject: "Do you still want to play in a SIXFL team?",
