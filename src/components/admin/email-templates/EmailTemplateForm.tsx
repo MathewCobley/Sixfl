@@ -144,6 +144,8 @@ const TOKENS = [
   "{{area}}",
   "{{preferredNight}}",
   "{{link}}",
+  "{{yesResponseUrl}}",
+  "{{noResponseUrl}}",
   "{{cta}}",
 ] as const;
 
@@ -282,6 +284,14 @@ function previewReplace(text: string) {
     .replaceAll(
       "{{paymentUrl}}",
       "https://www.sixfl.co.uk/pay/charge/demo-token",
+    )
+    .replaceAll(
+      "{{yesResponseUrl}}",
+      "https://www.sixfl.co.uk/player-response/yes?token=demo-token",
+    )
+    .replaceAll(
+      "{{noResponseUrl}}",
+      "https://www.sixfl.co.uk/player-response/no?token=demo-token",
     )
     .replaceAll("{{area}}", "Harrogate")
     .replaceAll("{{preferredNight}}", "Tuesday")
