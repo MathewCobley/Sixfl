@@ -17,17 +17,17 @@ import { processNotificationQueue } from "@/lib/notifications/processor";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { createPlayerInterestResponseToken } from "@/lib/player-interest/response-token";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
-function getTrimmedValue(value: FormDataEntryValue | null) {
+function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
 
-function getSafeRedirectPath(value: FormDataEntryValue | null, fallback: string) {
-  const text = String(value ?? "").trim();
-  return text || fallback;
+function safeRedirect(value: FormDataEntryValue | null, fallback: string) {
+  return text(value) || fallback;
 }
 
 function appendRedirectParams(path: string, params: Record<string, string | number | null | undefined>) {
@@ -39,31 +39,56 @@ function appendRedirectParams(path: string, params: Record<string, string | numb
   if (entries.length === 0) return path;
 
   const separator = path.includes("?") ? "&" : "?";
-  const query = entries
+  return `${path}${separator}${entries
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
-    .join("&");
-
-  return `${path}${separator}${query}`;
+    .join("&")}`;
 }
 
-function getFullName(input: { firstName: string; lastName: string | null }) {
+function fullName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
-function getFirstName(value?: string | null) {
+function firstName(value?: string | null) {
   const trimmed = value?.trim();
-  if (!trimmed) return "";
-  return trimmed.split(/\s+/)[0] ?? "";
+  return trimmed ? (trimmed.split(/\s+/)[0] ?? "") : "";
+}
+
+function siteUrl() {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.SITE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim() ||
+    "https://www.sixfl.co.uk"
+  ).replace(/\/+$/, "");
 }
 
 function parseRecipientValue(value: string) {
   const [type, id] = value.split(":");
+  if (type === "teamMember" || type === "prospect") return { type, id: id || "" } as const;
+  return { type: "team", id: "" } as const;
+}
 
-  if (type === "teamMember" || type === "prospect") {
-    return { type, id: id || "" } as const;
+function responseUrls(input: { teamId: string; type: "team" | "teamMember" | "prospect"; id: string }) {
+  if (input.type !== "teamMember" && input.type !== "prospect") {
+    return { yesResponseUrl: "", noResponseUrl: "" };
   }
 
-  return { type: "team", id: "" } as const;
+  const token = createPlayerInterestResponseToken({
+    teamId: input.teamId,
+    recipientType: input.type,
+    recipientId: input.id,
+    expiresInDays: 45,
+  });
+
+  const encoded = encodeURIComponent(token);
+  const base = siteUrl();
+
+  return {
+    yesResponseUrl: `${base}/player-response/yes?token=${encoded}`,
+    noResponseUrl: `${base}/player-response/no?token=${encoded}`,
+  };
 }
 
 type CommunicationRecipientContext = {
@@ -72,11 +97,7 @@ type CommunicationRecipientContext = {
   sourceType: string;
   sourceId: string;
   displayName: string;
-  emailBranding: {
-    teamName: string;
-    teamLogoUrl: string | null;
-    leagueName: string | null;
-  };
+  emailBranding: { teamName: string; teamLogoUrl: string | null; leagueName: string | null };
   metadata: Record<string, unknown>;
 };
 
@@ -92,25 +113,12 @@ async function getTeamCommunicationRecipientContext(input: {
       where: { id: recipientId, teamId },
       select: {
         id: true,
-        role: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
+        user: { select: { id: true, name: true, email: true } },
         team: {
           select: {
-            id: true,
             name: true,
             logoUrl: true,
-            league: {
-              select: {
-                name: true,
-                season: true,
-              },
-            },
+            league: { select: { name: true, season: true } },
           },
         },
       },
@@ -152,17 +160,8 @@ async function getTeamCommunicationRecipientContext(input: {
       sourceType: sourceProspectId ? "TEAM_PLAYER_PROSPECT" : "TEAM_MEMBER",
       sourceId: sourceProspectId ?? member.id,
       displayName,
-      emailBranding: {
-        teamName: member.team.name,
-        teamLogoUrl: member.team.logoUrl,
-        leagueName,
-      },
-      metadata: {
-        recipientType: "teamMember",
-        teamMemberId: member.id,
-        userId: member.user.id,
-        sourceProspectId,
-      },
+      emailBranding: { teamName: member.team.name, teamLogoUrl: member.team.logoUrl, leagueName },
+      metadata: { recipientType: "teamMember", teamMemberId: member.id, userId: member.user.id, sourceProspectId },
     };
   }
 
@@ -178,15 +177,9 @@ async function getTeamCommunicationRecipientContext(input: {
         status: true,
         team: {
           select: {
-            id: true,
             name: true,
             logoUrl: true,
-            league: {
-              select: {
-                name: true,
-                season: true,
-              },
-            },
+            league: { select: { name: true, season: true } },
           },
         },
       },
@@ -194,7 +187,7 @@ async function getTeamCommunicationRecipientContext(input: {
 
     if (!prospect) return null;
 
-    const displayName = getFullName(prospect) || prospect.firstName;
+    const displayName = fullName(prospect) || prospect.firstName;
     const leagueName = prospect.team.league
       ? `${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}`
       : null;
@@ -210,11 +203,7 @@ async function getTeamCommunicationRecipientContext(input: {
       marketingSmsOptIn: true,
       transactionalEmailOptIn: true,
       transactionalSmsOptIn: true,
-      metadata: {
-        teamId,
-        prospectId: prospect.id,
-        entityType: "TEAM_PROSPECT",
-      },
+      metadata: { teamId, prospectId: prospect.id, entityType: "TEAM_PROSPECT" },
     });
 
     return {
@@ -223,24 +212,13 @@ async function getTeamCommunicationRecipientContext(input: {
       sourceType: "TEAM_PLAYER_PROSPECT",
       sourceId: prospect.id,
       displayName,
-      emailBranding: {
-        teamName: prospect.team.name,
-        teamLogoUrl: prospect.team.logoUrl,
-        leagueName,
-      },
-      metadata: {
-        recipientType: "prospect",
-        prospectId: prospect.id,
-        prospectStatus: prospect.status,
-      },
+      emailBranding: { teamName: prospect.team.name, teamLogoUrl: prospect.team.logoUrl, leagueName },
+      metadata: { recipientType: "prospect", prospectId: prospect.id, prospectStatus: prospect.status },
     };
   }
 
   const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
-  const teamBranding = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { logoUrl: true },
-  });
+  const teamBranding = await prisma.team.findUnique({ where: { id: teamId }, select: { logoUrl: true } });
 
   return {
     recipient,
@@ -248,11 +226,7 @@ async function getTeamCommunicationRecipientContext(input: {
     sourceType: "TEAM",
     sourceId: teamId,
     displayName: snapshot.primaryContact.name || snapshot.teamName,
-    emailBranding: {
-      teamName: snapshot.teamName,
-      teamLogoUrl: teamBranding?.logoUrl ?? null,
-      leagueName: snapshot.leagueName,
-    },
+    emailBranding: { teamName: snapshot.teamName, teamLogoUrl: teamBranding?.logoUrl ?? null, leagueName: snapshot.leagueName },
     metadata: { recipientType: "team" },
   };
 }
@@ -270,41 +244,35 @@ async function processJustQueuedMessages(queuedCount: number) {
 export async function sendTeamCommunicationBulkMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
 
-  const teamId = getTrimmedValue(formData.get("teamId"));
-  const from = getSafeRedirectPath(formData.get("from"), `/admin/teams/${teamId}/communications`);
-  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
-  const subject = getTrimmedValue(formData.get("subject"));
-  const body = getTrimmedValue(formData.get("body"));
-  const templateId = getTrimmedValue(formData.get("templateId")) || null;
-  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
-  const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
-  const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
-  const claimCode = getTrimmedValue(formData.get("claimCode"));
-  const claimLink = getTrimmedValue(formData.get("claimLink"));
-  const captainDashboardUrl = getTrimmedValue(formData.get("captainDashboardUrl")) || claimLink;
-  const isMarketingMessage = getTrimmedValue(formData.get("isMarketing")) === "1";
+  const teamId = text(formData.get("teamId"));
+  const from = safeRedirect(formData.get("from"), `/admin/teams/${teamId}/communications`);
+  const channelInput = text(formData.get("channel")).toUpperCase();
+  const subject = text(formData.get("subject"));
+  const body = text(formData.get("body"));
+  const templateId = text(formData.get("templateId")) || null;
+  const templateKey = text(formData.get("templateKey")) || null;
+  const ctaLabel = text(formData.get("ctaLabel")) || null;
+  const ctaUrl = text(formData.get("ctaUrl")) || null;
+  const claimCode = text(formData.get("claimCode"));
+  const claimLink = text(formData.get("claimLink"));
+  const captainDashboardUrl = text(formData.get("captainDashboardUrl")) || claimLink;
+  const isMarketingMessage = text(formData.get("isMarketing")) === "1";
 
   const selectedRecipientValues = formData
     .getAll("recipientValues")
     .map((value) => String(value).trim())
     .filter(Boolean);
 
-  const fallbackRecipientType = getTrimmedValue(formData.get("recipientType")) || "team";
-  const fallbackRecipientId = getTrimmedValue(formData.get("recipientId")) || "";
+  const fallbackRecipientType = text(formData.get("recipientType")) || "team";
+  const fallbackRecipientId = text(formData.get("recipientId")) || "";
   const recipientValues = selectedRecipientValues.length
     ? selectedRecipientValues
     : [`${fallbackRecipientType}:${fallbackRecipientId}`];
 
-  if (!teamId) {
-    redirect("/admin/teams?error=missing_id");
-  }
-
-  if (!body) {
-    redirect(appendRedirectParams(from, { error: "Message body is required." }));
-  }
+  if (!teamId) redirect("/admin/teams?error=missing_id");
+  if (!body) redirect(appendRedirectParams(from, { error: "Message body is required." }));
 
   const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
-
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(appendRedirectParams(from, { error: "Email subject is required." }));
   }
@@ -321,25 +289,26 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
     });
 
     if (!recipientContext) continue;
-
     if (channel === NotificationChannel.EMAIL && !recipientContext.recipient.email?.trim()) {
       skippedMissingContactCount += 1;
       continue;
     }
-
     if (channel === NotificationChannel.SMS && !recipientContext.recipient.phone?.trim()) {
       skippedMissingContactCount += 1;
       continue;
     }
 
+    const urls = responseUrls({ teamId, type: parsed.type, id: parsed.id });
     const variables = {
-      firstName: getFirstName(recipientContext.displayName),
+      firstName: firstName(recipientContext.displayName),
       fullName: recipientContext.displayName,
       teamName: recipientContext.emailBranding.teamName,
       leagueName: recipientContext.emailBranding.leagueName ?? "",
       claimCode,
       claimLink,
       captainDashboardUrl,
+      yesResponseUrl: urls.yesResponseUrl,
+      noResponseUrl: urls.noResponseUrl,
     };
     const isTransactional = !isMarketingMessage;
 
@@ -354,20 +323,12 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       sourceType: recipientContext.sourceType,
       sourceId: recipientContext.sourceId,
       emailBranding: channel === NotificationChannel.EMAIL ? recipientContext.emailBranding : undefined,
-      emailCta:
-        channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
-          ? { label: ctaLabel, url: ctaUrl }
-          : undefined,
+      emailCta: channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl ? { label: ctaLabel, url: ctaUrl } : undefined,
       metadata: {
         origin: "team_communications_hub",
-        originLabel:
-          recipientContext.audience === NotificationAudience.PLAYER
-            ? isTransactional
-              ? "Sent from communications hub as service message"
-              : "Sent from communications hub as marketing message"
-            : isTransactional
-              ? "Sent from communications hub as service message"
-              : "Sent from communications hub as marketing message",
+        originLabel: isTransactional
+          ? "Sent from communications hub as service message"
+          : "Sent from communications hub as marketing message",
         teamId,
         templateId,
         templateKey,
@@ -375,16 +336,15 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
         ctaUrl,
         isMarketingMessage,
         isTransactional,
+        yesResponseUrl: urls.yesResponseUrl,
+        noResponseUrl: urls.noResponseUrl,
         bulkRecipientCount: recipientValues.length,
         ...recipientContext.metadata,
       },
       createdByUserId: user?.id ?? null,
     });
 
-    await logNotificationDispatchToThread({
-      dispatch,
-      recipient: recipientContext.recipient,
-    });
+    await logNotificationDispatchToThread({ dispatch, recipient: recipientContext.recipient });
 
     if (recipientContext.sourceType === "TEAM_PLAYER_PROSPECT") {
       await prisma.teamPlayerProspect.update({
