@@ -250,6 +250,7 @@ function isKickoffAllowed(
 async function cancelQueuedFixtureReminderDispatches(
   fixtureIds: string[],
   db: FixtureNotificationDbClient = prisma,
+  options?: { reason?: string },
 ) {
   if (fixtureIds.length === 0) {
     return;
@@ -258,15 +259,17 @@ async function cancelQueuedFixtureReminderDispatches(
   await db.notificationDispatch.updateMany({
     where: {
       sourceType: "FIXTURE_REMINDER",
-      sourceId: {
-        in: fixtureIds,
-      },
+      OR: fixtureIds.flatMap((fixtureId) => [
+        { sourceId: fixtureId },
+        { sourceId: { startsWith: `${fixtureId}:` } },
+      ]),
       status: NotificationDispatchStatus.QUEUED,
     },
     data: {
       status: NotificationDispatchStatus.CANCELLED,
       cancelledAt: new Date(),
-      failureReason: "Fixture deleted before reminder was sent.",
+      failureReason:
+        options?.reason ?? "Fixture deleted before reminder was sent.",
     },
   });
 }
@@ -436,6 +439,10 @@ export async function submitResultAction(formData: FormData) {
       },
     }),
   ]);
+
+  await cancelQueuedFixtureReminderDispatches([fixtureId], prisma, {
+    reason: "Fixture was completed before queued reminder email was sent.",
+  });
 
   revalidatePath("/admin/fixtures");
   revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
@@ -741,6 +748,10 @@ export async function updateFixtureAction(formData: FormData) {
       fixture: updatedFixture,
       activeCharges: chargeSync.activeCharges,
     };
+  });
+
+  await cancelQueuedFixtureReminderDispatches([fixtureId], prisma, {
+    reason: "Fixture was changed before queued reminder email was sent.",
   });
 
   const hadExistingFee = (fixture.matchFeePence ?? 0) > 0;
