@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -52,6 +53,46 @@ function getChargeStatusTone(status: string) {
   }
 }
 
+function formatSubscriptionStatus(status: string | null) {
+  if (!status) return "Not set up";
+
+  const labels: Record<string, string> = {
+    active: "Active",
+    trialing: "Trialling",
+    past_due: "Past due",
+    unpaid: "Unpaid",
+    incomplete: "Setup incomplete",
+    incomplete_expired: "Setup expired",
+    canceled: "Cancelled",
+    paused: "Paused",
+  };
+
+  return labels[status] ?? status.replaceAll("_", " ");
+}
+
+function getSubscriptionTone(status: string | null) {
+  switch (status) {
+    case "active":
+    case "trialing":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "past_due":
+    case "unpaid":
+    case "incomplete":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    case "canceled":
+    case "incomplete_expired":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    default:
+      return "border-white/10 bg-white/[0.05] text-white/60";
+  }
+}
+
+function isManagedByStripe(status: string | null) {
+  return ["active", "trialing", "past_due", "unpaid", "incomplete", "paused"].includes(
+    status ?? "",
+  );
+}
+
 function formatUkDate(value: Date) {
   return formatDateTimeInLondon(value, {
     day: "2-digit",
@@ -96,65 +137,88 @@ function getFixtureLabel(
   )}`;
 }
 
+function getSubscriptionMessage(state?: string) {
+  switch (state) {
+    case "success":
+      return "Automatic payment setup started. Stripe will confirm it here once the payment is complete.";
+    case "cancelled":
+      return "Automatic payment setup was cancelled.";
+    case "active":
+      return "Automatic payments are already active or being managed by Stripe.";
+    case "missing_price":
+      return "Automatic payments are not configured yet. Ask an admin to add the Stripe subscription price ID.";
+    case "missing_customer":
+      return "A Stripe customer has not been created for this team yet.";
+    default:
+      return null;
+  }
+}
+
 export default async function CaptainPaymentsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ teamid: string }>;
+  searchParams?: Promise<{ subscription?: string }>;
 }) {
   const { teamid } = await params;
+  const sp = (await searchParams) ?? {};
   await requireCaptain(teamid);
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamid },
-    select: {
-      id: true,
-      name: true,
-      paymentCharges: {
-        orderBy: [{ createdAt: "desc" }],
-        include: {
-          transactions: {
-            select: {
-              id: true,
-              amountPence: true,
-            },
-          },
-          fixture: {
-            select: {
-              id: true,
-              kickoffAt: true,
-              homeTeam: {
-                select: {
-                  name: true,
-                },
+  const [team, subscription] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: {
+        id: true,
+        name: true,
+        paymentCharges: {
+          orderBy: [{ createdAt: "desc" }],
+          include: {
+            transactions: {
+              select: {
+                id: true,
+                amountPence: true,
               },
-              awayTeam: {
-                select: {
-                  name: true,
+            },
+            fixture: {
+              select: {
+                id: true,
+                kickoffAt: true,
+                homeTeam: {
+                  select: {
+                    name: true,
+                  },
+                },
+                awayTeam: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
           },
         },
-      },
-      paymentTransactions: {
-        orderBy: [{ paidAt: "desc" }],
-        take: 20,
-        select: {
-          id: true,
-          amountPence: true,
-          method: true,
-          reference: true,
-          notes: true,
-          paidAt: true,
-          charge: {
-            select: {
-              title: true,
+        paymentTransactions: {
+          orderBy: [{ paidAt: "desc" }],
+          take: 20,
+          select: {
+            id: true,
+            amountPence: true,
+            method: true,
+            reference: true,
+            notes: true,
+            paidAt: true,
+            charge: {
+              select: {
+                title: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+    getTeamSubscriptionSnapshot(teamid),
+  ]);
 
   if (!team) {
     notFound();
@@ -173,8 +237,18 @@ export default async function CaptainPaymentsPage({
     return sum + Math.max(charge.amountPence - paid, 0);
   }, 0);
 
+  const subscriptionMessage = getSubscriptionMessage(sp.subscription);
+  const canOpenPortal = Boolean(subscription?.stripeCustomerId);
+  const subscriptionIsManaged = isManagedByStripe(subscription?.subscriptionStatus ?? null);
+
   return (
     <div className="space-y-8">
+      {subscriptionMessage ? (
+        <div className="rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-sm text-white/70">
+          {subscriptionMessage}
+        </div>
+      ) : null}
+
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
@@ -210,6 +284,73 @@ export default async function CaptainPaymentsPage({
           <p className="mt-2 text-sm text-emerald-100/75">
             Most recent recorded team payments.
           </p>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-500/10">
+        <div className="flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-100/70">
+              Automatic payments
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">
+              Recurring team payments
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-emerald-50/75">
+              Set up a recurring Stripe payment for your team. Successful renewal payments will be recorded automatically in the SIXFL payment history.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span
+                className={[
+                  "inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
+                  getSubscriptionTone(subscription?.subscriptionStatus ?? null),
+                ].join(" ")}
+              >
+                {formatSubscriptionStatus(subscription?.subscriptionStatus ?? null)}
+              </span>
+
+              {subscription?.subscriptionCurrentPeriodEnd ? (
+                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                  Next renewal {formatUkDate(subscription.subscriptionCurrentPeriodEnd)}
+                </span>
+              ) : null}
+
+              {subscription?.subscriptionLastPaymentAt ? (
+                <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                  Last paid {formatUkDate(subscription.subscriptionLastPaymentAt)}
+                </span>
+              ) : null}
+
+              {subscription?.subscriptionLastPaymentFailedAt ? (
+                <span className="inline-flex rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-red-100">
+                  Last failed {formatUkDate(subscription.subscriptionLastPaymentFailedAt)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+            <form action={`/captain/team/${team.id}/payments/start-subscription`} method="post">
+              <button
+                type="submit"
+                className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-300 px-5 text-sm font-semibold text-black transition hover:bg-emerald-200 sm:w-auto"
+              >
+                {subscriptionIsManaged ? "Replace automatic payment" : "Set up automatic payments"}
+              </button>
+            </form>
+
+            {canOpenPortal ? (
+              <form action={`/captain/team/${team.id}/payments/manage-subscription`} method="post">
+                <button
+                  type="submit"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-5 text-sm font-semibold text-white transition hover:bg-black/30 sm:w-auto"
+                >
+                  Manage in Stripe
+                </button>
+              </form>
+            ) : null}
+          </div>
         </div>
       </section>
 

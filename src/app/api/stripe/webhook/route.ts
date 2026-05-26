@@ -10,6 +10,12 @@ import {
   getChargeStatusFromAmounts,
 } from "@/lib/payments/charge-status";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
+import {
+  markTeamSubscriptionDeleted,
+  markTeamSubscriptionInvoiceFailed,
+  recordTeamSubscriptionInvoicePaid,
+  syncTeamSubscriptionFromStripe,
+} from "@/lib/payments/team-subscriptions";
 import { prisma } from "@/lib/prisma";
 import {
   getStripeServerClient,
@@ -22,6 +28,15 @@ function getPaymentIntentId(session: Stripe.Checkout.Session) {
   return typeof session.payment_intent === "string"
     ? session.payment_intent
     : session.payment_intent?.id ?? null;
+}
+
+function getStripeId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "id" in value) {
+    const id = (value as { id?: unknown }).id;
+    return typeof id === "string" ? id : null;
+  }
+  return null;
 }
 
 async function hasExistingTransaction(sessionId: string) {
@@ -147,7 +162,41 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
   return true;
 }
 
-async function handleCompletedCheckoutSession(session: Stripe.Checkout.Session) {
+async function handleCompletedTeamSubscriptionCheckoutSession(
+  session: Stripe.Checkout.Session,
+  stripe: Stripe,
+) {
+  const isTeamSubscriptionSession =
+    session.mode === "subscription" || session.metadata?.type === "team_subscription";
+
+  if (!isTeamSubscriptionSession) {
+    return false;
+  }
+
+  const subscriptionId = getStripeId(session.subscription);
+  const teamId = session.metadata?.teamId?.trim() || session.client_reference_id || null;
+
+  if (!subscriptionId) {
+    return true;
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  await syncTeamSubscriptionFromStripe({ subscription, teamId });
+
+  return true;
+}
+
+async function handleCompletedCheckoutSession(
+  session: Stripe.Checkout.Session,
+  stripe: Stripe,
+) {
+  const handledTeamSubscription =
+    await handleCompletedTeamSubscriptionCheckoutSession(session, stripe);
+
+  if (handledTeamSubscription) {
+    return;
+  }
+
   const handledPlayerMatchFee =
     await handleCompletedPlayerMatchFeeCheckoutSession(session);
 
@@ -267,7 +316,36 @@ export async function POST(request: Request) {
       case "checkout.session.async_payment_succeeded": {
         await handleCompletedCheckoutSession(
           event.data.object as Stripe.Checkout.Session,
+          stripe,
         );
+        break;
+      }
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        await syncTeamSubscriptionFromStripe({
+          subscription: event.data.object as Stripe.Subscription,
+        });
+        break;
+      }
+      case "customer.subscription.deleted": {
+        await markTeamSubscriptionDeleted({
+          subscription: event.data.object as Stripe.Subscription,
+        });
+        break;
+      }
+      case "invoice.paid":
+      case "invoice.payment_succeeded": {
+        await recordTeamSubscriptionInvoicePaid({
+          invoice: event.data.object as Stripe.Invoice,
+          stripe,
+        });
+        break;
+      }
+      case "invoice.payment_failed": {
+        await markTeamSubscriptionInvoiceFailed({
+          invoice: event.data.object as Stripe.Invoice,
+          stripe,
+        });
         break;
       }
       default:
