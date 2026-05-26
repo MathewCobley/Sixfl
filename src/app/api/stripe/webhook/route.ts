@@ -80,6 +80,24 @@ async function ensurePaymentTransactionPlayerFeeColumn() {
   `);
 }
 
+async function closePlayerMatchFeeFromStripeSession(input: {
+  playerMatchFeeId: string;
+  paidAt: Date;
+}) {
+  await prisma.playerMatchFee.updateMany({
+    where: {
+      id: input.playerMatchFeeId,
+      status: "OPEN",
+    },
+    data: {
+      status: "PAID",
+      paidAt: input.paidAt,
+      waivedAt: null,
+      cancelledAt: null,
+    },
+  });
+}
+
 async function handleCompletedPlayerMatchFeeCheckoutSession(
   session: Stripe.Checkout.Session,
 ) {
@@ -89,7 +107,12 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
     return false;
   }
 
+  const paidAt = new Date(
+    (session.created ?? Math.floor(Date.now() / 1000)) * 1000,
+  );
+
   if (await hasExistingTransaction(session.id)) {
+    await closePlayerMatchFeeFromStripeSession({ playerMatchFeeId, paidAt });
     return true;
   }
 
@@ -116,9 +139,6 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
   }
 
   const paymentIntentId = getPaymentIntentId(session);
-  const paidAt = new Date(
-    (session.created ?? Math.floor(Date.now() / 1000)) * 1000,
-  );
 
   await ensurePaymentTransactionPlayerFeeColumn();
 
