@@ -507,6 +507,7 @@ export default async function AdminPaymentsPage({
           {sp.created === "team_charge_reminder" ? <div className="text-emerald-300">Team charge SMS queued.</div> : null}
           {sp.created === "player_fee_reminder" ? <div className="text-emerald-300">Player fee reminder queued.</div> : null}
           {sp.created === "player_fee_already_sent" ? <div className="text-amber-200">All player fee reminder stages have already been queued or sent.</div> : null}
+          {sp.created === "charge_voided" ? <div className="text-emerald-300">Charge voided.</div> : null}
           {sp.error === "invalid_charge" ? <div className="text-red-300">Charge details are incomplete.</div> : null}
           {sp.error === "missing_team" ? <div className="text-red-300">Selected team was not found.</div> : null}
           {sp.error === "invalid_payment" ? <div className="text-red-300">Payment details are incomplete.</div> : null}
@@ -629,6 +630,7 @@ export default async function AdminPaymentsPage({
                 row.charge.status !== "VOID" &&
                 row.summary.outstandingPence > 0 &&
                 Boolean(row.charge.paymentToken);
+              const canVoidCharge = row.charge.status !== "PAID" && row.charge.status !== "VOID";
 
               return (
                 <div key={row.charge.id} className={`rounded-2xl border bg-[#0d1428] p-4 ${row.needsAdminChase ? "border-red-500/30" : "border-white/10"}`}>
@@ -642,12 +644,17 @@ export default async function AdminPaymentsPage({
                         {row.summary.outstandingPence > 0 && row.charge.status !== "VOID" ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">Awaiting payment</span> : null}
                         <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/[0.05] text-white/55"}`}>{formatLastChasedLabel(lastChasedAt)}</span>
                       </div>
-                      {canChaseTeamCharge ? (
-                        <div className="mt-4">
-                          <form action={sendTeamChargeReminderAction}>
-                            <input type="hidden" name="chargeId" value={row.charge.id} />
-                            <button type="submit" className="inline-flex items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/15">Team chase SMS</button>
-                          </form>
+                      {(canChaseTeamCharge || canVoidCharge) ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {canChaseTeamCharge ? (
+                            <form action={sendTeamChargeReminderAction}>
+                              <input type="hidden" name="chargeId" value={row.charge.id} />
+                              <button type="submit" className="inline-flex items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/15">Team chase SMS</button>
+                            </form>
+                          ) : null}
+                          {canVoidCharge ? (
+                            <Link href={`/admin/payments/void/${row.charge.id}`} className="inline-flex items-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15">Void charge</Link>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
