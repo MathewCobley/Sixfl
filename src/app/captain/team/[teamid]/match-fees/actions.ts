@@ -103,6 +103,10 @@ function redirectIfNotAdmin(input: {
   }
 }
 
+function isClosedPlayerFee(status: PlayerMatchFeeStatus) {
+  return status === "PAID";
+}
+
 export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
@@ -162,8 +166,12 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
 
       const existing = await prisma.playerMatchFee.findFirst({
         where: { fixtureId, teamMemberId: player.id },
-        select: { id: true },
+        select: { id: true, status: true },
       });
+
+      if (existing && isClosedPlayerFee(existing.status)) {
+        continue;
+      }
 
       const data = {
         amountPence,
@@ -207,8 +215,12 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
 
       const existing = await prisma.playerMatchFee.findFirst({
         where: { fixtureId, prospectId: player.id },
-        select: { id: true },
+        select: { id: true, status: true },
       });
+
+      if (existing && isClosedPlayerFee(existing.status)) {
+        continue;
+      }
 
       if (existing) {
         await prisma.playerMatchFee.update({
