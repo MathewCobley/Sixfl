@@ -71,6 +71,31 @@ function getFixtureReminderFixtureId(input: {
   return sourceId.split(":")[0]?.trim() || null;
 }
 
+function getManagedSquadAvailabilityRefs(input: {
+  metadata: Record<string, unknown> | null;
+  sourceId: string | null;
+}) {
+  const metadataFixtureId = getMetadataString(input.metadata, "fixtureId");
+  const metadataTeamMemberId = getMetadataString(input.metadata, "teamMemberId");
+
+  if (metadataFixtureId && metadataTeamMemberId) {
+    return {
+      fixtureId: metadataFixtureId,
+      teamMemberId: metadataTeamMemberId,
+    };
+  }
+
+  const parts = input.sourceId?.trim().split(":") ?? [];
+  const fixtureId = metadataFixtureId ?? parts[0]?.trim() ?? null;
+  const teamMemberId = metadataTeamMemberId ?? parts[1]?.trim() ?? null;
+
+  if (!fixtureId || !teamMemberId) {
+    return null;
+  }
+
+  return { fixtureId, teamMemberId };
+}
+
 function buildLastMessagePreview(body: string): string {
   const trimmed = body.trim().replace(/\s+/g, " ");
   if (!trimmed) return "";
@@ -88,6 +113,16 @@ function isQueuedMatchFeeNotification(
 
 function isFixtureReminderNotification(sourceType: string | null | undefined) {
   return sourceType === "FIXTURE_REMINDER";
+}
+
+function isManagedSquadAvailabilityNotification(
+  sourceType: string | null | undefined,
+) {
+  return (
+    sourceType === "MANAGED_SQUAD_AVAILABILITY_REQUEST" ||
+    sourceType === "MANAGED_SQUAD_AVAILABILITY_CHASE_24H" ||
+    sourceType === "MANAGED_SQUAD_AVAILABILITY_CHASE_72H"
+  );
 }
 
 function isFixtureConfirmationSmsNotification(
@@ -183,6 +218,64 @@ async function getQueuedFixtureReminderCancellationReason(input: {
 
   if (fixture.updatedAt.getTime() > input.createdAt.getTime()) {
     return "Fixture was changed before queued reminder email was sent.";
+  }
+
+  return null;
+}
+
+async function getQueuedManagedSquadAvailabilityCancellationReason(input: {
+  sourceType: string | null;
+  sourceId: string | null;
+  metadata: Record<string, unknown> | null;
+}) {
+  if (!isManagedSquadAvailabilityNotification(input.sourceType)) {
+    return null;
+  }
+
+  const refs = getManagedSquadAvailabilityRefs({
+    metadata: input.metadata,
+    sourceId: input.sourceId,
+  });
+
+  if (!refs) {
+    return "Managed squad availability reminder is missing its fixture or player reference.";
+  }
+
+  const [fixture, availability] = await Promise.all([
+    prisma.fixture.findUnique({
+      where: {
+        id: refs.fixtureId,
+      },
+      select: {
+        id: true,
+        status: true,
+        kickoffAt: true,
+      },
+    }),
+    prisma.fixtureAvailability.findUnique({
+      where: {
+        fixtureId_teamMemberId: {
+          fixtureId: refs.fixtureId,
+          teamMemberId: refs.teamMemberId,
+        },
+      },
+      select: {
+        response: true,
+        respondedAt: true,
+      },
+    }),
+  ]);
+
+  if (!fixture) {
+    return "Fixture was deleted before queued managed squad availability reminder was sent.";
+  }
+
+  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
+    return "Fixture is no longer scheduled before queued managed squad availability reminder was sent.";
+  }
+
+  if (availability && availability.response !== "NO_RESPONSE") {
+    return "Player had already responded before queued managed squad availability reminder was sent.";
   }
 
   return null;
@@ -365,6 +458,12 @@ export async function processNotificationQueue(limit = 25) {
           metadata,
           createdAt: dispatch.createdAt,
         });
+      const queuedManagedSquadAvailabilityCancellationReason =
+        await getQueuedManagedSquadAvailabilityCancellationReason({
+          sourceType: dispatch.sourceType,
+          sourceId: dispatch.sourceId,
+          metadata,
+        });
       const queuedFixtureConfirmationSmsCancellationReason =
         await getQueuedFixtureConfirmationSmsCancellationReason({
           sourceType: dispatch.sourceType,
@@ -374,6 +473,7 @@ export async function processNotificationQueue(limit = 25) {
       const cancellationReason =
         queuedMatchFeeCancellationReason ??
         queuedFixtureReminderCancellationReason ??
+        queuedManagedSquadAvailabilityCancellationReason ??
         queuedFixtureConfirmationSmsCancellationReason;
 
       if (cancellationReason) {
