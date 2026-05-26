@@ -80,6 +80,7 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
             <textarea
               name="body"
               rows={5}
+              required={canReply}
               disabled={!canReply}
               placeholder={canReply ? "Type your email reply here..." : "Email reply unavailable"}
               className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 focus:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
