@@ -26,15 +26,17 @@ type ResultsCardGeneratorProps = {
 
 const CANVAS_SIZE = 1080;
 const THREE_FIXTURE_ROWS = [445, 570, 695];
-const FOUR_FIXTURE_ROWS = [445, 570, 695, 820];
+const FOUR_FIXTURE_ROWS = [410, 525, 640, 755];
 const HOME_BADGE_X = 76;
 const HOME_NAME_X = 130;
 const HOME_SCORE_X = 438;
 const AWAY_SCORE_X = 640;
 const AWAY_NAME_X = 708;
 const AWAY_BADGE_X = 1010;
-const BADGE_SIZE = 68;
-const TEAM_NAME_FONT_SIZE = 22;
+const THREE_FIXTURE_BADGE_SIZE = 68;
+const FOUR_FIXTURE_BADGE_SIZE = 58;
+const THREE_FIXTURE_TEAM_NAME_FONT_SIZE = 22;
+const FOUR_FIXTURE_TEAM_NAME_FONT_SIZE = 19;
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -113,7 +115,7 @@ function drawBadge(input: {
     ctx.drawImage(image, x - drawWidth / 2, y - drawHeight / 2, drawWidth, drawHeight);
   } else {
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 22px Arial, sans-serif";
+    ctx.font = `900 ${Math.round(size * 0.32)}px Arial, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(getInitials(teamName), x, y + 1);
@@ -129,15 +131,16 @@ function drawTeamName(input: {
   y: number;
   align: CanvasTextAlign;
   maxWidth: number;
+  fontSize: number;
 }) {
-  const { ctx, name, x, y, align, maxWidth } = input;
+  const { ctx, name, x, y, align, maxWidth, fontSize } = input;
   const uppercaseName = name.toUpperCase();
 
   ctx.save();
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = align;
   ctx.textBaseline = "middle";
-  ctx.font = `900 ${TEAM_NAME_FONT_SIZE}px Arial Narrow, Impact, Arial, sans-serif`;
+  ctx.font = `900 ${fontSize}px Arial Narrow, Impact, Arial, sans-serif`;
   ctx.fillText(getFittedText({ ctx, text: uppercaseName, maxWidth }), x, y + 1);
   ctx.restore();
 }
@@ -147,11 +150,12 @@ function drawScore(input: {
   score: number;
   x: number;
   y: number;
+  fontSize: number;
 }) {
-  const { ctx, score, x, y } = input;
+  const { ctx, score, x, y, fontSize } = input;
   ctx.save();
   ctx.fillStyle = "#000000";
-  ctx.font = "900 58px Impact, Arial Black, Arial, sans-serif";
+  ctx.font = `900 ${fontSize}px Impact, Arial Black, Arial, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(String(score), x, y + 1);
@@ -199,7 +203,15 @@ export default function ResultsCardGenerator({
       setDownloadUrl(null);
 
       try {
-        const rowYValues = fixtures.length >= 4 ? FOUR_FIXTURE_ROWS : THREE_FIXTURE_ROWS;
+        const isFourFixtureCard = fixtures.length >= 4;
+        const rowYValues = isFourFixtureCard ? FOUR_FIXTURE_ROWS : THREE_FIXTURE_ROWS;
+        const badgeSize = isFourFixtureCard ? FOUR_FIXTURE_BADGE_SIZE : THREE_FIXTURE_BADGE_SIZE;
+        const teamNameFontSize = isFourFixtureCard
+          ? FOUR_FIXTURE_TEAM_NAME_FONT_SIZE
+          : THREE_FIXTURE_TEAM_NAME_FONT_SIZE;
+        const scoreFontSize = isFourFixtureCard ? 50 : 58;
+        const homeNameMaxWidth = isFourFixtureCard ? 285 : 255;
+        const awayNameMaxWidth = isFourFixtureCard ? 275 : 250;
         const visibleFixtures = fixtures.slice(0, rowYValues.length);
         const template = await loadImage(templateUrl);
         const badgeEntries = await Promise.all(
@@ -226,13 +238,13 @@ export default function ResultsCardGenerator({
           const homeBadge = badgeEntries[index * 2] ?? null;
           const awayBadge = badgeEntries[index * 2 + 1] ?? null;
 
-          drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: BADGE_SIZE });
-          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: 255 });
-          drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y });
+          drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: badgeSize });
+          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: homeNameMaxWidth, fontSize: teamNameFontSize });
+          drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y, fontSize: scoreFontSize });
 
-          drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y });
-          drawTeamName({ ctx, name: fixture.awayTeamName, x: AWAY_NAME_X, y, align: "left", maxWidth: 250 });
-          drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: AWAY_BADGE_X, y, size: BADGE_SIZE });
+          drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y, fontSize: scoreFontSize });
+          drawTeamName({ ctx, name: fixture.awayTeamName, x: AWAY_NAME_X, y, align: "left", maxWidth: awayNameMaxWidth, fontSize: teamNameFontSize });
+          drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: AWAY_BADGE_X, y, size: badgeSize });
         });
 
         drawFooter({ ctx, matchweekLabel, dateLabel });
