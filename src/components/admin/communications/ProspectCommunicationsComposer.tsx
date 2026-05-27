@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 import { sendProspectCommunicationMessageAction } from "@/app/(admin)/admin/communications/actions";
 
@@ -104,25 +104,33 @@ export default function ProspectCommunicationsComposer({
     [smsTemplates, selectedSmsTemplateId],
   );
 
-  useEffect(() => {
-    if (!selectedEmailTemplate) {
+  function handleEmailTemplateChange(templateId: string) {
+    setSelectedEmailTemplateId(templateId);
+
+    const template = emailTemplates.find((item) => item.id === templateId) ?? null;
+
+    if (!template) {
       setEmailSubject("");
       setEmailBody("");
       return;
     }
 
-    setEmailSubject(resolveText(selectedEmailTemplate.subject, templateContext));
-    setEmailBody(resolveText(selectedEmailTemplate.body, templateContext));
-  }, [selectedEmailTemplate, templateContext]);
+    setEmailSubject(resolveText(template.subject, templateContext));
+    setEmailBody(resolveText(template.body, templateContext));
+  }
 
-  useEffect(() => {
-    if (!selectedSmsTemplate) {
+  function handleSmsTemplateChange(templateId: string) {
+    setSelectedSmsTemplateId(templateId);
+
+    const template = smsTemplates.find((item) => item.id === templateId) ?? null;
+
+    if (!template) {
       setSmsBody("");
       return;
     }
 
-    setSmsBody(resolveText(selectedSmsTemplate.body, templateContext));
-  }, [selectedSmsTemplate, templateContext]);
+    setSmsBody(resolveText(template.body, templateContext));
+  }
 
   return (
     <div className="space-y-6">
@@ -147,7 +155,7 @@ export default function ProspectCommunicationsComposer({
           <TemplateSelect
             label="Email template"
             value={selectedEmailTemplateId}
-            onChange={setSelectedEmailTemplateId}
+            onChange={handleEmailTemplateChange}
             options={emailTemplates.map((template) => ({ value: template.id, label: template.name }))}
             placeholder="Select email template"
           />
@@ -200,7 +208,7 @@ export default function ProspectCommunicationsComposer({
           <TemplateSelect
             label="SMS template"
             value={selectedSmsTemplateId}
-            onChange={setSelectedSmsTemplateId}
+            onChange={handleSmsTemplateChange}
             options={smsTemplates.map((template) => ({ value: template.id, label: template.name }))}
             placeholder="Select SMS template"
           />
