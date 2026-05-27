@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 
 type EmailTemplate = {
@@ -121,34 +121,31 @@ export default function ProspectTemplateMessageForm({
     [templates, selectedTemplateId],
   );
 
-  useEffect(() => {
-    if (!isIndividualProspectEmail || selectedTemplateId) return;
+  function resolveTemplateSubject(template: EmailTemplate) {
+    return applyPersonalization ? personaliseText(template.subject, context) : template.subject;
+  }
 
-    setSubject(signupEmailPreset.subject);
-    setBody(signupEmailPreset.body);
-  }, [isIndividualProspectEmail, selectedTemplateId, signupEmailPreset]);
+  function resolveTemplateBody(template: EmailTemplate | SmsTemplate) {
+    return applyPersonalization ? personaliseText(template.body, context) : template.body;
+  }
 
-  useEffect(() => {
-    if (!selectedTemplate) return;
+  function handleTemplateChange(templateId: string) {
+    setSelectedTemplateId(templateId);
 
-    if (channel === "EMAIL") {
-      const template = selectedTemplate as EmailTemplate;
-      setSubject(
-        applyPersonalization
-          ? personaliseText(template.subject, context)
-          : template.subject,
-      );
-      setBody(
-        applyPersonalization ? personaliseText(template.body, context) : template.body,
-      );
+    const template = templates.find((item) => item.id === templateId) ?? null;
+
+    if (!template) {
       return;
     }
 
-    const template = selectedTemplate as SmsTemplate;
-    setBody(
-      applyPersonalization ? personaliseText(template.body, context) : template.body,
-    );
-  }, [applyPersonalization, channel, context, selectedTemplate]);
+    if (channel === "EMAIL") {
+      setSubject(resolveTemplateSubject(template as EmailTemplate));
+      setBody(resolveTemplateBody(template as EmailTemplate));
+      return;
+    }
+
+    setBody(resolveTemplateBody(template as SmsTemplate));
+  }
 
   function useSignupEmailPreset() {
     setSelectedTemplateId("");
@@ -193,7 +190,7 @@ export default function ProspectTemplateMessageForm({
           label={channel === "EMAIL" ? "Email template" : "SMS template"}
           value={selectedTemplateId}
           options={templateOptions}
-          onChange={setSelectedTemplateId}
+          onChange={handleTemplateChange}
           placeholder={channel === "EMAIL" ? "Choose email template" : "Choose SMS template"}
         />
 
