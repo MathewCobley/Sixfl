@@ -5,7 +5,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 import { sendTeamMessageAction } from "@/app/(admin)/admin/teams/actions";
@@ -144,18 +144,22 @@ export default function TeamEmailForm({
       (!selectedTemplateNeedsDynamicCtaUrl || paymentUrl.trim()),
   );
 
-  useEffect(() => {
-    if (!selectedTemplate) {
+  function handleTemplateChange(value: string) {
+    setSelectedTemplateId(value);
+
+    const template = templates.find((item) => item.id === value) ?? null;
+
+    if (!template) {
       setSubject("");
       setBody("");
       setPaymentUrl("");
       return;
     }
 
-    setSubject(resolveTeamTemplateText(selectedTemplate.subject, templateContext));
-    setBody(resolveTeamTemplateText(selectedTemplate.body, templateContext));
+    setSubject(resolveTeamTemplateText(template.subject, templateContext));
+    setBody(resolveTeamTemplateText(template.body, templateContext));
     setPaymentUrl("");
-  }, [selectedTemplate, templateContext]);
+  }
 
   function resetTemplate() {
     if (!selectedTemplate) {
@@ -199,7 +203,7 @@ export default function TeamEmailForm({
           label=""
           value={selectedTemplateId}
           options={templateOptions}
-          onChange={(value) => setSelectedTemplateId(value)}
+          onChange={handleTemplateChange}
           disabled={!emailReplyConfigured}
           placeholder={
             templates.length > 0
