@@ -103,17 +103,6 @@ export default function LeadEmailForm({
   }, [firstName, fullName, area, signupUrl]);
 
   useEffect(() => {
-    if (!selectedTemplate) {
-      setSubject("");
-      setBody("");
-      return;
-    }
-
-    setSubject(resolveTemplateText(selectedTemplate.subject, templateContext));
-    setBody(resolveTemplateText(selectedTemplate.body, templateContext));
-  }, [selectedTemplate, templateContext]);
-
-  useEffect(() => {
     if (!requiresManagedTeam) {
       setTargetTeamId("");
       return;
@@ -123,6 +112,21 @@ export default function LeadEmailForm({
       setTargetTeamId(managedTeamOptions[0].value);
     }
   }, [managedTeamOptions, requiresManagedTeam, targetTeamId]);
+
+  function handleTemplateChange(value: string) {
+    setSelectedTemplateId(value);
+
+    const template = templates.find((item) => item.id === value) ?? null;
+
+    if (!template) {
+      setSubject("");
+      setBody("");
+      return;
+    }
+
+    setSubject(resolveTemplateText(template.subject, templateContext));
+    setBody(resolveTemplateText(template.body, templateContext));
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -178,7 +182,7 @@ export default function LeadEmailForm({
           label=""
           value={selectedTemplateId}
           options={templateOptions}
-          onChange={(value) => setSelectedTemplateId(value)}
+          onChange={handleTemplateChange}
           disabled={sending}
           placeholder={
             templates.length > 0
