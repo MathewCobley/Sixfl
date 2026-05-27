@@ -29,6 +29,14 @@ type SearchParams = {
   error?: string;
 };
 
+type PlayerInterestResponseRow = {
+  id: string;
+  teamMemberId: string | null;
+  prospectId: string | null;
+  response: string;
+  respondedAt: Date;
+};
+
 const roleOptions: { value: TeamRole; label: string }[] = [
   { value: "CAPTAIN", label: "Captain" },
   { value: "MANAGER", label: "Manager" },
@@ -106,7 +114,45 @@ function getSavedMessage(saved?: string) {
   }
 }
 
-function getActivationEmailBadgeLabel(status?: NotificationDispatchStatus) {
+function getActivationStatusText(input: {
+  label: "Activation email" | "SMS chase";
+  status: NotificationDispatchStatus;
+  createdAt: Date;
+  scheduledFor: Date;
+  sentAt: Date | null;
+  failedAt: Date | null;
+}) {
+  switch (input.status) {
+    case "SENT":
+      return `${input.label} sent ${formatUkDateTime(input.sentAt ?? input.createdAt)}`;
+    case "QUEUED":
+      return `${input.label} queued ${formatUkDateTime(input.scheduledFor ?? input.createdAt)}`;
+    case "PROCESSING":
+      return `${input.label} is being processed (${formatUkDateTime(input.createdAt)})`;
+    case "FAILED":
+      return `${input.label} failed ${formatUkDateTime(input.failedAt ?? input.createdAt)}`;
+    case "SKIPPED":
+      return `${input.label} skipped ${formatUkDateTime(input.createdAt)}`;
+    case "CANCELLED":
+      return `${input.label} cancelled ${formatUkDateTime(input.createdAt)}`;
+    default:
+      return `${input.label} queued ${formatUkDateTime(input.createdAt)}`;
+  }
+}
+
+function getActivationStatusClasses(status?: NotificationDispatchStatus) {
+  if (status === "FAILED" || status === "SKIPPED" || status === "CANCELLED") {
+    return "border-red-400/20 bg-red-500/10 text-red-100";
+  }
+
+  if (status === "SENT") {
+    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  }
+
+  return "border-sky-400/20 bg-sky-500/10 text-sky-100";
+}
+
+function getActivationBadgeLabel(status?: NotificationDispatchStatus) {
   switch (status) {
     case "SENT":
       return "Activation sent";
@@ -122,66 +168,6 @@ function getActivationEmailBadgeLabel(status?: NotificationDispatchStatus) {
     default:
       return "Activation email";
   }
-}
-
-function getActivationEmailStatusText(input: {
-  status: NotificationDispatchStatus;
-  createdAt: Date;
-  scheduledFor: Date;
-  sentAt: Date | null;
-  failedAt: Date | null;
-}) {
-  switch (input.status) {
-    case "SENT":
-      return `Activation email sent ${formatUkDateTime(input.sentAt ?? input.createdAt)}`;
-    case "QUEUED":
-      return `Activation email queued ${formatUkDateTime(input.scheduledFor ?? input.createdAt)}`;
-    case "PROCESSING":
-      return `Activation email is being processed (${formatUkDateTime(input.createdAt)})`;
-    case "FAILED":
-      return `Activation email failed ${formatUkDateTime(input.failedAt ?? input.createdAt)}`;
-    case "SKIPPED":
-      return `Activation email skipped ${formatUkDateTime(input.createdAt)}`;
-    case "CANCELLED":
-      return `Activation email cancelled ${formatUkDateTime(input.createdAt)}`;
-    default:
-      return `Activation email queued ${formatUkDateTime(input.createdAt)}`;
-  }
-}
-function getActivationSmsStatusText(input: {
-  status: NotificationDispatchStatus;
-  createdAt: Date;
-  scheduledFor: Date;
-  sentAt: Date | null;
-  failedAt: Date | null;
-}) {
-  switch (input.status) {
-    case "SENT":
-      return `SMS chase sent ${formatUkDateTime(input.sentAt ?? input.createdAt)}`;
-    case "QUEUED":
-      return `SMS chase queued ${formatUkDateTime(input.scheduledFor ?? input.createdAt)}`;
-    case "PROCESSING":
-      return `SMS chase is being processed (${formatUkDateTime(input.createdAt)})`;
-    case "FAILED":
-      return `SMS chase failed ${formatUkDateTime(input.failedAt ?? input.createdAt)}`;
-    case "SKIPPED":
-      return `SMS chase skipped ${formatUkDateTime(input.createdAt)}`;
-    case "CANCELLED":
-      return `SMS chase cancelled ${formatUkDateTime(input.createdAt)}`;
-    default:
-      return `SMS chase queued ${formatUkDateTime(input.createdAt)}`;
-  }
-}
-function getActivationEmailStatusClasses(status?: NotificationDispatchStatus) {
-  if (status === "FAILED" || status === "SKIPPED" || status === "CANCELLED") {
-    return "border-red-400/20 bg-red-500/10 text-red-100";
-  }
-
-  if (status === "SENT") {
-    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-  }
-
-  return "border-sky-400/20 bg-sky-500/10 text-sky-100";
 }
 
 function formatPreferredNights(value: unknown) {
@@ -223,6 +209,52 @@ function CommunicationButton({ href, label = "Comms" }: { href: string; label?: 
       {label}
     </Link>
   );
+}
+
+function getResponseBadgeClasses(response?: string | null) {
+  if (response === "YES") {
+    return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+  }
+
+  if (response === "NO") {
+    return "border-red-400/25 bg-red-500/10 text-red-100";
+  }
+
+  return "border-white/10 bg-white/[0.04] text-white/55";
+}
+
+function getResponseBadgeLabel(response?: string | null) {
+  if (response === "YES") return "YES — still wants to play";
+  if (response === "NO") return "NO — remove / follow up";
+  return "No YES/NO reply yet";
+}
+
+function PlayerResponseBadge({ response }: { response?: PlayerInterestResponseRow | null }) {
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getResponseBadgeClasses(response?.response)}`}>
+      {getResponseBadgeLabel(response?.response)}
+      {response?.respondedAt ? ` · ${formatUkDateTime(response.respondedAt)}` : ""}
+    </span>
+  );
+}
+
+async function getPlayerInterestResponses(teamId: string) {
+  try {
+    return await prisma.$queryRaw<PlayerInterestResponseRow[]>`
+      SELECT DISTINCT ON (COALESCE("teamMemberId", "prospectId"))
+        "id",
+        "teamMemberId",
+        "prospectId",
+        "response",
+        "respondedAt"
+      FROM "PlayerInterestResponse"
+      WHERE "teamId" = ${teamId}
+      ORDER BY COALESCE("teamMemberId", "prospectId"), "respondedAt" DESC
+    `;
+  } catch (error) {
+    console.error("Could not load player interest responses for squad page", error);
+    return [];
+  }
 }
 
 export default async function CaptainSquadPage({
@@ -298,9 +330,23 @@ export default async function CaptainSquadPage({
 
   if (!team) notFound();
 
-  const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(
-    team.members.map((member) => member.id),
-  );
+  const [profileByMemberId, playerInterestResponses] = await Promise.all([
+    getTeamMemberProfilesByTeamMemberIds(team.members.map((member) => member.id)),
+    getPlayerInterestResponses(team.id),
+  ]);
+
+  const latestResponseByMemberId = new Map<string, PlayerInterestResponseRow>();
+  const latestResponseByProspectId = new Map<string, PlayerInterestResponseRow>();
+
+  for (const response of playerInterestResponses) {
+    if (response.teamMemberId && !latestResponseByMemberId.has(response.teamMemberId)) {
+      latestResponseByMemberId.set(response.teamMemberId, response);
+    }
+
+    if (response.prospectId && !latestResponseByProspectId.has(response.prospectId)) {
+      latestResponseByProspectId.set(response.prospectId, response);
+    }
+  }
 
   const linkedMemberEmails = new Set(
     team.members
@@ -316,58 +362,45 @@ export default async function CaptainSquadPage({
     return !linkedMemberEmails.has(normalizedEmail);
   });
 
-  const latestActivationDispatches = pendingSquadProspects.length
-    ? await prisma.notificationDispatch.findMany({
-        where: {
-          sourceType: "TEAM_PLAYER_PROSPECT",
-          sourceId: {
-            in: pendingSquadProspects.map((prospect) => prospect.id),
+  const [latestActivationDispatches, latestActivationSmsDispatches] = await Promise.all([
+    pendingSquadProspects.length
+      ? prisma.notificationDispatch.findMany({
+          where: {
+            sourceType: "TEAM_PLAYER_PROSPECT",
+            sourceId: { in: pendingSquadProspects.map((prospect) => prospect.id) },
+            template: { is: { key: "squad-activation-email" } },
           },
-          template: {
-            is: {
-              key: "squad-activation-email",
-            },
+          select: {
+            sourceId: true,
+            status: true,
+            createdAt: true,
+            scheduledFor: true,
+            sentAt: true,
+            failedAt: true,
           },
-        },
-        select: {
-          sourceId: true,
-          status: true,
-          createdAt: true,
-          scheduledFor: true,
-          sentAt: true,
-          failedAt: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      })
-    : [];
-    const latestActivationSmsDispatches = pendingSquadProspects.length
-    ? await prisma.notificationDispatch.findMany({
-        where: {
-          sourceType: "TEAM_PLAYER_PROSPECT",
-          sourceId: {
-            in: pendingSquadProspects.map((prospect) => prospect.id),
+          orderBy: { createdAt: "desc" },
+        })
+      : [],
+    pendingSquadProspects.length
+      ? prisma.notificationDispatch.findMany({
+          where: {
+            sourceType: "TEAM_PLAYER_PROSPECT",
+            sourceId: { in: pendingSquadProspects.map((prospect) => prospect.id) },
+            template: { is: { key: "squad-activation-sms" } },
           },
-          template: {
-            is: {
-              key: "squad-activation-sms",
-            },
+          select: {
+            sourceId: true,
+            status: true,
+            createdAt: true,
+            scheduledFor: true,
+            sentAt: true,
+            failedAt: true,
           },
-        },
-        select: {
-          sourceId: true,
-          status: true,
-          createdAt: true,
-          scheduledFor: true,
-          sentAt: true,
-          failedAt: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      })
-    : [];
+          orderBy: { createdAt: "desc" },
+        })
+      : [],
+  ]);
+
   const activationDispatchByProspectId = new Map<
     string,
     (typeof latestActivationDispatches)[number]
@@ -378,21 +411,25 @@ export default async function CaptainSquadPage({
       activationDispatchByProspectId.set(dispatch.sourceId, dispatch);
     }
   }
-  const activationSmsDispatchByProspectId = new Map<
-  string,
-  (typeof latestActivationSmsDispatches)[number]
->();
 
-for (const dispatch of latestActivationSmsDispatches) {
-  if (dispatch.sourceId && !activationSmsDispatchByProspectId.has(dispatch.sourceId)) {
-    activationSmsDispatchByProspectId.set(dispatch.sourceId, dispatch);
+  const activationSmsDispatchByProspectId = new Map<
+    string,
+    (typeof latestActivationSmsDispatches)[number]
+  >();
+
+  for (const dispatch of latestActivationSmsDispatches) {
+    if (dispatch.sourceId && !activationSmsDispatchByProspectId.has(dispatch.sourceId)) {
+      activationSmsDispatchByProspectId.set(dispatch.sourceId, dispatch);
+    }
   }
-}
+
   const captainCount = team.members.filter((member) => member.role === "CAPTAIN").length;
   const managerCount = team.members.filter((member) => member.role === "MANAGER").length;
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
   const coachCount = team.members.filter((member) => member.role === "COACH").length;
   const totalSquadCount = team.members.length + pendingSquadProspects.length;
+  const yesCount = playerInterestResponses.filter((response) => response.response === "YES").length;
+  const noCount = playerInterestResponses.filter((response) => response.response === "NO").length;
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
@@ -419,6 +456,11 @@ for (const dispatch of latestActivationSmsDispatches) {
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
                 {totalSquadCount} squad player{totalSquadCount === 1 ? "" : "s"}
               </span>
+              {playerInterestResponses.length > 0 ? (
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                  {yesCount} YES · {noCount} NO
+                </span>
+              ) : null}
               {pendingSquadProspects.length > 0 ? (
                 <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
                   {pendingSquadProspects.length} pending activation
@@ -440,12 +482,20 @@ for (const dispatch of latestActivationSmsDispatches) {
                 Open prospects
               </Link>
               {canOpenAdminComms ? (
-                <Link
-                  href={`/admin/teams/${teamid}/communications`}
-                  className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-                >
-                  Team communications
-                </Link>
+                <>
+                  <Link
+                    href={`/admin/teams/${teamid}/communications`}
+                    className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                  >
+                    Team communications
+                  </Link>
+                  <Link
+                    href={`/admin/player-responses?teamId=${teamid}`}
+                    className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-500/10 px-5 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+                  >
+                    View YES/NO responses
+                  </Link>
+                </>
               ) : null}
             </div>
           </div>
@@ -455,7 +505,7 @@ for (const dispatch of latestActivationSmsDispatches) {
               { label: "Captains", value: captainCount, copy: "Linked captain roles in squad.", tone: "amber" },
               { label: "Managers", value: managerCount, copy: "Organisers and managers attached.", tone: "emerald" },
               { label: "Linked players", value: playerCount, copy: "Players with a SIXFL account.", tone: "white" },
-              { label: "Coaches", value: coachCount, copy: "Coach roles currently assigned.", tone: "sky" },
+              { label: "Responses", value: playerInterestResponses.length, copy: `${yesCount} YES · ${noCount} NO`, tone: "sky" },
             ].map((metric) => {
               const toneClasses =
                 metric.tone === "amber"
@@ -516,6 +566,7 @@ for (const dispatch of latestActivationSmsDispatches) {
             {team.members.map((member) => {
               const profile = profileByMemberId.get(member.id);
               const preferredNights = formatPreferredNights(profile?.preferredNights);
+              const latestResponse = latestResponseByMemberId.get(member.id);
               const hasProfileDetails = Boolean(
                 profile?.phone ||
                   profile?.ageBand ||
@@ -544,6 +595,7 @@ for (const dispatch of latestActivationSmsDispatches) {
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
+                        <PlayerResponseBadge response={latestResponse} />
                       </div>
                       <div className="mt-2 text-sm text-white/65">
                         {member.user.email || "No email on account"}
@@ -604,12 +656,11 @@ for (const dispatch of latestActivationSmsDispatches) {
                       </button>
                     </form>
 
-                    {canOpenAdminComms && profile?.sourceProspectId ? (
+                    {canOpenAdminComms ? (
                       <CommunicationButton
-                        href={`/admin/teams/${teamid}/prospects/${profile.sourceProspectId}/communications`}
+                        href={`/admin/teams/${teamid}/players/${member.id}/communications`}
+                        label="Player comms"
                       />
-                    ) : canOpenAdminComms ? (
-                      <CommunicationButton href={`/admin/teams/${teamid}/communications`} label="Team comms" />
                     ) : null}
 
                     <form action={removeSquadMemberAction}>
@@ -653,7 +704,9 @@ for (const dispatch of latestActivationSmsDispatches) {
                       const hasEmail = Boolean(prospect.email?.trim());
                       const latestActivationDispatch = activationDispatchByProspectId.get(prospect.id);
                       const latestActivationSmsDispatch = activationSmsDispatchByProspectId.get(prospect.id);
+                      const latestResponse = latestResponseByProspectId.get(prospect.id);
                       const hasActivationEmailBeenQueued = Boolean(latestActivationDispatch);
+
                       return (
                         <div
                           key={prospect.id}
@@ -672,9 +725,10 @@ for (const dispatch of latestActivationSmsDispatches) {
                                 <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">
                                   Pending account
                                 </span>
+                                <PlayerResponseBadge response={latestResponse} />
                                 {latestActivationDispatch ? (
-                                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getActivationEmailStatusClasses(latestActivationDispatch.status)}`}>
-                                    {getActivationEmailBadgeLabel(latestActivationDispatch.status)}
+                                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getActivationStatusClasses(latestActivationDispatch.status)}`}>
+                                    {getActivationBadgeLabel(latestActivationDispatch.status)}
                                   </span>
                                 ) : null}
                               </div>
@@ -689,8 +743,8 @@ for (const dispatch of latestActivationSmsDispatches) {
                               </div>
 
                               {latestActivationDispatch ? (
-                                <div className={`mt-2 rounded-xl border px-3 py-2 text-xs font-medium ${getActivationEmailStatusClasses(latestActivationDispatch.status)}`}>
-                                  {getActivationEmailStatusText(latestActivationDispatch)}
+                                <div className={`mt-2 rounded-xl border px-3 py-2 text-xs font-medium ${getActivationStatusClasses(latestActivationDispatch.status)}`}>
+                                  {getActivationStatusText({ label: "Activation email", ...latestActivationDispatch })}
                                 </div>
                               ) : (
                                 <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-white/50">
@@ -699,12 +753,8 @@ for (const dispatch of latestActivationSmsDispatches) {
                               )}
 
                               {latestActivationSmsDispatch ? (
-                                <div
-                                  className={`mt-2 rounded-xl border px-3 py-2 text-xs font-medium ${getActivationEmailStatusClasses(
-                                    latestActivationSmsDispatch.status,
-                                  )}`}
-                                >
-                                  {getActivationSmsStatusText(latestActivationSmsDispatch)}
+                                <div className={`mt-2 rounded-xl border px-3 py-2 text-xs font-medium ${getActivationStatusClasses(latestActivationSmsDispatch.status)}`}>
+                                  {getActivationStatusText({ label: "SMS chase", ...latestActivationSmsDispatch })}
                                 </div>
                               ) : null}
 
@@ -735,7 +785,7 @@ for (const dispatch of latestActivationSmsDispatches) {
                                 Chase by SMS
                               </button>
                             </form>
-                            
+
                             {canOpenAdminComms ? (
                               <CommunicationButton
                                 href={`/admin/teams/${teamid}/prospects/${prospect.id}/communications`}
@@ -776,6 +826,12 @@ for (const dispatch of latestActivationSmsDispatches) {
                   className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
                 >
                   Open team communications
+                </Link>
+                <Link
+                  href={`/admin/player-responses?teamId=${teamid}`}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+                >
+                  View YES/NO responses
                 </Link>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
                   Use the individual <span className="text-white/80">Comms</span> buttons beside players for one-to-one player/prospect messages.
