@@ -360,25 +360,33 @@ export default function TeamCommunicationsComposer({
     };
   }, [teamId]);
 
-  useEffect(() => {
-    if (!selectedEmailTemplate) {
+  function handleEmailTemplateChange(templateId: string) {
+    setSelectedEmailTemplateId(templateId);
+
+    const template = emailTemplates.find((item) => item.id === templateId) ?? null;
+
+    if (!template) {
       setEmailSubject("");
       setEmailBody("");
       return;
     }
 
-    setEmailSubject(resolveText(selectedEmailTemplate.subject, templateContext));
-    setEmailBody(resolveText(selectedEmailTemplate.body, templateContext));
-  }, [selectedEmailTemplate, templateContext]);
+    setEmailSubject(resolveText(template.subject, templateContext));
+    setEmailBody(resolveText(template.body, templateContext));
+  }
 
-  useEffect(() => {
-    if (!selectedSmsTemplate) {
+  function handleSmsTemplateChange(templateId: string) {
+    setSelectedSmsTemplateId(templateId);
+
+    const template = smsTemplates.find((item) => item.id === templateId) ?? null;
+
+    if (!template) {
       setSmsBody("");
       return;
     }
 
-    setSmsBody(resolveText(selectedSmsTemplate.body, templateContext));
-  }, [selectedSmsTemplate, templateContext]);
+    setSmsBody(resolveText(template.body, templateContext));
+  }
 
   function toggleRecipient(value: string) {
     setSelectedRecipientValues((current) => {
@@ -660,7 +668,7 @@ export default function TeamCommunicationsComposer({
           <TemplateSelect
             label="Email template"
             value={selectedEmailTemplateId}
-            onChange={setSelectedEmailTemplateId}
+            onChange={handleEmailTemplateChange}
             options={emailTemplates.map((template) => ({ value: template.id, label: template.name }))}
             placeholder="Select email template"
           />
@@ -739,7 +747,7 @@ export default function TeamCommunicationsComposer({
           <TemplateSelect
             label="SMS template"
             value={selectedSmsTemplateId}
-            onChange={setSelectedSmsTemplateId}
+            onChange={handleSmsTemplateChange}
             options={smsTemplates.map((template) => ({ value: template.id, label: template.name }))}
             placeholder="Select SMS template"
           />
