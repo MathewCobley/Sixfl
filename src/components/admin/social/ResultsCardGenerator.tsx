@@ -33,6 +33,7 @@ const HOME_SCORE_X = 438;
 const AWAY_SCORE_X = 640;
 const AWAY_NAME_X = 708;
 const AWAY_BADGE_X = 1010;
+const CENTRE_SEPARATOR_X = 540;
 const THREE_FIXTURE_BADGE_SIZE = 68;
 const FOUR_FIXTURE_BADGE_SIZE = 58;
 const THREE_FIXTURE_TEAM_NAME_FONT_SIZE = 22;
@@ -162,6 +163,30 @@ function drawScore(input: {
   ctx.restore();
 }
 
+function drawCentreSeparator(input: {
+  ctx: CanvasRenderingContext2D;
+  y: number;
+  isFourFixtureCard: boolean;
+}) {
+  const { ctx, y, isFourFixtureCard } = input;
+
+  ctx.save();
+
+  // The template already has separators baked into it, but the lower rows can
+  // sit slightly out of line. Mask the old separator area and draw a fresh one
+  // exactly on the generated row centre.
+  ctx.fillStyle = "rgba(16, 18, 18, 0.64)";
+  ctx.fillRect(CENTRE_SEPARATOR_X - 24, y - 32, 48, 64);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${isFourFixtureCard ? 38 : 44}px Impact, Arial Black, Arial, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(":", CENTRE_SEPARATOR_X, y - 1);
+
+  ctx.restore();
+}
+
 function drawFooter(input: {
   ctx: CanvasRenderingContext2D;
   matchweekLabel: string;
@@ -237,6 +262,8 @@ export default function ResultsCardGenerator({
           const y = rowYValues[index];
           const homeBadge = badgeEntries[index * 2] ?? null;
           const awayBadge = badgeEntries[index * 2 + 1] ?? null;
+
+          drawCentreSeparator({ ctx, y, isFourFixtureCard });
 
           drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: badgeSize });
           drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: homeNameMaxWidth, fontSize: teamNameFontSize });
