@@ -38,19 +38,22 @@ export default async function ClaimTeamPage({
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
     if (!user) redirect("/login");
 
     const team = await prisma.team.findUnique({
       where: { claimCode: code },
-      select: { id: true, name: true },
+      select: { id: true, name: true, contactName: true },
     });
 
     if (!team) {
       redirect(`/claim?error=invalid&code=${encodeURIComponent(code)}`);
     }
+
+    const captainName = team.contactName?.trim() || null;
+    const shouldSyncUserName = captainName && !user.name?.trim();
 
     await prisma.$transaction([
       prisma.teamMember.upsert({
@@ -77,6 +80,14 @@ export default async function ClaimTeamPage({
           captainClaimSource: "CLAIM_LINK",
         },
       }),
+      ...(shouldSyncUserName
+        ? [
+            prisma.user.update({
+              where: { id: user.id },
+              data: { name: captainName },
+            }),
+          ]
+        : []),
     ]);
 
     redirect(`/captain/team/${team.id}?claimed=1`);
