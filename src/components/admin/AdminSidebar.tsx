@@ -33,81 +33,97 @@ const navigation = [
     href: "/admin",
     icon: ShieldCheckIcon,
     exact: true,
+    description: "Admin dashboard",
   },
   {
     name: "Search",
     href: "/admin/search",
     icon: MagnifyingGlassIcon,
+    description: "Find by mobile or email",
   },
   {
     name: "Teams",
     href: "/admin/teams",
     icon: UserGroupIcon,
+    description: "Squads and captains",
   },
   {
     name: "Users",
     href: "/admin/users",
     icon: UsersIcon,
+    description: "Names and linked accounts",
   },
   {
     name: "Leagues",
     href: "/admin/leagues",
     icon: TrophyIcon,
+    description: "League setup",
   },
   {
     name: "Venues",
     href: "/admin/venues",
     icon: MapPinIcon,
+    description: "Match locations",
   },
   {
     name: "Fixtures",
     href: "/admin/fixtures",
     icon: CalendarDaysIcon,
+    description: "Schedule and results",
   },
   {
     name: "Social",
     href: "/admin/social",
     icon: PhotoIcon,
+    description: "Drafts and publishing",
   },
   {
     name: "Result Disputes",
     href: "/admin/results",
     icon: ExclamationTriangleIcon,
+    description: "Captain-raised issues",
   },
   {
     name: "Payments",
     href: "/admin/payments",
     icon: DocumentTextIcon,
+    description: "Charges and payments",
   },
   {
     name: "Subscriptions",
     href: "/admin/payments/subscriptions",
     icon: CreditCardIcon,
+    description: "Recurring Stripe billing",
   },
   {
     name: "Referees",
     href: "/admin/referees",
     icon: ShieldCheckIcon,
+    description: "Officials and assignments",
   },
   {
     name: "Leads",
     href: "/admin/leads",
     icon: UsersIcon,
+    description: "Inbound enquiries",
   },
   {
     name: "Communications",
     href: "/admin/messaging",
     icon: DocumentTextIcon,
+    description: "Email, SMS and history",
   },
   {
     name: "Queue",
     href: "/admin/queue",
     icon: Cog6ToothIcon,
+    description: "SMS and email dispatches",
   },
   {
     name: "Templates",
     href: "/admin/templates",
     icon: DocumentTextIcon,
+    description: "Email and SMS messaging",
   },
 ];
 
@@ -149,19 +165,23 @@ export default function AdminSidebar({
           </div>
         </div>
 
-        <nav className="space-y-2 p-4">
+        <nav className="grid grid-cols-2 gap-2 p-4">
           {navigation.map((item) => {
             const active = isActivePath(pathname, item.href, item.exact);
             const Icon = item.icon;
             const unreadCount =
               item.name === "Communications" ? unreadMessagingCount : 0;
+            const description =
+              item.name === "Communications" && unreadCount > 0
+                ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
+                : item.description;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={[
-                  "group flex items-center gap-3 rounded-2xl border px-4 py-3 transition",
+                  "group flex min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition",
                   active
                     ? "border-emerald-400/25 bg-emerald-400/12 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                     : "border-white/8 bg-white/[0.02] text-white/75 hover:border-white/15 hover:bg-white/[0.05] hover:text-white",
@@ -169,46 +189,30 @@ export default function AdminSidebar({
               >
                 <div
                   className={[
-                    "flex h-10 w-10 items-center justify-center rounded-xl border transition",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition",
                     active
                       ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
                       : "border-white/10 bg-black/30 text-white/55 group-hover:text-white/80",
                   ].join(" ")}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-4.5 w-4.5" />
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold">{item.name}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="truncate text-sm font-semibold">
+                      {item.name}
+                    </div>
 
                     {unreadCount > 0 ? (
-                      <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
+                      <span className="inline-flex min-w-[1.35rem] shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200">
                         {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
                     ) : null}
                   </div>
 
-                  <div className="mt-0.5 text-xs text-white/35">
-                    {item.name === "Overview" && "Admin dashboard"}
-                    {item.name === "Search" && "Find by mobile or email"}
-                    {item.name === "Teams" && "Squads and captains"}
-                    {item.name === "Users" && "Names and linked accounts"}
-                    {item.name === "Leagues" && "League setup"}
-                    {item.name === "Venues" && "Match locations"}
-                    {item.name === "Fixtures" && "Schedule and results"}
-                    {item.name === "Social" && "Drafts and publishing"}
-                    {item.name === "Result Disputes" && "Captain-raised issues"}
-                    {item.name === "Payments" && "Charges and payments"}
-                    {item.name === "Subscriptions" && "Recurring Stripe billing"}
-                    {item.name === "Referees" && "Officials and assignments"}
-                    {item.name === "Leads" && "Inbound enquiries"}
-                    {item.name === "Communications" &&
-                      (unreadCount > 0
-                        ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
-                        : "Email, SMS and history")}
-                    {item.name === "Queue" && "SMS and email dispatches"}
-                    {item.name === "Templates" && "Email and SMS messaging"}
+                  <div className="mt-0.5 truncate text-[11px] text-white/35">
+                    {description}
                   </div>
                 </div>
               </Link>
