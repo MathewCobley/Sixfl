@@ -31,8 +31,7 @@ export default async function ClaimTeamPage({
     if (!session?.user?.email) redirect("/login");
 
     const email = session.user.email.toLowerCase().trim();
-
-    const code = String(formData.get("code") ?? "").trim().toUpperCase();
+    const code = String(formData.get("code") ?? "").trim();
 
     if (!code) redirect("/claim?error=missing_code");
 
@@ -43,8 +42,13 @@ export default async function ClaimTeamPage({
 
     if (!user) redirect("/login");
 
-    const team = await prisma.team.findUnique({
-      where: { claimCode: code },
+    const team = await prisma.team.findFirst({
+      where: {
+        claimCode: {
+          equals: code,
+          mode: "insensitive",
+        },
+      },
       select: { id: true, name: true, contactName: true },
     });
 
@@ -53,7 +57,12 @@ export default async function ClaimTeamPage({
     }
 
     const captainName = team.contactName?.trim() || null;
-    const shouldSyncUserName = captainName && !user.name?.trim();
+    const userNameUpdate = captainName && !user.name?.trim()
+      ? prisma.user.update({
+          where: { id: user.id },
+          data: { name: captainName },
+        })
+      : null;
 
     await prisma.$transaction([
       prisma.teamMember.upsert({
@@ -80,14 +89,7 @@ export default async function ClaimTeamPage({
           captainClaimSource: "CLAIM_LINK",
         },
       }),
-      ...(shouldSyncUserName
-        ? [
-            prisma.user.update({
-              where: { id: user.id },
-              data: { name: captainName },
-            }),
-          ]
-        : []),
+      ...(userNameUpdate ? [userNameUpdate] : []),
     ]);
 
     redirect(`/captain/team/${team.id}?claimed=1`);
