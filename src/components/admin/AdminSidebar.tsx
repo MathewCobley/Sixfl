@@ -11,6 +11,7 @@ import {
   CreditCardIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
+  MagnifyingGlassIcon,
   MapPinIcon,
   PhotoIcon,
   Cog6ToothIcon,
@@ -32,6 +33,11 @@ const navigation = [
     href: "/admin",
     icon: ShieldCheckIcon,
     exact: true,
+  },
+  {
+    name: "Search",
+    href: "/admin/search",
+    icon: MagnifyingGlassIcon,
   },
   {
     name: "Teams",
@@ -185,6 +191,7 @@ export default function AdminSidebar({
 
                   <div className="mt-0.5 text-xs text-white/35">
                     {item.name === "Overview" && "Admin dashboard"}
+                    {item.name === "Search" && "Find by mobile or email"}
                     {item.name === "Teams" && "Squads and captains"}
                     {item.name === "Users" && "Names and linked accounts"}
                     {item.name === "Leagues" && "League setup"}
