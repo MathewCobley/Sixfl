@@ -34,11 +34,7 @@ function getPhoneSearchValues(query: string) {
   const digits = query.replace(/\D/g, "");
   const lastSevenDigits = digits.length >= 7 ? digits.slice(-7) : null;
 
-  return {
-    normalised,
-    digits,
-    lastSevenDigits,
-  };
+  return { normalised, digits, lastSevenDigits };
 }
 
 function nonEmpty(values: Array<string | null | undefined>) {
@@ -95,31 +91,25 @@ export default async function AdminSearchPage({ searchParams }: Props) {
     ? await Promise.all([
         prisma.user.findMany({
           where: {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { email: { contains: q, mode: "insensitive" } },
-            ],
+            OR: [{ name: { contains: q } }, { email: { contains: q } }],
           },
           orderBy: [{ name: "asc" }, { email: "asc" }],
           take: 20,
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
+          select: { id: true, name: true, email: true, role: true },
         }),
         prisma.interestLead.findMany({
           where: {
             OR: [
-              { contactName: { contains: q, mode: "insensitive" } },
-              { email: { contains: q, mode: "insensitive" } },
-              { phone: { contains: q, mode: "insensitive" } },
-              { phoneNormalized: phone.normalised ? { equals: phone.normalised } : undefined },
-              { phoneNormalized: phone.lastSevenDigits ? { contains: phone.lastSevenDigits } : undefined },
-              { teamName: { contains: q, mode: "insensitive" } },
-              { area: { contains: q, mode: "insensitive" } },
-            ].filter(Boolean),
+              { contactName: { contains: q } },
+              { email: { contains: q } },
+              { phone: { contains: q } },
+              { teamName: { contains: q } },
+              { area: { contains: q } },
+              ...(phone.normalised ? [{ phoneNormalized: phone.normalised }] : []),
+              ...(phone.lastSevenDigits
+                ? [{ phoneNormalized: { contains: phone.lastSevenDigits } }]
+                : []),
+            ],
           },
           orderBy: [{ createdAt: "desc" }],
           take: 30,
@@ -133,18 +123,19 @@ export default async function AdminSearchPage({ searchParams }: Props) {
             area: true,
             status: true,
             interestType: true,
-            createdAt: true,
           },
         }),
         prisma.teamPlayerProspect.findMany({
           where: {
             OR: [
-              { firstName: { contains: q, mode: "insensitive" } },
-              { lastName: { contains: q, mode: "insensitive" } },
-              { email: { contains: q, mode: "insensitive" } },
-              { phone: { contains: q, mode: "insensitive" } },
-              { phone: phone.lastSevenDigits ? { contains: phone.lastSevenDigits } : undefined },
-            ].filter(Boolean),
+              { firstName: { contains: q } },
+              { lastName: { contains: q } },
+              { email: { contains: q } },
+              { phone: { contains: q } },
+              ...(phone.lastSevenDigits
+                ? [{ phone: { contains: phone.lastSevenDigits } }]
+                : []),
+            ],
           },
           orderBy: [{ createdAt: "desc" }],
           take: 30,
@@ -156,27 +147,26 @@ export default async function AdminSearchPage({ searchParams }: Props) {
             phone: true,
             status: true,
             preferredPositions: true,
-            team: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            team: { select: { id: true, name: true } },
           },
         }),
         prisma.team.findMany({
           where: {
             OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { contactName: { contains: q, mode: "insensitive" } },
-              { contactEmail: { contains: q, mode: "insensitive" } },
-              { contactPhone: { contains: q, mode: "insensitive" } },
-              { contactPhone: phone.lastSevenDigits ? { contains: phone.lastSevenDigits } : undefined },
-              { secondaryContactName: { contains: q, mode: "insensitive" } },
-              { secondaryContactEmail: { contains: q, mode: "insensitive" } },
-              { secondaryContactPhone: { contains: q, mode: "insensitive" } },
-              { secondaryContactPhone: phone.lastSevenDigits ? { contains: phone.lastSevenDigits } : undefined },
-            ].filter(Boolean),
+              { name: { contains: q } },
+              { contactName: { contains: q } },
+              { contactEmail: { contains: q } },
+              { contactPhone: { contains: q } },
+              { secondaryContactName: { contains: q } },
+              { secondaryContactEmail: { contains: q } },
+              { secondaryContactPhone: { contains: q } },
+              ...(phone.lastSevenDigits
+                ? [
+                    { contactPhone: { contains: phone.lastSevenDigits } },
+                    { secondaryContactPhone: { contains: phone.lastSevenDigits } },
+                  ]
+                : []),
+            ],
           },
           orderBy: [{ name: "asc" }],
           take: 30,
@@ -190,24 +180,21 @@ export default async function AdminSearchPage({ searchParams }: Props) {
             secondaryContactEmail: true,
             secondaryContactPhone: true,
             teamMode: true,
-            league: {
-              select: {
-                name: true,
-                season: true,
-              },
-            },
+            league: { select: { name: true, season: true } },
           },
         }),
         prisma.notificationRecipient.findMany({
           where: {
             OR: [
-              { displayName: { contains: q, mode: "insensitive" } },
-              { email: { contains: q, mode: "insensitive" } },
-              { emailNormalized: { contains: q.toLowerCase(), mode: "insensitive" } },
-              { phone: { contains: q, mode: "insensitive" } },
-              { phoneNormalized: phone.normalised ? { equals: phone.normalised } : undefined },
-              { phoneNormalized: phone.lastSevenDigits ? { contains: phone.lastSevenDigits } : undefined },
-            ].filter(Boolean),
+              { displayName: { contains: q } },
+              { email: { contains: q } },
+              { emailNormalized: { contains: q.toLowerCase() } },
+              { phone: { contains: q } },
+              ...(phone.normalised ? [{ phoneNormalized: phone.normalised }] : []),
+              ...(phone.lastSevenDigits
+                ? [{ phoneNormalized: { contains: phone.lastSevenDigits } }]
+                : []),
+            ],
           },
           orderBy: [{ updatedAt: "desc" }],
           take: 30,
@@ -226,13 +213,15 @@ export default async function AdminSearchPage({ searchParams }: Props) {
         prisma.messageThread.findMany({
           where: {
             OR: [
-              { contactName: { contains: q, mode: "insensitive" } },
-              { contactEmail: { contains: q, mode: "insensitive" } },
-              { emailNormalized: { contains: q.toLowerCase(), mode: "insensitive" } },
-              { contactPhone: { contains: q, mode: "insensitive" } },
-              { phoneNormalized: phone.normalised ? { equals: phone.normalised } : undefined },
-              { phoneNormalized: phone.lastSevenDigits ? { contains: phone.lastSevenDigits } : undefined },
-            ].filter(Boolean),
+              { contactName: { contains: q } },
+              { contactEmail: { contains: q } },
+              { emailNormalized: { contains: q.toLowerCase() } },
+              { contactPhone: { contains: q } },
+              ...(phone.normalised ? [{ phoneNormalized: phone.normalised }] : []),
+              ...(phone.lastSevenDigits
+                ? [{ phoneNormalized: { contains: phone.lastSevenDigits } }]
+                : []),
+            ],
           },
           orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
           take: 30,
@@ -244,13 +233,7 @@ export default async function AdminSearchPage({ searchParams }: Props) {
             contactEmail: true,
             contactPhone: true,
             phoneNormalized: true,
-            latestMessageAt: true,
-            team: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            team: { select: { id: true, name: true } },
           },
         }),
       ])
@@ -313,8 +296,11 @@ export default async function AdminSearchPage({ searchParams }: Props) {
     ...recipients.map((recipient) => ({
       id: recipient.id,
       type: "Notification recipient",
-      title: recipient.displayName || recipient.email || recipient.phone || "Unnamed recipient",
-      subtitle: `${recipient.audience} · ${recipient.sourceType}${recipient.isSuppressed ? " · suppressed" : ""}`,
+      title:
+        recipient.displayName || recipient.email || recipient.phone || "Unnamed recipient",
+      subtitle: `${recipient.audience} · ${recipient.sourceType}${
+        recipient.isSuppressed ? " · suppressed" : ""
+      }`,
       details: nonEmpty([
         recipient.email,
         recipient.phoneNormalized || recipient.phone,
@@ -325,8 +311,11 @@ export default async function AdminSearchPage({ searchParams }: Props) {
     ...threads.map((thread) => ({
       id: thread.id,
       type: "Message thread",
-      title: thread.contactName || thread.contactEmail || thread.contactPhone || "Unnamed thread",
-      subtitle: thread.team ? `${thread.channel} thread · ${thread.team.name}` : `${thread.channel} thread`,
+      title:
+        thread.contactName || thread.contactEmail || thread.contactPhone || "Unnamed thread",
+      subtitle: thread.team
+        ? `${thread.channel} thread · ${thread.team.name}`
+        : `${thread.channel} thread`,
       details: nonEmpty([
         thread.contactEmail,
         thread.phoneNormalized || thread.contactPhone,
@@ -340,9 +329,12 @@ export default async function AdminSearchPage({ searchParams }: Props) {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="space-y-2">
         <div className="text-sm text-emerald-300">Admin search</div>
-        <h1 className="text-3xl font-semibold text-white">Find a person or contact</h1>
+        <h1 className="text-3xl font-semibold text-white">
+          Find a person or contact
+        </h1>
         <p className="max-w-3xl text-sm leading-6 text-white/60">
-          Search by name, email address or mobile number. Mobile numbers are matched against both the typed version and the normalised UK format.
+          Search by name, email address or mobile number. Mobile numbers are
+          matched against both the typed version and the normalised UK format.
         </p>
       </div>
 
@@ -369,14 +361,16 @@ export default async function AdminSearchPage({ searchParams }: Props) {
 
         {phone.normalised ? (
           <div className="mt-3 text-xs text-white/45">
-            Normalised phone search: <span className="font-mono text-white/70">{phone.normalised}</span>
+            Normalised phone search:{" "}
+            <span className="font-mono text-white/70">{phone.normalised}</span>
           </div>
         ) : null}
       </form>
 
       {!hasQuery ? (
         <div className="rounded-3xl border border-white/10 bg-black/25 p-6 text-sm text-white/55">
-          Enter at least two characters, or paste a mobile number, to search across leads, prospects, teams, recipients and message threads.
+          Enter at least two characters, or paste a mobile number, to search
+          across leads, prospects, teams, recipients and message threads.
         </div>
       ) : (
         <div className="space-y-4">
@@ -391,7 +385,8 @@ export default async function AdminSearchPage({ searchParams }: Props) {
             <div className="grid gap-3">{results.map(resultCard)}</div>
           ) : (
             <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6 text-sm leading-6 text-amber-50/85">
-              No matches found. Try the mobile number without spaces, with 07 at the start, or in +44 format.
+              No matches found. Try the mobile number without spaces, with 07 at
+              the start, or in +44 format.
             </div>
           )}
         </div>
