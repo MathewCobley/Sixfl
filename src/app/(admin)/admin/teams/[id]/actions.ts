@@ -83,7 +83,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
     redirect(buildTeamRedirect(id, "?error=missing_name"));
   }
 
-  await prisma.team.update({
+  const updatedTeam = await prisma.team.update({
     where: { id },
     data: {
       name,
@@ -103,10 +103,27 @@ export async function updateTeamDetailsAction(formData: FormData) {
       secondaryContactEmail,
       secondaryContactPhone,
     },
+    select: {
+      captainUserId: true,
+    },
   });
+
+  if (contactName && updatedTeam.captainUserId) {
+    await prisma.user.updateMany({
+      where: {
+        id: updatedTeam.captainUserId,
+        OR: [{ name: null }, { name: "" }],
+      },
+      data: {
+        name: contactName,
+      },
+    });
+  }
 
   revalidatePath(`/admin/teams/${id}`);
   revalidatePath("/admin/teams");
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/captains");
   revalidatePath(`/captain/team/${id}`);
   revalidatePath(`/captain/team/${id}/squad`);
 
