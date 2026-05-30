@@ -158,7 +158,10 @@ export default async function AdminCaptainsPage() {
 
           <tbody className="divide-y divide-white/10">
             {captainMemberships.map((membership) => {
-              const captainName = membership.user.name?.trim() || "Unnamed captain";
+              const captainName =
+                membership.user.name?.trim() ||
+                membership.team.contactName?.trim() ||
+                "Unnamed captain";
               const captainEmail = membership.user.email?.trim() || "No email";
               const leagueName = membership.team.league?.name || "Unassigned";
               const leagueSeason = membership.team.league?.season || null;
@@ -167,6 +170,11 @@ export default async function AdminCaptainsPage() {
                 <tr key={membership.id} className="text-sm text-white/85">
                   <td className="px-5 py-4">
                     <div className="font-medium text-white">{captainName}</div>
+                    {!membership.user.name?.trim() && membership.team.contactName?.trim() ? (
+                      <div className="text-xs text-emerald-200/60">
+                        Showing team contact name
+                      </div>
+                    ) : null}
                     <div className="text-xs text-white/45">
                       User ID: {membership.user.id}
                     </div>
