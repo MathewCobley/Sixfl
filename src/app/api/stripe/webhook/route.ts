@@ -11,6 +11,7 @@ import {
   getChargeStatusFromAmounts,
 } from "@/lib/payments/charge-status";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
+import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import {
   markTeamSubscriptionDeleted,
   markTeamSubscriptionInvoiceFailed,
@@ -90,6 +91,11 @@ async function closePlayerMatchFeeFromStripeSession(input: {
       cancelledAt: null,
     },
   });
+
+  await cancelQueuedPlayerMatchFeeNotificationDispatches(
+    [input.playerMatchFeeId],
+    "Player match fee was paid before the queued payment reminder was sent.",
+  );
 }
 
 async function findExistingPlayerFeeTransaction(input: {
@@ -136,7 +142,18 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
     select: { id: true, teamId: true, amountPence: true, status: true },
   });
 
-  if (!fee || fee.status !== "OPEN") return true;
+  if (!fee) return true;
+
+  if (fee.status !== "OPEN") {
+    if (fee.status === "PAID") {
+      await cancelQueuedPlayerMatchFeeNotificationDispatches(
+        [fee.id],
+        "Player match fee was already paid before the queued payment reminder was sent.",
+      );
+    }
+
+    return true;
+  }
 
   const amountPence = session.amount_total ?? 0;
   if (amountPence <= 0) return true;
@@ -189,6 +206,11 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
       },
     });
   });
+
+  await cancelQueuedPlayerMatchFeeNotificationDispatches(
+    [fee.id],
+    "Player match fee was paid before the queued payment reminder was sent.",
+  );
 
   return true;
 }
@@ -324,10 +346,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    console.error("Stripe webhook handler failed", error);
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Stripe webhook processing failed.",
+        error: error instanceof Error ? error.message : "Webhook handler failed.",
       },
       { status: 500 },
     );
