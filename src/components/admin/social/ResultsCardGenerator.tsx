@@ -26,7 +26,7 @@ type ResultsCardGeneratorProps = {
 
 const CANVAS_SIZE = 1080;
 const THREE_FIXTURE_ROWS = [445, 570, 695];
-const FOUR_FIXTURE_ROWS = [410, 525, 640, 755];
+const FOUR_FIXTURE_ROWS = [408, 523, 638, 753];
 const HOME_BADGE_X = 76;
 const HOME_NAME_X = 130;
 const HOME_SCORE_X = 438;
@@ -170,19 +170,32 @@ function drawCentreSeparator(input: {
 }) {
   const { ctx, y, isFourFixtureCard } = input;
 
+  const boxWidth = isFourFixtureCard ? 42 : 48;
+  const boxHeight = isFourFixtureCard ? 58 : 64;
+  const dotRadius = isFourFixtureCard ? 3.8 : 4.5;
+  const dotGap = isFourFixtureCard ? 11 : 13;
+
   ctx.save();
 
-  // The template already has separators baked into it, but the lower rows can
-  // sit slightly out of line. Mask the old separator area and draw a fresh one
-  // exactly on the generated row centre.
-  ctx.fillStyle = "rgba(16, 18, 18, 0.64)";
-  ctx.fillRect(CENTRE_SEPARATOR_X - 24, y - 32, 48, 64);
+  // The template already has separator marks baked into it. Mask that area and
+  // redraw clean circular dots so the lower rows stay centred and consistent.
+  ctx.fillStyle = "rgba(13, 15, 15, 0.92)";
+  ctx.fillRect(
+    CENTRE_SEPARATOR_X - boxWidth / 2,
+    y - boxHeight / 2,
+    boxWidth,
+    boxHeight,
+  );
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = `900 ${isFourFixtureCard ? 38 : 44}px Impact, Arial Black, Arial, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(":", CENTRE_SEPARATOR_X, y - 1);
+
+  ctx.beginPath();
+  ctx.arc(CENTRE_SEPARATOR_X, y - dotGap, dotRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(CENTRE_SEPARATOR_X, y + dotGap, dotRadius, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
