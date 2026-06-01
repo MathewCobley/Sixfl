@@ -3,6 +3,7 @@
 // ========================================
 
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -148,6 +149,17 @@ export default function NorthallertonMensWednesdayLeaguePage() {
 
           <div className="lg:col-span-5">
             <div className="rounded-[2rem] border border-emerald-500/20 bg-black/45 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.38)] sm:p-6">
+              <div className="mb-6 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/40 shadow-[0_18px_55px_rgba(0,0,0,0.35)]">
+                <Image
+                  src="/leagues/northallerton-wednesday.png"
+                  alt="Northallerton Men’s Wednesday 6-a-side League badge"
+                  width={1200}
+                  height={1200}
+                  priority
+                  className="h-auto w-full object-cover"
+                />
+              </div>
+
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/45">
