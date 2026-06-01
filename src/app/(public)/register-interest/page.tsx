@@ -2,6 +2,7 @@
 // File: src/app/register-interest/page.tsx
 // ========================================
 
+import Image from "next/image";
 import Link from "next/link";
 import { submitRegisterInterest } from "./actions";
 
@@ -182,35 +183,15 @@ function getNotesPlaceholder(config: LeadTypeConfig, isNorthallertonWednesday: b
 
 function NorthallertonLeagueBadge() {
   return (
-    <div className="mt-5 overflow-hidden rounded-[1.75rem] border border-emerald-400/25 bg-gradient-to-br from-emerald-500/15 via-white/[0.055] to-black/35 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.32)]">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.26em] text-emerald-300">
-            SIXFL League Badge
-          </div>
-          <div className="mt-2 text-2xl font-black uppercase leading-none tracking-tight text-white sm:text-3xl">
-            Northallerton
-          </div>
-          <div className="mt-1 text-sm font-extrabold uppercase tracking-[0.16em] text-white/72">
-            Men’s Wednesday League
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-center sm:min-w-44">
-          <div className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
-              Format
-            </div>
-            <div className="mt-1 text-lg font-black text-white">6-A-SIDE</div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
-              Night
-            </div>
-            <div className="mt-1 text-lg font-black text-white">WEDS</div>
-          </div>
-        </div>
-      </div>
+    <div className="mt-5 overflow-hidden rounded-[1.75rem] border border-emerald-400/25 bg-black/35 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.32)]">
+      <Image
+        src="/leagues/northallerton-wednesday.png"
+        alt="Northallerton Men’s Wednesday 6-a-side League badge"
+        width={1200}
+        height={1200}
+        priority
+        className="h-auto w-full object-contain"
+      />
     </div>
   );
 }
