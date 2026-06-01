@@ -61,10 +61,10 @@ export default async function AdminTeamDetailLayout({
               Prospects
             </Link>
             <Link
-              href={`/admin/teams/${id}/communications`}
-              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+              href={`/admin/messages?composeTeam=${encodeURIComponent(id)}`}
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
             >
-              Communications
+              Squad comms
             </Link>
           </div>
         </div>
