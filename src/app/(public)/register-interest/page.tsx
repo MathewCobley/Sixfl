@@ -144,6 +144,42 @@ function getErrorMessage(rawError?: string): string | null {
   }
 }
 
+function getTypeHref(type: InterestTypeValue, isNorthallertonWednesday: boolean) {
+  const base = `/register-interest?type=${type.toLowerCase()}`;
+
+  if (!isNorthallertonWednesday) return base;
+
+  return `${base}&area=Northallerton&night=Wednesday`;
+}
+
+function getIntro(config: LeadTypeConfig, isNorthallertonWednesday: boolean) {
+  if (!isNorthallertonWednesday) return config.intro;
+
+  if (config.type === "TEAM") {
+    return "Register interest for the new Northallerton men’s Wednesday night 6-a-side league.";
+  }
+
+  if (config.type === "PLAYER") {
+    return "Join the player list for the new Northallerton men’s Wednesday night 6-a-side league.";
+  }
+
+  return "Register referee interest for the new Northallerton Wednesday night 6-a-side league.";
+}
+
+function getNotesPlaceholder(config: LeadTypeConfig, isNorthallertonWednesday: boolean) {
+  if (!isNorthallertonWednesday) return config.notesPlaceholder;
+
+  if (config.type === "TEAM") {
+    return "Anything useful to know? For example: likely squad size, playing standard, whether you already have a full squad, or any questions about the Northallerton Wednesday league.";
+  }
+
+  if (config.type === "PLAYER") {
+    return "Anything useful to know? For example: position, playing standard, whether you are joining on your own or with friends, or any questions about the Northallerton Wednesday league.";
+  }
+
+  return "Tell us anything useful. For example: refereeing experience, qualifications, whether you can do Wednesday nights, or whether you are interested in regular weekly games.";
+}
+
 export default async function RegisterInterestPage({
   searchParams,
 }: {
@@ -156,6 +192,11 @@ export default async function RegisterInterestPage({
   const errorMessage = getErrorMessage(sp.error);
   const defaultArea = getDefaultArea(sp.area);
   const defaultNight = getDefaultNight(sp.night);
+  const isNorthallertonWednesday =
+    defaultArea === "Northallerton" && defaultNight === "WEDNESDAY";
+  const showLeagueTypeField = config.showLeagueType && !isNorthallertonWednesday;
+  const intro = getIntro(config, isNorthallertonWednesday);
+  const notesPlaceholder = getNotesPlaceholder(config, isNorthallertonWednesday);
 
   if (success) {
     return (
@@ -192,7 +233,7 @@ export default async function RegisterInterestPage({
               </Link>
 
               <Link
-                href={`/register-interest?type=${leadType.toLowerCase()}`}
+                href={getTypeHref(leadType, isNorthallertonWednesday)}
                 className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
                 ADD ANOTHER
@@ -217,17 +258,17 @@ export default async function RegisterInterestPage({
 
           <div className="flex flex-wrap gap-2">
             <TypeLink
-              href="/register-interest?type=team"
+              href={getTypeHref("TEAM", isNorthallertonWednesday)}
               label="Team"
               active={leadType === "TEAM"}
             />
             <TypeLink
-              href="/register-interest?type=player"
+              href={getTypeHref("PLAYER", isNorthallertonWednesday)}
               label="Player"
               active={leadType === "PLAYER"}
             />
             <TypeLink
-              href="/register-interest?type=referee"
+              href={getTypeHref("REFEREE", isNorthallertonWednesday)}
               label="Referee"
               active={leadType === "REFEREE"}
             />
@@ -244,7 +285,7 @@ export default async function RegisterInterestPage({
           </h1>
 
           <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
-            {config.intro}
+            {intro}
           </p>
 
           <p className="mt-3 text-sm font-medium text-white/50">
@@ -253,10 +294,24 @@ export default async function RegisterInterestPage({
 
           <div className="mt-4 flex flex-wrap gap-2">
             {leadType === "REFEREE" ? (
+              isNorthallertonWednesday ? (
+                <>
+                  <Pill text="Northallerton" />
+                  <Pill text="Wednesday nights" />
+                  <Pill text="Launch opportunities" />
+                </>
+              ) : (
+                <>
+                  <Pill text="Weekly games" />
+                  <Pill text="Flexible availability" />
+                  <Pill text="Launch opportunities" />
+                </>
+              )
+            ) : isNorthallertonWednesday ? (
               <>
-                <Pill text="Weekly games" />
-                <Pill text="Flexible availability" />
-                <Pill text="Launch opportunities" />
+                <Pill text="Northallerton" />
+                <Pill text="Men’s league" />
+                <Pill text="Wednesday nights" />
               </>
             ) : (
               <>
@@ -279,11 +334,20 @@ export default async function RegisterInterestPage({
               type="hidden"
               name="source"
               value={
-                defaultArea === "Northallerton" && defaultNight === "WEDNESDAY"
+                isNorthallertonWednesday
                   ? "northallerton-wednesday-launch"
                   : "register-interest-page"
               }
             />
+            {isNorthallertonWednesday ? (
+              <input type="hidden" name="area" value="Northallerton" />
+            ) : null}
+            {isNorthallertonWednesday && config.showLeagueType ? (
+              <input type="hidden" name="leagueType" value="MENS" />
+            ) : null}
+            {isNorthallertonWednesday ? (
+              <input type="hidden" name="preferredNights" value="WEDNESDAY" />
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -319,34 +383,40 @@ export default async function RegisterInterestPage({
               )}
             </div>
 
-            <div
-              className={`grid gap-4 ${
-                config.showLeagueType ? "sm:grid-cols-2" : "sm:grid-cols-1"
-              }`}
-            >
-              <SelectField
-                label="Area"
-                name="area"
-                required
-                options={areaOptions.map((area) => ({ label: area, value: area }))}
-                defaultValue={defaultArea}
-              />
+            {!isNorthallertonWednesday || showLeagueTypeField ? (
+              <div
+                className={`grid gap-4 ${
+                  showLeagueTypeField ? "sm:grid-cols-2" : "sm:grid-cols-1"
+                }`}
+              >
+                {!isNorthallertonWednesday ? (
+                  <SelectField
+                    label="Area"
+                    name="area"
+                    required
+                    options={areaOptions.map((area) => ({ label: area, value: area }))}
+                    defaultValue={defaultArea}
+                  />
+                ) : null}
 
-              {config.showLeagueType ? (
-                <SelectField
-                  label="League type"
-                  name="leagueType"
-                  required
-                  options={[
-                    { label: "Men’s", value: "MENS" },
-                    { label: "Women’s", value: "WOMENS" },
-                    { label: "Youth", value: "YOUTH" },
-                  ]}
-                />
-              ) : null}
-            </div>
+                {showLeagueTypeField ? (
+                  <SelectField
+                    label="League type"
+                    name="leagueType"
+                    required
+                    options={[
+                      { label: "Men’s", value: "MENS" },
+                      { label: "Women’s", value: "WOMENS" },
+                      { label: "Youth", value: "YOUTH" },
+                    ]}
+                  />
+                ) : null}
+              </div>
+            ) : null}
 
-            <PreferredNightsField defaultNight={defaultNight} />
+            {!isNorthallertonWednesday ? (
+              <PreferredNightsField defaultNight={defaultNight} />
+            ) : null}
 
             {config.showExperience ? (
               <SelectField
@@ -375,7 +445,7 @@ export default async function RegisterInterestPage({
               <textarea
                 name="message"
                 rows={5}
-                placeholder={config.notesPlaceholder}
+                placeholder={notesPlaceholder}
                 className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
               />
             </div>
