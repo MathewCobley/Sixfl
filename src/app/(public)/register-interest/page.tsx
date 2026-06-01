@@ -156,11 +156,11 @@ function getIntro(config: LeadTypeConfig, isNorthallertonWednesday: boolean) {
   if (!isNorthallertonWednesday) return config.intro;
 
   if (config.type === "TEAM") {
-    return "Register interest for the new Northallerton men’s Wednesday night 6-a-side league.";
+    return "Register interest for the new Northallerton Men’s Wednesday 6-a-side League.";
   }
 
   if (config.type === "PLAYER") {
-    return "Join the player list for the new Northallerton men’s Wednesday night 6-a-side league.";
+    return "Join the player list for the new Northallerton Men’s Wednesday 6-a-side League.";
   }
 
   return "Register referee interest for the new Northallerton Wednesday night 6-a-side league.";
