@@ -185,7 +185,7 @@ function NorthallertonLeagueWatermark() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute -right-10 top-16 hidden w-[380px] opacity-[0.055] blur-[0.2px] sm:block lg:w-[430px]"
+      className="pointer-events-none absolute -right-8 top-14 hidden w-[390px] opacity-[0.16] sm:block lg:w-[440px]"
     >
       <Image
         src="/leagues/northallerton-wednesday.png"
