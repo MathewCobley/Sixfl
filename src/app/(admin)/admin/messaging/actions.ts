@@ -18,6 +18,7 @@ import {
   mergeEmailTemplateContext,
   resolveTemplateText,
 } from "@/lib/email/template-context";
+import { buildLeadResponseUrls } from "@/lib/leads/responseLinks";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const CTA_PLACEHOLDER_TOKEN = "__SIXFL_CTA__";
@@ -157,12 +158,15 @@ export async function sendAdminLeadCampaignAction(
         ? `https://www.sixfl.co.uk/leagues/${lead.league.slug}`
         : "https://www.sixfl.co.uk/register-interest";
 
-      const context = buildLeadEmailContext({
-        contactName: lead.contactName,
-        area: lead.area,
-        signupUrl,
-        teamName: lead.teamName,
-      });
+      const context = mergeEmailTemplateContext(
+        buildLeadEmailContext({
+          contactName: lead.contactName,
+          area: lead.area,
+          signupUrl,
+          teamName: lead.teamName,
+        }),
+        buildLeadResponseUrls(lead.id),
+      );
 
       const resolvedSubject = resolveTemplateText(subjectInput, context);
       const resolvedBody = resolveTemplateText(
