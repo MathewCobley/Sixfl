@@ -181,14 +181,17 @@ function getNotesPlaceholder(config: LeadTypeConfig, isNorthallertonWednesday: b
   return "Tell us anything useful. For example: refereeing experience, qualifications, whether you can do Wednesday nights, or whether you are interested in regular weekly games.";
 }
 
-function NorthallertonLeagueBadge() {
+function NorthallertonLeagueWatermark() {
   return (
-    <div className="mt-5 overflow-hidden rounded-[1.75rem] border border-emerald-400/25 bg-black/35 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.32)]">
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute -right-10 top-16 hidden w-[380px] opacity-[0.055] blur-[0.2px] sm:block lg:w-[430px]"
+    >
       <Image
         src="/leagues/northallerton-wednesday.png"
-        alt="Northallerton Men’s Wednesday 6-a-side League badge"
-        width={1200}
-        height={1200}
+        alt=""
+        width={900}
+        height={900}
         priority
         className="h-auto w-full object-contain"
       />
@@ -292,204 +295,206 @@ export default async function RegisterInterestPage({
           </div>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8">
-          <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
-            {config.badge}
-          </div>
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8">
+          {isNorthallertonWednesday ? <NorthallertonLeagueWatermark /> : null}
 
-          {isNorthallertonWednesday ? <NorthallertonLeagueBadge /> : null}
+          <div className="relative z-10">
+            <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
+              {config.badge}
+            </div>
 
-          <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-            {config.title}
-          </h1>
+            <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+              {config.title}
+            </h1>
 
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
-            {intro}
-          </p>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
+              {intro}
+            </p>
 
-          <p className="mt-3 text-sm font-medium text-white/50">
-            {config.reassuranceText}
-          </p>
+            <p className="mt-3 text-sm font-medium text-white/50">
+              {config.reassuranceText}
+            </p>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {leadType === "REFEREE" ? (
-              isNorthallertonWednesday ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {leadType === "REFEREE" ? (
+                isNorthallertonWednesday ? (
+                  <>
+                    <Pill text="Northallerton" />
+                    <Pill text="Wednesday nights" />
+                    <Pill text="Launch opportunities" />
+                  </>
+                ) : (
+                  <>
+                    <Pill text="Weekly games" />
+                    <Pill text="Flexible availability" />
+                    <Pill text="Launch opportunities" />
+                  </>
+                )
+              ) : isNorthallertonWednesday ? (
                 <>
                   <Pill text="Northallerton" />
+                  <Pill text="Men’s league" />
                   <Pill text="Wednesday nights" />
-                  <Pill text="Launch opportunities" />
                 </>
               ) : (
                 <>
-                  <Pill text="Weekly games" />
-                  <Pill text="Flexible availability" />
-                  <Pill text="Launch opportunities" />
+                  <Pill text="Men’s leagues" />
+                  <Pill text="Women’s leagues" />
+                  <Pill text="Youth leagues" />
                 </>
-              )
-            ) : isNorthallertonWednesday ? (
-              <>
-                <Pill text="Northallerton" />
-                <Pill text="Men’s league" />
-                <Pill text="Wednesday nights" />
-              </>
-            ) : (
-              <>
-                <Pill text="Men’s leagues" />
-                <Pill text="Women’s leagues" />
-                <Pill text="Youth leagues" />
-              </>
-            )}
-          </div>
-
-          {errorMessage ? (
-            <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-              {errorMessage}
-            </div>
-          ) : null}
-
-          <form action={submitRegisterInterest} className="mt-8 grid gap-4">
-            <input type="hidden" name="interestType" value={config.type} />
-            <input
-              type="hidden"
-              name="source"
-              value={
-                isNorthallertonWednesday
-                  ? "northallerton-wednesday-launch"
-                  : "register-interest-page"
-              }
-            />
-            {isNorthallertonWednesday ? (
-              <input type="hidden" name="area" value="Northallerton" />
-            ) : null}
-            {isNorthallertonWednesday && config.showLeagueType ? (
-              <input type="hidden" name="leagueType" value="MENS" />
-            ) : null}
-            {isNorthallertonWednesday ? (
-              <input type="hidden" name="preferredNights" value="WEDNESDAY" />
-            ) : null}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Your name"
-                name="contactName"
-                placeholder="Your full name"
-                required
-              />
-              <Field
-                label="Email address"
-                name="email"
-                type="email"
-                placeholder="your@email.com"
-                required
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Phone number"
-                name="phone"
-                type="tel"
-                placeholder="Optional"
-              />
-              {config.showTeamName ? (
-                <Field
-                  label="Team name"
-                  name="teamName"
-                  placeholder="Your team name"
-                />
-              ) : (
-                <div />
               )}
             </div>
 
-            {!isNorthallertonWednesday || showLeagueTypeField ? (
-              <div
-                className={`grid gap-4 ${
-                  showLeagueTypeField ? "sm:grid-cols-2" : "sm:grid-cols-1"
-                }`}
-              >
-                {!isNorthallertonWednesday ? (
-                  <SelectField
-                    label="Area"
-                    name="area"
-                    required
-                    options={areaOptions.map((area) => ({ label: area, value: area }))}
-                    defaultValue={defaultArea}
-                  />
-                ) : null}
-
-                {showLeagueTypeField ? (
-                  <SelectField
-                    label="League type"
-                    name="leagueType"
-                    required
-                    options={[
-                      { label: "Men’s", value: "MENS" },
-                      { label: "Women’s", value: "WOMENS" },
-                      { label: "Youth", value: "YOUTH" },
-                    ]}
-                  />
-                ) : null}
+            {errorMessage ? (
+              <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                {errorMessage}
               </div>
             ) : null}
 
-            {!isNorthallertonWednesday ? (
-              <PreferredNightsField defaultNight={defaultNight} />
-            ) : null}
-
-            {config.showExperience ? (
-              <SelectField
-                label="Experience level"
-                name="experienceLevel"
-                options={[
-                  "New to refereeing",
-                  "Some experience",
-                  "Regular referee",
-                  "Qualified referee",
-                ]}
+            <form action={submitRegisterInterest} className="mt-8 grid gap-4">
+              <input type="hidden" name="interestType" value={config.type} />
+              <input
+                type="hidden"
+                name="source"
+                value={
+                  isNorthallertonWednesday
+                    ? "northallerton-wednesday-launch"
+                    : "register-interest-page"
+                }
               />
-            ) : null}
+              {isNorthallertonWednesday ? (
+                <input type="hidden" name="area" value="Northallerton" />
+              ) : null}
+              {isNorthallertonWednesday && config.showLeagueType ? (
+                <input type="hidden" name="leagueType" value="MENS" />
+              ) : null}
+              {isNorthallertonWednesday ? (
+                <input type="hidden" name="preferredNights" value="WEDNESDAY" />
+              ) : null}
 
-            {config.showFreeKit ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Your name"
+                  name="contactName"
+                  placeholder="Your full name"
+                  required
+                />
+                <Field
+                  label="Email address"
+                  name="email"
+                  type="email"
+                  placeholder="your@email.com"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Phone number"
+                  name="phone"
+                  type="tel"
+                  placeholder="Optional"
+                />
+                {config.showTeamName ? (
+                  <Field
+                    label="Team name"
+                    name="teamName"
+                    placeholder="Your team name"
+                  />
+                ) : (
+                  <div />
+                )}
+              </div>
+
+              {!isNorthallertonWednesday || showLeagueTypeField ? (
+                <div
+                  className={`grid gap-4 ${
+                    showLeagueTypeField ? "sm:grid-cols-2" : "sm:grid-cols-1"
+                  }`}
+                >
+                  {!isNorthallertonWednesday ? (
+                    <SelectField
+                      label="Area"
+                      name="area"
+                      required
+                      options={areaOptions.map((area) => ({ label: area, value: area }))}
+                      defaultValue={defaultArea}
+                    />
+                  ) : null}
+
+                  {showLeagueTypeField ? (
+                    <SelectField
+                      label="League type"
+                      name="leagueType"
+                      required
+                      options={[
+                        { label: "Men’s", value: "MENS" },
+                        { label: "Women’s", value: "WOMENS" },
+                        { label: "Youth", value: "YOUTH" },
+                      ]}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {!isNorthallertonWednesday ? (
+                <PreferredNightsField defaultNight={defaultNight} />
+              ) : null}
+
+              {config.showExperience ? (
+                <SelectField
+                  label="Experience level"
+                  name="experienceLevel"
+                  options={[
+                    "New to refereeing",
+                    "Some experience",
+                    "Regular referee",
+                    "Qualified referee",
+                  ]}
+                />
+              ) : null}
+
+              {config.showFreeKit ? (
+                <CheckboxField
+                  name="wantsFreeKit"
+                  label="I’d like to be considered for the founding teams free kit offer"
+                />
+              ) : null}
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-white/80">
+                  {config.notesLabel}
+                </label>
+                <textarea
+                  name="message"
+                  rows={5}
+                  placeholder={notesPlaceholder}
+                  className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
+                />
+              </div>
+
               <CheckboxField
-                name="wantsFreeKit"
-                label="I’d like to be considered for the founding teams free kit offer"
+                name="marketingConsent"
+                label="I’m happy to receive SIXFL launch updates by email"
               />
-            ) : null}
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-white/80">
-                {config.notesLabel}
-              </label>
-              <textarea
-                name="message"
-                rows={5}
-                placeholder={notesPlaceholder}
-                className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
-              />
-            </div>
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                <button
+                  type="submit"
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+                >
+                  {config.submitLabel}
+                </button>
 
-            <CheckboxField
-              name="marketingConsent"
-              label="I’m happy to receive SIXFL launch updates by email"
-            />
-
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
-              >
-                {config.submitLabel}
-              </button>
-
-              <Link
-                href="/"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
-              >
-                BACK TO HOME
-              </Link>
-            </div>
-          </form>
+                <Link
+                  href="/"
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+                >
+                  BACK TO HOME
+                </Link>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
