@@ -11,15 +11,19 @@ const YES_RESPONSE_TOKEN = "{{yesResponseUrl}}";
 const NO_RESPONSE_TOKEN = "{{noResponseUrl}}";
 
 function replaceLeadResponseTokens(value: string, leadId: string) {
-  if (!value.includes(YES_RESPONSE_TOKEN) && !value.includes(NO_RESPONSE_TOKEN)) {
-    return value;
-  }
-
   const urls = buildLeadResponseUrls(leadId);
 
   return value
     .replaceAll(YES_RESPONSE_TOKEN, urls.yesResponseUrl)
-    .replaceAll(NO_RESPONSE_TOKEN, urls.noResponseUrl);
+    .replaceAll(NO_RESPONSE_TOKEN, urls.noResponseUrl)
+    .replace(
+      /(YES,\s*I still want to play:)\s*(?:\n|$)/i,
+      `$1 ${urls.yesResponseUrl}\n`,
+    )
+    .replace(
+      /(NO,\s*remove me from the squad list:)\s*(?:\n|$)/i,
+      `$1 ${urls.noResponseUrl}\n`,
+    );
 }
 
 export async function sendLeadEmailWithResponseLinksAction(formData: FormData) {
