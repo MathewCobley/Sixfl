@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { NotificationDispatchStatus, TeamRole } from "@prisma/client";
+import { NotificationDispatchStatus, TeamMode, TeamRole } from "@prisma/client";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -274,6 +274,7 @@ export default async function CaptainSquadPage({
     select: {
       id: true,
       name: true,
+      teamMode: true,
       contactName: true,
       contactEmail: true,
       contactPhone: true,
@@ -330,9 +331,11 @@ export default async function CaptainSquadPage({
 
   if (!team) notFound();
 
+  const isManagedTeam = team.teamMode === TeamMode.MANAGED;
+
   const [profileByMemberId, playerInterestResponses] = await Promise.all([
     getTeamMemberProfilesByTeamMemberIds(team.members.map((member) => member.id)),
-    getPlayerInterestResponses(team.id),
+    isManagedTeam ? getPlayerInterestResponses(team.id) : Promise.resolve([]),
   ]);
 
   const latestResponseByMemberId = new Map<string, PlayerInterestResponseRow>();
@@ -401,10 +404,7 @@ export default async function CaptainSquadPage({
       : [],
   ]);
 
-  const activationDispatchByProspectId = new Map<
-    string,
-    (typeof latestActivationDispatches)[number]
-  >();
+  const activationDispatchByProspectId = new Map<string, (typeof latestActivationDispatches)[number]>();
 
   for (const dispatch of latestActivationDispatches) {
     if (dispatch.sourceId && !activationDispatchByProspectId.has(dispatch.sourceId)) {
@@ -412,10 +412,7 @@ export default async function CaptainSquadPage({
     }
   }
 
-  const activationSmsDispatchByProspectId = new Map<
-    string,
-    (typeof latestActivationSmsDispatches)[number]
-  >();
+  const activationSmsDispatchByProspectId = new Map<string, (typeof latestActivationSmsDispatches)[number]>();
 
   for (const dispatch of latestActivationSmsDispatches) {
     if (dispatch.sourceId && !activationSmsDispatchByProspectId.has(dispatch.sourceId)) {
@@ -426,12 +423,20 @@ export default async function CaptainSquadPage({
   const captainCount = team.members.filter((member) => member.role === "CAPTAIN").length;
   const managerCount = team.members.filter((member) => member.role === "MANAGER").length;
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
-  const coachCount = team.members.filter((member) => member.role === "COACH").length;
   const totalSquadCount = team.members.length + pendingSquadProspects.length;
   const yesCount = playerInterestResponses.filter((response) => response.response === "YES").length;
   const noCount = playerInterestResponses.filter((response) => response.response === "NO").length;
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
+
+  const summaryMetrics = [
+    { label: "Captains", value: captainCount, copy: "Linked captain roles in squad.", tone: "amber" },
+    { label: "Managers", value: managerCount, copy: "Organisers and managers attached.", tone: "emerald" },
+    { label: "Linked players", value: playerCount, copy: "Players with a SIXFL account.", tone: "white" },
+    ...(isManagedTeam
+      ? [{ label: "Responses", value: playerInterestResponses.length, copy: `${yesCount} YES · ${noCount} NO`, tone: "sky" }]
+      : []),
+  ];
 
   return (
     <div className="space-y-8">
@@ -456,7 +461,7 @@ export default async function CaptainSquadPage({
               <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
                 {totalSquadCount} squad player{totalSquadCount === 1 ? "" : "s"}
               </span>
-              {playerInterestResponses.length > 0 ? (
+              {isManagedTeam && playerInterestResponses.length > 0 ? (
                 <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
                   {yesCount} YES · {noCount} NO
                 </span>
@@ -482,31 +487,26 @@ export default async function CaptainSquadPage({
                 Open prospects
               </Link>
               {canOpenAdminComms ? (
-                <>
-                  <Link
-                    href={`/admin/teams/${teamid}/communications`}
-                    className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-                  >
-                    Team communications
-                  </Link>
-                  <Link
-                    href={`/admin/player-responses?teamId=${teamid}`}
-                    className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-500/10 px-5 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
-                  >
-                    View YES/NO responses
-                  </Link>
-                </>
+                <Link
+                  href={`/admin/teams/${teamid}/communications`}
+                  className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                >
+                  Team communications
+                </Link>
+              ) : null}
+              {canOpenAdminComms && isManagedTeam ? (
+                <Link
+                  href={`/admin/player-responses?teamId=${teamid}`}
+                  className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-500/10 px-5 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+                >
+                  View YES/NO responses
+                </Link>
               ) : null}
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-            {[
-              { label: "Captains", value: captainCount, copy: "Linked captain roles in squad.", tone: "amber" },
-              { label: "Managers", value: managerCount, copy: "Organisers and managers attached.", tone: "emerald" },
-              { label: "Linked players", value: playerCount, copy: "Players with a SIXFL account.", tone: "white" },
-              { label: "Responses", value: playerInterestResponses.length, copy: `${yesCount} YES · ${noCount} NO`, tone: "sky" },
-            ].map((metric) => {
+            {summaryMetrics.map((metric) => {
               const toneClasses =
                 metric.tone === "amber"
                   ? "border-amber-400/20 bg-amber-500/10 text-amber-100/70"
@@ -595,7 +595,7 @@ export default async function CaptainSquadPage({
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
-                        <PlayerResponseBadge response={latestResponse} />
+                        {isManagedTeam ? <PlayerResponseBadge response={latestResponse} /> : null}
                       </div>
                       <div className="mt-2 text-sm text-white/65">
                         {member.user.email || "No email on account"}
@@ -725,7 +725,7 @@ export default async function CaptainSquadPage({
                                 <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">
                                   Pending account
                                 </span>
-                                <PlayerResponseBadge response={latestResponse} />
+                                {isManagedTeam ? <PlayerResponseBadge response={latestResponse} /> : null}
                                 {latestActivationDispatch ? (
                                   <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getActivationStatusClasses(latestActivationDispatch.status)}`}>
                                     {getActivationBadgeLabel(latestActivationDispatch.status)}
@@ -827,12 +827,14 @@ export default async function CaptainSquadPage({
                 >
                   Open team communications
                 </Link>
-                <Link
-                  href={`/admin/player-responses?teamId=${teamid}`}
-                  className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
-                >
-                  View YES/NO responses
-                </Link>
+                {isManagedTeam ? (
+                  <Link
+                    href={`/admin/player-responses?teamId=${teamid}`}
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+                  >
+                    View YES/NO responses
+                  </Link>
+                ) : null}
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
                   Use the individual <span className="text-white/80">Comms</span> buttons beside players for one-to-one player/prospect messages.
                 </div>
