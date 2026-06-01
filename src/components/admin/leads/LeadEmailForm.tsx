@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
-import { sendLeadEmailAction } from "@/app/(admin)/admin/leads/[id]/actions";
+import { sendLeadEmailWithResponseLinksAction } from "@/app/(admin)/admin/leads/[id]/response-email-actions";
 import {
   buildBaseEmailTemplateContext,
   mergeEmailTemplateContext,
@@ -50,6 +50,23 @@ type Props = {
   templates: LeadEmailTemplateOption[];
   managedTeamOptions: ManagedTeamOption[];
 };
+
+const RESPONSE_TOKEN_PLACEHOLDERS = {
+  yes: "__SIXFL_YES_RESPONSE_URL__",
+  no: "__SIXFL_NO_RESPONSE_URL__",
+} as const;
+
+function protectLeadResponseTokens(value: string) {
+  return value
+    .replaceAll("{{yesResponseUrl}}", RESPONSE_TOKEN_PLACEHOLDERS.yes)
+    .replaceAll("{{noResponseUrl}}", RESPONSE_TOKEN_PLACEHOLDERS.no);
+}
+
+function restoreLeadResponseTokens(value: string) {
+  return value
+    .replaceAll(RESPONSE_TOKEN_PLACEHOLDERS.yes, "{{yesResponseUrl}}")
+    .replaceAll(RESPONSE_TOKEN_PLACEHOLDERS.no, "{{noResponseUrl}}");
+}
 
 // ========================================
 // Component
@@ -113,6 +130,12 @@ export default function LeadEmailForm({
     }
   }, [managedTeamOptions, requiresManagedTeam, targetTeamId]);
 
+  function resolveTemplateForLead(value: string) {
+    return restoreLeadResponseTokens(
+      resolveTemplateText(protectLeadResponseTokens(value), templateContext),
+    );
+  }
+
   function handleTemplateChange(value: string) {
     setSelectedTemplateId(value);
 
@@ -124,8 +147,8 @@ export default function LeadEmailForm({
       return;
     }
 
-    setSubject(resolveTemplateText(template.subject, templateContext));
-    setBody(resolveTemplateText(template.body, templateContext));
+    setSubject(resolveTemplateForLead(template.subject));
+    setBody(resolveTemplateForLead(template.body));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -143,7 +166,7 @@ export default function LeadEmailForm({
       formData.append("ctaUrlKey", selectedTemplate?.ctaUrlKey?.trim() || "");
       formData.append("targetTeamId", targetTeamId);
 
-      const result = await sendLeadEmailAction(formData);
+      const result = await sendLeadEmailWithResponseLinksAction(formData);
 
       if (!result?.ok) {
         alert(result?.error || "Failed to send email.");
@@ -166,8 +189,8 @@ export default function LeadEmailForm({
       return;
     }
 
-    setSubject(resolveTemplateText(selectedTemplate.subject, templateContext));
-    setBody(resolveTemplateText(selectedTemplate.body, templateContext));
+    setSubject(resolveTemplateForLead(selectedTemplate.subject));
+    setBody(resolveTemplateForLead(selectedTemplate.body));
   }
 
   return (
