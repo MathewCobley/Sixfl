@@ -129,6 +129,8 @@ export async function replyToFixtureIssueAction(formData: FormData) {
     "Please reply or update the fixture confirmation if anything changes.",
   ].join("\n");
 
+  let notice = "reply_error";
+
   try {
     const dispatch = await queueDirectNotification({
       recipientId: recipient.id,
@@ -167,23 +169,19 @@ export async function replyToFixtureIssueAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamId}`);
     revalidatePath(`/captain/team/${teamId}/fixtures`);
 
-    redirect(
-      buildRedirect({
-        leagueId: confirmation.fixture.leagueId,
-        notice:
-          dispatch.status === NotificationDispatchStatus.QUEUED
-            ? "reply_queued"
-            : "reply_skipped",
-        teamName: confirmation.team.name,
-      }),
-    );
+    notice =
+      dispatch.status === NotificationDispatchStatus.QUEUED
+        ? "reply_queued"
+        : "reply_skipped";
   } catch {
-    redirect(
-      buildRedirect({
-        leagueId: confirmation.fixture.leagueId,
-        notice: "reply_error",
-        teamName: confirmation.team.name,
-      }),
-    );
+    notice = "reply_error";
   }
+
+  redirect(
+    buildRedirect({
+      leagueId: confirmation.fixture.leagueId,
+      notice,
+      teamName: confirmation.team.name,
+    }),
+  );
 }
