@@ -375,7 +375,8 @@ export default async function CaptainPaymentsPage({
                 (sum, tx) => sum + tx.amountPence,
                 0,
               );
-              const outstanding = Math.max(charge.amountPence - paid, 0);
+              const outstanding =
+                charge.status === "VOID" ? 0 : Math.max(charge.amountPence - paid, 0);
               const fixtureLabel = getFixtureLabel(charge.fixture);
               const canPayOnline =
                 Boolean(charge.paymentToken) &&
