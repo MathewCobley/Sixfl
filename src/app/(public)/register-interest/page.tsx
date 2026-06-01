@@ -227,8 +227,9 @@ export default async function RegisterInterestPage({
   const errorMessage = getErrorMessage(sp.error);
   const defaultArea = getDefaultArea(sp.area);
   const defaultNight = getDefaultNight(sp.night);
+  const isNorthallertonLead = defaultArea === "Northallerton";
   const isNorthallertonWednesday =
-    defaultArea === "Northallerton" && defaultNight === "WEDNESDAY";
+    isNorthallertonLead && (!defaultNight || defaultNight === "WEDNESDAY");
   const showLeagueTypeField = config.showLeagueType && !isNorthallertonWednesday;
   const intro = getIntro(config, isNorthallertonWednesday);
   const notesPlaceholder = getNotesPlaceholder(config, isNorthallertonWednesday);
