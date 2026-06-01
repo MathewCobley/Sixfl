@@ -180,6 +180,41 @@ function getNotesPlaceholder(config: LeadTypeConfig, isNorthallertonWednesday: b
   return "Tell us anything useful. For example: refereeing experience, qualifications, whether you can do Wednesday nights, or whether you are interested in regular weekly games.";
 }
 
+function NorthallertonLeagueBadge() {
+  return (
+    <div className="mt-5 overflow-hidden rounded-[1.75rem] border border-emerald-400/25 bg-gradient-to-br from-emerald-500/15 via-white/[0.055] to-black/35 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.32)]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-[0.26em] text-emerald-300">
+            SIXFL League Badge
+          </div>
+          <div className="mt-2 text-2xl font-black uppercase leading-none tracking-tight text-white sm:text-3xl">
+            Northallerton
+          </div>
+          <div className="mt-1 text-sm font-extrabold uppercase tracking-[0.16em] text-white/72">
+            Men’s Wednesday League
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-center sm:min-w-44">
+          <div className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
+              Format
+            </div>
+            <div className="mt-1 text-lg font-black text-white">6-A-SIDE</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
+              Night
+            </div>
+            <div className="mt-1 text-lg font-black text-white">WEDS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default async function RegisterInterestPage({
   searchParams,
 }: {
@@ -279,6 +314,8 @@ export default async function RegisterInterestPage({
           <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
             {config.badge}
           </div>
+
+          {isNorthallertonWednesday ? <NorthallertonLeagueBadge /> : null}
 
           <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
             {config.title}
