@@ -24,20 +24,47 @@ type ResultsCardGeneratorProps = {
   fixtures: ResultCardFixture[];
 };
 
+type ResultsCardLayout = {
+  rowYValues: number[];
+  badgeSize: number;
+  teamNameFontSize: number;
+  scoreFontSize: number;
+  homeNameCentreX: number;
+  awayNameCentreX: number;
+  homeNameMaxWidth: number;
+  awayNameMaxWidth: number;
+};
+
 const CANVAS_SIZE = 1080;
-const THREE_FIXTURE_ROWS = [445, 570, 695];
-const FOUR_FIXTURE_ROWS = [408, 523, 638, 753];
 const HOME_BADGE_X = 76;
-const HOME_NAME_X = 130;
 const HOME_SCORE_X = 438;
 const AWAY_SCORE_X = 640;
-const AWAY_NAME_X = 708;
 const AWAY_BADGE_X = 1010;
-const CENTRE_SEPARATOR_X = 540;
-const THREE_FIXTURE_BADGE_SIZE = 68;
-const FOUR_FIXTURE_BADGE_SIZE = 58;
-const THREE_FIXTURE_TEAM_NAME_FONT_SIZE = 22;
-const FOUR_FIXTURE_TEAM_NAME_FONT_SIZE = 19;
+
+const THREE_FIXTURE_LAYOUT: ResultsCardLayout = {
+  rowYValues: [445, 570, 695],
+  badgeSize: 68,
+  teamNameFontSize: 22,
+  scoreFontSize: 58,
+  homeNameCentreX: 272,
+  awayNameCentreX: 846,
+  homeNameMaxWidth: 270,
+  awayNameMaxWidth: 270,
+};
+
+const FOUR_FIXTURE_LAYOUT: ResultsCardLayout = {
+  // Evenly spaced against the 4-result template slots. Keeping this as one
+  // layout object avoids the lower rows drifting away from the top rows when
+  // future card tweaks are made.
+  rowYValues: [408, 523, 638, 753],
+  badgeSize: 58,
+  teamNameFontSize: 20,
+  scoreFontSize: 50,
+  homeNameCentreX: 272,
+  awayNameCentreX: 846,
+  homeNameMaxWidth: 285,
+  awayNameMaxWidth: 285,
+};
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -130,16 +157,15 @@ function drawTeamName(input: {
   name: string;
   x: number;
   y: number;
-  align: CanvasTextAlign;
   maxWidth: number;
   fontSize: number;
 }) {
-  const { ctx, name, x, y, align, maxWidth, fontSize } = input;
+  const { ctx, name, x, y, maxWidth, fontSize } = input;
   const uppercaseName = name.toUpperCase();
 
   ctx.save();
   ctx.fillStyle = "#ffffff";
-  ctx.textAlign = align;
+  ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `900 ${fontSize}px Arial Narrow, Impact, Arial, sans-serif`;
   ctx.fillText(getFittedText({ ctx, text: uppercaseName, maxWidth }), x, y + 1);
@@ -160,43 +186,6 @@ function drawScore(input: {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(String(score), x, y + 1);
-  ctx.restore();
-}
-
-function drawCentreSeparator(input: {
-  ctx: CanvasRenderingContext2D;
-  y: number;
-  isFourFixtureCard: boolean;
-}) {
-  const { ctx, y, isFourFixtureCard } = input;
-
-  const boxWidth = isFourFixtureCard ? 42 : 48;
-  const boxHeight = isFourFixtureCard ? 58 : 64;
-  const dotRadius = isFourFixtureCard ? 3.8 : 4.5;
-  const dotGap = isFourFixtureCard ? 11 : 13;
-
-  ctx.save();
-
-  // The template already has separator marks baked into it. Mask that area and
-  // redraw clean circular dots so the lower rows stay centred and consistent.
-  ctx.fillStyle = "rgba(13, 15, 15, 0.92)";
-  ctx.fillRect(
-    CENTRE_SEPARATOR_X - boxWidth / 2,
-    y - boxHeight / 2,
-    boxWidth,
-    boxHeight,
-  );
-
-  ctx.fillStyle = "#ffffff";
-
-  ctx.beginPath();
-  ctx.arc(CENTRE_SEPARATOR_X, y - dotGap, dotRadius, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(CENTRE_SEPARATOR_X, y + dotGap, dotRadius, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.restore();
 }
 
@@ -242,15 +231,8 @@ export default function ResultsCardGenerator({
 
       try {
         const isFourFixtureCard = fixtures.length >= 4;
-        const rowYValues = isFourFixtureCard ? FOUR_FIXTURE_ROWS : THREE_FIXTURE_ROWS;
-        const badgeSize = isFourFixtureCard ? FOUR_FIXTURE_BADGE_SIZE : THREE_FIXTURE_BADGE_SIZE;
-        const teamNameFontSize = isFourFixtureCard
-          ? FOUR_FIXTURE_TEAM_NAME_FONT_SIZE
-          : THREE_FIXTURE_TEAM_NAME_FONT_SIZE;
-        const scoreFontSize = isFourFixtureCard ? 50 : 58;
-        const homeNameMaxWidth = isFourFixtureCard ? 285 : 255;
-        const awayNameMaxWidth = isFourFixtureCard ? 275 : 250;
-        const visibleFixtures = fixtures.slice(0, rowYValues.length);
+        const layout = isFourFixtureCard ? FOUR_FIXTURE_LAYOUT : THREE_FIXTURE_LAYOUT;
+        const visibleFixtures = fixtures.slice(0, layout.rowYValues.length);
         const template = await loadImage(templateUrl);
         const badgeEntries = await Promise.all(
           visibleFixtures.flatMap((fixture) => [
@@ -272,19 +254,20 @@ export default function ResultsCardGenerator({
         ctx.drawImage(template, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
         visibleFixtures.forEach((fixture, index) => {
-          const y = rowYValues[index];
+          const y = layout.rowYValues[index];
           const homeBadge = badgeEntries[index * 2] ?? null;
           const awayBadge = badgeEntries[index * 2 + 1] ?? null;
 
-          drawCentreSeparator({ ctx, y, isFourFixtureCard });
+          // The centre separator/dots are part of the Canva template. Do not
+          // paint over them here; masking them caused the odd dark blocks/marks
+          // on the 4-fixture result card.
+          drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: layout.badgeSize });
+          drawTeamName({ ctx, name: fixture.homeTeamName, x: layout.homeNameCentreX, y, maxWidth: layout.homeNameMaxWidth, fontSize: layout.teamNameFontSize });
+          drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y, fontSize: layout.scoreFontSize });
 
-          drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: badgeSize });
-          drawTeamName({ ctx, name: fixture.homeTeamName, x: HOME_NAME_X, y, align: "left", maxWidth: homeNameMaxWidth, fontSize: teamNameFontSize });
-          drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y, fontSize: scoreFontSize });
-
-          drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y, fontSize: scoreFontSize });
-          drawTeamName({ ctx, name: fixture.awayTeamName, x: AWAY_NAME_X, y, align: "left", maxWidth: awayNameMaxWidth, fontSize: teamNameFontSize });
-          drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: AWAY_BADGE_X, y, size: badgeSize });
+          drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y, fontSize: layout.scoreFontSize });
+          drawTeamName({ ctx, name: fixture.awayTeamName, x: layout.awayNameCentreX, y, maxWidth: layout.awayNameMaxWidth, fontSize: layout.teamNameFontSize });
+          drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: AWAY_BADGE_X, y, size: layout.badgeSize });
         });
 
         drawFooter({ ctx, matchweekLabel, dateLabel });
