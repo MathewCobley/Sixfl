@@ -13,9 +13,13 @@ export const revalidate = 0;
 const TEMPLATE_BODY = [
   "Hi {{firstName}},",
   "",
-  "We’re checking who still wants to play in a SIXFL team.",
+  "We recently emailed you to check whether you still wanted to play in a team in the SIXFL league, but we haven’t received a response from you yet.",
   "",
-  "Please click one of the buttons below so we can keep the squad list up to date.",
+  "Our teams are filling up quickly, and we’re now checking whether you would still like to be added to a squad.",
+  "",
+  "We’ve already successfully started two teams made up of individual players, and we’re now looking to start a third.",
+  "",
+  "Please click one of the options below so we can keep the squad list up to date and make sure we only contact players who are still interested.",
   "",
   "YES, I still want to play: {{yesResponseUrl}}",
   "NO, remove me from the squad list: {{noResponseUrl}}",
@@ -33,7 +37,7 @@ export default async function YesIWantToPlayTemplateSetupPage() {
     update: {
       name: "Yes, I want to play",
       description:
-        "Squad-player email with YES and NO buttons so SIXFL knows who still wants to play.",
+        "Squad-player email with secure YES and NO response links so SIXFL knows who still wants to play.",
       audience: "PLAYER",
       interestType: "PLAYER",
       subject: "Do you still want to play in a SIXFL team?",
@@ -46,7 +50,7 @@ export default async function YesIWantToPlayTemplateSetupPage() {
       key: "yes-i-want-to-play",
       name: "Yes, I want to play",
       description:
-        "Squad-player email with YES and NO buttons so SIXFL knows who still wants to play.",
+        "Squad-player email with secure YES and NO response links so SIXFL knows who still wants to play.",
       audience: "PLAYER",
       interestType: "PLAYER",
       subject: "Do you still want to play in a SIXFL team?",
