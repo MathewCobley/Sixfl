@@ -9,7 +9,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Northallerton Wednesday 6-a-side football league | SIXFL",
   description:
-    "Register your team for the new SIXFL Wednesday 6-a-side football league in Northallerton. Recruiting teams, players and referees now.",
+    "Register your team for the new SIXFL Wednesday 6-a-side football league in Northallerton. New teams, players and referees wanted.",
 };
 
 const teamInterestHref =
@@ -23,39 +23,39 @@ const launchStats = [
   { label: "Area", value: "Northallerton" },
   { label: "Night", value: "Wednesday" },
   { label: "Format", value: "6-a-side" },
-  { label: "Status", value: "Recruiting now" },
+  { label: "Status", value: "Teams wanted" },
 ];
 
 const sellingPoints = [
   {
-    title: "Built before it launches",
-    body: "We only start once there are enough committed teams, so the league feels organised from week one instead of rushed together.",
+    title: "Refereed matches",
+    body: "Play proper weekly 6-a-side football with referees, organised fixtures and clear match-night communication.",
   },
   {
-    title: "Reliable weekly fixtures",
-    body: "Clear communication, confirmed teams and a proper match-night setup help reduce gaps, confusion and last-minute problems.",
+    title: "League tables and results",
+    body: "Follow your team’s progress with league tables, results and weekly updates across the season.",
   },
   {
-    title: "Cleaner captain experience",
-    body: "Captains get a more professional league setup with clear next steps, fixtures, results and updates handled properly.",
+    title: "Teams and players welcome",
+    body: "Enter a full team or register as an individual player and we’ll help connect interest as the league fills.",
   },
 ];
 
 const joinSteps = [
   {
     number: "01",
-    title: "Register your team",
-    body: "Leave your captain details, team name and interest in the Northallerton Wednesday league.",
+    title: "Register interest",
+    body: "Captains can register a team, and individual players can add their details for the Northallerton Wednesday league.",
   },
   {
     number: "02",
-    title: "We build the league list",
-    body: "We speak to local teams, players and referees, then keep interested captains updated as the launch group fills.",
+    title: "We confirm the launch group",
+    body: "Once enough teams are interested, we’ll contact captains with the proposed start date, match times and next steps.",
   },
   {
     number: "03",
-    title: "Launch when ready",
-    body: "Once enough committed teams are ready, we confirm venue details, start date, fixtures and captain next steps.",
+    title: "Start playing",
+    body: "When the league is ready, fixtures are confirmed and teams can get started with organised Wednesday night football.",
   },
 ];
 
@@ -63,22 +63,22 @@ const faqs = [
   {
     question: "Is the Northallerton league live yet?",
     answer:
-      "It is currently recruiting. Teams can register now and will be contacted as the launch group builds.",
+      "Not yet. We are currently taking registrations from teams and players so the league can launch properly once there is enough interest.",
   },
   {
     question: "Do we need to pay now?",
     answer:
-      "No. This is an interest registration stage. We will confirm costs, start date and match-night details before asking teams to commit.",
+      "No. This is only an interest form. We’ll confirm costs, start date and match-night details before asking teams to commit.",
   },
   {
     question: "Can individual players register?",
     answer:
-      "Yes. Players without a team can join the player list and we can use that interest to help form or support squads.",
+      "Yes. Players without a team can join the player list and may be matched with teams or other players as the league builds.",
   },
   {
     question: "Can referees register?",
     answer:
-      "Yes. Referees can register interest for Northallerton and future SIXFL areas.",
+      "Yes. Referees can register interest for Northallerton and future SIXFL leagues.",
   },
 ];
 
@@ -113,17 +113,17 @@ export default function NorthallertonMensWednesdayLeaguePage() {
         <section className="grid gap-8 rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:p-8 lg:grid-cols-12 lg:items-center lg:p-10">
           <div className="lg:col-span-7">
             <div className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.24em] text-emerald-300">
-              New league forming • Northallerton Wednesdays
+              New teams and players wanted
             </div>
 
             <h1 className="mt-6 max-w-4xl text-balance text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
-              Northallerton 6-a-side football league.
+              Northallerton’s new 6-a-side league.
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-white/72 sm:text-lg">
-              SIXFL is recruiting teams for a new Wednesday night 6-a-side
-              football league in Northallerton. Register your team now and we
-              will keep you updated as the launch group builds.
+              A new men’s Wednesday night 6-a-side league is coming to
+              Northallerton Leisure Centre. Register your team or join as a
+              player to be contacted with launch updates.
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
@@ -143,7 +143,7 @@ export default function NorthallertonMensWednesdayLeaguePage() {
             </div>
 
             <p className="mt-5 text-sm font-medium text-white/50">
-              No payment now • No commitment today • Register interest first
+              No payment now • No commitment today • Just register interest
             </p>
           </div>
 
@@ -163,7 +163,7 @@ export default function NorthallertonMensWednesdayLeaguePage() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/45">
-                    Launch status
+                    League status
                   </div>
                   <div className="mt-2 text-2xl font-black text-white">
                     Recruiting now
@@ -191,9 +191,8 @@ export default function NorthallertonMensWednesdayLeaguePage() {
               </div>
 
               <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/68">
-                The aim is to create a proper SIXFL launch group first: local
-                teams, captains, players and referees who are ready before a
-                start date is confirmed.
+                Wednesday nights • Northallerton Leisure Centre • New teams and
+                individual players welcome.
               </div>
             </div>
           </div>
@@ -224,7 +223,7 @@ export default function NorthallertonMensWednesdayLeaguePage() {
               How it works
             </div>
             <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-              Register first. Launch properly.
+              Register interest. Get updates. Start playing.
             </h2>
 
             <div className="mt-7 grid gap-4">
@@ -254,35 +253,34 @@ export default function NorthallertonMensWednesdayLeaguePage() {
             className="rounded-[2rem] border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:p-8 lg:col-span-5"
           >
             <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-emerald-300">
-              Choose your route
+              Get involved
             </div>
             <h2 className="mt-3 text-3xl font-black tracking-tight text-white">
-              Join the Northallerton launch list.
+              Join the Northallerton list.
             </h2>
             <p className="mt-3 text-sm leading-7 text-white/70">
-              Team captains are the priority, but individual players and referees
-              can register too. Every enquiry is tagged for Northallerton
-              Wednesday so it can be chased properly.
+              Register a team, join as an individual player, or let us know if
+              you are interested in refereeing Wednesday night games.
             </p>
 
             <div className="mt-6 grid gap-3">
               <FunnelLink
                 href={teamInterestHref}
-                title="I have a team"
-                body="Register your captain details and team name."
+                title="Register a team"
+                body="Add your captain details and team name."
                 cta="Register team"
                 featured
               />
               <FunnelLink
                 href={playerInterestHref}
-                title="I need a team"
-                body="Join the player list for Northallerton."
+                title="Join as a player"
+                body="Add your details if you need a team."
                 cta="Join as player"
               />
               <FunnelLink
                 href={refereeInterestHref}
-                title="I can referee"
-                body="Register referee interest for launch nights."
+                title="Register as a referee"
+                body="Tell us you are interested in refereeing launch nights."
                 cta="Referee interest"
               />
             </div>
@@ -296,11 +294,11 @@ export default function NorthallertonMensWednesdayLeaguePage() {
                 FAQ
               </div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                Northallerton launch questions.
+                Northallerton league questions.
               </h2>
               <p className="mt-3 text-sm leading-7 text-white/62">
-                Keep the message simple while recruiting: no fake start date, no
-                payment pressure, and clear next steps for each lead type.
+                Quick answers for teams, players and referees interested in the
+                new Wednesday night league.
               </p>
             </div>
 
