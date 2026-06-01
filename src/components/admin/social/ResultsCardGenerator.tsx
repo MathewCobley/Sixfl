@@ -53,10 +53,10 @@ const THREE_FIXTURE_LAYOUT: ResultsCardLayout = {
 };
 
 const FOUR_FIXTURE_LAYOUT: ResultsCardLayout = {
-  // Evenly spaced against the 4-result template slots. Keeping this as one
-  // layout object avoids the lower rows drifting away from the top rows when
-  // future card tweaks are made.
-  rowYValues: [408, 523, 638, 753],
+  // The 4-result Canva template rows are not perfectly evenly spaced in the
+  // lower half of the card. These Y values match the visible green bar centres
+  // so badges, names and scores sit in the middle of each fixture strip.
+  rowYValues: [408, 523, 653, 779],
   badgeSize: 58,
   teamNameFontSize: 20,
   scoreFontSize: 50,
