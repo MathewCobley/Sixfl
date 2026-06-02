@@ -185,7 +185,7 @@ function NorthallertonLeagueWatermark() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute -right-8 top-14 hidden w-[390px] opacity-[0.16] sm:block lg:w-[440px]"
+      className="pointer-events-none absolute left-1/2 top-1/2 hidden w-[440px] -translate-x-1/2 -translate-y-1/2 opacity-[0.28] sm:block lg:w-[500px]"
     >
       <Image
         src="/leagues/northallerton-wednesday.png"
@@ -469,7 +469,7 @@ export default async function RegisterInterestPage({
                   name="message"
                   rows={5}
                   placeholder={notesPlaceholder}
-                  className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-500/50"
                 />
               </div>
 
@@ -548,7 +548,7 @@ function Field({
         type={type}
         placeholder={placeholder}
         required={required}
-        className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/50"
+        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-500/50"
       />
     </div>
   );
@@ -576,7 +576,7 @@ function SelectField({
         name={name}
         required={required}
         defaultValue={defaultValue}
-        className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-500/50"
+        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-500/50"
       >
         <option value="" disabled className="bg-black text-white/60">
           Select {label.toLowerCase()}
@@ -604,7 +604,7 @@ function SelectField({
 
 function CheckboxField({ name, label }: { name: string; label: string }) {
   return (
-    <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/80">
+    <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/18 px-4 py-3 text-sm text-white/80">
       <input
         type="checkbox"
         name={name}
