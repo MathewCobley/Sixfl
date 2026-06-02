@@ -146,8 +146,13 @@ function getTeamDetailsForFixture(
   return fixture.homeTeam.id === teamId ? fixture.homeTeam : fixture.awayTeam;
 }
 
-function buildDigestSourceId(input: { leagueId: string; teamId: string }) {
-  return `${input.leagueId}:${input.teamId}`;
+function buildDigestSourceId(input: {
+  leagueId: string;
+  teamId: string;
+  fixtureIds: string[];
+}) {
+  const fixtureBatch = input.fixtureIds.slice().sort().join(",");
+  return `${input.leagueId}:${input.teamId}:${fixtureBatch}`;
 }
 
 function buildReminderSourceId(input: {
@@ -398,11 +403,15 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       sourceId: buildDigestSourceId({
         leagueId: league.id,
         teamId,
+        fixtureIds: teamFixtures.map((fixture) => fixture.id),
       }),
       metadata: {
         kind: "fixture_publish_digest",
         teamId,
+        teamName: snapshot.teamName || teamDetails.name,
         leagueId: league.id,
+        leagueName: leagueDisplayName,
+        fixtureIds: teamFixtures.map((fixture) => fixture.id),
       },
       variables: {
         firstName: snapshot.primaryContact.name ?? snapshot.teamName,
@@ -429,6 +438,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
       const { recipient } = await upsertTeamNotificationRecipient(teamId);
       const teamDetails = getTeamDetailsForFixture(fixture, teamId);
+      const fixtureName = `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`;
 
       const reminderTimes = [
         new Date(fixture.kickoffAt.getTime() - 48 * 60 * 60 * 1000),
@@ -448,13 +458,17 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
           metadata: {
             kind: "fixture_reminder",
             teamId,
+            teamName: teamDetails.name,
             leagueId: league.id,
+            leagueName: leagueDisplayName,
+            fixtureId: fixture.id,
+            fixtureName,
           },
           scheduledFor,
           variables: {
             firstName: recipient.displayName?.trim() || teamDetails.name,
             leagueName: league.name,
-            fixtureName: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`,
+            fixtureName,
             kickoffLabel: formatKickoff(fixture.kickoffAt),
             fixturesUrl,
           },
