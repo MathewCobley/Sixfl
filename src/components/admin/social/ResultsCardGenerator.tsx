@@ -29,8 +29,8 @@ type ResultsCardLayout = {
   badgeSize: number;
   teamNameFontSize: number;
   scoreFontSize: number;
-  homeNameCentreX: number;
-  awayNameCentreX: number;
+  homeNameAnchorX: number;
+  awayNameAnchorX: number;
   homeNameMaxWidth: number;
   awayNameMaxWidth: number;
 };
@@ -46,8 +46,8 @@ const THREE_FIXTURE_LAYOUT: ResultsCardLayout = {
   badgeSize: 68,
   teamNameFontSize: 22,
   scoreFontSize: 58,
-  homeNameCentreX: 260,
-  awayNameCentreX: 846,
+  homeNameAnchorX: 390,
+  awayNameAnchorX: 704,
   homeNameMaxWidth: 270,
   awayNameMaxWidth: 270,
 };
@@ -60,8 +60,8 @@ const FOUR_FIXTURE_LAYOUT: ResultsCardLayout = {
   badgeSize: 58,
   teamNameFontSize: 20,
   scoreFontSize: 50,
-  homeNameCentreX: 260,
-  awayNameCentreX: 846,
+  homeNameAnchorX: 390,
+  awayNameAnchorX: 704,
   homeNameMaxWidth: 285,
   awayNameMaxWidth: 285,
 };
@@ -159,13 +159,14 @@ function drawTeamName(input: {
   y: number;
   maxWidth: number;
   fontSize: number;
+  align: CanvasTextAlign;
 }) {
-  const { ctx, name, x, y, maxWidth, fontSize } = input;
+  const { ctx, name, x, y, maxWidth, fontSize, align } = input;
   const uppercaseName = name.toUpperCase();
 
   ctx.save();
   ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
+  ctx.textAlign = align;
   ctx.textBaseline = "middle";
   ctx.font = `900 ${fontSize}px Arial Narrow, Impact, Arial, sans-serif`;
   ctx.fillText(getFittedText({ ctx, text: uppercaseName, maxWidth }), x, y + 1);
@@ -262,11 +263,11 @@ export default function ResultsCardGenerator({
           // paint over them here; masking them caused the odd dark blocks/marks
           // on the 4-fixture result card.
           drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: layout.badgeSize });
-          drawTeamName({ ctx, name: fixture.homeTeamName, x: layout.homeNameCentreX, y, maxWidth: layout.homeNameMaxWidth, fontSize: layout.teamNameFontSize });
+          drawTeamName({ ctx, name: fixture.homeTeamName, x: layout.homeNameAnchorX, y, maxWidth: layout.homeNameMaxWidth, fontSize: layout.teamNameFontSize, align: "right" });
           drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y, fontSize: layout.scoreFontSize });
 
           drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y, fontSize: layout.scoreFontSize });
-          drawTeamName({ ctx, name: fixture.awayTeamName, x: layout.awayNameCentreX, y, maxWidth: layout.awayNameMaxWidth, fontSize: layout.teamNameFontSize });
+          drawTeamName({ ctx, name: fixture.awayTeamName, x: layout.awayNameAnchorX, y, maxWidth: layout.awayNameMaxWidth, fontSize: layout.teamNameFontSize, align: "left" });
           drawBadge({ ctx, image: awayBadge, teamName: fixture.awayTeamName, x: AWAY_BADGE_X, y, size: layout.badgeSize });
         });
 
