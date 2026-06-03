@@ -20,7 +20,6 @@ import {
   archiveMessageThread,
   getMessageThreadById,
   markThreadAsReadForAdmin,
-  recordOutboundSms,
   reopenMessageThread,
 } from "@/lib/messaging/service";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
@@ -208,22 +207,37 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
         redirect(buildMessagesHref({ filter, threadId, extras: { error: "send_failed" } }));
       }
 
-      await recordOutboundSms({
-        notificationDispatchId: dispatch.id,
-        recipientId,
-        teamId: thread.teamId,
-        leagueId: thread.leagueId,
-        sourceType: thread.sourceType,
-        sourceId: thread.sourceId,
-        contactName:
-          thread.contactName ?? thread.recipient?.displayName ?? thread.team?.name ?? null,
-        phone: toNumber,
-        body: dispatch.bodyText,
-        toNumber,
-        provider: "twilio",
-        providerStatus: "queued",
-        createdByUserId: user?.id ?? null,
-        sentAt: null,
+      const now = new Date();
+      const entry = await prisma.messageEntry.create({
+        data: {
+          threadId: thread.id,
+          channel: "SMS",
+          direction: "OUTBOUND",
+          participantRole: "ADMIN",
+          body: dispatch.bodyText,
+          textBody: dispatch.bodyText,
+          toNumber,
+          provider: "twilio",
+          providerStatus: "queued",
+          notificationDispatchId: dispatch.id,
+          createdByUserId: user?.id ?? null,
+          sentAt: null,
+        },
+      });
+
+      await prisma.messageThread.update({
+        where: { id: thread.id },
+        data: {
+          recipientId,
+          teamId: thread.teamId,
+          leagueId: thread.leagueId,
+          contactPhone: thread.contactPhone ?? toNumber,
+          phoneNormalized: thread.phoneNormalized ?? toNumber,
+          latestMessageAt: now,
+          latestOutboundAt: now,
+          lastOutboundMessageId: entry.id,
+          lastMessagePreview: dispatch.bodyText.trim().replace(/\s+/g, " ").slice(0, 140),
+        },
       });
     } else if (toEmail) {
       const now = new Date();
