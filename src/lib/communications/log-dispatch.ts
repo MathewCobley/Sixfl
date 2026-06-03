@@ -29,6 +29,11 @@ const PLAYER_MATCH_FEE_SOURCE_TYPES = new Set([
   "PLAYER_MATCH_FEE_CHASE_72H",
 ]);
 
+const FIXTURE_MATCH_FEE_SOURCE_TYPES = new Set([
+  "FIXTURE_MATCH_FEE",
+  "FIXTURE_MATCH_FEE_REMINDER",
+]);
+
 function getMessageChannel(channel: NotificationChannel): MessageChannel {
   return channel === "SMS" ? "SMS" : "EMAIL";
 }
@@ -73,6 +78,12 @@ function isPlayerMatchFeeDispatch(dispatch: NotificationDispatch) {
   );
 }
 
+function isFixtureMatchFeeDispatch(dispatch: NotificationDispatch) {
+  return Boolean(
+    dispatch.sourceType && FIXTURE_MATCH_FEE_SOURCE_TYPES.has(dispatch.sourceType),
+  );
+}
+
 async function resolveThreadContext(dispatch: NotificationDispatch) {
   if (dispatch.sourceType === "TEAM" && dispatch.sourceId) {
     const team = await prisma.team.findUnique({
@@ -96,6 +107,44 @@ async function resolveThreadContext(dispatch: NotificationDispatch) {
         contactEmail: team.contactEmail,
         contactPhone: team.contactPhone,
       };
+    }
+  }
+
+  if (isFixtureMatchFeeDispatch(dispatch)) {
+    const chargeId =
+      getMetadataString(dispatch.metadata, "chargeId") ??
+      dispatch.sourceId?.trim() ??
+      null;
+
+    if (chargeId) {
+      const charge = await prisma.paymentCharge.findUnique({
+        where: { id: chargeId },
+        select: {
+          id: true,
+          teamId: true,
+          leagueId: true,
+          team: {
+            select: {
+              id: true,
+              name: true,
+              contactEmail: true,
+              contactPhone: true,
+            },
+          },
+        },
+      });
+
+      if (charge?.team) {
+        return {
+          sourceType: "TEAM",
+          sourceId: charge.team.id,
+          teamId: charge.teamId,
+          leagueId: charge.leagueId,
+          contactName: charge.team.name,
+          contactEmail: charge.team.contactEmail,
+          contactPhone: charge.team.contactPhone,
+        };
+      }
     }
   }
 
@@ -263,6 +312,14 @@ function buildThreadLookupFilters(input: {
   // moves it onto the actual player/prospect history instead of leaving it only
   // visible in the central comms inbox.
   if (isPlayerMatchFeeDispatch(input.dispatch) && input.dispatch.sourceType && input.dispatch.sourceId) {
+    filters.push({
+      channel: input.channel,
+      sourceType: input.dispatch.sourceType,
+      sourceId: input.dispatch.sourceId,
+    });
+  }
+
+  if (isFixtureMatchFeeDispatch(input.dispatch) && input.dispatch.sourceType && input.dispatch.sourceId) {
     filters.push({
       channel: input.channel,
       sourceType: input.dispatch.sourceType,
