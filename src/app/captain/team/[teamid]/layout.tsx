@@ -10,6 +10,7 @@ import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLink
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
+import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
 import ManagedProspectMoveLinks from "@/components/captain/ManagedProspectMoveLinks";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import PendingActivationDeleteLinks from "@/components/captain/PendingActivationDeleteLinks";
@@ -59,8 +60,7 @@ export default async function CaptainTeamLayout({
   }
 
   const isManagedTeam = team.teamMode === "MANAGED";
-  const isLimitedCaptainPreview = access.accessMode === "admin-preview";
-  const showTeamPayments = !isManagedTeam || (access.isAdmin && !isLimitedCaptainPreview);
+  const showTeamPayments = !isManagedTeam || access.isAdmin;
 
   const squadHref = access.isAdmin
     ? `/captain/team/${teamid}/squad`
@@ -116,21 +116,15 @@ export default async function CaptainTeamLayout({
                 </div>
 
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-                    {isLimitedCaptainPreview ? "Limited captain preview" : "SIXFL Captain Hub"}
-                  </p>
+                  <CaptainViewModeHeader
+                    teamId={team.id}
+                    isAdmin={access.isAdmin}
+                    isManagedTeam={isManagedTeam}
+                  />
 
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                     {team.name}
                   </h1>
-
-                  <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                    {isLimitedCaptainPreview
-                      ? "You are viewing this exactly as a managed-squad captain sees it. Admin-only tabs and payment controls are hidden."
-                      : isManagedTeam
-                        ? "Full admin view: matchday control, fixtures, results and payments for your team."
-                        : "Matchday control, fixtures, results and payments for your team."}
-                  </p>
 
                   <p className="mt-3 text-sm text-white/55">
                     {team.league?.name ?? "No league assigned"}
@@ -138,67 +132,6 @@ export default async function CaptainTeamLayout({
                     {team.league?.isActive ? " · Live season" : ""}
                   </p>
                 </div>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                {access.isAdmin ? (
-                  <Link
-                    href={`/admin/teams/${team.id}`}
-                    className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
-                  >
-                    Back to admin team
-                  </Link>
-                ) : null}
-
-                {access.isAdmin && !isLimitedCaptainPreview ? (
-                  <Link
-                    href={`/captain/team/${team.id}/captain-squad`}
-                    className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
-                  >
-                    Preview limited captain view
-                  </Link>
-                ) : null}
-
-                {isLimitedCaptainPreview ? (
-                  <Link
-                    href={`/captain/team/${team.id}`}
-                    className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
-                  >
-                    Return to full admin view
-                  </Link>
-                ) : null}
-
-                {access.isAdmin ? (
-                  <Link
-                    href={`/admin/teams/${team.id}/squad`}
-                    className="inline-flex items-center rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-500/15"
-                  >
-                    Admin squad console
-                  </Link>
-                ) : null}
-
-                {isLimitedCaptainPreview ? (
-                  <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
-                    <div className="font-medium text-white">Viewing as captain</div>
-                    <div className="mt-1 text-amber-100/75">
-                      Limited preview mode.
-                    </div>
-                  </div>
-                ) : access.isAdmin ? (
-                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-                    <div className="font-medium text-white">Full admin view</div>
-                    <div className="mt-1 text-emerald-100/70">
-                      Admin tabs and payment tools are visible.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-                    <div className="font-medium text-white">Captain view</div>
-                    <div className="mt-1 text-emerald-100/70">
-                      You are signed in to manage this team.
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
