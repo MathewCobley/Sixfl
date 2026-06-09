@@ -8,7 +8,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
-import { ensurePlayerMatchFeePaymentDetailsForFees } from "@/lib/payments/player-match-fees";
+import {
+  ensurePlayerMatchFeePaymentDetailsForFees,
+  queuePlayerMatchFeeReminder,
+} from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -93,6 +96,25 @@ async function assertFixtureBelongsToTeam(input: { fixtureId: string; teamId: st
   return Boolean(fixture);
 }
 
+async function emailPlayerPaymentLinks(feeIds: string[]) {
+  const uniqueFeeIds = Array.from(new Set(feeIds.filter(Boolean)));
+  let queued = 0;
+  let skipped = 0;
+
+  for (const feeId of uniqueFeeIds) {
+    const result = await queuePlayerMatchFeeReminder({
+      feeId,
+      mode: "request",
+      channels: ["EMAIL"],
+    });
+
+    queued += result.queued;
+    skipped += result.skipped;
+  }
+
+  return { queued, skipped };
+}
+
 export async function createCaptainSquadPaymentCollectionAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
@@ -157,7 +179,6 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
       });
 
       if (existing && isLockedPlayerFee(existing.status)) {
-        createdOrUpdatedFeeIds.push(existing.id);
         continue;
       }
 
@@ -211,7 +232,6 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
       });
 
       if (existing && isLockedPlayerFee(existing.status)) {
-        createdOrUpdatedFeeIds.push(existing.id);
         continue;
       }
 
@@ -295,6 +315,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
   }
 
   await ensurePlayerMatchFeePaymentDetailsForFees(createdOrUpdatedFeeIds);
+  await emailPlayerPaymentLinks(createdOrUpdatedFeeIds);
 
   revalidatePath(getPlayerPaymentsPath(teamId, fixtureId));
   redirect(getPlayerPaymentsPath(teamId, fixtureId, "&saved=collection_created"));
