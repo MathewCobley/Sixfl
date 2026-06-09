@@ -211,6 +211,17 @@ function CommunicationButton({ href, label = "Comms" }: { href: string; label?: 
   );
 }
 
+function EditPlayerButton({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+    >
+      Edit player
+    </Link>
+  );
+}
+
 function getResponseBadgeClasses(response?: string | null) {
   if (response === "YES") {
     return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
@@ -656,6 +667,8 @@ export default async function CaptainSquadPage({
                       </button>
                     </form>
 
+                    <EditPlayerButton href={`/captain/team/${teamid}/squad/${member.id}/edit`} />
+
                     {canOpenAdminComms ? (
                       <CommunicationButton
                         href={`/admin/teams/${teamid}/players/${member.id}/communications`}
@@ -757,47 +770,22 @@ export default async function CaptainSquadPage({
                                   {getActivationStatusText({ label: "SMS chase", ...latestActivationSmsDispatch })}
                                 </div>
                               ) : null}
-
-                              {prospect.notes ? (
-                                <div className="mt-2 text-sm text-white/55">{prospect.notes}</div>
-                              ) : null}
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap gap-3 xl:justify-end">
-                            <form method="post" action={`/captain/team/${teamid}/squad/send-activation`}>
-                              <input type="hidden" name="prospectId" value={prospect.id} />
-                              <button
-                                type="submit"
-                                disabled={!hasEmail}
-                                className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
-                              >
-                                {hasActivationEmailBeenQueued ? "Send again" : "Send activation email"}
-                              </button>
-                            </form>
-                            <form method="post" action={`/captain/team/${teamid}/squad/send-activation-sms`}>
-                              <input type="hidden" name="prospectId" value={prospect.id} />
-                              <button
-                                type="submit"
-                                disabled={!prospect.phone}
-                                className="inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
-                              >
-                                Chase by SMS
-                              </button>
-                            </form>
-
+                          <div className="flex flex-wrap gap-2 xl:justify-end">
+                            <Link
+                              href={`/captain/team/${teamid}/prospects`}
+                              className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/10"
+                            >
+                              Edit in prospects
+                            </Link>
                             {canOpenAdminComms ? (
                               <CommunicationButton
                                 href={`/admin/teams/${teamid}/prospects/${prospect.id}/communications`}
+                                label="Prospect comms"
                               />
                             ) : null}
-
-                            <Link
-                              href={`/captain/team/${teamid}/prospects`}
-                              className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                            >
-                              Open prospect
-                            </Link>
                           </div>
                         </div>
                       );
@@ -812,139 +800,59 @@ export default async function CaptainSquadPage({
         <div className="space-y-6">
           <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Communications
+              Add squad member
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Use the communications hub</h2>
-            <p className="mt-2 text-sm text-white/60">
-              Squad emails and player outreach now live in Communications so the message history, replies and templates stay in one place.
+            <h2 className="mt-2 text-xl font-semibold text-white">Attach an existing user</h2>
+            <p className="mt-2 text-sm text-white/55">
+              Add a player by email address. They need a SIXFL account before they can be attached here.
             </p>
-
-            {canOpenAdminComms ? (
-              <div className="mt-5 space-y-3">
-                <Link
-                  href={`/admin/teams/${teamid}/communications`}
-                  className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                >
-                  Open team communications
-                </Link>
-                {isManagedTeam ? (
-                  <Link
-                    href={`/admin/player-responses?teamId=${teamid}`}
-                    className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
-                  >
-                    View YES/NO responses
-                  </Link>
-                ) : null}
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
-                  Use the individual <span className="text-white/80">Comms</span> buttons beside players for one-to-one player/prospect messages.
-                </div>
-              </div>
-            ) : (
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-                Messaging is managed from the central communications area.
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Add existing user
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Add squad member</h2>
-            <p className="mt-2 text-sm text-white/60">
-              This uses an existing SIXFL user account. Add them by email, then choose the role.
-            </p>
-
             <form action={addSquadMemberAction} className="mt-5 space-y-4">
               <input type="hidden" name="teamid" value={teamid} />
-
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm text-white/60">
-                  User email
-                </label>
+              <label className="block space-y-2 text-sm font-medium text-white/65">
+                <span>Email address</span>
                 <input
-                  id="email"
-                  name="email"
                   type="email"
+                  name="email"
+                  required
                   placeholder="player@example.com"
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                  className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50 focus:bg-black/35"
                 />
-              </div>
-
-              <FormListboxField
-                name="role"
-                label="Role"
-                value="PLAYER"
-                options={roleOptions}
-                placeholder="Select role"
-              />
-
+              </label>
               <button
                 type="submit"
-                className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400"
               >
-                Add to squad
+                Add member
               </button>
             </form>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Team contacts
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Contact snapshot</h2>
-
-            <div className="mt-5 space-y-4 text-sm text-white/75">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                  Primary
-                </div>
-                <div className="mt-3 space-y-2">
-                  <div><span className="text-white/45">Name:</span> {team.contactName || "—"}</div>
-                  <div><span className="text-white/45">Email:</span> {team.contactEmail || "—"}</div>
-                  <div><span className="text-white/45">Phone:</span> {team.contactPhone || "—"}</div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                  Secondary
-                </div>
-                <div className="mt-3 space-y-2">
-                  <div><span className="text-white/45">Name:</span> {team.secondaryContactName || "—"}</div>
-                  <div><span className="text-white/45">Email:</span> {team.secondaryContactEmail || "—"}</div>
-                  <div><span className="text-white/45">Phone:</span> {team.secondaryContactPhone || "—"}</div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+          <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
               Captain access
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Claim status</h2>
-
-            <div className="mt-5 space-y-3 text-sm text-white/75">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-white/50">Captain linked</span>
-                <span className="text-right text-white">{team.captainLinkedAt ? formatUkDateTime(team.captainLinkedAt) : "—"}</span>
+            <h2 className="mt-2 text-xl font-semibold text-white">Claim and invite status</h2>
+            <div className="mt-4 space-y-3 text-sm text-amber-100/80">
+              <div>
+                <span className="text-white/55">Primary contact:</span> {team.contactName || "No name"} · {team.contactEmail || "No email"}
               </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-white/50">Linked source</span>
-                <span className="text-right text-white">{team.captainLinkedSource || "—"}</span>
+              <div>
+                <span className="text-white/55">Phone:</span> {team.contactPhone || "No phone"}
               </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-white/50">Invite sent</span>
-                <span className="text-right text-white">{team.captainInviteSentAt ? formatUkDateTime(team.captainInviteSentAt) : "—"}</span>
+              {team.secondaryContactEmail ? (
+                <div>
+                  <span className="text-white/55">Secondary:</span> {team.secondaryContactName || "No name"} · {team.secondaryContactEmail}
+                </div>
+              ) : null}
+              <div>
+                <span className="text-white/55">Invite sent:</span> {team.captainInviteSentAt ? formatUkDateTime(team.captainInviteSentAt) : "Not sent"}
               </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-white/50">Invite email</span>
-                <span className="text-right text-white">{team.captainInviteSentTo || "—"}</span>
+              <div>
+                <span className="text-white/55">Claimed:</span> {team.captainClaimedAt ? formatUkDateTime(team.captainClaimedAt) : "Not claimed"}
               </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-white/50">Claimed at</span>
-                <span className="text-right text-white">{team.captainClaimedAt ? formatUkDateTime(team.captainClaimedAt) : "—"}</span>
+              <div>
+                <span className="text-white/55">Linked:</span> {team.captainLinkedAt ? formatUkDateTime(team.captainLinkedAt) : "Not linked"}
+                {team.captainLinkedSource ? ` · ${team.captainLinkedSource}` : ""}
               </div>
             </div>
           </section>
