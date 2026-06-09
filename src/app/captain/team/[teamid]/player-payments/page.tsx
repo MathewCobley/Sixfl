@@ -6,8 +6,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
-import { ensurePlayerMatchFeePaymentDetailsForFees } from "@/lib/payments/player-match-fees";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { ensurePlayerMatchFeePaymentDetailsForFees } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { createCaptainSquadPaymentCollectionAction } from "./actions";
@@ -138,72 +138,94 @@ function getPlayerContact(input: {
     .join(" · ") || "No contact saved";
 }
 
-function getCollectionComparisonText(input: {
-  collectionTotalPence: number;
-  teamFeePence: number;
-}) {
-  const difference = input.collectionTotalPence - input.teamFeePence;
+function getAllocationStatus(input: { allocatedPence: number; teamFeePence: number }) {
+  const unallocatedPence = Math.max(input.teamFeePence - input.allocatedPence, 0);
+  const overAllocatedPence = Math.max(input.allocatedPence - input.teamFeePence, 0);
 
-  if (difference === 0) {
-    return `This collection matches the ${formatMoney(input.teamFeePence)} team fee.`;
+  if (unallocatedPence > 0) {
+    return {
+      label: `Unallocated ${formatMoney(unallocatedPence)}`,
+      helper: `${formatMoney(input.allocatedPence)} allocated from ${formatMoney(input.teamFeePence)} team fee`,
+      tone: "amber" as const,
+      unallocatedPence,
+      overAllocatedPence,
+    };
   }
 
-  if (difference < 0) {
-    return `${formatMoney(Math.abs(difference))} still unallocated against the ${formatMoney(input.teamFeePence)} team fee.`;
+  if (overAllocatedPence > 0) {
+    return {
+      label: `Over allocated ${formatMoney(overAllocatedPence)}`,
+      helper: `${formatMoney(input.allocatedPence)} allocated against ${formatMoney(input.teamFeePence)} team fee`,
+      tone: "sky" as const,
+      unallocatedPence,
+      overAllocatedPence,
+    };
   }
 
-  return `${formatMoney(difference)} over allocated against the ${formatMoney(input.teamFeePence)} team fee.`;
+  return {
+    label: "Fully allocated",
+    helper: `${formatMoney(input.allocatedPence)} allocated against ${formatMoney(input.teamFeePence)} team fee`,
+    tone: "emerald" as const,
+    unallocatedPence,
+    overAllocatedPence,
+  };
 }
 
-function getCollectionComparisonClasses(input: {
-  collectionTotalPence: number;
-  teamFeePence: number;
-}) {
-  const difference = input.collectionTotalPence - input.teamFeePence;
-
-  if (difference === 0) return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-  if (difference < 0) return "border-amber-400/25 bg-amber-500/10 text-amber-100";
-  return "border-sky-400/20 bg-sky-500/10 text-sky-100";
-}
-
-function getAllocatedDetail(input: {
-  allocatedPence: number;
-  teamFeePence: number;
-}) {
-  const difference = input.allocatedPence - input.teamFeePence;
-  const allocatedText = `Allocated ${formatMoney(input.allocatedPence)} / ${formatMoney(input.teamFeePence)}`;
-
-  if (difference === 0) return `${allocatedText} · Fully allocated`;
-  if (difference < 0) return `${allocatedText} · Unallocated ${formatMoney(Math.abs(difference))}`;
-  return `${allocatedText} · Over allocated ${formatMoney(difference)}`;
+function getToneClasses(tone: "white" | "emerald" | "amber" | "sky" | "red") {
+  switch (tone) {
+    case "emerald":
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70";
+    case "amber":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100/70";
+    case "sky":
+      return "border-sky-400/20 bg-sky-500/10 text-sky-100/70";
+    case "red":
+      return "border-red-400/20 bg-red-500/10 text-red-100/70";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/45";
+  }
 }
 
 function getFixturePaymentBadge(input: {
   summary?: FixturePaymentSummary;
   teamFeePence: number;
 }) {
-  const summary = input.summary;
+  const summary = input.summary ?? {
+    players: 0,
+    paidCount: 0,
+    openCount: 0,
+    waivedCount: 0,
+    totalPence: 0,
+    paidPence: 0,
+    openPence: 0,
+    waivedPence: 0,
+  };
+  const allocation = getAllocationStatus({
+    allocatedPence: summary.totalPence,
+    teamFeePence: input.teamFeePence,
+  });
+  const teamFeeStillToCoverPence = Math.max(input.teamFeePence - summary.paidPence, 0);
+  const baseLines = [
+    `Allocated ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)}`,
+    allocation.overAllocatedPence > 0
+      ? `Over allocated ${formatMoney(allocation.overAllocatedPence)}`
+      : `Unallocated ${formatMoney(allocation.unallocatedPence)}`,
+    `Player payments outstanding ${formatMoney(summary.openPence)}`,
+    `Team fee still to cover ${formatMoney(teamFeeStillToCoverPence)}`,
+  ];
 
-  if (!summary || summary.players === 0) {
+  if (summary.players === 0) {
     return {
       label: "Not started",
-      detail: getAllocatedDetail({ allocatedPence: 0, teamFeePence: input.teamFeePence }),
+      lines: baseLines,
       classes: "border-white/10 bg-white/[0.04] text-white/55",
     };
   }
 
-  const allocatedDetail = getAllocatedDetail({
-    allocatedPence: summary.totalPence,
-    teamFeePence: input.teamFeePence,
-  });
-
   if (summary.openCount === 0) {
-    const label = summary.paidCount > 0 ? "Paid" : "Waived";
-    const detail = `${summary.paidCount}/${summary.players} paid · collected ${formatMoney(summary.paidPence)} · ${allocatedDetail}`;
-
     return {
-      label,
-      detail,
+      label: summary.paidCount > 0 ? "Paid" : "Waived",
+      lines: [`${summary.paidCount}/${summary.players} paid`, ...baseLines],
       classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
     };
   }
@@ -211,14 +233,14 @@ function getFixturePaymentBadge(input: {
   if (summary.paidCount > 0 || summary.waivedCount > 0) {
     return {
       label: "Part paid",
-      detail: `${summary.paidCount}/${summary.players} paid · outstanding ${formatMoney(summary.openPence)} · ${allocatedDetail}`,
+      lines: [`${summary.paidCount}/${summary.players} paid`, ...baseLines],
       classes: "border-amber-400/25 bg-amber-500/10 text-amber-100",
     };
   }
 
   return {
     label: "Outstanding",
-    detail: `${summary.players} player${summary.players === 1 ? "" : "s"} · outstanding ${formatMoney(summary.openPence)} · ${allocatedDetail}`,
+    lines: [`${summary.players} player${summary.players === 1 ? "" : "s"}`, ...baseLines],
     classes: "border-red-400/25 bg-red-500/10 text-red-100",
   };
 }
@@ -406,13 +428,8 @@ export default async function CaptainPlayerPaymentsPage({
   const waivedCount = activeFees.filter((fee) => fee.status === "WAIVED").length;
   const defaultAmount = activeFees.find((fee) => fee.status !== "PAID")?.amountPence ?? 400;
   const teamFeePence = selectedFixture?.matchFeePence ?? 4000;
-  const unallocatedPence = Math.max(teamFeePence - totals.total, 0);
-  const overAllocatedPence = Math.max(totals.total - teamFeePence, 0);
-  const allocationSummaryText = unallocatedPence > 0
-    ? `Still unallocated: ${formatMoney(unallocatedPence)}`
-    : overAllocatedPence > 0
-      ? `Over allocated: ${formatMoney(overAllocatedPence)}`
-      : "Fully allocated";
+  const allocation = getAllocationStatus({ allocatedPence: totals.total, teamFeePence });
+  const teamFeeStillToCoverPence = Math.max(teamFeePence - totals.paid, 0);
   const savedMessage = getSavedMessage(sp.saved);
   const errorMessage = getErrorMessage(sp.error);
 
@@ -420,12 +437,8 @@ export default async function CaptainPlayerPaymentsPage({
     <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-            Squad payments
-          </p>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            Collect money from your players
-          </h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Squad payments</p>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Collect money from your players</h2>
           <p className="mt-3 max-w-3xl text-sm text-white/65 sm:text-base">
             Set a default amount, adjust individual player amounts for subs or guests, then share secure Stripe payment links and track who has paid. The team still remains responsible for the SIXFL fixture fee.
           </p>
@@ -443,14 +456,15 @@ export default async function CaptainPlayerPaymentsPage({
       {savedMessage ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">{savedMessage}</div> : null}
       {errorMessage ? <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</div> : null}
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: "Team fee", value: formatMoney(teamFeePence), text: selectedFixture ? "Fixed SIXFL fee for this fixture." : "Choose a fixture to see the fee.", classes: "border-white/10 bg-white/[0.04] text-white/45" },
-          { label: "Allocated to players", value: formatMoney(totals.total), text: allocationSummaryText, classes: getCollectionComparisonClasses({ collectionTotalPence: totals.total, teamFeePence }) },
-          { label: "Collected so far", value: formatMoney(totals.paid), text: `${paidCount} paid · ${waivedCount} waived`, classes: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70" },
-          { label: "Still unpaid", value: formatMoney(totals.open), text: `${openCount} unpaid player${openCount === 1 ? "" : "s"}`, classes: "border-amber-400/20 bg-amber-500/10 text-amber-100/70" },
+          { label: "Team fee", value: formatMoney(teamFeePence), text: selectedFixture ? "Fixed SIXFL fee for this fixture." : "Choose a fixture to see the fee.", tone: "white" as const },
+          { label: "Allocated", value: formatMoney(totals.total), text: allocation.label, tone: allocation.tone },
+          { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} paid · ${waivedCount} waived`, tone: "emerald" as const },
+          { label: "Player payments outstanding", value: formatMoney(totals.open), text: `${openCount} unpaid player${openCount === 1 ? "" : "s"}`, tone: openCount > 0 ? "amber" as const : "white" as const },
+          { label: "Team fee still to cover", value: formatMoney(teamFeeStillToCoverPence), text: "Paid online so far deducted from team fee.", tone: teamFeeStillToCoverPence > 0 ? "red" as const : "emerald" as const },
         ].map((item) => (
-          <div key={item.label} className={`rounded-3xl border p-5 ${item.classes}`}>
+          <div key={item.label} className={`rounded-3xl border p-5 ${getToneClasses(item.tone)}`}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{item.label}</p>
             <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
             <p className="mt-2 text-sm text-white/55">{item.text}</p>
@@ -459,10 +473,10 @@ export default async function CaptainPlayerPaymentsPage({
       </section>
 
       {activeFees.length > 0 || selectedFixture ? (
-        <section className={`rounded-3xl border p-5 text-sm ${getCollectionComparisonClasses({ collectionTotalPence: totals.total, teamFeePence })}`}>
-          <div className="font-semibold text-white">Allocation check</div>
+        <section className={`rounded-3xl border p-5 text-sm ${getToneClasses(allocation.tone)}`}>
+          <div className="font-semibold text-white">Allocation and payment check</div>
           <p className="mt-2 text-white/70">
-            Allocated to players: {formatMoney(totals.total)} / {formatMoney(teamFeePence)}. {getCollectionComparisonText({ collectionTotalPence: totals.total, teamFeePence })} This is a warning only — it will not stop you saving, because subs, guests, top-ups and over-collections can be deliberate.
+            Allocated to players: {formatMoney(totals.total)} / {formatMoney(teamFeePence)}. {allocation.helper}. Player payments outstanding: {formatMoney(totals.open)}. Team fee still to cover from actual paid player payments: {formatMoney(teamFeeStillToCoverPence)}.
           </p>
         </section>
       ) : null}
@@ -476,10 +490,9 @@ export default async function CaptainPlayerPaymentsPage({
             {fixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               const isPast = fixture.kickoffAt < now;
-              const fixtureTeamFeePence = fixture.matchFeePence ?? 4000;
               const paymentBadge = getFixturePaymentBadge({
                 summary: paymentSummaryByFixtureId.get(fixture.id),
-                teamFeePence: fixtureTeamFeePence,
+                teamFeePence: fixture.matchFeePence ?? 4000,
               });
 
               return (
@@ -491,15 +504,13 @@ export default async function CaptainPlayerPaymentsPage({
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>
                     {isPast ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100">Past fixture</span> : null}
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${paymentBadge.classes}`}>
-                      {paymentBadge.label}
-                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${paymentBadge.classes}`}>{paymentBadge.label}</span>
                   </div>
                   <div className="mt-1 text-xs text-white/50">
                     {formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
                   </div>
-                  <div className="mt-2 text-xs text-white/55">
-                    {paymentBadge.detail}
+                  <div className="mt-3 grid gap-1 text-xs text-white/55">
+                    {paymentBadge.lines.map((line) => <div key={line}>{line}</div>)}
                   </div>
                 </Link>
               );
@@ -509,9 +520,7 @@ export default async function CaptainPlayerPaymentsPage({
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Create / update collection</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Set a default amount, then adjust any individual player amount. Enter 0.00 to waive a player. Paid rows stay locked and will not be reset.
-          </p>
+          <p className="mt-1 text-sm text-white/55">Set a default amount, then adjust any individual player amount. Enter 0.00 to waive a player. Paid rows stay locked and will not be reset.</p>
 
           {selectedFixture ? (
             <form action={createCaptainSquadPaymentCollectionAction} className="mt-5 space-y-5">
@@ -521,14 +530,7 @@ export default async function CaptainPlayerPaymentsPage({
               <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4">
                 <label htmlFor="amount" className="text-sm font-medium text-emerald-50">Default amount per player</label>
                 <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <input
-                    id="amount"
-                    name="amount"
-                    type="text"
-                    inputMode="decimal"
-                    defaultValue={(defaultAmount / 100).toFixed(2)}
-                    className="w-full max-w-[180px] rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-                  />
+                  <input id="amount" name="amount" type="text" inputMode="decimal" defaultValue={(defaultAmount / 100).toFixed(2)} className="w-full max-w-[180px] rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60" />
                   <p className="text-sm text-emerald-100/70">This fills the standard amount. Change individual player boxes below for subs or guests.</p>
                 </div>
               </div>
@@ -558,15 +560,7 @@ export default async function CaptainPlayerPaymentsPage({
                           </label>
                           <div className="mt-3 flex items-center gap-2 pl-7">
                             <label htmlFor={`amount_member_${member.id}`} className="text-xs font-medium text-white/50">Amount</label>
-                            <input
-                              id={`amount_member_${member.id}`}
-                              name={`amount_member_${member.id}`}
-                              type="text"
-                              inputMode="decimal"
-                              defaultValue={amountValue}
-                              disabled={isPaid}
-                              className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45"
-                            />
+                            <input id={`amount_member_${member.id}`} name={`amount_member_${member.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />
                             {isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}
                           </div>
                         </div>
@@ -596,22 +590,12 @@ export default async function CaptainPlayerPaymentsPage({
                                   <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed player"}</span>
                                   {existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}
                                 </span>
-                                <span className="block text-xs text-white/45">
-                                  {[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact saved"}
-                                </span>
+                                <span className="block text-xs text-white/45">{[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact saved"}</span>
                               </span>
                             </label>
                             <div className="mt-3 flex items-center gap-2 pl-7">
                               <label htmlFor={`amount_prospect_${prospect.id}`} className="text-xs font-medium text-white/50">Amount</label>
-                              <input
-                                id={`amount_prospect_${prospect.id}`}
-                                name={`amount_prospect_${prospect.id}`}
-                                type="text"
-                                inputMode="decimal"
-                                defaultValue={amountValue}
-                                disabled={isPaid}
-                                className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45"
-                              />
+                              <input id={`amount_prospect_${prospect.id}`} name={`amount_prospect_${prospect.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />
                               {isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}
                             </div>
                           </div>
@@ -622,9 +606,7 @@ export default async function CaptainPlayerPaymentsPage({
                 ) : null}
               </div>
 
-              <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">
-                Create / refresh payment links
-              </button>
+              <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">Create / refresh payment links</button>
             </form>
           ) : (
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a fixture before collecting player payments.</div>
@@ -652,9 +634,7 @@ export default async function CaptainPlayerPaymentsPage({
               prospectPhone: fee.prospect?.phone,
             });
             const shareText = `Hi ${playerName}, please pay your ${formatMoney(fee.amountPence)} SIXFL match fee here: ${fee.paymentUrl ?? ""}`;
-            const shareHref = fee.paymentUrl
-              ? `https://wa.me/?text=${encodeURIComponent(shareText)}`
-              : null;
+            const shareHref = fee.paymentUrl ? `https://wa.me/?text=${encodeURIComponent(shareText)}` : null;
 
             return (
               <div key={fee.id} className="grid gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -667,24 +647,14 @@ export default async function CaptainPlayerPaymentsPage({
                   <div className="mt-1 text-sm text-white/50">{contact}</div>
                   {fee.paidAt ? <div className="mt-1 text-xs text-emerald-100/65">Paid {formatUkDateTime(fee.paidAt)}</div> : null}
                   {fee.waivedAt ? <div className="mt-1 text-xs text-sky-100/65">Waived {formatUkDateTime(fee.waivedAt)}</div> : null}
-                  {fee.status === "OPEN" && fee.paymentUrl ? (
-                    <div className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/60">
-                      {fee.paymentUrl}
-                    </div>
-                  ) : null}
+                  {fee.status === "OPEN" && fee.paymentUrl ? <div className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/60">{fee.paymentUrl}</div> : null}
                 </div>
 
                 <div className="flex flex-wrap gap-2 lg:justify-end">
                   {fee.status === "OPEN" && fee.paymentUrl ? (
                     <>
-                      <Link href={fee.paymentUrl} target="_blank" className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
-                        Open link
-                      </Link>
-                      {shareHref ? (
-                        <Link href={shareHref} target="_blank" className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10">
-                          Share on WhatsApp
-                        </Link>
-                      ) : null}
+                      <Link href={fee.paymentUrl} target="_blank" className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">Open link</Link>
+                      {shareHref ? <Link href={shareHref} target="_blank" className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10">Share on WhatsApp</Link> : null}
                     </>
                   ) : fee.status === "PAID" ? (
                     <span className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100">Paid</span>
