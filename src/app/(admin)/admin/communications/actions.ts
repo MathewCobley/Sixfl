@@ -42,6 +42,27 @@ function getErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function hasUnresolvedTemplatePlaceholder(text: string) {
+  return /\{\{[^}]+\}\}/.test(text);
+}
+
+function redirectIfUnresolvedTemplatePlaceholder(input: {
+  from: string;
+  subject?: string | null;
+  body: string;
+}) {
+  if (
+    hasUnresolvedTemplatePlaceholder(input.body) ||
+    hasUnresolvedTemplatePlaceholder(input.subject ?? "")
+  ) {
+    redirect(
+      `${input.from}?error=${encodeURIComponent(
+        "The message still contains an unresolved template placeholder such as {{fixtures}}. Please reselect the template or edit the message before sending.",
+      )}`,
+    );
+  }
+}
+
 type CommunicationRecipientContext = {
   recipient: Awaited<ReturnType<typeof upsertNotificationRecipient>>;
   audience: NotificationAudience;
@@ -238,10 +259,7 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
 
   const teamId = getTrimmedValue(formData.get("teamId"));
-  const from = getSafeRedirectPath(
-    formData.get("from"),
-    `/admin/teams/${teamId}/communications`,
-  );
+  const from = getSafeRedirectPath(formData.get("from"), `/admin/teams/${teamId}/communications`);
   const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
   const subject = getTrimmedValue(formData.get("subject"));
   const body = getTrimmedValue(formData.get("body"));
@@ -267,33 +285,37 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
   }
 
-  const recipientContext = await getTeamCommunicationRecipientContext({
+  redirectIfUnresolvedTemplatePlaceholder({
+    from,
+    subject: channel === NotificationChannel.EMAIL ? subject : null,
+    body,
+  });
+
+  const context = await getTeamCommunicationRecipientContext({
     teamId,
     recipientType,
     recipientId,
   });
 
-  if (channel === NotificationChannel.EMAIL && !recipientContext.recipient.email?.trim()) {
-    redirect(`${from}?error=Selected%20recipient%20does%20not%20have%20an%20email%20address.`);
+  if (channel === NotificationChannel.EMAIL && !context.recipient.email?.trim()) {
+    redirect(`${from}?error=This%20recipient%20does%20not%20have%20an%20email%20address.`);
   }
 
-  if (channel === NotificationChannel.SMS && !recipientContext.recipient.phone?.trim()) {
-    redirect(`${from}?error=Selected%20recipient%20does%20not%20have%20a%20mobile%20number.`);
+  if (channel === NotificationChannel.SMS && !context.recipient.phone?.trim()) {
+    redirect(`${from}?error=This%20recipient%20does%20not%20have%20a%20mobile%20number.`);
   }
 
   const dispatch = await queueDirectNotification({
-    recipientId: recipientContext.recipient.id,
+    recipientId: context.recipient.id,
     channel,
-    audience: recipientContext.audience,
+    audience: context.audience,
     subject: channel === NotificationChannel.EMAIL ? subject : null,
     body,
-    isTransactional: recipientContext.audience === NotificationAudience.TEAM,
-    sourceType: recipientContext.sourceType,
-    sourceId: recipientContext.sourceId,
+    isTransactional: false,
+    sourceType: context.sourceType,
+    sourceId: context.sourceId,
     emailBranding:
-      channel === NotificationChannel.EMAIL
-        ? recipientContext.emailBranding
-        : undefined,
+      channel === NotificationChannel.EMAIL ? context.emailBranding : undefined,
     emailCta:
       channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
         ? {
@@ -303,33 +325,21 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
         : undefined,
     metadata: {
       origin: "team_communications_hub",
-      originLabel:
-        recipientContext.audience === NotificationAudience.PLAYER
-          ? "Sent from communications hub to player"
-          : "Sent from communications hub",
+      originLabel: "Sent from communications hub",
       teamId,
       templateId,
       templateKey,
       ctaLabel,
       ctaUrl,
-      ...recipientContext.metadata,
+      ...context.metadata,
     },
     createdByUserId: user?.id ?? null,
   });
 
   await logNotificationDispatchToThread({
     dispatch,
-    recipient: recipientContext.recipient,
+    recipient: context.recipient,
   });
-
-  if (recipientContext.sourceType === "TEAM_PLAYER_PROSPECT") {
-    await prisma.teamPlayerProspect.update({
-      where: { id: recipientContext.sourceId },
-      data: {
-        lastContactedAt: new Date(),
-      },
-    });
-  }
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
 }
@@ -339,10 +349,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
 
   const teamId = getTrimmedValue(formData.get("teamId"));
   const prospectId = getTrimmedValue(formData.get("prospectId"));
-  const from = getSafeRedirectPath(
-    formData.get("from"),
-    `/admin/teams/${teamId}/prospects/${prospectId}/communications`,
-  );
+  const from = getSafeRedirectPath(formData.get("from"), `/admin/teams/${teamId}/prospects`);
   const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
   const subject = getTrimmedValue(formData.get("subject"));
   const body = getTrimmedValue(formData.get("body"));
@@ -395,6 +402,12 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
   }
+
+  redirectIfUnresolvedTemplatePlaceholder({
+    from,
+    subject: channel === NotificationChannel.EMAIL ? subject : null,
+    body,
+  });
 
   const displayName = [prospect.firstName, prospect.lastName]
     .filter(Boolean)
@@ -515,6 +528,12 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
   }
+
+  redirectIfUnresolvedTemplatePlaceholder({
+    from,
+    subject: channel === NotificationChannel.EMAIL ? subject : null,
+    body,
+  });
 
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
