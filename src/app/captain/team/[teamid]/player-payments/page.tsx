@@ -166,6 +166,18 @@ function getCollectionComparisonClasses(input: {
   return "border-sky-400/20 bg-sky-500/10 text-sky-100";
 }
 
+function getAllocatedDetail(input: {
+  allocatedPence: number;
+  teamFeePence: number;
+}) {
+  const difference = input.allocatedPence - input.teamFeePence;
+  const allocatedText = `Allocated ${formatMoney(input.allocatedPence)} / ${formatMoney(input.teamFeePence)}`;
+
+  if (difference === 0) return `${allocatedText} · Fully allocated`;
+  if (difference < 0) return `${allocatedText} · Unallocated ${formatMoney(Math.abs(difference))}`;
+  return `${allocatedText} · Over allocated ${formatMoney(difference)}`;
+}
+
 function getFixturePaymentBadge(input: {
   summary?: FixturePaymentSummary;
   teamFeePence: number;
@@ -175,14 +187,19 @@ function getFixturePaymentBadge(input: {
   if (!summary || summary.players === 0) {
     return {
       label: "Not started",
-      detail: `No collection yet · team fee ${formatMoney(input.teamFeePence)}`,
+      detail: getAllocatedDetail({ allocatedPence: 0, teamFeePence: input.teamFeePence }),
       classes: "border-white/10 bg-white/[0.04] text-white/55",
     };
   }
 
+  const allocatedDetail = getAllocatedDetail({
+    allocatedPence: summary.totalPence,
+    teamFeePence: input.teamFeePence,
+  });
+
   if (summary.openCount === 0) {
     const label = summary.paidCount > 0 ? "Paid" : "Waived";
-    const detail = `${summary.paidCount}/${summary.players} paid · collected ${formatMoney(summary.paidPence)}`;
+    const detail = `${summary.paidCount}/${summary.players} paid · collected ${formatMoney(summary.paidPence)} · ${allocatedDetail}`;
 
     return {
       label,
@@ -194,14 +211,14 @@ function getFixturePaymentBadge(input: {
   if (summary.paidCount > 0 || summary.waivedCount > 0) {
     return {
       label: "Part paid",
-      detail: `${summary.paidCount}/${summary.players} paid · outstanding ${formatMoney(summary.openPence)}`,
+      detail: `${summary.paidCount}/${summary.players} paid · outstanding ${formatMoney(summary.openPence)} · ${allocatedDetail}`,
       classes: "border-amber-400/25 bg-amber-500/10 text-amber-100",
     };
   }
 
   return {
     label: "Outstanding",
-    detail: `${summary.players} player${summary.players === 1 ? "" : "s"} · outstanding ${formatMoney(summary.openPence)}`,
+    detail: `${summary.players} player${summary.players === 1 ? "" : "s"} · outstanding ${formatMoney(summary.openPence)} · ${allocatedDetail}`,
     classes: "border-red-400/25 bg-red-500/10 text-red-100",
   };
 }
