@@ -114,9 +114,9 @@ function WhatsAppToggle({ defaultChecked }: { defaultChecked: boolean }) {
           <img src="/WhatsApp-Logo.png" alt="" className="h-6 w-6 object-contain" />
         </span>
         <span className="min-w-0">
-          <span className="block text-sm font-semibold text-white">Show WhatsApp logo</span>
+          <span className="block text-sm font-semibold text-white">Player uses WhatsApp</span>
           <span className="mt-1 block text-xs font-normal leading-5 text-white/45">
-            Tick this when the player uses WhatsApp. The logo will appear beside their name on squad screens.
+            Tick this when the player uses WhatsApp, so captains know payment links can be sent that way.
           </span>
         </span>
       </span>
@@ -140,7 +140,7 @@ export default async function EditSquadPlayerPage({
   params: Promise<{ teamid: string; membershipId: string }>;
 }) {
   const { teamid, membershipId } = await params;
-  const access = await requireCaptain(teamid);
+  await requireCaptain(teamid);
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
@@ -191,7 +191,6 @@ export default async function EditSquadPlayerPage({
 
   const profiles = await getTeamMemberProfilesByTeamMemberIds([membership.id]);
   const profile = profiles.get(membership.id) ?? null;
-  const canEdit = access.isAdmin && team.teamMode === "MANAGED";
   const preferredNights = formatPreferredNights(profile?.preferredNights);
 
   return (
@@ -204,13 +203,13 @@ export default async function EditSquadPlayerPage({
             </div>
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-                Managed squad player
+                Squad player
               </p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                 Edit {membership.user.name || "player"}
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                Update player contact details, availability notes, position details, match fee override and internal SIXFL notes for this managed team.
+                Update this player’s contact details, availability notes and payment settings for your team.
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
@@ -235,145 +234,122 @@ export default async function EditSquadPlayerPage({
             >
               Back to squad
             </Link>
-            {profile?.sourceProspectId ? (
-              <Link
-                href={`/admin/teams/${teamid}/prospects/${profile.sourceProspectId}/communications`}
-                className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-              >
-                Player comms
-              </Link>
-            ) : (
-              <Link
-                href={`/admin/teams/${teamid}/communications`}
-                className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-              >
-                Team comms
-              </Link>
-            )}
           </div>
         </div>
       </section>
 
-      {!canEdit ? (
-        <section className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">
-          Player detail editing is only available to SIXFL admins for teams marked as managed.
-        </section>
-      ) : (
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] lg:p-8">
-          <form action={updateManagedSquadMemberDetailsAction} className="space-y-7">
-            <input type="hidden" name="teamid" value={teamid} />
-            <input type="hidden" name="membershipId" value={membership.id} />
+      <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] lg:p-8">
+        <form action={updateManagedSquadMemberDetailsAction} className="space-y-7">
+          <input type="hidden" name="teamid" value={teamid} />
+          <input type="hidden" name="membershipId" value={membership.id} />
 
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Contact details
-              </p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Field
-                  label="Player name"
-                  name="displayName"
-                  defaultValue={membership.user.name}
-                  placeholder="Player name"
-                />
-                <Field
-                  label="Email"
-                  name="email"
-                  type="email"
-                  defaultValue={membership.user.email}
-                  placeholder="player@example.com"
-                />
-                <Field
-                  label="Phone"
-                  name="phone"
-                  defaultValue={profile?.phone}
-                  placeholder="Mobile number"
-                />
-                <WhatsAppToggle defaultChecked={usesWhatsapp} />
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Match fee setting
-              </p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Field
-                  label="Player fee override"
-                  name="playerMatchFeeOverride"
-                  type="number"
-                  defaultValue={formatFeeOverride(profile?.playerMatchFeePenceOverride)}
-                  placeholder="Leave blank for £6.00 default"
-                  help="Use 0 for a free player. Leave blank to use the team default of £6.00."
-                />
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Football profile
-              </p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Field
-                  label="Preferred positions"
-                  name="preferredPositions"
-                  defaultValue={profile?.preferredPositions}
-                  placeholder="Defender, midfield, striker..."
-                />
-                <Field
-                  label="Experience"
-                  name="experienceSummary"
-                  defaultValue={profile?.experienceSummary}
-                  placeholder="Casual, league player, experienced..."
-                />
-                <Field
-                  label="Availability level"
-                  name="availabilityLevel"
-                  defaultValue={profile?.availabilityLevel}
-                  placeholder="Regular, rotation, backup..."
-                />
-                <Field
-                  label="Preferred nights"
-                  name="preferredNights"
-                  defaultValue={preferredNights}
-                  placeholder="Tuesday, Thursday"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <TextArea
-                label="Availability notes"
-                name="availabilitySummary"
-                defaultValue={profile?.availabilitySummary}
-                placeholder="Any notes about when this player can usually play."
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Contact details
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field
+                label="Player name"
+                name="displayName"
+                defaultValue={membership.user.name}
+                placeholder="Player name"
               />
-              <TextArea
-                label="Player notes"
-                name="notes"
-                defaultValue={profile?.notes}
-                placeholder="Internal notes for SIXFL/admin use."
+              <Field
+                label="Email"
+                name="email"
+                type="email"
+                defaultValue={membership.user.email}
+                placeholder="player@example.com"
+              />
+              <Field
+                label="Phone"
+                name="phone"
+                defaultValue={profile?.phone}
+                placeholder="Mobile number"
+              />
+              <WhatsAppToggle defaultChecked={usesWhatsapp} />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Match fee setting
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field
+                label="Player fee override"
+                name="playerMatchFeeOverride"
+                type="number"
+                defaultValue={formatFeeOverride(profile?.playerMatchFeePenceOverride)}
+                placeholder="Leave blank to use the team default"
+                help="Use 0 for a free player. Leave blank to use the default amount on the squad payments page."
               />
             </div>
+          </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.04] p-4">
-              <div>
-                <div className="text-sm font-semibold text-white">
-                  Save managed player details
-                </div>
-                <p className="mt-1 text-sm text-white/55">
-                  This updates the linked user account, squad player profile, fee override and messaging recipient so comms stay accurate.
-                </p>
-              </div>
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
-              >
-                Save player details
-              </button>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Football profile
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field
+                label="Preferred positions"
+                name="preferredPositions"
+                defaultValue={profile?.preferredPositions}
+                placeholder="Defender, midfield, striker..."
+              />
+              <Field
+                label="Experience"
+                name="experienceSummary"
+                defaultValue={profile?.experienceSummary}
+                placeholder="Casual, league player, experienced..."
+              />
+              <Field
+                label="Availability level"
+                name="availabilityLevel"
+                defaultValue={profile?.availabilityLevel}
+                placeholder="Regular, rotation, backup..."
+              />
+              <Field
+                label="Preferred nights"
+                name="preferredNights"
+                defaultValue={preferredNights}
+                placeholder="Tuesday, Thursday"
+              />
             </div>
-          </form>
-        </section>
-      )}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextArea
+              label="Availability notes"
+              name="availabilitySummary"
+              defaultValue={profile?.availabilitySummary}
+              placeholder="Any notes about when this player can usually play."
+            />
+            <TextArea
+              label="Player notes"
+              name="notes"
+              defaultValue={profile?.notes}
+              placeholder="Team notes for this player."
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.04] p-4">
+            <div>
+              <div className="text-sm font-semibold text-white">Save player details</div>
+              <div className="mt-1 text-xs text-white/45">
+                These details help captains send payment links and organise matchday squads.
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400"
+            >
+              Save player
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
