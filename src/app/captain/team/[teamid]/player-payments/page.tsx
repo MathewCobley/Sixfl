@@ -293,7 +293,7 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
         status: { in: ["SCHEDULED", "COMPLETED"] },
       },
-      orderBy: [{ kickoffAt: "asc" }],
+      orderBy: [{ kickoffAt: "desc" }],
       take: 40,
       include: {
         homeTeam: { select: { id: true, name: true } },
