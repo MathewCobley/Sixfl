@@ -46,9 +46,9 @@ const THREE_FIXTURE_LAYOUT: ResultsCardLayout = {
   badgeSize: 68,
   teamNameFontSize: 22,
   scoreFontSize: 58,
-  homeNameAnchorX: 390,
+  homeNameAnchorX: 126,
   awayNameAnchorX: 704,
-  homeNameMaxWidth: 270,
+  homeNameMaxWidth: 265,
   awayNameMaxWidth: 270,
 };
 
@@ -60,7 +60,7 @@ const FOUR_FIXTURE_LAYOUT: ResultsCardLayout = {
   badgeSize: 58,
   teamNameFontSize: 20,
   scoreFontSize: 50,
-  homeNameAnchorX: 390,
+  homeNameAnchorX: 118,
   awayNameAnchorX: 704,
   homeNameMaxWidth: 285,
   awayNameMaxWidth: 285,
@@ -263,7 +263,7 @@ export default function ResultsCardGenerator({
           // paint over them here; masking them caused the odd dark blocks/marks
           // on the 4-fixture result card.
           drawBadge({ ctx, image: homeBadge, teamName: fixture.homeTeamName, x: HOME_BADGE_X, y, size: layout.badgeSize });
-          drawTeamName({ ctx, name: fixture.homeTeamName, x: layout.homeNameAnchorX, y, maxWidth: layout.homeNameMaxWidth, fontSize: layout.teamNameFontSize, align: "right" });
+          drawTeamName({ ctx, name: fixture.homeTeamName, x: layout.homeNameAnchorX, y, maxWidth: layout.homeNameMaxWidth, fontSize: layout.teamNameFontSize, align: "left" });
           drawScore({ ctx, score: fixture.homeScore, x: HOME_SCORE_X, y, fontSize: layout.scoreFontSize });
 
           drawScore({ ctx, score: fixture.awayScore, x: AWAY_SCORE_X, y, fontSize: layout.scoreFontSize });
