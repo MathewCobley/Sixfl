@@ -12,6 +12,7 @@ import {
 } from "@/lib/payments/charge-status";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
+import { reconcileFixtureChargeFromPlayerPayments } from "@/lib/payments/player-match-fee-reconciliation";
 import {
   markTeamSubscriptionDeleted,
   markTeamSubscriptionInvoiceFailed,
@@ -82,20 +83,39 @@ async function closePlayerMatchFeeFromStripeSession(input: {
   playerMatchFeeId: string;
   paidAt: Date;
 }) {
-  await prisma.playerMatchFee.updateMany({
-    where: { id: input.playerMatchFeeId, status: "OPEN" },
-    data: {
-      status: "PAID",
-      paidAt: input.paidAt,
-      waivedAt: null,
-      cancelledAt: null,
+  const fee = await prisma.playerMatchFee.findUnique({
+    where: { id: input.playerMatchFeeId },
+    select: {
+      id: true,
+      teamId: true,
+      fixtureId: true,
+      status: true,
     },
   });
+
+  if (!fee) return;
+
+  if (fee.status === "OPEN") {
+    await prisma.playerMatchFee.update({
+      where: { id: input.playerMatchFeeId },
+      data: {
+        status: "PAID",
+        paidAt: input.paidAt,
+        waivedAt: null,
+        cancelledAt: null,
+      },
+    });
+  }
 
   await cancelQueuedPlayerMatchFeeNotificationDispatches(
     [input.playerMatchFeeId],
     "Player match fee was paid before the queued payment reminder was sent.",
   );
+
+  await reconcileFixtureChargeFromPlayerPayments({
+    teamId: fee.teamId,
+    fixtureId: fee.fixtureId,
+  });
 }
 
 async function findExistingPlayerFeeTransaction(input: {
@@ -139,7 +159,13 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
 
   const fee = await prisma.playerMatchFee.findUnique({
     where: { id: playerMatchFeeId },
-    select: { id: true, teamId: true, amountPence: true, status: true },
+    select: {
+      id: true,
+      teamId: true,
+      fixtureId: true,
+      amountPence: true,
+      status: true,
+    },
   });
 
   if (!fee) return true;
@@ -150,6 +176,11 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
         [fee.id],
         "Player match fee was already paid before the queued payment reminder was sent.",
       );
+
+      await reconcileFixtureChargeFromPlayerPayments({
+        teamId: fee.teamId,
+        fixtureId: fee.fixtureId,
+      });
     }
 
     return true;
@@ -211,6 +242,11 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
     [fee.id],
     "Player match fee was paid before the queued payment reminder was sent.",
   );
+
+  await reconcileFixtureChargeFromPlayerPayments({
+    teamId: fee.teamId,
+    fixtureId: fee.fixtureId,
+  });
 
   return true;
 }
@@ -337,7 +373,7 @@ export async function POST(request: Request) {
         break;
       }
       case "invoice.payment_failed": {
-        await markTeamSubscriptionInvoiceFailed({ invoice: event.data.object as Stripe.Invoice, stripe });
+        await markTeamSubscriptionInvoiceFailed({ invoice: event.data.object as Stripe.Invoice });
         break;
       }
       default:
