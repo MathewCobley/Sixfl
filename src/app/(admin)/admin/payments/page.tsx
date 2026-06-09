@@ -43,6 +43,10 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
+function formatAmountInput(amountPence: number) {
+  return (amountPence / 100).toFixed(2);
+}
+
 function formatDateTimeLabel(value: Date) {
   return formatDateTimeInLondon(value, {
     day: "2-digit",
@@ -51,6 +55,26 @@ function formatDateTimeLabel(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatDateTimeLocalInput(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+
+  const lookup = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  return `${lookup.year}-${lookup.month}-${lookup.day}T${lookup.hour}:${lookup.minute}`;
 }
 
 function formatFixtureDate(value: Date) {
@@ -176,9 +200,26 @@ async function recordPaymentAction(formData: FormData) {
   const reference = String(formData.get("reference") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const paidAtValue = String(formData.get("paidAt") ?? "").trim();
+  const paidAt = paidAtValue ? new Date(paidAtValue) : new Date();
 
-  if (!teamId || !Number.isFinite(amountPounds) || amountPounds <= 0 || !paidAtValue) {
+  if (
+    !teamId ||
+    !Number.isFinite(amountPounds) ||
+    amountPounds <= 0 ||
+    Number.isNaN(paidAt.getTime())
+  ) {
     redirect("/admin/payments?error=invalid_payment");
+  }
+
+  if (chargeId) {
+    const charge = await prisma.paymentCharge.findUnique({
+      where: { id: chargeId },
+      select: { id: true, teamId: true, status: true },
+    });
+
+    if (!charge || charge.teamId !== teamId || charge.status === "PAID" || charge.status === "VOID") {
+      redirect("/admin/payments?error=invalid_payment");
+    }
   }
 
   await prisma.paymentTransaction.create({
@@ -189,7 +230,7 @@ async function recordPaymentAction(formData: FormData) {
       method,
       reference: reference || null,
       notes: notes || null,
-      paidAt: new Date(paidAtValue),
+      paidAt,
     },
   });
 
@@ -334,7 +375,7 @@ async function sendPlayerMatchFeeReminderAction(formData: FormData) {
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ created?: string; error?: string }>;
+  searchParams?: Promise<{ created?: string; error?: string; paymentChargeId?: string }>;
 }) {
   await requireAdmin();
 
@@ -491,6 +532,19 @@ export default async function AdminPaymentsPage({
     label: `${row.charge.team.name} · ${row.charge.title} · ${formatMoney(row.summary.outstandingPence)}`,
   }));
 
+  const selectedPaymentChargeId = String(sp.paymentChargeId ?? "").trim();
+  const selectedPaymentChargeRow =
+    openChargeRows.find((row) => row.charge.id === selectedPaymentChargeId) ?? null;
+  const recordPaymentTeamId = selectedPaymentChargeRow?.charge.teamId ?? "";
+  const recordPaymentChargeId = selectedPaymentChargeRow?.charge.id ?? "";
+  const recordPaymentAmount = selectedPaymentChargeRow
+    ? formatAmountInput(selectedPaymentChargeRow.summary.outstandingPence)
+    : "";
+  const recordPaymentHelpText = selectedPaymentChargeRow
+    ? `Ready to record a payment against ${selectedPaymentChargeRow.charge.team.name} · ${selectedPaymentChargeRow.charge.title}. The amount has been set to the outstanding balance.`
+    : "Select a team and link an open charge to record a payment against it.";
+  const defaultPaidAt = formatDateTimeLocalInput(new Date());
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
       <div className="space-y-2">
@@ -599,16 +653,26 @@ export default async function AdminPaymentsPage({
           </div>
         </form>
 
-        <form action={recordPaymentAction} className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-          <h2 className="text-xl font-semibold text-white">Record payment</h2>
+        <form id="record-payment" action={recordPaymentAction} className="scroll-mt-24 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Record payment</h2>
+              <p className="mt-1 text-sm text-white/55">{recordPaymentHelpText}</p>
+            </div>
+            {selectedPaymentChargeRow ? (
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                Outstanding {formatMoney(selectedPaymentChargeRow.summary.outstandingPence)}
+              </span>
+            ) : null}
+          </div>
           <div className="mt-4 space-y-4">
-            <FormListboxField name="teamId" options={teamOptions} placeholder="Select team" />
-            <FormListboxField name="chargeId" value="" options={[{ value: "", label: "No linked charge" }, ...openChargeOptions]} placeholder="Optional linked charge" />
-            <input type="number" step="0.01" min="0" name="amountPounds" placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <FormListboxField name="teamId" value={recordPaymentTeamId} options={teamOptions} placeholder="Select team" />
+            <FormListboxField name="chargeId" value={recordPaymentChargeId} options={[{ value: "", label: "No linked charge" }, ...openChargeOptions]} placeholder="Optional linked charge" />
+            <input type="number" step="0.01" min="0" name="amountPounds" defaultValue={recordPaymentAmount} placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
             <FormListboxField name="method" value={PaymentMethod.BANK_TRANSFER} options={methodOptions} placeholder="Select payment method" />
             <input type="text" name="reference" placeholder="Reference" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
             <textarea name="notes" rows={4} placeholder="Optional notes" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <input type="datetime-local" name="paidAt" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <input type="datetime-local" name="paidAt" defaultValue={defaultPaidAt} className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
             <button type="submit" className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">Record payment</button>
           </div>
         </form>
@@ -630,6 +694,10 @@ export default async function AdminPaymentsPage({
                 row.charge.status !== "VOID" &&
                 row.summary.outstandingPence > 0 &&
                 Boolean(row.charge.paymentToken);
+              const canRecordPayment =
+                row.charge.status !== "PAID" &&
+                row.charge.status !== "VOID" &&
+                row.summary.outstandingPence > 0;
               const canVoidCharge = row.charge.status !== "PAID" && row.charge.status !== "VOID";
 
               return (
@@ -644,8 +712,11 @@ export default async function AdminPaymentsPage({
                         {row.summary.outstandingPence > 0 && row.charge.status !== "VOID" ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">Awaiting payment</span> : null}
                         <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/[0.05] text-white/55"}`}>{formatLastChasedLabel(lastChasedAt)}</span>
                       </div>
-                      {(canChaseTeamCharge || canVoidCharge) ? (
+                      {(canRecordPayment || canChaseTeamCharge || canVoidCharge) ? (
                         <div className="mt-4 flex flex-wrap gap-2">
+                          {canRecordPayment ? (
+                            <Link href={`/admin/payments?paymentChargeId=${encodeURIComponent(row.charge.id)}#record-payment`} className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Record payment</Link>
+                          ) : null}
                           {canChaseTeamCharge ? (
                             <form action={sendTeamChargeReminderAction}>
                               <input type="hidden" name="chargeId" value={row.charge.id} />
