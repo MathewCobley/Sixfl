@@ -149,10 +149,10 @@ function getCollectionComparisonText(input: {
   }
 
   if (difference < 0) {
-    return `${formatMoney(Math.abs(difference))} short of the ${formatMoney(input.teamFeePence)} team fee.`;
+    return `${formatMoney(Math.abs(difference))} still unallocated against the ${formatMoney(input.teamFeePence)} team fee.`;
   }
 
-  return `${formatMoney(difference)} over the ${formatMoney(input.teamFeePence)} team fee.`;
+  return `${formatMoney(difference)} over allocated against the ${formatMoney(input.teamFeePence)} team fee.`;
 }
 
 function getCollectionComparisonClasses(input: {
@@ -406,6 +406,13 @@ export default async function CaptainPlayerPaymentsPage({
   const waivedCount = activeFees.filter((fee) => fee.status === "WAIVED").length;
   const defaultAmount = activeFees.find((fee) => fee.status !== "PAID")?.amountPence ?? 400;
   const teamFeePence = selectedFixture?.matchFeePence ?? 4000;
+  const unallocatedPence = Math.max(teamFeePence - totals.total, 0);
+  const overAllocatedPence = Math.max(totals.total - teamFeePence, 0);
+  const allocationSummaryText = unallocatedPence > 0
+    ? `Still unallocated: ${formatMoney(unallocatedPence)}`
+    : overAllocatedPence > 0
+      ? `Over allocated: ${formatMoney(overAllocatedPence)}`
+      : "Fully allocated";
   const savedMessage = getSavedMessage(sp.saved);
   const errorMessage = getErrorMessage(sp.error);
 
@@ -438,10 +445,10 @@ export default async function CaptainPlayerPaymentsPage({
 
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          { label: "Players", value: activeFees.length, text: `${waivedCount} waived`, classes: "border-white/10 bg-white/[0.04] text-white/45" },
-          { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} paid`, classes: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70" },
-          { label: "Outstanding", value: formatMoney(totals.open), text: `${openCount} unpaid`, classes: "border-amber-400/20 bg-amber-500/10 text-amber-100/70" },
-          { label: "Collection total", value: formatMoney(totals.total), text: getCollectionComparisonText({ collectionTotalPence: totals.total, teamFeePence }), classes: "border-sky-400/20 bg-sky-500/10 text-sky-100/70" },
+          { label: "Team fee", value: formatMoney(teamFeePence), text: selectedFixture ? "Fixed SIXFL fee for this fixture." : "Choose a fixture to see the fee.", classes: "border-white/10 bg-white/[0.04] text-white/45" },
+          { label: "Allocated to players", value: formatMoney(totals.total), text: allocationSummaryText, classes: getCollectionComparisonClasses({ collectionTotalPence: totals.total, teamFeePence }) },
+          { label: "Collected so far", value: formatMoney(totals.paid), text: `${paidCount} paid · ${waivedCount} waived`, classes: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70" },
+          { label: "Still unpaid", value: formatMoney(totals.open), text: `${openCount} unpaid player${openCount === 1 ? "" : "s"}`, classes: "border-amber-400/20 bg-amber-500/10 text-amber-100/70" },
         ].map((item) => (
           <div key={item.label} className={`rounded-3xl border p-5 ${item.classes}`}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{item.label}</p>
@@ -451,11 +458,11 @@ export default async function CaptainPlayerPaymentsPage({
         ))}
       </section>
 
-      {activeFees.length > 0 ? (
+      {activeFees.length > 0 || selectedFixture ? (
         <section className={`rounded-3xl border p-5 text-sm ${getCollectionComparisonClasses({ collectionTotalPence: totals.total, teamFeePence })}`}>
-          <div className="font-semibold text-white">Team fee check</div>
+          <div className="font-semibold text-white">Allocation check</div>
           <p className="mt-2 text-white/70">
-            Current player collection total is {formatMoney(totals.total)} against a team fee of {formatMoney(teamFeePence)}. This is a warning only — it will not stop you saving, because subs, guests, top-ups and over-collections can be deliberate.
+            Allocated to players: {formatMoney(totals.total)} / {formatMoney(teamFeePence)}. {getCollectionComparisonText({ collectionTotalPence: totals.total, teamFeePence })} This is a warning only — it will not stop you saving, because subs, guests, top-ups and over-collections can be deliberate.
           </p>
         </section>
       ) : null}
