@@ -35,6 +35,8 @@ type FixturePaymentSummary = {
   waivedPence: number;
 };
 
+type Tone = "white" | "emerald" | "amber" | "sky" | "red";
+
 function formatUkDateTime(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
@@ -82,6 +84,36 @@ function getFeeStatusClasses(status: PlayerMatchFeeStatus) {
   }
 }
 
+function getToneClasses(tone: Tone) {
+  switch (tone) {
+    case "emerald":
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70";
+    case "amber":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100/70";
+    case "sky":
+      return "border-sky-400/20 bg-sky-500/10 text-sky-100/70";
+    case "red":
+      return "border-red-400/20 bg-red-500/10 text-red-100/70";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/45";
+  }
+}
+
+function getPillClasses(tone: Tone) {
+  switch (tone) {
+    case "emerald":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "amber":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    case "sky":
+      return "border-sky-400/25 bg-sky-500/10 text-sky-100";
+    case "red":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/60";
+  }
+}
+
 function getSavedMessage(saved?: string) {
   switch (saved) {
     case "collection_created":
@@ -112,10 +144,7 @@ function getPlayerName(fee: {
   teamMember: { user: { name: string | null; email: string | null } } | null;
   prospect: { firstName: string | null; lastName: string | null; email: string | null; phone: string | null } | null;
 }) {
-  if (fee.teamMember) {
-    return fee.teamMember.user.name || fee.teamMember.user.email || "Unnamed member";
-  }
-
+  if (fee.teamMember) return fee.teamMember.user.name || fee.teamMember.user.email || "Unnamed member";
   if (fee.prospect) {
     return (
       [fee.prospect.firstName, fee.prospect.lastName].filter(Boolean).join(" ") ||
@@ -124,7 +153,6 @@ function getPlayerName(fee: {
       "Unnamed player"
     );
   }
-
   return "Unknown player";
 }
 
@@ -133,9 +161,7 @@ function getPlayerContact(input: {
   prospectEmail?: string | null;
   prospectPhone?: string | null;
 }) {
-  return [input.memberEmail, input.prospectEmail, input.prospectPhone]
-    .filter(Boolean)
-    .join(" · ") || "No contact saved";
+  return [input.memberEmail, input.prospectEmail, input.prospectPhone].filter(Boolean).join(" · ") || "No contact saved";
 }
 
 function getAllocationStatus(input: { allocatedPence: number; teamFeePence: number }) {
@@ -171,21 +197,6 @@ function getAllocationStatus(input: { allocatedPence: number; teamFeePence: numb
   };
 }
 
-function getToneClasses(tone: "white" | "emerald" | "amber" | "sky" | "red") {
-  switch (tone) {
-    case "emerald":
-      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70";
-    case "amber":
-      return "border-amber-400/25 bg-amber-500/10 text-amber-100/70";
-    case "sky":
-      return "border-sky-400/20 bg-sky-500/10 text-sky-100/70";
-    case "red":
-      return "border-red-400/20 bg-red-500/10 text-red-100/70";
-    default:
-      return "border-white/10 bg-white/[0.04] text-white/45";
-  }
-}
-
 function getFixturePaymentBadge(input: {
   summary?: FixturePaymentSummary;
   teamFeePence: number;
@@ -200,12 +211,22 @@ function getFixturePaymentBadge(input: {
     openPence: 0,
     waivedPence: 0,
   };
+
   const allocation = getAllocationStatus({
     allocatedPence: summary.totalPence,
     teamFeePence: input.teamFeePence,
   });
   const teamFeeStillToCoverPence = Math.max(input.teamFeePence - summary.paidPence, 0);
-  const baseLines = [
+  const playerOutstandingTone: Tone = summary.openPence > 0 ? "amber" : "white";
+  const teamCoverTone: Tone = teamFeeStillToCoverPence > 0 ? "red" : "emerald";
+
+  const pills = [
+    { label: allocation.label, tone: allocation.tone },
+    { label: `Player outstanding ${formatMoney(summary.openPence)}`, tone: playerOutstandingTone },
+    { label: `Team still to cover ${formatMoney(teamFeeStillToCoverPence)}`, tone: teamCoverTone },
+  ];
+
+  const lines = [
     `Allocated ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)}`,
     allocation.overAllocatedPence > 0
       ? `Over allocated ${formatMoney(allocation.overAllocatedPence)}`
@@ -217,7 +238,8 @@ function getFixturePaymentBadge(input: {
   if (summary.players === 0) {
     return {
       label: "Not started",
-      lines: baseLines,
+      lines,
+      pills,
       classes: "border-white/10 bg-white/[0.04] text-white/55",
     };
   }
@@ -225,7 +247,8 @@ function getFixturePaymentBadge(input: {
   if (summary.openCount === 0) {
     return {
       label: summary.paidCount > 0 ? "Paid" : "Waived",
-      lines: [`${summary.paidCount}/${summary.players} paid`, ...baseLines],
+      lines: [`${summary.paidCount}/${summary.players} paid`, ...lines],
+      pills,
       classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
     };
   }
@@ -233,25 +256,23 @@ function getFixturePaymentBadge(input: {
   if (summary.paidCount > 0 || summary.waivedCount > 0) {
     return {
       label: "Part paid",
-      lines: [`${summary.paidCount}/${summary.players} paid`, ...baseLines],
+      lines: [`${summary.paidCount}/${summary.players} paid`, ...lines],
+      pills,
       classes: "border-amber-400/25 bg-amber-500/10 text-amber-100",
     };
   }
 
   return {
     label: "Outstanding",
-    lines: [`${summary.players} player${summary.players === 1 ? "" : "s"}`, ...baseLines],
+    lines: [`${summary.players} player${summary.players === 1 ? "" : "s"}`, ...lines],
+    pills,
     classes: "border-red-400/25 bg-red-500/10 text-red-100",
   };
 }
 
-export default async function CaptainPlayerPaymentsPage({
-  params,
-  searchParams,
-}: Props) {
+export default async function CaptainPlayerPaymentsPage({ params, searchParams }: Props) {
   const { teamid } = await params;
   await requireCaptain(teamid);
-
   const sp = (await searchParams) ?? {};
 
   const team = await prisma.team.findUnique({
@@ -366,12 +387,8 @@ export default async function CaptainPlayerPaymentsPage({
           where: { teamId: teamid, fixtureId: selectedFixture.id },
           orderBy: [{ createdAt: "asc" }],
           include: {
-            teamMember: {
-              include: { user: { select: { name: true, email: true } } },
-            },
-            prospect: {
-              select: { firstName: true, lastName: true, email: true, phone: true },
-            },
+            teamMember: { include: { user: { select: { name: true, email: true } } } },
+            prospect: { select: { firstName: true, lastName: true, email: true, phone: true } },
           },
         })
       : [];
@@ -458,11 +475,11 @@ export default async function CaptainPlayerPaymentsPage({
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: "Team fee", value: formatMoney(teamFeePence), text: selectedFixture ? "Fixed SIXFL fee for this fixture." : "Choose a fixture to see the fee.", tone: "white" as const },
+          { label: "Team fee", value: formatMoney(teamFeePence), text: selectedFixture ? "Fixed SIXFL fee for this fixture." : "Choose a fixture to see the fee.", tone: "white" as Tone },
           { label: "Allocated", value: formatMoney(totals.total), text: allocation.label, tone: allocation.tone },
-          { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} paid · ${waivedCount} waived`, tone: "emerald" as const },
-          { label: "Player payments outstanding", value: formatMoney(totals.open), text: `${openCount} unpaid player${openCount === 1 ? "" : "s"}`, tone: openCount > 0 ? "amber" as const : "white" as const },
-          { label: "Team fee still to cover", value: formatMoney(teamFeeStillToCoverPence), text: "Paid online so far deducted from team fee.", tone: teamFeeStillToCoverPence > 0 ? "red" as const : "emerald" as const },
+          { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} paid · ${waivedCount} waived`, tone: "emerald" as Tone },
+          { label: "Player payments outstanding", value: formatMoney(totals.open), text: `${openCount} unpaid player${openCount === 1 ? "" : "s"}`, tone: openCount > 0 ? "amber" as Tone : "white" as Tone },
+          { label: "Team fee still to cover", value: formatMoney(teamFeeStillToCoverPence), text: "Paid online so far deducted from team fee.", tone: teamFeeStillToCoverPence > 0 ? "red" as Tone : "emerald" as Tone },
         ].map((item) => (
           <div key={item.label} className={`rounded-3xl border p-5 ${getToneClasses(item.tone)}`}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{item.label}</p>
@@ -508,6 +525,13 @@ export default async function CaptainPlayerPaymentsPage({
                   </div>
                   <div className="mt-1 text-xs text-white/50">
                     {formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {paymentBadge.pills.map((pill) => (
+                      <span key={pill.label} className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getPillClasses(pill.tone)}`}>
+                        {pill.label}
+                      </span>
+                    ))}
                   </div>
                   <div className="mt-3 grid gap-1 text-xs text-white/55">
                     {paymentBadge.lines.map((line) => <div key={line}>{line}</div>)}
