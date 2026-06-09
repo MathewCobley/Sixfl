@@ -41,6 +41,7 @@ type Props = {
   leagueName: string;
   teamCount: number;
   teams: TeamOption[];
+  fixtureLines: string[];
   emailTemplates: EmailTemplateOption[];
   smsTemplates: SmsTemplateOption[];
 };
@@ -51,7 +52,7 @@ const FIXTURE_UPDATE_TEMPLATE: EmailTemplateOption = {
   name: "Fixture update",
   subject: "SIXFL – Updated fixtures for this week",
   description:
-    "League email for sending this week’s updated fixtures. Works with 3 fixtures or any number of fixture lines.",
+    "League email for sending this week’s updated fixtures. The fixture list is filled automatically from this league’s upcoming fixtures.",
   ctaLabel: null,
   ctaUrl: null,
   body: [
@@ -72,8 +73,19 @@ const FIXTURE_UPDATE_TEMPLATE: EmailTemplateOption = {
   ].join("\n"),
 };
 
-function resolveText(text: string, context: { leagueName: string }) {
-  return text.replaceAll("{{leagueName}}", context.leagueName);
+function getFixtureText(fixtureLines: string[]) {
+  return fixtureLines.length > 0
+    ? fixtureLines.join("\n")
+    : "No upcoming fixtures are currently published for this league.";
+}
+
+function resolveText(
+  text: string,
+  context: { leagueName: string; fixtureLines: string[] },
+) {
+  return text
+    .replaceAll("{{leagueName}}", context.leagueName)
+    .replaceAll("{{fixtures}}", getFixtureText(context.fixtureLines));
 }
 
 function TeamSelectionCard({
@@ -148,6 +160,7 @@ export default function LeagueCommunicationsComposer({
   leagueName,
   teamCount,
   teams,
+  fixtureLines,
   emailTemplates,
   smsTemplates,
 }: Props) {
@@ -164,13 +177,15 @@ export default function LeagueCommunicationsComposer({
   );
 
   const allEmailTemplates = useMemo(() => {
-    const hasFixtureUpdateTemplate = emailTemplates.some(
-      (template) => template.key === FIXTURE_UPDATE_TEMPLATE.key,
+    const templates = emailTemplates.map((template) =>
+      template.key === FIXTURE_UPDATE_TEMPLATE.key
+        ? { ...template, ...FIXTURE_UPDATE_TEMPLATE, id: template.id }
+        : template,
     );
 
-    return hasFixtureUpdateTemplate
-      ? emailTemplates
-      : [FIXTURE_UPDATE_TEMPLATE, ...emailTemplates];
+    return templates.some((template) => template.key === FIXTURE_UPDATE_TEMPLATE.key)
+      ? templates
+      : [FIXTURE_UPDATE_TEMPLATE, ...templates];
   }, [emailTemplates]);
 
   const selectedEmailTemplate = useMemo(
@@ -207,8 +222,8 @@ export default function LeagueCommunicationsComposer({
       return;
     }
 
-    setEmailSubject(resolveText(template.subject, { leagueName }));
-    setEmailBody(resolveText(template.body, { leagueName }));
+    setEmailSubject(resolveText(template.subject, { leagueName, fixtureLines }));
+    setEmailBody(resolveText(template.body, { leagueName, fixtureLines }));
   }
 
   function handleSmsTemplateChange(templateId: string) {
@@ -221,7 +236,7 @@ export default function LeagueCommunicationsComposer({
       return;
     }
 
-    setSmsBody(resolveText(template.body, { leagueName }));
+    setSmsBody(resolveText(template.body, { leagueName, fixtureLines }));
   }
 
   function toggleEmailTeam(teamId: string) {
