@@ -45,6 +45,33 @@ type Props = {
   smsTemplates: SmsTemplateOption[];
 };
 
+const FIXTURE_UPDATE_TEMPLATE: EmailTemplateOption = {
+  id: "fixture-update-inline-template",
+  key: "fixture-update",
+  name: "Fixture update",
+  subject: "SIXFL – Updated fixtures for this week",
+  description:
+    "League email for sending this week’s updated fixtures. Works with 3 fixtures or any number of fixture lines.",
+  ctaLabel: null,
+  ctaUrl: null,
+  body: [
+    "Hi everyone,",
+    "",
+    "Just a quick message to let you know that some fixtures have changed for this week.",
+    "",
+    "Please check the updated fixtures below and make sure your team is aware of your kick-off time.",
+    "",
+    "This week’s fixtures:",
+    "",
+    "{{fixtures}}",
+    "",
+    "Please arrive in good time before your match so we can keep everything running to schedule.",
+    "",
+    "Thanks,",
+    "SIXFL",
+  ].join("\n"),
+};
+
 function resolveText(text: string, context: { leagueName: string }) {
   return text.replaceAll("{{leagueName}}", context.leagueName);
 }
@@ -136,9 +163,19 @@ export default function LeagueCommunicationsComposer({
     teams.map((team) => team.id),
   );
 
+  const allEmailTemplates = useMemo(() => {
+    const hasFixtureUpdateTemplate = emailTemplates.some(
+      (template) => template.key === FIXTURE_UPDATE_TEMPLATE.key,
+    );
+
+    return hasFixtureUpdateTemplate
+      ? emailTemplates
+      : [FIXTURE_UPDATE_TEMPLATE, ...emailTemplates];
+  }, [emailTemplates]);
+
   const selectedEmailTemplate = useMemo(
-    () => emailTemplates.find((template) => template.id === selectedEmailTemplateId) ?? null,
-    [emailTemplates, selectedEmailTemplateId],
+    () => allEmailTemplates.find((template) => template.id === selectedEmailTemplateId) ?? null,
+    [allEmailTemplates, selectedEmailTemplateId],
   );
   const selectedSmsTemplate = useMemo(
     () => smsTemplates.find((template) => template.id === selectedSmsTemplateId) ?? null,
@@ -162,7 +199,7 @@ export default function LeagueCommunicationsComposer({
   function handleEmailTemplateChange(templateId: string) {
     setSelectedEmailTemplateId(templateId);
 
-    const template = emailTemplates.find((item) => item.id === templateId) ?? null;
+    const template = allEmailTemplates.find((item) => item.id === templateId) ?? null;
 
     if (!template) {
       setEmailSubject("");
@@ -229,7 +266,7 @@ export default function LeagueCommunicationsComposer({
             label="Email template"
             value={selectedEmailTemplateId}
             onChange={handleEmailTemplateChange}
-            options={emailTemplates.map((template) => ({ value: template.id, label: template.name }))}
+            options={allEmailTemplates.map((template) => ({ value: template.id, label: template.name }))}
             placeholder="Select email template"
           />
 
