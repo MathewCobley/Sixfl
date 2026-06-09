@@ -38,6 +38,13 @@ function parseAmountPence(value: string, options?: { allowZero?: boolean }) {
   return Math.round(numeric * 100);
 }
 
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
+}
+
 function getSelectedPlayers(formData: FormData) {
   return formData
     .getAll("player")
@@ -68,6 +75,23 @@ function getPlayerAmountPence(input: {
   return parseAmountPence(rawValue, { allowZero: true });
 }
 
+type CaptainCollectionMethod = "link" | "captain_paid" | "waived";
+
+function getCollectionMethod(input: {
+  formData: FormData;
+  type: string;
+  id: string;
+  amountPence: number;
+}): CaptainCollectionMethod {
+  const rawValue = getString(input.formData, `collection_${input.type}_${input.id}`);
+
+  if (rawValue === "captain_paid") return "captain_paid";
+  if (rawValue === "waived") return "waived";
+  if (input.amountPence === 0) return "waived";
+
+  return "link";
+}
+
 function appendNote(input: { existingNote: string | null; note: string }) {
   const existingNote = input.existingNote?.trim();
   if (!existingNote) return input.note;
@@ -79,9 +103,23 @@ function isLockedPlayerFee(status: PlayerMatchFeeStatus) {
   return status === "PAID";
 }
 
-function getCollectionNote(amountPence: number) {
-  if (amountPence === 0) return "Captain collection: waived / £0.00";
-  return `Captain collection: £${(amountPence / 100).toFixed(2)} for this player`;
+function getCollectionNote(input: {
+  amountPence: number;
+  method: CaptainCollectionMethod;
+}) {
+  if (input.method === "captain_paid") {
+    return `Paid captain directly: captain collected ${formatMoney(input.amountPence)} outside SIXFL link and remains responsible for settling with SIXFL.`;
+  }
+
+  if (input.method === "waived" || input.amountPence === 0) {
+    return "No player link needed: waived / no charge.";
+  }
+
+  return `SIXFL player payment link: ${formatMoney(input.amountPence)} for this player.`;
+}
+
+function getNextStatus(method: CaptainCollectionMethod): PlayerMatchFeeStatus {
+  return method === "link" ? "OPEN" : "WAIVED";
 }
 
 async function assertFixtureBelongsToTeam(input: { fixtureId: string; teamId: string }) {
@@ -150,20 +188,32 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
   const createdOrUpdatedFeeIds: string[] = [];
 
   for (const player of players) {
-    const playerAmountPence = getPlayerAmountPence({
+    const enteredAmountPence = getPlayerAmountPence({
       formData,
       type: player.type,
       id: player.id,
       defaultAmountPence,
     });
 
-    if (playerAmountPence === null) {
+    if (enteredAmountPence === null) {
       redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=invalid_player_amount"));
     }
 
-    const nextStatus: PlayerMatchFeeStatus = playerAmountPence === 0 ? "WAIVED" : "OPEN";
+    const method = getCollectionMethod({
+      formData,
+      type: player.type,
+      id: player.id,
+      amountPence: enteredAmountPence,
+    });
+    const playerAmountPence = method === "waived" ? 0 : enteredAmountPence;
+    const nextStatus = getNextStatus(method);
     const now = new Date();
-    const note = getCollectionNote(playerAmountPence);
+    const note = getCollectionNote({ amountPence: playerAmountPence, method });
+    const clearPaymentLink = nextStatus !== "OPEN";
+
+    if (method === "link" && playerAmountPence <= 0) {
+      redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=invalid_player_amount"));
+    }
 
     if (player.type === "member") {
       const member = await prisma.teamMember.findFirst({
@@ -192,8 +242,8 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
             paidAt: null,
             waivedAt: nextStatus === "WAIVED" ? now : null,
             cancelledAt: null,
-            paymentUrl: nextStatus === "WAIVED" ? null : undefined,
-            paymentToken: nextStatus === "WAIVED" ? null : undefined,
+            paymentUrl: clearPaymentLink ? null : undefined,
+            paymentToken: clearPaymentLink ? null : undefined,
             note: appendNote({ existingNote: existing.note, note }),
           },
           select: { id: true, status: true },
@@ -245,8 +295,8 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
             paidAt: null,
             waivedAt: nextStatus === "WAIVED" ? now : null,
             cancelledAt: null,
-            paymentUrl: nextStatus === "WAIVED" ? null : undefined,
-            paymentToken: nextStatus === "WAIVED" ? null : undefined,
+            paymentUrl: clearPaymentLink ? null : undefined,
+            paymentToken: clearPaymentLink ? null : undefined,
             note: appendNote({ existingNote: existing.note, note }),
           },
           select: { id: true, status: true },
