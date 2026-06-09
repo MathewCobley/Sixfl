@@ -105,6 +105,15 @@ function findTeamActionsContainer(card: Element) {
   return lastAction?.parentElement ?? null;
 }
 
+function hasNativeTeamVoidAction(card: Element) {
+  return Array.from(card.querySelectorAll("a,button")).some((node) => {
+    if (node.matches(TEAM_VOID_BUTTON_SELECTOR)) return false;
+
+    const text = normaliseText(node.textContent ?? "");
+    return text.includes("void charge");
+  });
+}
+
 function createTeamVoidButton(input: {
   item: VoidableCharge;
   onVoided: () => void;
@@ -163,6 +172,10 @@ function injectTeamVoidButtons(input: {
 
   for (const card of findTeamChargeCards()) {
     if (card.querySelector(TEAM_VOID_BUTTON_SELECTOR)) continue;
+
+    // The admin payments page now renders its own Void charge link.
+    // Avoid injecting a second client-side button into the same charge card.
+    if (hasNativeTeamVoidAction(card)) continue;
 
     const item = findMatchingTeamCharge(card, input.items);
     if (!item || usedChargeIds.has(item.id)) continue;
