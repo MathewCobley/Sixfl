@@ -28,6 +28,25 @@ function appendCoveredNote(description: string | null, paidTotalPence: number) {
   return `${cleaned}\n${note}`;
 }
 
+async function linkPlayerFeeTransactionsToCharge(input: {
+  playerMatchFeeIds: string[];
+  chargeId: string;
+}) {
+  for (const playerMatchFeeId of input.playerMatchFeeIds) {
+    await prisma.paymentTransaction.updateMany({
+      where: {
+        chargeId: null,
+        notes: {
+          contains: `Player fee ID: ${playerMatchFeeId}`,
+        },
+      },
+      data: {
+        chargeId: input.chargeId,
+      },
+    });
+  }
+}
+
 export async function reconcileFixtureChargeFromPlayerPayments(input: {
   teamId: string;
   fixtureId: string;
@@ -50,6 +69,7 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
         status: "PAID",
       },
       select: {
+        id: true,
         amountPence: true,
       },
     }),
@@ -95,6 +115,11 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
       covered: false,
     };
   }
+
+  await linkPlayerFeeTransactionsToCharge({
+    playerMatchFeeIds: paidFees.map((fee) => fee.id),
+    chargeId: matchingCharge.id,
+  });
 
   await prisma.paymentCharge.update({
     where: { id: matchingCharge.id },
