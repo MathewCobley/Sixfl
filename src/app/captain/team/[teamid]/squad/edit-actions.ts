@@ -79,10 +79,6 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
     redirect("/captain");
   }
 
-  if (!access.isAdmin) {
-    redirect(getErrorRedirect(teamid, "Only SIXFL admins can edit managed squad player details."));
-  }
-
   if (Number.isNaN(playerMatchFeeOverride)) {
     redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank."));
   }
@@ -114,10 +110,6 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
 
   if (!membership) {
     redirect(getErrorRedirect(teamid, "Squad member not found."));
-  }
-
-  if (membership.team.teamMode !== "MANAGED") {
-    redirect(getErrorRedirect(teamid, "Player details can only be edited here for SIXFL-managed teams."));
   }
 
   if (!displayName && !email) {
@@ -155,6 +147,31 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   const sourceProspectId = existingProfiles[0]?.sourceProspectId ?? null;
 
   await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TeamMemberProfile" (
+        "id" TEXT NOT NULL,
+        "teamMemberId" TEXT NOT NULL,
+        "sourceProspectId" TEXT,
+        "phone" TEXT,
+        "ageBand" TEXT,
+        "preferredPositions" TEXT,
+        "experienceSummary" TEXT,
+        "availabilityLevel" TEXT,
+        "preferredNights" JSONB,
+        "availabilitySummary" TEXT,
+        "notes" TEXT,
+        "playerMatchFeePenceOverride" INTEGER,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TeamMemberProfile_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    await tx.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "TeamMemberProfile_teamMemberId_key"
+      ON "TeamMemberProfile"("teamMemberId");
+    `);
+
     await tx.$executeRawUnsafe(`
       ALTER TABLE "TeamMemberProfile"
         ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER;
@@ -257,7 +274,8 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
           teamId: teamid,
           teamName: membership.team.name,
           userId: membership.userId,
-          managedTeamPlayer: true,
+          managedTeamPlayer: membership.team.teamMode === "MANAGED",
+          updatedByCaptain: !access.isAdmin,
           usesWhatsapp,
         },
         lastSyncedAt: new Date(),
@@ -277,7 +295,8 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
           teamId: teamid,
           teamName: membership.team.name,
           userId: membership.userId,
-          managedTeamPlayer: true,
+          managedTeamPlayer: membership.team.teamMode === "MANAGED",
+          updatedByCaptain: !access.isAdmin,
           usesWhatsapp,
         },
         lastSyncedAt: new Date(),
@@ -289,6 +308,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   revalidatePath(`/captain/team/${teamid}/squad`);
   revalidatePath(`/captain/team/${teamid}/fixtures`);
   revalidatePath(`/captain/team/${teamid}/match-fees`);
+  revalidatePath(`/captain/team/${teamid}/player-payments`);
   revalidatePath(`/admin/teams/${teamid}`);
   revalidatePath(`/admin/teams/${teamid}/squad`);
   revalidatePath(`/admin/teams/${teamid}/communications`);
