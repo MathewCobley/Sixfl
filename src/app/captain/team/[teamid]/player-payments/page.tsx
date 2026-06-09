@@ -85,7 +85,9 @@ function getErrorMessage(error?: string) {
     case "missing_fixture":
       return "Choose a fixture first.";
     case "invalid_amount":
-      return "Enter a valid amount per player.";
+      return "Enter a valid default amount per player.";
+    case "invalid_player_amount":
+      return "One of the player amounts is not valid. Use 0.00 for waived players or a positive amount for payment links.";
     case "no_players":
       return "Select at least one player to collect from.";
     case "fixture_not_found":
@@ -123,6 +125,34 @@ function getPlayerContact(input: {
   return [input.memberEmail, input.prospectEmail, input.prospectPhone]
     .filter(Boolean)
     .join(" · ") || "No contact saved";
+}
+
+function getCollectionComparisonText(input: {
+  collectionTotalPence: number;
+  teamFeePence: number;
+}) {
+  const difference = input.collectionTotalPence - input.teamFeePence;
+
+  if (difference === 0) {
+    return `This collection matches the ${formatMoney(input.teamFeePence)} team fee.`;
+  }
+
+  if (difference < 0) {
+    return `${formatMoney(Math.abs(difference))} short of the ${formatMoney(input.teamFeePence)} team fee.`;
+  }
+
+  return `${formatMoney(difference)} over the ${formatMoney(input.teamFeePence)} team fee.`;
+}
+
+function getCollectionComparisonClasses(input: {
+  collectionTotalPence: number;
+  teamFeePence: number;
+}) {
+  const difference = input.collectionTotalPence - input.teamFeePence;
+
+  if (difference === 0) return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  if (difference < 0) return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+  return "border-sky-400/20 bg-sky-500/10 text-sky-100";
 }
 
 export default async function CaptainPlayerPaymentsPage({
@@ -189,27 +219,31 @@ export default async function CaptainPlayerPaymentsPage({
     fixtures[0] ??
     null;
 
-  const fees = selectedFixture
-    ? await prisma.playerMatchFee.findMany({
-        where: { teamId: teamid, fixtureId: selectedFixture.id },
-        orderBy: [{ createdAt: "asc" }],
-        include: {
-          teamMember: {
-            include: { user: { select: { name: true, email: true } } },
+  async function loadFees() {
+    return selectedFixture
+      ? prisma.playerMatchFee.findMany({
+          where: { teamId: teamid, fixtureId: selectedFixture.id },
+          orderBy: [{ createdAt: "asc" }],
+          include: {
+            teamMember: {
+              include: { user: { select: { name: true, email: true } } },
+            },
+            prospect: {
+              select: { firstName: true, lastName: true, email: true, phone: true },
+            },
           },
-          prospect: {
-            select: { firstName: true, lastName: true, email: true, phone: true },
-          },
-        },
-      })
-    : [];
+        })
+      : [];
+  }
 
+  let fees = await loadFees();
   const openFeeIdsWithoutLinks = fees
     .filter((fee) => fee.status === "OPEN" && (!fee.paymentToken || !fee.paymentUrl))
     .map((fee) => fee.id);
 
   if (openFeeIdsWithoutLinks.length > 0) {
     await ensurePlayerMatchFeePaymentDetailsForFees(openFeeIdsWithoutLinks);
+    fees = await loadFees();
   }
 
   const activeFees = fees.filter((fee) => fee.status !== "CANCELLED");
@@ -218,6 +252,12 @@ export default async function CaptainPlayerPaymentsPage({
   );
   const selectedProspectIds = new Set(
     activeFees.filter((fee) => fee.prospectId).map((fee) => fee.prospectId as string),
+  );
+  const feeByMemberId = new Map(
+    activeFees.filter((fee) => fee.teamMemberId).map((fee) => [fee.teamMemberId as string, fee]),
+  );
+  const feeByProspectId = new Map(
+    activeFees.filter((fee) => fee.prospectId).map((fee) => [fee.prospectId as string, fee]),
   );
 
   const linkedMemberKeys = new Set(
@@ -244,7 +284,9 @@ export default async function CaptainPlayerPaymentsPage({
   );
   const paidCount = activeFees.filter((fee) => fee.status === "PAID").length;
   const openCount = activeFees.filter((fee) => fee.status === "OPEN").length;
+  const waivedCount = activeFees.filter((fee) => fee.status === "WAIVED").length;
   const defaultAmount = activeFees.find((fee) => fee.status !== "PAID")?.amountPence ?? 400;
+  const teamFeePence = selectedFixture?.matchFeePence ?? 4000;
   const savedMessage = getSavedMessage(sp.saved);
   const errorMessage = getErrorMessage(sp.error);
 
@@ -259,7 +301,7 @@ export default async function CaptainPlayerPaymentsPage({
             Collect money from your players
           </h2>
           <p className="mt-3 max-w-3xl text-sm text-white/65 sm:text-base">
-            Set the amount each player owes, choose the players for the fixture, then share secure Stripe payment links and track who has paid. The team still remains responsible for the SIXFL fixture fee.
+            Set a default amount, adjust individual player amounts for subs or guests, then share secure Stripe payment links and track who has paid. The team still remains responsible for the SIXFL fixture fee.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href={`/captain/team/${team.id}`} className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white">
@@ -277,10 +319,10 @@ export default async function CaptainPlayerPaymentsPage({
 
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          { label: "Players", value: activeFees.length, text: "Included in this collection.", classes: "border-white/10 bg-white/[0.04] text-white/45" },
+          { label: "Players", value: activeFees.length, text: `${waivedCount} waived`, classes: "border-white/10 bg-white/[0.04] text-white/45" },
           { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} paid`, classes: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70" },
           { label: "Outstanding", value: formatMoney(totals.open), text: `${openCount} unpaid`, classes: "border-amber-400/20 bg-amber-500/10 text-amber-100/70" },
-          { label: "Collection total", value: formatMoney(totals.total), text: "This is captain collection tracking, not the fixed SIXFL team invoice.", classes: "border-sky-400/20 bg-sky-500/10 text-sky-100/70" },
+          { label: "Collection total", value: formatMoney(totals.total), text: getCollectionComparisonText({ collectionTotalPence: totals.total, teamFeePence }), classes: "border-sky-400/20 bg-sky-500/10 text-sky-100/70" },
         ].map((item) => (
           <div key={item.label} className={`rounded-3xl border p-5 ${item.classes}`}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{item.label}</p>
@@ -289,6 +331,15 @@ export default async function CaptainPlayerPaymentsPage({
           </div>
         ))}
       </section>
+
+      {activeFees.length > 0 ? (
+        <section className={`rounded-3xl border p-5 text-sm ${getCollectionComparisonClasses({ collectionTotalPence: totals.total, teamFeePence })}`}>
+          <div className="font-semibold text-white">Team fee check</div>
+          <p className="mt-2 text-white/70">
+            Current player collection total is {formatMoney(totals.total)} against a team fee of {formatMoney(teamFeePence)}. This is a warning only — it will not stop you saving, because subs, guests, top-ups and over-collections can be deliberate.
+          </p>
+        </section>
+      ) : null}
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.3fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
@@ -322,7 +373,7 @@ export default async function CaptainPlayerPaymentsPage({
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Create / update collection</h2>
           <p className="mt-1 text-sm text-white/55">
-            Choose the players and enter the amount each one should pay. Paid rows are kept safe and will not be reset.
+            Set a default amount, then adjust any individual player amount. Enter 0.00 to waive a player. Paid rows stay locked and will not be reset.
           </p>
 
           {selectedFixture ? (
@@ -331,7 +382,7 @@ export default async function CaptainPlayerPaymentsPage({
               <input type="hidden" name="fixtureId" value={selectedFixture.id} />
 
               <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4">
-                <label htmlFor="amount" className="text-sm font-medium text-emerald-50">Amount per player</label>
+                <label htmlFor="amount" className="text-sm font-medium text-emerald-50">Default amount per player</label>
                 <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
                   <input
                     id="amount"
@@ -341,7 +392,7 @@ export default async function CaptainPlayerPaymentsPage({
                     defaultValue={(defaultAmount / 100).toFixed(2)}
                     className="w-full max-w-[180px] rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
                   />
-                  <p className="text-sm text-emerald-100/70">Example: 4.00, 5.00 or 6.00. Stripe will take each player to a secure checkout page.</p>
+                  <p className="text-sm text-emerald-100/70">This fills the standard amount. Change individual player boxes below for subs or guests.</p>
                 </div>
               </div>
 
@@ -350,15 +401,40 @@ export default async function CaptainPlayerPaymentsPage({
                   <h3 className="font-semibold text-white">Linked squad members</h3>
                   <div className="mt-3 space-y-2">
                     {members.length === 0 ? <div className="text-sm text-white/45">No linked members yet.</div> : null}
-                    {members.map((member) => (
-                      <label key={member.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                        <input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={selectedMemberIds.has(member.id)} className="mt-1" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>
-                          <span className="mt-1 block text-xs text-white/45">{member.user.email || "No email saved"}</span>
-                        </span>
-                      </label>
-                    ))}
+                    {members.map((member) => {
+                      const existingFee = feeByMemberId.get(member.id);
+                      const isPaid = existingFee?.status === "PAID";
+                      const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2);
+
+                      return (
+                        <div key={member.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>
+                          {isPaid ? <input type="hidden" name="player" value={`member:${member.id}`} /> : null}
+                          <label className="flex items-start gap-3 text-white/75">
+                            <input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={selectedMemberIds.has(member.id)} disabled={isPaid} className="mt-1" />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>
+                                {existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}
+                              </span>
+                              <span className="mt-1 block text-xs text-white/45">{member.user.email || "No email saved"}</span>
+                            </span>
+                          </label>
+                          <div className="mt-3 flex items-center gap-2 pl-7">
+                            <label htmlFor={`amount_member_${member.id}`} className="text-xs font-medium text-white/50">Amount</label>
+                            <input
+                              id={`amount_member_${member.id}`}
+                              name={`amount_member_${member.id}`}
+                              type="text"
+                              inputMode="decimal"
+                              defaultValue={amountValue}
+                              disabled={isPaid}
+                              className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45"
+                            />
+                            {isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -369,17 +445,39 @@ export default async function CaptainPlayerPaymentsPage({
                     <div className="mt-3 space-y-2">
                       {selectableProspects.map((prospect) => {
                         const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+                        const existingFee = feeByProspectId.get(prospect.id);
+                        const isPaid = existingFee?.status === "PAID";
+                        const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2);
 
                         return (
-                          <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                            <input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={selectedProspectIds.has(prospect.id)} className="mt-1" />
-                            <span>
-                              <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed player"}</span>
-                              <span className="block text-xs text-white/45">
-                                {[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact saved"}
+                          <div key={prospect.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>
+                            {isPaid ? <input type="hidden" name="player" value={`prospect:${prospect.id}`} /> : null}
+                            <label className="flex items-start gap-3 text-white/75">
+                              <input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={selectedProspectIds.has(prospect.id)} disabled={isPaid} className="mt-1" />
+                              <span className="min-w-0 flex-1">
+                                <span className="flex flex-wrap items-center gap-2">
+                                  <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed player"}</span>
+                                  {existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}
+                                </span>
+                                <span className="block text-xs text-white/45">
+                                  {[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact saved"}
+                                </span>
                               </span>
-                            </span>
-                          </label>
+                            </label>
+                            <div className="mt-3 flex items-center gap-2 pl-7">
+                              <label htmlFor={`amount_prospect_${prospect.id}`} className="text-xs font-medium text-white/50">Amount</label>
+                              <input
+                                id={`amount_prospect_${prospect.id}`}
+                                name={`amount_prospect_${prospect.id}`}
+                                type="text"
+                                inputMode="decimal"
+                                defaultValue={amountValue}
+                                disabled={isPaid}
+                                className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45"
+                              />
+                              {isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -431,6 +529,7 @@ export default async function CaptainPlayerPaymentsPage({
                   </div>
                   <div className="mt-1 text-sm text-white/50">{contact}</div>
                   {fee.paidAt ? <div className="mt-1 text-xs text-emerald-100/65">Paid {formatUkDateTime(fee.paidAt)}</div> : null}
+                  {fee.waivedAt ? <div className="mt-1 text-xs text-sky-100/65">Waived {formatUkDateTime(fee.waivedAt)}</div> : null}
                   {fee.status === "OPEN" && fee.paymentUrl ? (
                     <div className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/60">
                       {fee.paymentUrl}
@@ -452,6 +551,8 @@ export default async function CaptainPlayerPaymentsPage({
                     </>
                   ) : fee.status === "PAID" ? (
                     <span className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100">Paid</span>
+                  ) : fee.status === "WAIVED" ? (
+                    <span className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-100">Waived</span>
                   ) : (
                     <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/50">No payment link</span>
                   )}
