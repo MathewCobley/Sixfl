@@ -24,6 +24,17 @@ type Props = {
   searchParams?: Promise<{ fixtureId?: string; saved?: string; error?: string }>;
 };
 
+type FixturePaymentSummary = {
+  players: number;
+  paidCount: number;
+  openCount: number;
+  waivedCount: number;
+  totalPence: number;
+  paidPence: number;
+  openPence: number;
+  waivedPence: number;
+};
+
 function formatUkDateTime(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
@@ -155,6 +166,46 @@ function getCollectionComparisonClasses(input: {
   return "border-sky-400/20 bg-sky-500/10 text-sky-100";
 }
 
+function getFixturePaymentBadge(input: {
+  summary?: FixturePaymentSummary;
+  teamFeePence: number;
+}) {
+  const summary = input.summary;
+
+  if (!summary || summary.players === 0) {
+    return {
+      label: "Not started",
+      detail: `No collection yet · team fee ${formatMoney(input.teamFeePence)}`,
+      classes: "border-white/10 bg-white/[0.04] text-white/55",
+    };
+  }
+
+  if (summary.openCount === 0) {
+    const label = summary.paidCount > 0 ? "Paid" : "Waived";
+    const detail = `${summary.paidCount}/${summary.players} paid · collected ${formatMoney(summary.paidPence)}`;
+
+    return {
+      label,
+      detail,
+      classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
+    };
+  }
+
+  if (summary.paidCount > 0 || summary.waivedCount > 0) {
+    return {
+      label: "Part paid",
+      detail: `${summary.paidCount}/${summary.players} paid · outstanding ${formatMoney(summary.openPence)}`,
+      classes: "border-amber-400/25 bg-amber-500/10 text-amber-100",
+    };
+  }
+
+  return {
+    label: "Outstanding",
+    detail: `${summary.players} player${summary.players === 1 ? "" : "s"} · outstanding ${formatMoney(summary.openPence)}`,
+    classes: "border-red-400/25 bg-red-500/10 text-red-100",
+  };
+}
+
 export default async function CaptainPlayerPaymentsPage({
   params,
   searchParams,
@@ -211,6 +262,57 @@ export default async function CaptainPlayerPaymentsPage({
       },
     }),
   ]);
+
+  const fixtureIds = fixtures.map((fixture) => fixture.id);
+  const fixturePaymentRows = fixtureIds.length
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          teamId: teamid,
+          fixtureId: { in: fixtureIds },
+          status: { not: "CANCELLED" },
+        },
+        select: {
+          fixtureId: true,
+          amountPence: true,
+          status: true,
+        },
+      })
+    : [];
+
+  const paymentSummaryByFixtureId = new Map<string, FixturePaymentSummary>();
+
+  for (const fee of fixturePaymentRows) {
+    const existing = paymentSummaryByFixtureId.get(fee.fixtureId) ?? {
+      players: 0,
+      paidCount: 0,
+      openCount: 0,
+      waivedCount: 0,
+      totalPence: 0,
+      paidPence: 0,
+      openPence: 0,
+      waivedPence: 0,
+    };
+
+    existing.players += 1;
+    existing.totalPence += fee.amountPence;
+
+    if (fee.status === "PAID") {
+      existing.paidCount += 1;
+      existing.paidPence += fee.amountPence;
+    }
+
+    if (fee.status === "OPEN") {
+      existing.openCount += 1;
+      existing.openPence += fee.amountPence;
+    }
+
+    if (fee.status === "WAIVED") {
+      existing.waivedCount += 1;
+      existing.waivedPence += fee.amountPence;
+    }
+
+    paymentSummaryByFixtureId.set(fee.fixtureId, existing);
+  }
 
   const now = new Date();
   const selectedFixture =
@@ -350,6 +452,11 @@ export default async function CaptainPlayerPaymentsPage({
             {fixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               const isPast = fixture.kickoffAt < now;
+              const fixtureTeamFeePence = fixture.matchFeePence ?? 4000;
+              const paymentBadge = getFixturePaymentBadge({
+                summary: paymentSummaryByFixtureId.get(fixture.id),
+                teamFeePence: fixtureTeamFeePence,
+              });
 
               return (
                 <Link
@@ -360,9 +467,15 @@ export default async function CaptainPlayerPaymentsPage({
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>
                     {isPast ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100">Past fixture</span> : null}
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${paymentBadge.classes}`}>
+                      {paymentBadge.label}
+                    </span>
                   </div>
                   <div className="mt-1 text-xs text-white/50">
                     {formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
+                  </div>
+                  <div className="mt-2 text-xs text-white/55">
+                    {paymentBadge.detail}
                   </div>
                 </Link>
               );
