@@ -12,6 +12,8 @@ export type LeadEmailTemplateKey =
   | "player-follow-up"
   | "referee-follow-up";
 
+export type LeagueEmailTemplateKey = "fixture-update";
+
 type TemplateInput = {
   firstName?: string;
 };
@@ -122,8 +124,28 @@ Any questions, just reply to this email.`,
   };
 }
 
+export function sixflFixtureUpdateTemplate() {
+  return {
+    subject: "SIXFL – Updated fixtures for this week",
+    body: `Hi everyone,
+
+Just a quick message to let you know that some fixtures have changed for this week.
+
+Please check the updated fixtures below and make sure your team is aware of your kick-off time.
+
+This week’s fixtures:
+
+{{fixtures}}
+
+Please arrive in good time before your match so we can keep everything running to schedule.
+
+Thanks,
+SIXFL`,
+  };
+}
+
 // ========================================
-// Template Selector
+// Template Selectors
 // ========================================
 
 export function getSixflLeadEmailTemplate(
@@ -143,4 +165,12 @@ export function getSixflLeadEmailTemplate(
   }
 
   return sixflRefereeFollowUpTemplate(data);
+}
+
+export function getSixflLeagueEmailTemplate(templateKey: LeagueEmailTemplateKey) {
+  if (templateKey === "fixture-update") {
+    return sixflFixtureUpdateTemplate();
+  }
+
+  return sixflFixtureUpdateTemplate();
 }
