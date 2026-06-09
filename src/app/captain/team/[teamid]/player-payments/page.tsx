@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { PlayerMatchFeeStatus } from "@prisma/client";
+import type { PaymentChargeStatus, PlayerMatchFeeStatus } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { ensurePlayerMatchFeePaymentDetailsForFees } from "@/lib/payments/player-match-fees";
@@ -24,6 +24,8 @@ type Props = {
   searchParams?: Promise<{ fixtureId?: string; saved?: string; error?: string }>;
 };
 
+type Tone = "white" | "emerald" | "amber" | "sky" | "red";
+
 type FixturePaymentSummary = {
   players: number;
   paidCount: number;
@@ -35,7 +37,12 @@ type FixturePaymentSummary = {
   waivedPence: number;
 };
 
-type Tone = "white" | "emerald" | "amber" | "sky" | "red";
+type TeamChargeSummary = {
+  amountPence: number;
+  paidPence: number;
+  outstandingPence: number;
+  status: PaymentChargeStatus;
+};
 
 function formatUkDateTime(value: Date) {
   return formatDateTimeInLondon(value, {
@@ -164,6 +171,11 @@ function getPlayerContact(input: {
   return [input.memberEmail, input.prospectEmail, input.prospectPhone].filter(Boolean).join(" · ") || "No contact saved";
 }
 
+function isTeamChargePaid(charge?: TeamChargeSummary | null) {
+  if (!charge) return false;
+  return charge.status === "PAID" || charge.paidPence >= charge.amountPence;
+}
+
 function getAllocationStatus(input: { allocatedPence: number; teamFeePence: number }) {
   const unallocatedPence = Math.max(input.teamFeePence - input.allocatedPence, 0);
   const overAllocatedPence = Math.max(input.allocatedPence - input.teamFeePence, 0);
@@ -200,6 +212,7 @@ function getAllocationStatus(input: { allocatedPence: number; teamFeePence: numb
 function getFixturePaymentBadge(input: {
   summary?: FixturePaymentSummary;
   teamFeePence: number;
+  teamCharge?: TeamChargeSummary | null;
 }) {
   const summary = input.summary ?? {
     players: 0,
@@ -212,20 +225,42 @@ function getFixturePaymentBadge(input: {
     waivedPence: 0,
   };
 
+  const chargePaid = isTeamChargePaid(input.teamCharge);
+  const teamChargeAmountPence = input.teamCharge?.amountPence ?? input.teamFeePence;
+  const teamChargePaidPence = input.teamCharge?.paidPence ?? 0;
+  const teamFeeStillToCoverPence = chargePaid
+    ? 0
+    : Math.max(teamChargeAmountPence - teamChargePaidPence, 0);
   const allocation = getAllocationStatus({
     allocatedPence: summary.totalPence,
     teamFeePence: input.teamFeePence,
   });
-  const teamFeeStillToCoverPence = Math.max(input.teamFeePence - summary.paidPence, 0);
+
+  if (chargePaid) {
+    return {
+      label: "Team paid",
+      lines: [
+        `Team charge paid ${formatMoney(teamChargePaidPence || teamChargeAmountPence)} / ${formatMoney(teamChargeAmountPence)}`,
+        "No action needed for the team fee",
+        `Player allocation ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)}`,
+        `Player payments outstanding ${formatMoney(summary.openPence)}`,
+      ],
+      pills: [
+        { label: "Team paid", tone: "emerald" as Tone },
+        { label: "No action needed", tone: "emerald" as Tone },
+        { label: `Player outstanding ${formatMoney(summary.openPence)}`, tone: summary.openPence > 0 ? "amber" as Tone : "white" as Tone },
+      ],
+      classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
+    };
+  }
+
   const playerOutstandingTone: Tone = summary.openPence > 0 ? "amber" : "white";
   const teamCoverTone: Tone = teamFeeStillToCoverPence > 0 ? "red" : "emerald";
-
   const pills = [
     { label: allocation.label, tone: allocation.tone },
     { label: `Player outstanding ${formatMoney(summary.openPence)}`, tone: playerOutstandingTone },
     { label: `Team still to cover ${formatMoney(teamFeeStillToCoverPence)}`, tone: teamCoverTone },
   ];
-
   const lines = [
     `Allocated ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)}`,
     allocation.overAllocatedPence > 0
@@ -246,8 +281,8 @@ function getFixturePaymentBadge(input: {
 
   if (summary.openCount === 0) {
     return {
-      label: summary.paidCount > 0 ? "Paid" : "Waived",
-      lines: [`${summary.paidCount}/${summary.players} paid`, ...lines],
+      label: summary.paidCount > 0 ? "Player paid" : "Waived",
+      lines: [`${summary.paidCount}/${summary.players} player payments paid`, ...lines],
       pills,
       classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
     };
@@ -256,7 +291,7 @@ function getFixturePaymentBadge(input: {
   if (summary.paidCount > 0 || summary.waivedCount > 0) {
     return {
       label: "Part paid",
-      lines: [`${summary.paidCount}/${summary.players} paid`, ...lines],
+      lines: [`${summary.paidCount}/${summary.players} player payments paid`, ...lines],
       pills,
       classes: "border-amber-400/25 bg-amber-500/10 text-amber-100",
     };
@@ -324,20 +359,36 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
   ]);
 
   const fixtureIds = fixtures.map((fixture) => fixture.id);
-  const fixturePaymentRows = fixtureIds.length
-    ? await prisma.playerMatchFee.findMany({
-        where: {
-          teamId: teamid,
-          fixtureId: { in: fixtureIds },
-          status: { not: "CANCELLED" },
-        },
-        select: {
-          fixtureId: true,
-          amountPence: true,
-          status: true,
-        },
-      })
-    : [];
+  const [fixturePaymentRows, teamChargeRows] = await Promise.all([
+    fixtureIds.length
+      ? prisma.playerMatchFee.findMany({
+          where: {
+            teamId: teamid,
+            fixtureId: { in: fixtureIds },
+            status: { not: "CANCELLED" },
+          },
+          select: {
+            fixtureId: true,
+            amountPence: true,
+            status: true,
+          },
+        })
+      : [],
+    fixtureIds.length
+      ? prisma.paymentCharge.findMany({
+          where: {
+            teamId: teamid,
+            fixtureId: { in: fixtureIds },
+          },
+          select: {
+            fixtureId: true,
+            amountPence: true,
+            status: true,
+            transactions: { select: { amountPence: true } },
+          },
+        })
+      : [],
+  ]);
 
   const paymentSummaryByFixtureId = new Map<string, FixturePaymentSummary>();
 
@@ -372,6 +423,19 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
     }
 
     paymentSummaryByFixtureId.set(fee.fixtureId, existing);
+  }
+
+  const teamChargeByFixtureId = new Map<string, TeamChargeSummary>();
+
+  for (const charge of teamChargeRows) {
+    if (!charge.fixtureId) continue;
+    const paidPence = charge.transactions.reduce((sum, transaction) => sum + transaction.amountPence, 0);
+    teamChargeByFixtureId.set(charge.fixtureId, {
+      amountPence: charge.amountPence,
+      paidPence,
+      outstandingPence: Math.max(charge.amountPence - paidPence, 0),
+      status: charge.status,
+    });
   }
 
   const now = new Date();
@@ -445,8 +509,14 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
   const waivedCount = activeFees.filter((fee) => fee.status === "WAIVED").length;
   const defaultAmount = activeFees.find((fee) => fee.status !== "PAID")?.amountPence ?? 400;
   const teamFeePence = selectedFixture?.matchFeePence ?? 4000;
+  const selectedTeamCharge = selectedFixture ? teamChargeByFixtureId.get(selectedFixture.id) : null;
+  const selectedTeamChargePaid = isTeamChargePaid(selectedTeamCharge);
   const allocation = getAllocationStatus({ allocatedPence: totals.total, teamFeePence });
-  const teamFeeStillToCoverPence = Math.max(teamFeePence - totals.paid, 0);
+  const teamFeeStillToCoverPence = selectedTeamChargePaid
+    ? 0
+    : selectedTeamCharge
+      ? selectedTeamCharge.outstandingPence
+      : Math.max(teamFeePence - totals.paid, 0);
   const savedMessage = getSavedMessage(sp.saved);
   const errorMessage = getErrorMessage(sp.error);
 
@@ -475,11 +545,11 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: "Team fee", value: formatMoney(teamFeePence), text: selectedFixture ? "Fixed SIXFL fee for this fixture." : "Choose a fixture to see the fee.", tone: "white" as Tone },
+          { label: "Team fee", value: formatMoney(teamFeePence), text: selectedTeamChargePaid ? "Team charge already paid." : "Fixed SIXFL fee for this fixture.", tone: selectedTeamChargePaid ? "emerald" as Tone : "white" as Tone },
           { label: "Allocated", value: formatMoney(totals.total), text: allocation.label, tone: allocation.tone },
-          { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} paid · ${waivedCount} waived`, tone: "emerald" as Tone },
+          { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} player payments · ${waivedCount} waived`, tone: "emerald" as Tone },
           { label: "Player payments outstanding", value: formatMoney(totals.open), text: `${openCount} unpaid player${openCount === 1 ? "" : "s"}`, tone: openCount > 0 ? "amber" as Tone : "white" as Tone },
-          { label: "Team fee still to cover", value: formatMoney(teamFeeStillToCoverPence), text: "Paid online so far deducted from team fee.", tone: teamFeeStillToCoverPence > 0 ? "red" as Tone : "emerald" as Tone },
+          { label: "Team fee still to cover", value: formatMoney(teamFeeStillToCoverPence), text: selectedTeamChargePaid ? "No action needed." : "Based on team charge ledger.", tone: teamFeeStillToCoverPence > 0 ? "red" as Tone : "emerald" as Tone },
         ].map((item) => (
           <div key={item.label} className={`rounded-3xl border p-5 ${getToneClasses(item.tone)}`}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{item.label}</p>
@@ -490,10 +560,12 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
       </section>
 
       {activeFees.length > 0 || selectedFixture ? (
-        <section className={`rounded-3xl border p-5 text-sm ${getToneClasses(allocation.tone)}`}>
+        <section className={`rounded-3xl border p-5 text-sm ${getToneClasses(selectedTeamChargePaid ? "emerald" : allocation.tone)}`}>
           <div className="font-semibold text-white">Allocation and payment check</div>
           <p className="mt-2 text-white/70">
-            Allocated to players: {formatMoney(totals.total)} / {formatMoney(teamFeePence)}. {allocation.helper}. Player payments outstanding: {formatMoney(totals.open)}. Team fee still to cover from actual paid player payments: {formatMoney(teamFeeStillToCoverPence)}.
+            {selectedTeamChargePaid
+              ? `The team charge for this fixture is already paid. No action is needed for the team fee. Player allocation is optional and currently ${formatMoney(totals.total)} / ${formatMoney(teamFeePence)}.`
+              : `Allocated to players: ${formatMoney(totals.total)} / ${formatMoney(teamFeePence)}. ${allocation.helper}. Player payments outstanding: ${formatMoney(totals.open)}. Team fee still to cover from the team ledger: ${formatMoney(teamFeeStillToCoverPence)}.`}
           </p>
         </section>
       ) : null}
@@ -510,6 +582,7 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
               const paymentBadge = getFixturePaymentBadge({
                 summary: paymentSummaryByFixtureId.get(fixture.id),
                 teamFeePence: fixture.matchFeePence ?? 4000,
+                teamCharge: teamChargeByFixtureId.get(fixture.id),
               });
 
               return (
