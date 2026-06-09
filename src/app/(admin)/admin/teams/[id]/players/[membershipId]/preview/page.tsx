@@ -71,6 +71,32 @@ function getRoleLabel(role: TeamRole) {
   }
 }
 
+function getResponseLabel(response?: string | null) {
+  switch (response) {
+    case "AVAILABLE":
+      return "Available";
+    case "MAYBE":
+      return "Maybe";
+    case "UNAVAILABLE":
+      return "Unavailable";
+    default:
+      return "No response";
+  }
+}
+
+function getResponseClasses(response?: string | null) {
+  switch (response) {
+    case "AVAILABLE":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "MAYBE":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    case "UNAVAILABLE":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/60";
+  }
+}
+
 function getFeeStatusLabel(status: PlayerMatchFeeStatus) {
   switch (status) {
     case PlayerMatchFeeStatus.PAID:
@@ -236,6 +262,15 @@ export default async function AdminPlayerDashboardPreviewPage({
         homeTeam: { select: { name: true } },
         awayTeam: { select: { name: true } },
         venue: { select: { name: true } },
+        availabilities: {
+          where: { teamMemberId: membership.id },
+          select: {
+            response: true,
+            note: true,
+            respondedAt: true,
+          },
+          take: 1,
+        },
       },
     }),
     prisma.fixture.findMany({
@@ -343,6 +378,9 @@ export default async function AdminPlayerDashboardPreviewPage({
       .filter((fee) => fee.teamId === teamid)
       .map((fee) => [fee.fixtureId, fee]),
   );
+  const availabilityCount = upcomingFixtures.filter(
+    (fixture) => fixture.availabilities[0]?.response === "AVAILABLE",
+  ).length;
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
@@ -357,7 +395,7 @@ export default async function AdminPlayerDashboardPreviewPage({
                 Viewing {playerName}'s player dashboard
               </h1>
               <p className="mt-1 text-sm text-amber-100/75">
-                This shows the fixtures, availability actions, match fees and player stats linked to this player.
+                This preview now includes the player’s recorded fixture availability responses.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -439,11 +477,13 @@ export default async function AdminPlayerDashboardPreviewPage({
         <section className="grid gap-4 md:grid-cols-4">
           <div className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">
-              Next action
+              Availability
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Confirm availability</h2>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              {availabilityCount} available
+            </h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
-              Fixture-specific availability links are shown below.
+              Across {upcomingFixtures.length} upcoming fixture{upcomingFixtures.length === 1 ? "" : "s"}.
             </p>
           </div>
 
@@ -468,7 +508,7 @@ export default async function AdminPlayerDashboardPreviewPage({
             </h2>
             <p className="mt-2 text-sm leading-6 text-amber-100/70">
               {outstandingPence > 0
-                ? `${openFees.length} open fee${openFees.length === 1 ? "" : "s"} linked to this player account, including previous teams.`
+                ? `${openFees.length} open fee${openFees.length === 1 ? "" : "s"} linked to this player account.`
                 : "No outstanding player match fees are showing for this player."}
             </p>
             {nextOpenFee ? (
@@ -488,10 +528,6 @@ export default async function AdminPlayerDashboardPreviewPage({
               >
                 Pay now
               </Link>
-            ) : outstandingPence > 0 ? (
-              <span className="mt-4 inline-flex rounded-xl border border-amber-400/20 bg-black/20 px-4 py-2.5 text-sm font-medium text-amber-100/80">
-                Payment link pending
-              </span>
             ) : null}
           </div>
 
@@ -528,6 +564,7 @@ export default async function AdminPlayerDashboardPreviewPage({
               ) : (
                 upcomingFixtures.map((fixture) => {
                   const fee = feesByFixtureId.get(fixture.id) ?? null;
+                  const availability = fixture.availabilities[0] ?? null;
 
                   return (
                     <div key={fixture.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -552,21 +589,32 @@ export default async function AdminPlayerDashboardPreviewPage({
                             {fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
                             {fixture.pitch ? ` · ${fixture.pitch}` : ""}
                           </div>
-                          {fee ? (
-                            <div className="mt-3 flex flex-wrap gap-2">
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getResponseClasses(availability?.response)}`}>
+                              Availability: {getResponseLabel(availability?.response)}
+                            </span>
+                            {availability?.respondedAt ? (
+                              <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-medium text-white/60">
+                                Updated {formatFixtureDate(availability.respondedAt)}
+                              </span>
+                            ) : null}
+                            {fee ? (
                               <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getFeeStatusClasses(fee.status)}`}>
                                 Fee: {formatMoney(fee.amountPence)} · {getFeeStatusLabel(fee.status)}
                               </span>
-                              {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
-                                <Link
-                                  href={fee.paymentUrl}
-                                  target="_blank"
-                                  className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-100 transition hover:bg-amber-500/15"
-                                >
-                                  Pay fee
-                                </Link>
-                              ) : null}
-                            </div>
+                            ) : null}
+                            {fee?.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
+                              <Link
+                                href={fee.paymentUrl}
+                                target="_blank"
+                                className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-100 transition hover:bg-amber-500/15"
+                              >
+                                Pay fee
+                              </Link>
+                            ) : null}
+                          </div>
+                          {availability?.note ? (
+                            <div className="mt-2 text-xs text-white/50">Note: {availability.note}</div>
                           ) : null}
                         </div>
                         <div className="flex flex-wrap gap-2 sm:justify-end">
