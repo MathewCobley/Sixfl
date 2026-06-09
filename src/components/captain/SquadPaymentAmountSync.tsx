@@ -14,21 +14,33 @@ function normaliseAmount(value: string) {
   return numeric.toFixed(2);
 }
 
+function getDefaultInput() {
+  return document.querySelector<HTMLInputElement>(
+    'form[action] input[name="amount"], input#amount[name="amount"]',
+  );
+}
+
+function getAmountInputs() {
+  return Array.from(
+    document.querySelectorAll<HTMLInputElement>(
+      'input[name^="amount_member_"], input[name^="amount_prospect_"]',
+    ),
+  );
+}
+
 export default function SquadPaymentAmountSync() {
   useEffect(() => {
-    const defaultInput = document.querySelector<HTMLInputElement>("[data-squad-payment-default]");
+    const defaultInput = getDefaultInput();
 
     if (!defaultInput) return;
-
-    const getAmountInputs = () =>
-      Array.from(document.querySelectorAll<HTMLInputElement>("[data-squad-payment-amount]"));
 
     const initialiseInputs = () => {
       const currentDefault = normaliseAmount(defaultInput.value) ?? "0.00";
 
       for (const input of getAmountInputs()) {
+        const currentValue = normaliseAmount(input.value);
         input.dataset.lastSyncedDefault = currentDefault;
-        input.dataset.customAmount = "false";
+        input.dataset.customAmount = currentValue === currentDefault ? "false" : "true";
       }
     };
 
@@ -63,6 +75,7 @@ export default function SquadPaymentAmountSync() {
           input.value = nextDefault;
           input.dataset.customAmount = "false";
           input.dataset.lastSyncedDefault = nextDefault;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
           input.dispatchEvent(new Event("change", { bubbles: true }));
         }
       }
