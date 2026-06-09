@@ -4,7 +4,11 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { NotificationChannel, NotificationDispatchStatus } from "@prisma/client";
+import {
+  FixtureStatus,
+  NotificationChannel,
+  NotificationDispatchStatus,
+} from "@prisma/client";
 
 import LeagueCommunicationsComposer from "@/components/admin/communications/LeagueCommunicationsComposer";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -27,6 +31,14 @@ type SearchParams = {
   count?: string;
   skipped?: string;
   failed?: string;
+};
+
+type FixtureLineInput = {
+  kickoffAt: Date;
+  pitch: string | null;
+  homeTeam: { name: string };
+  awayTeam: { name: string };
+  venue: { name: string } | null;
 };
 
 function getChannelLabel(value?: string) {
@@ -54,6 +66,30 @@ function getDispatchStatusLabel(status: NotificationDispatchStatus) {
     default:
       return status;
   }
+}
+
+function getUpcomingFixtureWindow() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 8);
+
+  return { start, end };
+}
+
+function formatFixtureLine(fixture: FixtureLineInput) {
+  const kickoff = formatDateTimeInLondon(fixture.kickoffAt, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const pitch = fixture.pitch?.trim() ? ` · ${fixture.pitch.trim()}` : "";
+  const venue = fixture.venue?.name?.trim() ? ` · ${fixture.venue.name.trim()}` : "";
+
+  return `${kickoff} – ${fixture.homeTeam.name} v ${fixture.awayTeam.name}${pitch}${venue}`;
 }
 
 export default async function AdminLeagueCommunicationsPage({
@@ -103,8 +139,15 @@ export default async function AdminLeagueCommunicationsPage({
 
   const leagueTeamIds = league.teams.map((team) => team.id);
   const recentDeliveryCutoff = new Date(Date.now() - 1000 * 60 * 60 * 24);
+  const fixtureWindow = getUpcomingFixtureWindow();
 
-  const [emailTemplates, smsTemplates, teamThreads, recentEmailProblemDispatches] = await Promise.all([
+  const [
+    emailTemplates,
+    smsTemplates,
+    upcomingFixtures,
+    teamThreads,
+    recentEmailProblemDispatches,
+  ] = await Promise.all([
     prisma.emailTemplate.findMany({
       where: {
         isActive: true,
@@ -139,6 +182,30 @@ export default async function AdminLeagueCommunicationsPage({
         name: true,
         body: true,
         description: true,
+      },
+    }),
+    prisma.fixture.findMany({
+      where: {
+        leagueId: league.id,
+        status: FixtureStatus.SCHEDULED,
+        kickoffAt: {
+          gte: fixtureWindow.start,
+          lt: fixtureWindow.end,
+        },
+      },
+      orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
+      select: {
+        kickoffAt: true,
+        pitch: true,
+        homeTeam: {
+          select: { name: true },
+        },
+        awayTeam: {
+          select: { name: true },
+        },
+        venue: {
+          select: { name: true },
+        },
       },
     }),
     prisma.messageThread.findMany({
@@ -196,6 +263,7 @@ export default async function AdminLeagueCommunicationsPage({
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const fixedPaymentUrl = "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
+  const fixtureLines = upcomingFixtures.map(formatFixtureLine);
 
   const resolvedEmailTemplates = emailTemplates.map((template) => {
     const ctaUrl =
@@ -340,6 +408,7 @@ export default async function AdminLeagueCommunicationsPage({
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Teams: {league.teams.length}</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Email ready: {emailReadyCount}</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">SMS ready: {smsReadyCount}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Fixtures loaded: {fixtureLines.length}</span>
             </div>
           </div>
 
@@ -375,6 +444,7 @@ export default async function AdminLeagueCommunicationsPage({
               smsReady: Boolean(snapshot?.primaryContact.phone?.trim()),
             };
           })}
+          fixtureLines={fixtureLines}
           emailTemplates={resolvedEmailTemplates}
           smsTemplates={smsTemplates}
         />
