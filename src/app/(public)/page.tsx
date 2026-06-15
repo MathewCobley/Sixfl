@@ -108,14 +108,14 @@ export default function HomePage() {
 
       <div className="pointer-events-none absolute left-1/2 top-20 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[130px]" />
 
-      <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-6 sm:px-6 lg:px-8">
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:p-8 lg:p-10">
+      <main className="relative mx-auto max-w-6xl px-4 pb-16 pt-4 sm:px-6 sm:pb-20 sm:pt-6 lg:px-8">
+        <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
           <div className="max-w-5xl text-left">
-            <div className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-300">
+            <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
               Harrogate live now • Northallerton recruiting now
             </div>
 
-            <h1 className="mt-6 max-w-4xl text-balance text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
+            <h1 className="mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl sm:leading-[0.95] lg:text-7xl">
               6-a-side football in Harrogate and Northallerton.
               <br />
               <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.55)]">
@@ -140,17 +140,17 @@ export default function HomePage() {
               ))}
             </div>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
                 href={harrogateLeagueLink}
-                className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
               >
                 VIEW HARROGATE LEAGUE
               </Link>
 
               <Link
                 href={northallertonLeagueLink}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
               >
                 JOIN NORTHALLERTON LAUNCH
               </Link>
@@ -165,19 +165,19 @@ export default function HomePage() {
         </section>
 
         <section className="mt-10">
-          <div className="grid gap-3 rounded-3xl border border-white/10 bg-white/[0.05] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 rounded-3xl border border-white/10 bg-white/[0.05] p-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-4 md:grid-cols-4">
             {homeStats.map((stat) => (
               <StripItem key={stat.label} label={stat.label} value={stat.value} />
             ))}
           </div>
         </section>
 
-        <section className="mt-16 grid gap-6 lg:grid-cols-2">
+        <section className="mt-12 grid gap-6 lg:mt-16 lg:grid-cols-2">
           <HarrogatePanel />
           <NorthallertonPanel />
         </section>
 
-        <section id="why-sixfl" className="mt-16">
+        <section id="why-sixfl" className="mt-12 lg:mt-16">
           <div className="mb-6">
             <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
               WHY SIXFL
@@ -202,8 +202,8 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="join-sixfl" className="mt-16">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+        <section id="join-sixfl" className="mt-12 lg:mt-16">
+          <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
@@ -273,7 +273,7 @@ function AreaCard({
 }) {
   return (
     <article
-      className={`rounded-[1.75rem] border p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] ${
+      className={`rounded-[1.5rem] border p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-[1.75rem] sm:p-6 ${
         featured
           ? "border-emerald-500/25 bg-emerald-500/[0.08]"
           : "border-white/10 bg-black/35"
@@ -304,13 +304,13 @@ function AreaCard({
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Link
           href={primaryHref}
-          className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-500 px-5 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
+          className="inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-5 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
         >
           {primaryLabel}
         </Link>
         <Link
           href={secondaryHref}
-          className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+          className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto"
         >
           {secondaryLabel}
         </Link>
@@ -321,7 +321,7 @@ function AreaCard({
 
 function HarrogatePanel() {
   return (
-    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
       <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
         LIVE SIXFL LEAGUE
       </div>
@@ -341,7 +341,7 @@ function HarrogatePanel() {
       </div>
       <Link
         href={harrogateLeagueLink}
-        className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
+        className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
       >
         VIEW HARROGATE LEAGUE
       </Link>
@@ -351,7 +351,7 @@ function HarrogatePanel() {
 
 function NorthallertonPanel() {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
       <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
         NEW LAUNCH AREA
       </div>
@@ -371,13 +371,13 @@ function NorthallertonPanel() {
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Link
           href={northallertonLeagueLink}
-          className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto"
         >
           VIEW LAUNCH PAGE
         </Link>
         <Link
           href={northallertonTeamLink}
-          className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
         >
           REGISTER TEAM
         </Link>
@@ -419,11 +419,11 @@ function FunnelCard({
 
 function StripItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/35 px-4 py-5">
-      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+    <div className="rounded-2xl border border-white/10 bg-black/35 px-3 py-4 sm:px-4 sm:py-5">
+      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 sm:tracking-[0.18em]">
         {label}
       </div>
-      <div className="mt-2 text-2xl font-black tracking-tight text-white">
+      <div className="mt-2 text-xl font-black tracking-tight text-white sm:text-2xl">
         {value}
       </div>
     </div>
@@ -432,7 +432,7 @@ function StripItem({ label, value }: { label: string; value: string }) {
 
 function PathwayCard({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07]">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] sm:p-6">
       <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
         SIXFL BENEFIT
       </div>
