@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { HiOutlineMenu, HiOutlineX } from "react-icons/hi";
 import { track } from "@vercel/analytics";
+import { adminNavigationLinks } from "@/lib/adminNavigation";
 
 type HeaderVariant = "public" | "admin";
 
@@ -18,6 +19,7 @@ type HeaderLink = {
   label: string;
   href: string;
   pill?: boolean;
+  exact?: boolean;
 };
 
 type HeaderAction = {
@@ -25,6 +27,7 @@ type HeaderAction = {
   href: string;
   eventLabel: string;
   tone?: "primary" | "secondary";
+  mobileLabel?: string;
 };
 
 type HeaderConfig = {
@@ -45,19 +48,26 @@ const SUPER_ADMINS = [
   "mathewcobley1@gmail.com",
 ];
 
+function isNavLinkActive(pathname: string, href: string, exact?: boolean) {
+  if (exact) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 function NavLink({
   href,
   children,
   onClick,
   activeMode = "underline",
+  exact,
 }: {
   href: string;
   children: React.ReactNode;
   onClick?: () => void;
   activeMode?: "underline" | "pill";
+  exact?: boolean;
 }) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
+  const active = isNavLinkActive(pathname, href, exact);
 
   if (activeMode === "pill") {
     return (
@@ -103,17 +113,14 @@ function getHeaderConfig(
   if (variant === "admin") {
     return {
       containerClassName:
-        "mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8",
+        "mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-6 lg:px-8",
       desktopNavClassName: "hidden items-center gap-2 xl:flex",
       mobilePanelTitle: "Admin",
-      links: [
-        { label: "Overview", href: "/admin" },
-        { label: "Teams", href: "/admin/teams" },
-        { label: "Leagues", href: "/admin/leagues" },
-        { label: "Fixtures", href: "/admin/fixtures" },
-        { label: "Leads", href: "/admin/leads" },
-        { label: "Messaging", href: "/admin/messaging" },
-      ],
+      links: adminNavigationLinks.map((item) => ({
+        label: item.name,
+        href: item.href,
+        exact: item.exact,
+      })),
       actions: [
         {
           label: "Public site",
@@ -141,7 +148,7 @@ function getHeaderConfig(
 
   return {
     containerClassName:
-      "mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4",
+      "mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-3 sm:px-4",
     desktopNavClassName:
       "hidden items-center gap-5 text-[13px] font-medium md:flex",
     mobilePanelTitle: "Menu",
@@ -149,6 +156,7 @@ function getHeaderConfig(
     actions: [
       {
         label: "Register Interest",
+        mobileLabel: "Register",
         href: "/register-interest?type=team",
         eventLabel: "Register Interest",
         tone: "primary",
@@ -179,6 +187,7 @@ export default function AppHeader({
     () => getHeaderConfig(variant, isAdmin),
     [variant, isAdmin],
   );
+  const mobileOnlyClassName = variant === "admin" ? "xl:hidden" : "md:hidden";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -268,6 +277,7 @@ export default function AppHeader({
                 <NavLink
                   key={link.href}
                   href={link.href}
+                  exact={link.exact}
                   activeMode={config.navMode}
                   onClick={() =>
                     track("header_nav_click", {
@@ -305,7 +315,7 @@ export default function AppHeader({
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 md:hidden">
+          <div className={`flex items-center gap-2 ${mobileOnlyClassName}`}>
             {config.actions[0] ? (
               <Link
                 href={config.actions[0].href}
@@ -323,7 +333,7 @@ export default function AppHeader({
                     : "border border-white/10 bg-white/5 text-white hover:bg-white/10",
                 ].join(" ")}
               >
-                {config.actions[0].label}
+                {config.actions[0].mobileLabel ?? config.actions[0].label}
               </Link>
             ) : null}
 
@@ -352,7 +362,7 @@ export default function AppHeader({
 
       {mobileMenuOpen ? (
         <div
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm md:hidden"
+          className={`fixed inset-0 z-40 bg-black/70 backdrop-blur-sm ${mobileOnlyClassName}`}
           onClick={() => {
             track("mobile_menu_toggle", {
               action: "close_overlay",
@@ -364,7 +374,7 @@ export default function AppHeader({
       ) : null}
 
       <div
-        className={`fixed right-0 top-0 z-50 h-full w-[88vw] max-w-sm border-l border-white/10 bg-black text-white shadow-2xl transition-transform duration-300 md:hidden ${
+        className={`fixed right-0 top-0 z-50 h-full w-[92vw] max-w-md border-l border-white/10 bg-black text-white shadow-2xl transition-transform duration-300 ${mobileOnlyClassName} ${
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -393,24 +403,34 @@ export default function AppHeader({
 
         <div className="flex h-[calc(100%-66px)] flex-col overflow-y-auto px-4 py-6">
           <div className="space-y-2">
-            {config.links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => {
-                  track("header_nav_click", {
-                    location: `${variant}_mobile_menu`,
-                    target: link.href,
-                    label: link.label,
-                  });
-                  setMobileMenuOpen(false);
-                }}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400 hover:bg-white/10"
-              >
-                <span>{link.label}</span>
-                <span className="text-white/40">→</span>
-              </Link>
-            ))}
+            {config.links.map((link) => {
+              const active = isNavLinkActive(pathname, link.href, link.exact);
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => {
+                    track("header_nav_click", {
+                      location: `${variant}_mobile_menu`,
+                      target: link.href,
+                      label: link.label,
+                    });
+                    setMobileMenuOpen(false);
+                  }}
+                  className={[
+                    "flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+                    active
+                      ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-200"
+                      : "border-white/10 bg-white/5 text-white hover:border-emerald-400 hover:bg-white/10",
+                  ].join(" ")}
+                >
+                  <span>{link.label}</span>
+                  <span className="text-white/40">→</span>
+                </Link>
+              );
+            })}
           </div>
 
           {config.actions[0] ? (
