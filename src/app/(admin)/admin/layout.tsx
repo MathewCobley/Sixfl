@@ -41,7 +41,7 @@ export default async function AdminLayout({
       <AdminSocialResultsGeneratorLinksBridge />
       <AppHeader variant="admin" />
 
-      <div className="flex w-full gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1800px] gap-6 px-3 py-4 sm:px-6 lg:px-8 lg:py-6">
         <aside className="hidden w-[34rem] shrink-0 xl:w-[38rem] lg:block">
           <AdminSidebar
             name={name}
@@ -50,7 +50,7 @@ export default async function AdminLayout({
           />
         </aside>
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="w-full min-w-0 flex-1">{children}</main>
       </div>
     </div>
   );
