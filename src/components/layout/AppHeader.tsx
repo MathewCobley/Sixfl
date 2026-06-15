@@ -87,7 +87,7 @@ function NavLink({
   activeMode?: "underline" | "pill";
 }) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
+  const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 
   if (activeMode === "pill") {
     return (
@@ -196,7 +196,6 @@ export default function AppHeader({
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const pathname = usePathname();
   const { data: session } = useSession();
 
   const email = session?.user?.email?.toLowerCase().trim() ?? "";
@@ -220,10 +219,6 @@ export default function AppHeader({
 
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -256,13 +251,14 @@ export default function AppHeader({
           <Link
             href={config.logoHref}
             className="flex min-w-0 shrink-0 items-center"
-            onClick={() =>
+            onClick={() => {
               track("header_nav_click", {
                 location: `${variant}_header`,
                 target: config.logoHref,
                 label: "logo",
-              })
-            }
+              });
+              setMobileMenuOpen(false);
+            }}
           >
             <Image
               src={config.logoSrc}
@@ -339,13 +335,14 @@ export default function AppHeader({
             {primaryAction ? (
               <Link
                 href={primaryAction.href}
-                onClick={() =>
+                onClick={() => {
                   track("header_cta_click", {
                     location: `${variant}_mobile_header`,
                     target: primaryAction.href,
                     label: primaryAction.eventLabel,
-                  })
-                }
+                  });
+                  setMobileMenuOpen(false);
+                }}
                 className={[
                   "inline-flex h-9 max-w-[8rem] shrink-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-full px-3 text-[11px] font-extrabold transition sm:max-w-none",
                   primaryAction.tone === "primary"
@@ -424,7 +421,7 @@ export default function AppHeader({
           </button>
         </div>
 
-        <div className="flex h-[calc(100%-66px)] flex-col overflow-y-auto px-4 py-5 sixfl-mobile-scroll">
+        <div className="sixfl-mobile-scroll flex h-[calc(100%-66px)] flex-col overflow-y-auto px-4 py-5">
           <div className="space-y-2">
             {mobileLinks.map((link) => (
               <Link
