@@ -1,0 +1,78 @@
+/*
+  Mobile-wide baseline fixes.
+  Keep these rules small and structural so they improve every route without
+  fighting the page-specific Tailwind design.
+*/
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-width: 320px;
+  overflow-x: clip;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+img,
+video,
+canvas {
+  height: auto;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (max-width: 639px) {
+  h1,
+  h2,
+  h3,
+  p,
+  a,
+  button,
+  label,
+  input,
+  select,
+  textarea {
+    overflow-wrap: anywhere;
+  }
+
+  a[class*="rounded"],
+  button[class*="rounded"] {
+    min-height: 2.75rem;
+  }
+
+  table {
+    width: 100%;
+  }
+}
