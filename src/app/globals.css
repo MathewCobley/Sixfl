@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /* Theme variables (optional, safe to keep) */
 :root {
   --background: #ffffff;
@@ -23,11 +29,76 @@
 
 html {
   scrollbar-gutter: stable;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* IMPORTANT: do NOT override background here */
 body {
+  min-width: 320px;
+  overflow-x: clip;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+.sixfl-mobile-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+  main,
+  section,
+  article,
+  header,
+  footer,
+  nav,
+  div {
+    min-width: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  a,
+  span,
+  div {
+    overflow-wrap: anywhere;
+  }
+
+  button,
+  a {
+    touch-action: manipulation;
+  }
+
+  .text-5xl {
+    font-size: 2.75rem !important;
+    line-height: 1.02 !important;
+  }
+
+  .text-4xl {
+    font-size: 2.15rem !important;
+    line-height: 1.08 !important;
+  }
 }
 
 /* Headline fade in */
