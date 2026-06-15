@@ -140,32 +140,32 @@ export default function AdminSidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-6">
-      <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-        <div className="border-b border-white/10 px-5 py-5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/35">
+    <aside className="sticky top-20">
+      <div className="max-h-[calc(100dvh-6rem)] overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <div className="border-b border-white/10 px-4 py-5 xl:px-5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">
             Admin console
           </div>
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-white">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-white">
                   {name?.trim() || "Admin"}
                 </div>
-                <div className="mt-1 text-sm text-white/45">
+                <div className="mt-1 truncate text-sm text-white/45">
                   {email?.trim() || "SIXFL operations"}
                 </div>
               </div>
 
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10">
                 <Cog6ToothIcon className="h-5 w-5 text-emerald-300" />
               </div>
             </div>
           </div>
         </div>
 
-        <nav className="grid grid-cols-2 gap-2 p-4">
+        <nav className="grid max-h-[calc(100dvh-18rem)] gap-2 overflow-y-auto p-3 sixfl-mobile-scroll xl:p-4">
           {navigation.map((item) => {
             const active = isActivePath(pathname, item.href, item.exact);
             const Icon = item.icon;
@@ -181,7 +181,7 @@ export default function AdminSidebar({
                 key={item.href}
                 href={item.href}
                 className={[
-                  "group flex min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition",
+                  "group flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition",
                   active
                     ? "border-emerald-400/25 bg-emerald-400/12 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                     : "border-white/8 bg-white/[0.02] text-white/75 hover:border-white/15 hover:bg-white/[0.05] hover:text-white",
