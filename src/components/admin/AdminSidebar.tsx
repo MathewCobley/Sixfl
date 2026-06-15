@@ -20,6 +20,10 @@ import {
   UserGroupIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
+import {
+  adminNavigationLinks,
+  type AdminNavigationIcon,
+} from "@/lib/adminNavigation";
 
 type AdminSidebarProps = {
   name?: string | null;
@@ -27,105 +31,20 @@ type AdminSidebarProps = {
   unreadMessagingCount?: number;
 };
 
-const navigation = [
-  {
-    name: "Overview",
-    href: "/admin",
-    icon: ShieldCheckIcon,
-    exact: true,
-    description: "Admin dashboard",
-  },
-  {
-    name: "Search",
-    href: "/admin/search",
-    icon: MagnifyingGlassIcon,
-    description: "Find by mobile or email",
-  },
-  {
-    name: "Teams",
-    href: "/admin/teams",
-    icon: UserGroupIcon,
-    description: "Squads and captains",
-  },
-  {
-    name: "Users",
-    href: "/admin/users",
-    icon: UsersIcon,
-    description: "Names and linked accounts",
-  },
-  {
-    name: "Leagues",
-    href: "/admin/leagues",
-    icon: TrophyIcon,
-    description: "League setup",
-  },
-  {
-    name: "Venues",
-    href: "/admin/venues",
-    icon: MapPinIcon,
-    description: "Match locations",
-  },
-  {
-    name: "Fixtures",
-    href: "/admin/fixtures",
-    icon: CalendarDaysIcon,
-    description: "Schedule and results",
-  },
-  {
-    name: "Social",
-    href: "/admin/social",
-    icon: PhotoIcon,
-    description: "Drafts and publishing",
-  },
-  {
-    name: "Result Disputes",
-    href: "/admin/results",
-    icon: ExclamationTriangleIcon,
-    description: "Captain-raised issues",
-  },
-  {
-    name: "Payments",
-    href: "/admin/payments",
-    icon: DocumentTextIcon,
-    description: "Charges and payments",
-  },
-  {
-    name: "Subscriptions",
-    href: "/admin/payments/subscriptions",
-    icon: CreditCardIcon,
-    description: "Recurring Stripe billing",
-  },
-  {
-    name: "Referees",
-    href: "/admin/referees",
-    icon: ShieldCheckIcon,
-    description: "Officials and assignments",
-  },
-  {
-    name: "Leads",
-    href: "/admin/leads",
-    icon: UsersIcon,
-    description: "Inbound enquiries",
-  },
-  {
-    name: "Communications",
-    href: "/admin/messaging",
-    icon: DocumentTextIcon,
-    description: "Email, SMS and history",
-  },
-  {
-    name: "Queue",
-    href: "/admin/queue",
-    icon: Cog6ToothIcon,
-    description: "SMS and email dispatches",
-  },
-  {
-    name: "Templates",
-    href: "/admin/templates",
-    icon: DocumentTextIcon,
-    description: "Email and SMS messaging",
-  },
-];
+const iconMap: Record<AdminNavigationIcon, typeof ShieldCheckIcon> = {
+  calendar: CalendarDaysIcon,
+  card: CreditCardIcon,
+  cog: Cog6ToothIcon,
+  document: DocumentTextIcon,
+  map: MapPinIcon,
+  photo: PhotoIcon,
+  search: MagnifyingGlassIcon,
+  shield: ShieldCheckIcon,
+  teams: UserGroupIcon,
+  trophy: TrophyIcon,
+  users: UsersIcon,
+  warning: ExclamationTriangleIcon,
+};
 
 function isActivePath(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
@@ -149,26 +68,26 @@ export default function AdminSidebar({
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-white">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-white">
                   {name?.trim() || "Admin"}
                 </div>
-                <div className="mt-1 text-sm text-white/45">
+                <div className="mt-1 truncate text-sm text-white/45">
                   {email?.trim() || "SIXFL operations"}
                 </div>
               </div>
 
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10">
                 <Cog6ToothIcon className="h-5 w-5 text-emerald-300" />
               </div>
             </div>
           </div>
         </div>
 
-        <nav className="grid grid-cols-2 gap-2 p-4">
-          {navigation.map((item) => {
+        <nav className="grid grid-cols-2 gap-2 p-4 xl:grid-cols-2">
+          {adminNavigationLinks.map((item) => {
             const active = isActivePath(pathname, item.href, item.exact);
-            const Icon = item.icon;
+            const Icon = iconMap[item.icon];
             const unreadCount =
               item.name === "Communications" ? unreadMessagingCount : 0;
             const description =
