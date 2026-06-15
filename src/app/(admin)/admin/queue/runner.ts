@@ -6,6 +6,7 @@
 
 import { redirect } from "next/navigation";
 
+import { prisma } from "@/lib/prisma";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -23,6 +24,46 @@ export async function runQueueFromAdmin() {
 
   const firstProblem = result.items.find((item) => item.status !== "sent" && item.message);
   if (firstProblem?.message) params.set("message", firstProblem.message.slice(0, 220));
+
+  redirect(`/admin/queue?${params.toString()}`);
+}
+
+export async function cancelQueuedDispatchFromAdmin(formData: FormData) {
+  await requireAdmin();
+
+  const dispatchId = String(formData.get("dispatchId") ?? "");
+  const filter = String(formData.get("filter") ?? "queued");
+
+  const params = new URLSearchParams();
+  params.set("filter", filter);
+
+  if (!dispatchId) {
+    params.set("queueMessage", "No dispatch was selected.");
+    redirect(`/admin/queue?${params.toString()}`);
+  }
+
+  const result = await prisma.notificationDispatch.updateMany({
+    where: {
+      id: dispatchId,
+      status: "QUEUED",
+    },
+    data: {
+      status: "CANCELLED",
+      cancelledAt: new Date(),
+      failureReason: "Cancelled by admin before sending.",
+    },
+  });
+
+  if (result.count === 0) {
+    params.set(
+      "queueMessage",
+      "That item could not be cancelled. It may already have been sent, cancelled, or started processing.",
+    );
+    redirect(`/admin/queue?${params.toString()}`);
+  }
+
+  params.set("cancelled", "1");
+  params.set("queueMessage", "Queued dispatch cancelled before sending.");
 
   redirect(`/admin/queue?${params.toString()}`);
 }
