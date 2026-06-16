@@ -56,7 +56,9 @@ function escapeHtml(value: string) {
 }
 
 function renderInlineFormatting(value: string) {
-  return escapeHtml(value).replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  return escapeHtml(value)
+    .replace(/\*{2,}([^*\n]+)\*{2,}/g, "<strong>$1</strong>")
+    .replace(/\*{2,}/g, "");
 }
 
 function normalizeLineEndings(value: string) {
