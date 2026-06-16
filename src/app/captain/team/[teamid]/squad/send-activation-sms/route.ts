@@ -185,7 +185,9 @@ export async function POST(
   }
 
   if (!teamid || !prospectId) {
-    return NextResponse.redirect(getSquadRedirectUrl(request, teamid, "?error=Missing%20prospect%20details.#pending-activation"));
+    return NextResponse.redirect(
+      getSquadRedirectUrl(request, teamid, "?error=Missing%20prospect%20details."),
+    );
   }
 
   const team = await prisma.team.findUnique({
@@ -204,11 +206,15 @@ export async function POST(
   const prospect = team?.prospects[0] ?? null;
 
   if (!team || !prospect) {
-    return NextResponse.redirect(getSquadRedirectUrl(request, teamid, "?error=Pending%20squad%20player%20not%20found.#pending-activation"));
+    return NextResponse.redirect(
+      getSquadRedirectUrl(request, teamid, "?error=Pending%20squad%20player%20not%20found."),
+    );
   }
 
   if (!prospect.phone?.trim()) {
-    return NextResponse.redirect(getSquadRedirectUrl(request, teamid, "?error=This%20player%20does%20not%20have%20a%20phone%20number.#pending-activation"));
+    return NextResponse.redirect(
+      getSquadRedirectUrl(request, teamid, "?error=This%20player%20does%20not%20have%20a%20phone%20number."),
+    );
   }
 
   const contactName = getDisplayName(prospect);
@@ -275,6 +281,6 @@ export async function POST(
   revalidatePath(`/captain/team/${teamid}/prospects`);
 
   return NextResponse.redirect(
-    getSquadRedirectUrl(request, teamid, "?saved=activation-sms-sent#pending-activation"),
+    getSquadRedirectUrl(request, teamid, "?saved=activation-sms-sent"),
   );
 }
