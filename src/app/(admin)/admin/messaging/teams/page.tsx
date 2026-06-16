@@ -57,7 +57,7 @@ export default async function AdminAllTeamsCommunicationsPage({
 
   const [teams, emailTemplates] = await Promise.all([
     prisma.team.findMany({
-      orderBy: [{ league: { name: "asc" } }, { name: "asc" }],
+      orderBy: [{ name: "asc" }],
       select: {
         id: true,
         name: true,
@@ -91,11 +91,13 @@ export default async function AdminAllTeamsCommunicationsPage({
   ]);
 
   const snapshots = await Promise.all(teams.map((team) => getTeamContactSnapshot(team.id)));
-  const snapshotByTeamId = new Map(
-    snapshots
-      .filter((snapshot): snapshot is NonNullable<typeof snapshot> => Boolean(snapshot))
-      .map((snapshot) => [snapshot.teamId, snapshot]),
-  );
+  const snapshotByTeamId = new Map<string, NonNullable<(typeof snapshots)[number]>>();
+
+  for (const snapshot of snapshots) {
+    if (snapshot) {
+      snapshotByTeamId.set(snapshot.teamId, snapshot);
+    }
+  }
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk";
   const fixedPaymentUrl = "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
@@ -120,19 +122,26 @@ export default async function AdminAllTeamsCommunicationsPage({
     };
   });
 
-  const teamOptions = teams.map((team) => {
-    const snapshot = snapshotByTeamId.get(team.id);
-    const leagueLabel = team.league
-      ? `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`
-      : null;
+  const teamOptions = teams
+    .map((team) => {
+      const snapshot = snapshotByTeamId.get(team.id);
+      const leagueLabel = team.league
+        ? `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`
+        : null;
 
-    return {
-      id: team.id,
-      name: team.name,
-      leagueLabel,
-      emailReady: Boolean(snapshot?.primaryContact.email?.trim()),
-    };
-  });
+      return {
+        id: team.id,
+        name: team.name,
+        leagueLabel,
+        emailReady: Boolean(snapshot?.primaryContact.email?.trim()),
+      };
+    })
+    .sort((a, b) => {
+      const leagueA = a.leagueLabel ?? "zzzz-no-league";
+      const leagueB = b.leagueLabel ?? "zzzz-no-league";
+      const leagueComparison = leagueA.localeCompare(leagueB);
+      return leagueComparison === 0 ? a.name.localeCompare(b.name) : leagueComparison;
+    });
 
   const emailReadyCount = teamOptions.filter((team) => team.emailReady).length;
   const noLeagueCount = teamOptions.filter((team) => !team.leagueLabel).length;
