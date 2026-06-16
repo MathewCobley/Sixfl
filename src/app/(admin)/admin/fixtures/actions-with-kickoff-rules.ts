@@ -38,6 +38,17 @@ type TeamSchedulingRule = {
   latestKickoffTime: string | null;
 };
 
+type TeamSchedulingRuleWithoutEarliest = Omit<
+  TeamSchedulingRule,
+  "earliestKickoffTime"
+>;
+
+type ColumnExistsRow = {
+  exists: boolean;
+};
+
+let teamEarliestKickoffTimeColumnExists: boolean | null = null;
+
 function getString(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
@@ -204,19 +215,90 @@ function getKickoffRuleBreach(input: {
   return null;
 }
 
+async function hasTeamEarliestKickoffTimeColumn() {
+  if (teamEarliestKickoffTimeColumnExists !== null) {
+    return teamEarliestKickoffTimeColumnExists;
+  }
+
+  const rows = await prisma.$queryRaw<ColumnExistsRow[]>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'Team'
+        AND column_name = 'earliestKickoffTime'
+    ) AS "exists"
+  `;
+
+  teamEarliestKickoffTimeColumnExists = Boolean(rows[0]?.exists);
+  return teamEarliestKickoffTimeColumnExists;
+}
+
+function addEarliestKickoffFallback(
+  teams: TeamSchedulingRuleWithoutEarliest[],
+): TeamSchedulingRule[] {
+  return teams.map((team) => ({
+    ...team,
+    earliestKickoffTime: null,
+  }));
+}
+
 async function getTeamSchedulingRules(teamIds: string[]) {
   if (teamIds.length === 0) return [];
 
-  return prisma.$queryRaw<TeamSchedulingRule[]>`
+  if (await hasTeamEarliestKickoffTimeColumn()) {
+    return prisma.$queryRaw<TeamSchedulingRule[]>`
+      SELECT
+        "id",
+        "name",
+        "leagueId",
+        "earliestKickoffTime",
+        "latestKickoffTime"
+      FROM "Team"
+      WHERE "id" IN (${Prisma.join(teamIds)})
+    `;
+  }
+
+  const teams = await prisma.$queryRaw<TeamSchedulingRuleWithoutEarliest[]>`
     SELECT
       "id",
       "name",
       "leagueId",
-      "earliestKickoffTime",
       "latestKickoffTime"
     FROM "Team"
     WHERE "id" IN (${Prisma.join(teamIds)})
   `;
+
+  return addEarliestKickoffFallback(teams);
+}
+
+async function getLeagueTeamSchedulingRules(leagueId: string) {
+  if (await hasTeamEarliestKickoffTimeColumn()) {
+    return prisma.$queryRaw<TeamSchedulingRule[]>`
+      SELECT
+        "id",
+        "name",
+        "leagueId",
+        "earliestKickoffTime",
+        "latestKickoffTime"
+      FROM "Team"
+      WHERE "leagueId" = ${leagueId}
+      ORDER BY "name" ASC
+    `;
+  }
+
+  const teams = await prisma.$queryRaw<TeamSchedulingRuleWithoutEarliest[]>`
+    SELECT
+      "id",
+      "name",
+      "leagueId",
+      "latestKickoffTime"
+    FROM "Team"
+    WHERE "leagueId" = ${leagueId}
+    ORDER BY "name" ASC
+  `;
+
+  return addEarliestKickoffFallback(teams);
 }
 
 async function validateManualFixtureScheduling(formData: FormData) {
@@ -288,17 +370,7 @@ async function validateGeneratedFixtureScheduling(formData: FormData) {
     return;
   }
 
-  const teams = await prisma.$queryRaw<TeamSchedulingRule[]>`
-    SELECT
-      "id",
-      "name",
-      "leagueId",
-      "earliestKickoffTime",
-      "latestKickoffTime"
-    FROM "Team"
-    WHERE "leagueId" = ${leagueId}
-    ORDER BY "name" ASC
-  `;
+  const teams = await getLeagueTeamSchedulingRules(leagueId);
 
   if (teams.length < 2) return;
 
