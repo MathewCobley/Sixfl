@@ -37,10 +37,10 @@ export default async function CaptainSquadLayout({
   `;
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100 shadow-[0_18px_60px_rgba(0,0,0,0.25)]">
+    <div className="space-y-5 sm:space-y-6">
+      <section className="rounded-[1.5rem] border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100 shadow-[0_18px_60px_rgba(0,0,0,0.25)] sm:rounded-3xl sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/70">
               Admin-only managed squad tools
             </p>
@@ -49,16 +49,16 @@ export default async function CaptainSquadLayout({
               This route is kept for SIXFL admin use only. Appointed captains are redirected to the safer captain squad view.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href={`/captain/team/${teamid}/captain-squad`}
-              className="inline-flex items-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/5 hover:text-white"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-center text-sm font-medium text-white/80 transition hover:bg-white/5 hover:text-white sm:w-auto"
             >
               View weaker captain version
             </Link>
             <Link
               href={`/admin/teams/${teamid}/squad`}
-              className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-center text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20 sm:w-auto"
             >
               Open admin squad console
             </Link>
