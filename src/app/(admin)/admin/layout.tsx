@@ -8,7 +8,6 @@ import { getAdminInboxSummary } from "@/lib/messaging/service";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
-import EmailTemplateBoldButtonBridge from "@/components/admin/email-templates/EmailTemplateBoldButtonBridge";
 import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditButtonBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
@@ -40,7 +39,6 @@ export default async function AdminLayout({
       <AdminPlayerFeePaymentLabelsBridge />
       <AdminLeadEditButtonBridge />
       <AdminSocialResultsGeneratorLinksBridge />
-      <EmailTemplateBoldButtonBridge />
       <AppHeader variant="admin" />
 
       <div className="flex w-full gap-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-6">
