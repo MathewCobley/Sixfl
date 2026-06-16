@@ -4,6 +4,7 @@
 
 import type { ReactNode } from "react";
 import AppHeader from "@/components/layout/AppHeader";
+import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
 import SiteFooter from "@/components/layout/SiteFooter";
 
@@ -16,6 +17,7 @@ export default function PublicLayout({
     <div className="min-h-screen bg-black text-white">
       <AppHeader variant="public" />
       <PublicLeagueLandingSpacingBridge />
+      <PublicFixtureWinChanceBridge />
       <main className="bg-black">{children}</main>
       <SiteFooter />
     </div>
