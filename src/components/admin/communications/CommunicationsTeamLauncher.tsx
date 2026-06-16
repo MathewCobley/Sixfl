@@ -32,18 +32,27 @@ export default function CommunicationsTeamLauncher({ teams }: { teams: TeamOptio
           </div>
           <h2 className="text-2xl font-semibold text-white">Start a team message</h2>
           <p className="max-w-2xl text-sm text-white/60">
-            Pick a team and jump straight into the inbox composer to send a new email or SMS with the selected team already loaded.
+            Pick one team for a direct message, or open the all-team picker to email any mix of teams, including teams that are not in a current league.
           </p>
         </div>
 
-        {selectedTeam ? (
+        <div className="flex flex-wrap gap-2">
           <Link
-            href={`/admin/messages?composeTeam=${encodeURIComponent(selectedTeam.id)}`}
-            className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
+            href="/admin/messaging/teams"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
           >
-            Open {selectedTeam.name}
+            Email selected teams
           </Link>
-        ) : null}
+
+          {selectedTeam ? (
+            <Link
+              href={`/admin/messages?composeTeam=${encodeURIComponent(selectedTeam.id)}`}
+              className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
+            >
+              Open {selectedTeam.name}
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-5 max-w-3xl">
