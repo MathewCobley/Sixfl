@@ -42,6 +42,12 @@ export type SIXFLPaymentSummary = {
   reason?: string | null;
 };
 
+type EmailListLine = {
+  depth: number;
+  marker: string;
+  text: string;
+};
+
 // ========================================
 // Helpers
 // ========================================
@@ -65,7 +71,7 @@ function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n");
 }
 
-function getListLine(value: string) {
+function getListLine(value: string): EmailListLine | null {
   const match = value.match(/^(\s*)(-|\d+\.)\s+(.+)$/);
 
   if (!match) return null;
@@ -79,6 +85,67 @@ function getListLine(value: string) {
     marker: marker === "-" ? "•" : marker,
     text: match[3].trim(),
   };
+}
+
+function renderParagraphHtml(lines: string[]) {
+  const text = lines.join("\n").trim();
+
+  if (!text) return "";
+
+  return `
+    <p style="margin:0 0 18px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
+      ${renderInlineFormatting(text).replace(/\n/g, "<br />")}
+    </p>
+  `.trim();
+}
+
+function renderListGroupHtml(items: EmailListLine[]) {
+  if (!items.length) return "";
+
+  return `
+    <div
+      style="
+        margin:0 0 18px 0;
+        color:#111827;
+        font-size:16px;
+        line-height:1.65;
+        mso-line-height-rule:exactly;
+      "
+    >
+      ${items
+        .map((item) => {
+          const marginLeft = item.depth * 18;
+
+          return `
+            <table
+              role="presentation"
+              cellpadding="0"
+              cellspacing="0"
+              border="0"
+              width="100%"
+              style="margin:0 0 8px ${marginLeft}px;border-collapse:collapse;table-layout:fixed;"
+            >
+              <tr>
+                <td
+                  valign="top"
+                  width="28"
+                  style="width:28px;padding:0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
+                >
+                  ${escapeHtml(item.marker)}
+                </td>
+                <td
+                  valign="top"
+                  style="padding:0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
+                >
+                  ${renderInlineFormatting(item.text)}
+                </td>
+              </tr>
+            </table>
+          `.trim();
+        })
+        .join("")}
+    </div>
+  `.trim();
 }
 
 function getSiteUrl() {
@@ -150,53 +217,39 @@ function convertTextToHtml(text: string) {
         .map((line) => line.trimEnd())
         .filter((line) => Boolean(line.trim()));
 
-      const listLines = lines.filter((line) => getListLine(line));
-      const nonListLines = lines.filter((line) => !getListLine(line));
+      const chunks: string[] = [];
+      let paragraphLines: string[] = [];
+      let listItems: EmailListLine[] = [];
 
-      if (listLines.length > 0) {
-        const normalHtml = nonListLines.length
-          ? `
-            <p style="margin:0 0 12px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
-              ${renderInlineFormatting(nonListLines.join("\n").trim()).replace(/\n/g, "<br />")}
-            </p>
-          `.trim()
-          : "";
-
-        const listHtml = `
-          <div
-            style="
-              margin:0 0 18px 0;
-              color:#111827;
-              font-size:16px;
-              line-height:1.65;
-              mso-line-height-rule:exactly;
-            "
-          >
-            ${listLines
-              .map((line) => {
-                const item = getListLine(line);
-                if (!item) return "";
-
-                return `
-                  <div style="margin:0 0 8px ${item.depth * 18}px;line-height:1.65;mso-line-height-rule:exactly;">
-                    <span style="display:inline-block;min-width:24px;font-weight:400;">${escapeHtml(item.marker)}</span>${renderInlineFormatting(item.text)}
-                  </div>
-                `.trim();
-              })
-              .join("")}
-          </div>
-        `.trim();
-
-        return `${normalHtml}${listHtml}`;
+      function flushParagraph() {
+        const html = renderParagraphHtml(paragraphLines);
+        if (html) chunks.push(html);
+        paragraphLines = [];
       }
 
-      const paragraphHtml = renderInlineFormatting(paragraph.trim()).replace(/\n/g, "<br />");
+      function flushList() {
+        const html = renderListGroupHtml(listItems);
+        if (html) chunks.push(html);
+        listItems = [];
+      }
 
-      return `
-        <p style="margin:0 0 18px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
-          ${paragraphHtml}
-        </p>
-      `.trim();
+      for (const line of lines) {
+        const listLine = getListLine(line);
+
+        if (listLine) {
+          flushParagraph();
+          listItems.push(listLine);
+          continue;
+        }
+
+        flushList();
+        paragraphLines.push(line.trim());
+      }
+
+      flushParagraph();
+      flushList();
+
+      return chunks.join("");
     })
     .join("");
 }
