@@ -55,6 +55,16 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#39;");
 }
 
+function formatInlineMarkdown(value: string) {
+  return escapeHtml(value).replace(
+    /\*\*([\s\S]+?)\*\*/g,
+    (match, content: string) =>
+      content.trim()
+        ? `<strong style="font-weight:700;color:#111827;">${content}</strong>`
+        : match,
+  );
+}
+
 function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n");
 }
@@ -135,7 +145,7 @@ function convertTextToHtml(text: string) {
         const normalHtml = nonBulletLines.length
           ? `
             <p style="margin:0 0 12px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
-              ${escapeHtml(nonBulletLines.join("\n")).replace(/\n/g, "<br />")}
+              ${formatInlineMarkdown(nonBulletLines.join("\n")).replace(/\n/g, "<br />")}
             </p>
           `.trim()
           : "";
@@ -155,7 +165,7 @@ function convertTextToHtml(text: string) {
               .map(
                 (line) => `
                   <li style="margin:0 0 10px 0;">
-                    ${escapeHtml(line.replace(/^- /, "").trim())}
+                    ${formatInlineMarkdown(line.replace(/^- /, "").trim())}
                   </li>
                 `.trim(),
               )
@@ -166,7 +176,7 @@ function convertTextToHtml(text: string) {
         return `${normalHtml}${listHtml}`;
       }
 
-      const paragraphHtml = escapeHtml(paragraph).replace(/\n/g, "<br />");
+      const paragraphHtml = formatInlineMarkdown(paragraph).replace(/\n/g, "<br />");
 
       return `
         <p style="margin:0 0 18px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
