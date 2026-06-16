@@ -38,6 +38,37 @@ function getOriginLabel(metadata: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : "Communication";
 }
 
+function getEmailAuditKey(input: {
+  subject: string | null;
+  body: string | null;
+  sentTo: string | null;
+}) {
+  const subject = input.subject?.trim().toLowerCase() || "";
+  const body = input.body?.replace(/\s+/g, " ").trim().toLowerCase() || "";
+  const sentTo = input.sentTo?.trim().toLowerCase() || "";
+
+  return `${subject}|${body}|${sentTo}`;
+}
+
+function getEmailStatusLabel(status: string) {
+  switch (status) {
+    case "QUEUED":
+      return "Queued";
+    case "PROCESSING":
+      return "Processing";
+    case "SENT":
+      return "Sent";
+    case "FAILED":
+      return "Failed";
+    case "SKIPPED":
+      return "Skipped";
+    case "CANCELLED":
+      return "Cancelled";
+    default:
+      return status;
+  }
+}
+
 export default async function AdminLeadLayout({
   children,
   params,
@@ -48,6 +79,121 @@ export default async function AdminLeadLayout({
   await requireAdmin();
 
   const { id } = await params;
+
+  const leadForHistory = await prisma.interestLead.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      email: true,
+      emails: {
+        orderBy: { sentAt: "desc" },
+        select: {
+          id: true,
+          subject: true,
+          body: true,
+          sentTo: true,
+          sentAt: true,
+        },
+      },
+    },
+  });
+
+  const emailNormalised = leadForHistory?.email?.trim().toLowerCase() || null;
+  const emailRecipientIds = emailNormalised
+    ? await prisma.notificationRecipient.findMany({
+        where: {
+          emailNormalized: emailNormalised,
+        },
+        select: {
+          id: true,
+        },
+      })
+    : [];
+
+  const emailDispatches = await prisma.notificationDispatch.findMany({
+    where: {
+      channel: NotificationChannel.EMAIL,
+      OR: [
+        {
+          sourceType: "LEAD",
+          sourceId: id,
+        },
+        ...(emailRecipientIds.length > 0
+          ? [
+              {
+                recipientId: {
+                  in: emailRecipientIds.map((recipient) => recipient.id),
+                },
+              },
+            ]
+          : []),
+      ],
+    },
+    include: {
+      recipient: {
+        select: {
+          email: true,
+          displayName: true,
+        },
+      },
+      template: {
+        select: {
+          name: true,
+          key: true,
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    take: 100,
+  });
+
+  const legacyEmailItems = (leadForHistory?.emails ?? []).map((email) => ({
+    id: `lead-email-${email.id}`,
+    source: "Lead email record",
+    status: "SENT",
+    statusLabel: "Sent",
+    subject: email.subject || "Email",
+    body: email.body || "",
+    sentTo: email.sentTo || leadForHistory?.email || null,
+    occurredAt: email.sentAt,
+    scheduledFor: null as Date | null,
+    failureReason: null as string | null,
+    templateName: null as string | null,
+    templateKey: null as string | null,
+    key: getEmailAuditKey({
+      subject: email.subject,
+      body: email.body,
+      sentTo: email.sentTo || leadForHistory?.email || null,
+    }),
+  }));
+
+  const legacyEmailKeys = new Set(legacyEmailItems.map((item) => item.key));
+
+  const dispatchEmailItems = emailDispatches
+    .map((dispatch) => ({
+      id: `dispatch-email-${dispatch.id}`,
+      source: getOriginLabel(dispatch.metadata),
+      status: dispatch.status,
+      statusLabel: getEmailStatusLabel(dispatch.status),
+      subject: dispatch.subject || "Email",
+      body: dispatch.bodyText || "",
+      sentTo: dispatch.recipient.email || leadForHistory?.email || null,
+      occurredAt: dispatch.sentAt ?? dispatch.failedAt ?? dispatch.cancelledAt ?? dispatch.createdAt,
+      scheduledFor: dispatch.scheduledFor,
+      failureReason: dispatch.failureReason,
+      templateName: dispatch.template?.name ?? null,
+      templateKey: dispatch.template?.key ?? null,
+      key: getEmailAuditKey({
+        subject: dispatch.subject,
+        body: dispatch.bodyText,
+        sentTo: dispatch.recipient.email || leadForHistory?.email || null,
+      }),
+    }))
+    .filter((item) => !legacyEmailKeys.has(item.key));
+
+  const combinedEmailHistory = [...legacyEmailItems, ...dispatchEmailItems].sort(
+    (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+  );
 
   const threads = await prisma.messageThread.findMany({
     where: {
@@ -119,6 +265,86 @@ export default async function AdminLeadLayout({
 
   return (
     <div className="space-y-8">
+      <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.25)]">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">
+              Lead email history
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              Combined email audit trail
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
+              This combines the older lead email records with newer emails saved through Communications and notification dispatches, including bulk lead emails.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-right">
+            <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
+              Total emails
+            </div>
+            <div className="mt-1 text-2xl font-black text-white">
+              {combinedEmailHistory.length}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+          {combinedEmailHistory.length === 0 ? (
+            <div className="p-6 text-sm text-white/55">
+              No email history has been logged for this lead yet.
+            </div>
+          ) : (
+            combinedEmailHistory.map((email, index) => (
+              <div key={email.id} className="space-y-3 p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/60">
+                    #{combinedEmailHistory.length - index}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-white/70">
+                    EMAIL
+                  </span>
+                  <CommunicationStatusBadge status={email.status} />
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/55">
+                    {email.source}
+                  </span>
+                  {email.templateName ? (
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-100">
+                      Template: {email.templateName}
+                    </span>
+                  ) : null}
+                  {email.templateKey ? (
+                    <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 font-mono text-[11px] text-white/60">
+                      {email.templateKey}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div>
+                  <div className="text-sm font-semibold text-white">
+                    {email.subject}
+                  </div>
+                  <div className="mt-1 text-xs text-white/45">
+                    {formatDateTime(email.occurredAt)}
+                    {email.scheduledFor ? ` · Scheduled ${formatDateTime(email.scheduledFor)}` : ""}
+                    {email.sentTo ? ` · To ${email.sentTo}` : ""}
+                    {email.statusLabel ? ` · ${email.statusLabel}` : ""}
+                  </div>
+                </div>
+
+                <div className="max-h-[360px] overflow-y-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">
+                  {email.body}
+                </div>
+
+                <CommunicationStatusExplanation status={email.status}>
+                  {email.failureReason ? `Reason: ${email.failureReason}` : undefined}
+                </CommunicationStatusExplanation>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
       {children}
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.25)]">
