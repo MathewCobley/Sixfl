@@ -108,6 +108,36 @@ function getReplyNotice(searchParams: ReturnType<typeof useSearchParams>) {
   }
 }
 
+function ScheduleWarningPanel() {
+  const searchParams = useSearchParams();
+  const scheduleError = searchParams.get("scheduleError");
+
+  if (!scheduleError) {
+    return null;
+  }
+
+  return (
+    <section
+      id="fixture-scheduling-warning"
+      className="rounded-3xl border border-red-400/25 bg-red-500/[0.08] p-5 shadow-[0_20px_70px_rgba(0,0,0,0.28)]"
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-red-200/80">
+        Fixture blocked
+      </div>
+      <h2 className="mt-2 text-xl font-semibold text-white">
+        This fixture breaks a team kick-off rule
+      </h2>
+      <p className="mt-2 max-w-4xl text-sm leading-6 text-red-100/90">
+        {scheduleError}
+      </p>
+      <p className="mt-3 text-xs leading-5 text-white/45">
+        Change the kick-off time, or update the team’s kick-off rules from the
+        team page if the restriction no longer applies.
+      </p>
+    </section>
+  );
+}
+
 function ReplySubmitButton() {
   const { pending } = useFormStatus();
 
@@ -254,6 +284,7 @@ export default function FixturesAdminScreenWithIssueReplies(
 ) {
   return (
     <div className="space-y-8">
+      <ScheduleWarningPanel />
       <FixtureIssueReplyPanel
         fixtures={props.fixtures}
         initialLeagueId={props.initialLeagueId}
