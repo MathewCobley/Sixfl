@@ -204,7 +204,7 @@ function CommunicationButton({ href, label = "Comms" }: { href: string; label?: 
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+      className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-center text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 sm:w-auto"
     >
       {label}
     </Link>
@@ -215,7 +215,7 @@ function EditPlayerButton({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+      className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-center text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 sm:w-auto"
     >
       Edit player
     </Link>
@@ -647,11 +647,11 @@ export default async function CaptainSquadPage({
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
-                    <form action={updateSquadMemberRoleAction} className="flex flex-wrap items-center gap-3">
+                  <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:max-w-[36rem] xl:justify-end">
+                    <form action={updateSquadMemberRoleAction} className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
                       <input type="hidden" name="teamid" value={teamid} />
                       <input type="hidden" name="membershipId" value={member.id} />
-                      <div className="min-w-[220px]">
+                      <div className="w-full min-w-0 sm:w-[220px]">
                         <FormListboxField
                           name="role"
                           value={member.role}
@@ -661,7 +661,7 @@ export default async function CaptainSquadPage({
                       </div>
                       <button
                         type="submit"
-                        className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                        className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-center text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 sm:w-auto"
                       >
                         Update role
                       </button>
@@ -676,12 +676,12 @@ export default async function CaptainSquadPage({
                       />
                     ) : null}
 
-                    <form action={removeSquadMemberAction}>
+                    <form action={removeSquadMemberAction} className="w-full sm:w-auto">
                       <input type="hidden" name="teamid" value={teamid} />
                       <input type="hidden" name="membershipId" value={member.id} />
                       <button
                         type="submit"
-                        className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
+                        className="inline-flex w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-center text-sm font-medium text-red-100 transition hover:bg-red-500/15 sm:w-auto"
                       >
                         Remove
                       </button>
@@ -773,10 +773,10 @@ export default async function CaptainSquadPage({
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap gap-2 xl:justify-end">
+                          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
                             <Link
                               href={`/captain/team/${teamid}/prospects`}
-                              className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/10"
+                              className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-center text-sm font-medium text-white/75 transition hover:bg-white/10 sm:w-auto"
                             >
                               Edit in prospects
                             </Link>
