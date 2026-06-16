@@ -4,6 +4,7 @@
 
 import { NextResponse } from "next/server";
 
+import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -55,39 +56,61 @@ export async function GET(
   try {
     await requireCaptain(teamId);
 
-    const fixtures = await prisma.fixture.findMany({
-      where: {
-        OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
-      },
-      orderBy: [{ kickoffAt: "desc" }],
-      take: 100,
-      select: {
-        id: true,
-        kickoffAt: true,
-        homeTeamId: true,
-        awayTeamId: true,
-        homeTeam: {
-          select: {
-            id: true,
-            name: true,
-            logoUrl: true,
-          },
-        },
-        awayTeam: {
-          select: {
-            id: true,
-            name: true,
-            logoUrl: true,
-          },
-        },
-      },
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { leagueId: true },
     });
+
+    const [fixtures, leagueFixtures] = await Promise.all([
+      prisma.fixture.findMany({
+        where: {
+          OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+        },
+        orderBy: [{ kickoffAt: "desc" }],
+        take: 100,
+        select: {
+          id: true,
+          kickoffAt: true,
+          status: true,
+          homeTeamId: true,
+          awayTeamId: true,
+          homeTeam: {
+            select: {
+              id: true,
+              name: true,
+              logoUrl: true,
+            },
+          },
+          awayTeam: {
+            select: {
+              id: true,
+              name: true,
+              logoUrl: true,
+            },
+          },
+        },
+      }),
+      team?.leagueId
+        ? prisma.fixture.findMany({
+            where: { leagueId: team.leagueId },
+            select: {
+              id: true,
+              kickoffAt: true,
+              status: true,
+              homeTeam: { select: { id: true } },
+              awayTeam: { select: { id: true } },
+              result: { select: { homeScore: true, awayScore: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
     return NextResponse.json({
       teamId,
       fixtures: fixtures.map((fixture) => ({
         id: fixture.id,
         kickoffAt: fixture.kickoffAt.toISOString(),
+        status: fixture.status,
         homeTeamId: fixture.homeTeamId,
         awayTeamId: fixture.awayTeamId,
         homeTeam: toTeamBadge(fixture.homeTeam),
@@ -97,6 +120,14 @@ export async function GET(
           fixture.homeTeamId === teamId
             ? `vs ${fixture.awayTeam.name}`
             : `vs ${fixture.homeTeam.name}`,
+        winChance:
+          fixture.status === "SCHEDULED"
+            ? calculateFixtureWinChance({
+                homeTeamId: fixture.homeTeamId,
+                awayTeamId: fixture.awayTeamId,
+                fixtures: leagueFixtures,
+              })
+            : null,
       })),
     });
   } catch (error) {
