@@ -246,22 +246,18 @@ export default async function CaptainTeamLayout({
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: squadHref, label: "Squad" },
-    { href: `/captain/team/${teamid}/prospects`, label: "Prospects" },
-    { href: `/captain/team/${teamid}/player-payments`, label: "Squad payments" },
-    { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
-    ...(isManagedTeam
+    ...(access.isAdmin
       ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
       : []),
+    { href: `/captain/team/${teamid}/player-payments`, label: "Squad payments" },
+    { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
     ...(showTeamPayments
       ? [{ href: `/captain/team/${teamid}/payments`, label: "Team payments" }]
       : []),
-  ].filter(
-    (item, index, items) =>
-      items.findIndex((candidate) => candidate.href === item.href) === index,
-  );
+  ];
 
   return (
     <div className="captain-team-shell min-h-screen bg-[#07130f] text-white">
