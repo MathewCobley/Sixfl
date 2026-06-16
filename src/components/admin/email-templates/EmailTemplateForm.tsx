@@ -4,7 +4,14 @@
 
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useFormStatus } from "react-dom";
 
 import { buildSIXFLEmailHtml } from "@/lib/email/buildEmail";
@@ -227,6 +234,14 @@ function slugifyTemplateKey(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function getLineRange(text: string, start: number, end: number) {
+  const lineStart = text.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+  const nextLineBreak = text.indexOf("\n", end);
+  const lineEnd = nextLineBreak === -1 ? text.length : nextLineBreak;
+
+  return { lineStart, lineEnd };
+}
+
 function previewReplace(text: string) {
   return text
     .replaceAll("{{firstName}}", "Jordan")
@@ -369,6 +384,17 @@ export default function EmailTemplateForm({
     [body, ctaLabel, selectedCta.previewUrl],
   );
 
+  function setBodyAndSelection(next: string, selectionStart: number, selectionEnd = selectionStart) {
+    const textarea = bodyRef.current;
+
+    setBody(next);
+
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(selectionStart, selectionEnd);
+    });
+  }
+
   function insertToken(token: string) {
     const textarea = bodyRef.current;
 
@@ -381,13 +407,7 @@ export default function EmailTemplateForm({
     const end = textarea.selectionEnd ?? body.length;
     const next = `${body.slice(0, start)}${token}${body.slice(end)}`;
 
-    setBody(next);
-
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const cursor = start + token.length;
-      textarea.setSelectionRange(cursor, cursor);
-    });
+    setBodyAndSelection(next, start + token.length);
   }
 
   function insertBoldText() {
@@ -405,21 +425,118 @@ export default function EmailTemplateForm({
     const boldText = selectedText || fallbackText;
     const next = `${body.slice(0, start)}**${boldText}**${body.slice(end)}`;
 
-    setBody(next);
+    if (selectedText) {
+      setBodyAndSelection(next, start + boldText.length + 4);
+      return;
+    }
 
-    requestAnimationFrame(() => {
-      textarea.focus();
+    const selectionStart = start + 2;
+    const selectionEnd = selectionStart + fallbackText.length;
+    setBodyAndSelection(next, selectionStart, selectionEnd);
+  }
 
-      if (selectedText) {
-        const cursor = start + boldText.length + 4;
-        textarea.setSelectionRange(cursor, cursor);
-        return;
-      }
+  function insertBulletText() {
+    const textarea = bodyRef.current;
+    const fallbackText = "Bullet point";
 
-      const selectionStart = start + 2;
-      const selectionEnd = selectionStart + fallbackText.length;
-      textarea.setSelectionRange(selectionStart, selectionEnd);
-    });
+    if (!textarea) {
+      setBody((current) => `${current}${current ? "\n" : ""}- ${fallbackText}`);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? body.length;
+    const end = textarea.selectionEnd ?? body.length;
+    const selectedText = body.slice(start, end);
+
+    if (selectedText) {
+      const bulletText = selectedText
+        .split("\n")
+        .map((line) => {
+          if (!line.trim()) return line;
+          if (/^\s*-\s+/.test(line)) return line;
+          return `${line.match(/^\s*/)?.[0] ?? ""}- ${line.trimStart()}`;
+        })
+        .join("\n");
+      const next = `${body.slice(0, start)}${bulletText}${body.slice(end)}`;
+      setBodyAndSelection(next, start, start + bulletText.length);
+      return;
+    }
+
+    const needsLineBreak = start > 0 && body[start - 1] !== "\n";
+    const prefix = needsLineBreak ? "\n" : "";
+    const insertion = `${prefix}- ${fallbackText}`;
+    const next = `${body.slice(0, start)}${insertion}${body.slice(end)}`;
+    const selectionStart = start + prefix.length + 2;
+    const selectionEnd = selectionStart + fallbackText.length;
+
+    setBodyAndSelection(next, selectionStart, selectionEnd);
+  }
+
+  function indentSelectedLines(input: {
+    start: number;
+    end: number;
+    outdent: boolean;
+  }) {
+    const indent = "  ";
+    const { lineStart, lineEnd } = getLineRange(body, input.start, input.end);
+    const block = body.slice(lineStart, lineEnd);
+    const lines = block.split("\n");
+
+    if (input.outdent) {
+      let offset = 0;
+      let removedBeforeStart = 0;
+      let removedBeforeEnd = 0;
+
+      const nextLines = lines.map((line) => {
+        const absoluteLineStart = lineStart + offset;
+        const removeCount = line.startsWith(indent)
+          ? indent.length
+          : line.startsWith(" ") || line.startsWith("\t")
+            ? 1
+            : 0;
+
+        offset += line.length + 1;
+
+        if (!removeCount) return line;
+
+        if (absoluteLineStart < input.start) {
+          removedBeforeStart += removeCount;
+        }
+
+        if (absoluteLineStart < input.end) {
+          removedBeforeEnd += removeCount;
+        }
+
+        return line.slice(removeCount);
+      });
+
+      const nextBlock = nextLines.join("\n");
+      const next = `${body.slice(0, lineStart)}${nextBlock}${body.slice(lineEnd)}`;
+      setBodyAndSelection(
+        next,
+        Math.max(lineStart, input.start - removedBeforeStart),
+        Math.max(lineStart, input.end - removedBeforeEnd),
+      );
+      return;
+    }
+
+    const nextBlock = lines.map((line) => `${indent}${line}`).join("\n");
+    const next = `${body.slice(0, lineStart)}${nextBlock}${body.slice(lineEnd)}`;
+    const addedCharacters = nextBlock.length - block.length;
+
+    setBodyAndSelection(next, input.start + indent.length, input.end + addedCharacters);
+  }
+
+  function handleBodyKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Tab") return;
+
+    event.preventDefault();
+
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart ?? body.length;
+    const end = textarea.selectionEnd ?? body.length;
+
+    indentSelectedLines({ start, end, outdent: event.shiftKey });
   }
 
   return (
@@ -612,16 +729,25 @@ export default function EmailTemplateForm({
                   <label className="text-sm font-medium text-white">
                     Message body
                   </label>
-                  <button
-                    type="button"
-                    onClick={insertBoldText}
-                    className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-white transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-emerald-100"
-                  >
-                    Bold
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={insertBoldText}
+                      className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-white transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-emerald-100"
+                    >
+                      Bold
+                    </button>
+                    <button
+                      type="button"
+                      onClick={insertBulletText}
+                      className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-white transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-emerald-100"
+                    >
+                      Bullet
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs leading-5 text-neutral-400">
-                  Highlight text and click Bold, or type **bold text** manually.
+                  Highlight text and click Bold or Bullet. Use Tab / Shift+Tab in the message box to indent or outdent bullet lines.
                 </p>
                 <textarea
                   ref={bodyRef}
@@ -629,6 +755,7 @@ export default function EmailTemplateForm({
                   rows={16}
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
+                  onKeyDown={handleBodyKeyDown}
                   className="min-h-[420px] w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-7 text-white outline-none focus:border-emerald-400/50"
                 />
                 {state?.errors?.body?.[0] ? (
