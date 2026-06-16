@@ -16,9 +16,67 @@ type AvailabilityRow = {
   respondedAt: string | null;
 };
 
+const CAPTAIN_NAV_LINK_CLASS =
+  "inline-flex shrink-0 items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white";
+
+const MANAGED_ONLY_MATCHDAY_WARNING =
+  "This team is currently set as a standard team. Matchday player selection is intended for managed SIXFL squads.";
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/^\/captain\/team\/([^/]+)\/match-fees\/?$/);
   return match?.[1] ?? null;
+}
+
+function getCaptainTeamIdFromPathname(pathname: string) {
+  const match = pathname.match(/^\/captain\/team\/([^/]+)(?:\/.*)?$/);
+  return match?.[1] ?? null;
+}
+
+function ensureMatchdaySquadNavLink(pathname: string) {
+  const teamId = getCaptainTeamIdFromPathname(pathname);
+  if (!teamId) return;
+
+  const nav = document.querySelector<HTMLElement>(".captain-team-nav");
+  if (!nav) return;
+
+  const matchdayHref = `/captain/team/${teamId}/match-fees`;
+  const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>("a"));
+
+  if (links.some((link) => link.getAttribute("href") === matchdayHref)) {
+    return;
+  }
+
+  const matchdayLink = document.createElement("a");
+  matchdayLink.href = matchdayHref;
+  matchdayLink.textContent = "Matchday squad";
+  matchdayLink.className = CAPTAIN_NAV_LINK_CLASS;
+
+  const squadPaymentsLink = links.find(
+    (link) => link.textContent?.trim() === "Squad payments",
+  );
+  const availabilityLink = links.find(
+    (link) => link.textContent?.trim() === "Availability",
+  );
+
+  if (squadPaymentsLink?.nextSibling) {
+    nav.insertBefore(matchdayLink, squadPaymentsLink.nextSibling);
+    return;
+  }
+
+  if (availabilityLink) {
+    nav.insertBefore(matchdayLink, availabilityLink);
+    return;
+  }
+
+  nav.appendChild(matchdayLink);
+}
+
+function removeManagedOnlyMatchdayWarning() {
+  document.querySelectorAll<HTMLElement>("div").forEach((element) => {
+    if (element.textContent?.trim() === MANAGED_ONLY_MATCHDAY_WARNING) {
+      element.remove();
+    }
+  });
 }
 
 function getBadgeClasses(response: AvailabilityResponse) {
@@ -91,6 +149,26 @@ export default function CaptainMatchdayAvailabilityBadgesBridge() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const fixtureId = searchParams.get("fixtureId");
+
+  useEffect(() => {
+    const teamId = getCaptainTeamIdFromPathname(pathname);
+    if (!teamId) return;
+
+    const installMatchdayEnhancements = () => {
+      ensureMatchdaySquadNavLink(pathname);
+      removeManagedOnlyMatchdayWarning();
+    };
+
+    const frame = window.requestAnimationFrame(installMatchdayEnhancements);
+    const observer = new MutationObserver(installMatchdayEnhancements);
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [pathname]);
 
   useEffect(() => {
     const teamId = getTeamIdFromPathname(pathname);
