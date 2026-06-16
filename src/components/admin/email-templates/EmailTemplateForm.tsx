@@ -390,6 +390,38 @@ export default function EmailTemplateForm({
     });
   }
 
+  function insertBoldText() {
+    const textarea = bodyRef.current;
+    const fallbackText = "bold text";
+
+    if (!textarea) {
+      setBody((current) => `${current}${current ? "\n" : ""}**${fallbackText}**`);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? body.length;
+    const end = textarea.selectionEnd ?? body.length;
+    const selectedText = body.slice(start, end);
+    const boldText = selectedText || fallbackText;
+    const next = `${body.slice(0, start)}**${boldText}**${body.slice(end)}`;
+
+    setBody(next);
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+
+      if (selectedText) {
+        const cursor = start + boldText.length + 4;
+        textarea.setSelectionRange(cursor, cursor);
+        return;
+      }
+
+      const selectionStart = start + 2;
+      const selectionEnd = selectionStart + fallbackText.length;
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+    });
+  }
+
   return (
     <form action={formAction} className="space-y-8">
       {initialValues?.id ? (
@@ -573,9 +605,24 @@ export default function EmailTemplateForm({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-white">
-                  Message body
-                </label>
+                <div
+                  data-email-template-bold-toolbar="true"
+                  className="flex flex-wrap items-center justify-between gap-3"
+                >
+                  <label className="text-sm font-medium text-white">
+                    Message body
+                  </label>
+                  <button
+                    type="button"
+                    onClick={insertBoldText}
+                    className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-white transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-emerald-100"
+                  >
+                    Bold
+                  </button>
+                </div>
+                <p className="text-xs leading-5 text-neutral-400">
+                  Highlight text and click Bold, or type **bold text** manually.
+                </p>
                 <textarea
                   ref={bodyRef}
                   name="body"
