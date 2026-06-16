@@ -19,6 +19,9 @@
       }
     ],
     "paths": {
+      "@/app/(admin)/admin/fixtures/actions": [
+        "./src/app/(admin)/admin/fixtures/actions-with-kickoff-rules.ts"
+      ],
       "@/components/admin/fixtures/FixturesAdminScreen": [
         "./src/components/admin/fixtures/FixturesAdminScreenWithIssueReplies.tsx"
       ],
