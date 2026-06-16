@@ -7,6 +7,9 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+const injectedLinkClassName =
+  "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition sm:w-auto";
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
   return match?.[1] ?? null;
@@ -37,8 +40,7 @@ function normaliseExistingCommsLink(input: {
     link.href = playerCommsHref;
     link.textContent = "Player comms";
     link.dataset.adminPlayerCommsLink = membershipId;
-    link.className =
-      "inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15";
+    link.className = `${injectedLinkClassName} border border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15`;
   }
 }
 
@@ -74,8 +76,7 @@ function addPreviewLinks(pathname: string) {
     previewLink.href = `/admin/teams/${teamId}/players/${membershipId}/preview`;
     previewLink.textContent = "Player preview";
     previewLink.dataset.adminPlayerPreviewLink = membershipId;
-    previewLink.className =
-      "inline-flex items-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-medium text-violet-100 transition hover:bg-violet-500/15";
+    previewLink.className = `${injectedLinkClassName} border border-violet-400/30 bg-violet-500/10 text-violet-100 hover:bg-violet-500/15`;
 
     actionsContainer.insertBefore(previewLink, form.nextSibling);
   }
