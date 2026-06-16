@@ -65,17 +65,19 @@ function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n");
 }
 
-function getBulletLine(value: string) {
-  const match = value.match(/^(\s*)-\s+(.+)$/);
+function getListLine(value: string) {
+  const match = value.match(/^(\s*)(-|\d+\.)\s+(.+)$/);
 
   if (!match) return null;
 
   const indentation = match[1].replace(/\t/g, "  ").length;
   const depth = Math.min(Math.floor(indentation / 2), 4);
+  const marker = match[2];
 
   return {
     depth,
-    text: match[2].trim(),
+    marker: marker === "-" ? "•" : marker,
+    text: match[3].trim(),
   };
 }
 
@@ -148,42 +150,41 @@ function convertTextToHtml(text: string) {
         .map((line) => line.trimEnd())
         .filter((line) => Boolean(line.trim()));
 
-      const bulletLines = lines.filter((line) => getBulletLine(line));
-      const nonBulletLines = lines.filter((line) => !getBulletLine(line));
+      const listLines = lines.filter((line) => getListLine(line));
+      const nonListLines = lines.filter((line) => !getListLine(line));
 
-      if (bulletLines.length > 0) {
-        const normalHtml = nonBulletLines.length
+      if (listLines.length > 0) {
+        const normalHtml = nonListLines.length
           ? `
             <p style="margin:0 0 12px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
-              ${renderInlineFormatting(nonBulletLines.join("\n").trim()).replace(/\n/g, "<br />")}
+              ${renderInlineFormatting(nonListLines.join("\n").trim()).replace(/\n/g, "<br />")}
             </p>
           `.trim()
           : "";
 
         const listHtml = `
-          <ul
+          <div
             style="
               margin:0 0 18px 0;
-              padding-left:20px;
               color:#111827;
               font-size:16px;
               line-height:1.65;
               mso-line-height-rule:exactly;
             "
           >
-            ${bulletLines
+            ${listLines
               .map((line) => {
-                const bullet = getBulletLine(line);
-                if (!bullet) return "";
+                const item = getListLine(line);
+                if (!item) return "";
 
                 return `
-                  <li style="margin:0 0 10px ${bullet.depth * 18}px;">
-                    ${renderInlineFormatting(bullet.text)}
-                  </li>
+                  <div style="margin:0 0 8px ${item.depth * 18}px;line-height:1.65;mso-line-height-rule:exactly;">
+                    <span style="display:inline-block;min-width:24px;font-weight:400;">${escapeHtml(item.marker)}</span>${renderInlineFormatting(item.text)}
+                  </div>
                 `.trim();
               })
               .join("")}
-          </ul>
+          </div>
         `.trim();
 
         return `${normalHtml}${listHtml}`;
