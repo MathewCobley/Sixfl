@@ -108,6 +108,18 @@ const navigation = [
     description: "Inbound enquiries",
   },
   {
+    name: "Player Prospects",
+    href: "/admin/player-prospects",
+    icon: UsersIcon,
+    description: "Individual player pipeline",
+  },
+  {
+    name: "Prospect Teams",
+    href: "/admin/team-prospects",
+    icon: UserGroupIcon,
+    description: "Team enquiries and dropouts",
+  },
+  {
     name: "Communications",
     href: "/admin/messaging",
     icon: DocumentTextIcon,
