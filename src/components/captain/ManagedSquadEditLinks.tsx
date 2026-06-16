@@ -21,6 +21,9 @@ type MoveData = {
   }>;
 };
 
+const injectedActionClassName =
+  "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 sm:w-auto";
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
   return match?.[1] ?? null;
@@ -201,8 +204,7 @@ function addManagedSquadEditLinks(pathname: string) {
       moveButton.type = "button";
       moveButton.textContent = "Move player";
       moveButton.dataset.managedSquadMoveLink = membershipId;
-      moveButton.className =
-        "inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15";
+      moveButton.className = injectedActionClassName;
       moveButton.addEventListener("click", () => {
         showMoveModal({ teamId, membershipId, playerName });
       });
@@ -223,8 +225,7 @@ function addManagedSquadEditLinks(pathname: string) {
     editLink.href = `/captain/team/${teamId}/squad/${membershipId}/edit`;
     editLink.textContent = "Edit details";
     editLink.dataset.managedSquadEditLink = membershipId;
-    editLink.className =
-      "inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15";
+    editLink.className = injectedActionClassName;
 
     const removeForm = Array.from(actionsContainer.querySelectorAll("form")).find(
       (candidate) => candidate !== form && Boolean(candidate.querySelector('input[name="membershipId"]')),
