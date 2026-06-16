@@ -48,26 +48,100 @@ function getBarClass(type: "home" | "draw" | "away") {
   }
 }
 
-function findFixtureCard(fixture: FixtureWinChanceItem) {
-  const home = normaliseText(fixture.homeTeamName);
-  const away = normaliseText(fixture.awayTeamName);
+function hasFixtureText(
+  element: HTMLElement,
+  fixture: FixtureWinChanceItem,
+) {
+  const text = normaliseText(element.textContent ?? "");
+  return (
+    text.includes(normaliseText(fixture.homeTeamName)) &&
+    text.includes(normaliseText(fixture.awayTeamName))
+  );
+}
 
-  const candidates = Array.from(
+function countVsLabels(element: HTMLElement) {
+  const text = normaliseText(element.textContent ?? "");
+  return text.match(/\bvs\b/g)?.length ?? 0;
+}
+
+function getElementClassName(element: HTMLElement) {
+  return element.getAttribute("class") ?? "";
+}
+
+function isLikelyFixtureCard(element: HTMLElement) {
+  const className = getElementClassName(element);
+
+  return (
+    className.includes("rounded-") &&
+    className.includes("border") &&
+    !className.includes("grid-cols")
+  );
+}
+
+function getFixtureCardScore(element: HTMLElement) {
+  const text = normaliseText(element.textContent ?? "");
+  const className = getElementClassName(element);
+  const width = element.getBoundingClientRect().width;
+  const vsCount = countVsLabels(element);
+
+  let score = 0;
+
+  if (isLikelyFixtureCard(element)) score += 60;
+  if (vsCount === 1) score += 45;
+  if (width >= 560) score += 35;
+  if (width >= 420) score += 20;
+  if (className.includes("p-4") || className.includes("p-5")) score += 10;
+  if (text.length < 420) score += 25;
+  if (text.length > 900) score -= 80;
+  if (text.includes("upcoming fixtures")) score -= 60;
+  if (text.includes("results")) score -= 35;
+
+  return score;
+}
+
+function findFixtureCard(fixture: FixtureWinChanceItem) {
+  const matchingElements = Array.from(
     document.querySelectorAll<HTMLElement>("article, div"),
-  )
-    .filter((element) => {
-      const text = normaliseText(element.textContent ?? "");
-      if (!text.includes(home) || !text.includes(away)) return false;
-      if (text.includes("win chance")) return false;
-      if (element.querySelector(`[data-public-fixture-win-chance="${fixture.id}"]`)) {
-        return false;
+  ).filter((element) => {
+    if (!hasFixtureText(element, fixture)) return false;
+    if (normaliseText(element.textContent ?? "").includes("win chance")) return false;
+    if (element.querySelector(`[data-public-fixture-win-chance="${fixture.id}"]`)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const candidates = new Set<HTMLElement>();
+
+  for (const element of matchingElements) {
+    let current: HTMLElement | null = element;
+    let depth = 0;
+
+    while (current && depth < 8) {
+      if (!hasFixtureText(current, fixture)) break;
+
+      if (isLikelyFixtureCard(current) || countVsLabels(current) === 1) {
+        candidates.add(current);
       }
 
-      return true;
-    })
-    .sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0));
+      current = current.parentElement;
+      depth += 1;
+    }
+  }
 
-  return candidates[0] ?? null;
+  return (
+    Array.from(candidates)
+      .sort((a, b) => {
+        const scoreDifference = getFixtureCardScore(b) - getFixtureCardScore(a);
+        if (scoreDifference !== 0) return scoreDifference;
+
+        const widthDifference = b.getBoundingClientRect().width - a.getBoundingClientRect().width;
+        if (widthDifference !== 0) return widthDifference;
+
+        return (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0);
+      })[0] ?? null
+  );
 }
 
 function createChanceCard(input: {
@@ -76,18 +150,18 @@ function createChanceCard(input: {
   type: "home" | "draw" | "away";
 }) {
   const card = document.createElement("div");
-  card.className = "rounded-2xl border border-white/10 bg-black/25 p-3";
+  card.className = "min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3";
 
   const top = document.createElement("div");
-  top.className = "flex items-center justify-between gap-2";
+  top.className = "flex items-start justify-between gap-3";
 
   const label = document.createElement("div");
-  label.className = "truncate text-xs font-semibold text-white/75";
+  label.className = "min-w-0 text-xs font-semibold leading-4 text-white/75";
   label.textContent = input.label;
   label.title = input.label;
 
   const value = document.createElement("div");
-  value.className = "text-lg font-black text-white";
+  value.className = "shrink-0 text-lg font-black text-white";
   value.textContent = `${input.value}%`;
 
   const rail = document.createElement("div");
@@ -110,7 +184,7 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   const block = document.createElement("div");
   block.dataset.publicFixtureWinChance = fixture.id;
   block.className =
-    "mt-5 rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)]";
+    "mt-5 w-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)] sm:p-5";
 
   const header = document.createElement("div");
   header.className = "flex flex-wrap items-center justify-between gap-2";
@@ -138,7 +212,7 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   header.appendChild(funBadge);
 
   const grid = document.createElement("div");
-  grid.className = "mt-4 grid gap-3 sm:grid-cols-3";
+  grid.className = "mt-4 grid w-full gap-3 sm:grid-cols-3";
   grid.appendChild(
     createChanceCard({
       label: fixture.homeTeamName,
@@ -181,6 +255,7 @@ function injectWinChances(fixtures: FixtureWinChanceItem[]) {
     const card = findFixtureCard(fixture);
     if (!card) continue;
 
+    card.classList.add("w-full");
     card.appendChild(createWinChanceBlock(fixture));
   }
 }
