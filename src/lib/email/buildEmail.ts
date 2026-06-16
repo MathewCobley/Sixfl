@@ -65,6 +65,20 @@ function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n");
 }
 
+function getBulletLine(value: string) {
+  const match = value.match(/^(\s*)-\s+(.+)$/);
+
+  if (!match) return null;
+
+  const indentation = match[1].replace(/\t/g, "  ").length;
+  const depth = Math.min(Math.floor(indentation / 2), 4);
+
+  return {
+    depth,
+    text: match[2].trim(),
+  };
+}
+
 function getSiteUrl() {
   const fallback = "https://www.sixfl.co.uk";
 
@@ -126,22 +140,22 @@ function convertTextToHtml(text: string) {
   return normalizeLineEndings(text)
     .trim()
     .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
+    .map((paragraph) => paragraph.trimEnd())
+    .filter((paragraph) => Boolean(paragraph.trim()))
     .map((paragraph) => {
       const lines = paragraph
         .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
+        .map((line) => line.trimEnd())
+        .filter((line) => Boolean(line.trim()));
 
-      const bulletLines = lines.filter((line) => line.startsWith("- "));
-      const nonBulletLines = lines.filter((line) => !line.startsWith("- "));
+      const bulletLines = lines.filter((line) => getBulletLine(line));
+      const nonBulletLines = lines.filter((line) => !getBulletLine(line));
 
       if (bulletLines.length > 0) {
         const normalHtml = nonBulletLines.length
           ? `
             <p style="margin:0 0 12px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
-              ${renderInlineFormatting(nonBulletLines.join("\n")).replace(/\n/g, "<br />")}
+              ${renderInlineFormatting(nonBulletLines.join("\n").trim()).replace(/\n/g, "<br />")}
             </p>
           `.trim()
           : "";
@@ -158,13 +172,16 @@ function convertTextToHtml(text: string) {
             "
           >
             ${bulletLines
-              .map(
-                (line) => `
-                  <li style="margin:0 0 10px 0;">
-                    ${renderInlineFormatting(line.replace(/^- /, "").trim())}
+              .map((line) => {
+                const bullet = getBulletLine(line);
+                if (!bullet) return "";
+
+                return `
+                  <li style="margin:0 0 10px ${bullet.depth * 18}px;">
+                    ${renderInlineFormatting(bullet.text)}
                   </li>
-                `.trim(),
-              )
+                `.trim();
+              })
               .join("")}
           </ul>
         `.trim();
@@ -172,7 +189,7 @@ function convertTextToHtml(text: string) {
         return `${normalHtml}${listHtml}`;
       }
 
-      const paragraphHtml = renderInlineFormatting(paragraph).replace(/\n/g, "<br />");
+      const paragraphHtml = renderInlineFormatting(paragraph.trim()).replace(/\n/g, "<br />");
 
       return `
         <p style="margin:0 0 18px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
