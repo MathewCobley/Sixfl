@@ -204,7 +204,7 @@ export async function POST(
       getSquadRedirectUrl(
         request,
         teamid,
-        "?error=Missing%20prospect%20details.#pending-activation",
+        "?error=Missing%20prospect%20details.",
       ),
     );
   }
@@ -236,7 +236,7 @@ export async function POST(
       getSquadRedirectUrl(
         request,
         teamid,
-        "?error=Pending%20squad%20player%20not%20found.#pending-activation",
+        "?error=Pending%20squad%20player%20not%20found.",
       ),
     );
   }
@@ -248,7 +248,7 @@ export async function POST(
       getSquadRedirectUrl(
         request,
         teamid,
-        "?error=This%20player%20does%20not%20have%20an%20email%20address.#pending-activation",
+        "?error=This%20player%20does%20not%20have%20an%20email%20address.",
       ),
     );
   }
@@ -315,10 +315,6 @@ export async function POST(
   revalidatePath("/admin/messaging");
 
   return NextResponse.redirect(
-    getSquadRedirectUrl(
-      request,
-      teamid,
-      "?saved=activation-email-sent#pending-activation",
-    ),
+    getSquadRedirectUrl(request, teamid, "?saved=activation-email-sent"),
   );
 }
