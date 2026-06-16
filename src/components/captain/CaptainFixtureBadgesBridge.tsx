@@ -13,12 +13,21 @@ type FixtureBadgeTeam = {
   logoUrl: string | null;
 };
 
+type FixtureWinChance = {
+  home: number;
+  draw: number;
+  away: number;
+  confidence: "Low" | "Medium" | "High";
+  explanation: string;
+};
+
 type FixtureBadge = {
   id: string;
   homeTeam: FixtureBadgeTeam;
   awayTeam: FixtureBadgeTeam;
   fullLabel: string;
   captainLabel: string;
+  winChance?: FixtureWinChance | null;
 };
 
 type FixtureBadgesPayload = {
@@ -109,6 +118,102 @@ function createCaptainFixtureLabel(fixture: FixtureBadge, size: "sm" | "lg") {
   return wrapper;
 }
 
+function getHighestChanceLabel(fixture: FixtureBadge) {
+  const chance = fixture.winChance;
+  if (!chance) return null;
+
+  if (chance.home >= chance.draw && chance.home >= chance.away) {
+    return `${fixture.homeTeam.name} ${chance.home}%`;
+  }
+
+  if (chance.away >= chance.home && chance.away >= chance.draw) {
+    return `${fixture.awayTeam.name} ${chance.away}%`;
+  }
+
+  return `Draw ${chance.draw}%`;
+}
+
+function createCompactWinChanceBadge(fixture: FixtureBadge) {
+  const chance = fixture.winChance;
+  const highest = getHighestChanceLabel(fixture);
+
+  if (!chance || !highest) return null;
+
+  const badge = document.createElement("span");
+  badge.dataset.fixtureWinChanceFor = fixture.id;
+  badge.className =
+    "inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100";
+  badge.title = `${chance.explanation} Home ${chance.home}% · Draw ${chance.draw}% · Away ${chance.away}%`;
+  badge.textContent = `Win chance: ${highest}`;
+
+  return badge;
+}
+
+function createDetailedWinChanceBlock(fixture: FixtureBadge) {
+  const chance = fixture.winChance;
+  if (!chance) return null;
+
+  const block = document.createElement("div");
+  block.dataset.fixtureWinChanceFor = fixture.id;
+  block.className =
+    "mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4";
+
+  const heading = document.createElement("div");
+  heading.className =
+    "text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300";
+  heading.textContent = `Win chance · ${chance.confidence} confidence`;
+
+  const grid = document.createElement("div");
+  grid.className = "mt-3 grid gap-2 sm:grid-cols-3";
+
+  const rows = [
+    { label: fixture.homeTeam.name, value: chance.home, bar: "bg-emerald-400" },
+    { label: "Draw", value: chance.draw, bar: "bg-white/45" },
+    { label: fixture.awayTeam.name, value: chance.away, bar: "bg-sky-400" },
+  ];
+
+  for (const row of rows) {
+    const card = document.createElement("div");
+    card.className = "rounded-xl border border-white/10 bg-black/20 p-3";
+
+    const top = document.createElement("div");
+    top.className = "flex items-center justify-between gap-2";
+
+    const label = document.createElement("div");
+    label.className = "truncate text-xs font-semibold text-white/75";
+    label.textContent = row.label;
+    label.title = row.label;
+
+    const value = document.createElement("div");
+    value.className = "text-base font-black text-white";
+    value.textContent = `${row.value}%`;
+
+    const rail = document.createElement("div");
+    rail.className = "mt-2 h-1.5 overflow-hidden rounded-full bg-white/10";
+
+    const bar = document.createElement("div");
+    bar.className = `h-full rounded-full ${row.bar}`;
+    bar.style.width = `${row.value}%`;
+
+    top.appendChild(label);
+    top.appendChild(value);
+    rail.appendChild(bar);
+    card.appendChild(top);
+    card.appendChild(rail);
+    grid.appendChild(card);
+  }
+
+  const helper = document.createElement("p");
+  helper.className = "mt-3 text-xs leading-5 text-white/45";
+  helper.textContent = chance.explanation;
+
+  block.appendChild(heading);
+  block.appendChild(grid);
+  block.appendChild(helper);
+
+  return block;
+}
+
 function findMatchingFixture(text: string, fixtures: FixtureBadge[]) {
   const normalisedText = text.replace(/\s+/g, " ").trim();
 
@@ -122,6 +227,29 @@ function findMatchingFixture(text: string, fixtures: FixtureBadge[]) {
   );
 }
 
+function injectWinChance(element: HTMLElement, fixture: FixtureBadge) {
+  if (!fixture.winChance) return;
+
+  if (element.tagName === "H2") {
+    const parent = element.parentElement;
+    if (parent?.querySelector(`[data-fixture-win-chance-for="${fixture.id}"]`)) {
+      return;
+    }
+
+    const block = createDetailedWinChanceBlock(fixture);
+    if (block) element.insertAdjacentElement("afterend", block);
+    return;
+  }
+
+  const target = element.parentElement ?? element;
+  if (target.querySelector(`[data-fixture-win-chance-for="${fixture.id}"]`)) {
+    return;
+  }
+
+  const badge = createCompactWinChanceBadge(fixture);
+  if (badge) target.appendChild(badge);
+}
+
 function injectFixtureBadges(fixtures: FixtureBadge[]) {
   if (fixtures.length === 0) return;
 
@@ -132,6 +260,13 @@ function injectFixtureBadges(fixtures: FixtureBadge[]) {
   );
 
   for (const element of headingCandidates) {
+    if (element.dataset.fixtureBadgeProcessed === "true") {
+      const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+      const fixture = findMatchingFixture(text, fixtures);
+      if (fixture) injectWinChance(element, fixture);
+      continue;
+    }
+
     const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
     if (!text.includes(" vs ") && !text.startsWith("vs ")) continue;
 
@@ -142,12 +277,15 @@ function injectFixtureBadges(fixtures: FixtureBadge[]) {
     element.textContent = "";
     element.classList.add("flex", "items-center", "gap-3");
     element.dataset.fixtureBadgeProcessed = "true";
+    element.dataset.fixtureFullLabel = fixture.fullLabel;
+    element.dataset.fixtureCaptainLabel = fixture.captainLabel;
 
     const label = text === fixture.fullLabel
       ? createFullFixtureLabel(fixture, size)
       : createCaptainFixtureLabel(fixture, size);
 
     element.appendChild(label);
+    injectWinChance(element, fixture);
   }
 }
 
