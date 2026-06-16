@@ -7,7 +7,7 @@ import Link from "next/link";
 export const metadata = {
   title: "SIXFL | Harrogate & Northallerton 6-a-side football leagues",
   description:
-    "Join SIXFL 6-a-side football leagues in Harrogate and Northallerton. View the live Harrogate Tuesday league at Rossett Sports Centre or register your team for the Northallerton Wednesday launch league.",
+    "Find local SIXFL 6-a-side football leagues in Harrogate and Northallerton. View fixtures, results and tables, or register interest as a team, player or referee.",
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
@@ -26,22 +26,22 @@ const leagueTypes = ["MEN’S LEAGUES", "WOMEN’S LEAGUES", "YOUTH LEAGUES"];
 
 const areaCards = [
   {
-    eyebrow: "LIVE LEAGUE",
-    title: "Harrogate Tuesday league",
-    status: "Live now",
-    body: "View fixtures, results, teams and league table updates for the SIXFL Harrogate league at Rossett Sports Centre.",
-    primaryLabel: "View Harrogate league",
+    eyebrow: "LIVE HARROGATE LEAGUE",
+    title: "Harrogate Tuesday 6-a-side",
+    status: "Fixtures live",
+    body: "See upcoming fixtures, recent results, teams and the current league table for the Tuesday 6-a-side league at Rossett Sports Centre.",
+    primaryLabel: "View league",
     primaryHref: harrogateLeagueLink,
     secondaryLabel: "Register interest",
     secondaryHref: generalTeamLink,
     featured: true,
   },
   {
-    eyebrow: "NEW LEAGUE FORMING",
-    title: "Northallerton Wednesday league",
-    status: "Recruiting now",
-    body: "Register your team for the new Wednesday night 6-a-side launch league in Northallerton. Teams, players and referees wanted.",
-    primaryLabel: "View Northallerton launch",
+    eyebrow: "NORTHALLERTON LAUNCH",
+    title: "Northallerton Wednesday 6-a-side",
+    status: "Registrations open",
+    body: "Northallerton team entries are open for the upcoming Wednesday night 6-a-side league. Individual players and referees can also register interest.",
+    primaryLabel: "View launch page",
     primaryHref: northallertonLeagueLink,
     secondaryLabel: "Register team",
     secondaryHref: northallertonTeamLink,
@@ -50,43 +50,43 @@ const areaCards = [
 ];
 
 const homeStats = [
-  { label: "Live league", value: "Harrogate" },
-  { label: "Launch area", value: "Northallerton" },
+  { label: "Live fixtures", value: "Harrogate" },
+  { label: "New league", value: "Northallerton" },
   { label: "Format", value: "6-a-side" },
-  { label: "Built for", value: "Captains" },
+  { label: "Open to", value: "Teams & players" },
 ];
 
 const whySixflPoints = [
   {
     title: "Reliable weekly fixtures",
-    desc: "We build leagues properly so teams are not left with gaps, poor communication or unreliable opposition.",
+    desc: "Check schedules, venues and kick-off details before match night, with league information kept in one place.",
   },
   {
-    title: "Built for captains",
-    desc: "Cleaner communication, smoother admin and a better experience than chasing everything in group chats.",
+    title: "Clear league updates",
+    desc: "Fixtures, results and tables are kept up to date so teams and players can follow the season easily.",
   },
   {
-    title: "Proper match nights",
-    desc: "Qualified referees, clear scheduling and stronger league management from day one.",
+    title: "Welcoming match nights",
+    desc: "Organised 6-a-side football for teams, individual players and referees across local launch areas.",
   },
 ];
 
 const joinRoutes = [
   {
     title: "I have a team",
-    desc: "Register a team for Northallerton or future SIXFL league launches.",
+    desc: "Enter an existing team into a live or upcoming SIXFL league.",
     href: generalTeamLink,
     cta: "Register team",
   },
   {
     title: "I need a team",
-    desc: "Join the player list and hear when teams need extra players.",
+    desc: "Join the player list and hear from teams looking for extra players.",
     href: generalPlayerLink,
     cta: "Join as player",
   },
   {
     title: "I can referee",
-    desc: "Register referee interest for live leagues and launch areas.",
+    desc: "Register referee interest for current and upcoming SIXFL match nights.",
     href: generalRefereeLink,
     cta: "Referee interest",
   },
@@ -112,21 +112,21 @@ export default function HomePage() {
         <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
           <div className="max-w-5xl text-left">
             <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
-              Harrogate live now • Northallerton recruiting now
+              Harrogate live now • Northallerton registrations open
             </div>
 
             <h1 className="mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl sm:leading-[0.95] lg:text-7xl">
-              6-a-side football in Harrogate and Northallerton.
+              Local 6-a-side football in Harrogate and Northallerton.
               <br />
               <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.55)]">
-                Done properly.
+                Easy to join. Easy to follow.
               </span>
             </h1>
 
             <p className="mt-6 max-w-3xl text-base leading-8 text-white/72 sm:text-lg">
-              Play in the live Harrogate Tuesday league at Rossett Sports Centre,
-              or register your team for the new Northallerton Wednesday launch
-              league.
+              Find a local SIXFL league, check live fixtures and tables, or
+              register interest for an upcoming launch as a team, player or
+              referee.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
@@ -152,7 +152,7 @@ export default function HomePage() {
                 href={northallertonLeagueLink}
                 className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
               >
-                JOIN NORTHALLERTON LAUNCH
+                REGISTER INTEREST
               </Link>
             </div>
           </div>
@@ -183,11 +183,11 @@ export default function HomePage() {
               WHY SIXFL
             </div>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-              Built for a better league experience.
+              Local 6-a-side made easier to follow.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
-              SIXFL is designed to feel more organised, more modern and more
-              professional than the typical weekly 6-a-side setup.
+              From fixtures and results to registrations and league tables,
+              SIXFL keeps the important details easy to find.
             </p>
           </div>
 
@@ -207,15 +207,15 @@ export default function HomePage() {
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-                  TEAMS • PLAYERS • REFEREES
+                  JOIN A LEAGUE
                 </div>
                 <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Choose the route that fits you best.
+                  Get involved with SIXFL.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  Team captains, players and referees can all register interest.
-                  Harrogate shows the live league, while Northallerton is the
-                  next launch area being built.
+                  Teams, individual players and referees can register interest
+                  for live leagues and new launch areas. Harrogate is live now,
+                  and Northallerton registrations are open.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -323,20 +323,19 @@ function HarrogatePanel() {
   return (
     <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
       <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-        LIVE SIXFL LEAGUE
+        HARROGATE LEAGUE LIVE
       </div>
       <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-        Harrogate Tuesday league at Rossett Sports Centre.
+        Harrogate Tuesday 6-a-side at Rossett Sports Centre.
       </h2>
       <p className="mt-3 text-sm leading-7 text-white/70 sm:text-base">
-        The Harrogate league gives new teams proof that SIXFL is already active:
-        fixtures, results, teams and league table updates are live on the public
-        league page.
+        Follow the public league page for upcoming fixtures, recent results,
+        participating teams and the current table.
       </p>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        <BenefitPill text="Live fixtures" />
+        <BenefitPill text="Fixtures & kick-offs" />
         <BenefitPill text="League table" />
-        <BenefitPill text="Results updates" />
+        <BenefitPill text="Results" />
         <BenefitPill text="Rossett Sports Centre" />
       </div>
       <Link
@@ -353,20 +352,21 @@ function NorthallertonPanel() {
   return (
     <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
       <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
-        NEW LAUNCH AREA
+        NORTHALLERTON REGISTRATIONS OPEN
       </div>
       <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-        Northallerton Wednesday league recruiting now.
+        Northallerton Wednesday 6-a-side recruiting now.
       </h2>
       <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
-        SIXFL is building a new Wednesday night league in Northallerton. Teams,
-        players and referees can register now before the start date is confirmed.
+        Register interest for the upcoming Wednesday night league in
+        Northallerton. Team entries, individual players and referees are
+        welcome.
       </p>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        <BenefitPill text="No payment today" />
-        <BenefitPill text="Teams wanted" />
-        <BenefitPill text="Wednesday launch" />
-        <BenefitPill text="Priority updates" />
+        <BenefitPill text="Free to register" />
+        <BenefitPill text="Team entries open" />
+        <BenefitPill text="Wednesday nights" />
+        <BenefitPill text="Player/referee interest" />
       </div>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Link
