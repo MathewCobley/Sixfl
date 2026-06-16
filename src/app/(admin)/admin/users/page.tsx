@@ -124,7 +124,7 @@ export default async function AdminUsersPage({
             Users
           </h1>
           <p className="max-w-3xl text-sm text-white/60 sm:text-base">
-            Search users, fix missing names, mark WhatsApp contacts, and link user accounts to matching squad prospects.
+            Search users, fix missing names, mark WhatsApp contacts, open player comms, and link user accounts to matching squad prospects.
           </p>
         </div>
 
@@ -227,15 +227,22 @@ export default async function AdminUsersPage({
                     <div className="text-sm text-white/65">{user.email || "No email"}</div>
 
                     {isLinked ? (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="space-y-2">
                         {user.teamMembers.map((membership) => (
-                          <Link
-                            key={membership.id}
-                            href={`/admin/teams/${membership.team.id}`}
-                            className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                          >
-                            {membership.team.name} · {membership.role}
-                          </Link>
+                          <div key={membership.id} className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`/admin/teams/${membership.team.id}`}
+                              className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                            >
+                              {membership.team.name} · {membership.role}
+                            </Link>
+                            <Link
+                              href={`/admin/teams/${membership.team.id}/players/${membership.id}/communications`}
+                              className="inline-flex items-center rounded-full border border-sky-400/25 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/15"
+                            >
+                              Open comms
+                            </Link>
+                          </div>
                         ))}
                       </div>
                     ) : (
@@ -258,14 +265,26 @@ export default async function AdminUsersPage({
 
                         <div className="mt-3 space-y-2">
                           {prospects.map((prospect) => (
-                            <Link
+                            <div
                               key={prospect.id}
-                              href={`/admin/teams/${prospect.team.id}/prospects`}
-                              className="block rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/65 transition hover:bg-white/[0.06]"
+                              className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 transition hover:bg-white/[0.06]"
                             >
-                              {[prospect.firstName, prospect.lastName].filter(Boolean).join(" ") || prospect.email || "Unnamed prospect"} · {prospect.team.name} · {prospect.status}
-                              {prospect.phone ? ` · ${prospect.phone}` : ""}
-                            </Link>
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <Link
+                                  href={`/admin/teams/${prospect.team.id}/prospects`}
+                                  className="min-w-0 text-xs text-white/65 transition hover:text-white"
+                                >
+                                  {[prospect.firstName, prospect.lastName].filter(Boolean).join(" ") || prospect.email || "Unnamed prospect"} · {prospect.team.name} · {prospect.status}
+                                  {prospect.phone ? ` · ${prospect.phone}` : ""}
+                                </Link>
+                                <Link
+                                  href={`/admin/teams/${prospect.team.id}/prospects/${prospect.id}/communications`}
+                                  className="inline-flex w-full items-center justify-center rounded-lg border border-sky-400/25 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/15 sm:w-auto"
+                                >
+                                  Open prospect comms
+                                </Link>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
