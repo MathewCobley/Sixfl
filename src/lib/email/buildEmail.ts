@@ -115,6 +115,7 @@ function renderListGroupHtml(items: EmailListLine[]) {
       ${items
         .map((item) => {
           const marginLeft = item.depth * 18;
+          const widthPercent = Math.max(88, 100 - item.depth * 4);
 
           return `
             <table
@@ -122,20 +123,23 @@ function renderListGroupHtml(items: EmailListLine[]) {
               cellpadding="0"
               cellspacing="0"
               border="0"
-              width="100%"
-              style="margin:0 0 8px ${marginLeft}px;border-collapse:collapse;table-layout:fixed;"
+              width="${widthPercent}%"
+              class="sixfl-list-row"
+              style="width:${widthPercent}% !important;margin:0 0 8px ${marginLeft}px !important;border-collapse:collapse !important;table-layout:fixed !important;"
             >
               <tr>
                 <td
                   valign="top"
-                  width="28"
-                  style="width:28px;padding:0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
+                  width="32"
+                  class="sixfl-list-marker"
+                  style="width:32px !important;min-width:32px !important;max-width:32px !important;padding:0 8px 0 0 !important;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
                 >
                   ${escapeHtml(item.marker)}
                 </td>
                 <td
                   valign="top"
-                  style="padding:0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
+                  class="sixfl-list-text"
+                  style="padding:0 !important;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
                 >
                   ${renderInlineFormatting(item.text)}
                 </td>
@@ -560,6 +564,22 @@ function buildResponsiveEmailDocument(contentHtml: string) {
         border-collapse: collapse !important;
         table-layout: fixed !important;
         margin: 0 auto !important;
+      }
+
+      .sixfl-list-row {
+        margin-right: 0 !important;
+        margin-left: 0 !important;
+        table-layout: fixed !important;
+      }
+
+      .sixfl-list-marker {
+        width: 32px !important;
+        min-width: 32px !important;
+        max-width: 32px !important;
+      }
+
+      .sixfl-list-text {
+        width: auto !important;
       }
 
       img {
