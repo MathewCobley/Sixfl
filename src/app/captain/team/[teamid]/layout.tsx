@@ -20,6 +20,41 @@ import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
 const captainMobileStyles = String.raw`
+.captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > form {
+  min-width: 0;
+}
+
+.captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > form:first-child {
+  flex: 1 1 18rem;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > form:first-child > div {
+  flex: 1 1 13rem;
+  min-width: min(13rem, 100%);
+}
+
+.captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > a,
+.captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > button,
+.captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > form:not(:first-child) {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 1280px) {
+  .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
+    flex: 0 1 39rem;
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 640px) {
   .captain-team-shell .captain-team-container {
     gap: 1rem;
@@ -130,6 +165,22 @@ const captainMobileStyles = String.raw`
 
   .captain-team-shell .captain-team-main input[class*="max-w-[180px]"] {
     max-width: 100% !important;
+  }
+
+  .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > form,
+  .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > a,
+  .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > button {
+    width: 100%;
+  }
+
+  .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > form:first-child > div {
+    width: 100%;
+    min-width: 0;
   }
 
   .captain-team-shell .captain-team-main [class*="grid-cols-[1fr_82px_82px]"] {
