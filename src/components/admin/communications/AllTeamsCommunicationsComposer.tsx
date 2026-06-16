@@ -43,7 +43,7 @@ const DEFAULT_SUMMER_LEAGUE_TEMPLATE: EmailTemplateOption = {
   ctaLabel: null,
   ctaUrl: null,
   body: [
-    "Hi {{teamName}},",
+    "Hi,",
     "",
     "Hope you’re well.",
     "",
@@ -59,10 +59,6 @@ const DEFAULT_SUMMER_LEAGUE_TEMPLATE: EmailTemplateOption = {
     "SIXFL",
   ].join("\n"),
 };
-
-function resolveTeamTokens(text: string) {
-  return text.replaceAll("{{teamName}}", "{{teamName}}");
-}
 
 function TeamPicker({
   teams,
@@ -247,8 +243,8 @@ export default function AllTeamsCommunicationsComposer({
       return;
     }
 
-    setSubject(resolveTeamTokens(template.subject));
-    setBody(resolveTeamTokens(template.body));
+    setSubject(template.subject);
+    setBody(template.body);
   }
 
   function toggleTeam(teamId: string) {
