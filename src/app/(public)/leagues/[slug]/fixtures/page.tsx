@@ -234,6 +234,10 @@ export default async function LeagueFixturesPublic({
     {} as Record<number, typeof league.fixtures>,
   );
 
+  const sortedRounds = Object.entries(rounds).sort(
+    ([roundA], [roundB]) => Number(roundB) - Number(roundA),
+  );
+
   const scheduledCount = league.fixtures.filter(
     (fixture) => fixture.status === "SCHEDULED",
   ).length;
@@ -284,13 +288,13 @@ export default async function LeagueFixturesPublic({
           </div>
         </section>
 
-        {Object.keys(rounds).length === 0 ? (
+        {sortedRounds.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] px-6 py-10 text-white/65">
             Fixtures will appear here once they have been published.
           </div>
         ) : null}
 
-        {Object.entries(rounds).map(([round, fixtures]) => (
+        {sortedRounds.map(([round, fixtures]) => (
           <section key={round} className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 text-lg font-black text-emerald-100">
