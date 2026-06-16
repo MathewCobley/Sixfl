@@ -60,6 +60,46 @@ const DEFAULT_SUMMER_LEAGUE_TEMPLATE: EmailTemplateOption = {
   ].join("\n"),
 };
 
+function LeagueFilterPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
+        League filter
+      </div>
+      <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto pr-1">
+        {["all", ...options].map((option) => {
+          const label = option === "all" ? "All leagues / unassigned" : option;
+          const active = value === option;
+
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onChange(option)}
+              className={[
+                "rounded-xl border px-3 py-2 text-left text-xs font-semibold transition",
+                active
+                  ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-100"
+                  : "border-white/10 bg-white/[0.04] text-white/65 hover:border-white/20 hover:bg-white/[0.08] hover:text-white",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function TeamPicker({
   teams,
   selectedTeamIds,
@@ -79,11 +119,9 @@ function TeamPicker({
   const [leagueFilter, setLeagueFilter] = useState("all");
 
   const leagueOptions = useMemo(() => {
-    const labels = Array.from(
+    return Array.from(
       new Set(teams.map((team) => team.leagueLabel || "No league assigned")),
     ).sort((a, b) => a.localeCompare(b));
-
-    return labels;
   }, [teams]);
 
   const filteredTeams = useMemo(() => {
@@ -115,7 +153,7 @@ function TeamPicker({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
         <input
           type="search"
           value={query}
@@ -123,18 +161,11 @@ function TeamPicker({
           placeholder="Search teams or leagues"
           className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
         />
-        <select
+        <LeagueFilterPicker
+          options={leagueOptions}
           value={leagueFilter}
-          onChange={(event) => setLeagueFilter(event.target.value)}
-          className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/40"
-        >
-          <option value="all">All leagues / unassigned</option>
-          {leagueOptions.map((label) => (
-            <option key={label} value={label}>
-              {label}
-            </option>
-          ))}
-        </select>
+          onChange={setLeagueFilter}
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
