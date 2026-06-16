@@ -58,6 +58,56 @@ function buildPreview(bodyText: string) {
   return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
 }
 
+async function writeLeadEmailAuditIfNeeded(input: {
+  dispatch: NotificationDispatch;
+  recipient: RecipientSnapshot;
+}) {
+  const { dispatch, recipient } = input;
+
+  if (
+    dispatch.channel !== NotificationChannel.EMAIL ||
+    dispatch.sourceType !== "LEAD" ||
+    !dispatch.sourceId?.trim()
+  ) {
+    return;
+  }
+
+  const sentTo = recipient.email?.trim() || "";
+
+  if (!sentTo) {
+    return;
+  }
+
+  const subject = dispatch.subject?.trim() || "Email";
+  const body = dispatch.bodyText || "";
+
+  const existing = await prisma.interestLeadEmail.findFirst({
+    where: {
+      interestLeadId: dispatch.sourceId,
+      subject,
+      body,
+      sentTo,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existing) {
+    return;
+  }
+
+  await prisma.interestLeadEmail.create({
+    data: {
+      interestLeadId: dispatch.sourceId,
+      subject,
+      body,
+      sentTo,
+      sentAt: dispatch.sentAt ?? dispatch.createdAt,
+    },
+  });
+}
+
 function getMetadataRecord(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
@@ -448,6 +498,8 @@ export async function logNotificationDispatchToThread(input: {
           sentAt: true,
         },
       });
+
+  await writeLeadEmailAuditIfNeeded({ dispatch, recipient });
 
   await prisma.messageThread.update({
     where: { id: thread.id },
