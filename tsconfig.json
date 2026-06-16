@@ -19,6 +19,9 @@
       }
     ],
     "paths": {
+      "@/components/admin/fixtures/FixturesAdminScreen": [
+        "./src/components/admin/fixtures/FixturesAdminScreenWithIssueReplies.tsx"
+      ],
       "@/*": ["./src/*"]
     }
   },
