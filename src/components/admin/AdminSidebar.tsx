@@ -144,12 +144,19 @@ function isActivePath(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function getActiveHref(pathname: string) {
+  return navigation
+    .filter((item) => isActivePath(pathname, item.href, item.exact))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
+
 export default function AdminSidebar({
   name,
   email,
   unreadMessagingCount = 0,
 }: AdminSidebarProps) {
   const pathname = usePathname();
+  const activeHref = getActiveHref(pathname);
 
   return (
     <aside className="sticky top-20 xl:top-4">
@@ -179,7 +186,7 @@ export default function AdminSidebar({
 
         <nav className="grid max-h-[calc(100dvh-18rem)] gap-2 overflow-y-auto p-3 sixfl-mobile-scroll xl:max-h-none xl:gap-1.5 xl:overflow-visible xl:p-2 2xl:gap-2 2xl:p-3">
           {navigation.map((item) => {
-            const active = isActivePath(pathname, item.href, item.exact);
+            const active = activeHref === item.href;
             const Icon = item.icon;
             const unreadCount =
               item.name === "Communications" ? unreadMessagingCount : 0;
