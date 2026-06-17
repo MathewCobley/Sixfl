@@ -44,7 +44,7 @@ export default async function AdminLayout({
       <AppHeader variant="admin" />
 
       <div className="flex w-full gap-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-6">
-        <aside className="hidden w-[20rem] shrink-0 xl:block 2xl:w-[22rem]">
+        <aside className="hidden w-[34rem] shrink-0 xl:block 2xl:w-[38rem]">
           <AdminSidebar
             name={name}
             email={email}
