@@ -10,6 +10,11 @@ import { prisma } from "@/lib/prisma";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { requireAdmin } from "@/lib/requireAdmin";
 
+function normalisePageValue(value: FormDataEntryValue | null) {
+  const page = Number(String(value ?? "1"));
+  return Number.isInteger(page) && page > 1 ? String(page) : null;
+}
+
 export async function runQueueFromAdmin() {
   await requireAdmin();
 
@@ -33,9 +38,11 @@ export async function cancelQueuedDispatchFromAdmin(formData: FormData) {
 
   const dispatchId = String(formData.get("dispatchId") ?? "");
   const filter = String(formData.get("filter") ?? "queued");
+  const page = normalisePageValue(formData.get("page"));
 
   const params = new URLSearchParams();
   params.set("filter", filter);
+  if (page) params.set("page", page);
 
   if (!dispatchId) {
     params.set("queueMessage", "No dispatch was selected.");
