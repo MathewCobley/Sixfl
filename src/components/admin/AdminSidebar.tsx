@@ -152,32 +152,32 @@ export default function AdminSidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-20">
-      <div className="max-h-[calc(100dvh-6rem)] overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-        <div className="border-b border-white/10 px-4 py-5 xl:px-5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">
+    <aside className="sticky top-20 xl:top-4">
+      <div className="max-h-[calc(100dvh-6rem)] overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl xl:max-h-[calc(100dvh-2rem)]">
+        <div className="border-b border-white/10 px-4 py-5 xl:px-3 xl:py-3 2xl:px-4 2xl:py-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35 xl:text-[10px]">
             Admin console
           </div>
 
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 xl:mt-2 xl:rounded-xl xl:p-2.5 2xl:mt-3 2xl:p-3">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-white">
+                <div className="truncate text-sm font-semibold text-white xl:text-[13px]">
                   {name?.trim() || "Admin"}
                 </div>
-                <div className="mt-1 truncate text-sm text-white/45">
+                <div className="mt-1 truncate text-sm text-white/45 xl:text-[11px]">
                   {email?.trim() || "SIXFL operations"}
                 </div>
               </div>
 
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10">
-                <Cog6ToothIcon className="h-5 w-5 text-emerald-300" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 xl:h-8 xl:w-8 xl:rounded-xl">
+                <Cog6ToothIcon className="h-5 w-5 text-emerald-300 xl:h-4 xl:w-4" />
               </div>
             </div>
           </div>
         </div>
 
-        <nav className="grid max-h-[calc(100dvh-18rem)] gap-2 overflow-y-auto p-3 sixfl-mobile-scroll xl:p-4">
+        <nav className="grid max-h-[calc(100dvh-18rem)] gap-2 overflow-y-auto p-3 sixfl-mobile-scroll xl:max-h-none xl:gap-1.5 xl:overflow-visible xl:p-2 2xl:gap-2 2xl:p-3">
           {navigation.map((item) => {
             const active = isActivePath(pathname, item.href, item.exact);
             const Icon = item.icon;
@@ -193,7 +193,7 @@ export default function AdminSidebar({
                 key={item.href}
                 href={item.href}
                 className={[
-                  "group flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition",
+                  "group flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition xl:min-h-0 xl:gap-2 xl:rounded-xl xl:px-2.5 xl:py-2 2xl:gap-3 2xl:rounded-2xl 2xl:px-3 2xl:py-2.5",
                   active
                     ? "border-emerald-400/25 bg-emerald-400/12 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                     : "border-white/8 bg-white/[0.02] text-white/75 hover:border-white/15 hover:bg-white/[0.05] hover:text-white",
@@ -201,18 +201,18 @@ export default function AdminSidebar({
               >
                 <div
                   className={[
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition xl:h-7 xl:w-7 xl:rounded-lg 2xl:h-8 2xl:w-8 2xl:rounded-xl",
                     active
                       ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
                       : "border-white/10 bg-black/30 text-white/55 group-hover:text-white/80",
                   ].join(" ")}
                 >
-                  <Icon className="h-4.5 w-4.5" />
+                  <Icon className="h-4.5 w-4.5 xl:h-4 xl:w-4" />
                 </div>
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="truncate text-sm font-semibold">
+                    <div className="truncate text-sm font-semibold xl:text-[13px] 2xl:text-sm">
                       {item.name}
                     </div>
 
@@ -223,7 +223,7 @@ export default function AdminSidebar({
                     ) : null}
                   </div>
 
-                  <div className="mt-0.5 truncate text-[11px] text-white/35">
+                  <div className="mt-0.5 truncate text-[11px] text-white/35 xl:text-[10px] 2xl:text-[11px]">
                     {description}
                   </div>
                 </div>
