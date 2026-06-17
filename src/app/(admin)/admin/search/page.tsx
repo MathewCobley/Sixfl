@@ -41,6 +41,47 @@ function nonEmpty(values: Array<string | null | undefined>) {
   return values.filter((value): value is string => Boolean(value?.trim()));
 }
 
+function buildUsersHref(input: { id?: string | null; email?: string | null; name?: string | null }) {
+  const query = input.email?.trim() || input.name?.trim() || input.id?.trim() || "";
+  const params = new URLSearchParams();
+
+  if (query) {
+    params.set("q", query);
+  }
+
+  const suffix = input.id?.trim() ? `#user-${input.id.trim()}` : "";
+  const queryString = params.toString();
+
+  return `/admin/users${queryString ? `?${queryString}` : ""}${suffix}`;
+}
+
+function getRecipientHref(recipient: {
+  sourceType: string;
+  sourceId: string | null;
+  email: string | null;
+  displayName: string | null;
+}) {
+  const sourceId = recipient.sourceId?.trim();
+
+  if (recipient.sourceType === "USER") {
+    return buildUsersHref({ id: sourceId, email: recipient.email, name: recipient.displayName });
+  }
+
+  if (recipient.sourceType === "TEAM" && sourceId) {
+    return `/admin/teams/${sourceId}`;
+  }
+
+  if (recipient.sourceType === "LEAD" && sourceId) {
+    return `/admin/leads/${sourceId}`;
+  }
+
+  if (recipient.sourceType === "PLAYER" && sourceId) {
+    return `/admin/player-prospects?q=${encodeURIComponent(recipient.email || recipient.displayName || sourceId)}`;
+  }
+
+  return "/admin/queue";
+}
+
 function resultCard(item: ResultItem) {
   return (
     <Link
@@ -246,7 +287,7 @@ export default async function AdminSearchPage({ searchParams }: Props) {
       title: user.name || user.email || "Unnamed user",
       subtitle: user.email || "No email stored",
       details: nonEmpty([user.role]),
-      href: "/admin/users",
+      href: buildUsersHref({ id: user.id, email: user.email, name: user.name }),
     })),
     ...leads.map((lead) => ({
       id: lead.id,
@@ -306,7 +347,7 @@ export default async function AdminSearchPage({ searchParams }: Props) {
         recipient.phoneNormalized || recipient.phone,
         recipient.sourceId,
       ]),
-      href: "/admin/queue",
+      href: getRecipientHref(recipient),
     })),
     ...threads.map((thread) => ({
       id: thread.id,
