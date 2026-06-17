@@ -67,23 +67,30 @@ export async function upsertNotificationRecipient(
     lastSyncedAt: new Date(),
   };
 
-  if (existing) {
-    return prisma.notificationRecipient.update({
-      where: { id: existing.id },
-      data: recipientData,
-    });
-  }
+  const recipient = existing
+    ? await prisma.notificationRecipient.update({
+        where: { id: existing.id },
+        data: recipientData,
+      })
+    : await prisma.notificationRecipient.create({
+        data: {
+          sourceType: input.sourceType,
+          sourceId,
+          ...recipientData,
+        },
+      });
 
-  return prisma.notificationRecipient.create({
-    data: {
-      sourceType: input.sourceType,
-      sourceId,
-      ...recipientData,
-      preferences: {
-        create: {},
-      },
+  await prisma.notificationPreference.upsert({
+    where: {
+      recipientId: recipient.id,
+    },
+    update: {},
+    create: {
+      recipientId: recipient.id,
     },
   });
+
+  return recipient;
 }
 
 export async function getNotificationRecipientBySource(input: {
