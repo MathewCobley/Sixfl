@@ -31,10 +31,17 @@ type TeamWinChanceStats = {
   recent: number[];
 };
 
+export type PredictedResult = {
+  homeScore: number;
+  awayScore: number;
+  label: string;
+};
+
 export type FixtureWinChance = {
   home: number;
   draw: number;
   away: number;
+  predictedResult: PredictedResult;
   confidence: "Low" | "Medium" | "High";
   explanation: string;
 };
@@ -161,6 +168,100 @@ function getStrength(stats: TeamWinChanceStats | undefined) {
   );
 }
 
+function getLeagueAverageGoals(statsByTeamId: Map<string, TeamWinChanceStats>) {
+  let goalsFor = 0;
+  let played = 0;
+
+  for (const stats of statsByTeamId.values()) {
+    goalsFor += stats.goalsFor;
+    played += stats.played;
+  }
+
+  if (played === 0) return 2.5;
+
+  return clamp(goalsFor / played, 0.5, 7);
+}
+
+function getGoalsForPerGame(
+  stats: TeamWinChanceStats | undefined,
+  fallback: number,
+) {
+  if (!stats || stats.played === 0) return fallback;
+  return stats.goalsFor / stats.played;
+}
+
+function getGoalsAgainstPerGame(
+  stats: TeamWinChanceStats | undefined,
+  fallback: number,
+) {
+  if (!stats || stats.played === 0) return fallback;
+  return stats.goalsAgainst / stats.played;
+}
+
+function getPredictedOutcome(input: {
+  home: number;
+  draw: number;
+  away: number;
+}) {
+  if (input.draw >= input.home && input.draw >= input.away) return "draw" as const;
+  if (input.home >= input.away) return "home" as const;
+  return "away" as const;
+}
+
+function buildPredictedResult(input: {
+  homeStats: TeamWinChanceStats | undefined;
+  awayStats: TeamWinChanceStats | undefined;
+  leagueAverageGoals: number;
+  strengthDifference: number;
+  percentages: { home: number; draw: number; away: number };
+}): PredictedResult {
+  const homeAttack = getGoalsForPerGame(input.homeStats, input.leagueAverageGoals);
+  const awayAttack = getGoalsForPerGame(input.awayStats, input.leagueAverageGoals);
+  const homeDefenceConceded = getGoalsAgainstPerGame(
+    input.homeStats,
+    input.leagueAverageGoals,
+  );
+  const awayDefenceConceded = getGoalsAgainstPerGame(
+    input.awayStats,
+    input.leagueAverageGoals,
+  );
+
+  const homeExpected = clamp(
+    homeAttack * 0.58 + awayDefenceConceded * 0.42 + input.strengthDifference * 0.025 + 0.12,
+    0.4,
+    8.5,
+  );
+  const awayExpected = clamp(
+    awayAttack * 0.58 + homeDefenceConceded * 0.42 - input.strengthDifference * 0.025,
+    0.4,
+    8.5,
+  );
+
+  let homeScore = clamp(Math.round(homeExpected), 0, 9);
+  let awayScore = clamp(Math.round(awayExpected), 0, 9);
+  const outcome = getPredictedOutcome(input.percentages);
+
+  if (outcome === "home" && homeScore <= awayScore) {
+    homeScore = clamp(awayScore + 1, 1, 9);
+  }
+
+  if (outcome === "away" && awayScore <= homeScore) {
+    awayScore = clamp(homeScore + 1, 1, 9);
+  }
+
+  if (outcome === "draw") {
+    const drawScore = clamp(Math.round((homeExpected + awayExpected) / 2), 0, 8);
+    homeScore = drawScore;
+    awayScore = drawScore;
+  }
+
+  return {
+    homeScore,
+    awayScore,
+    label: `${homeScore}-${awayScore}`,
+  };
+}
+
 function getHeadToHeadAdjustment(input: {
   homeTeamId: string;
   awayTeamId: string;
@@ -237,6 +338,11 @@ export function calculateFixtureWinChance(input: {
       home: 35,
       draw: 30,
       away: 35,
+      predictedResult: {
+        homeScore: 2,
+        awayScore: 2,
+        label: "2-2",
+      },
       confidence: "Low",
       explanation: "No completed league results yet, so this starts as an even prediction.",
     };
@@ -259,10 +365,19 @@ export function calculateFixtureWinChance(input: {
     away: availableWinShare * (1 - homeShare),
   });
 
+  const predictedResult = buildPredictedResult({
+    homeStats,
+    awayStats,
+    leagueAverageGoals: getLeagueAverageGoals(statsByTeamId),
+    strengthDifference,
+    percentages: rounded,
+  });
+
   return {
     ...rounded,
+    predictedResult,
     confidence: getConfidence(completedGames),
     explanation:
-      "Based on completed league results, points per game, goal difference, recent form and head-to-head record.",
+      "Based on completed league results, points per game, goal difference, recent form, scoring record and head-to-head record.",
   };
 }
