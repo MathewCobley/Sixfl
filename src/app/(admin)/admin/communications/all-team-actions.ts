@@ -8,9 +8,20 @@ import { redirect } from "next/navigation";
 import { NotificationChannel } from "@prisma/client";
 
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
+import { extractNotificationTokens } from "@/lib/notifications/renderer";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+
+const SUPPORTED_TEAM_EMAIL_TOKENS = new Set([
+  "firstName",
+  "name",
+  "fullName",
+  "teamName",
+  "leagueName",
+  "signupUrl",
+  "link",
+]);
 
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -40,8 +51,9 @@ function appendRedirectParams(
     .join("&")}`;
 }
 
-function hasUnresolvedTemplatePlaceholder(textValue: string) {
-  return /\{\{[^}]+\}\}/.test(textValue);
+function getUnsupportedTemplateTokens(...values: string[]) {
+  const tokens = new Set(values.flatMap((value) => extractNotificationTokens(value)));
+  return Array.from(tokens).filter((token) => !SUPPORTED_TEAM_EMAIL_TOKENS.has(token));
 }
 
 function getErrorMessage(error: unknown) {
@@ -93,11 +105,14 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: "Select at least one team before queueing the email." }));
   }
 
-  if (hasUnresolvedTemplatePlaceholder(subject) || hasUnresolvedTemplatePlaceholder(body)) {
+  const unsupportedTokens = getUnsupportedTemplateTokens(subject, body);
+
+  if (unsupportedTokens.length > 0) {
+    const listedTokens = unsupportedTokens.map((token) => `{{${token}}}`).join(", ");
+
     redirect(
       appendRedirectParams(from, {
-        error:
-          "The message still contains an unresolved template placeholder such as {{fixtures}}. Please edit the message before sending.",
+        error: `This selected-teams email contains unsupported placeholder${unsupportedTokens.length === 1 ? "" : "s"}: ${listedTokens}. Supported placeholders are {{firstName}}, {{name}}, {{fullName}}, {{teamName}}, {{leagueName}}, {{signupUrl}} and {{link}}.`,
       }),
     );
   }
