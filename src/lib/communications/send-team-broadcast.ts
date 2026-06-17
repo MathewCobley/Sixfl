@@ -8,10 +8,10 @@ import {
   NotificationDispatchStatus,
 } from "@prisma/client";
 
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { prisma } from "@/lib/prisma";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { queueDirectNotification } from "@/lib/notifications/service";
-import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 
 type Input = {
   teamId: string;
@@ -27,6 +27,11 @@ type Input = {
   metadata?: Record<string, unknown>;
   createdByUserId?: string | null;
 };
+
+function getFirstName(name?: string | null) {
+  const firstName = name?.trim().split(/\s+/)[0]?.trim();
+  return firstName || "there";
+}
 
 export async function sendTeamBroadcastMessage(input: Input) {
   const team = await prisma.team.findUnique({
@@ -50,6 +55,10 @@ export async function sendTeamBroadcastMessage(input: Input) {
   }
 
   const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
+  const contactName = snapshot.primaryContact.name?.trim() || snapshot.teamName;
+  const leagueName = team.league
+    ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
+    : "";
 
   const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
@@ -60,14 +69,21 @@ export async function sendTeamBroadcastMessage(input: Input) {
     isTransactional: true,
     sourceType: "TEAM",
     sourceId: team.id,
+    variables: {
+      firstName: getFirstName(contactName),
+      name: contactName,
+      fullName: contactName,
+      teamName: team.name,
+      leagueName,
+      signupUrl: "https://www.sixfl.co.uk/register-interest",
+      link: input.ctaUrl ?? "",
+    },
     emailBranding:
       input.channel === NotificationChannel.EMAIL
         ? {
             teamName: snapshot.teamName,
             teamLogoUrl: team.logoUrl ?? null,
-            leagueName: team.league
-              ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
-              : null,
+            leagueName: leagueName || null,
           }
         : undefined,
     emailCta:
