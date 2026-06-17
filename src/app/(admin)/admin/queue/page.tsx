@@ -12,6 +12,8 @@ import { cancelQueuedDispatchFromAdmin, runQueueFromAdmin } from "./runner";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const PAGE_SIZE = 50;
+
 type QueueFilter = "all" | "queued" | "due" | "processing" | "sent" | "failed" | "skipped" | "cancelled";
 
 function normaliseFilter(value?: string | null): QueueFilter {
@@ -27,6 +29,18 @@ function normaliseFilter(value?: string | null): QueueFilter {
     default:
       return "all";
   }
+}
+
+function normalisePage(value?: string | null) {
+  const page = Number(value ?? "1");
+  return Number.isInteger(page) && page > 0 ? page : 1;
+}
+
+function buildQueueHref(filter: QueueFilter, page = 1) {
+  const params = new URLSearchParams();
+  params.set("filter", filter);
+  if (page > 1) params.set("page", String(page));
+  return `/admin/queue?${params.toString()}`;
 }
 
 function getFilteredWhere(filter: QueueFilter, now: Date) {
@@ -92,11 +106,21 @@ function getFilterTabClasses(active: boolean) {
   ].join(" ");
 }
 
+function getPaginationLinkClasses(enabled: boolean) {
+  return [
+    "inline-flex h-11 items-center justify-center rounded-xl border px-4 text-sm font-semibold transition",
+    enabled
+      ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
+      : "pointer-events-none border-white/10 bg-white/[0.03] text-white/30",
+  ].join(" ");
+}
+
 export default async function AdminQueuePage({
   searchParams,
 }: {
   searchParams?: Promise<{
     filter?: string;
+    page?: string;
     ran?: string;
     processed?: string;
     sent?: string;
@@ -110,6 +134,8 @@ export default async function AdminQueuePage({
   await requireAdmin();
   const sp = (await searchParams) ?? {};
   const activeFilter = normaliseFilter(sp.filter);
+  const currentPage = normalisePage(sp.page);
+  const skip = (currentPage - 1) * PAGE_SIZE;
   const now = new Date();
   const filteredWhere = getFilteredWhere(activeFilter, now);
 
@@ -144,7 +170,8 @@ export default async function AdminQueuePage({
     prisma.notificationDispatch.findMany({
       where: filteredWhere,
       orderBy: [{ createdAt: "desc" }],
-      take: 50,
+      skip,
+      take: PAGE_SIZE,
       select: {
         id: true,
         channel: true,
@@ -182,6 +209,13 @@ export default async function AdminQueuePage({
     { key: "skipped", label: "Skipped", count: skipped },
     { key: "cancelled", label: "Cancelled", count: cancelled },
   ];
+
+  const activeTab = filterTabs.find((tab) => tab.key === activeFilter) ?? filterTabs[0];
+  const activeTotal = activeTab.count;
+  const pageStart = activeTotal === 0 ? 0 : skip + 1;
+  const pageEnd = activeTotal === 0 ? 0 : Math.min(skip + recent.length, activeTotal);
+  const hasPreviousPage = currentPage > 1;
+  const hasNextPage = skip + PAGE_SIZE < activeTotal;
 
   return (
     <div className="space-y-8">
@@ -257,8 +291,11 @@ export default async function AdminQueuePage({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Dispatches</p>
             <h2 className="mt-2 text-xl font-semibold text-white">
-              {activeFilter === "all" ? "Last 50 queue items" : `${filterTabs.find((tab) => tab.key === activeFilter)?.label ?? "Filtered"} queue items`}
+              {activeFilter === "all" ? "Queue items" : `${activeTab.label} queue items`}
             </h2>
+            <p className="mt-2 text-sm text-white/50">
+              Showing {pageStart}–{pageEnd} of {activeTotal} dispatch{activeTotal === 1 ? "" : "es"} · Page {currentPage}
+            </p>
           </div>
           <a
             href="/api/cron/notifications"
@@ -274,7 +311,7 @@ export default async function AdminQueuePage({
           {filterTabs.map((tab) => (
             <Link
               key={tab.key}
-              href={`/admin/queue?filter=${tab.key}`}
+              href={buildQueueHref(tab.key)}
               className={getFilterTabClasses(activeFilter === tab.key)}
             >
               <span>{tab.label}</span>
@@ -283,6 +320,28 @@ export default async function AdminQueuePage({
               </span>
             </Link>
           ))}
+        </div>
+
+        <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-white/55">
+            Use the buttons to move through older dispatches. Each page shows {PAGE_SIZE} items.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={buildQueueHref(activeFilter, Math.max(1, currentPage - 1))}
+              className={getPaginationLinkClasses(hasPreviousPage)}
+              aria-disabled={!hasPreviousPage}
+            >
+              ← Previous 50
+            </Link>
+            <Link
+              href={buildQueueHref(activeFilter, currentPage + 1)}
+              className={getPaginationLinkClasses(hasNextPage)}
+              aria-disabled={!hasNextPage}
+            >
+              Next 50 →
+            </Link>
+          </div>
         </div>
 
         <div className="mt-5 space-y-3">
@@ -330,6 +389,7 @@ export default async function AdminQueuePage({
                     <form action={cancelQueuedDispatchFromAdmin}>
                       <input type="hidden" name="dispatchId" value={item.id} />
                       <input type="hidden" name="filter" value={activeFilter} />
+                      <input type="hidden" name="page" value={currentPage} />
 
                       <button
                         type="submit"
@@ -349,6 +409,30 @@ export default async function AdminQueuePage({
             );
           })}
         </div>
+
+        {activeTotal > PAGE_SIZE ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
+            <p className="text-sm text-white/50">
+              Showing {pageStart}–{pageEnd} of {activeTotal}.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={buildQueueHref(activeFilter, Math.max(1, currentPage - 1))}
+                className={getPaginationLinkClasses(hasPreviousPage)}
+                aria-disabled={!hasPreviousPage}
+              >
+                ← Previous 50
+              </Link>
+              <Link
+                href={buildQueueHref(activeFilter, currentPage + 1)}
+                className={getPaginationLinkClasses(hasNextPage)}
+                aria-disabled={!hasNextPage}
+              >
+                Next 50 →
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
