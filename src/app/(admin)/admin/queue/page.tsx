@@ -36,9 +36,14 @@ function normalisePage(value?: string | null) {
   return Number.isInteger(page) && page > 0 ? page : 1;
 }
 
-function buildQueueHref(filter: QueueFilter, page = 1) {
+function normaliseSearch(value?: string | null) {
+  return String(value ?? "").trim().slice(0, 120);
+}
+
+function buildQueueHref(filter: QueueFilter, page = 1, searchTerm = "") {
   const params = new URLSearchParams();
   params.set("filter", filter);
+  if (searchTerm.trim()) params.set("q", searchTerm.trim());
   if (page > 1) params.set("page", String(page));
   return `/admin/queue?${params.toString()}`;
 }
@@ -67,6 +72,41 @@ function getFilteredWhere(filter: QueueFilter, now: Date) {
     default:
       return {};
   }
+}
+
+function getSearchWhere(searchTerm: string) {
+  if (!searchTerm) return {};
+
+  const contains = {
+    contains: searchTerm,
+    mode: "insensitive" as const,
+  };
+
+  return {
+    OR: [
+      { id: contains },
+      { subject: contains },
+      { bodyText: contains },
+      { failureReason: contains },
+      { provider: contains },
+      { providerMessageId: contains },
+      { sourceType: contains },
+      { sourceId: contains },
+      {
+        recipient: {
+          is: {
+            OR: [
+              { displayName: contains },
+              { email: contains },
+              { phone: contains },
+              { emailNormalized: contains },
+              { phoneNormalized: contains },
+            ],
+          },
+        },
+      },
+    ],
+  };
 }
 
 function formatDateTime(value: Date | null) {
@@ -121,6 +161,7 @@ export default async function AdminQueuePage({
   searchParams?: Promise<{
     filter?: string;
     page?: string;
+    q?: string;
     ran?: string;
     processed?: string;
     sent?: string;
@@ -135,11 +176,16 @@ export default async function AdminQueuePage({
   const sp = (await searchParams) ?? {};
   const activeFilter = normaliseFilter(sp.filter);
   const currentPage = normalisePage(sp.page);
+  const searchTerm = normaliseSearch(sp.q);
   const skip = (currentPage - 1) * PAGE_SIZE;
   const now = new Date();
   const filteredWhere = getFilteredWhere(activeFilter, now);
+  const searchWhere = getSearchWhere(searchTerm);
+  const queueWhere = searchTerm
+    ? { AND: [filteredWhere, searchWhere] }
+    : filteredWhere;
 
-  const [all, queued, dueNow, processing, sent, failed, skipped, cancelled, recent] = await Promise.all([
+  const [all, queued, dueNow, processing, sent, failed, skipped, cancelled, matchingTotal, recent] = await Promise.all([
     prisma.notificationDispatch.count(),
     prisma.notificationDispatch.count({
       where: { status: "QUEUED" },
@@ -167,8 +213,11 @@ export default async function AdminQueuePage({
     prisma.notificationDispatch.count({
       where: { status: "CANCELLED" },
     }),
+    prisma.notificationDispatch.count({
+      where: queueWhere,
+    }),
     prisma.notificationDispatch.findMany({
-      where: filteredWhere,
+      where: queueWhere,
       orderBy: [{ createdAt: "desc" }],
       skip,
       take: PAGE_SIZE,
@@ -211,7 +260,7 @@ export default async function AdminQueuePage({
   ];
 
   const activeTab = filterTabs.find((tab) => tab.key === activeFilter) ?? filterTabs[0];
-  const activeTotal = activeTab.count;
+  const activeTotal = matchingTotal;
   const pageStart = activeTotal === 0 ? 0 : skip + 1;
   const pageEnd = activeTotal === 0 ? 0 : Math.min(skip + recent.length, activeTotal);
   const hasPreviousPage = currentPage > 1;
@@ -294,7 +343,7 @@ export default async function AdminQueuePage({
               {activeFilter === "all" ? "Queue items" : `${activeTab.label} queue items`}
             </h2>
             <p className="mt-2 text-sm text-white/50">
-              Showing {pageStart}–{pageEnd} of {activeTotal} dispatch{activeTotal === 1 ? "" : "es"} · Page {currentPage}
+              {searchTerm ? `Matching “${searchTerm}” · ` : ""}Showing {pageStart}–{pageEnd} of {activeTotal} dispatch{activeTotal === 1 ? "" : "es"} · Page {currentPage}
             </p>
           </div>
           <a
@@ -307,11 +356,46 @@ export default async function AdminQueuePage({
           </a>
         </div>
 
+        <form action="/admin/queue" method="get" className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <input type="hidden" name="filter" value={activeFilter} />
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="queue-search" className="text-sm font-medium text-white/70">
+                Search queue items
+              </label>
+              <input
+                id="queue-search"
+                name="q"
+                type="search"
+                defaultValue={searchTerm}
+                placeholder="Search recipient, email, phone, subject, message, provider ID, source or dispatch ID"
+                className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50 focus:bg-black/40"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
+              >
+                Search
+              </button>
+              {searchTerm ? (
+                <Link
+                  href={buildQueueHref(activeFilter)}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
+                >
+                  Clear
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </form>
+
         <div className="mt-5 flex flex-wrap gap-2">
           {filterTabs.map((tab) => (
             <Link
               key={tab.key}
-              href={buildQueueHref(tab.key)}
+              href={buildQueueHref(tab.key, 1, searchTerm)}
               className={getFilterTabClasses(activeFilter === tab.key)}
             >
               <span>{tab.label}</span>
@@ -324,18 +408,18 @@ export default async function AdminQueuePage({
 
         <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-white/55">
-            Use the buttons to move through older dispatches. Each page shows {PAGE_SIZE} items.
+            {searchTerm ? "Search is applied to the selected filter. " : ""}Use the buttons to move through older dispatches. Each page shows {PAGE_SIZE} items.
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={buildQueueHref(activeFilter, Math.max(1, currentPage - 1))}
+              href={buildQueueHref(activeFilter, Math.max(1, currentPage - 1), searchTerm)}
               className={getPaginationLinkClasses(hasPreviousPage)}
               aria-disabled={!hasPreviousPage}
             >
               ← Previous 50
             </Link>
             <Link
-              href={buildQueueHref(activeFilter, currentPage + 1)}
+              href={buildQueueHref(activeFilter, currentPage + 1, searchTerm)}
               className={getPaginationLinkClasses(hasNextPage)}
               aria-disabled={!hasNextPage}
             >
@@ -347,7 +431,7 @@ export default async function AdminQueuePage({
         <div className="mt-5 space-y-3">
           {recent.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">
-              No dispatches match this filter.
+              {searchTerm ? "No dispatches match this search and filter." : "No dispatches match this filter."}
             </div>
           ) : null}
 
@@ -390,6 +474,7 @@ export default async function AdminQueuePage({
                       <input type="hidden" name="dispatchId" value={item.id} />
                       <input type="hidden" name="filter" value={activeFilter} />
                       <input type="hidden" name="page" value={currentPage} />
+                      <input type="hidden" name="q" value={searchTerm} />
 
                       <button
                         type="submit"
@@ -417,14 +502,14 @@ export default async function AdminQueuePage({
             </p>
             <div className="flex flex-wrap gap-2">
               <Link
-                href={buildQueueHref(activeFilter, Math.max(1, currentPage - 1))}
+                href={buildQueueHref(activeFilter, Math.max(1, currentPage - 1), searchTerm)}
                 className={getPaginationLinkClasses(hasPreviousPage)}
                 aria-disabled={!hasPreviousPage}
               >
                 ← Previous 50
               </Link>
               <Link
-                href={buildQueueHref(activeFilter, currentPage + 1)}
+                href={buildQueueHref(activeFilter, currentPage + 1, searchTerm)}
                 className={getPaginationLinkClasses(hasNextPage)}
                 aria-disabled={!hasNextPage}
               >
