@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { NotificationChannel } from "@prisma/client";
 
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
+import { processNotificationQueue } from "@/lib/notifications/processor";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -49,6 +50,16 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Unknown error";
+}
+
+async function processQueuedTeamEmails(queuedCount: number) {
+  if (queuedCount <= 0) return;
+
+  try {
+    await processNotificationQueue(Math.max(queuedCount + 10, 25));
+  } catch (error) {
+    console.error("Failed to process selected team emails immediately", error);
+  }
 }
 
 export async function sendAllTeamsCommunicationMessageAction(formData: FormData) {
@@ -114,9 +125,10 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: "No matching teams were found." }));
   }
 
-  let deliveredCount = 0;
+  let queuedCount = 0;
   let skippedCount = 0;
   let failedCount = 0;
+  const skippedTeamNames: string[] = [];
   const failedTeamNames: string[] = [];
 
   for (const team of teams) {
@@ -144,8 +156,9 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
 
       if (result.skipped) {
         skippedCount += 1;
+        skippedTeamNames.push(team.name);
       } else {
-        deliveredCount += 1;
+        queuedCount += 1;
       }
     } catch (error) {
       failedCount += 1;
@@ -159,7 +172,11 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
     }
   }
 
-  if (deliveredCount === 0 && failedCount > 0) {
+  if (queuedCount > 0) {
+    await processQueuedTeamEmails(queuedCount);
+  }
+
+  if (queuedCount === 0 && failedCount > 0) {
     const failedNames = failedTeamNames.slice(0, 3).join(", ");
     const suffix = failedTeamNames.length > 3 ? ` and ${failedTeamNames.length - 3} more` : "";
 
@@ -170,13 +187,30 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
     );
   }
 
+  if (queuedCount === 0 && skippedCount > 0 && failedCount === 0) {
+    const skippedNames = skippedTeamNames.slice(0, 3).join(", ");
+    const suffix = skippedTeamNames.length > 3 ? ` and ${skippedTeamNames.length - 3} more` : "";
+
+    redirect(
+      appendRedirectParams(from, {
+        error: `No emails were queued. ${skippedCount} selected team${skippedCount === 1 ? "" : "s"} were skipped${skippedNames ? `: ${skippedNames}${suffix}` : ""}. Check the team contact email addresses.`,
+      }),
+    );
+  }
+
   const params: Record<string, string | number> = {
     saved: "queued",
     channel: "email",
-    count: deliveredCount,
+    count: queuedCount,
     skipped: skippedCount,
     failed: failedCount,
   };
+
+  if (skippedCount > 0) {
+    const skippedNames = skippedTeamNames.slice(0, 3).join(", ");
+    const suffix = skippedTeamNames.length > 3 ? ` and ${skippedTeamNames.length - 3} more` : "";
+    params.warning = `${skippedCount} team${skippedCount === 1 ? "" : "s"} skipped${skippedNames ? `: ${skippedNames}${suffix}` : ""}.`;
+  }
 
   if (failedCount > 0) {
     const failedNames = failedTeamNames.slice(0, 3).join(", ");
