@@ -7,6 +7,12 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+type FixtureAiPreview = {
+  headline: string;
+  summary: string;
+  source: "openai" | "fallback";
+};
+
 type FixtureWinChance = {
   home: number;
   draw: number;
@@ -16,6 +22,7 @@ type FixtureWinChance = {
     awayScore: number;
     label: string;
   };
+  aiPreview?: FixtureAiPreview;
   confidence: "Low" | "Medium" | "High";
   explanation: string;
 };
@@ -205,6 +212,27 @@ function createPredictedResultCard(fixture: FixtureWinChanceItem) {
   return card;
 }
 
+function createAiPreview(fixture: FixtureWinChanceItem) {
+  const preview = fixture.winChance.aiPreview;
+  if (!preview) return null;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4";
+
+  const headline = document.createElement("div");
+  headline.className = "text-sm font-semibold text-white";
+  headline.textContent = preview.headline;
+
+  const summary = document.createElement("p");
+  summary.className = "mt-2 text-sm leading-6 text-white/60";
+  summary.textContent = preview.summary;
+
+  wrapper.appendChild(headline);
+  wrapper.appendChild(summary);
+
+  return wrapper;
+}
+
 function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   const block = document.createElement("div");
   block.dataset.publicFixtureWinChance = fixture.id;
@@ -223,13 +251,15 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
 
   const helper = document.createElement("div");
   helper.className = "mt-1 text-xs text-white/45";
-  helper.textContent = `Form-based prediction · ${fixture.winChance.confidence} confidence · Just for fun`;
+  helper.textContent = `OpenAI match preview · ${fixture.winChance.confidence} confidence · Just for fun`;
 
   headingWrap.appendChild(eyebrow);
   headingWrap.appendChild(helper);
 
   header.appendChild(headingWrap);
   header.appendChild(createPredictedResultCard(fixture));
+
+  const aiPreview = createAiPreview(fixture);
 
   const grid = document.createElement("div");
   grid.className = "mt-4 grid w-full gap-3 sm:grid-cols-3";
@@ -260,6 +290,7 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   explanation.textContent = fixture.winChance.explanation;
 
   block.appendChild(header);
+  if (aiPreview) block.appendChild(aiPreview);
   block.appendChild(grid);
   block.appendChild(explanation);
 
