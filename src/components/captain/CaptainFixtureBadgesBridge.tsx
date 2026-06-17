@@ -17,6 +17,11 @@ type FixtureWinChance = {
   home: number;
   draw: number;
   away: number;
+  predictedResult: {
+    homeScore: number;
+    awayScore: number;
+    label: string;
+  };
   confidence: "Low" | "Medium" | "High";
   explanation: string;
 };
@@ -143,10 +148,33 @@ function createCompactWinChanceBadge(fixture: FixtureBadge) {
   badge.dataset.fixtureWinChanceFor = fixture.id;
   badge.className =
     "inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100";
-  badge.title = `${chance.explanation} Home ${chance.home}% · Draw ${chance.draw}% · Away ${chance.away}%`;
-  badge.textContent = `Win chance: ${highest}`;
+  badge.title = `${chance.explanation} Predicted result ${chance.predictedResult.label} · Home ${chance.home}% · Draw ${chance.draw}% · Away ${chance.away}%`;
+  badge.textContent = `SIXFL AI: ${chance.predictedResult.label} · ${highest}`;
 
   return badge;
+}
+
+function createPredictedResultCard(fixture: FixtureBadge) {
+  const chance = fixture.winChance;
+  if (!chance) return null;
+
+  const card = document.createElement("div");
+  card.className =
+    "rounded-xl border border-emerald-400/20 bg-black/20 px-4 py-3 text-center";
+
+  const label = document.createElement("div");
+  label.className =
+    "text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70";
+  label.textContent = "Predicted result";
+
+  const score = document.createElement("div");
+  score.className = "mt-1 text-2xl font-black text-white";
+  score.textContent = chance.predictedResult.label;
+
+  card.appendChild(label);
+  card.appendChild(score);
+
+  return card;
 }
 
 function createDetailedWinChanceBlock(fixture: FixtureBadge) {
@@ -158,10 +186,26 @@ function createDetailedWinChanceBlock(fixture: FixtureBadge) {
   block.className =
     "mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4";
 
+  const header = document.createElement("div");
+  header.className = "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between";
+
+  const headingWrap = document.createElement("div");
+
   const heading = document.createElement("div");
   heading.className =
     "text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300";
-  heading.textContent = `Win chance · ${chance.confidence} confidence`;
+  heading.textContent = "SIXFL AI Predictor";
+
+  const helperTop = document.createElement("div");
+  helperTop.className = "mt-1 text-xs text-white/45";
+  helperTop.textContent = `Form-based prediction · ${chance.confidence} confidence · Just for fun`;
+
+  headingWrap.appendChild(heading);
+  headingWrap.appendChild(helperTop);
+  header.appendChild(headingWrap);
+
+  const predictedResultCard = createPredictedResultCard(fixture);
+  if (predictedResultCard) header.appendChild(predictedResultCard);
 
   const grid = document.createElement("div");
   grid.className = "mt-3 grid gap-2 sm:grid-cols-3";
@@ -207,7 +251,7 @@ function createDetailedWinChanceBlock(fixture: FixtureBadge) {
   helper.className = "mt-3 text-xs leading-5 text-white/45";
   helper.textContent = chance.explanation;
 
-  block.appendChild(heading);
+  block.appendChild(header);
   block.appendChild(grid);
   block.appendChild(helper);
 
