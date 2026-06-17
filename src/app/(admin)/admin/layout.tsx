@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminSidebarDesktopColumnsBridge from "@/components/admin/AdminSidebarDesktopColumnsBridge";
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
 import EmailTemplateListControlsBridge from "@/components/admin/email-templates/EmailTemplateListControlsBridge";
@@ -41,6 +42,7 @@ export default async function AdminLayout({
       <AdminLeadEditButtonBridge />
       <AdminSocialResultsGeneratorLinksBridge />
       <EmailTemplateListControlsBridge />
+      <AdminSidebarDesktopColumnsBridge />
       <AppHeader variant="admin" />
 
       <div className="flex w-full gap-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-6">
