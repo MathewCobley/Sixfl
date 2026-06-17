@@ -64,6 +64,16 @@ function getPreferredSmsPhone(
   return null;
 }
 
+function getPreferredEmail(
+  contacts: TeamContactPoint[],
+  recipientEmail?: string | null,
+) {
+  return (
+    contacts.find((contact) => cleanValue(contact.email))?.email ??
+    cleanValue(recipientEmail)
+  );
+}
+
 function contactKey(input: {
   name?: string | null;
   email?: string | null;
@@ -307,7 +317,7 @@ export async function getTeamContactSnapshot(
     leagueName: team.league?.name ?? null,
     primaryContact: {
       name: primary?.name ?? null,
-      email: primary?.email ?? recipient?.email ?? null,
+      email: getPreferredEmail(contacts, recipient?.email),
       phone: getPreferredSmsPhone(
         primary?.phone,
         recipient?.phone,
