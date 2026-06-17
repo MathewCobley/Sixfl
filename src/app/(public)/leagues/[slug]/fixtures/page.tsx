@@ -5,6 +5,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getFixtureAiPreview, type FixtureAiPreview } from "@/lib/fixtures/aiPredictor";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
@@ -66,6 +67,10 @@ function getWinChanceBarClasses(type: "home" | "draw" | "away") {
   }
 }
 
+type WinChanceWithAi = ReturnType<typeof calculateFixtureWinChance> & {
+  aiPreview?: FixtureAiPreview;
+};
+
 function TeamBadge({
   name,
   logoUrl,
@@ -117,7 +122,7 @@ function WinChanceBlock({
 }: {
   homeTeamName: string;
   awayTeamName: string;
-  chance: ReturnType<typeof calculateFixtureWinChance>;
+  chance: WinChanceWithAi;
 }) {
   const rows = [
     {
@@ -148,7 +153,7 @@ function WinChanceBlock({
             SIXFL AI Predictor
           </div>
           <div className="mt-1 text-xs text-white/45">
-            Form-based prediction · {chance.confidence} confidence · Just for fun
+            OpenAI match preview · {chance.confidence} confidence · Just for fun
           </div>
         </div>
 
@@ -161,6 +166,17 @@ function WinChanceBlock({
           </div>
         </div>
       </div>
+
+      {chance.aiPreview ? (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <div className="text-sm font-semibold text-white">
+            {chance.aiPreview.headline}
+          </div>
+          <p className="mt-2 text-sm leading-6 text-white/60">
+            {chance.aiPreview.summary}
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         {rows.map((row) => (
@@ -228,6 +244,26 @@ export default async function LeagueFixturesPublic({
   if (!league) {
     notFound();
   }
+
+  const winChanceEntries = await Promise.all(
+    league.fixtures
+      .filter((fixture) => fixture.status === "SCHEDULED")
+      .map(async (fixture) => {
+        const winChance = calculateFixtureWinChance({
+          homeTeamId: fixture.homeTeam.id,
+          awayTeamId: fixture.awayTeam.id,
+          fixtures: league.fixtures,
+        });
+        const aiPreview = await getFixtureAiPreview({
+          homeTeamName: fixture.homeTeam.name,
+          awayTeamName: fixture.awayTeam.name,
+          winChance,
+        });
+
+        return [fixture.id, { ...winChance, aiPreview }] as const;
+      }),
+  );
+  const winChanceByFixtureId = new Map<string, WinChanceWithAi>(winChanceEntries);
 
   const rounds = league.fixtures.reduce(
     (acc, fixture) => {
@@ -321,14 +357,7 @@ export default async function LeagueFixturesPublic({
               {fixtures.map((fixture) => {
                 const homeLogoUrl = normaliseLogoUrl(fixture.homeTeam.logoUrl);
                 const awayLogoUrl = normaliseLogoUrl(fixture.awayTeam.logoUrl);
-                const winChance =
-                  fixture.status === "SCHEDULED"
-                    ? calculateFixtureWinChance({
-                        homeTeamId: fixture.homeTeam.id,
-                        awayTeamId: fixture.awayTeam.id,
-                        fixtures: league.fixtures,
-                      })
-                    : null;
+                const winChance = winChanceByFixtureId.get(fixture.id) ?? null;
 
                 return (
                   <article
