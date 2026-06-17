@@ -10,6 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { useFormStatus } from "react-dom";
 
 import { replyFixtureConfirmationIssueSmsAction } from "@/app/(admin)/admin/fixtures/confirmation-actions";
+import { resolveFixtureConfirmationIssueAction } from "@/app/(admin)/admin/fixtures/issue-actions";
 import OriginalFixturesAdminScreen from "./FixturesAdminScreen";
 
 type FixturesAdminScreenProps = ComponentProps<typeof OriginalFixturesAdminScreen>;
@@ -152,6 +153,16 @@ function ReplySubmitButton() {
   );
 }
 
+function ResolveIssueButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button type="submit" disabled={pending} className="inline-flex h-10 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 text-xs font-semibold text-amber-100 transition hover:border-amber-400/35 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50">
+      {pending ? "Updating..." : "Mark handled"}
+    </button>
+  );
+}
+
 function FixtureIssueReplyPanel({
   fixtures,
   initialLeagueId,
@@ -239,6 +250,15 @@ function FixtureIssueReplyPanel({
 
                 <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-500/5 px-3 py-3 text-sm leading-6 text-amber-100/90">
                   {item.note}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <form action={resolveFixtureConfirmationIssueAction}>
+                    <input type="hidden" name="fixtureId" value={item.fixtureId} />
+                    <input type="hidden" name="teamId" value={item.teamId} />
+                    <input type="hidden" name="leagueId" value={initialLeagueId ?? ""} />
+                    <ResolveIssueButton />
+                  </form>
                 </div>
 
                 <details className="mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.04] p-3">
