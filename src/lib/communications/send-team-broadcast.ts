@@ -2,7 +2,11 @@
 // File: src/lib/communications/send-team-broadcast.ts
 // ========================================
 
-import { NotificationAudience, NotificationChannel } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationChannel,
+  NotificationDispatchStatus,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
@@ -46,14 +50,6 @@ export async function sendTeamBroadcastMessage(input: Input) {
   }
 
   const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
-
-  if (input.channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
-    return { skipped: true as const, reason: "missing_email" };
-  }
-
-  if (input.channel === NotificationChannel.SMS && !recipient.phone?.trim()) {
-    return { skipped: true as const, reason: "missing_phone" };
-  }
 
   const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
@@ -102,8 +98,10 @@ export async function sendTeamBroadcastMessage(input: Input) {
   });
 
   return {
-    skipped: false as const,
+    skipped: dispatch.status === NotificationDispatchStatus.SKIPPED,
+    reason: dispatch.status === NotificationDispatchStatus.SKIPPED ? dispatch.failureReason : null,
     dispatchId: dispatch.id,
     teamId: team.id,
+    status: dispatch.status,
   };
 }
