@@ -13,6 +13,12 @@ type FixtureBadgeTeam = {
   logoUrl: string | null;
 };
 
+type FixtureAiPreview = {
+  headline: string;
+  summary: string;
+  source: "openai" | "fallback";
+};
+
 type FixtureWinChance = {
   home: number;
   draw: number;
@@ -22,6 +28,7 @@ type FixtureWinChance = {
     awayScore: number;
     label: string;
   };
+  aiPreview?: FixtureAiPreview;
   confidence: "Low" | "Medium" | "High";
   explanation: string;
 };
@@ -148,7 +155,7 @@ function createCompactWinChanceBadge(fixture: FixtureBadge) {
   badge.dataset.fixtureWinChanceFor = fixture.id;
   badge.className =
     "inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100";
-  badge.title = `${chance.explanation} Predicted result ${chance.predictedResult.label} · Home ${chance.home}% · Draw ${chance.draw}% · Away ${chance.away}%`;
+  badge.title = `${chance.aiPreview?.summary ?? chance.explanation} Predicted result ${chance.predictedResult.label} · Home ${chance.home}% · Draw ${chance.draw}% · Away ${chance.away}%`;
   badge.textContent = `SIXFL AI: ${chance.predictedResult.label} · ${highest}`;
 
   return badge;
@@ -177,6 +184,27 @@ function createPredictedResultCard(fixture: FixtureBadge) {
   return card;
 }
 
+function createAiPreview(fixture: FixtureBadge) {
+  const preview = fixture.winChance?.aiPreview;
+  if (!preview) return null;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "mt-3 rounded-xl border border-white/10 bg-black/20 p-3";
+
+  const headline = document.createElement("div");
+  headline.className = "text-sm font-semibold text-white";
+  headline.textContent = preview.headline;
+
+  const summary = document.createElement("p");
+  summary.className = "mt-2 text-xs leading-5 text-white/55";
+  summary.textContent = preview.summary;
+
+  wrapper.appendChild(headline);
+  wrapper.appendChild(summary);
+
+  return wrapper;
+}
+
 function createDetailedWinChanceBlock(fixture: FixtureBadge) {
   const chance = fixture.winChance;
   if (!chance) return null;
@@ -198,7 +226,7 @@ function createDetailedWinChanceBlock(fixture: FixtureBadge) {
 
   const helperTop = document.createElement("div");
   helperTop.className = "mt-1 text-xs text-white/45";
-  helperTop.textContent = `Form-based prediction · ${chance.confidence} confidence · Just for fun`;
+  helperTop.textContent = `OpenAI match preview · ${chance.confidence} confidence · Just for fun`;
 
   headingWrap.appendChild(heading);
   headingWrap.appendChild(helperTop);
@@ -206,6 +234,8 @@ function createDetailedWinChanceBlock(fixture: FixtureBadge) {
 
   const predictedResultCard = createPredictedResultCard(fixture);
   if (predictedResultCard) header.appendChild(predictedResultCard);
+
+  const aiPreview = createAiPreview(fixture);
 
   const grid = document.createElement("div");
   grid.className = "mt-3 grid gap-2 sm:grid-cols-3";
@@ -252,6 +282,7 @@ function createDetailedWinChanceBlock(fixture: FixtureBadge) {
   helper.textContent = chance.explanation;
 
   block.appendChild(header);
+  if (aiPreview) block.appendChild(aiPreview);
   block.appendChild(grid);
   block.appendChild(helper);
 
