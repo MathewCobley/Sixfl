@@ -159,8 +159,8 @@ export default function AdminSidebar({
   const activeHref = getActiveHref(pathname);
 
   return (
-    <aside className="sticky top-20 xl:top-4">
-      <div className="max-h-[calc(100dvh-6rem)] overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl xl:max-h-[calc(100dvh-2rem)]">
+    <aside className="fixed bottom-4 top-24 w-[34rem] 2xl:w-[38rem]">
+      <div className="h-full overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
         <div className="border-b border-white/10 px-4 py-5 xl:px-3 xl:py-3 2xl:px-4 2xl:py-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35 xl:text-[10px]">
             Admin console
