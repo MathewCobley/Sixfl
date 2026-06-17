@@ -142,13 +142,22 @@ function WinChanceBlock({
 
   return (
     <div className="mt-5 rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-            Win chance
+            SIXFL AI Predictor
           </div>
           <div className="mt-1 text-xs text-white/45">
-            Form-based prediction · {chance.confidence} confidence
+            Form-based prediction · {chance.confidence} confidence · Just for fun
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-400/20 bg-black/25 px-5 py-3 text-center">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
+            Predicted result
+          </div>
+          <div className="mt-1 text-3xl font-black text-white">
+            {chance.predictedResult.label}
           </div>
         </div>
       </div>
@@ -266,7 +275,7 @@ export default async function LeagueFixturesPublic({
                   {league.name}
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-white/60 sm:text-base">
-                  Published fixtures with team badges, kick-off details and form-based win chance predictions.
+                  Published fixtures with team badges, kick-off details and the SIXFL AI Predictor.
                 </p>
               </div>
 
