@@ -512,8 +512,7 @@ export default async function AdminPaymentsPage({
       dispatch.metadata && typeof dispatch.metadata === "object" && !Array.isArray(dispatch.metadata)
         ? (dispatch.metadata as Record<string, unknown>)
         : null;
-    const chargeIdFromMetadata =
-      typeof metadata?.chargeId === "string" ? metadata.chargeId : null;
+    const chargeIdFromMetadata = typeof metadata?.chargeId === "string" ? metadata.chargeId : null;
     const chargeIdFromSource = openChargeIds.find((chargeId) =>
       dispatch.sourceId?.startsWith(`${chargeId}:manual-sms:`),
     );
@@ -528,10 +527,7 @@ export default async function AdminPaymentsPage({
     (sum, row) => sum + row.summary.outstandingPence,
     0,
   );
-  const playerFeeOutstanding = openPlayerFees.reduce(
-    (sum, fee) => sum + fee.amountPence,
-    0,
-  );
+  const playerFeeOutstanding = openPlayerFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const totalOutstanding = teamChargeOutstanding + playerFeeOutstanding;
   const needsAdminChaseCount = chargeRows.filter((row) => row.needsAdminChase).length;
 
@@ -574,14 +570,20 @@ export default async function AdminPaymentsPage({
           {sp.created === "payment" ? <div className="text-emerald-300">Payment recorded.</div> : null}
           {sp.created === "team_charge_reminder" ? <div className="text-emerald-300">Team charge SMS queued.</div> : null}
           {sp.created === "player_fee_reminder" ? <div className="text-emerald-300">Player fee reminder queued.</div> : null}
-          {sp.created === "player_fee_already_sent" ? <div className="text-amber-200">All player fee reminder stages have already been queued or sent.</div> : null}
+          {sp.created === "player_fee_already_sent" ? (
+            <div className="text-amber-200">All player fee reminder stages have already been queued or sent.</div>
+          ) : null}
           {sp.created === "charge_voided" ? <div className="text-emerald-300">Charge voided.</div> : null}
           {sp.error === "invalid_charge" ? <div className="text-red-300">Charge details are incomplete.</div> : null}
           {sp.error === "missing_team" ? <div className="text-red-300">Selected team was not found.</div> : null}
           {sp.error === "invalid_payment" ? <div className="text-red-300">Payment details are incomplete.</div> : null}
-          {sp.error === "invalid_player_fee" || sp.error === "not_open" ? <div className="text-red-300">That player fee cannot be chased.</div> : null}
+          {sp.error === "invalid_player_fee" || sp.error === "not_open" ? (
+            <div className="text-red-300">That player fee cannot be chased.</div>
+          ) : null}
           {sp.error === "no_contact" ? <div className="text-red-300">No contact details were found for that player.</div> : null}
-          {sp.error === "no_payment_url" ? <div className="text-red-300">A payment link could not be created for that player fee.</div> : null}
+          {sp.error === "no_payment_url" ? (
+            <div className="text-red-300">A payment link could not be created for that player fee.</div>
+          ) : null}
         </div>
       ) : null}
 
@@ -605,3 +607,175 @@ export default async function AdminPaymentsPage({
           <div className="mt-3 text-3xl font-semibold text-white">{transactions.length}</div>
         </div>
       </div>
+
+      {openPlayerFees.length > 0 ? (
+        <section className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-100/70">Player match fees</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">{formatMoney(playerFeeOutstanding)} pending from players</h2>
+              <p className="mt-2 max-w-3xl text-sm text-white/65">
+                These open player fees are included in the outstanding total above. Use the reminder button to queue the next missing reminder.
+              </p>
+            </div>
+            <span className="rounded-2xl border border-amber-400/25 bg-black/20 px-4 py-3 text-sm font-semibold text-amber-100">
+              {openPlayerFees.length} open player fee{openPlayerFees.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {openPlayerFees.map((fee) => {
+              const playerName = getPlayerFeeName({ teamMember: fee.teamMember, prospect: fee.prospect });
+              const playerContact = getPlayerFeeContact({ teamMember: fee.teamMember, prospect: fee.prospect });
+              const fixtureName = `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`;
+
+              return (
+                <div key={fee.id} className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="font-semibold text-white">{playerName} · {formatMoney(fee.amountPence)}</div>
+                      <div className="mt-1 text-sm text-white/55">{fee.team.name} · {fixtureName} · {formatFixtureDate(fee.fixture.kickoffAt)}</div>
+                      <div className="mt-1 text-xs text-white/40">{playerContact}</div>
+                      <div className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fee.lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/5 text-white/55"}`}>
+                        {formatLastChasedLabel(fee.lastChasedAt)}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <Link href={`/captain/team/${fee.team.id}/match-fees?fixtureId=${fee.fixture.id}`} className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10">Open team fees</Link>
+                      {fee.paymentUrl ? <Link href={fee.paymentUrl} className="inline-flex items-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">Payment link</Link> : null}
+                      <form action={sendPlayerMatchFeeReminderAction}>
+                        <input type="hidden" name="feeId" value={fee.id} />
+                        <button type="submit" className="inline-flex items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/15">Chase player</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <form action={createChargeAction} className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <h2 className="text-xl font-semibold text-white">Create charge</h2>
+          <div className="mt-4 space-y-4">
+            <FormListboxField name="teamId" options={teamOptions} placeholder="Select team" />
+            <input type="text" name="title" placeholder="Charge title" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <textarea name="description" rows={4} placeholder="Optional description" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <input type="number" step="0.01" min="0" name="amountPounds" placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <input type="date" name="dueDate" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <button type="submit" className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">Create charge</button>
+          </div>
+        </form>
+
+        <form id="record-payment" action={recordPaymentAction} className="scroll-mt-24 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Record payment</h2>
+              <p className="mt-1 text-sm text-white/55">{recordPaymentHelpText}</p>
+            </div>
+            {selectedPaymentChargeRow ? (
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                Outstanding {formatMoney(selectedPaymentChargeRow.summary.outstandingPence)}
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-4 space-y-4">
+            <FormListboxField name="teamId" value={recordPaymentTeamId} options={teamOptions} placeholder="Select team" />
+            <FormListboxField name="chargeId" value={recordPaymentChargeId} options={[{ value: "", label: "No linked charge" }, ...openChargeOptions]} placeholder="Optional linked charge" />
+            <input type="number" step="0.01" min="0" name="amountPounds" defaultValue={recordPaymentAmount} placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <FormListboxField name="method" value={PaymentMethod.BANK_TRANSFER} options={methodOptions} placeholder="Select payment method" />
+            <input type="text" name="reference" placeholder="Reference" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <textarea name="notes" rows={4} placeholder="Optional notes" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <input type="datetime-local" name="paidAt" defaultValue={defaultPaidAt} className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+            <button type="submit" className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">Record payment</button>
+          </div>
+        </form>
+      </div>
+
+      <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-white">Team charges</h2>
+          <p className="text-sm text-white/55">Red items are unpaid after the automatic reminder window.</p>
+        </div>
+        <div className="mt-4 space-y-3">
+          {chargeRows.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No charges yet.</div>
+          ) : (
+            chargeRows.map((row) => {
+              const lastChasedAt = lastTeamChargeChaseByChargeId.get(row.charge.id) ?? null;
+              const canChaseTeamCharge =
+                row.charge.status !== "PAID" &&
+                row.charge.status !== "VOID" &&
+                row.summary.outstandingPence > 0 &&
+                Boolean(row.charge.paymentToken);
+              const canRecordPayment =
+                row.charge.status !== "PAID" &&
+                row.charge.status !== "VOID" &&
+                row.summary.outstandingPence > 0;
+              const canVoidCharge = row.charge.status !== "PAID" && row.charge.status !== "VOID";
+
+              return (
+                <div key={row.charge.id} className={`rounded-2xl border bg-[#0d1428] p-4 ${row.needsAdminChase ? "border-red-500/30" : "border-white/10"}`}>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="text-base font-semibold text-white">{row.charge.team.name} · {row.charge.title}</div>
+                      <div className="mt-1 text-sm text-white/55">{row.charge.description || "No description"}</div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {row.charge.dueDate ? <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Due {formatDueLabel(row.charge.dueDate)}</span> : null}
+                        {row.needsAdminChase ? <span className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-red-200">Needs admin chase</span> : null}
+                        {row.summary.outstandingPence > 0 && row.charge.status !== "VOID" ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">Awaiting payment</span> : null}
+                        <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/[0.05] text-white/55"}`}>{formatLastChasedLabel(lastChasedAt)}</span>
+                      </div>
+                      {(canRecordPayment || canChaseTeamCharge || canVoidCharge) ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {canRecordPayment ? (
+                            <Link href={`/admin/payments?paymentChargeId=${encodeURIComponent(row.charge.id)}#record-payment`} className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Record payment</Link>
+                          ) : null}
+                          {canChaseTeamCharge ? (
+                            <form action={sendTeamChargeReminderAction}>
+                              <input type="hidden" name="chargeId" value={row.charge.id} />
+                              <button type="submit" className="inline-flex items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/15">Team chase SMS</button>
+                            </form>
+                          ) : null}
+                          {canVoidCharge ? (
+                            <Link href={`/admin/payments/void/${row.charge.id}`} className="inline-flex items-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15">Void charge</Link>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-base font-semibold text-white">{formatMoney(row.charge.amountPence)}</div>
+                      <div className="mt-1 text-sm text-white/55">Paid {formatMoney(row.summary.paidTotalPence)} · Outstanding {formatMoney(row.summary.outstandingPence)}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">{row.charge.status}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-xl font-semibold text-white">Recent payments</h2>
+        <div className="mt-4 space-y-3">
+          {transactions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No payments recorded yet.</div> : null}
+          {transactions.map((payment) => (
+            <div key={payment.id} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-[#0d1428] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="font-semibold text-white">{payment.team.name}</div>
+                <div className="mt-1 text-sm text-white/55">{payment.charge?.title ?? "Unlinked payment"} · {formatPaymentMethodLabel(payment.method)}</div>
+              </div>
+              <div className="text-sm text-white/60 sm:text-right">
+                <div className="font-semibold text-white">{formatMoney(payment.amountPence)}</div>
+                <div>{formatDateTimeLabel(payment.paidAt)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
