@@ -5,6 +5,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { TeamRole } from "@prisma/client";
 
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
@@ -236,6 +237,34 @@ export default async function CaptainTeamLayout({
     notFound();
   }
 
+  const captainTeamMemberships = access.user?.id
+    ? await prisma.teamMember.findMany({
+        where: {
+          userId: access.user.id,
+          role: TeamRole.CAPTAIN,
+        },
+        select: {
+          team: {
+            select: {
+              id: true,
+              name: true,
+              league: {
+                select: {
+                  name: true,
+                  season: true,
+                },
+              },
+            },
+          },
+        },
+      })
+    : [];
+
+  const captainTeamOptions = captainTeamMemberships
+    .map((membership) => membership.team)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const showCaptainTeamSwitcher = !access.isAdmin && captainTeamOptions.length > 1;
+
   const isManagedTeam = team.teamMode === "MANAGED";
   const showTeamPayments = !isManagedTeam || access.isAdmin;
 
@@ -309,6 +338,42 @@ export default async function CaptainTeamLayout({
                   </p>
                 </div>
               </div>
+
+              {showCaptainTeamSwitcher ? (
+                <div className="w-full rounded-2xl border border-emerald-400/20 bg-black/25 p-3 lg:max-w-md">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">
+                    Switch team
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    {captainTeamOptions.map((option) => {
+                      const active = option.id === teamid;
+                      const leagueLabel = option.league
+                        ? `${option.league.name}${option.league.season ? ` · ${option.league.season}` : ""}`
+                        : "No league assigned";
+
+                      return (
+                        <Link
+                          key={option.id}
+                          href={`/captain/team/${option.id}`}
+                          className={[
+                            "rounded-xl border px-3 py-2 text-left transition",
+                            active
+                              ? "border-emerald-400/35 bg-emerald-500/15 text-white"
+                              : "border-white/10 bg-white/[0.03] text-white/75 hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-white",
+                          ].join(" ")}
+                        >
+                          <span className="block truncate text-sm font-semibold">
+                            {option.name}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-white/45">
+                            {active ? "Current team" : leagueLabel}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
