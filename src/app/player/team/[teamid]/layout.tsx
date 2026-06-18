@@ -3,6 +3,7 @@
 // ========================================
 
 import type { ReactNode } from "react";
+import PlayerDashboardCopyPolish from "@/components/player/PlayerDashboardCopyPolish";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 
 export default async function PlayerTeamLayout({
@@ -16,6 +17,7 @@ export default async function PlayerTeamLayout({
 
   return (
     <>
+      <PlayerDashboardCopyPolish />
       {children}
       <PlayerMessageBox teamId={teamid} />
     </>
