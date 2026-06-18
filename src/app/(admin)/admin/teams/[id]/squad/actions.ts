@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
+import { moveTeamMemberToProspect } from "@/lib/managed-squad/movePlayerToProspect";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -32,6 +33,16 @@ function getRoleValue(input: FormDataEntryValue | null): TeamRole {
 
 function buildRedirect(teamId: string, query: string) {
   return `/admin/teams/${teamId}/squad${query}`;
+}
+
+function revalidateSquadAndProspectPaths(teamId: string) {
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/squad`);
+  revalidatePath(`/admin/teams/${teamId}/prospects`);
+  revalidatePath(`/captain/team/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/squad`);
+  revalidatePath(`/captain/team/${teamId}/prospects`);
+  revalidatePath("/admin/player-prospects");
 }
 
 export async function addAdminSquadMemberAction(formData: FormData) {
@@ -207,4 +218,27 @@ export async function removeAdminSquadMemberAction(formData: FormData) {
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath(`/admin/teams/${teamId}/squad`);
   redirect(buildRedirect(teamId, "?saved=member-removed"));
+}
+
+export async function moveAdminSquadMemberToProspectsAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const membershipId = String(formData.get("membershipId") ?? "").trim();
+
+  if (!teamId || !membershipId) {
+    redirect("/admin/teams");
+  }
+
+  const result = await moveTeamMemberToProspect({
+    teamId,
+    membershipId,
+  });
+
+  if (!result.ok) {
+    redirect(buildRedirect(teamId, "?error=Squad%20member%20not%20found."));
+  }
+
+  revalidateSquadAndProspectPaths(teamId);
+  redirect(buildRedirect(teamId, "?saved=moved-to-prospects"));
 }
