@@ -3,11 +3,14 @@
 // ========================================
 
 import { getServerSession } from "next-auth";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { TeamRole, UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
+
+export const CAPTAIN_ONLY_PREVIEW_COOKIE = "sixfl-captain-only-preview-team";
 
 type RequireCaptainResult = {
   session: Awaited<ReturnType<typeof getServerSession>> | null;
@@ -33,8 +36,20 @@ type RequireCaptainResult = {
     | null;
   isAdmin: boolean;
   isCaptain: boolean;
-  accessMode: "admin-preview" | "captain";
+  accessMode: "admin-preview" | "captain-preview" | "captain";
 };
+
+async function isCaptainOnlyPreviewEnabled(input: {
+  teamId: string;
+  isAdmin: boolean;
+}) {
+  if (!input.isAdmin) return false;
+
+  const cookieStore = await cookies();
+  const previewTeamId = cookieStore.get(CAPTAIN_ONLY_PREVIEW_COOKIE)?.value;
+
+  return previewTeamId === input.teamId;
+}
 
 export async function requireCaptain(
   teamId: string,
@@ -82,10 +97,15 @@ export async function requireCaptain(
       })
     : null;
 
-  const isAdmin = user?.role === UserRole.ADMIN;
-  const isCaptain = Boolean(membership);
+  const rawIsAdmin = user?.role === UserRole.ADMIN;
+  const isCaptainOnlyPreview = await isCaptainOnlyPreviewEnabled({
+    teamId,
+    isAdmin: rawIsAdmin,
+  });
+  const isAdmin = rawIsAdmin && !isCaptainOnlyPreview;
+  const isCaptain = Boolean(membership) || isCaptainOnlyPreview;
 
-  if (!isAdmin && !isCaptain) {
+  if (!rawIsAdmin && !membership) {
     if (process.env.NODE_ENV !== "production") {
       return {
         session,
@@ -106,6 +126,10 @@ export async function requireCaptain(
     membership,
     isAdmin,
     isCaptain,
-    accessMode: isAdmin && !isCaptain ? "admin-preview" : "captain",
+    accessMode: isCaptainOnlyPreview
+      ? "captain-preview"
+      : rawIsAdmin && !membership
+        ? "admin-preview"
+        : "captain",
   };
 }
