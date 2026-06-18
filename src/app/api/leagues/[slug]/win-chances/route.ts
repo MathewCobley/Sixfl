@@ -4,7 +4,7 @@
 
 import { NextResponse } from "next/server";
 
-import { getFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
@@ -65,37 +65,34 @@ export async function GET(
       return NextResponse.json({ fixtures: [] }, { status: 404 });
     }
 
-    const fixtures = await Promise.all(
-      league.fixtures
-        .filter((fixture) => fixture.status === "SCHEDULED")
-        .map(async (fixture) => {
-          const winChance = calculateFixtureWinChance({
-            homeTeamId: fixture.homeTeam.id,
-            awayTeamId: fixture.awayTeam.id,
-            fixtures: league.fixtures,
-          });
-
-          const aiPreview = await getFixtureAiPreview({
-            homeTeamName: fixture.homeTeam.name,
-            awayTeamName: fixture.awayTeam.name,
-            winChance,
-          });
-
-          return {
-            id: fixture.id,
-            homeTeamName: fixture.homeTeam.name,
-            awayTeamName: fixture.awayTeam.name,
-            fullLabel: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`,
-            kickoffAt: fixture.kickoffAt.toISOString(),
-            winChance: {
-              ...winChance,
-              aiPreview,
-            },
-          };
-        }),
+    const scheduledFixtures = league.fixtures.filter(
+      (fixture) => fixture.status === "SCHEDULED",
+    );
+    const storedPreviews = await getStoredAiPreviewsByFixtureIds(
+      scheduledFixtures.map((fixture) => fixture.id),
     );
 
-    return NextResponse.json({ fixtures });
+    return NextResponse.json({
+      fixtures: scheduledFixtures.map((fixture) => {
+        const winChance = calculateFixtureWinChance({
+          homeTeamId: fixture.homeTeam.id,
+          awayTeamId: fixture.awayTeam.id,
+          fixtures: league.fixtures,
+        });
+
+        return {
+          id: fixture.id,
+          homeTeamName: fixture.homeTeam.name,
+          awayTeamName: fixture.awayTeam.name,
+          fullLabel: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`,
+          kickoffAt: fixture.kickoffAt.toISOString(),
+          winChance: {
+            ...winChance,
+            aiPreview: storedPreviews.get(fixture.id) ?? null,
+          },
+        };
+      }),
+    });
   } catch (error) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
