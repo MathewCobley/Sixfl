@@ -25,7 +25,7 @@ export default async function AdminTeamDetailLayout({
               Admin preview tools
             </p>
             <p className="mt-1 text-sm text-white/60">
-              Open the live role views and managed squad tools for this team.
+              Open the admin version, true captain-only preview, player view and managed squad tools for this team.
             </p>
           </div>
 
@@ -49,10 +49,16 @@ export default async function AdminTeamDetailLayout({
               Managed squad
             </Link>
             <Link
-              href={`/captain/team/${id}`}
+              href={`/admin/teams/${id}/captain-admin-view`}
               className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
             >
-              Captain view
+              Admin captain view
+            </Link>
+            <Link
+              href={`/admin/teams/${id}/captain-preview`}
+              className="inline-flex items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/15"
+            >
+              Captain-only preview
             </Link>
             <Link
               href={`/admin/teams/${id}/player-preview`}
