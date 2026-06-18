@@ -5,7 +5,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 function getFormValue(form: HTMLFormElement, name: string) {
   return form.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value.trim() || "";
@@ -20,6 +20,34 @@ function buildResultsGeneratorHref(form: HTMLFormElement) {
   if (fixtureDate) params.set("fixtureDate", fixtureDate);
 
   return `/admin/social/results${params.toString() ? `?${params.toString()}` : ""}`;
+}
+
+function getActionColumnFromCardIdInput(input: HTMLInputElement) {
+  const form = input.closest("form");
+  const parent = form?.parentElement;
+
+  if (!form || !parent) return null;
+
+  const className = typeof parent.className === "string" ? parent.className : "";
+  if (!className.includes("flex")) return null;
+
+  return { form, parent, cardId: input.value.trim() };
+}
+
+function getQueueRowFromActionColumn(actionColumn: HTMLElement) {
+  let current: HTMLElement | null = actionColumn;
+
+  while (current && current.parentElement && current.parentElement.tagName !== "MAIN") {
+    const className = typeof current.className === "string" ? current.className : "";
+
+    if (className.includes("grid") && className.includes("px-6") && className.includes("py-6")) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
 }
 
 function enhanceResultsCardButtons() {
@@ -103,21 +131,106 @@ function addResultsGeneratorIntro() {
   hero.insertAdjacentElement("afterend", intro);
 }
 
-function cleanSocialPage() {
+function addAiImageNotice(searchParams: URLSearchParams) {
+  const aiImageStatus = searchParams.get("aiImage");
+  if (!aiImageStatus || document.querySelector("[data-ai-image-notice]")) return;
+
+  const queueHeading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find((heading) =>
+    heading.textContent?.includes("Weekly social queue"),
+  );
+  const queueHeader = queueHeading?.closest("div.border-b");
+  if (!queueHeader?.parentElement) return;
+
+  const notice = document.createElement("div");
+  notice.dataset.aiImageNotice = "true";
+  notice.className =
+    aiImageStatus === "generated"
+      ? "mx-6 mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100 md:mx-8"
+      : "mx-6 mt-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100 md:mx-8";
+  notice.textContent =
+    aiImageStatus === "generated"
+      ? "AI image draft generated. Open the image from the queue below and review it before approving or publishing."
+      : aiImageStatus === "missing-card"
+        ? "Could not generate an AI image because the social card was not found."
+        : "AI image generation failed. Check the card error message in the queue.";
+
+  queueHeader.insertAdjacentElement("afterend", notice);
+}
+
+function addAiImageReviewPreviews() {
+  const imageLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).filter(
+    (link) => link.textContent?.trim() === "Open image" && link.href.includes("/api/social/ai-image/"),
+  );
+
+  for (const link of imageLinks) {
+    const actionColumn = link.parentElement;
+    const queueRow = actionColumn ? getQueueRowFromActionColumn(actionColumn) : null;
+    if (!queueRow || queueRow.querySelector("[data-ai-image-preview]")) continue;
+
+    const preview = document.createElement("a");
+    preview.href = link.href;
+    preview.target = "_blank";
+    preview.rel = "noreferrer";
+    preview.dataset.aiImagePreview = "true";
+    preview.className =
+      "block overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/30 shadow-[0_16px_50px_rgba(0,0,0,0.28)]";
+    preview.innerHTML = `<img src="${link.href}" alt="AI generated social image draft" class="aspect-square w-full max-w-[320px] object-cover" />`;
+
+    actionColumn?.insertAdjacentElement("afterbegin", preview);
+  }
+}
+
+function addAiImageButtons() {
+  const cardInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('form input[name="cardId"]'),
+  );
+
+  const seenColumns = new Set<HTMLElement>();
+
+  for (const input of cardInputs) {
+    const details = getActionColumnFromCardIdInput(input);
+    if (!details || !details.cardId || seenColumns.has(details.parent)) continue;
+
+    seenColumns.add(details.parent);
+
+    if (details.parent.querySelector("[data-ai-image-form]")) continue;
+
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/admin/social/ai-image/generate";
+    form.dataset.aiImageForm = "true";
+    form.innerHTML = `
+      <input type="hidden" name="cardId" value="${details.cardId}" />
+      <button type="submit" class="inline-flex h-10 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 text-xs font-semibold text-violet-100 transition hover:border-violet-300/35 hover:bg-violet-500/15">
+        Generate AI image
+      </button>
+    `;
+
+    details.parent.insertAdjacentElement("afterbegin", form);
+  }
+}
+
+function cleanSocialPage(searchParams: URLSearchParams) {
   addResultsGeneratorIntro();
+  addAiImageNotice(searchParams);
   enhanceResultsCardButtons();
   hideOldResultsQueueCards();
+  addAiImageButtons();
+  addAiImageReviewPreviews();
 }
 
 export default function AdminSocialResultsGeneratorLinksBridge() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (pathname !== "/admin/social") return;
 
-    cleanSocialPage();
+    const params = new URLSearchParams(searchParams.toString());
 
-    const observer = new MutationObserver(cleanSocialPage);
+    cleanSocialPage(params);
+
+    const observer = new MutationObserver(() => cleanSocialPage(params));
 
     observer.observe(document.body, {
       childList: true,
@@ -125,7 +238,7 @@ export default function AdminSocialResultsGeneratorLinksBridge() {
     });
 
     return () => observer.disconnect();
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   return null;
 }
