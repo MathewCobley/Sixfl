@@ -70,6 +70,19 @@ async function getTeamMemberProfileSnapshot(
   }
 }
 
+async function hasPlayerInterestResponseTable() {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT to_regclass('"PlayerInterestResponse"') IS NOT NULL AS "exists"
+    `;
+
+    return Boolean(rows[0]?.exists);
+  } catch (error) {
+    console.warn("Could not check PlayerInterestResponse table while moving squad player to prospects", error);
+    return false;
+  }
+}
+
 async function findReusableProspect(input: {
   client: DbClient;
   teamId: string;
@@ -155,7 +168,10 @@ export async function moveTeamMemberToProspect(input: {
     return { ok: false, reason: "TEAM_MEMBER_NOT_FOUND" };
   }
 
-  const profile = await getTeamMemberProfileSnapshot(membership.id);
+  const [profile, canRelinkInterestResponses] = await Promise.all([
+    getTeamMemberProfileSnapshot(membership.id),
+    hasPlayerInterestResponseTable(),
+  ]);
   const email = normaliseEmail(membership.user.email);
   const { firstName, lastName } = splitPlayerName({
     name: membership.user.name,
@@ -205,13 +221,15 @@ export async function moveTeamMemberToProspect(input: {
           select: { id: true },
         });
 
-    await tx.$executeRaw`
-      UPDATE "PlayerInterestResponse"
-      SET "prospectId" = ${prospect.id},
-          "teamMemberId" = NULL,
-          "updatedAt" = NOW()
-      WHERE "teamMemberId" = ${membership.id}
-    `;
+    if (canRelinkInterestResponses) {
+      await tx.$executeRaw`
+        UPDATE "PlayerInterestResponse"
+        SET "prospectId" = ${prospect.id},
+            "teamMemberId" = NULL,
+            "updatedAt" = NOW()
+        WHERE "teamMemberId" = ${membership.id}
+      `;
+    }
 
     await tx.teamMember.delete({
       where: { id: membership.id },
@@ -226,7 +244,7 @@ export async function moveTeamMemberToProspect(input: {
       });
     }
 
-    return { ok: true, prospectId: prospect.id };
+    return { ok: true, prospectId: prospect.id } as const;
   });
 }
 
