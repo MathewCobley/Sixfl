@@ -4,7 +4,7 @@
 
 import { NextResponse } from "next/server";
 
-import { getFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -106,38 +106,14 @@ export async function GET(
         : Promise.resolve([]),
     ]);
 
-    const hydratedFixtures = await Promise.all(
-      fixtures.map(async (fixture) => {
-        if (fixture.status !== "SCHEDULED") {
-          return {
-            id: fixture.id,
-            kickoffAt: fixture.kickoffAt.toISOString(),
-            status: fixture.status,
-            homeTeamId: fixture.homeTeamId,
-            awayTeamId: fixture.awayTeamId,
-            homeTeam: toTeamBadge(fixture.homeTeam),
-            awayTeam: toTeamBadge(fixture.awayTeam),
-            fullLabel: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`,
-            captainLabel:
-              fixture.homeTeamId === teamId
-                ? `vs ${fixture.awayTeam.name}`
-                : `vs ${fixture.homeTeam.name}`,
-            winChance: null,
-          };
-        }
+    const storedPreviews = await getStoredAiPreviewsByFixtureIds(
+      fixtures.map((fixture) => fixture.id),
+    );
 
-        const winChance = calculateFixtureWinChance({
-          homeTeamId: fixture.homeTeamId,
-          awayTeamId: fixture.awayTeamId,
-          fixtures: leagueFixtures,
-        });
-        const aiPreview = await getFixtureAiPreview({
-          homeTeamName: fixture.homeTeam.name,
-          awayTeamName: fixture.awayTeam.name,
-          winChance,
-        });
-
-        return {
+    return NextResponse.json({
+      teamId,
+      fixtures: fixtures.map((fixture) => {
+        const base = {
           id: fixture.id,
           kickoffAt: fixture.kickoffAt.toISOString(),
           status: fixture.status,
@@ -150,17 +126,29 @@ export async function GET(
             fixture.homeTeamId === teamId
               ? `vs ${fixture.awayTeam.name}`
               : `vs ${fixture.homeTeam.name}`,
+        };
+
+        if (fixture.status !== "SCHEDULED") {
+          return {
+            ...base,
+            winChance: null,
+          };
+        }
+
+        const winChance = calculateFixtureWinChance({
+          homeTeamId: fixture.homeTeamId,
+          awayTeamId: fixture.awayTeamId,
+          fixtures: leagueFixtures,
+        });
+
+        return {
+          ...base,
           winChance: {
             ...winChance,
-            aiPreview,
+            aiPreview: storedPreviews.get(fixture.id) ?? null,
           },
         };
       }),
-    );
-
-    return NextResponse.json({
-      teamId,
-      fixtures: hydratedFixtures,
     });
   } catch (error) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
