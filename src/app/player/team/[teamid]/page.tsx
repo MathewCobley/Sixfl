@@ -54,6 +54,18 @@ function formatFixtureDate(value: Date) {
   });
 }
 
+function formatPaymentDate(value: Date | null) {
+  if (!value) return "Not paid yet";
+
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function formatMoney(amountPence: number) {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -280,11 +292,12 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                 PlayerMatchFeeStatus.OPEN,
                 PlayerMatchFeeStatus.PAID,
                 PlayerMatchFeeStatus.WAIVED,
+                PlayerMatchFeeStatus.CANCELLED,
               ],
             },
           },
           orderBy: [{ createdAt: "desc" }],
-          take: 10,
+          take: 50,
           select: {
             id: true,
             fixtureId: true,
@@ -309,10 +322,17 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   const openFees = playerFees.filter(
     (fee) => fee.status === PlayerMatchFeeStatus.OPEN,
   );
+  const paidFees = playerFees.filter(
+    (fee) => fee.status === PlayerMatchFeeStatus.PAID,
+  );
+  const waivedFees = playerFees.filter(
+    (fee) => fee.status === PlayerMatchFeeStatus.WAIVED,
+  );
   const outstandingPence = openFees.reduce(
     (sum, fee) => sum + fee.amountPence,
     0,
   );
+  const paidPence = paidFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const nextOpenFee = openFees
     .slice()
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
@@ -466,6 +486,84 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
             <p className="mt-2 text-sm leading-6 text-white/60">
               Each fixture now has its own availability button so you know exactly which match you are responding for.
             </p>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.06] p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+                Payments
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Payments history</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-100/70">
+                See your open, paid and waived player match fees for this team.
+              </p>
+            </div>
+
+            <div className="grid gap-2 text-sm sm:grid-cols-3 lg:min-w-[28rem]">
+              <div className="rounded-2xl border border-amber-400/20 bg-black/20 px-4 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100/55">Outstanding</div>
+                <div className="mt-1 text-lg font-black text-white">{formatMoney(outstandingPence)}</div>
+              </div>
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100/60">Paid</div>
+                <div className="mt-1 text-lg font-black text-white">{formatMoney(paidPence)}</div>
+              </div>
+              <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100/60">Waived</div>
+                <div className="mt-1 text-lg font-black text-white">{waivedFees.length}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {playerFees.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/60">
+                No player match fees have been linked to this player yet.
+              </div>
+            ) : (
+              playerFees.map((fee) => (
+                <div key={fee.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getFeeStatusClasses(fee.status)}`}>
+                          {getFeeStatusLabel(fee.status)}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/60">
+                          {formatMoney(fee.amountPence)}
+                        </span>
+                      </div>
+                      <h3 className="mt-3 text-sm font-semibold text-white">
+                        {getFixtureLabel({
+                          homeTeamName: fee.fixture.homeTeam.name,
+                          awayTeamName: fee.fixture.awayTeam.name,
+                        })}
+                      </h3>
+                      <p className="mt-1 text-xs text-white/45">
+                        Fixture: {formatFixtureDate(fee.fixture.kickoffAt)}
+                      </p>
+                      <p className="mt-1 text-xs text-white/45">
+                        Added: {formatPaymentDate(fee.createdAt)} · Paid: {formatPaymentDate(fee.paidAt)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
+                        <Link
+                          href={fee.paymentUrl}
+                          target="_blank"
+                          className="inline-flex items-center rounded-xl bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
+                        >
+                          Pay this fee
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </section>
 
