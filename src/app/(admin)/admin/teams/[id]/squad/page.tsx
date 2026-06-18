@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   addAdminSquadMemberAction,
+  moveAdminSquadMemberToProspectsAction,
   removeAdminSquadMemberAction,
   updateAdminSquadMemberRoleAction,
 } from "./actions";
@@ -107,6 +108,8 @@ function getSavedMessage(saved?: string) {
       return "Squad role updated.";
     case "member-removed":
       return "Squad member removed.";
+    case "moved-to-prospects":
+      return "Player moved back to prospects and unlinked from the active squad.";
     default:
       return saved ? "Saved." : null;
   }
@@ -420,6 +423,21 @@ export default async function AdminTeamSquadPage({
                           className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
                         >
                           Update role
+                        </button>
+                      </form>
+
+                      <form action={moveAdminSquadMemberToProspectsAction}>
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input
+                          type="hidden"
+                          name="membershipId"
+                          value={member.id}
+                        />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+                        >
+                          Move to prospects
                         </button>
                       </form>
 
