@@ -25,7 +25,24 @@ export const metadata = {
 
 type PageProps = {
   params: Promise<{ teamid: string }>;
+  searchParams?: Promise<{ previewMembershipId?: string }>;
 };
+
+const teamSelect = {
+  id: true,
+  name: true,
+  logoUrl: true,
+  league: {
+    select: {
+      id: true,
+      name: true,
+      season: true,
+      slug: true,
+      venueName: true,
+      dayOfWeek: true,
+    },
+  },
+} as const;
 
 function formatFixtureDate(value: Date) {
   return formatDateTimeInLondon(value, {
@@ -126,8 +143,9 @@ function getTeamInitials(name: string) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "S";
 }
 
-export default async function PlayerTeamPage({ params }: PageProps) {
+export default async function PlayerTeamPage({ params, searchParams }: PageProps) {
   const { teamid } = await params;
+  const sp = (await searchParams) ?? {};
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
@@ -149,21 +167,7 @@ export default async function PlayerTeamPage({ params }: PageProps) {
           id: true,
           role: true,
           team: {
-            select: {
-              id: true,
-              name: true,
-              logoUrl: true,
-              league: {
-                select: {
-                  id: true,
-                  name: true,
-                  season: true,
-                  slug: true,
-                  venueName: true,
-                  dayOfWeek: true,
-                },
-              },
-            },
+            select: teamSelect,
           },
         },
         take: 1,
@@ -175,7 +179,26 @@ export default async function PlayerTeamPage({ params }: PageProps) {
     redirect(`/login?callbackUrl=${encodeURIComponent(`/player/team/${teamid}`)}`);
   }
 
-  const membership = user.teamMembers[0] ?? null;
+  const previewMembershipId =
+    user.role === UserRole.ADMIN ? sp.previewMembershipId?.trim() || null : null;
+
+  const previewMembership = previewMembershipId
+    ? await prisma.teamMember.findFirst({
+        where: {
+          id: previewMembershipId,
+          teamId: teamid,
+        },
+        select: {
+          id: true,
+          role: true,
+          team: {
+            select: teamSelect,
+          },
+        },
+      })
+    : null;
+
+  const membership = previewMembership ?? user.teamMembers[0] ?? null;
 
   if (!membership && user.role !== UserRole.ADMIN) {
     notFound();
@@ -185,21 +208,7 @@ export default async function PlayerTeamPage({ params }: PageProps) {
     membership?.team ??
     (await prisma.team.findUnique({
       where: { id: teamid },
-      select: {
-        id: true,
-        name: true,
-        logoUrl: true,
-        league: {
-          select: {
-            id: true,
-            name: true,
-            season: true,
-            slug: true,
-            venueName: true,
-            dayOfWeek: true,
-          },
-        },
-      },
+      select: teamSelect,
     }));
 
   if (!team) notFound();
@@ -425,12 +434,12 @@ export default async function PlayerTeamPage({ params }: PageProps) {
               Match fees
             </p>
             <h2 className="mt-2 text-xl font-semibold text-white">
-              {outstandingPence > 0 ? `${formatMoney(outstandingPence)} due` : "Nothing due"}
+              {outstandingPence > 0 ? `${formatMoney(outstandingPence)} due` : "All paid up"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-amber-100/70">
               {outstandingPence > 0
-                ? `${openFees.length} open fee${openFees.length === 1 ? "" : "s"} on your account.`
-                : "No outstanding player match fees are showing for you."}
+                ? `${openFees.length} match fee${openFees.length === 1 ? "" : "s"} waiting for you.`
+                : "No match fees are waiting for you right now."}
             </p>
             {nextOpenFee?.paymentUrl ? (
               <Link
