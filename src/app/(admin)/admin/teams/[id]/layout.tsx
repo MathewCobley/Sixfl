@@ -4,8 +4,6 @@
 
 import Link from "next/link";
 
-import PlayerDashboardCopyPolish from "@/components/player/PlayerDashboardCopyPolish";
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -20,7 +18,6 @@ export default async function AdminTeamDetailLayout({
 
   return (
     <div className="space-y-5">
-      <PlayerDashboardCopyPolish />
       <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 shadow-[0_14px_50px_rgba(0,0,0,0.25)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
