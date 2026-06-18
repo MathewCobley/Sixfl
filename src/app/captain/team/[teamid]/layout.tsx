@@ -270,7 +270,7 @@ export default async function CaptainTeamLayout({
       {access.isAdmin && isManagedTeam ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && isManagedTeam ? <ManagedProspectMoveLinks /> : null}
       {access.isAdmin && isManagedTeam ? <PendingActivationDeleteLinks /> : null}
-      {access.isAdmin && isManagedTeam ? <AdminPlayerPreviewLinks /> : null}
+      {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
       <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-10 sm:py-6">
         <header className="captain-team-header overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-3xl">
