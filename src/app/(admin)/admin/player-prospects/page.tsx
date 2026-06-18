@@ -26,6 +26,15 @@ function getProspectName(input: { firstName: string; lastName: string | null }) 
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim() || "Unnamed player";
 }
 
+function normaliseEmail(value: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function buildActiveSquadKey(input: { email: string | null; teamId: string }) {
+  const email = normaliseEmail(input.email);
+  return email ? `${email}::${input.teamId}` : null;
+}
+
 function getStatusClasses(status: string) {
   switch (status) {
     case "NEW":
@@ -103,13 +112,68 @@ export default async function AdminPlayerProspectsPage() {
     },
   });
 
-  const openProspects = prospects.filter((prospect) =>
-    !["ACTIVE_SQUAD", "DECLINED"].includes(prospect.status),
+  const prospectEmails = Array.from(
+    new Set(
+      prospects
+        .map((prospect) => normaliseEmail(prospect.email))
+        .filter(Boolean),
+    ),
   );
-  const newProspects = prospects.filter((prospect) => prospect.status === "NEW");
-  const trialProspects = prospects.filter((prospect) => prospect.status === "TRIAL");
-  const activeSquadProspects = prospects.filter((prospect) => prospect.status === "ACTIVE_SQUAD");
-  const unassignedLikeProspects = prospects.filter((prospect) => !prospect.teamId);
+
+  const linkedSquadUsers = prospectEmails.length
+    ? await prisma.user.findMany({
+        where: {
+          email: {
+            in: prospectEmails,
+          },
+        },
+        select: {
+          email: true,
+          teamMembers: {
+            select: {
+              teamId: true,
+            },
+          },
+        },
+      })
+    : [];
+
+  const activeSquadMembershipKeys = new Set<string>();
+
+  for (const user of linkedSquadUsers) {
+    const email = normaliseEmail(user.email);
+
+    if (!email) {
+      continue;
+    }
+
+    for (const membership of user.teamMembers) {
+      activeSquadMembershipKeys.add(`${email}::${membership.teamId}`);
+    }
+  }
+
+  const isActivelyUsedProspect = (prospect: (typeof prospects)[number]) => {
+    if (prospect.status === "ACTIVE_SQUAD") {
+      return true;
+    }
+
+    const activeSquadKey = buildActiveSquadKey({
+      email: prospect.email,
+      teamId: prospect.teamId,
+    });
+
+    return activeSquadKey ? activeSquadMembershipKeys.has(activeSquadKey) : false;
+  };
+
+  const pipelineProspects = prospects.filter(
+    (prospect) => !isActivelyUsedProspect(prospect) && prospect.status !== "DECLINED",
+  );
+  const newProspects = pipelineProspects.filter((prospect) => prospect.status === "NEW");
+  const trialProspects = pipelineProspects.filter((prospect) => prospect.status === "TRIAL");
+  const activeSquadProspects = prospects.filter(isActivelyUsedProspect);
+  const declinedProspects = prospects.filter(
+    (prospect) => !isActivelyUsedProspect(prospect) && prospect.status === "DECLINED",
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -123,15 +187,15 @@ export default async function AdminPlayerProspectsPage() {
               Player prospects
             </h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-              Admin-owned view of individual players who may join a team. Keep them here until they are confirmed, then promote them into a squad.
+              Admin-owned view of individual players who may join a team. Players already promoted or linked to active squads are hidden from this working list.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <StatCard label="Open" value={openProspects.length} helper="Still in the pipeline" tone="emerald" />
+            <StatCard label="Open" value={pipelineProspects.length} helper="Still in the pipeline" tone="emerald" />
             <StatCard label="New" value={newProspects.length} helper="Not yet processed" />
             <StatCard label="Trial" value={trialProspects.length} helper="May be joining" tone="amber" />
-            <StatCard label="Promoted" value={activeSquadProspects.length} helper="Marked as active squad" tone="sky" />
+            <StatCard label="Active hidden" value={activeSquadProspects.length} helper="Already in squads" tone="sky" />
           </div>
         </div>
       </section>
@@ -139,22 +203,23 @@ export default async function AdminPlayerProspectsPage() {
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">All player prospects</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Open player prospects</p>
             <h2 className="mt-2 text-xl font-semibold text-white">Pipeline list</h2>
           </div>
           <div className="text-sm text-white/50">
-            {prospects.length} total · {unassignedLikeProspects.length} unassigned
+            {pipelineProspects.length} shown · {activeSquadProspects.length} active hidden
+            {declinedProspects.length ? ` · ${declinedProspects.length} declined hidden` : ""}
           </div>
         </div>
 
         <div className="mt-5 space-y-3">
-          {prospects.length === 0 ? (
+          {pipelineProspects.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">
-              No player prospects yet.
+              No open player prospects yet.
             </div>
           ) : null}
 
-          {prospects.map((prospect) => {
+          {pipelineProspects.map((prospect) => {
             const name = getProspectName(prospect);
             const teamLeague = prospect.team.league
               ? `${prospect.team.league.name}${prospect.team.league.season ? ` · ${prospect.team.league.season}` : ""}`
