@@ -154,6 +154,26 @@ function getSubscriptionMessage(state?: string) {
   }
 }
 
+function getPaymentTransactionWhere(teamId: string, teamMode: string) {
+  if (teamMode === "MANAGED") {
+    return { teamId };
+  }
+
+  return {
+    teamId,
+    NOT: {
+      AND: [
+        { chargeId: null },
+        {
+          notes: {
+            contains: "Player match fee paid online",
+          },
+        },
+      ],
+    },
+  };
+}
+
 export default async function CaptainPaymentsPage({
   params,
   searchParams,
@@ -171,6 +191,7 @@ export default async function CaptainPaymentsPage({
       select: {
         id: true,
         name: true,
+        teamMode: true,
         paymentCharges: {
           orderBy: [{ createdAt: "desc" }],
           include: {
@@ -198,23 +219,6 @@ export default async function CaptainPaymentsPage({
             },
           },
         },
-        paymentTransactions: {
-          orderBy: [{ paidAt: "desc" }],
-          take: 20,
-          select: {
-            id: true,
-            amountPence: true,
-            method: true,
-            reference: true,
-            notes: true,
-            paidAt: true,
-            charge: {
-              select: {
-                title: true,
-              },
-            },
-          },
-        },
       },
     }),
     getTeamSubscriptionSnapshot(teamid),
@@ -223,6 +227,25 @@ export default async function CaptainPaymentsPage({
   if (!team) {
     notFound();
   }
+
+  const paymentTransactions = await prisma.paymentTransaction.findMany({
+    where: getPaymentTransactionWhere(team.id, team.teamMode),
+    orderBy: [{ paidAt: "desc" }],
+    take: 20,
+    select: {
+      id: true,
+      amountPence: true,
+      method: true,
+      reference: true,
+      notes: true,
+      paidAt: true,
+      charge: {
+        select: {
+          title: true,
+        },
+      },
+    },
+  });
 
   const openCharges = team.paymentCharges.filter(
     (charge) => charge.status !== "PAID" && charge.status !== "VOID",
@@ -279,7 +302,7 @@ export default async function CaptainPaymentsPage({
             Payment history
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
-            {team.paymentTransactions.length}
+            {paymentTransactions.length}
           </p>
           <p className="mt-2 text-sm text-emerald-100/75">
             Most recent recorded team payments.
@@ -472,12 +495,12 @@ export default async function CaptainPaymentsPage({
         </div>
 
         <div className="divide-y divide-white/10">
-          {team.paymentTransactions.length === 0 ? (
+          {paymentTransactions.length === 0 ? (
             <div className="px-6 py-10 text-sm text-white/55">
               No payments recorded yet.
             </div>
           ) : (
-            team.paymentTransactions.map((tx) => (
+            paymentTransactions.map((tx) => (
               <div key={tx.id} className="px-6 py-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
