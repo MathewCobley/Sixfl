@@ -322,14 +322,6 @@ function addManagedSquadEditLinks(pathname: string) {
       actionsContainer.closest("div[class*='flex']");
     normaliseSquadRowLayout(row instanceof HTMLElement ? row : null);
 
-    actionsContainer
-      .querySelector(`a[data-managed-squad-edit-link="${membershipId}"]`)
-      ?.remove();
-
-    actionsContainer
-      .querySelector(`button[data-managed-squad-move-link="${membershipId}"]`)
-      ?.remove();
-
     const playerName =
       row?.querySelector(".truncate.text-base.font-semibold.text-white")?.textContent?.trim() ||
       "this player";
@@ -389,20 +381,19 @@ export default function ManagedSquadEditLinks() {
   const pathname = usePathname();
 
   useEffect(() => {
-    addManagedSquadEditLinks(pathname);
+    let cancelled = false;
 
-    const observer = new MutationObserver(() => addManagedSquadEditLinks(pathname));
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    const run = () => {
+      if (!cancelled) addManagedSquadEditLinks(pathname);
+    };
 
-    const handleResize = () => addManagedSquadEditLinks(pathname);
-    window.addEventListener("resize", handleResize);
+    const frame = window.requestAnimationFrame(run);
+    window.addEventListener("resize", run);
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", handleResize);
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", run);
     };
   }, [pathname]);
 
