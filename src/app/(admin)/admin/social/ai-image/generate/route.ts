@@ -198,6 +198,48 @@ async function getCardFixtures(cardId: string) {
   `;
 }
 
+async function ensureSocialGeneratedImageTable() {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "SocialGeneratedImage" (
+      "id" TEXT NOT NULL,
+      "socialMatchCardId" TEXT NOT NULL,
+      "prompt" TEXT NOT NULL,
+      "mimeType" TEXT NOT NULL DEFAULT 'image/png',
+      "imageBase64" TEXT NOT NULL,
+      "provider" TEXT NOT NULL DEFAULT 'openai',
+      "model" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "SocialGeneratedImage_pkey" PRIMARY KEY ("id")
+    )
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "SocialGeneratedImage_socialMatchCardId_key"
+      ON "SocialGeneratedImage"("socialMatchCardId")
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "SocialGeneratedImage_createdAt_idx"
+      ON "SocialGeneratedImage"("createdAt")
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'SocialGeneratedImage_socialMatchCardId_fkey'
+      ) THEN
+        ALTER TABLE "SocialGeneratedImage"
+          ADD CONSTRAINT "SocialGeneratedImage_socialMatchCardId_fkey"
+          FOREIGN KEY ("socialMatchCardId") REFERENCES "SocialMatchCard"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+    END $$;
+  `);
+}
+
 async function saveCardError(cardId: string, message: string) {
   await prisma.$executeRaw`
     UPDATE "SocialMatchCard"
@@ -273,6 +315,8 @@ export async function POST(request: Request) {
     if (fixtures.length === 0) {
       throw new Error("This card has no fixtures linked to it yet. Generate the match card first, then create the AI image.");
     }
+
+    await ensureSocialGeneratedImageTable();
 
     await Promise.all(
       fixtures
