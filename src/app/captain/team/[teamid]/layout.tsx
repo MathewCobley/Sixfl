@@ -295,7 +295,7 @@ export default async function CaptainTeamLayout({
       <ProspectsReadableLayout />
       <CaptainFixtureBadgesBridge />
       <CaptainMatchdayAvailabilityBadgesBridge />
-      {access.isAdmin && isManagedTeam ? <ManagedSquadEditLinks /> : null}
+      {access.isAdmin ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && isManagedTeam ? <PendingActivationDeleteLinks /> : null}
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
