@@ -50,7 +50,7 @@ async function movePlayerToProspects(input: {
   button: HTMLButtonElement;
 }) {
   const confirmed = window.confirm(
-    `Move ${input.playerName} back to Prospects? This removes them from the active squad but keeps their details for this team.`,
+    `Move ${input.playerName} to the Player Prospects list? This removes them from the active squad but keeps their details as a prospective player.`,
   );
 
   if (!confirmed) return;
@@ -77,7 +77,7 @@ async function movePlayerToProspects(input: {
       throw new Error(payload?.error ?? "Player could not be moved to prospects.");
     }
 
-    window.location.href = `/captain/team/${input.teamId}/prospects?saved=moved-to-prospects`;
+    window.location.href = "/admin/player-prospects";
   } catch (error) {
     input.button.disabled = false;
     input.button.textContent = originalText;
