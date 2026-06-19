@@ -8,6 +8,8 @@ import { prisma } from "@/lib/prisma";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
+type ProspectMoveStatus = "BACKUP" | "DECLINED";
+
 type TeamMemberProfileSnapshot = {
   sourceProspectId: string | null;
   phone: string | null;
@@ -134,10 +136,27 @@ function buildProspectProfileData(profile: TeamMemberProfileSnapshot | null) {
   };
 }
 
+function getProspectMoveCopy(status: ProspectMoveStatus, previousRole: string) {
+  if (status === "DECLINED") {
+    return {
+      source: "Marked not interested from squad",
+      notes: `Marked as not interested and removed from the active squad. Previous role: ${previousRole}.`,
+    };
+  }
+
+  return {
+    source: "Moved from active squad",
+    notes: `Moved back from active squad so this player can be reused later. Previous role: ${previousRole}.`,
+  };
+}
+
 export async function moveTeamMemberToProspect(input: {
   teamId: string;
   membershipId: string;
+  status?: ProspectMoveStatus;
 }): Promise<MoveResult> {
+  const prospectStatus = input.status ?? "BACKUP";
+
   const membership = await prisma.teamMember.findFirst({
     where: {
       id: input.membershipId,
@@ -178,6 +197,7 @@ export async function moveTeamMemberToProspect(input: {
     email,
   });
   const profileData = buildProspectProfileData(profile);
+  const moveCopy = getProspectMoveCopy(prospectStatus, membership.role);
 
   return prisma.$transaction(async (tx) => {
     const reusableProspect = await findReusableProspect({
@@ -194,8 +214,10 @@ export async function moveTeamMemberToProspect(input: {
             firstName,
             lastName,
             email,
-            status: "BACKUP",
+            status: prospectStatus,
+            source: moveCopy.source,
             ...profileData,
+            notes: profileData.notes ?? moveCopy.notes,
           },
           select: { id: true },
         })
@@ -205,11 +227,9 @@ export async function moveTeamMemberToProspect(input: {
             firstName,
             lastName,
             email,
-            status: "BACKUP",
-            source: "Moved from active squad",
-            notes:
-              profileData.notes ??
-              `Moved back from active squad so this player can be reused later. Previous role: ${membership.role}.`,
+            status: prospectStatus,
+            source: moveCopy.source,
+            notes: profileData.notes ?? moveCopy.notes,
             phone: profileData.phone,
             ageBand: profileData.ageBand,
             preferredPositions: profileData.preferredPositions,
