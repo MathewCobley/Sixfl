@@ -5,7 +5,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 function getFormValue(form: HTMLFormElement, name: string) {
   return form.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value.trim() || "";
@@ -201,9 +201,10 @@ function addAiImageButtons() {
     form.dataset.aiImageForm = "true";
     form.innerHTML = `
       <input type="hidden" name="cardId" value="${details.cardId}" />
-      <button type="submit" class="inline-flex h-10 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 text-xs font-semibold text-violet-100 transition hover:border-violet-300/35 hover:bg-violet-500/15">
+      <button type="submit" data-ai-image-button="true" class="inline-flex h-10 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 text-xs font-semibold text-violet-100 transition hover:border-violet-300/35 hover:bg-violet-500/15">
         Generate AI image
       </button>
+      <p data-ai-image-status="true" class="hidden max-w-[16rem] text-xs leading-5 text-violet-100/75">Generating can take 20-60 seconds. Please leave this tab open.</p>
     `;
 
     details.parent.insertAdjacentElement("afterbegin", form);
@@ -219,16 +220,64 @@ function cleanSocialPage(searchParams: URLSearchParams) {
   addAiImageReviewPreviews();
 }
 
+function handleAiImageSubmit(event: SubmitEvent) {
+  const form = event.target;
+
+  if (!(form instanceof HTMLFormElement)) return;
+  if (!form.dataset.aiImageForm) return;
+
+  event.preventDefault();
+
+  const button = form.querySelector<HTMLButtonElement>("[data-ai-image-button]");
+  const status = form.querySelector<HTMLElement>("[data-ai-image-status]");
+
+  if (button?.disabled) return;
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Generating image...";
+    button.className =
+      "inline-flex h-10 items-center justify-center rounded-xl border border-violet-300/30 bg-violet-500/20 px-3 text-xs font-semibold text-violet-50 opacity-80";
+  }
+
+  if (status) {
+    status.classList.remove("hidden");
+    status.textContent = "Generating can take 20-60 seconds. Please leave this tab open.";
+  }
+
+  fetch(form.action, {
+    method: "POST",
+    body: new FormData(form),
+    credentials: "same-origin",
+  })
+    .then((response) => {
+      window.location.href = response.url || "/admin/social?aiImage=generated";
+    })
+    .catch(() => {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Try AI image again";
+        button.className =
+          "inline-flex h-10 items-center justify-center rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 text-xs font-semibold text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-500/15";
+      }
+
+      if (status) {
+        status.classList.remove("hidden");
+        status.textContent = "The request did not start or the connection dropped. Try again, then check Railway logs if it still fails.";
+      }
+    });
+}
+
 export default function AdminSocialResultsGeneratorLinksBridge() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (pathname !== "/admin/social") return;
 
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(window.location.search);
 
     cleanSocialPage(params);
+    document.addEventListener("submit", handleAiImageSubmit, true);
 
     const observer = new MutationObserver(() => cleanSocialPage(params));
 
@@ -237,8 +286,11 @@ export default function AdminSocialResultsGeneratorLinksBridge() {
       subtree: true,
     });
 
-    return () => observer.disconnect();
-  }, [pathname, searchParams]);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("submit", handleAiImageSubmit, true);
+    };
+  }, [pathname]);
 
   return null;
 }
