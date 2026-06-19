@@ -35,6 +35,27 @@ function getTeamLabel(team: MoveTeamData["targetTeams"][number]) {
   return `${team.name} — ${leagueLabel}`;
 }
 
+function normaliseSquadRowLayout(row: HTMLElement | null) {
+  if (!row) return;
+
+  const useDesktopLayout = window.matchMedia("(min-width: 1280px)").matches;
+
+  row.classList.remove("xl:flex-row", "xl:items-start", "xl:justify-between");
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = useDesktopLayout
+    ? "minmax(0, 1fr) 22rem"
+    : "minmax(0, 1fr)";
+  row.style.gap = "1.25rem";
+  row.style.alignItems = "start";
+  row.style.width = "100%";
+
+  const firstChild = row.firstElementChild;
+  if (firstChild instanceof HTMLElement) {
+    firstChild.style.minWidth = "0";
+    firstChild.style.maxWidth = "100%";
+  }
+}
+
 function normaliseActionLayout(actionsContainer: HTMLElement) {
   actionsContainer.className =
     "grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:w-[22rem] xl:max-w-[22rem] xl:shrink-0";
@@ -43,6 +64,7 @@ function normaliseActionLayout(actionsContainer: HTMLElement) {
   actionsContainer.style.gap = "0.5rem";
   actionsContainer.style.width = "min(22rem, 100%)";
   actionsContainer.style.maxWidth = "22rem";
+  actionsContainer.style.minWidth = "0";
   actionsContainer.style.alignItems = "stretch";
 
   for (const form of Array.from(actionsContainer.querySelectorAll("form"))) {
@@ -54,14 +76,17 @@ function normaliseActionLayout(actionsContainer: HTMLElement) {
       form.style.display = "grid";
       form.style.gridTemplateColumns = "minmax(0, 1fr) auto";
       form.style.gap = "0.5rem";
+      form.style.minWidth = "0";
 
       const selectWrapper = form.querySelector("div");
       if (selectWrapper instanceof HTMLElement) {
         selectWrapper.className = "min-w-0";
+        selectWrapper.style.minWidth = "0";
       }
     } else {
       form.className = "w-full";
       form.style.gridColumn = "auto";
+      form.style.minWidth = "0";
     }
   }
 
@@ -71,7 +96,10 @@ function normaliseActionLayout(actionsContainer: HTMLElement) {
     control.classList.add("w-full", "justify-center", "text-center");
     control.classList.remove("sm:w-auto", "shrink-0");
     control.style.width = "100%";
+    control.style.minWidth = "0";
     control.style.minHeight = "2.75rem";
+    control.style.whiteSpace = "normal";
+    control.style.lineHeight = "1.15";
   }
 }
 
@@ -290,6 +318,10 @@ function addManagedSquadEditLinks(pathname: string) {
     const actionsContainer = form.parentElement;
     if (!(actionsContainer instanceof HTMLElement)) continue;
 
+    const row = actionsContainer.closest("div[class*='px-6'][class*='py-5']") ??
+      actionsContainer.closest("div[class*='flex']");
+    normaliseSquadRowLayout(row instanceof HTMLElement ? row : null);
+
     actionsContainer
       .querySelector(`a[data-managed-squad-edit-link="${membershipId}"]`)
       ?.remove();
@@ -298,8 +330,6 @@ function addManagedSquadEditLinks(pathname: string) {
       .querySelector(`button[data-managed-squad-move-link="${membershipId}"]`)
       ?.remove();
 
-    const row = actionsContainer.closest("div[class*='px-6'][class*='py-5']") ??
-      actionsContainer.closest("div[class*='flex']");
     const playerName =
       row?.querySelector(".truncate.text-base.font-semibold.text-white")?.textContent?.trim() ||
       "this player";
@@ -367,7 +397,13 @@ export default function ManagedSquadEditLinks() {
       subtree: true,
     });
 
-    return () => observer.disconnect();
+    const handleResize = () => addManagedSquadEditLinks(pathname);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", handleResize);
+    };
   }, [pathname]);
 
   return null;
