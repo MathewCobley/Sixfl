@@ -50,12 +50,12 @@ async function getTargetTeams(sourceTeamId: string) {
       id: {
         not: sourceTeamId,
       },
-      teamMode: "MANAGED",
     },
     orderBy: [{ league: { name: "asc" } }, { name: "asc" }],
     select: {
       id: true,
       name: true,
+      teamMode: true,
       league: {
         select: {
           name: true,
@@ -190,7 +190,6 @@ export async function POST(
     const targetTeam = await prisma.team.findFirst({
       where: {
         id: targetTeamId,
-        teamMode: "MANAGED",
       },
       select: {
         id: true,
@@ -200,7 +199,7 @@ export async function POST(
 
     if (!targetTeam) {
       return NextResponse.json(
-        { error: "Destination managed team not found." },
+        { error: "Destination team not found." },
         { status: 404 },
       );
     }
