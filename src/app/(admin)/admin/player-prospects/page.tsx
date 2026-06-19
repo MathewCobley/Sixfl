@@ -14,6 +14,29 @@ export const metadata = {
   title: "Player Prospects | SIXFL Admin",
 };
 
+type ProspectWithTeam = {
+  id: string;
+  teamId: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  preferredPositions: string | null;
+  availabilitySummary: string | null;
+  source: string | null;
+  status: string;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  lastContactedAt: Date | null;
+  team: {
+    id: string;
+    name: string;
+    teamMode: unknown;
+    league: { name: string; season: string | null } | null;
+  };
+};
+
 function formatDate(value: Date) {
   return formatDateTimeInLondon(value, {
     day: "2-digit",
@@ -55,6 +78,8 @@ function getStatusClasses(status: string) {
 }
 
 function formatStatus(status: string) {
+  if (status === "DECLINED") return "Not interested";
+
   return status
     .split("_")
     .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
@@ -70,7 +95,7 @@ function StatCard({
   label: string;
   value: number;
   helper: string;
-  tone?: "white" | "emerald" | "amber" | "sky";
+  tone?: "white" | "emerald" | "amber" | "sky" | "red";
 }) {
   const toneClasses =
     tone === "emerald"
@@ -79,7 +104,9 @@ function StatCard({
         ? "border-amber-400/20 bg-amber-500/10 text-amber-100/70"
         : tone === "sky"
           ? "border-sky-400/20 bg-sky-500/10 text-sky-100/70"
-          : "border-white/10 bg-white/[0.04] text-white/45";
+          : tone === "red"
+            ? "border-red-400/20 bg-red-500/10 text-red-100/70"
+            : "border-white/10 bg-white/[0.04] text-white/45";
 
   return (
     <div className={`rounded-3xl border p-5 ${toneClasses}`}>
@@ -87,6 +114,77 @@ function StatCard({
       <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
       <p className="mt-2 text-sm text-white/55">{helper}</p>
     </div>
+  );
+}
+
+function ProspectCard({ prospect, muted = false }: { prospect: ProspectWithTeam; muted?: boolean }) {
+  const name = getProspectName(prospect);
+  const teamLeague = prospect.team.league
+    ? `${prospect.team.league.name}${prospect.team.league.season ? ` · ${prospect.team.league.season}` : ""}`
+    : "No league assigned";
+
+  return (
+    <article
+      className={`rounded-3xl border border-white/10 bg-black/20 p-5 transition ${
+        muted ? "opacity-80 hover:opacity-100" : "hover:border-emerald-400/20 hover:bg-black/25"
+      }`}
+    >
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_auto] lg:items-start">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg font-semibold text-white">{name}</h3>
+            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getStatusClasses(prospect.status)}`}>
+              {formatStatus(prospect.status)}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/45">
+            {prospect.email ? <span>{prospect.email}</span> : null}
+            {prospect.phone ? <span>{prospect.phone}</span> : null}
+            {prospect.source ? <span>Source: {prospect.source}</span> : null}
+          </div>
+          {prospect.preferredPositions || prospect.availabilitySummary ? (
+            <p className="mt-3 text-sm leading-6 text-white/60">
+              {[prospect.preferredPositions, prospect.availabilitySummary].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
+          {prospect.notes ? (
+            <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/50">
+              {prospect.notes}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Linked team</div>
+          <Link href={`/admin/teams/${prospect.team.id}/prospects`} className="mt-2 block font-semibold text-emerald-200 hover:text-emerald-100">
+            {prospect.team.name}
+          </Link>
+          <div className="mt-1 text-sm text-white/45">{teamLeague}</div>
+          <div className="mt-2 text-xs text-white/35">Mode: {String(prospect.team.teamMode)}</div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          <Link
+            href={`/admin/teams/${prospect.team.id}/prospects`}
+            className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+          >
+            Manage
+          </Link>
+          <Link
+            href={`/admin/teams/${prospect.team.id}/prospects/${prospect.id}/communications`}
+            className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
+          >
+            Comms
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/35">
+        <span>Added {formatDate(prospect.createdAt)}</span>
+        <span>Updated {formatDate(prospect.updatedAt)}</span>
+        {prospect.lastContactedAt ? <span>Last contacted {formatDate(prospect.lastContactedAt)}</span> : null}
+      </div>
+    </article>
   );
 }
 
@@ -187,7 +285,7 @@ export default async function AdminPlayerProspectsPage() {
               Player prospects
             </h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-              Admin-owned view of individual players who may join a team. Players already promoted or linked to active squads are hidden from this working list.
+              Admin-owned view of individual players who may join a team. Players already promoted or linked to active squads are hidden from the working list, while not interested players are kept separately below.
             </p>
           </div>
 
@@ -195,7 +293,7 @@ export default async function AdminPlayerProspectsPage() {
             <StatCard label="Open" value={pipelineProspects.length} helper="Still in the pipeline" tone="emerald" />
             <StatCard label="New" value={newProspects.length} helper="Not yet processed" />
             <StatCard label="Trial" value={trialProspects.length} helper="May be joining" tone="amber" />
-            <StatCard label="Active hidden" value={activeSquadProspects.length} helper="Already in squads" tone="sky" />
+            <StatCard label="Not interested" value={declinedProspects.length} helper="Kept but out of pipeline" tone="red" />
           </div>
         </div>
       </section>
@@ -208,7 +306,7 @@ export default async function AdminPlayerProspectsPage() {
           </div>
           <div className="text-sm text-white/50">
             {pipelineProspects.length} shown · {activeSquadProspects.length} active hidden
-            {declinedProspects.length ? ` · ${declinedProspects.length} declined hidden` : ""}
+            {declinedProspects.length ? ` · ${declinedProspects.length} not interested` : ""}
           </div>
         </div>
 
@@ -219,70 +317,36 @@ export default async function AdminPlayerProspectsPage() {
             </div>
           ) : null}
 
-          {pipelineProspects.map((prospect) => {
-            const name = getProspectName(prospect);
-            const teamLeague = prospect.team.league
-              ? `${prospect.team.league.name}${prospect.team.league.season ? ` · ${prospect.team.league.season}` : ""}`
-              : "No league assigned";
+          {pipelineProspects.map((prospect) => (
+            <ProspectCard key={prospect.id} prospect={prospect} />
+          ))}
+        </div>
+      </section>
 
-            return (
-              <article
-                key={prospect.id}
-                className="rounded-3xl border border-white/10 bg-black/20 p-5 transition hover:border-emerald-400/20 hover:bg-black/25"
-              >
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_auto] lg:items-start">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-white">{name}</h3>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getStatusClasses(prospect.status)}`}>
-                        {formatStatus(prospect.status)}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/45">
-                      {prospect.email ? <span>{prospect.email}</span> : null}
-                      {prospect.phone ? <span>{prospect.phone}</span> : null}
-                      {prospect.source ? <span>Source: {prospect.source}</span> : null}
-                    </div>
-                    {prospect.preferredPositions || prospect.availabilitySummary ? (
-                      <p className="mt-3 text-sm leading-6 text-white/60">
-                        {[prospect.preferredPositions, prospect.availabilitySummary].filter(Boolean).join(" · ")}
-                      </p>
-                    ) : null}
-                  </div>
+      <section id="not-interested" className="scroll-mt-8 rounded-3xl border border-red-400/15 bg-red-500/[0.06] p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/60">Not interested</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Declined / removed players</h2>
+            <p className="mt-2 max-w-3xl text-sm text-white/55">
+              Players marked not interested are kept here so they are not lost, but they do not appear in the active pipeline.
+            </p>
+          </div>
+          <div className="text-sm text-red-100/60">
+            {declinedProspects.length} saved
+          </div>
+        </div>
 
-                  <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Linked team</div>
-                    <Link href={`/admin/teams/${prospect.team.id}/prospects`} className="mt-2 block font-semibold text-emerald-200 hover:text-emerald-100">
-                      {prospect.team.name}
-                    </Link>
-                    <div className="mt-1 text-sm text-white/45">{teamLeague}</div>
-                    <div className="mt-2 text-xs text-white/35">Mode: {prospect.team.teamMode}</div>
-                  </div>
+        <div className="mt-5 space-y-3">
+          {declinedProspects.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">
+              No not interested players saved yet.
+            </div>
+          ) : null}
 
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <Link
-                      href={`/admin/teams/${prospect.team.id}/prospects`}
-                      className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                    >
-                      Manage
-                    </Link>
-                    <Link
-                      href={`/admin/teams/${prospect.team.id}/prospects/${prospect.id}/communications`}
-                      className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-                    >
-                      Comms
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/35">
-                  <span>Added {formatDate(prospect.createdAt)}</span>
-                  <span>Updated {formatDate(prospect.updatedAt)}</span>
-                  {prospect.lastContactedAt ? <span>Last contacted {formatDate(prospect.lastContactedAt)}</span> : null}
-                </div>
-              </article>
-            );
-          })}
+          {declinedProspects.map((prospect) => (
+            <ProspectCard key={prospect.id} prospect={prospect} muted />
+          ))}
         </div>
       </section>
     </div>
