@@ -12,7 +12,6 @@ import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadge
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
 import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
-import ManagedProspectMoveLinks from "@/components/captain/ManagedProspectMoveLinks";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import PendingActivationDeleteLinks from "@/components/captain/PendingActivationDeleteLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
@@ -297,7 +296,6 @@ export default async function CaptainTeamLayout({
       <CaptainFixtureBadgesBridge />
       <CaptainMatchdayAvailabilityBadgesBridge />
       {access.isAdmin && isManagedTeam ? <ManagedSquadEditLinks /> : null}
-      {access.isAdmin ? <ManagedProspectMoveLinks /> : null}
       {access.isAdmin && isManagedTeam ? <PendingActivationDeleteLinks /> : null}
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
