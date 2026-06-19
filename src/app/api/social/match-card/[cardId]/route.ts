@@ -314,8 +314,8 @@ function drawFixtureRow(
   fillRoundedRect(ctx, rowX, y, rowW, rowHeight, 28, "rgba(15,23,42,0.92)");
   strokeRoundedRect(ctx, rowX, y, rowW, rowHeight, 28, "rgba(148,163,184,0.22)");
 
-  drawText(ctx, line.meta || "SIXFL", rowX + 32, y + 28, {
-    size: 24,
+  drawText(ctx, line.meta || "SIXFL", rowX + 32, y + (rowHeight >= 100 ? 28 : 22), {
+    size: rowHeight >= 100 ? 24 : 18,
     weight: "700",
     color: COLORS.muted,
     baseline: "middle",
@@ -331,40 +331,53 @@ function drawFixtureRow(
     });
   }
 
-  const teamTop = y + 54;
+  const teamTop = y + (rowHeight >= 100 ? 54 : 42);
   const teamWidth = 340;
-  const teamFontSize = rowHeight >= 124 ? 34 : 30;
+  const teamFontSize =
+    rowHeight >= 124 ? 34 : rowHeight >= 100 ? 30 : rowHeight >= 84 ? 26 : 22;
+  const teamMaxLines = rowHeight >= 100 ? 2 : 1;
 
   drawWrappedText(ctx, line.left.toUpperCase(), rowX + 32, teamTop, teamWidth, {
     size: teamFontSize,
     weight: "900",
     color: COLORS.text,
-    maxLines: 2,
+    maxLines: teamMaxLines,
     lineHeight: Math.round(teamFontSize * 1.04),
   });
 
-  drawPill(ctx, line.middle.toUpperCase(), 504, y + rowHeight / 2 - 30, 72, 60, {
-    fill: "rgba(52,211,153,0.16)",
-    stroke: "rgba(52,211,153,0.35)",
-    text: COLORS.green,
-    size: postType === "RESULT" ? 24 : 30,
-  });
+  const centrePillHeight = Math.min(60, Math.max(42, rowHeight - 28));
+  const centrePillWidth = postType === "RESULT" ? 104 : 72;
+
+  drawPill(
+    ctx,
+    line.middle.toUpperCase(),
+    540 - centrePillWidth / 2,
+    y + rowHeight / 2 - centrePillHeight / 2,
+    centrePillWidth,
+    centrePillHeight,
+    {
+      fill: "rgba(52,211,153,0.16)",
+      stroke: "rgba(52,211,153,0.35)",
+      text: COLORS.green,
+      size: postType === "RESULT" ? 24 : rowHeight >= 100 ? 30 : 22,
+    },
+  );
 
   drawWrappedText(ctx, line.right.toUpperCase(), rowX + rowW - 32, teamTop, teamWidth, {
     size: teamFontSize,
     weight: "900",
     color: COLORS.text,
     align: "right",
-    maxLines: 2,
+    maxLines: teamMaxLines,
     lineHeight: Math.round(teamFontSize * 1.04),
   });
 }
 
 function getFixtureLayout(count: number) {
   if (count <= 2) return { rowHeight: 140, rowGap: 18 };
-  if (count <= 4) return { rowHeight: 124, rowGap: 16 };
-  if (count <= 6) return { rowHeight: 108, rowGap: 14 };
-  return { rowHeight: 96, rowGap: 12 };
+  if (count <= 4) return { rowHeight: 118, rowGap: 14 };
+  if (count <= 6) return { rowHeight: 92, rowGap: 12 };
+  return { rowHeight: 72, rowGap: 9 };
 }
 
 function drawCard(card: CardRow, fixtures: FixtureRow[]) {
@@ -429,10 +442,10 @@ function drawCard(card: CardRow, fixtures: FixtureRow[]) {
     : card.leagueName;
   const dateLabel = formatWeeklyCardDate(card.fixtureDate);
 
-  const visibleFixtures = fixtures.slice(0, 8);
+  const visibleFixtures = fixtures.length > 8 ? fixtures.slice(0, 7) : fixtures.slice(0, 8);
   const { rowHeight, rowGap } = getFixtureLayout(visibleFixtures.length);
   const rowsHeight = visibleFixtures.length * rowHeight + Math.max(0, visibleFixtures.length - 1) * rowGap;
-  const fixturePanelHeight = Math.max(430, rowsHeight + 190);
+  const fixturePanelHeight = Math.max(430, Math.min(824, rowsHeight + 190));
   const fixturePanelY = 340;
 
   const panelGradient = ctx.createLinearGradient(100, fixturePanelY, 980, fixturePanelY + fixturePanelHeight);
