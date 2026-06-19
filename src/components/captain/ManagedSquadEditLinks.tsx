@@ -87,12 +87,12 @@ function showMoveModal(input: {
   heading.innerHTML = `
     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-100/70">Move squad member</p>
     <h2 class="mt-2 text-2xl font-semibold tracking-tight text-white">Move ${input.playerName}</h2>
-    <p class="mt-2 text-sm leading-6 text-sky-100/70">Choose the managed team to move this player into. They will remain a squad member in the destination team.</p>
+    <p class="mt-2 text-sm leading-6 text-sky-100/70">Choose the team to move this player into.</p>
   `;
 
   const status = document.createElement("div");
   status.className = "mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65";
-  status.textContent = "Loading managed teams…";
+  status.textContent = "Loading teams…";
 
   const list = document.createElement("div");
   list.className = "mt-4 grid gap-2";
@@ -120,14 +120,14 @@ function showMoveModal(input: {
     cache: "no-store",
   })
     .then(async (response) => {
-      if (!response.ok) throw new Error("Could not load managed teams.");
+      if (!response.ok) throw new Error("Could not load teams.");
       return (await response.json()) as MoveData;
     })
     .then((data) => {
       list.innerHTML = "";
 
       if (data.targetTeams.length === 0) {
-        status.textContent = "No other managed teams are available.";
+        status.textContent = "No other teams are available.";
         return;
       }
 
@@ -141,7 +141,7 @@ function showMoveModal(input: {
         button.innerHTML = `
           <span>
             <span class="block font-semibold text-white">${getTeamLabel(team)}</span>
-            <span class="mt-1 block text-xs text-white/45">Move into this managed squad</span>
+            <span class="mt-1 block text-xs text-white/45">Move into this team</span>
           </span>
           <span class="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-100">Move</span>
         `;
@@ -192,7 +192,7 @@ function showMoveModal(input: {
     .catch((error) => {
       status.className =
         "mt-4 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100";
-      status.textContent = error instanceof Error ? error.message : "Could not load managed teams.";
+      status.textContent = error instanceof Error ? error.message : "Could not load teams.";
     });
 }
 
@@ -219,6 +219,11 @@ function addManagedSquadEditLinks(pathname: string) {
 
     normaliseActionLayout(actionsContainer);
 
+    const duplicateEditDetails = actionsContainer.querySelector(
+      `a[data-managed-squad-edit-link="${membershipId}"]`,
+    );
+    duplicateEditDetails?.remove();
+
     const existingMoveButton = actionsContainer.querySelector(
       `button[data-managed-squad-move-link="${membershipId}"]`,
     );
@@ -244,24 +249,6 @@ function addManagedSquadEditLinks(pathname: string) {
       );
 
       actionsContainer.insertBefore(moveButton, removeForm ?? null);
-    }
-
-    const existingLink = actionsContainer.querySelector(
-      `a[data-managed-squad-edit-link="${membershipId}"]`,
-    );
-
-    if (!existingLink) {
-      const editLink = document.createElement("a");
-      editLink.href = `/captain/team/${teamId}/squad/${membershipId}/edit`;
-      editLink.textContent = "Edit details";
-      editLink.dataset.managedSquadEditLink = membershipId;
-      editLink.className = injectedActionClassName;
-
-      const removeForm = Array.from(actionsContainer.querySelectorAll("form")).find(
-        (candidate) => candidate !== form && Boolean(candidate.querySelector('input[name="membershipId"]')),
-      );
-
-      actionsContainer.insertBefore(editLink, removeForm ?? null);
     }
 
     normaliseActionLayout(actionsContainer);
