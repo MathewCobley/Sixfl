@@ -161,134 +161,6 @@ function createCompactWinChanceBadge(fixture: FixtureBadge) {
   return badge;
 }
 
-function createPredictedResultCard(fixture: FixtureBadge) {
-  const chance = fixture.winChance;
-  if (!chance) return null;
-
-  const card = document.createElement("div");
-  card.className =
-    "rounded-xl border border-emerald-400/20 bg-black/20 px-4 py-3 text-center";
-
-  const label = document.createElement("div");
-  label.className =
-    "text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70";
-  label.textContent = "Predicted result";
-
-  const score = document.createElement("div");
-  score.className = "mt-1 text-2xl font-black text-white";
-  score.textContent = chance.predictedResult.label;
-
-  card.appendChild(label);
-  card.appendChild(score);
-
-  return card;
-}
-
-function createAiPreview(fixture: FixtureBadge) {
-  const preview = fixture.winChance?.aiPreview;
-  if (!preview) return null;
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "mt-3 rounded-xl border border-white/10 bg-black/20 p-3";
-
-  const headline = document.createElement("div");
-  headline.className = "text-sm font-semibold text-white";
-  headline.textContent = preview.headline;
-
-  const summary = document.createElement("p");
-  summary.className = "mt-2 text-xs leading-5 text-white/55";
-  summary.textContent = preview.summary;
-
-  wrapper.appendChild(headline);
-  wrapper.appendChild(summary);
-
-  return wrapper;
-}
-
-function createDetailedWinChanceBlock(fixture: FixtureBadge) {
-  const chance = fixture.winChance;
-  if (!chance) return null;
-
-  const block = document.createElement("div");
-  block.dataset.fixtureWinChanceFor = fixture.id;
-  block.className =
-    "mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4";
-
-  const header = document.createElement("div");
-  header.className = "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between";
-
-  const headingWrap = document.createElement("div");
-
-  const heading = document.createElement("div");
-  heading.className =
-    "text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300";
-  heading.textContent = "SIXFL AI Predictor";
-
-  const helperTop = document.createElement("div");
-  helperTop.className = "mt-1 text-xs text-white/45";
-  helperTop.textContent = `OpenAI match preview · ${chance.confidence} confidence · Just for fun`;
-
-  headingWrap.appendChild(heading);
-  headingWrap.appendChild(helperTop);
-  header.appendChild(headingWrap);
-
-  const predictedResultCard = createPredictedResultCard(fixture);
-  if (predictedResultCard) header.appendChild(predictedResultCard);
-
-  const aiPreview = createAiPreview(fixture);
-
-  const grid = document.createElement("div");
-  grid.className = "mt-3 grid gap-2 sm:grid-cols-3";
-
-  const rows = [
-    { label: fixture.homeTeam.name, value: chance.home, bar: "bg-emerald-400" },
-    { label: "Draw", value: chance.draw, bar: "bg-white/45" },
-    { label: fixture.awayTeam.name, value: chance.away, bar: "bg-sky-400" },
-  ];
-
-  for (const row of rows) {
-    const card = document.createElement("div");
-    card.className = "rounded-xl border border-white/10 bg-black/20 p-3";
-
-    const top = document.createElement("div");
-    top.className = "flex items-center justify-between gap-2";
-
-    const label = document.createElement("div");
-    label.className = "truncate text-xs font-semibold text-white/75";
-    label.textContent = row.label;
-    label.title = row.label;
-
-    const value = document.createElement("div");
-    value.className = "text-base font-black text-white";
-    value.textContent = `${row.value}%`;
-
-    const rail = document.createElement("div");
-    rail.className = "mt-2 h-1.5 overflow-hidden rounded-full bg-white/10";
-
-    const bar = document.createElement("div");
-    bar.className = `h-full rounded-full ${row.bar}`;
-    bar.style.width = `${row.value}%`;
-
-    top.appendChild(label);
-    top.appendChild(value);
-    rail.appendChild(bar);
-    card.appendChild(top);
-    card.appendChild(rail);
-    grid.appendChild(card);
-  }
-
-  const helper = document.createElement("p");
-  helper.className = "mt-3 text-xs leading-5 text-white/45";
-  helper.textContent = chance.explanation;
-
-  block.appendChild(header);
-  if (aiPreview) block.appendChild(aiPreview);
-  block.appendChild(grid);
-  block.appendChild(helper);
-
-  return block;
-}
-
 function findMatchingFixture(text: string, fixtures: FixtureBadge[]) {
   const normalisedText = text.replace(/\s+/g, " ").trim();
 
@@ -304,17 +176,6 @@ function findMatchingFixture(text: string, fixtures: FixtureBadge[]) {
 
 function injectWinChance(element: HTMLElement, fixture: FixtureBadge) {
   if (!fixture.winChance) return;
-
-  if (element.tagName === "H2") {
-    const parent = element.parentElement;
-    if (parent?.querySelector(`[data-fixture-win-chance-for="${fixture.id}"]`)) {
-      return;
-    }
-
-    const block = createDetailedWinChanceBlock(fixture);
-    if (block) element.insertAdjacentElement("afterend", block);
-    return;
-  }
 
   const target = element.parentElement ?? element;
   if (target.querySelector(`[data-fixture-win-chance-for="${fixture.id}"]`)) {
@@ -380,37 +241,38 @@ function getTeamIdFromPathname(pathname: string) {
   return match?.[1] ?? null;
 }
 
+function shouldRunOnPathname(pathname: string, teamId: string) {
+  if (pathname.includes("/squad")) return false;
+  if (pathname.includes("/prospects")) return false;
+  if (pathname.includes("/edit")) return false;
+
+  return [
+    `/captain/team/${teamId}`,
+    `/captain/team/${teamId}/fixtures`,
+    `/captain/team/${teamId}/results`,
+    `/captain/team/${teamId}/player-payments`,
+    `/captain/team/${teamId}/match-fees`,
+    `/captain/team/${teamId}/availability`,
+  ].some((allowed) => pathname === allowed || pathname.startsWith(`${allowed}/`));
+}
+
 export default function CaptainFixtureBadgesBridge() {
   const pathname = usePathname();
 
   useEffect(() => {
     const teamId = getTeamIdFromPathname(pathname);
     if (!teamId) return;
-    if (!pathname.startsWith(`/captain/team/${teamId}`)) return;
+    if (!shouldRunOnPathname(pathname, teamId)) return;
 
     let cancelled = false;
-    let fixtures: FixtureBadge[] = [];
 
     void loadFixtureBadges(teamId).then((loadedFixtures) => {
       if (cancelled) return;
-      fixtures = loadedFixtures;
-      injectFixtureBadges(fixtures);
-    });
-
-    const observer = new MutationObserver(() => {
-      if (fixtures.length > 0) {
-        injectFixtureBadges(fixtures);
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
+      injectFixtureBadges(loadedFixtures);
     });
 
     return () => {
       cancelled = true;
-      observer.disconnect();
     };
   }, [pathname]);
 
