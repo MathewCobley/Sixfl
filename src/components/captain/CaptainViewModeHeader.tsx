@@ -29,12 +29,20 @@ export default function CaptainViewModeHeader({
     ? "You are viewing the limited captain version. Admin-only squad tools are hidden on this page."
     : isAdmin
       ? isManagedTeam
-        ? "Full admin view: squad controls, fixtures, results and payment tools are visible."
+        ? "Full admin view: squad controls, fixtures, results, prospects and payment tools are visible."
         : "Full admin view: fixtures, results and payment tools are visible."
       : "Matchday control, fixtures, results and payments for your team.";
 
   return (
     <>
+      {isAdmin && !isManagedTeam ? (
+        <style>{`
+          .captain-team-shell a[href="/captain/team/${teamId}/prospects"] {
+            display: none !important;
+          }
+        `}</style>
+      ) : null}
+
       <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
         {overline}
       </p>
