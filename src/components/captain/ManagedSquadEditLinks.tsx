@@ -7,37 +7,17 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-type MoveData = {
-  targetTeams: Array<{
-    id: string;
-    name: string;
-    league: { name: string; season: string | null } | null;
-  }>;
-  items: Array<{
-    id: string;
-    name: string;
-    contact: string;
-    label: string;
-  }>;
-};
-
-const injectedActionClassName =
-  "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-center text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 sm:w-auto";
+const moveToProspectsClassName =
+  "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-center text-sm font-medium text-amber-100 transition hover:bg-amber-500/15 sm:w-auto";
 
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
   return match?.[1] ?? null;
 }
 
-function getTeamLabel(team: MoveData["targetTeams"][number]) {
-  return team.league?.name
-    ? `${team.name} · ${team.league.name}${team.league.season ? ` ${team.league.season}` : ""}`
-    : team.name;
-}
-
 function normaliseActionLayout(actionsContainer: HTMLElement) {
   actionsContainer.className =
-    "flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:max-w-[38rem] xl:justify-end";
+    "flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:max-w-[42rem] xl:justify-end";
 
   for (const form of Array.from(actionsContainer.querySelectorAll("form"))) {
     const hasRoleSelect = Boolean(form.querySelector('[name="role"]'));
@@ -63,137 +43,46 @@ function normaliseActionLayout(actionsContainer: HTMLElement) {
   }
 }
 
-function removeMoveModal() {
-  document.querySelector("[data-managed-squad-move-modal]")?.remove();
-}
-
-function showMoveModal(input: {
+async function movePlayerToProspects(input: {
   teamId: string;
   membershipId: string;
   playerName: string;
+  button: HTMLButtonElement;
 }) {
-  removeMoveModal();
+  const confirmed = window.confirm(
+    `Move ${input.playerName} back to Prospects? This removes them from the active squad but keeps their details for this team.`,
+  );
 
-  const overlay = document.createElement("div");
-  overlay.dataset.managedSquadMoveModal = "true";
-  overlay.className =
-    "fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm";
+  if (!confirmed) return;
 
-  const modal = document.createElement("div");
-  modal.className =
-    "w-full max-w-2xl rounded-3xl border border-sky-400/20 bg-[#07130f] p-6 text-white shadow-2xl";
+  const originalText = input.button.textContent ?? "Move to prospects";
+  input.button.disabled = true;
+  input.button.textContent = "Moving…";
 
-  const heading = document.createElement("div");
-  heading.innerHTML = `
-    <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-100/70">Move squad member</p>
-    <h2 class="mt-2 text-2xl font-semibold tracking-tight text-white">Move ${input.playerName}</h2>
-    <p class="mt-2 text-sm leading-6 text-sky-100/70">Choose the team to move this player into.</p>
-  `;
+  try {
+    const response = await fetch(
+      `/api/captain/team/${input.teamId}/move-player-to-prospect`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ membershipId: input.membershipId }),
+      },
+    );
 
-  const status = document.createElement("div");
-  status.className = "mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65";
-  status.textContent = "Loading teams…";
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
 
-  const list = document.createElement("div");
-  list.className = "mt-4 grid gap-2";
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Player could not be moved to prospects.");
+    }
 
-  const footer = document.createElement("div");
-  footer.className = "mt-5 flex justify-end";
-
-  const close = document.createElement("button");
-  close.type = "button";
-  close.textContent = "Cancel";
-  close.className =
-    "inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10";
-  close.addEventListener("click", removeMoveModal);
-  footer.appendChild(close);
-
-  modal.append(heading, status, list, footer);
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) removeMoveModal();
-  });
-
-  fetch(`/api/captain/team/${input.teamId}/move-managed-player?type=squad`, {
-    cache: "no-store",
-  })
-    .then(async (response) => {
-      if (!response.ok) throw new Error("Could not load teams.");
-      return (await response.json()) as MoveData;
-    })
-    .then((data) => {
-      list.innerHTML = "";
-
-      if (data.targetTeams.length === 0) {
-        status.textContent = "No other teams are available.";
-        return;
-      }
-
-      status.textContent = "Select a destination team.";
-
-      for (const team of data.targetTeams) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className =
-          "flex w-full items-center justify-between rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-left text-sm text-white transition hover:border-sky-400/30 hover:bg-sky-500/10";
-        button.innerHTML = `
-          <span>
-            <span class="block font-semibold text-white">${getTeamLabel(team)}</span>
-            <span class="mt-1 block text-xs text-white/45">Move into this team</span>
-          </span>
-          <span class="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-100">Move</span>
-        `;
-
-        button.addEventListener("click", async () => {
-          button.setAttribute("disabled", "true");
-          status.className =
-            "mt-4 rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100";
-          status.textContent = "Moving player…";
-
-          try {
-            const response = await fetch(
-              `/api/captain/team/${input.teamId}/move-managed-player`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  type: "squad",
-                  itemId: input.membershipId,
-                  targetTeamId: team.id,
-                }),
-              },
-            );
-
-            const payload = (await response.json().catch(() => null)) as {
-              error?: string;
-            } | null;
-
-            if (!response.ok) {
-              throw new Error(payload?.error ?? "Player could not be moved.");
-            }
-
-            status.className =
-              "mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100";
-            status.textContent = "Player moved. Refreshing…";
-            window.location.reload();
-          } catch (error) {
-            button.removeAttribute("disabled");
-            status.className =
-              "mt-4 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100";
-            status.textContent = error instanceof Error ? error.message : "Player could not be moved.";
-          }
-        });
-
-        list.appendChild(button);
-      }
-    })
-    .catch((error) => {
-      status.className =
-        "mt-4 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100";
-      status.textContent = error instanceof Error ? error.message : "Could not load teams.";
-    });
+    window.location.href = `/captain/team/${input.teamId}/prospects?saved=moved-to-prospects`;
+  } catch (error) {
+    input.button.disabled = false;
+    input.button.textContent = originalText;
+    window.alert(error instanceof Error ? error.message : "Player could not be moved to prospects.");
+  }
 }
 
 function addManagedSquadEditLinks(pathname: string) {
@@ -219,16 +108,19 @@ function addManagedSquadEditLinks(pathname: string) {
 
     normaliseActionLayout(actionsContainer);
 
-    const duplicateEditDetails = actionsContainer.querySelector(
-      `a[data-managed-squad-edit-link="${membershipId}"]`,
-    );
-    duplicateEditDetails?.remove();
+    actionsContainer
+      .querySelector(`a[data-managed-squad-edit-link="${membershipId}"]`)
+      ?.remove();
 
-    const existingMoveButton = actionsContainer.querySelector(
-      `button[data-managed-squad-move-link="${membershipId}"]`,
+    actionsContainer
+      .querySelector(`button[data-managed-squad-move-link="${membershipId}"]`)
+      ?.remove();
+
+    const existingMoveToProspectsButton = actionsContainer.querySelector(
+      `button[data-managed-squad-move-to-prospects-link="${membershipId}"]`,
     );
 
-    if (!existingMoveButton) {
+    if (!existingMoveToProspectsButton) {
       const row = actionsContainer.closest("div[class*='px-6'][class*='py-5']") ??
         actionsContainer.closest("div[class*='flex']");
       const playerName =
@@ -237,11 +129,16 @@ function addManagedSquadEditLinks(pathname: string) {
 
       const moveButton = document.createElement("button");
       moveButton.type = "button";
-      moveButton.textContent = "Move player";
-      moveButton.dataset.managedSquadMoveLink = membershipId;
-      moveButton.className = injectedActionClassName;
+      moveButton.textContent = "Move to prospects";
+      moveButton.dataset.managedSquadMoveToProspectsLink = membershipId;
+      moveButton.className = moveToProspectsClassName;
       moveButton.addEventListener("click", () => {
-        showMoveModal({ teamId, membershipId, playerName });
+        void movePlayerToProspects({
+          teamId,
+          membershipId,
+          playerName,
+          button: moveButton,
+        });
       });
 
       const removeForm = Array.from(actionsContainer.querySelectorAll("form")).find(
@@ -260,6 +157,14 @@ export default function ManagedSquadEditLinks() {
 
   useEffect(() => {
     addManagedSquadEditLinks(pathname);
+
+    const observer = new MutationObserver(() => addManagedSquadEditLinks(pathname));
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
   }, [pathname]);
 
   return null;
