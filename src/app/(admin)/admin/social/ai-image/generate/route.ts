@@ -52,8 +52,40 @@ function getSocialRedirect(params: Record<string, string | number | null | undef
   return `/admin/social${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
 }
 
+function normaliseOrigin(value: string | null | undefined) {
+  const trimmed = value?.trim().replace(/\/$/, "");
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function getRequestOrigin(request: Request) {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+  const host = forwardedHost || request.headers.get("host")?.split(",")[0]?.trim();
+
+  if (host && host !== "localhost:8080" && !host.startsWith("localhost:") && !host.startsWith("127.0.0.1")) {
+    return `${forwardedProto}://${host}`;
+  }
+
+  return (
+    normaliseOrigin(process.env.NEXT_PUBLIC_APP_URL) ||
+    normaliseOrigin(process.env.NEXTAUTH_URL) ||
+    normaliseOrigin(process.env.APP_URL) ||
+    normaliseOrigin(process.env.BASE_URL) ||
+    normaliseOrigin(getBaseUrl()) ||
+    "https://sixfl.co.uk"
+  );
+}
+
 function redirectToSocial(request: Request, params: Record<string, string | number | null | undefined>) {
-  return NextResponse.redirect(new URL(getSocialRedirect(params), request.url), 303);
+  return NextResponse.redirect(`${getRequestOrigin(request)}${getSocialRedirect(params)}`, 303);
 }
 
 function getPostTypeLabel(postType: SocialPostType) {
@@ -223,7 +255,7 @@ export async function POST(request: Request) {
   await requireAdmin();
 
   const formData = await request.formData();
-  const cardId = getString(formData.get("cardId") ? formData : new FormData(), "cardId");
+  const cardId = getString(formData, "cardId");
 
   if (!cardId) {
     return redirectToSocial(request, { aiImage: "missing-card" });
@@ -258,6 +290,7 @@ export async function POST(request: Request) {
     const prompt = buildImagePrompt({ card, fixtures, predictorLines });
     const generated = await generateImage(prompt);
     const imagePath = `/api/social/ai-image/${card.id}`;
+    const imageUrl = `${getRequestOrigin(request)}${imagePath}`;
 
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`
@@ -294,7 +327,7 @@ export async function POST(request: Request) {
       await tx.$executeRaw`
         UPDATE "SocialMatchCard"
         SET
-          "imageUrl" = ${`${getBaseUrl()}${imagePath}`},
+          "imageUrl" = ${imageUrl},
           "postStatus" = ${SocialPostStatus.DRAFTED}::"SocialPostStatus",
           "lastError" = NULL,
           "queuedAt" = NOW(),
