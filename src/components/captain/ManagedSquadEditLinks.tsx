@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 const moveToProspectsClassName =
-  "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-center text-sm font-medium text-amber-100 transition hover:bg-amber-500/15 sm:w-auto";
+  "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-center text-sm font-medium text-amber-100 transition hover:bg-amber-500/15";
 
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
@@ -17,29 +17,41 @@ function getTeamIdFromPathname(pathname: string) {
 
 function normaliseActionLayout(actionsContainer: HTMLElement) {
   actionsContainer.className =
-    "flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:max-w-[42rem] xl:justify-end";
+    "grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:w-[22rem] xl:max-w-[22rem] xl:shrink-0";
+  actionsContainer.style.display = "grid";
+  actionsContainer.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
+  actionsContainer.style.gap = "0.5rem";
+  actionsContainer.style.width = "min(22rem, 100%)";
+  actionsContainer.style.maxWidth = "22rem";
+  actionsContainer.style.alignItems = "stretch";
 
   for (const form of Array.from(actionsContainer.querySelectorAll("form"))) {
     const hasRoleSelect = Boolean(form.querySelector('[name="role"]'));
 
     if (hasRoleSelect) {
-      form.className =
-        "flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center";
+      form.className = "grid w-full min-w-0 grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_auto]";
+      form.style.gridColumn = "1 / -1";
+      form.style.display = "grid";
+      form.style.gridTemplateColumns = "minmax(0, 1fr) auto";
+      form.style.gap = "0.5rem";
 
       const selectWrapper = form.querySelector("div");
       if (selectWrapper instanceof HTMLElement) {
-        selectWrapper.className = "w-full min-w-0 sm:w-[220px]";
+        selectWrapper.className = "min-w-0";
       }
     } else {
-      form.className = "w-full sm:w-auto";
+      form.className = "w-full";
+      form.style.gridColumn = "auto";
     }
   }
 
   for (const control of Array.from(
     actionsContainer.querySelectorAll<HTMLElement>("a, button"),
   )) {
-    control.classList.add("w-full", "justify-center", "text-center", "sm:w-auto");
-    control.classList.remove("shrink-0");
+    control.classList.add("w-full", "justify-center", "text-center");
+    control.classList.remove("sm:w-auto", "shrink-0");
+    control.style.width = "100%";
+    control.style.minHeight = "2.75rem";
   }
 }
 
@@ -105,8 +117,6 @@ function addManagedSquadEditLinks(pathname: string) {
 
     const actionsContainer = form.parentElement;
     if (!(actionsContainer instanceof HTMLElement)) continue;
-
-    normaliseActionLayout(actionsContainer);
 
     actionsContainer
       .querySelector(`a[data-managed-squad-edit-link="${membershipId}"]`)
