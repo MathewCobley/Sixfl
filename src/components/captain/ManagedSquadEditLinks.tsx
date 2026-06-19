@@ -297,6 +297,83 @@ async function movePlayerToProspects(input: {
   }
 }
 
+async function markPlayerNotInterested(input: {
+  teamId: string;
+  membershipId: string;
+  playerName: string;
+  button: HTMLButtonElement;
+}) {
+  const confirmed = window.confirm(
+    `Mark ${input.playerName} as not interested? This removes them from the squad but keeps them in the Player Prospects not interested list.`,
+  );
+
+  if (!confirmed) return;
+
+  const originalText = input.button.textContent ?? "Not interested";
+  input.button.disabled = true;
+  input.button.textContent = "Saving…";
+
+  try {
+    const response = await fetch(
+      `/api/captain/team/${input.teamId}/mark-player-not-interested`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ membershipId: input.membershipId }),
+      },
+    );
+
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Player could not be marked as not interested.");
+    }
+
+    window.location.href = "/admin/player-prospects#not-interested";
+  } catch (error) {
+    input.button.disabled = false;
+    input.button.textContent = originalText;
+    window.alert(error instanceof Error ? error.message : "Player could not be marked as not interested.");
+  }
+}
+
+function wireNotInterestedForm(input: {
+  teamId: string;
+  membershipId: string;
+  playerName: string;
+  actionsContainer: HTMLElement;
+  roleForm: HTMLFormElement;
+}) {
+  const removeForm = Array.from(input.actionsContainer.querySelectorAll<HTMLFormElement>("form")).find(
+    (candidate) =>
+      candidate !== input.roleForm &&
+      Boolean(candidate.querySelector('input[name="membershipId"]')),
+  );
+
+  if (!removeForm) return;
+
+  const button = removeForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (!button) return;
+
+  button.textContent = "Not interested";
+  button.dataset.squadNotInterestedLink = input.membershipId;
+
+  if (removeForm.dataset.squadNotInterestedWired === input.membershipId) return;
+
+  removeForm.dataset.squadNotInterestedWired = input.membershipId;
+  removeForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void markPlayerNotInterested({
+      teamId: input.teamId,
+      membershipId: input.membershipId,
+      playerName: input.playerName,
+      button,
+    });
+  });
+}
+
 function addManagedSquadEditLinks(pathname: string) {
   const teamId = getTeamIdFromPathname(pathname);
   if (!teamId) return;
@@ -372,6 +449,14 @@ function addManagedSquadEditLinks(pathname: string) {
 
       actionsContainer.insertBefore(moveButton, removeForm ?? null);
     }
+
+    wireNotInterestedForm({
+      teamId,
+      membershipId,
+      playerName,
+      actionsContainer,
+      roleForm: form,
+    });
 
     normaliseActionLayout(actionsContainer);
   }
