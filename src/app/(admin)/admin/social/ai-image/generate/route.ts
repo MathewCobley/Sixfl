@@ -52,6 +52,10 @@ function getSocialRedirect(params: Record<string, string | number | null | undef
   return `/admin/social${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
 }
 
+function redirectToSocial(request: Request, params: Record<string, string | number | null | undefined>) {
+  return NextResponse.redirect(new URL(getSocialRedirect(params), request.url), 303);
+}
+
 function getPostTypeLabel(postType: SocialPostType) {
   switch (postType) {
     case "RESULT":
@@ -219,16 +223,16 @@ export async function POST(request: Request) {
   await requireAdmin();
 
   const formData = await request.formData();
-  const cardId = getString(formData, "cardId");
+  const cardId = getString(formData.get("cardId") ? formData : new FormData(), "cardId");
 
   if (!cardId) {
-    return NextResponse.redirect(new URL(getSocialRedirect({ aiImage: "missing-card" }), request.url));
+    return redirectToSocial(request, { aiImage: "missing-card" });
   }
 
   const card = await getCard(cardId);
 
   if (!card) {
-    return NextResponse.redirect(new URL(getSocialRedirect({ aiImage: "missing-card" }), request.url));
+    return redirectToSocial(request, { aiImage: "missing-card" });
   }
 
   try {
@@ -301,15 +305,11 @@ export async function POST(request: Request) {
       `;
     });
 
-    return NextResponse.redirect(
-      new URL(getSocialRedirect({ aiImage: "generated", cardId: card.id }), request.url),
-    );
+    return redirectToSocial(request, { aiImage: "generated", cardId: card.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "OpenAI image generation failed.";
     await saveCardError(card.id, message.slice(0, 1200));
 
-    return NextResponse.redirect(
-      new URL(getSocialRedirect({ aiImage: "failed", cardId: card.id }), request.url),
-    );
+    return redirectToSocial(request, { aiImage: "failed", cardId: card.id });
   }
 }
