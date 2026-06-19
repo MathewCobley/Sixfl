@@ -226,8 +226,6 @@ function handleAiImageSubmit(event: SubmitEvent) {
   if (!(form instanceof HTMLFormElement)) return;
   if (!form.dataset.aiImageForm) return;
 
-  event.preventDefault();
-
   const button = form.querySelector<HTMLButtonElement>("[data-ai-image-button]");
   const status = form.querySelector<HTMLElement>("[data-ai-image-status]");
 
@@ -242,30 +240,8 @@ function handleAiImageSubmit(event: SubmitEvent) {
 
   if (status) {
     status.classList.remove("hidden");
-    status.textContent = "Generating can take 20-60 seconds. Please leave this tab open.";
+    status.textContent = "Generating can take 20-60 seconds. The page will refresh when the draft is ready.";
   }
-
-  fetch(form.action, {
-    method: "POST",
-    body: new FormData(form),
-    credentials: "same-origin",
-  })
-    .then((response) => {
-      window.location.href = response.url || "/admin/social?aiImage=generated";
-    })
-    .catch(() => {
-      if (button) {
-        button.disabled = false;
-        button.textContent = "Try AI image again";
-        button.className =
-          "inline-flex h-10 items-center justify-center rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 text-xs font-semibold text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-500/15";
-      }
-
-      if (status) {
-        status.classList.remove("hidden");
-        status.textContent = "The request did not start or the connection dropped. Try again, then check Railway logs if it still fails.";
-      }
-    });
 }
 
 export default function AdminSocialResultsGeneratorLinksBridge() {
