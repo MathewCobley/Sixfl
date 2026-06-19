@@ -4,8 +4,59 @@
 
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+
+const CAPTAIN_PREVIEW_PARAM = "captainPreview";
+
+function getPathWithPreview(input: {
+  pathname: string;
+  searchParams: URLSearchParams;
+  teamId: string;
+}) {
+  const teamPrefix = `/captain/team/${input.teamId}`;
+  const path = input.pathname === `${teamPrefix}/squad`
+    ? `${teamPrefix}/captain-squad`
+    : input.pathname;
+  const nextParams = new URLSearchParams(input.searchParams);
+
+  nextParams.set(CAPTAIN_PREVIEW_PARAM, "1");
+
+  const query = nextParams.toString();
+  return `${path}${query ? `?${query}` : ""}`;
+}
+
+function getFullAdminHref(input: { pathname: string | null; teamId: string }) {
+  const fallback = `/captain/team/${input.teamId}/squad`;
+  const pathname = input.pathname || fallback;
+
+  return pathname.replace(
+    new RegExp(`/captain/team/${input.teamId}/captain-squad/?$`),
+    `/captain/team/${input.teamId}/squad`,
+  );
+}
+
+function applyCaptainPreviewToHref(input: { href: string; teamId: string }) {
+  const url = new URL(input.href, window.location.origin);
+  const teamPrefix = `/captain/team/${input.teamId}`;
+
+  if (url.origin !== window.location.origin) {
+    return input.href;
+  }
+
+  if (!url.pathname.startsWith(teamPrefix)) {
+    return input.href;
+  }
+
+  if (url.pathname === `${teamPrefix}/squad`) {
+    url.pathname = `${teamPrefix}/captain-squad`;
+  }
+
+  url.searchParams.set(CAPTAIN_PREVIEW_PARAM, "1");
+
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 
 export default function CaptainViewModeHeader({
   teamId,
@@ -17,7 +68,43 @@ export default function CaptainViewModeHeader({
   isManagedTeam: boolean;
 }) {
   const pathname = usePathname();
-  const isLimitedCaptainPreview = Boolean(pathname?.includes("/captain-squad"));
+  const searchParams = useSearchParams();
+  const searchParamsKey = searchParams.toString();
+  const isLimitedCaptainPreview = Boolean(
+    pathname?.includes("/captain-squad") || searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1",
+  );
+  const previewHref = getPathWithPreview({
+    pathname: pathname || `/captain/team/${teamId}/captain-squad`,
+    searchParams: new URLSearchParams(searchParamsKey),
+    teamId,
+  });
+  const fullAdminHref = getFullAdminHref({ pathname, teamId });
+
+  useEffect(() => {
+    if (!isLimitedCaptainPreview) return;
+
+    const selector = `.captain-team-shell a[href^="/captain/team/${teamId}"]:not([data-captain-preview-ignore="true"])`;
+
+    function updateLinks() {
+      for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>(selector))) {
+        const href = link.getAttribute("href");
+        if (!href) continue;
+
+        link.setAttribute(
+          "href",
+          applyCaptainPreviewToHref({ href, teamId }),
+        );
+      }
+    }
+
+    updateLinks();
+
+    const root = document.querySelector(".captain-team-shell") ?? document.body;
+    const observer = new MutationObserver(updateLinks);
+    observer.observe(root, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, [isLimitedCaptainPreview, searchParamsKey, teamId]);
 
   const overline = isLimitedCaptainPreview
     ? "Limited captain preview"
@@ -37,7 +124,8 @@ export default function CaptainViewModeHeader({
     <>
       {isAdmin && !isManagedTeam ? (
         <style>{`
-          .captain-team-shell a[href="/captain/team/${teamId}/prospects"] {
+          .captain-team-shell a[href="/captain/team/${teamId}/prospects"],
+          .captain-team-shell a[href="/captain/team/${teamId}/prospects?${CAPTAIN_PREVIEW_PARAM}=1"] {
             display: none !important;
           }
         `}</style>
@@ -55,6 +143,7 @@ export default function CaptainViewModeHeader({
         {isAdmin ? (
           <Link
             href={`/admin/teams/${teamId}`}
+            data-captain-preview-ignore="true"
             className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
           >
             Back to admin team
@@ -63,7 +152,7 @@ export default function CaptainViewModeHeader({
 
         {isAdmin && !isLimitedCaptainPreview ? (
           <Link
-            href={`/captain/team/${teamId}/captain-squad`}
+            href={previewHref}
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
           >
             Preview limited captain view
@@ -72,7 +161,8 @@ export default function CaptainViewModeHeader({
 
         {isAdmin && isLimitedCaptainPreview ? (
           <Link
-            href={`/captain/team/${teamId}/squad`}
+            href={fullAdminHref}
+            data-captain-preview-ignore="true"
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
           >
             Return to full admin view
@@ -82,6 +172,7 @@ export default function CaptainViewModeHeader({
         {isAdmin ? (
           <Link
             href={`/admin/teams/${teamId}/squad`}
+            data-captain-preview-ignore="true"
             className="inline-flex items-center rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-500/15"
           >
             Admin squad console
