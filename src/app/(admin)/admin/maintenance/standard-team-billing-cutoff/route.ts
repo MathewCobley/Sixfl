@@ -43,9 +43,9 @@ async function applyStandardTeamBillingCutoff() {
           ELSE pmf."note" || E'\nIgnored for standard-team billing: fixture was before the team became a standard team on 17 June 2026.'
         END,
         "updatedAt" = NOW()
-      FROM "Fixture" f
-      INNER JOIN "Team" t ON t."id" = pmf."teamId"
+      FROM "Fixture" f, "Team" t
       WHERE pmf."fixtureId" = f."id"
+        AND t."id" = pmf."teamId"
         AND t."standardBillingStartsAt" IS NOT NULL
         AND f."kickoffAt" < t."standardBillingStartsAt"
         AND pmf."status" <> 'CANCELLED'::"PlayerMatchFeeStatus"
@@ -70,9 +70,9 @@ async function applyStandardTeamBillingCutoff() {
           ELSE pc."description" || E'\nIgnored for standard-team billing: fixture was before the team became a standard team on 17 June 2026.'
         END,
         "updatedAt" = NOW()
-      FROM "Fixture" f
-      INNER JOIN "Team" t ON t."id" = pc."teamId"
+      FROM "Fixture" f, "Team" t
       WHERE pc."fixtureId" = f."id"
+        AND t."id" = pc."teamId"
         AND t."standardBillingStartsAt" IS NOT NULL
         AND f."kickoffAt" < t."standardBillingStartsAt"
         AND pc."status" <> 'VOID'::"PaymentChargeStatus"
@@ -80,116 +80,6 @@ async function applyStandardTeamBillingCutoff() {
     )
     SELECT COUNT(*)::bigint AS count FROM updated
   `;
-
-  await prisma.$executeRawUnsafe(`
-    CREATE OR REPLACE FUNCTION sixfl_cancel_pre_standard_player_match_fee()
-    RETURNS TRIGGER AS $$
-    DECLARE
-      billing_start TIMESTAMP(3);
-      fixture_kickoff TIMESTAMP(3);
-      ignore_note TEXT := 'Ignored for standard-team billing: fixture was before the team became a standard team.';
-    BEGIN
-      SELECT t."standardBillingStartsAt"
-      INTO billing_start
-      FROM "Team" t
-      WHERE t."id" = NEW."teamId";
-
-      IF billing_start IS NULL THEN
-        RETURN NEW;
-      END IF;
-
-      SELECT f."kickoffAt"
-      INTO fixture_kickoff
-      FROM "Fixture" f
-      WHERE f."id" = NEW."fixtureId";
-
-      IF fixture_kickoff IS NOT NULL AND fixture_kickoff < billing_start THEN
-        NEW."status" := 'CANCELLED'::"PlayerMatchFeeStatus";
-        NEW."cancelledAt" := COALESCE(NEW."cancelledAt", NOW());
-        NEW."paidAt" := NULL;
-        NEW."waivedAt" := NULL;
-        NEW."paymentUrl" := NULL;
-        NEW."paymentToken" := NULL;
-        NEW."note" := CASE
-          WHEN NEW."note" IS NULL OR trim(NEW."note") = '' THEN ignore_note
-          WHEN NEW."note" LIKE '%Ignored for standard-team billing:%' THEN NEW."note"
-          ELSE NEW."note" || E'\n' || ignore_note
-        END;
-      END IF;
-
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    DROP TRIGGER IF EXISTS "sixfl_cancel_pre_standard_player_match_fee_trigger" ON "PlayerMatchFee"
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TRIGGER "sixfl_cancel_pre_standard_player_match_fee_trigger"
-    BEFORE INSERT OR UPDATE OF "teamId", "fixtureId", "status", "amountPence"
-    ON "PlayerMatchFee"
-    FOR EACH ROW
-    EXECUTE FUNCTION sixfl_cancel_pre_standard_player_match_fee()
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE OR REPLACE FUNCTION sixfl_void_pre_standard_payment_charge()
-    RETURNS TRIGGER AS $$
-    DECLARE
-      billing_start TIMESTAMP(3);
-      fixture_kickoff TIMESTAMP(3);
-      ignore_note TEXT := 'Ignored for standard-team billing: fixture was before the team became a standard team.';
-    BEGIN
-      IF NEW."fixtureId" IS NULL THEN
-        RETURN NEW;
-      END IF;
-
-      SELECT t."standardBillingStartsAt"
-      INTO billing_start
-      FROM "Team" t
-      WHERE t."id" = NEW."teamId";
-
-      IF billing_start IS NULL THEN
-        RETURN NEW;
-      END IF;
-
-      SELECT f."kickoffAt"
-      INTO fixture_kickoff
-      FROM "Fixture" f
-      WHERE f."id" = NEW."fixtureId";
-
-      IF fixture_kickoff IS NOT NULL AND fixture_kickoff < billing_start THEN
-        NEW."status" := 'VOID'::"PaymentChargeStatus";
-        NEW."paymentToken" := NULL;
-        NEW."lastStripeCheckoutUrl" := NULL;
-        NEW."lastStripeCheckoutSessionId" := NULL;
-        NEW."lastStripeCheckoutCreatedAt" := NULL;
-        NEW."lastStripeCheckoutAmountPence" := NULL;
-        NEW."description" := CASE
-          WHEN NEW."description" IS NULL OR trim(NEW."description") = '' THEN ignore_note
-          WHEN NEW."description" LIKE '%Ignored for standard-team billing:%' THEN NEW."description"
-          ELSE NEW."description" || E'\n' || ignore_note
-        END;
-      END IF;
-
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    DROP TRIGGER IF EXISTS "sixfl_void_pre_standard_payment_charge_trigger" ON "PaymentCharge"
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TRIGGER "sixfl_void_pre_standard_payment_charge_trigger"
-    BEFORE INSERT OR UPDATE OF "teamId", "fixtureId", "status", "amountPence"
-    ON "PaymentCharge"
-    FOR EACH ROW
-    EXECUTE FUNCTION sixfl_void_pre_standard_payment_charge()
-  `);
 
   return {
     cancelledPlayerFees: Number(cancelledRows[0]?.count ?? 0),
@@ -200,11 +90,21 @@ async function applyStandardTeamBillingCutoff() {
 export async function GET() {
   await requireAdmin();
 
-  const result = await applyStandardTeamBillingCutoff();
+  try {
+    const result = await applyStandardTeamBillingCutoff();
 
-  return NextResponse.json({
-    ok: true,
-    message: "Standard-team billing cutoff applied for Dynamo Kebab and Crescent United from 17 June 2026.",
-    ...result,
-  });
+    return NextResponse.json({
+      ok: true,
+      message: "Standard-team billing cutoff applied for Dynamo Kebab and Crescent United from 17 June 2026.",
+      ...result,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: error instanceof Error ? error.message : "Unknown maintenance error",
+      },
+      { status: 500 },
+    );
+  }
 }
