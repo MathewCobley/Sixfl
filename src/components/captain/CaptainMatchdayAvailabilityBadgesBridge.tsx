@@ -16,6 +16,12 @@ type AvailabilityRow = {
   respondedAt: string | null;
 };
 
+const oldOptionalSelectionMessage =
+  "This team is currently set as a standard team. Matchday player selection is intended for managed SIXFL squads.";
+
+const captainFriendlyOptionalSelectionMessage =
+  "This is optional for your team. Use it if you want to record who actually played and help manage individual match fees. If you only collect one team payment, you can ignore this page.";
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/^\/captain\/team\/([^/]+)\/match-fees\/?$/);
   return match?.[1] ?? null;
@@ -44,6 +50,20 @@ function getBadgeLabel(response: AvailabilityResponse) {
       return "Availability: Unavailable";
     default:
       return "Availability: No response";
+  }
+}
+
+function rewriteCaptainFriendlyOptionalSelectionMessage() {
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>("main div, main section, main p"));
+
+  for (const candidate of candidates) {
+    if (candidate.textContent?.trim() === oldOptionalSelectionMessage) {
+      candidate.textContent = captainFriendlyOptionalSelectionMessage;
+      candidate.classList.remove("text-amber-100");
+      candidate.classList.add("text-emerald-100");
+      candidate.classList.remove("border-amber-400/20", "bg-amber-500/10");
+      candidate.classList.add("border-emerald-400/20", "bg-emerald-500/10");
+    }
   }
 }
 
@@ -95,11 +115,15 @@ export default function CaptainMatchdayAvailabilityBadgesBridge() {
   useEffect(() => {
     const teamId = getTeamIdFromPathname(pathname);
 
-    if (!teamId || !fixtureId) return;
+    if (!teamId) return;
 
     let cancelled = false;
 
+    rewriteCaptainFriendlyOptionalSelectionMessage();
+
     async function loadAvailability() {
+      if (!fixtureId) return;
+
       try {
         const response = await fetch(
           `/api/captain/team/${teamId}/fixture/${fixtureId}/availability`,
@@ -112,6 +136,7 @@ export default function CaptainMatchdayAvailabilityBadgesBridge() {
 
         if (!cancelled) {
           addAvailabilityBadges(payload.availabilities ?? []);
+          rewriteCaptainFriendlyOptionalSelectionMessage();
         }
       } catch {
         // Non-blocking UI enhancement only.
