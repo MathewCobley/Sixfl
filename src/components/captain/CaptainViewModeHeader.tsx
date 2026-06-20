@@ -37,6 +37,8 @@ const CAPTAIN_FACING_REPLACEMENTS = [
   },
 ] as const;
 
+type CaptainAccessMode = "admin-preview" | "captain-preview" | "captain";
+
 function getPathWithPreview(input: {
   pathname: string;
   searchParams: URLSearchParams;
@@ -62,6 +64,17 @@ function getFullAdminHref(input: { pathname: string | null; teamId: string }) {
     new RegExp(`/captain/team/${input.teamId}/captain-squad/?$`),
     `/captain/team/${input.teamId}/squad`,
   );
+}
+
+function getExitCaptainPreviewHref(input: {
+  pathname: string | null;
+  searchParamsKey: string;
+  teamId: string;
+}) {
+  const pathname = input.pathname || `/captain/team/${input.teamId}`;
+  const currentPath = `${pathname}${input.searchParamsKey ? `?${input.searchParamsKey}` : ""}`;
+
+  return `/admin/teams/${input.teamId}/captain-preview/exit?to=${encodeURIComponent(currentPath)}`;
 }
 
 function applyCaptainPreviewToHref(input: { href: string; teamId: string }) {
@@ -118,23 +131,31 @@ export default function CaptainViewModeHeader({
   teamId,
   isAdmin,
   isManagedTeam,
+  accessMode,
 }: {
   teamId: string;
   isAdmin: boolean;
   isManagedTeam: boolean;
+  accessMode?: CaptainAccessMode;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsKey = searchParams.toString();
+  const isCaptainOnlyPreview = accessMode === "captain-preview";
+  const canShowAdminControls = isAdmin || isCaptainOnlyPreview;
   const isLimitedCaptainPreview = Boolean(
-    pathname?.includes("/captain-squad") || searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1",
+    isCaptainOnlyPreview ||
+      pathname?.includes("/captain-squad") ||
+      searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1",
   );
   const previewHref = getPathWithPreview({
     pathname: pathname || `/captain/team/${teamId}/captain-squad`,
     searchParams: new URLSearchParams(searchParamsKey),
     teamId,
   });
-  const fullAdminHref = getFullAdminHref({ pathname, teamId });
+  const fullAdminHref = isCaptainOnlyPreview
+    ? getExitCaptainPreviewHref({ pathname, searchParamsKey, teamId })
+    : getFullAdminHref({ pathname, teamId });
 
   useEffect(() => {
     const root = document.querySelector(".captain-team-shell") ?? document.body;
@@ -176,7 +197,9 @@ export default function CaptainViewModeHeader({
   }, [isLimitedCaptainPreview, searchParamsKey, teamId]);
 
   const overline = isLimitedCaptainPreview
-    ? "Limited captain preview"
+    ? canShowAdminControls
+      ? "Admin captain preview"
+      : "Limited captain preview"
     : isAdmin
       ? "SIXFL admin team view"
       : "SIXFL captain hub";
@@ -191,7 +214,7 @@ export default function CaptainViewModeHeader({
 
   return (
     <>
-      {isAdmin && !isManagedTeam ? (
+      {canShowAdminControls && !isManagedTeam ? (
         <style>{`
           .captain-team-shell a[href="/captain/team/${teamId}/prospects"],
           .captain-team-shell a[href="/captain/team/${teamId}/prospects?${CAPTAIN_PREVIEW_PARAM}=1"] {
@@ -209,7 +232,7 @@ export default function CaptainViewModeHeader({
       </p>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        {isAdmin ? (
+        {canShowAdminControls ? (
           <Link
             href={`/admin/teams/${teamId}`}
             data-captain-preview-ignore="true"
@@ -228,7 +251,7 @@ export default function CaptainViewModeHeader({
           </Link>
         ) : null}
 
-        {isAdmin && isLimitedCaptainPreview ? (
+        {canShowAdminControls && isLimitedCaptainPreview ? (
           <Link
             href={fullAdminHref}
             data-captain-preview-ignore="true"
@@ -238,7 +261,7 @@ export default function CaptainViewModeHeader({
           </Link>
         ) : null}
 
-        {isAdmin ? (
+        {canShowAdminControls ? (
           <Link
             href={`/admin/teams/${teamId}/squad`}
             data-captain-preview-ignore="true"
@@ -248,7 +271,7 @@ export default function CaptainViewModeHeader({
           </Link>
         ) : null}
 
-        {isAdmin && isLimitedCaptainPreview ? (
+        {canShowAdminControls && isLimitedCaptainPreview ? (
           <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
             <div className="font-medium text-white">Viewing as captain</div>
             <div className="mt-1 text-amber-100/75">Limited preview mode.</div>
