@@ -5,7 +5,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getFixtureAiPreview, type FixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import { getFallbackFixtureAiPreview, type FixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
@@ -153,7 +154,7 @@ function WinChanceBlock({
             SIXFL AI Predictor
           </div>
           <div className="mt-1 text-xs text-white/45">
-            OpenAI match preview · {chance.confidence} confidence · Just for fun
+            Match preview · {chance.confidence} confidence · Just for fun
           </div>
         </div>
 
@@ -245,24 +246,27 @@ export default async function LeagueFixturesPublic({
     notFound();
   }
 
-  const winChanceEntries = await Promise.all(
-    league.fixtures
-      .filter((fixture) => fixture.status === "SCHEDULED")
-      .map(async (fixture) => {
-        const winChance = calculateFixtureWinChance({
-          homeTeamId: fixture.homeTeam.id,
-          awayTeamId: fixture.awayTeam.id,
-          fixtures: league.fixtures,
-        });
-        const aiPreview = await getFixtureAiPreview({
-          homeTeamName: fixture.homeTeam.name,
-          awayTeamName: fixture.awayTeam.name,
-          winChance,
-        });
-
-        return [fixture.id, { ...winChance, aiPreview }] as const;
-      }),
+  const scheduledFixtures = league.fixtures.filter((fixture) => fixture.status === "SCHEDULED");
+  const storedPreviews = await getStoredAiPreviewsByFixtureIds(
+    scheduledFixtures.map((fixture) => fixture.id),
   );
+
+  const winChanceEntries = scheduledFixtures.map((fixture) => {
+    const winChance = calculateFixtureWinChance({
+      homeTeamId: fixture.homeTeam.id,
+      awayTeamId: fixture.awayTeam.id,
+      fixtures: league.fixtures,
+    });
+    const aiPreview =
+      storedPreviews.get(fixture.id) ??
+      getFallbackFixtureAiPreview({
+        homeTeamName: fixture.homeTeam.name,
+        awayTeamName: fixture.awayTeam.name,
+        winChance,
+      });
+
+    return [fixture.id, { ...winChance, aiPreview }] as const;
+  });
   const winChanceByFixtureId = new Map<string, WinChanceWithAi>(winChanceEntries);
 
   const rounds = league.fixtures.reduce(
