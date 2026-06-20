@@ -12,6 +12,10 @@ import {
   getLondonMinutesSinceMidnight,
   parseLondonDateTime,
 } from "@/lib/datetime/london";
+import {
+  refreshStoredAiPreviewForFixture,
+  refreshStoredAiPreviewsForLeague,
+} from "@/lib/fixtures/storedAiPredictions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -420,20 +424,61 @@ async function validateGeneratedFixtureScheduling(formData: FormData) {
   }
 }
 
+async function refreshFixtureAiPreviewSafely(fixtureId: string | null) {
+  if (!fixtureId) return;
+
+  try {
+    await refreshStoredAiPreviewForFixture(fixtureId, { force: true });
+  } catch (error) {
+    console.error("Failed to generate stored fixture AI preview", error);
+  }
+}
+
+async function refreshLeagueAiPreviewsSafely(leagueId: string | null) {
+  if (!leagueId) return;
+
+  try {
+    await refreshStoredAiPreviewsForLeague(leagueId, { force: true });
+  } catch (error) {
+    console.error("Failed to generate stored league AI previews", error);
+  }
+}
+
 export async function createFixtureAction(formData: FormData) {
   await requireAdmin();
   await validateManualFixtureScheduling(formData);
-  return createFixtureActionWithoutKickoffRules(formData);
+
+  const leagueId = getString(formData.get("leagueId"));
+
+  try {
+    return await createFixtureActionWithoutKickoffRules(formData);
+  } finally {
+    await refreshLeagueAiPreviewsSafely(leagueId);
+  }
 }
 
 export async function updateFixtureAction(formData: FormData) {
   await requireAdmin();
   await validateManualFixtureScheduling(formData);
-  return updateFixtureActionWithoutKickoffRules(formData);
+
+  const fixtureId = getString(formData.get("fixtureId"));
+
+  try {
+    return await updateFixtureActionWithoutKickoffRules(formData);
+  } finally {
+    await refreshFixtureAiPreviewSafely(fixtureId);
+  }
 }
 
 export async function generateFixtures(formData: FormData) {
   await requireAdmin();
   await validateGeneratedFixtureScheduling(formData);
-  return generateFixturesWithoutKickoffRules(formData);
+
+  const leagueId = getString(formData.get("leagueId"));
+
+  try {
+    return await generateFixturesWithoutKickoffRules(formData);
+  } finally {
+    await refreshLeagueAiPreviewsSafely(leagueId);
+  }
 }
