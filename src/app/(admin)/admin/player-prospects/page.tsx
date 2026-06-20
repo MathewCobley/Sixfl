@@ -186,13 +186,35 @@ function mapProspectRow(row: RawProspectRow): ProspectWithTeam {
   };
 }
 
+function getActiveProspectReason(input: {
+  prospect: ProspectWithTeam;
+  activeSquadMembershipKeys: Set<string>;
+}) {
+  if (input.prospect.status === "ACTIVE_SQUAD") {
+    return "Prospect has been promoted to an active squad or is pending activation.";
+  }
+
+  const activeSquadKey = buildActiveSquadKey({
+    email: input.prospect.email,
+    teamId: input.prospect.teamId,
+  });
+
+  if (activeSquadKey && input.activeSquadMembershipKeys.has(activeSquadKey)) {
+    return "Email matches a player already attached to this team squad.";
+  }
+
+  return null;
+}
+
 function ProspectCard({
   prospect,
   teamOptions,
+  activeReason = null,
   muted = false,
 }: {
   prospect: ProspectWithTeam;
   teamOptions: FormListboxOption[];
+  activeReason?: string | null;
   muted?: boolean;
 }) {
   const name = getProspectName(prospect);
@@ -200,6 +222,7 @@ function ProspectCard({
     ? `${prospect.team.league.name}${prospect.team.league.season ? ` · ${prospect.team.league.season}` : ""}`
     : "No team assigned";
   const isUnassigned = !prospect.team;
+  const isActivePlayer = Boolean(activeReason);
 
   return (
     <article
@@ -214,6 +237,11 @@ function ProspectCard({
             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getStatusClasses(prospect.status)}`}>
               {formatStatus(prospect.status)}
             </span>
+            {isActivePlayer ? (
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                Active player
+              </span>
+            ) : null}
             {isUnassigned ? (
               <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">
                 Unassigned
@@ -225,6 +253,11 @@ function ProspectCard({
             {prospect.phone ? <span>{prospect.phone}</span> : null}
             {prospect.source ? <span>Source: {prospect.source}</span> : null}
           </div>
+          {activeReason ? (
+            <div className="mt-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.08] px-3 py-2 text-xs leading-5 text-emerald-100/80">
+              <span className="font-semibold text-emerald-100">Active player reason:</span> {activeReason}
+            </div>
+          ) : null}
           {prospect.preferredPositions || prospect.availabilitySummary ? (
             <p className="mt-3 text-sm leading-6 text-white/60">
               {[prospect.preferredPositions, prospect.availabilitySummary].filter(Boolean).join(" · ")}
@@ -239,7 +272,7 @@ function ProspectCard({
 
         <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-            {isUnassigned ? "Prospect pool" : "Currently held under"}
+            {isUnassigned ? "Prospect pool" : isActivePlayer ? "Active team" : "Currently held under"}
           </div>
           {prospect.team ? (
             <>
@@ -403,18 +436,17 @@ export default async function AdminPlayerProspectsPage({
     }
   }
 
-  const isActivelyUsedProspect = (prospect: ProspectWithTeam) => {
-    if (prospect.status === "ACTIVE_SQUAD") {
-      return true;
+  const activeProspectReasonById = new Map<string, string>();
+
+  for (const prospect of prospects) {
+    const reason = getActiveProspectReason({ prospect, activeSquadMembershipKeys });
+
+    if (reason) {
+      activeProspectReasonById.set(prospect.id, reason);
     }
+  }
 
-    const activeSquadKey = buildActiveSquadKey({
-      email: prospect.email,
-      teamId: prospect.teamId,
-    });
-
-    return activeSquadKey ? activeSquadMembershipKeys.has(activeSquadKey) : false;
-  };
+  const isActivelyUsedProspect = (prospect: ProspectWithTeam) => activeProspectReasonById.has(prospect.id);
 
   const pipelineProspects = prospects.filter(
     (prospect) => !isActivelyUsedProspect(prospect) && prospect.status !== "DECLINED",
@@ -441,14 +473,14 @@ export default async function AdminPlayerProspectsPage({
               Player prospects
             </h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-              Admin-owned view of individual players who may join a team. Players moved out of squads become unassigned prospects until you assign them to a new team.
+              Admin-owned view of individual players who may join a team. Open prospects are shown first, active players are visible separately, and players moved out of squads become unassigned prospects until you assign them to a new team.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <StatCard label="Open" value={pipelineProspects.length} helper="Still in the pipeline" tone="emerald" />
             <StatCard label="Unassigned" value={unassignedProspects.length} helper="Ready to assign" tone="sky" />
-            <StatCard label="New" value={newProspects.length} helper="Not yet processed" />
+            <StatCard label="Active players" value={activeSquadProspects.length} helper="Already in use" tone="emerald" />
             <StatCard label="Trial" value={trialProspects.length} helper="May be joining" tone="amber" />
           </div>
         </div>
@@ -473,7 +505,7 @@ export default async function AdminPlayerProspectsPage({
             <h2 className="mt-2 text-xl font-semibold text-white">Pipeline list</h2>
           </div>
           <div className="text-sm text-white/50">
-            {pipelineProspects.length} shown · {unassignedProspects.length} unassigned · {activeSquadProspects.length} active hidden
+            {pipelineProspects.length} shown · {unassignedProspects.length} unassigned · {activeSquadProspects.length} active players below
             {declinedProspects.length ? ` · ${declinedProspects.length} not interested` : ""}
           </div>
         </div>
@@ -490,6 +522,32 @@ export default async function AdminPlayerProspectsPage({
           ))}
         </div>
       </section>
+
+      {activeSquadProspects.length > 0 ? (
+        <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/60">Active players</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Already promoted or linked to squads</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-100/65">
+                These players are not in the open prospect pipeline because they are already active, pending activation, or their email matches an existing squad member.
+              </p>
+            </div>
+            <div className="text-sm text-emerald-100/65">{activeSquadProspects.length} active player{activeSquadProspects.length === 1 ? "" : "s"}</div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {activeSquadProspects.map((prospect) => (
+              <ProspectCard
+                key={prospect.id}
+                prospect={prospect}
+                teamOptions={teamOptions}
+                activeReason={activeProspectReasonById.get(prospect.id) ?? "Active player."}
+                muted
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {declinedProspects.length > 0 ? (
         <section className="rounded-3xl border border-red-400/15 bg-red-500/[0.06] p-5">
