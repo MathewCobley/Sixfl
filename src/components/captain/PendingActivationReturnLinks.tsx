@@ -29,16 +29,19 @@ function addButtons(pathname: string) {
 
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = "Return to prospects";
+      button.textContent = "Return to prospects tab";
       button.dataset.returnPendingProspect = id;
       button.className = "inline-flex w-full items-center justify-center rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-2.5 text-center text-sm font-medium text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto";
       button.addEventListener("click", async () => {
         button.disabled = true;
         button.textContent = "Returning…";
         const response = await fetch(`/api/captain/team/${currentTeamId}/prospects/${id}`, { method: "POST" });
-        if (response.ok) window.location.reload();
+        if (response.ok) {
+          window.location.href = "/admin/player-prospects";
+          return;
+        }
         button.disabled = false;
-        button.textContent = "Return to prospects";
+        button.textContent = "Return to prospects tab";
       });
 
       actions.appendChild(button);
