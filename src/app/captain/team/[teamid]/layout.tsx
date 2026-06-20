@@ -324,6 +324,7 @@ export default async function CaptainTeamLayout({
                     teamId={team.id}
                     isAdmin={access.isAdmin}
                     isManagedTeam={isManagedTeam}
+                    accessMode={access.accessMode}
                   />
 
                   <h1 className="captain-team-heading mt-2 text-2xl font-semibold tracking-tight text-white sm:text-4xl">
