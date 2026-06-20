@@ -26,6 +26,11 @@ function getTeamLabel(team: MoveData["targetTeams"][number]) {
     : team.name;
 }
 
+function getProspectIdFromHref(href: string) {
+  const match = href.match(/\/prospects\/([^/]+)\/communications(?:\?|#|$)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 function findPendingActivationCard(start: HTMLElement) {
   let current: HTMLElement | null = start;
 
@@ -36,7 +41,7 @@ function findPendingActivationCard(start: HTMLElement) {
       className.includes("rounded-2xl") &&
       className.includes("px-4") &&
       className.includes("py-4") &&
-      current.querySelector('input[name="prospectId"]')
+      current.querySelector('a[href*="/prospects/"][href*="/communications"]')
     ) {
       return current;
     }
@@ -45,6 +50,21 @@ function findPendingActivationCard(start: HTMLElement) {
   }
 
   return null;
+}
+
+function findPendingActivationActionsContainer(card: HTMLElement, prospectId: string) {
+  const commsLink = card.querySelector<HTMLAnchorElement>(
+    `a[href*="/prospects/${CSS.escape(prospectId)}/communications"]`,
+  );
+
+  if (commsLink?.parentElement instanceof HTMLElement) {
+    return commsLink.parentElement;
+  }
+
+  return Array.from(card.querySelectorAll<HTMLElement>("div")).find((element) => {
+    const className = typeof element.className === "string" ? element.className : "";
+    return className.includes("flex") && className.includes("flex-wrap") && className.includes("justify-end");
+  }) ?? null;
 }
 
 function getPendingActivationName(card: HTMLElement) {
@@ -80,12 +100,12 @@ function showMoveModal(input: {
   heading.innerHTML = `
     <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-100/70">Move pending player</p>
     <h2 class="mt-2 text-2xl font-semibold tracking-tight text-white">Move ${input.playerName}</h2>
-    <p class="mt-2 text-sm leading-6 text-sky-100/70">Choose the managed team to move this pending activation player into. They will remain pending activation in the destination squad.</p>
+    <p class="mt-2 text-sm leading-6 text-sky-100/70">Choose the team to move this pending activation player into. They will remain pending activation in the destination squad.</p>
   `;
 
   const status = document.createElement("div");
   status.className = "mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65";
-  status.textContent = "Loading managed teams…";
+  status.textContent = "Loading teams…";
 
   const list = document.createElement("div");
   list.className = "mt-4 grid gap-2";
@@ -113,14 +133,14 @@ function showMoveModal(input: {
     cache: "no-store",
   })
     .then(async (response) => {
-      if (!response.ok) throw new Error("Could not load managed teams.");
+      if (!response.ok) throw new Error("Could not load teams.");
       return (await response.json()) as MoveData;
     })
     .then((data) => {
       list.innerHTML = "";
 
       if (data.targetTeams.length === 0) {
-        status.textContent = "No other managed teams are available.";
+        status.textContent = "No other teams are available.";
         return;
       }
 
@@ -134,7 +154,7 @@ function showMoveModal(input: {
         button.innerHTML = `
           <span>
             <span class="block font-semibold text-white">${getTeamLabel(team)}</span>
-            <span class="mt-1 block text-xs text-white/45">Move into this managed squad as pending activation</span>
+            <span class="mt-1 block text-xs text-white/45">Move into this squad as pending activation</span>
           </span>
           <span class="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-100">Move</span>
         `;
@@ -185,7 +205,7 @@ function showMoveModal(input: {
     .catch((error) => {
       status.className =
         "mt-4 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100";
-      status.textContent = error instanceof Error ? error.message : "Could not load managed teams.";
+      status.textContent = error instanceof Error ? error.message : "Could not load teams.";
     });
 }
 
@@ -230,22 +250,20 @@ function addPendingActivationControls(pathname: string) {
   const teamId = getTeamIdFromPathname(pathname);
   if (!teamId) return;
 
-  const prospectInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('#pending-activation input[name="prospectId"]'),
+  const prospectLinks = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>(
+      '#pending-activation a[href*="/prospects/"][href*="/communications"]',
+    ),
   );
 
-  for (const input of prospectInputs) {
-    const prospectId = input.value.trim();
+  for (const link of prospectLinks) {
+    const prospectId = getProspectIdFromHref(link.getAttribute("href") ?? "");
     if (!prospectId) continue;
 
-    const card = findPendingActivationCard(input);
+    const card = findPendingActivationCard(link);
     if (!card) continue;
 
-    const actionsContainer = Array.from(card.querySelectorAll<HTMLElement>("div")).find((element) => {
-      const className = typeof element.className === "string" ? element.className : "";
-      return className.includes("flex") && className.includes("flex-wrap") && className.includes("gap-3");
-    });
-
+    const actionsContainer = findPendingActivationActionsContainer(card, prospectId);
     if (!actionsContainer) continue;
 
     const playerName = getPendingActivationName(card);
@@ -256,7 +274,7 @@ function addPendingActivationControls(pathname: string) {
       moveButton.textContent = "Move pending player";
       moveButton.dataset.pendingActivationMoveLink = prospectId;
       moveButton.className =
-        "inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+        "inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-center text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto";
       moveButton.addEventListener("click", () => {
         showMoveModal({ teamId, prospectId, playerName });
       });
@@ -270,7 +288,7 @@ function addPendingActivationControls(pathname: string) {
       deleteButton.textContent = "Delete pending player";
       deleteButton.dataset.pendingActivationDeleteLink = prospectId;
       deleteButton.className =
-        "inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+        "inline-flex w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-center text-sm font-medium text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto";
       deleteButton.addEventListener("click", () => {
         void deletePendingPlayer({
           teamId,
