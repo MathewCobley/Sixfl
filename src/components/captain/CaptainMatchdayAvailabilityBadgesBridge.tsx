@@ -22,6 +22,34 @@ const oldOptionalSelectionMessage =
 const captainFriendlyOptionalSelectionMessage =
   "This is optional for your team. Use it if you want to record who actually played and help manage individual match fees. If you only collect one team payment, you can ignore this page.";
 
+const captainFriendlyTextReplacements: Array<[string, string]> = [
+  [oldOptionalSelectionMessage, captainFriendlyOptionalSelectionMessage],
+  [
+    "Tick this when the player uses WhatsApp, so captains know payment links can be sent that way.",
+    "Tick this when the player uses WhatsApp, so you know payment links can be shared that way.",
+  ],
+  [
+    "These details help captains send payment links and organise matchday squads.",
+    "These details help you share payment links and organise matchday squads.",
+  ],
+  [
+    "Standard team",
+    "Your team",
+  ],
+  [
+    "Managed team",
+    "SIXFL-supported team",
+  ],
+  [
+    "SIXFL-managed",
+    "SIXFL-supported",
+  ],
+  [
+    "This team is currently managed by SIXFL. Automated player availability reminders may still be handled through the managed squad tools. WhatsApp templates are mainly intended for standard captains who manage their own squad group.",
+    "SIXFL may already help with availability reminders for this team. You can still use these WhatsApp templates if you want to share messages in your own team group.",
+  ],
+];
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/^\/captain\/team\/([^/]+)\/match-fees\/?$/);
   return match?.[1] ?? null;
@@ -53,12 +81,45 @@ function getBadgeLabel(response: AvailabilityResponse) {
   }
 }
 
-function rewriteCaptainFriendlyOptionalSelectionMessage() {
+function rewriteCaptainFriendlyCopy() {
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        const parent = node.parentElement;
+        if (!parent) return NodeFilter.FILTER_REJECT;
+        if (["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT"].includes(parent.tagName)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    },
+  );
+
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) {
+    textNodes.push(walker.currentNode as Text);
+  }
+
+  for (const node of textNodes) {
+    let nextValue = node.nodeValue ?? "";
+
+    for (const [from, to] of captainFriendlyTextReplacements) {
+      if (nextValue.includes(from)) {
+        nextValue = nextValue.split(from).join(to);
+      }
+    }
+
+    if (nextValue !== node.nodeValue) {
+      node.nodeValue = nextValue;
+    }
+  }
+
   const candidates = Array.from(document.querySelectorAll<HTMLElement>("main div, main section, main p"));
 
   for (const candidate of candidates) {
-    if (candidate.textContent?.trim() === oldOptionalSelectionMessage) {
-      candidate.textContent = captainFriendlyOptionalSelectionMessage;
+    if (candidate.textContent?.trim() === captainFriendlyOptionalSelectionMessage) {
       candidate.classList.remove("text-amber-100");
       candidate.classList.add("text-emerald-100");
       candidate.classList.remove("border-amber-400/20", "bg-amber-500/10");
@@ -113,16 +174,21 @@ export default function CaptainMatchdayAvailabilityBadgesBridge() {
   const fixtureId = searchParams.get("fixtureId");
 
   useEffect(() => {
+    let cancelled = false;
     const teamId = getTeamIdFromPathname(pathname);
 
-    if (!teamId) return;
+    function runCopyRewrite() {
+      if (!cancelled) rewriteCaptainFriendlyCopy();
+    }
 
-    let cancelled = false;
+    runCopyRewrite();
 
-    rewriteCaptainFriendlyOptionalSelectionMessage();
+    const root = document.querySelector(".captain-team-shell") ?? document.body;
+    const observer = new MutationObserver(runCopyRewrite);
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
 
     async function loadAvailability() {
-      if (!fixtureId) return;
+      if (!teamId || !fixtureId) return;
 
       try {
         const response = await fetch(
@@ -136,7 +202,7 @@ export default function CaptainMatchdayAvailabilityBadgesBridge() {
 
         if (!cancelled) {
           addAvailabilityBadges(payload.availabilities ?? []);
-          rewriteCaptainFriendlyOptionalSelectionMessage();
+          rewriteCaptainFriendlyCopy();
         }
       } catch {
         // Non-blocking UI enhancement only.
@@ -147,6 +213,7 @@ export default function CaptainMatchdayAvailabilityBadgesBridge() {
 
     return () => {
       cancelled = true;
+      observer.disconnect();
       window.cancelAnimationFrame(frame);
     };
   }, [pathname, fixtureId]);
