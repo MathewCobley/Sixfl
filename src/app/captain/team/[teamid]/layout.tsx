@@ -14,6 +14,7 @@ import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectE
 import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import PendingActivationDeleteLinks from "@/components/captain/PendingActivationDeleteLinks";
+import PendingActivationReturnLinks from "@/components/captain/PendingActivationReturnLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import { prisma } from "@/lib/prisma";
@@ -298,6 +299,7 @@ export default async function CaptainTeamLayout({
       <CaptainMatchdayAvailabilityBadgesBridge />
       {access.isAdmin ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin && isManagedTeam ? <PendingActivationDeleteLinks /> : null}
+      {access.isAdmin && isManagedTeam ? <PendingActivationReturnLinks /> : null}
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
       <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-10 sm:py-6">
