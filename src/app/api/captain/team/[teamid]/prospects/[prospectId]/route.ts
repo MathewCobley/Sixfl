@@ -57,6 +57,7 @@ export async function POST(
     await prisma.teamPlayerProspect.update({
       where: { id: prospect.id },
       data: {
+        teamId: null,
         status: "CONTACTED",
       },
     });
@@ -65,6 +66,7 @@ export async function POST(
     revalidatePath(`/captain/team/${teamId}/squad`);
     revalidatePath(`/captain/team/${teamId}/prospects`);
     revalidatePath(`/captain/team/${teamId}/captain-squad`);
+    revalidatePath("/admin/player-prospects");
 
     return NextResponse.json({ ok: true, returned: true });
   } catch (error) {
