@@ -78,7 +78,7 @@ function getFavourite(input: FixtureAiPreviewInput) {
   return input.awayTeamName;
 }
 
-function buildFallbackPreview(input: FixtureAiPreviewInput): FixtureAiPreview {
+export function getFallbackFixtureAiPreview(input: FixtureAiPreviewInput): FixtureAiPreview {
   const favourite = getFavourite(input);
 
   return {
@@ -114,7 +114,7 @@ function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAi
     .replace(/^headline:\s*/i, "")
     .replace(/^summary:\s*/i, "");
 
-  if (!cleaned) return buildFallbackPreview(input);
+  if (!cleaned) return getFallbackFixtureAiPreview(input);
 
   const [firstSentence, ...rest] = cleaned.split(/(?<=[.!?])\s+/);
   const headline = truncateSentence(firstSentence || "SIXFL AI Predictor", 78);
@@ -130,7 +130,7 @@ function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAi
 export async function getFixtureAiPreview(
   input: FixtureAiPreviewInput,
 ): Promise<FixtureAiPreview> {
-  const fallback = buildFallbackPreview(input);
+  const fallback = getFallbackFixtureAiPreview(input);
   const apiKey = process.env.OPENAI_API_KEY?.trim();
 
   if (!apiKey) return fallback;
