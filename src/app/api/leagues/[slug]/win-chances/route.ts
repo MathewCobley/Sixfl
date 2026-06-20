@@ -4,10 +4,8 @@
 
 import { NextResponse } from "next/server";
 
-import {
-  getStoredAiPreviewsByFixtureIds,
-  refreshStoredAiPreviewForFixture,
-} from "@/lib/fixtures/storedAiPredictions";
+import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
@@ -72,10 +70,6 @@ export async function GET(
       (fixture) => fixture.status === "SCHEDULED",
     );
 
-    await Promise.all(
-      scheduledFixtures.map((fixture) => refreshStoredAiPreviewForFixture(fixture.id)),
-    );
-
     const storedPreviews = await getStoredAiPreviewsByFixtureIds(
       scheduledFixtures.map((fixture) => fixture.id),
     );
@@ -96,7 +90,13 @@ export async function GET(
           kickoffAt: fixture.kickoffAt.toISOString(),
           winChance: {
             ...winChance,
-            aiPreview: storedPreviews.get(fixture.id) ?? null,
+            aiPreview:
+              storedPreviews.get(fixture.id) ??
+              getFallbackFixtureAiPreview({
+                homeTeamName: fixture.homeTeam.name,
+                awayTeamName: fixture.awayTeam.name,
+                winChance,
+              }),
           },
         };
       }),
