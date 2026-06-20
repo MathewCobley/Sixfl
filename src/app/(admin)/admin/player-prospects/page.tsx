@@ -41,6 +41,12 @@ type RawProspectRow = {
   teamMode: string | null;
   leagueName: string | null;
   leagueSeason: string | null;
+  latestPlayerResponse: string | null;
+  latestPlayerRespondedAt: Date | null;
+  latestYesNoEmailStatus: string | null;
+  latestYesNoEmailAt: Date | null;
+  latestSigninEmailStatus: string | null;
+  latestSigninEmailAt: Date | null;
 };
 
 type ProspectWithTeam = {
@@ -58,6 +64,12 @@ type ProspectWithTeam = {
   createdAt: Date;
   updatedAt: Date;
   lastContactedAt: Date | null;
+  latestPlayerResponse: string | null;
+  latestPlayerRespondedAt: Date | null;
+  latestYesNoEmailStatus: string | null;
+  latestYesNoEmailAt: Date | null;
+  latestSigninEmailStatus: string | null;
+  latestSigninEmailAt: Date | null;
   team: {
     id: string;
     name: string;
@@ -71,6 +83,16 @@ function formatDate(value: Date) {
     day: "2-digit",
     month: "short",
     year: "numeric",
+  });
+}
+
+function formatDateTime(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -115,6 +137,68 @@ function formatStatus(status: string) {
     .split("_")
     .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
     .join(" ");
+}
+
+function responseClasses(value: string | null) {
+  if (value === "YES") {
+    return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+  }
+
+  if (value === "NO") {
+    return "border-red-400/25 bg-red-500/10 text-red-100";
+  }
+
+  return "border-white/10 bg-white/[0.04] text-white/55";
+}
+
+function responseLabel(value: string | null) {
+  if (value === "YES") return "YES — still wants to play";
+  if (value === "NO") return "NO — follow up";
+  return "No YES/NO reply yet";
+}
+
+function dispatchClasses(status: string | null) {
+  if (status === "SENT") {
+    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  }
+
+  if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") {
+    return "border-red-400/20 bg-red-500/10 text-red-100";
+  }
+
+  if (status === "QUEUED" || status === "PROCESSING") {
+    return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+  }
+
+  return "border-white/10 bg-white/[0.04] text-white/55";
+}
+
+function dispatchLabel(input: {
+  label: string;
+  status: string | null;
+  at: Date | null;
+  empty: string;
+}) {
+  if (!input.status && !input.at) return input.empty;
+
+  const when = input.at ? formatDateTime(input.at) : "date unknown";
+
+  switch (input.status) {
+    case "SENT":
+      return `${input.label} sent ${when}`;
+    case "QUEUED":
+      return `${input.label} queued ${when}`;
+    case "PROCESSING":
+      return `${input.label} processing ${when}`;
+    case "FAILED":
+      return `${input.label} failed ${when}`;
+    case "SKIPPED":
+      return `${input.label} skipped ${when}`;
+    case "CANCELLED":
+      return `${input.label} cancelled ${when}`;
+    default:
+      return `${input.label} recorded ${when}`;
+  }
 }
 
 function getSavedMessage(saved?: string) {
@@ -173,6 +257,12 @@ function mapProspectRow(row: RawProspectRow): ProspectWithTeam {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     lastContactedAt: row.lastContactedAt,
+    latestPlayerResponse: row.latestPlayerResponse,
+    latestPlayerRespondedAt: row.latestPlayerRespondedAt,
+    latestYesNoEmailStatus: row.latestYesNoEmailStatus,
+    latestYesNoEmailAt: row.latestYesNoEmailAt,
+    latestSigninEmailStatus: row.latestSigninEmailStatus,
+    latestSigninEmailAt: row.latestSigninEmailAt,
     team: row.teamId && row.teamName
       ? {
           id: row.teamId,
@@ -253,6 +343,39 @@ function ProspectCard({
             {prospect.phone ? <span>{prospect.phone}</span> : null}
             {prospect.source ? <span>Source: {prospect.source}</span> : null}
           </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${responseClasses(prospect.latestPlayerResponse)}`}>
+              <div className="font-semibold">YES/NO reply</div>
+              <div>{responseLabel(prospect.latestPlayerResponse)}</div>
+              {prospect.latestPlayerRespondedAt ? (
+                <div className="mt-1 opacity-80">{formatDateTime(prospect.latestPlayerRespondedAt)}</div>
+              ) : null}
+            </div>
+            <div className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${dispatchClasses(prospect.latestYesNoEmailStatus)}`}>
+              <div className="font-semibold">YES/NO email</div>
+              <div>
+                {dispatchLabel({
+                  label: "YES/NO email",
+                  status: prospect.latestYesNoEmailStatus,
+                  at: prospect.latestYesNoEmailAt,
+                  empty: "No YES/NO email sent yet",
+                })}
+              </div>
+            </div>
+            <div className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${dispatchClasses(prospect.latestSigninEmailStatus)}`}>
+              <div className="font-semibold">Sign-in email</div>
+              <div>
+                {dispatchLabel({
+                  label: "Sign-in email",
+                  status: prospect.latestSigninEmailStatus,
+                  at: prospect.latestSigninEmailAt,
+                  empty: "No sign-in email sent yet",
+                })}
+              </div>
+            </div>
+          </div>
+
           {activeReason ? (
             <div className="mt-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.08] px-3 py-2 text-xs leading-5 text-emerald-100/80">
               <span className="font-semibold text-emerald-100">Active player reason:</span> {activeReason}
@@ -368,10 +491,61 @@ export default async function AdminPlayerProspectsPage({
         t."name" AS "teamName",
         t."teamMode"::text AS "teamMode",
         l."name" AS "leagueName",
-        l."season" AS "leagueSeason"
+        l."season" AS "leagueSeason",
+        latestResponse."response" AS "latestPlayerResponse",
+        latestResponse."respondedAt" AS "latestPlayerRespondedAt",
+        latestYesNoEmail."status" AS "latestYesNoEmailStatus",
+        latestYesNoEmail."emailAt" AS "latestYesNoEmailAt",
+        latestSigninEmail."status" AS "latestSigninEmailStatus",
+        latestSigninEmail."emailAt" AS "latestSigninEmailAt"
       FROM "TeamPlayerProspect" p
       LEFT JOIN "Team" t ON t."id" = p."teamId"
       LEFT JOIN "League" l ON l."id" = t."leagueId"
+      LEFT JOIN LATERAL (
+        SELECT
+          r."response",
+          r."respondedAt"
+        FROM "PlayerInterestResponse" r
+        WHERE r."prospectId" = p."id"
+        ORDER BY r."respondedAt" DESC
+        LIMIT 1
+      ) latestResponse ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          d."status"::text AS "status",
+          COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "emailAt"
+        FROM "NotificationDispatch" d
+        WHERE d."sourceType" = 'TEAM_PLAYER_PROSPECT'
+          AND d."sourceId" = p."id"
+          AND d."channel" = 'EMAIL'
+          AND (
+            d."metadata"::text ILIKE '%yesResponseUrl%'
+            OR d."metadata"::text ILIKE '%noResponseUrl%'
+            OR d."bodyText" ILIKE '%player-response/yes%'
+            OR d."bodyText" ILIKE '%player-response/no%'
+          )
+        ORDER BY COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") DESC
+        LIMIT 1
+      ) latestYesNoEmail ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          d."status"::text AS "status",
+          COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "emailAt"
+        FROM "NotificationDispatch" d
+        LEFT JOIN "NotificationTemplate" template ON template."id" = d."templateId"
+        WHERE d."sourceType" = 'TEAM_PLAYER_PROSPECT'
+          AND d."sourceId" = p."id"
+          AND d."channel" = 'EMAIL'
+          AND (
+            template."key" = 'squad-activation-email'
+            OR d."metadata"::text ILIKE '%squad-activation-email%'
+            OR d."subject" ILIKE '%activation%'
+            OR d."subject" ILIKE '%sign in%'
+            OR d."subject" ILIKE '%signin%'
+          )
+        ORDER BY COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") DESC
+        LIMIT 1
+      ) latestSigninEmail ON TRUE
       ORDER BY p."updatedAt" DESC, p."createdAt" DESC
     `,
     prisma.team.findMany({
@@ -452,7 +626,6 @@ export default async function AdminPlayerProspectsPage({
     (prospect) => !isActivelyUsedProspect(prospect) && prospect.status !== "DECLINED",
   );
   const unassignedProspects = pipelineProspects.filter((prospect) => !prospect.teamId);
-  const newProspects = pipelineProspects.filter((prospect) => prospect.status === "NEW");
   const trialProspects = pipelineProspects.filter((prospect) => prospect.status === "TRIAL");
   const activeSquadProspects = prospects.filter(isActivelyUsedProspect);
   const declinedProspects = prospects.filter(
