@@ -4,6 +4,7 @@
 
 import { NextResponse } from "next/server";
 
+import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
 import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
@@ -145,7 +146,13 @@ export async function GET(
           ...base,
           winChance: {
             ...winChance,
-            aiPreview: storedPreviews.get(fixture.id) ?? null,
+            aiPreview:
+              storedPreviews.get(fixture.id) ??
+              getFallbackFixtureAiPreview({
+                homeTeamName: fixture.homeTeam.name,
+                awayTeamName: fixture.awayTeam.name,
+                winChance,
+              }),
           },
         };
       }),
