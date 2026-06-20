@@ -10,6 +10,33 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 const CAPTAIN_PREVIEW_PARAM = "captainPreview";
 
+const CAPTAIN_FACING_REPLACEMENTS = [
+  {
+    from: "Tick this when the player uses WhatsApp, so captains know payment links can be sent that way.",
+    to: "Tick this if the player uses WhatsApp. This helps you know whether payment links can be sent that way.",
+  },
+  {
+    from: "These details help captains send payment links and organise matchday squads.",
+    to: "These details help you send payment links and organise matchday squads.",
+  },
+  {
+    from: "This team is currently set as a standard team. Matchday player selection is intended for managed SIXFL squads.",
+    to: "This page is optional for your team. Use it if you want to record who actually played and manage individual match fees. If you collect one team payment, you can ignore this page.",
+  },
+  {
+    from: "Standard team fee",
+    to: "Team match fee",
+  },
+  {
+    from: "standard team fee",
+    to: "team match fee",
+  },
+  {
+    from: "Standard team",
+    to: "Team-managed squad",
+  },
+] as const;
+
 function getPathWithPreview(input: {
   pathname: string;
   searchParams: URLSearchParams;
@@ -58,6 +85,35 @@ function applyCaptainPreviewToHref(input: { href: string; teamId: string }) {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+function rewriteCaptainFacingText() {
+  const root = document.querySelector(".captain-team-shell") ?? document.body;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const skipParents = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "OPTION"]);
+  const textNodes: Text[] = [];
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parentName = node.parentElement?.tagName;
+
+    if (parentName && skipParents.has(parentName)) continue;
+    if (node.textContent?.trim()) {
+      textNodes.push(node as Text);
+    }
+  }
+
+  for (const node of textNodes) {
+    let nextText = node.textContent ?? "";
+
+    for (const replacement of CAPTAIN_FACING_REPLACEMENTS) {
+      nextText = nextText.split(replacement.from).join(replacement.to);
+    }
+
+    if (nextText !== node.textContent) {
+      node.textContent = nextText;
+    }
+  }
+}
+
 export default function CaptainViewModeHeader({
   teamId,
   isAdmin,
@@ -79,6 +135,19 @@ export default function CaptainViewModeHeader({
     teamId,
   });
   const fullAdminHref = getFullAdminHref({ pathname, teamId });
+
+  useEffect(() => {
+    const root = document.querySelector(".captain-team-shell") ?? document.body;
+    const frame = window.requestAnimationFrame(rewriteCaptainFacingText);
+    const observer = new MutationObserver(rewriteCaptainFacingText);
+
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [pathname, searchParamsKey]);
 
   useEffect(() => {
     if (!isLimitedCaptainPreview) return;
