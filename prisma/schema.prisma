@@ -237,7 +237,7 @@ model TeamMember {
 model TeamPlayerProspect {
   id String @id @default(cuid())
 
-  teamId String
+  teamId String?
 
   firstName           String
   lastName            String?
@@ -257,7 +257,7 @@ model TeamPlayerProspect {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   playerMatchFees PlayerMatchFee[]
 
