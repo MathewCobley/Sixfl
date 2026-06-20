@@ -28,7 +28,7 @@ type FixtureWinChance = {
     awayScore: number;
     label: string;
   };
-  aiPreview?: FixtureAiPreview;
+  aiPreview?: FixtureAiPreview | null;
   confidence: "Low" | "Medium" | "High";
   explanation: string;
 };
@@ -145,6 +145,131 @@ function getHighestChanceLabel(fixture: FixtureBadge) {
   return `Draw ${chance.draw}%`;
 }
 
+function getBarClass(type: "home" | "draw" | "away") {
+  switch (type) {
+    case "home":
+      return "bg-emerald-400";
+    case "away":
+      return "bg-sky-400";
+    default:
+      return "bg-white/45";
+  }
+}
+
+function createChanceCard(input: {
+  label: string;
+  value: number;
+  type: "home" | "draw" | "away";
+}) {
+  const card = document.createElement("div");
+  card.className = "min-w-0 rounded-2xl border border-white/10 bg-black/25 p-3";
+
+  const row = document.createElement("div");
+  row.className = "flex items-center justify-between gap-2";
+
+  const label = document.createElement("div");
+  label.className = "truncate text-xs font-semibold text-white/80";
+  label.textContent = input.label;
+  label.title = input.label;
+
+  const value = document.createElement("div");
+  value.className = "shrink-0 text-lg font-black text-white";
+  value.textContent = `${input.value}%`;
+
+  const rail = document.createElement("div");
+  rail.className = "mt-3 h-1.5 overflow-hidden rounded-full bg-white/10";
+
+  const bar = document.createElement("div");
+  bar.className = `h-full rounded-full ${getBarClass(input.type)}`;
+  bar.style.width = `${input.value}%`;
+
+  row.appendChild(label);
+  row.appendChild(value);
+  rail.appendChild(bar);
+  card.appendChild(row);
+  card.appendChild(rail);
+
+  return card;
+}
+
+function createFullWinChancePanel(fixture: FixtureBadge) {
+  const chance = fixture.winChance;
+  if (!chance) return null;
+
+  const wrapper = document.createElement("details");
+  wrapper.dataset.fixtureFullAiFor = fixture.id;
+  wrapper.className =
+    "mt-3 w-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)]";
+
+  const summary = document.createElement("summary");
+  summary.className = "cursor-pointer list-none";
+
+  const summaryInner = document.createElement("div");
+  summaryInner.className = "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between";
+
+  const left = document.createElement("div");
+
+  const eyebrow = document.createElement("div");
+  eyebrow.className = "text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300";
+  eyebrow.textContent = "SIXFL AI Predictor";
+
+  const helper = document.createElement("div");
+  helper.className = "mt-1 text-xs text-white/45";
+  helper.textContent = `${chance.confidence} confidence · Just for fun · Tap to show details`;
+
+  left.appendChild(eyebrow);
+  left.appendChild(helper);
+
+  const score = document.createElement("div");
+  score.className = "rounded-2xl border border-emerald-400/20 bg-black/25 px-5 py-3 text-center";
+  score.innerHTML = `
+    <div class="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70">Predicted result</div>
+    <div class="mt-1 text-3xl font-black text-white">${chance.predictedResult.label}</div>
+  `;
+
+  summaryInner.appendChild(left);
+  summaryInner.appendChild(score);
+  summary.appendChild(summaryInner);
+  wrapper.appendChild(summary);
+
+  if (chance.aiPreview) {
+    const preview = document.createElement("div");
+    preview.className = "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4";
+
+    const headline = document.createElement("div");
+    headline.className = "text-sm font-semibold text-white";
+    headline.textContent = chance.aiPreview.headline;
+
+    const paragraph = document.createElement("p");
+    paragraph.className = "mt-2 text-sm leading-6 text-white/60";
+    paragraph.textContent = chance.aiPreview.summary;
+
+    preview.appendChild(headline);
+    preview.appendChild(paragraph);
+    wrapper.appendChild(preview);
+  } else {
+    const missingPreview = document.createElement("p");
+    missingPreview.className = "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/55";
+    missingPreview.textContent = "AI wording has not been generated yet, but the score prediction and percentages are available now.";
+    wrapper.appendChild(missingPreview);
+  }
+
+  const grid = document.createElement("div");
+  grid.className = "mt-4 grid gap-3 sm:grid-cols-3";
+  grid.appendChild(createChanceCard({ label: fixture.homeTeam.name, value: chance.home, type: "home" }));
+  grid.appendChild(createChanceCard({ label: "Draw", value: chance.draw, type: "draw" }));
+  grid.appendChild(createChanceCard({ label: fixture.awayTeam.name, value: chance.away, type: "away" }));
+
+  const explanation = document.createElement("p");
+  explanation.className = "mt-3 text-xs leading-5 text-white/45";
+  explanation.textContent = chance.explanation;
+
+  wrapper.appendChild(grid);
+  wrapper.appendChild(explanation);
+
+  return wrapper;
+}
+
 function createCompactWinChanceBadge(fixture: FixtureBadge) {
   const chance = fixture.winChance;
   const highest = getHighestChanceLabel(fixture);
@@ -184,6 +309,11 @@ function injectWinChance(element: HTMLElement, fixture: FixtureBadge) {
 
   const badge = createCompactWinChanceBadge(fixture);
   if (badge) target.appendChild(badge);
+
+  if (!target.querySelector(`[data-fixture-full-ai-for="${fixture.id}"]`)) {
+    const fullPanel = createFullWinChancePanel(fixture);
+    if (fullPanel) target.appendChild(fullPanel);
+  }
 }
 
 function injectFixtureBadges(fixtures: FixtureBadge[]) {
