@@ -57,7 +57,6 @@ export async function POST(
     await prisma.teamPlayerProspect.update({
       where: { id: prospect.id },
       data: {
-        teamId: null,
         status: "CONTACTED",
       },
     });
