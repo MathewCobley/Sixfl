@@ -4,10 +4,7 @@
 
 import { NextResponse } from "next/server";
 
-import {
-  getStoredAiPreviewsByFixtureIds,
-  refreshStoredAiPreviewForFixture,
-} from "@/lib/fixtures/storedAiPredictions";
+import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -108,14 +105,6 @@ export async function GET(
           })
         : Promise.resolve([]),
     ]);
-
-    const scheduledFixtures = fixtures.filter(
-      (fixture) => fixture.status === "SCHEDULED",
-    );
-
-    await Promise.all(
-      scheduledFixtures.map((fixture) => refreshStoredAiPreviewForFixture(fixture.id)),
-    );
 
     const storedPreviews = await getStoredAiPreviewsByFixtureIds(
       fixtures.map((fixture) => fixture.id),
