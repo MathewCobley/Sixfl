@@ -50,6 +50,15 @@ function getQueueRowFromActionColumn(actionColumn: HTMLElement) {
   return null;
 }
 
+function getCardIdFromImageHref(href: string) {
+  const match = href.match(/\/api\/social\/(?:ai-image|match-card)\/([^/?#]+)/);
+  return match?.[1] ?? null;
+}
+
+function getFixtureGraphicHref(cardId: string, background = "emerald") {
+  return `/api/social/match-card/${encodeURIComponent(cardId)}?background=${encodeURIComponent(background)}`;
+}
+
 function enhanceResultsCardButtons() {
   const resultForms = Array.from(
     document.querySelectorAll<HTMLFormElement>('form input[name="postType"][value="RESULT"]'),
@@ -120,9 +129,9 @@ function addResultsGeneratorIntro() {
   intro.innerHTML = `
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-200/80">Visual results cards</p>
-        <h2 class="mt-2 text-xl font-semibold tracking-tight text-white">Use the Canva-style results generator</h2>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-white/60">Use this for the new image-based match results card. The old results queue is hidden while we finish the visual card flow.</p>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-200/80">Accurate fixture graphics</p>
+        <h2 class="mt-2 text-xl font-semibold tracking-tight text-white">Use SIXFL-rendered cards, not AI text images</h2>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-white/60">OpenAI image generation has been removed from this page. Fixture graphics now use real fixture data, exact team names, exact kick-off times and controlled SIXFL layout.</p>
       </div>
       <a href="/admin/social/results" class="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20">Open visual results generator</a>
     </div>
@@ -131,9 +140,9 @@ function addResultsGeneratorIntro() {
   hero.insertAdjacentElement("afterend", intro);
 }
 
-function addAiImageNotice(searchParams: URLSearchParams) {
-  const aiImageStatus = searchParams.get("aiImage");
-  if (!aiImageStatus || document.querySelector("[data-ai-image-notice]")) return;
+function addFixtureGraphicNotice(searchParams: URLSearchParams) {
+  const status = searchParams.get("fixtureGraphic");
+  if (!status || document.querySelector("[data-fixture-graphic-notice]")) return;
 
   const queueHeading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find((heading) =>
     heading.textContent?.includes("Weekly social queue"),
@@ -142,45 +151,38 @@ function addAiImageNotice(searchParams: URLSearchParams) {
   if (!queueHeader?.parentElement) return;
 
   const notice = document.createElement("div");
-  notice.dataset.aiImageNotice = "true";
+  notice.dataset.fixtureGraphicNotice = "true";
   notice.className =
-    aiImageStatus === "generated"
+    status === "selected"
       ? "mx-6 mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100 md:mx-8"
       : "mx-6 mt-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100 md:mx-8";
   notice.textContent =
-    aiImageStatus === "generated"
-      ? "AI image draft generated. Open the image from the queue below and review it before approving or publishing."
-      : aiImageStatus === "missing-card"
-        ? "Could not generate an AI image because the social card was not found."
-        : "AI image generation failed. Check the card error message in the queue.";
+    status === "selected"
+      ? "Accurate SIXFL fixture graphic selected. Open the image below to review it before approving or publishing."
+      : "Could not select the fixture graphic for that card.";
 
   queueHeader.insertAdjacentElement("afterend", notice);
 }
 
-function addAiImageReviewPreviews() {
-  const imageLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).filter(
-    (link) => link.textContent?.trim() === "Open image" && link.href.includes("/api/social/ai-image/"),
-  );
+function removeOpenAiUi() {
+  document.querySelectorAll<HTMLElement>("[data-ai-image-form], [data-ai-image-preview], [data-ai-image-notice]").forEach((element) => {
+    element.remove();
+  });
 
-  for (const link of imageLinks) {
-    const actionColumn = link.parentElement;
-    const queueRow = actionColumn ? getQueueRowFromActionColumn(actionColumn) : null;
-    if (!queueRow || queueRow.querySelector("[data-ai-image-preview]")) continue;
+  Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).forEach((link) => {
+    const href = link.getAttribute("href") ?? "";
+    const cardId = getCardIdFromImageHref(href);
 
-    const preview = document.createElement("a");
-    preview.href = link.href;
-    preview.target = "_blank";
-    preview.rel = "noreferrer";
-    preview.dataset.aiImagePreview = "true";
-    preview.className =
-      "block overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/30 shadow-[0_16px_50px_rgba(0,0,0,0.28)]";
-    preview.innerHTML = `<img src="${link.href}" alt="AI generated social image draft" class="aspect-square w-full max-w-[320px] object-cover" />`;
+    if (!cardId) return;
 
-    actionColumn?.insertAdjacentElement("afterbegin", preview);
-  }
+    link.href = getFixtureGraphicHref(cardId);
+    if (link.textContent?.trim() === "Open image") {
+      link.textContent = "Open fixture graphic";
+    }
+  });
 }
 
-function addAiImageButtons() {
+function addFixtureGraphicControls() {
   const cardInputs = Array.from(
     document.querySelectorAll<HTMLInputElement>('form input[name="cardId"]'),
   );
@@ -193,55 +195,62 @@ function addAiImageButtons() {
 
     seenColumns.add(details.parent);
 
-    if (details.parent.querySelector("[data-ai-image-form]")) continue;
+    if (details.parent.querySelector("[data-fixture-graphic-controls]")) continue;
 
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = "/admin/social/ai-image/generate";
-    form.dataset.aiImageForm = "true";
-    form.innerHTML = `
-      <input type="hidden" name="cardId" value="${details.cardId}" />
-      <button type="submit" data-ai-image-button="true" class="inline-flex h-10 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 text-xs font-semibold text-violet-100 transition hover:border-violet-300/35 hover:bg-violet-500/15">
-        Generate AI image
-      </button>
-      <p data-ai-image-status="true" class="hidden max-w-[16rem] text-xs leading-5 text-violet-100/75">Generating can take 20-60 seconds. Please leave this tab open.</p>
+    const controls = document.createElement("div");
+    controls.dataset.fixtureGraphicControls = "true";
+    controls.className =
+      "w-full rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.06] p-3 text-xs text-emerald-50/80";
+    controls.innerHTML = `
+      <div class="font-semibold text-emerald-50">Fixture graphic</div>
+      <p class="mt-1 leading-5 text-emerald-50/60">Uses exact SIXFL fixture data. Choose this instead of AI-generated image text.</p>
+      <form method="POST" action="/admin/social/fixture-graphic/use" class="mt-3 grid gap-2">
+        <input type="hidden" name="cardId" value="${details.cardId}" />
+        <input type="hidden" name="background" value="emerald" />
+        <button type="submit" class="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-3 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300/35 hover:bg-emerald-500/20">
+          Use accurate fixture graphic
+        </button>
+      </form>
+      <a href="${getFixtureGraphicHref(details.cardId)}" target="_blank" rel="noreferrer" class="mt-2 inline-flex h-10 w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]">
+        Preview fixture graphic
+      </a>
     `;
 
-    details.parent.insertAdjacentElement("afterbegin", form);
+    details.parent.insertAdjacentElement("afterbegin", controls);
+  }
+}
+
+function addFixtureGraphicReviewPreviews() {
+  const imageLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).filter(
+    (link) => link.textContent?.trim() === "Open fixture graphic" && link.href.includes("/api/social/match-card/"),
+  );
+
+  for (const link of imageLinks) {
+    const actionColumn = link.parentElement;
+    const queueRow = actionColumn ? getQueueRowFromActionColumn(actionColumn) : null;
+    if (!queueRow || queueRow.querySelector("[data-fixture-graphic-preview]")) continue;
+
+    const preview = document.createElement("a");
+    preview.href = link.href;
+    preview.target = "_blank";
+    preview.rel = "noreferrer";
+    preview.dataset.fixtureGraphicPreview = "true";
+    preview.className =
+      "block overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/30 shadow-[0_16px_50px_rgba(0,0,0,0.28)]";
+    preview.innerHTML = `<img src="${link.href}" alt="SIXFL fixture graphic draft" class="aspect-[4/5] w-full max-w-[320px] object-cover" />`;
+
+    actionColumn?.insertAdjacentElement("afterbegin", preview);
   }
 }
 
 function cleanSocialPage(searchParams: URLSearchParams) {
   addResultsGeneratorIntro();
-  addAiImageNotice(searchParams);
+  addFixtureGraphicNotice(searchParams);
   enhanceResultsCardButtons();
   hideOldResultsQueueCards();
-  addAiImageButtons();
-  addAiImageReviewPreviews();
-}
-
-function handleAiImageSubmit(event: SubmitEvent) {
-  const form = event.target;
-
-  if (!(form instanceof HTMLFormElement)) return;
-  if (!form.dataset.aiImageForm) return;
-
-  const button = form.querySelector<HTMLButtonElement>("[data-ai-image-button]");
-  const status = form.querySelector<HTMLElement>("[data-ai-image-status]");
-
-  if (button?.disabled) return;
-
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Generating image...";
-    button.className =
-      "inline-flex h-10 items-center justify-center rounded-xl border border-violet-300/30 bg-violet-500/20 px-3 text-xs font-semibold text-violet-50 opacity-80";
-  }
-
-  if (status) {
-    status.classList.remove("hidden");
-    status.textContent = "Generating can take 20-60 seconds. The page will refresh when the draft is ready.";
-  }
+  removeOpenAiUi();
+  addFixtureGraphicControls();
+  addFixtureGraphicReviewPreviews();
 }
 
 export default function AdminSocialResultsGeneratorLinksBridge() {
@@ -253,7 +262,6 @@ export default function AdminSocialResultsGeneratorLinksBridge() {
     const params = new URLSearchParams(window.location.search);
 
     cleanSocialPage(params);
-    document.addEventListener("submit", handleAiImageSubmit, true);
 
     const observer = new MutationObserver(() => cleanSocialPage(params));
 
@@ -262,10 +270,7 @@ export default function AdminSocialResultsGeneratorLinksBridge() {
       subtree: true,
     });
 
-    return () => {
-      observer.disconnect();
-      document.removeEventListener("submit", handleAiImageSubmit, true);
-    };
+    return () => observer.disconnect();
   }, [pathname]);
 
   return null;
