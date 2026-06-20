@@ -110,16 +110,16 @@ async function findReusableProspect(input: {
     return null;
   }
 
-  return input.client.teamPlayerProspect.findFirst({
-    where: {
-      email: input.email,
-      OR: [{ teamId: input.teamId }, { teamId: null }],
-    },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-    },
-  });
+  const reusableProspects = await input.client.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "TeamPlayerProspect"
+    WHERE LOWER(TRIM("email")) = ${input.email}
+      AND ("teamId" = ${input.teamId} OR "teamId" IS NULL)
+    ORDER BY "updatedAt" DESC, "createdAt" DESC
+    LIMIT 1
+  `;
+
+  return reusableProspects[0] ?? null;
 }
 
 function buildProspectProfileData(profile: TeamMemberProfileSnapshot | null) {
