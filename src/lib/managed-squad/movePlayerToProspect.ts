@@ -95,7 +95,6 @@ async function findReusableProspect(input: {
     const sourceProspect = await input.client.teamPlayerProspect.findFirst({
       where: {
         id: input.sourceProspectId,
-        teamId: input.teamId,
       },
       select: {
         id: true,
@@ -113,8 +112,8 @@ async function findReusableProspect(input: {
 
   return input.client.teamPlayerProspect.findFirst({
     where: {
-      teamId: input.teamId,
       email: input.email,
+      OR: [{ teamId: input.teamId }, { teamId: null }],
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     select: {
@@ -146,8 +145,17 @@ function getProspectMoveCopy(status: ProspectMoveStatus, previousRole: string) {
 
   return {
     source: "Moved from active squad",
-    notes: `Moved back from active squad so this player can be reused later. Previous role: ${previousRole}.`,
+    notes: `Moved back from active squad into the unassigned prospect pool. Previous role: ${previousRole}.`,
   };
+}
+
+async function setProspectTeamIdToNull(input: { client: DbClient; prospectId: string }) {
+  await input.client.$executeRaw`
+    UPDATE "TeamPlayerProspect"
+    SET "teamId" = NULL,
+        "updatedAt" = NOW()
+    WHERE "id" = ${input.prospectId}
+  `;
 }
 
 export async function moveTeamMemberToProspect(input: {
@@ -241,6 +249,8 @@ export async function moveTeamMemberToProspect(input: {
           select: { id: true },
         });
 
+    await setProspectTeamIdToNull({ client: tx, prospectId: prospect.id });
+
     if (canRelinkInterestResponses) {
       await tx.$executeRaw`
         UPDATE "PlayerInterestResponse"
@@ -290,11 +300,20 @@ export async function moveActiveSquadProspectBackToPipeline(input: {
     where: { id: prospect.id },
     data: {
       status: "BACKUP",
+      source: "Moved from active squad",
+      notes: "Moved back from active squad into the unassigned prospect pool.",
     },
     select: {
       id: true,
     },
   });
+
+  await prisma.$executeRaw`
+    UPDATE "TeamPlayerProspect"
+    SET "teamId" = NULL,
+        "updatedAt" = NOW()
+    WHERE "id" = ${updatedProspect.id}
+  `;
 
   return { ok: true, prospectId: updatedProspect.id };
 }
