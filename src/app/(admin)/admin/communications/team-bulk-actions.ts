@@ -185,7 +185,7 @@ async function getTeamCommunicationRecipientContext(input: {
       },
     });
 
-    if (!prospect) return null;
+    if (!prospect?.team) return null;
 
     const displayName = fullName(prospect) || prospect.firstName;
     const leagueName = prospect.team.league
