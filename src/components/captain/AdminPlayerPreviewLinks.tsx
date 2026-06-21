@@ -10,6 +10,19 @@ import { usePathname } from "next/navigation";
 const injectedLinkClassName =
   "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-center text-sm font-medium transition";
 
+type LoginStatusItem = {
+  membershipId: string;
+  hasLoggedIn: boolean;
+  hasActiveSession: boolean;
+  activeSessionCount: number;
+  lastLoginAt: string | null;
+  latestSessionExpires: string | null;
+};
+
+type LoginStatusPayload = {
+  items: LoginStatusItem[];
+};
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
   return match?.[1] ?? null;
@@ -17,6 +30,61 @@ function getTeamIdFromPathname(pathname: string) {
 
 function getPlayerCommunicationsHref(input: { teamId: string; membershipId: string }) {
   return `/admin/teams/${input.teamId}/players/${input.membershipId}/communications`;
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return null;
+
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return null;
+  }
+}
+
+function getLoginStatusCopy(status?: LoginStatusItem) {
+  if (!status) {
+    return {
+      badge: "Dashboard status unknown",
+      detail: "Could not load login status.",
+      className: "border-white/10 bg-white/[0.04] text-white/55",
+    };
+  }
+
+  const lastLogin = formatDateTime(status.lastLoginAt);
+  const activeUntil = formatDateTime(status.latestSessionExpires);
+
+  if (lastLogin) {
+    return {
+      badge: status.hasActiveSession ? "Dashboard signed in" : "Dashboard used",
+      detail: `${status.hasActiveSession ? "Active session" : "Last login"}: ${lastLogin}${activeUntil ? ` · session expires ${activeUntil}` : ""}`,
+      className: status.hasActiveSession
+        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+        : "border-sky-400/20 bg-sky-500/10 text-sky-100",
+    };
+  }
+
+  if (status.hasActiveSession) {
+    return {
+      badge: "Dashboard session active",
+      detail: activeUntil
+        ? `Active session found · expires ${activeUntil}. Login time was not recorded before this feature was added.`
+        : "Active session found. Login time was not recorded before this feature was added.",
+      className: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
+    };
+  }
+
+  return {
+    badge: "No dashboard login recorded",
+    detail: "This linked account has not signed in since login tracking was added.",
+    className: "border-amber-400/20 bg-amber-500/10 text-amber-100",
+  };
 }
 
 function normaliseActionLayout(actionsContainer: HTMLElement) {
@@ -84,7 +152,40 @@ function normaliseExistingCommsLink(input: {
   }
 }
 
-function addPreviewLinks(pathname: string) {
+function findMemberDetailsContainer(actionsContainer: HTMLElement) {
+  const row = actionsContainer.parentElement;
+  if (!(row instanceof HTMLElement)) return null;
+
+  return row.querySelector<HTMLElement>("div.flex.min-w-0.items-start.gap-4 > div.min-w-0");
+}
+
+function addLoginStatusBlock(input: {
+  actionsContainer: HTMLElement;
+  membershipId: string;
+  status?: LoginStatusItem;
+}) {
+  const detailsContainer = findMemberDetailsContainer(input.actionsContainer);
+  if (!detailsContainer) return;
+
+  const copy = getLoginStatusCopy(input.status);
+  const existing = detailsContainer.querySelector<HTMLElement>(
+    `[data-admin-login-status="${input.membershipId}"]`,
+  );
+  const block = existing ?? document.createElement("div");
+
+  block.dataset.adminLoginStatus = input.membershipId;
+  block.className = `mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${copy.className}`;
+  block.innerHTML = `
+    <div class="font-semibold text-white/90">${copy.badge}</div>
+    <div class="mt-0.5 text-white/65">${copy.detail}</div>
+  `;
+
+  if (!existing) {
+    detailsContainer.appendChild(block);
+  }
+}
+
+function addPreviewLinks(pathname: string, statusByMembershipId = new Map<string, LoginStatusItem>()) {
   const teamId = getTeamIdFromPathname(pathname);
   if (!teamId) return;
 
@@ -106,6 +207,11 @@ function addPreviewLinks(pathname: string) {
     if (!(actionsContainer instanceof HTMLElement)) continue;
 
     normaliseExistingCommsLink({ actionsContainer, teamId, membershipId });
+    addLoginStatusBlock({
+      actionsContainer,
+      membershipId,
+      status: statusByMembershipId.get(membershipId),
+    });
 
     const existingLink = actionsContainer.querySelector(
       `a[data-admin-player-preview-link="${membershipId}"]`,
@@ -129,15 +235,40 @@ export default function AdminPlayerPreviewLinks() {
   const pathname = usePathname();
 
   useEffect(() => {
-    addPreviewLinks(pathname);
+    const teamId = getTeamIdFromPathname(pathname);
+    let cancelled = false;
+    let statusByMembershipId = new Map<string, LoginStatusItem>();
 
-    const observer = new MutationObserver(() => addPreviewLinks(pathname));
+    addPreviewLinks(pathname, statusByMembershipId);
+
+    if (teamId) {
+      fetch(`/api/admin/team/${teamId}/squad-login-status`, { cache: "no-store" })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Could not load login status.");
+          return (await response.json()) as LoginStatusPayload;
+        })
+        .then((payload) => {
+          if (cancelled) return;
+          statusByMembershipId = new Map(
+            payload.items.map((item) => [item.membershipId, item]),
+          );
+          addPreviewLinks(pathname, statusByMembershipId);
+        })
+        .catch(() => {
+          if (!cancelled) addPreviewLinks(pathname, statusByMembershipId);
+        });
+    }
+
+    const observer = new MutationObserver(() => addPreviewLinks(pathname, statusByMembershipId));
     observer.observe(document.body, {
       childList: true,
       subtree: true,
     });
 
-    return () => observer.disconnect();
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [pathname]);
 
   return null;
