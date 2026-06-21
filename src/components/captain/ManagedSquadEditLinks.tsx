@@ -103,6 +103,15 @@ function normaliseActionLayout(actionsContainer: HTMLElement) {
   }
 }
 
+function getRemoveForm(actionsContainer: HTMLElement, roleForm: HTMLFormElement) {
+  return Array.from(actionsContainer.querySelectorAll<HTMLFormElement>("form")).find(
+    (candidate) =>
+      candidate !== roleForm &&
+      Boolean(candidate.querySelector('input[name="membershipId"]')) &&
+      !candidate.querySelector('[name="role"]'),
+  );
+}
+
 function removeMoveTeamPicker() {
   document.querySelector("[data-squad-move-team-picker]")?.remove();
 }
@@ -346,11 +355,7 @@ function wireNotInterestedForm(input: {
   actionsContainer: HTMLElement;
   roleForm: HTMLFormElement;
 }) {
-  const removeForm = Array.from(input.actionsContainer.querySelectorAll<HTMLFormElement>("form")).find(
-    (candidate) =>
-      candidate !== input.roleForm &&
-      Boolean(candidate.querySelector('input[name="membershipId"]')),
-  );
+  const removeForm = getRemoveForm(input.actionsContainer, input.roleForm);
 
   if (!removeForm) return;
 
@@ -383,7 +388,11 @@ function addManagedSquadEditLinks(pathname: string) {
   )
     .map((input) => input.closest("form"))
     .filter((form): form is HTMLFormElement => form instanceof HTMLFormElement)
-    .filter((form) => Boolean(form.querySelector('input[name="teamid"]')));
+    .filter(
+      (form) =>
+        Boolean(form.querySelector('input[name="teamid"]')) &&
+        Boolean(form.querySelector('[name="role"]')),
+    );
 
   for (const form of roleForms) {
     const membershipId = form
@@ -403,6 +412,8 @@ function addManagedSquadEditLinks(pathname: string) {
       row?.querySelector(".truncate.text-base.font-semibold.text-white")?.textContent?.trim() ||
       "this player";
 
+    const removeForm = getRemoveForm(actionsContainer, form);
+
     const existingMoveTeamButton = actionsContainer.querySelector(
       `button[data-managed-squad-move-team-link="${membershipId}"]`,
     );
@@ -416,10 +427,6 @@ function addManagedSquadEditLinks(pathname: string) {
       moveTeamButton.addEventListener("click", () => {
         showMoveTeamPicker({ teamId, membershipId, playerName });
       });
-
-      const removeForm = Array.from(actionsContainer.querySelectorAll("form")).find(
-        (candidate) => candidate !== form && Boolean(candidate.querySelector('input[name="membershipId"]')),
-      );
 
       actionsContainer.insertBefore(moveTeamButton, removeForm ?? null);
     }
@@ -442,10 +449,6 @@ function addManagedSquadEditLinks(pathname: string) {
           button: moveButton,
         });
       });
-
-      const removeForm = Array.from(actionsContainer.querySelectorAll("form")).find(
-        (candidate) => candidate !== form && Boolean(candidate.querySelector('input[name="membershipId"]')),
-      );
 
       actionsContainer.insertBefore(moveButton, removeForm ?? null);
     }
