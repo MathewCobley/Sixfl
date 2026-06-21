@@ -113,6 +113,9 @@ export default async function SquadActivationPage({ params }: PageProps) {
     return <InvalidActivationLinkCard />;
   }
 
+  const prospectTeamId = prospect.teamId;
+  const prospectTeamName = prospect.team.name;
+
   if (prospect.status !== "ACTIVE_SQUAD") {
     return (
       <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
@@ -125,7 +128,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
             This can happen if your account has already been linked or the squad place has been changed by the organiser.
           </p>
           <Link
-            href={`/player/team/${prospect.teamId}`}
+            href={`/player/team/${prospectTeamId}`}
             className="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
           >
             Go to team area
@@ -149,7 +152,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
               Activate squad place
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              {prospect.team.name}
+              {prospectTeamName}
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/70">
               Sign in with the email address this invite was sent to and SIXFL will link your account to the squad.
@@ -253,13 +256,13 @@ export default async function SquadActivationPage({ params }: PageProps) {
       where: {
         userId_teamId: {
           userId,
-          teamId: prospect.teamId,
+          teamId: prospectTeamId,
         },
       },
       update: {},
       create: {
         userId,
-        teamId: prospect.teamId,
+        teamId: prospectTeamId,
         role: "PLAYER",
       },
       select: { id: true },
@@ -296,12 +299,12 @@ export default async function SquadActivationPage({ params }: PageProps) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200/80">
           Squad activated
         </p>
-        <h1 className="mt-3 text-2xl font-semibold">You’re now linked to {prospect.team.name}</h1>
+        <h1 className="mt-3 text-2xl font-semibold">You’re now linked to {prospectTeamName}</h1>
         <p className="mt-3 text-sm leading-6 text-emerald-100/80">
           Your SIXFL account has been connected to this squad using {sessionEmail}.
         </p>
         <Link
-          href={`/player/team/${prospect.teamId}`}
+          href={`/player/team/${prospectTeamId}`}
           className="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
         >
           Go to team area
