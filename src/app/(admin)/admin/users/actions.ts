@@ -119,6 +119,10 @@ export async function linkAdminUserToSquadProspectAction(formData: FormData) {
     redirect(appendStatusToPath(from, "error", "Could not find the user or prospect."));
   }
 
+  if (!prospect.teamId || !prospect.team) {
+    redirect(appendStatusToPath(from, "error", "Assign this prospect to a team before linking a user account."));
+  }
+
   const userEmail = user.email?.trim().toLowerCase() ?? null;
   const prospectEmail = prospect.email?.trim().toLowerCase() ?? null;
 
