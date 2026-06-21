@@ -298,8 +298,8 @@ export default async function CaptainTeamLayout({
       <CaptainFixtureBadgesBridge />
       <CaptainMatchdayAvailabilityBadgesBridge />
       {access.isAdmin ? <ManagedSquadEditLinks /> : null}
-      {access.isAdmin && isManagedTeam ? <PendingActivationDeleteLinks /> : null}
-      {access.isAdmin && isManagedTeam ? <PendingActivationReturnLinks /> : null}
+      {access.isAdmin ? <PendingActivationDeleteLinks /> : null}
+      {access.isAdmin ? <PendingActivationReturnLinks /> : null}
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
       <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-10 sm:py-6">
@@ -358,18 +358,14 @@ export default async function CaptainTeamLayout({
                           key={option.id}
                           href={`/captain/team/${option.id}`}
                           className={[
-                            "rounded-xl border px-3 py-2 text-left transition",
+                            "rounded-xl border px-3 py-2 text-left text-sm transition",
                             active
-                              ? "border-emerald-400/35 bg-emerald-500/15 text-white"
-                              : "border-white/10 bg-white/[0.03] text-white/75 hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-white",
+                              ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-50"
+                              : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
                           ].join(" ")}
                         >
-                          <span className="block truncate text-sm font-semibold">
-                            {option.name}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-white/45">
-                            {active ? "Current team" : leagueLabel}
-                          </span>
+                          <span className="block font-semibold">{option.name}</span>
+                          <span className="mt-0.5 block text-xs text-white/45">{leagueLabel}</span>
                         </Link>
                       );
                     })}
@@ -379,12 +375,12 @@ export default async function CaptainTeamLayout({
             </div>
           </div>
 
-          <nav className="captain-team-nav sixfl-mobile-scroll flex gap-2 overflow-x-auto px-4 py-3 sm:flex-wrap sm:overflow-visible sm:px-6 sm:py-4">
+          <nav className="captain-team-nav flex flex-wrap gap-2 px-4 py-4 sm:px-6" aria-label="Team navigation">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="inline-flex shrink-0 items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+                className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-emerald-100"
               >
                 {item.label}
               </Link>
