@@ -123,6 +123,8 @@ function getStatusClasses(status: string) {
       return "border-violet-400/25 bg-violet-500/10 text-violet-100";
     case "DECLINED":
       return "border-red-400/25 bg-red-500/10 text-red-100";
+    case "DUPLICATE":
+      return "border-orange-400/25 bg-orange-500/10 text-orange-100";
     default:
       return "border-white/10 bg-white/5 text-white/75";
   }
@@ -130,6 +132,7 @@ function getStatusClasses(status: string) {
 
 function formatStatus(status: string) {
   if (status === "DECLINED") return "Not interested";
+  if (status === "DUPLICATE") return "Duplicated";
   if (status === "BACKUP") return "Reusable prospect";
   if (status === "ACTIVE_SQUAD") return "Active squad";
 
@@ -219,7 +222,7 @@ function StatCard({
   label: string;
   value: number;
   helper: string;
-  tone?: "white" | "emerald" | "amber" | "sky" | "red";
+  tone?: "white" | "emerald" | "amber" | "sky" | "red" | "orange";
 }) {
   const toneClasses =
     tone === "emerald"
@@ -230,7 +233,9 @@ function StatCard({
           ? "border-sky-400/20 bg-sky-500/10 text-sky-100/70"
           : tone === "red"
             ? "border-red-400/20 bg-red-500/10 text-red-100/70"
-            : "border-white/10 bg-white/[0.04] text-white/45";
+            : tone === "orange"
+              ? "border-orange-400/20 bg-orange-500/10 text-orange-100/70"
+              : "border-white/10 bg-white/[0.04] text-white/45";
 
   return (
     <div className={`rounded-3xl border p-5 ${toneClasses}`}>
@@ -280,6 +285,10 @@ function getActiveProspectReason(input: {
   prospect: ProspectWithTeam;
   activeSquadMembershipKeys: Set<string>;
 }) {
+  if (input.prospect.status === "DECLINED" || input.prospect.status === "DUPLICATE") {
+    return null;
+  }
+
   if (input.prospect.status === "ACTIVE_SQUAD") {
     return "Prospect has been promoted to an active squad or is pending activation.";
   }
@@ -313,6 +322,17 @@ function ProspectCard({
     : "No team assigned";
   const isUnassigned = !prospect.team;
   const isActivePlayer = Boolean(activeReason);
+  const isClosedProspect = prospect.status === "DECLINED" || prospect.status === "DUPLICATE";
+  const poolLabel = prospect.status === "DUPLICATE"
+    ? "Duplicate record"
+    : prospect.status === "DECLINED"
+      ? "Not interested"
+      : "Unassigned prospect";
+  const poolHelp = prospect.status === "DUPLICATE"
+    ? "Marked as a duplicate and kept out of the open pipeline."
+    : prospect.status === "DECLINED"
+      ? "Kept for history but not part of the open pipeline."
+      : "Not currently linked to any team.";
 
   return (
     <article
@@ -332,7 +352,7 @@ function ProspectCard({
                 Active player
               </span>
             ) : null}
-            {isUnassigned ? (
+            {isUnassigned && !isClosedProspect ? (
               <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">
                 Unassigned
               </span>
@@ -395,7 +415,7 @@ function ProspectCard({
 
         <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-            {isUnassigned ? "Prospect pool" : isActivePlayer ? "Active team" : "Currently held under"}
+            {isClosedProspect ? "Closed record" : isUnassigned ? "Prospect pool" : isActivePlayer ? "Active team" : "Currently held under"}
           </div>
           {prospect.team ? (
             <>
@@ -404,6 +424,11 @@ function ProspectCard({
               </Link>
               <div className="mt-1 text-sm text-white/45">{teamLeague}</div>
               <div className="mt-2 text-xs text-white/35">Mode: {String(prospect.team.teamMode)}</div>
+            </>
+          ) : isClosedProspect ? (
+            <>
+              <div className="mt-2 font-semibold text-orange-100">{poolLabel}</div>
+              <div className="mt-1 text-sm text-white/45">{poolHelp}</div>
             </>
           ) : (
             <>
@@ -445,6 +470,10 @@ function ProspectCard({
                 Comms
               </Link>
             </>
+          ) : isClosedProspect ? (
+            <span className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/45">
+              Closed record
+            </span>
           ) : (
             <span className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/45">
               Assign before team tools
@@ -623,13 +652,19 @@ export default async function AdminPlayerProspectsPage({
   const isActivelyUsedProspect = (prospect: ProspectWithTeam) => activeProspectReasonById.has(prospect.id);
 
   const pipelineProspects = prospects.filter(
-    (prospect) => !isActivelyUsedProspect(prospect) && prospect.status !== "DECLINED",
+    (prospect) =>
+      !isActivelyUsedProspect(prospect) &&
+      prospect.status !== "DECLINED" &&
+      prospect.status !== "DUPLICATE",
   );
   const unassignedProspects = pipelineProspects.filter((prospect) => !prospect.teamId);
   const trialProspects = pipelineProspects.filter((prospect) => prospect.status === "TRIAL");
   const activeSquadProspects = prospects.filter(isActivelyUsedProspect);
   const declinedProspects = prospects.filter(
     (prospect) => !isActivelyUsedProspect(prospect) && prospect.status === "DECLINED",
+  );
+  const duplicateProspects = prospects.filter(
+    (prospect) => !isActivelyUsedProspect(prospect) && prospect.status === "DUPLICATE",
   );
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
@@ -646,7 +681,7 @@ export default async function AdminPlayerProspectsPage({
               Player prospects
             </h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-              Admin-owned view of individual players who may join a team. Open prospects are shown first, active players are visible separately, and players moved out of squads become unassigned prospects until you assign them to a new team.
+              Admin-owned view of individual players who may join a team. Open prospects are shown first, active players are visible separately, and duplicate records are kept out of the working pipeline.
             </p>
           </div>
 
@@ -654,7 +689,7 @@ export default async function AdminPlayerProspectsPage({
             <StatCard label="Open" value={pipelineProspects.length} helper="Still in the pipeline" tone="emerald" />
             <StatCard label="Unassigned" value={unassignedProspects.length} helper="Ready to assign" tone="sky" />
             <StatCard label="Active players" value={activeSquadProspects.length} helper="Already in use" tone="emerald" />
-            <StatCard label="Trial" value={trialProspects.length} helper="May be joining" tone="amber" />
+            <StatCard label="Duplicated" value={duplicateProspects.length} helper="Out of pipeline" tone="orange" />
           </div>
         </div>
       </section>
@@ -680,6 +715,7 @@ export default async function AdminPlayerProspectsPage({
           <div className="text-sm text-white/50">
             {pipelineProspects.length} shown · {unassignedProspects.length} unassigned · {activeSquadProspects.length} active players below
             {declinedProspects.length ? ` · ${declinedProspects.length} not interested` : ""}
+            {duplicateProspects.length ? ` · ${duplicateProspects.length} duplicated` : ""}
           </div>
         </div>
 
@@ -717,6 +753,26 @@ export default async function AdminPlayerProspectsPage({
                 activeReason={activeProspectReasonById.get(prospect.id) ?? "Active player."}
                 muted
               />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {duplicateProspects.length > 0 ? (
+        <section className="rounded-3xl border border-orange-400/15 bg-orange-500/[0.06] p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-100/60">Duplicated</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Duplicate records kept out of the pipeline</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-orange-100/65">
+                These records are preserved for traceability but should not be used for team assignment, messaging or squad activation.
+              </p>
+            </div>
+            <div className="text-sm text-orange-100/65">{duplicateProspects.length} duplicate record{duplicateProspects.length === 1 ? "" : "s"}</div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {duplicateProspects.map((prospect) => (
+              <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} muted />
             ))}
           </div>
         </section>
