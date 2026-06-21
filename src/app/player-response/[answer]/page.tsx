@@ -139,7 +139,7 @@ async function saveProspectResponse(input: {
     },
   });
 
-  if (!prospect) return null;
+  if (!prospect?.team) return null;
 
   const now = new Date();
 
