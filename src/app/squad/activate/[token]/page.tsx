@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { verifySquadActivationToken } from "@/lib/squad/activationToken";
+import { removeDuplicatePlaceholderMemberForActivation } from "@/lib/squad/duplicateGuard";
 import { upsertTeamMemberProfileFromProspect } from "@/lib/teamMemberProfiles";
 
 export const dynamic = "force-dynamic";
@@ -251,6 +252,13 @@ export default async function SquadActivationPage({ params }: PageProps) {
         data: { name: prospectFullName },
       });
     }
+
+    await removeDuplicatePlaceholderMemberForActivation({
+      client: tx,
+      teamId: prospectTeamId,
+      userId,
+      phone: prospect.phone,
+    });
 
     const membership = await tx.teamMember.upsert({
       where: {
