@@ -301,16 +301,8 @@ function mapProspectRow(row: RawProspectRow): ProspectWithTeam {
   };
 }
 
-function prospectMatchesLeague(prospect: ProspectWithTeam, selectedLeague: LeagueFilterOption | null) {
-  if (!selectedLeague) return true;
-
-  if (prospect.team?.league?.id === selectedLeague.id) return true;
-
-  if (prospect.teamId) return false;
-
-  const leagueName = normaliseSearchText(selectedLeague.name);
-  const leagueArea = normaliseSearchText(selectedLeague.area);
-  const haystack = [
+function getProspectInterestText(prospect: ProspectWithTeam) {
+  return [
     prospect.source,
     prospect.notes,
     prospect.availabilitySummary,
@@ -319,11 +311,27 @@ function prospectMatchesLeague(prospect: ProspectWithTeam, selectedLeague: Leagu
     .map(normaliseSearchText)
     .filter(Boolean)
     .join(" ");
+}
 
-  if (leagueArea && haystack.includes(leagueArea)) return true;
-  if (leagueName && haystack.includes(leagueName)) return true;
+function prospectMatchesLeague(prospect: ProspectWithTeam, selectedLeague: LeagueFilterOption | null) {
+  if (!selectedLeague) return true;
 
-  return false;
+  const leagueName = normaliseSearchText(selectedLeague.name);
+  const leagueArea = normaliseSearchText(selectedLeague.area);
+  const interestText = getProspectInterestText(prospect);
+  const hasExplicitInterestText =
+    interestText.includes("area:") ||
+    interestText.includes("league type:") ||
+    interestText.includes("preferred nights:") ||
+    interestText.includes("source lead id:") ||
+    interestText.includes("lead message:");
+
+  if (leagueArea && interestText.includes(leagueArea)) return true;
+  if (leagueName && interestText.includes(leagueName)) return true;
+
+  if (hasExplicitInterestText) return false;
+
+  return prospect.team?.league?.id === selectedLeague.id;
 }
 
 function getActiveProspectReason(input: {
