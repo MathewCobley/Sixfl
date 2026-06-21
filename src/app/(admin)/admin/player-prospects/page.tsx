@@ -20,6 +20,7 @@ export const metadata = {
 type SearchParams = {
   saved?: string;
   error?: string;
+  leagueId?: string;
 };
 
 type RawProspectRow = {
@@ -39,6 +40,8 @@ type RawProspectRow = {
   lastContactedAt: Date | null;
   teamName: string | null;
   teamMode: string | null;
+  leagueId: string | null;
+  leagueArea: string | null;
   leagueName: string | null;
   leagueSeason: string | null;
   latestPlayerResponse: string | null;
@@ -74,8 +77,16 @@ type ProspectWithTeam = {
     id: string;
     name: string;
     teamMode: string;
-    league: { name: string; season: string | null } | null;
+    league: { id: string; name: string; season: string | null; area: string | null } | null;
   } | null;
+};
+
+type LeagueFilterOption = {
+  id: string;
+  name: string;
+  season: string | null;
+  area: string | null;
+  dayOfWeek: string | null;
 };
 
 function formatDate(value: Date) {
@@ -101,6 +112,10 @@ function getProspectName(input: { firstName: string; lastName: string | null }) 
 }
 
 function normaliseEmail(value: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function normaliseSearchText(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? "";
 }
 
@@ -213,6 +228,11 @@ function getSavedMessage(saved?: string) {
   }
 }
 
+function getLeagueLabel(league: LeagueFilterOption) {
+  const parts = [league.name, league.season, league.area, league.dayOfWeek].filter(Boolean);
+  return parts.join(" · ");
+}
+
 function StatCard({
   label,
   value,
@@ -273,12 +293,37 @@ function mapProspectRow(row: RawProspectRow): ProspectWithTeam {
           id: row.teamId,
           name: row.teamName,
           teamMode: row.teamMode ?? "STANDARD",
-          league: row.leagueName
-            ? { name: row.leagueName, season: row.leagueSeason }
+          league: row.leagueName && row.leagueId
+            ? { id: row.leagueId, name: row.leagueName, season: row.leagueSeason, area: row.leagueArea }
             : null,
         }
       : null,
   };
+}
+
+function prospectMatchesLeague(prospect: ProspectWithTeam, selectedLeague: LeagueFilterOption | null) {
+  if (!selectedLeague) return true;
+
+  if (prospect.team?.league?.id === selectedLeague.id) return true;
+
+  if (prospect.teamId) return false;
+
+  const leagueName = normaliseSearchText(selectedLeague.name);
+  const leagueArea = normaliseSearchText(selectedLeague.area);
+  const haystack = [
+    prospect.source,
+    prospect.notes,
+    prospect.availabilitySummary,
+    prospect.preferredPositions,
+  ]
+    .map(normaliseSearchText)
+    .filter(Boolean)
+    .join(" ");
+
+  if (leagueArea && haystack.includes(leagueArea)) return true;
+  if (leagueName && haystack.includes(leagueName)) return true;
+
+  return false;
 }
 
 function getActiveProspectReason(input: {
@@ -499,8 +544,9 @@ export default async function AdminPlayerProspectsPage({
   await requireAdmin();
 
   const filters = (await searchParams) ?? {};
+  const selectedLeagueId = String(filters.leagueId ?? "").trim();
 
-  const [prospectRows, teams] = await Promise.all([
+  const [prospectRows, teams, leagues] = await Promise.all([
     prisma.$queryRaw<RawProspectRow[]>`
       SELECT
         p."id",
@@ -519,6 +565,8 @@ export default async function AdminPlayerProspectsPage({
         p."lastContactedAt",
         t."name" AS "teamName",
         t."teamMode"::text AS "teamMode",
+        l."id" AS "leagueId",
+        l."area" AS "leagueArea",
         l."name" AS "leagueName",
         l."season" AS "leagueSeason",
         latestResponse."response" AS "latestPlayerResponse",
@@ -591,13 +639,34 @@ export default async function AdminPlayerProspectsPage({
         },
       },
     }),
+    prisma.league.findMany({
+      orderBy: [{ area: "asc" }, { name: "asc" }, { season: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        season: true,
+        area: true,
+        dayOfWeek: true,
+      },
+    }),
   ]);
 
-  const prospects = prospectRows.map(mapProspectRow);
-  const teamOptions = teams.map((team) => ({
-    value: team.id,
-    label: `${team.name}${team.league?.name ? ` · ${team.league.name}` : ""}${team.league?.season ? ` ${team.league.season}` : ""} · ${team.teamMode}`,
-  }));
+  const allProspects = prospectRows.map(mapProspectRow);
+  const selectedLeague = leagues.find((league) => league.id === selectedLeagueId) ?? null;
+  const prospects = allProspects.filter((prospect) => prospectMatchesLeague(prospect, selectedLeague));
+  const teamOptions = teams
+    .filter((team) => !selectedLeague || team.league?.name === selectedLeague.name || team.league?.season === selectedLeague.season)
+    .map((team) => ({
+      value: team.id,
+      label: `${team.name}${team.league?.name ? ` · ${team.league.name}` : ""}${team.league?.season ? ` ${team.league.season}` : ""} · ${team.teamMode}`,
+    }));
+  const leagueOptions: FormListboxOption[] = [
+    { value: "", label: "All leagues" },
+    ...leagues.map((league) => ({
+      value: league.id,
+      label: getLeagueLabel(league),
+    })),
+  ];
 
   const prospectEmails = Array.from(
     new Set(
@@ -668,11 +737,12 @@ export default async function AdminPlayerProspectsPage({
   );
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
+  const selectedLeagueLabel = selectedLeague ? getLeagueLabel(selectedLeague) : "All leagues";
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
-        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8 lg:py-8">
+        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               SIXFL pipeline
@@ -681,8 +751,40 @@ export default async function AdminPlayerProspectsPage({
               Player prospects
             </h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-              Admin-owned view of individual players who may join a team. Open prospects are shown first, active players are visible separately, and duplicate records are kept out of the working pipeline.
+              Admin-owned view of individual players who may join a team. Use the league picker to focus on Northallerton, Harrogate or another league area.
             </p>
+
+            <form method="get" action="/admin/player-prospects" className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                Filter prospects
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+                <FormListboxField
+                  name="leagueId"
+                  label="League"
+                  value={selectedLeagueId}
+                  options={leagueOptions}
+                  placeholder="All leagues"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex h-12 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                >
+                  Apply
+                </button>
+                {selectedLeague ? (
+                  <Link
+                    href="/admin/player-prospects"
+                    className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+                  >
+                    Clear
+                  </Link>
+                ) : null}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-white/45">
+                Showing: <span className="font-semibold text-white/70">{selectedLeagueLabel}</span>
+              </p>
+            </form>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -722,7 +824,7 @@ export default async function AdminPlayerProspectsPage({
         <div className="mt-5 space-y-3">
           {pipelineProspects.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">
-              No open player prospects yet.
+              No open player prospects match this league filter yet.
             </div>
           ) : null}
 
