@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 
 const injectedLinkClassName =
   "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-center text-sm font-medium transition";
+const dashboardLoginButtonClassName = `${injectedLinkClassName} border border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60`;
 
 type LoginStatusItem = {
   membershipId: string;
@@ -85,6 +86,59 @@ function getLoginStatusCopy(status?: LoginStatusItem) {
     detail: "This linked account has not signed in since login tracking was added.",
     className: "border-amber-400/20 bg-amber-500/10 text-amber-100",
   };
+}
+
+function setDashboardLoginButtonState(
+  button: HTMLButtonElement,
+  state: "idle" | "sending" | "sent" | "error",
+) {
+  switch (state) {
+    case "sending":
+      button.disabled = true;
+      button.textContent = "Sending login email…";
+      break;
+    case "sent":
+      button.disabled = true;
+      button.textContent = "Login email sent";
+      break;
+    case "error":
+      button.disabled = false;
+      button.textContent = "Try login email again";
+      break;
+    default:
+      button.disabled = false;
+      button.textContent = "Send login email";
+  }
+}
+
+async function sendDashboardLoginEmail(input: {
+  teamId: string;
+  membershipId: string;
+  button: HTMLButtonElement;
+}) {
+  setDashboardLoginButtonState(input.button, "sending");
+
+  try {
+    const response = await fetch(`/api/captain/team/${input.teamId}/send-player-login-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ membershipId: input.membershipId }),
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+      message?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Login email could not be sent.");
+    }
+
+    input.button.title = payload?.message ?? "Dashboard sign-in email sent.";
+    setDashboardLoginButtonState(input.button, "sent");
+  } catch (error) {
+    setDashboardLoginButtonState(input.button, "error");
+    window.alert(error instanceof Error ? error.message : "Login email could not be sent.");
+  }
 }
 
 function normaliseActionLayout(actionsContainer: HTMLElement) {
@@ -196,6 +250,33 @@ function addLoginStatusBlock(input: {
   }
 }
 
+function addDashboardLoginEmailButton(input: {
+  actionsContainer: HTMLElement;
+  teamId: string;
+  membershipId: string;
+}) {
+  const existingButton = input.actionsContainer.querySelector<HTMLButtonElement>(
+    `button[data-dashboard-login-email="${input.membershipId}"]`,
+  );
+
+  if (existingButton) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.dashboardLoginEmail = input.membershipId;
+  button.className = dashboardLoginButtonClassName;
+  button.textContent = "Send login email";
+  button.addEventListener("click", () => {
+    void sendDashboardLoginEmail({
+      teamId: input.teamId,
+      membershipId: input.membershipId,
+      button,
+    });
+  });
+
+  input.actionsContainer.appendChild(button);
+}
+
 function addPreviewLinks(pathname: string, statusByMembershipId = new Map<string, LoginStatusItem>()) {
   const teamId = getTeamIdFromPathname(pathname);
   if (!teamId) return;
@@ -223,6 +304,7 @@ function addPreviewLinks(pathname: string, statusByMembershipId = new Map<string
       membershipId,
       status: statusByMembershipId.get(membershipId),
     });
+    addDashboardLoginEmailButton({ actionsContainer, teamId, membershipId });
 
     const existingLink = actionsContainer.querySelector(
       `a[data-admin-player-preview-link="${membershipId}"]`,
