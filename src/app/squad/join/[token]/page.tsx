@@ -112,6 +112,8 @@ async function confirmManagedSquadJoinAction(formData: FormData) {
     throw new Error("This squad invite is no longer assigned to a team.");
   }
 
+  const prospectTeamId = prospect.teamId;
+
   if (prospect.status === "DECLINED") {
     throw new Error("This squad invite is no longer active.");
   }
@@ -143,7 +145,7 @@ async function confirmManagedSquadJoinAction(formData: FormData) {
       where: {
         userId_teamId: {
           userId: user.id,
-          teamId: prospect.teamId,
+          teamId: prospectTeamId,
         },
       },
       update: {
@@ -151,7 +153,7 @@ async function confirmManagedSquadJoinAction(formData: FormData) {
       },
       create: {
         userId: user.id,
-        teamId: prospect.teamId,
+        teamId: prospectTeamId,
         role: "PLAYER",
       },
       select: {
@@ -184,11 +186,11 @@ async function confirmManagedSquadJoinAction(formData: FormData) {
     });
   });
 
-  revalidatePath(`/admin/teams/${prospect.teamId}`);
-  revalidatePath(`/admin/teams/${prospect.teamId}/squad`);
-  revalidatePath(`/admin/teams/${prospect.teamId}/prospects`);
-  revalidatePath(`/captain/team/${prospect.teamId}/squad`);
-  revalidatePath(`/captain/team/${prospect.teamId}/prospects`);
+  revalidatePath(`/admin/teams/${prospectTeamId}`);
+  revalidatePath(`/admin/teams/${prospectTeamId}/squad`);
+  revalidatePath(`/admin/teams/${prospectTeamId}/prospects`);
+  revalidatePath(`/captain/team/${prospectTeamId}/squad`);
+  revalidatePath(`/captain/team/${prospectTeamId}/prospects`);
 }
 
 function InvalidLinkCard() {
@@ -247,6 +249,7 @@ export default async function ManagedSquadJoinPage({ params, searchParams }: Pag
     return <InvalidLinkCard />;
   }
 
+  const prospectTeamId = prospect.teamId;
   const fullName = getProspectFullName(prospect);
   const displayName = fullName || prospect.email || "Your squad place";
   const isConfirmed = resolvedSearchParams.confirmed === "1" || prospect.status === "ACTIVE_SQUAD";
@@ -313,7 +316,7 @@ export default async function ManagedSquadJoinPage({ params, searchParams }: Pag
                 You’re confirmed. We’ll send fixture availability messages when games are coming up.
               </div>
               <Link
-                href={`/player/team/${prospect.teamId}`}
+                href={`/player/team/${prospectTeamId}`}
                 className="inline-flex rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
               >
                 Go to team area
