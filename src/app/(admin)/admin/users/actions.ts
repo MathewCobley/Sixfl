@@ -123,6 +123,8 @@ export async function linkAdminUserToSquadProspectAction(formData: FormData) {
     redirect(appendStatusToPath(from, "error", "Assign this prospect to a team before linking a user account."));
   }
 
+  const prospectTeamId = prospect.teamId;
+  const prospectTeamName = prospect.team.name;
   const userEmail = user.email?.trim().toLowerCase() ?? null;
   const prospectEmail = prospect.email?.trim().toLowerCase() ?? null;
 
@@ -143,7 +145,7 @@ export async function linkAdminUserToSquadProspectAction(formData: FormData) {
       where: {
         userId_teamId: {
           userId: user.id,
-          teamId: prospect.teamId,
+          teamId: prospectTeamId,
         },
       },
       select: {
@@ -157,7 +159,7 @@ export async function linkAdminUserToSquadProspectAction(formData: FormData) {
       : await tx.teamMember.create({
           data: {
             userId: user.id,
-            teamId: prospect.teamId,
+            teamId: prospectTeamId,
             role: TeamRole.PLAYER,
           },
           select: {
@@ -192,16 +194,16 @@ export async function linkAdminUserToSquadProspectAction(formData: FormData) {
   });
 
   revalidatePath("/admin/users");
-  revalidatePath(`/admin/teams/${prospect.teamId}`);
-  revalidatePath(`/admin/teams/${prospect.teamId}/prospects`);
-  revalidatePath(`/captain/team/${prospect.teamId}`);
-  revalidatePath(`/captain/team/${prospect.teamId}/squad`);
+  revalidatePath(`/admin/teams/${prospectTeamId}`);
+  revalidatePath(`/admin/teams/${prospectTeamId}/prospects`);
+  revalidatePath(`/captain/team/${prospectTeamId}`);
+  revalidatePath(`/captain/team/${prospectTeamId}/squad`);
 
   redirect(
     appendStatusToPath(
       from,
       "saved",
-      `Linked ${displayName} to ${prospect.team.name} as ${member.role}.`,
+      `Linked ${displayName} to ${prospectTeamName} as ${member.role}.`,
     ),
   );
 }
