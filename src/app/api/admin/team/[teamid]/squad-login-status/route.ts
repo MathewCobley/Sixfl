@@ -18,40 +18,70 @@ type LoginStatusRow = {
   latestSessionExpires: Date | null;
 };
 
-async function getLoginStatusRows(teamId: string) {
-  try {
-    return await prisma.$queryRaw<LoginStatusRow[]>`
-      SELECT
-        tm."id" AS "membershipId",
-        u."id" AS "userId",
-        u."email" AS "email",
-        u."lastLoginAt" AS "lastLoginAt",
-        COUNT(s."id")::int AS "activeSessionCount",
-        MAX(s."expires") AS "latestSessionExpires"
-      FROM "TeamMember" tm
-      INNER JOIN "User" u ON u."id" = tm."userId"
-      LEFT JOIN "Session" s ON s."userId" = u."id" AND s."expires" > NOW()
-      WHERE tm."teamId" = ${teamId}
-      GROUP BY tm."id", u."id", u."email", u."lastLoginAt"
-    `;
-  } catch (error) {
-    console.warn("Could not read lastLoginAt; falling back to active session status", error);
+type ColumnExistsRow = {
+  exists: boolean;
+};
 
-    return prisma.$queryRaw<LoginStatusRow[]>`
-      SELECT
-        tm."id" AS "membershipId",
-        u."id" AS "userId",
-        u."email" AS "email",
-        NULL::timestamp AS "lastLoginAt",
-        COUNT(s."id")::int AS "activeSessionCount",
-        MAX(s."expires") AS "latestSessionExpires"
-      FROM "TeamMember" tm
-      INNER JOIN "User" u ON u."id" = tm."userId"
-      LEFT JOIN "Session" s ON s."userId" = u."id" AND s."expires" > NOW()
-      WHERE tm."teamId" = ${teamId}
-      GROUP BY tm."id", u."id", u."email"
+async function hasLastLoginAtColumn() {
+  try {
+    const rows = await prisma.$queryRaw<ColumnExistsRow[]>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'User'
+          AND column_name = 'lastLoginAt'
+      ) AS "exists"
     `;
+
+    return Boolean(rows[0]?.exists);
+  } catch {
+    return false;
   }
+}
+
+async function getLoginStatusRowsWithLastLogin(teamId: string) {
+  return prisma.$queryRaw<LoginStatusRow[]>`
+    SELECT
+      tm."id" AS "membershipId",
+      u."id" AS "userId",
+      u."email" AS "email",
+      u."lastLoginAt" AS "lastLoginAt",
+      COUNT(s."id")::int AS "activeSessionCount",
+      MAX(s."expires") AS "latestSessionExpires"
+    FROM "TeamMember" tm
+    INNER JOIN "User" u ON u."id" = tm."userId"
+    LEFT JOIN "Session" s ON s."userId" = u."id" AND s."expires" > NOW()
+    WHERE tm."teamId" = ${teamId}
+    GROUP BY tm."id", u."id", u."email", u."lastLoginAt"
+  `;
+}
+
+async function getLoginStatusRowsWithoutLastLogin(teamId: string) {
+  return prisma.$queryRaw<LoginStatusRow[]>`
+    SELECT
+      tm."id" AS "membershipId",
+      u."id" AS "userId",
+      u."email" AS "email",
+      NULL::timestamp AS "lastLoginAt",
+      COUNT(s."id")::int AS "activeSessionCount",
+      MAX(s."expires") AS "latestSessionExpires"
+    FROM "TeamMember" tm
+    INNER JOIN "User" u ON u."id" = tm."userId"
+    LEFT JOIN "Session" s ON s."userId" = u."id" AND s."expires" > NOW()
+    WHERE tm."teamId" = ${teamId}
+    GROUP BY tm."id", u."id", u."email"
+  `;
+}
+
+async function getLoginStatusRows(teamId: string) {
+  const canReadLastLogin = await hasLastLoginAtColumn();
+
+  if (canReadLastLogin) {
+    return getLoginStatusRowsWithLastLogin(teamId);
+  }
+
+  return getLoginStatusRowsWithoutLastLogin(teamId);
 }
 
 export async function GET(
