@@ -306,15 +306,15 @@ export default async function AdminSearchPage({ searchParams }: Props) {
     ...prospects.map((prospect) => ({
       id: prospect.id,
       type: "Team prospect",
-      title: [prospect.firstName, prospect.lastName].filter(Boolean).join(" "),
-      subtitle: `${prospect.team.name} prospect`,
+      title: [prospect.firstName, prospect.lastName].filter(Boolean).join(" ") || prospect.email || "Unnamed prospect",
+      subtitle: prospect.team ? `${prospect.team.name} prospect` : "Unassigned prospect",
       details: nonEmpty([
         prospect.email,
         prospect.phone,
         prospect.status,
         prospect.preferredPositions,
       ]),
-      href: `/admin/teams/${prospect.team.id}/prospects`,
+      href: prospect.team ? `/admin/teams/${prospect.team.id}/prospects` : "/admin/player-prospects",
     })),
     ...teams.map((team) => ({
       id: team.id,
@@ -358,79 +358,62 @@ export default async function AdminSearchPage({ searchParams }: Props) {
         ? `${thread.channel} thread · ${thread.team.name}`
         : `${thread.channel} thread`,
       details: nonEmpty([
+        thread.status,
         thread.contactEmail,
         thread.phoneNormalized || thread.contactPhone,
-        thread.status,
       ]),
-      href: "/admin/messaging",
+      href: `/admin/messaging?thread=${thread.id}`,
     })),
   ];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <div className="space-y-2">
-        <div className="text-sm text-emerald-300">Admin search</div>
-        <h1 className="text-3xl font-semibold text-white">
-          Find a person or contact
-        </h1>
-        <p className="max-w-3xl text-sm leading-6 text-white/60">
-          Search by name, email address or mobile number. Mobile numbers are
-          matched against both the typed version and the normalised UK format.
+    <div className="mx-auto max-w-5xl space-y-6">
+      <section className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+          Admin search
         </p>
-      </div>
-
-      <form className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 md:p-6">
-        <label htmlFor="q" className="text-sm font-medium text-white/70">
-          Search
-        </label>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Search SIXFL</h1>
+        <p className="mt-2 max-w-3xl text-sm text-white/60">
+          Search across users, leads, teams, prospects, recipients and message threads by name, email or phone.
+        </p>
+        <form action="/admin/search" className="mt-5 flex flex-col gap-3 sm:flex-row">
           <input
-            id="q"
-            name="q"
             type="search"
+            name="q"
             defaultValue={q}
-            placeholder="Name, email or mobile number"
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+            placeholder="Search name, email or phone"
+            className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
           />
           <button
             type="submit"
-            className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400"
+            className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
           >
             Search
           </button>
-        </div>
+        </form>
+      </section>
 
-        {phone.normalised ? (
-          <div className="mt-3 text-xs text-white/45">
-            Normalised phone search:{" "}
-            <span className="font-mono text-white/70">{phone.normalised}</span>
-          </div>
-        ) : null}
-      </form>
-
-      {!hasQuery ? (
-        <div className="rounded-3xl border border-white/10 bg-black/25 p-6 text-sm text-white/55">
-          Enter at least two characters, or paste a mobile number, to search
-          across leads, prospects, teams, recipients and message threads.
-        </div>
-      ) : (
-        <div className="space-y-4">
+      {hasQuery ? (
+        <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold text-white">
-              {results.length} result{results.length === 1 ? "" : "s"}
-            </h2>
-            <div className="text-sm text-white/45">Query: {q}</div>
+            <h2 className="text-xl font-semibold text-white">Results</h2>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/55">
+              {results.length} found
+            </div>
           </div>
 
-          {results.length > 0 ? (
-            <div className="grid gap-3">{results.map(resultCard)}</div>
-          ) : (
-            <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6 text-sm leading-6 text-amber-50/85">
-              No matches found. Try the mobile number without spaces, with 07 at
-              the start, or in +44 format.
+          {results.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">
+              No matching records found.
             </div>
+          ) : (
+            <div className="space-y-3">{results.map(resultCard)}</div>
           )}
-        </div>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">
+          Enter at least two characters to search.
+        </section>
       )}
     </div>
   );
