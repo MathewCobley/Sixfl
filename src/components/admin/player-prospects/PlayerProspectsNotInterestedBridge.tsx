@@ -74,6 +74,31 @@ function isClosedProspectCard(card: HTMLElement) {
   return text.includes("Not interested") || text.includes("Duplicated") || text.includes("Duplicate record");
 }
 
+function isHeldUnderTeam(card: HTMLElement) {
+  const text = card.textContent ?? "";
+  return text.includes("Currently held under") || text.includes("Active team");
+}
+
+async function moveProspectToMainPool(input: {
+  prospectId: string;
+  button: HTMLButtonElement;
+}) {
+  input.button.disabled = true;
+  input.button.textContent = "Moving…";
+
+  const response = await fetch(`/api/admin/player-prospects/${input.prospectId}/unassign`, {
+    method: "POST",
+  });
+
+  if (response.ok) {
+    window.location.reload();
+    return;
+  }
+
+  input.button.disabled = false;
+  input.button.textContent = "Move to main prospects";
+}
+
 async function moveProspectToNotInterested(input: {
   prospectId: string;
   button: HTMLButtonElement;
@@ -129,6 +154,20 @@ function addButtons() {
 
     const actionArea = getActionArea(card);
     if (!actionArea) continue;
+
+    if (isHeldUnderTeam(card) && !card.querySelector(`button[data-prospect-unassign="${prospectId}"]`)) {
+      const poolButton = document.createElement("button");
+      poolButton.type = "button";
+      poolButton.textContent = "Move to main prospects";
+      poolButton.dataset.prospectUnassign = prospectId;
+      poolButton.className =
+        "inline-flex w-full items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+      poolButton.addEventListener("click", () => {
+        void moveProspectToMainPool({ prospectId, button: poolButton });
+      });
+
+      actionArea.appendChild(poolButton);
+    }
 
     if (!card.querySelector(`button[data-prospect-not-interested="${prospectId}"]`)) {
       const button = document.createElement("button");
