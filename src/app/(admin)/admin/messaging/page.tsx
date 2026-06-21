@@ -14,7 +14,6 @@ import CommunicationsLeadLauncher from "@/components/admin/communications/Commun
 import CommunicationsLeagueLauncher from "@/components/admin/communications/CommunicationsLeagueLauncher";
 import CommunicationsProspectLauncher from "@/components/admin/communications/CommunicationsProspectLauncher";
 import CommunicationsTeamLauncher from "@/components/admin/communications/CommunicationsTeamLauncher";
-import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
 
 function normaliseFilter(value?: string) {
@@ -85,7 +84,6 @@ export default async function AdminMessagesPage({
   searchParams?: Promise<{
     filter?: string;
     thread?: string;
-    composeTeam?: string;
     saved?: string;
     channel?: string;
     count?: string;
@@ -98,7 +96,6 @@ export default async function AdminMessagesPage({
   const sp = (await searchParams) ?? {};
   const selectedFilter = normaliseFilter(sp.filter);
   const selectedThreadId = sp.thread?.trim() || "";
-  const composeTeamId = sp.composeTeam?.trim() || "";
   const composeNotice = getComposeNotice({
     saved: sp.saved,
     channel: sp.channel,
@@ -107,17 +104,7 @@ export default async function AdminMessagesPage({
     error: sp.error,
   });
 
-  const [
-    summary,
-    threads,
-    selectedThread,
-    leagues,
-    teams,
-    prospects,
-    composeTeam,
-    emailTemplates,
-    smsTemplates,
-  ] = await Promise.all([
+  const [summary, threads, selectedThread, leagues, teams, prospects] = await Promise.all([
     getAdminInboxSummary(),
     getAdminInboxThreads({
       unreadOnly: selectedFilter === "unread",
@@ -173,102 +160,26 @@ export default async function AdminMessagesPage({
         },
       },
     }),
-    composeTeamId
-      ? prisma.team.findUnique({
-          where: { id: composeTeamId },
-          select: {
-            id: true,
-            name: true,
-            claimCode: true,
-            joinSlug: true,
-            contactName: true,
-            contactEmail: true,
-            contactPhone: true,
-            league: {
-              select: {
-                id: true,
-                name: true,
-                season: true,
-              },
-            },
-          },
-        })
-      : null,
-    prisma.emailTemplate.findMany({
-      where: {
-        isActive: true,
-        audience: {
-          in: ["TEAM", "GENERAL"],
-        },
-      },
-      orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        key: true,
-        name: true,
-        subject: true,
-        body: true,
-        description: true,
-        ctaLabel: true,
-        ctaUrlKey: true,
-      },
-    }),
-    prisma.notificationTemplate.findMany({
-      where: {
-        isActive: true,
-        channel: "SMS",
-        audience: {
-          in: ["TEAM", "GENERAL"],
-        },
-      },
-      orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        key: true,
-        name: true,
-        body: true,
-        description: true,
-      },
-    }),
   ]);
 
   const fallbackThread =
     selectedThread ??
     (threads.length > 0 ? await getMessageThreadById(threads[0].id) : null);
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const claimLink = composeTeam?.claimCode
-    ? `${baseUrl}/claim?code=${encodeURIComponent(composeTeam.claimCode)}`
-    : `${baseUrl}/claim`;
-  const teamJoinUrl = composeTeam?.joinSlug
-    ? `${baseUrl}/teams/join/${composeTeam.joinSlug}`
-    : `${baseUrl}/register-interest`;
-  const fixedPaymentUrl = "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
+  const prospectLauncherOptions = prospects.flatMap((prospect) => {
+    if (!prospect.teamId || !prospect.team) return [];
 
-  const resolvedEmailTemplates = emailTemplates.map((template) => {
-    const ctaUrl =
-      template.ctaUrlKey === "signupUrl"
-        ? `${baseUrl}/register-interest`
-        : template.ctaUrlKey === "manageTeamUrl"
-          ? claimLink
-          : template.ctaUrlKey === "captainDashboardUrl"
-            ? claimLink
-            : template.ctaUrlKey === "teamJoinUrl"
-              ? teamJoinUrl
-              : template.ctaUrlKey === "paymentUrl"
-                ? fixedPaymentUrl
-                : null;
+    const leagueLabel = prospect.team.league?.name
+      ? ` · ${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}`
+      : "";
 
-    return {
-      id: template.id,
-      key: template.key,
-      name: template.name,
-      subject: template.subject,
-      body: template.body,
-      description: template.description,
-      ctaLabel: template.ctaLabel,
-      ctaUrl,
-    };
+    return [
+      {
+        id: prospect.id,
+        teamId: prospect.teamId,
+        label: `${prospect.firstName}${prospect.lastName ? ` ${prospect.lastName}` : ""} · ${prospect.team.name}${leagueLabel}`,
+      },
+    ];
   });
 
   return (
@@ -385,53 +296,6 @@ export default async function AdminMessagesPage({
           </section>
         ) : null}
 
-        {composeTeam ? (
-          <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
-            <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
-                  New outbound message
-                </div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
-                  Contact {composeTeam.name}
-                </h2>
-                <p className="mt-2 text-sm text-white/60">
-                  You are composing a new message for this team from the inbox.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-xs text-white/60">
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                  Email: {composeTeam.contactEmail || "—"}
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                  SMS: {composeTeam.contactPhone || "—"}
-                </span>
-                {composeTeam.league ? (
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                    {composeTeam.league.name}{composeTeam.league.season ? ` · ${composeTeam.league.season}` : ""}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <TeamCommunicationsComposer
-              teamId={composeTeam.id}
-              fromPath={`/admin/messaging?composeTeam=${composeTeam.id}`}
-              toEmail={composeTeam.contactEmail ?? null}
-              toPhone={composeTeam.contactPhone ?? null}
-              contactName={composeTeam.contactName ?? null}
-              teamName={composeTeam.name}
-              leagueName={composeTeam.league ? `${composeTeam.league.name}${composeTeam.league.season ? ` — ${composeTeam.league.season}` : ""}` : null}
-              claimCode={composeTeam.claimCode}
-              claimLink={claimLink}
-              captainDashboardUrl={claimLink}
-              emailTemplates={resolvedEmailTemplates}
-              smsTemplates={smsTemplates}
-            />
-          </section>
-        ) : null}
-
         <div className="grid gap-6 xl:grid-cols-2 3xl:grid-cols-4">
           <CommunicationsTeamLauncher
             teams={teams.map((team) => ({
@@ -443,13 +307,7 @@ export default async function AdminMessagesPage({
             }))}
           />
 
-          <CommunicationsProspectLauncher
-            prospects={prospects.map((prospect) => ({
-              id: prospect.id,
-              teamId: prospect.teamId,
-              label: `${prospect.firstName}${prospect.lastName ? ` ${prospect.lastName}` : ""} · ${prospect.team.name}${prospect.team.league?.name ? ` · ${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}` : ""}`,
-            }))}
-          />
+          <CommunicationsProspectLauncher prospects={prospectLauncherOptions} />
 
           <CommunicationsLeagueLauncher
             leagues={leagues.map((league) => ({
@@ -560,29 +418,14 @@ export default async function AdminMessagesPage({
                     toNumber: message.toNumber,
                     fromEmail: message.fromEmail,
                     toEmail: message.toEmail,
-                    providerStatus: message.providerStatus,
+                    createdAt: message.createdAt.toISOString(),
                     sentAt: message.sentAt?.toISOString() ?? null,
                     receivedAt: message.receivedAt?.toISOString() ?? null,
                     readAt: message.readAt?.toISOString() ?? null,
-                    createdAt: message.createdAt.toISOString(),
-                    dispatch: message.dispatch
-                      ? {
-                          id: message.dispatch.id,
-                          template: message.dispatch.template
-                            ? {
-                                id: message.dispatch.template.id,
-                                name: message.dispatch.template.name,
-                                key: message.dispatch.template.key,
-                              }
-                            : null,
-                          metadata: message.dispatch.metadata,
-                        }
-                      : null,
                   })),
                 }
               : null
           }
-          leagues={leagues}
         />
       </div>
     </div>
