@@ -33,6 +33,12 @@ function initials(name: string | null, email: string | null) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
+function hasAssignedProspectTeam<T extends { team: unknown | null }>(
+  prospect: T,
+): prospect is T & { team: NonNullable<T["team"]> } {
+  return Boolean(prospect.team);
+}
+
 export default async function AdminUsersPage({
   searchParams,
 }: {
@@ -100,8 +106,8 @@ export default async function AdminUsersPage({
       })
     : [];
 
-  const prospectsByEmail = new Map<string, typeof matchingProspects>();
-  for (const prospect of matchingProspects) {
+  const prospectsByEmail = new Map<string, Array<(typeof matchingProspects)[number] & { team: NonNullable<(typeof matchingProspects)[number]["team"]> }>>();
+  for (const prospect of matchingProspects.filter(hasAssignedProspectTeam)) {
     const email = normaliseEmail(prospect.email);
     if (!email) continue;
     prospectsByEmail.set(email, [...(prospectsByEmail.get(email) ?? []), prospect]);
