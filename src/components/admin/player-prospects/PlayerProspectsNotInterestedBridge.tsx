@@ -69,6 +69,11 @@ function getActionArea(card: HTMLElement) {
   return null;
 }
 
+function isClosedProspectCard(card: HTMLElement) {
+  const text = card.textContent ?? "";
+  return text.includes("Not interested") || text.includes("Duplicated") || text.includes("Duplicate record");
+}
+
 async function moveProspectToNotInterested(input: {
   prospectId: string;
   button: HTMLButtonElement;
@@ -89,31 +94,69 @@ async function moveProspectToNotInterested(input: {
   input.button.textContent = "Move to not interested";
 }
 
+async function flagProspectAsDuplicate(input: {
+  prospectId: string;
+  button: HTMLButtonElement;
+}) {
+  const confirmed = window.confirm(
+    "Mark this prospect as a duplicate record? It will leave the open pipeline and move to the duplicated records section.",
+  );
+
+  if (!confirmed) return;
+
+  input.button.disabled = true;
+  input.button.textContent = "Moving…";
+
+  const response = await fetch(`/api/admin/player-prospects/${input.prospectId}/duplicate`, {
+    method: "POST",
+  });
+
+  if (response.ok) {
+    window.location.reload();
+    return;
+  }
+
+  input.button.disabled = false;
+  input.button.textContent = "Remove duplicate";
+}
+
 function addButtons() {
   for (const prospectId of getProspectIds()) {
     const card = getCardForProspectId(prospectId);
-    if (!card || card.querySelector(`button[data-prospect-not-interested="${prospectId}"]`)) {
-      continue;
-    }
-
-    if (card.textContent?.includes("Not interested")) {
+    if (!card || isClosedProspectCard(card)) {
       continue;
     }
 
     const actionArea = getActionArea(card);
     if (!actionArea) continue;
 
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "Move to not interested";
-    button.dataset.prospectNotInterested = prospectId;
-    button.className =
-      "inline-flex w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50";
-    button.addEventListener("click", () => {
-      void moveProspectToNotInterested({ prospectId, button });
-    });
+    if (!card.querySelector(`button[data-prospect-not-interested="${prospectId}"]`)) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Move to not interested";
+      button.dataset.prospectNotInterested = prospectId;
+      button.className =
+        "inline-flex w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+      button.addEventListener("click", () => {
+        void moveProspectToNotInterested({ prospectId, button });
+      });
 
-    actionArea.appendChild(button);
+      actionArea.appendChild(button);
+    }
+
+    if (!card.querySelector(`button[data-prospect-duplicate="${prospectId}"]`)) {
+      const duplicateButton = document.createElement("button");
+      duplicateButton.type = "button";
+      duplicateButton.textContent = "Remove duplicate";
+      duplicateButton.dataset.prospectDuplicate = prospectId;
+      duplicateButton.className =
+        "inline-flex w-full items-center justify-center rounded-xl border border-orange-400/25 bg-orange-500/10 px-4 py-2.5 text-sm font-medium text-orange-100 transition hover:bg-orange-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+      duplicateButton.addEventListener("click", () => {
+        void flagProspectAsDuplicate({ prospectId, button: duplicateButton });
+      });
+
+      actionArea.appendChild(duplicateButton);
+    }
   }
 }
 
