@@ -465,24 +465,31 @@ export async function sendSquadEmailAction(formData: FormData) {
       fullName,
       teamName: team.name,
     });
+    const recipient = await ensureSquadUserNotificationRecipient({
+      userId: member.user.id,
+      email,
+      phone: null,
+      displayName: member.user.name?.trim() || null,
+      teamId: team.id,
+      teamName: team.name,
+    });
 
     await queueDirectNotification({
+      recipientId: recipient.id,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.PLAYER,
-      recipientSourceType: NotificationRecipientSourceType.USER,
-      recipientSourceId: member.user.id,
       subject: personalisedSubject,
       body: personalisedBody,
       isTransactional: false,
       sourceType: "TEAM_MEMBER",
       sourceId: member.id,
-      templateId,
-      templateKey,
       metadata: {
         origin: "captain_squad_email",
         originLabel: "Sent to squad member from captain hub",
         teamId: team.id,
         memberId: member.id,
+        templateId,
+        templateKey,
       },
       createdByUserId: user?.id ?? null,
     });
