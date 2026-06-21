@@ -6,10 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NotificationChannel, NotificationDispatchStatus } from "@prisma/client";
 
-import { cancelQueuedSmsMessageAction } from "@/app/(admin)/admin/messages/actions";
-import CommunicationStatusBadge, {
-  CommunicationStatusExplanation,
-} from "@/components/admin/communications/CommunicationStatusBadge";
+import CommunicationStatusBadge from "@/components/admin/communications/CommunicationStatusBadge";
 import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
@@ -45,9 +42,6 @@ type TimelineItem = {
   contactValue: string | null;
   occurredAt: Date;
   failureReason: string | null;
-  messageEntryId: string | null;
-  threadId: string | null;
-  canCancelQueuedSms: boolean;
 };
 
 const PLAYER_MATCH_FEE_SOURCE_TYPES = [
@@ -173,9 +167,14 @@ export default async function AdminProspectCommunicationsPage({
     },
   });
 
-  if (!prospect) {
+  if (!prospect?.team) {
     notFound();
   }
+
+  const prospectName = getProspectName({
+    firstName: prospect.firstName,
+    lastName: prospect.lastName,
+  }) || prospect.firstName;
 
   const playerMatchFees = await prisma.playerMatchFee.findMany({
     where: {
@@ -289,46 +288,28 @@ export default async function AdminProspectCommunicationsPage({
     }),
   ]);
 
-  const prospectName = getProspectName({
-    firstName: prospect.firstName,
-    lastName: prospect.lastName,
-  }) || prospect.firstName;
-
   const messageTimelineItems: TimelineItem[] = threads.flatMap((thread) =>
-    thread.messages.map((message) => {
-      const statusLabel = message.providerStatus || "RECORDED";
-      const canCancelQueuedSms = Boolean(
-        message.notificationDispatchId &&
-          message.channel === NotificationChannel.SMS &&
-          message.direction === "OUTBOUND" &&
-          statusLabel.trim().toUpperCase().startsWith("QUEUED"),
-      );
-
-      return {
-        id: `message-${message.id}`,
-        channel: message.channel,
-        direction: message.direction,
-        statusLabel,
-        sourceLabel: message.dispatch
-          ? getSourceLabel({
-              metadata: message.dispatch.metadata,
-              sourceType: message.dispatch.sourceType,
-            })
-          : "Inbox thread",
-        templateName: message.dispatch?.template?.name ?? null,
-        templateKey: message.dispatch?.template?.key ?? null,
-        subject: message.subject || `${message.channel} message`,
-        bodyText: message.textBody || message.body || "",
-        bodyHtml: message.channel === NotificationChannel.EMAIL ? message.htmlBody || null : null,
-        contactName: thread.contactName || prospectName,
-        contactValue: message.toEmail || message.toNumber || message.fromEmail || message.fromNumber || null,
-        occurredAt: message.receivedAt ?? message.sentAt ?? message.createdAt,
-        failureReason: null,
-        messageEntryId: message.id,
-        threadId: thread.id,
-        canCancelQueuedSms,
-      };
-    }),
+    thread.messages.map((message) => ({
+      id: `message-${message.id}`,
+      channel: message.channel,
+      direction: message.direction,
+      statusLabel: message.providerStatus || "RECORDED",
+      sourceLabel: message.dispatch
+        ? getSourceLabel({
+            metadata: message.dispatch.metadata,
+            sourceType: message.dispatch.sourceType,
+          })
+        : "Inbox thread",
+      templateName: message.dispatch?.template?.name ?? null,
+      templateKey: message.dispatch?.template?.key ?? null,
+      subject: message.subject || `${message.channel} message`,
+      bodyText: message.textBody || message.body || "",
+      bodyHtml: message.channel === NotificationChannel.EMAIL ? message.htmlBody || null : null,
+      contactName: thread.contactName || prospectName,
+      contactValue: message.toEmail || message.toNumber || message.fromEmail || message.fromNumber || null,
+      occurredAt: message.receivedAt ?? message.sentAt ?? message.createdAt,
+      failureReason: null,
+    })),
   );
 
   const loggedDispatchIds = new Set(
@@ -366,9 +347,6 @@ export default async function AdminProspectCommunicationsPage({
           : dispatch.recipient.email || null,
       occurredAt: dispatch.sentAt ?? dispatch.scheduledFor ?? dispatch.createdAt,
       failureReason: dispatch.failureReason,
-      messageEntryId: null,
-      threadId: null,
-      canCancelQueuedSms: false,
     }));
 
   const timeline = [...messageTimelineItems, ...unloggedDispatchTimelineItems].sort(
@@ -571,25 +549,13 @@ export default async function AdminProspectCommunicationsPage({
 
                   <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/45">
                     <span>{formatUkDateTime(item.occurredAt)}</span>
-
-                    {item.canCancelQueuedSms && item.messageEntryId && item.threadId ? (
-                      <form action={cancelQueuedSmsMessageAction}>
-                        <input type="hidden" name="messageId" value={item.messageEntryId} />
-                        <input type="hidden" name="threadId" value={item.threadId} />
-                        <input type="hidden" name="filter" value="all" />
-                        <button
-                          type="submit"
-                          className="inline-flex items-center rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/15"
-                        >
-                          Cancel queued SMS
-                        </button>
-                      </form>
-                    ) : null}
                   </div>
 
-                  <CommunicationStatusExplanation status={item.statusLabel}>
-                    {item.failureReason ? `Failure: ${item.failureReason}` : undefined}
-                  </CommunicationStatusExplanation>
+                  {item.failureReason ? (
+                    <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-xs leading-5 text-red-100">
+                      Failure: {item.failureReason}
+                    </div>
+                  ) : null}
                 </div>
               ))
             )}
