@@ -22,6 +22,9 @@ const moveTeamClassName =
 const moveToProspectsClassName =
   "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-center text-sm font-medium text-amber-100 transition hover:bg-amber-500/15";
 
+const removeDuplicateClassName =
+  "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-2.5 text-center text-sm font-medium text-orange-100 transition hover:bg-orange-500/15";
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
   return match?.[1] ?? null;
@@ -348,6 +351,48 @@ async function markPlayerNotInterested(input: {
   }
 }
 
+async function markPlayerDuplicate(input: {
+  teamId: string;
+  membershipId: string;
+  playerName: string;
+  button: HTMLButtonElement;
+}) {
+  const confirmed = window.confirm(
+    `Remove ${input.playerName} as a duplicate? This removes them from the squad and keeps the record in the duplicated prospects section.`,
+  );
+
+  if (!confirmed) return;
+
+  const originalText = input.button.textContent ?? "Remove duplicate";
+  input.button.disabled = true;
+  input.button.textContent = "Removing…";
+
+  try {
+    const response = await fetch(
+      `/api/captain/team/${input.teamId}/mark-player-duplicate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ membershipId: input.membershipId }),
+      },
+    );
+
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "Player could not be marked as a duplicate.");
+    }
+
+    window.location.href = "/admin/player-prospects";
+  } catch (error) {
+    input.button.disabled = false;
+    input.button.textContent = originalText;
+    window.alert(error instanceof Error ? error.message : "Player could not be marked as a duplicate.");
+  }
+}
+
 function wireNotInterestedForm(input: {
   teamId: string;
   membershipId: string;
@@ -451,6 +496,28 @@ function addManagedSquadEditLinks(pathname: string) {
       });
 
       actionsContainer.insertBefore(moveButton, removeForm ?? null);
+    }
+
+    const existingDuplicateButton = actionsContainer.querySelector(
+      `button[data-managed-squad-duplicate-link="${membershipId}"]`,
+    );
+
+    if (!existingDuplicateButton) {
+      const duplicateButton = document.createElement("button");
+      duplicateButton.type = "button";
+      duplicateButton.textContent = "Remove duplicate";
+      duplicateButton.dataset.managedSquadDuplicateLink = membershipId;
+      duplicateButton.className = removeDuplicateClassName;
+      duplicateButton.addEventListener("click", () => {
+        void markPlayerDuplicate({
+          teamId,
+          membershipId,
+          playerName,
+          button: duplicateButton,
+        });
+      });
+
+      actionsContainer.insertBefore(duplicateButton, removeForm ?? null);
     }
 
     wireNotInterestedForm({
