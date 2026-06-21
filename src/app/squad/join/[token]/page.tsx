@@ -108,6 +108,10 @@ async function confirmManagedSquadJoinAction(formData: FormData) {
     throw new Error("This squad invite could not be found.");
   }
 
+  if (!prospect.teamId || !prospect.team) {
+    throw new Error("This squad invite is no longer assigned to a team.");
+  }
+
   if (prospect.status === "DECLINED") {
     throw new Error("This squad invite is no longer active.");
   }
@@ -239,7 +243,7 @@ export default async function ManagedSquadJoinPage({ params, searchParams }: Pag
     },
   });
 
-  if (!prospect) {
+  if (!prospect?.teamId || !prospect.team) {
     return <InvalidLinkCard />;
   }
 

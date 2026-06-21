@@ -60,7 +60,7 @@ async function getPendingSquadActivationContext(email: string) {
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
   });
 
-  if (!prospect) return null;
+  if (!prospect?.team) return null;
 
   return {
     prospectId: prospect.id,

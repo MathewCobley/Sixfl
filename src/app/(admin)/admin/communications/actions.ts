@@ -192,7 +192,7 @@ async function getTeamCommunicationRecipientContext(input: {
       },
     });
 
-    if (!prospect) {
+    if (!prospect?.team) {
       redirect(`/admin/teams/${teamId}/communications?error=Player%20prospect%20not%20found.`);
     }
 
@@ -392,7 +392,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     },
   });
 
-  if (!prospect) {
+  if (!prospect?.team) {
     redirect(`/admin/teams/${teamId}/prospects?error=Prospect%20not%20found.`);
   }
 

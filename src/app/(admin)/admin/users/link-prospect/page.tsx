@@ -37,11 +37,11 @@ type ProspectMatch = {
   email: string | null;
   phone: string | null;
   status: string;
-  teamId?: string;
+  teamId: string | null;
   team: {
     id: string;
     name: string;
-  };
+  } | null;
 };
 
 function normalizeEmail(value: string | null | undefined) {
@@ -51,6 +51,10 @@ function normalizeEmail(value: string | null | undefined) {
 
 function getFullName(input: { firstName: string; lastName: string | null; email: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim() || input.email || "Unnamed prospect";
+}
+
+function getProspectTeamLabel(prospect: ProspectMatch) {
+  return prospect.team?.name ?? "Unassigned prospect";
 }
 
 function getInitials(name: string | null | undefined, email: string | null | undefined) {
@@ -305,7 +309,7 @@ export default async function AdminUserProspectLinkPage({
                     </div>
                     {matches.length > 0 ? (
                       <div className="mt-2 text-xs text-white/55">
-                        {matches.map((match) => `${getFullName(match)} · ${match.team.name}`).join(" | ")}
+                        {matches.map((match) => `${getFullName(match)} · ${getProspectTeamLabel(match)}`).join(" | ")}
                       </div>
                     ) : null}
                   </div>
@@ -364,7 +368,7 @@ export default async function AdminUserProspectLinkPage({
               ) : null}
 
               {prospects.map((prospect) => {
-                const isLinked = linkedTeamIds.has(prospect.teamId ?? prospect.team.id);
+                const isLinked = prospect.teamId ? linkedTeamIds.has(prospect.teamId) : false;
 
                 return (
                   <div key={prospect.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -372,12 +376,12 @@ export default async function AdminUserProspectLinkPage({
                       <div>
                         <h3 className="font-semibold text-white">{getFullName(prospect)}</h3>
                         <p className="mt-1 text-sm text-white/60">
-                          {prospect.team.name} · {prospect.status}
+                          {getProspectTeamLabel(prospect)} · {prospect.status}
                           {prospect.phone ? ` · ${prospect.phone}` : ""}
                         </p>
                       </div>
 
-                      {user && !isLinked ? (
+                      {user && prospect.teamId && !isLinked ? (
                         <form action={linkAdminUserToSquadProspectAction}>
                           <input type="hidden" name="userId" value={user.id} />
                           <input type="hidden" name="prospectId" value={prospect.id} />
@@ -389,6 +393,10 @@ export default async function AdminUserProspectLinkPage({
                             Link existing user
                           </button>
                         </form>
+                      ) : !prospect.teamId ? (
+                        <span className="inline-flex rounded-xl border border-sky-400/20 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-100">
+                          Assign to team first
+                        </span>
                       ) : isLinked ? (
                         <span className="inline-flex rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100">
                           Already linked
