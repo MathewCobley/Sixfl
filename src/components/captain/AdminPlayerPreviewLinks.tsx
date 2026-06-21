@@ -145,10 +145,14 @@ function normaliseExistingCommsLink(input: {
     });
 
   for (const link of commsLinks) {
-    link.href = playerCommsHref;
-    link.textContent = "Player comms";
-    link.dataset.adminPlayerCommsLink = membershipId;
-    link.className = `${injectedLinkClassName} border border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15`;
+    const className = `${injectedLinkClassName} border border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15`;
+
+    if (link.href !== playerCommsHref) link.href = playerCommsHref;
+    if (link.textContent !== "Player comms") link.textContent = "Player comms";
+    if (link.dataset.adminPlayerCommsLink !== membershipId) {
+      link.dataset.adminPlayerCommsLink = membershipId;
+    }
+    if (link.className !== className) link.className = className;
   }
 }
 
@@ -171,14 +175,21 @@ function addLoginStatusBlock(input: {
   const existing = detailsContainer.querySelector<HTMLElement>(
     `[data-admin-login-status="${input.membershipId}"]`,
   );
+  const className = `mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${copy.className}`;
+  const html = `<div class="font-semibold text-white/90">${copy.badge}</div><div class="mt-0.5 text-white/65">${copy.detail}</div>`;
   const block = existing ?? document.createElement("div");
 
-  block.dataset.adminLoginStatus = input.membershipId;
-  block.className = `mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${copy.className}`;
-  block.innerHTML = `
-    <div class="font-semibold text-white/90">${copy.badge}</div>
-    <div class="mt-0.5 text-white/65">${copy.detail}</div>
-  `;
+  if (block.dataset.adminLoginStatus !== input.membershipId) {
+    block.dataset.adminLoginStatus = input.membershipId;
+  }
+
+  if (block.className !== className) {
+    block.className = className;
+  }
+
+  if (block.innerHTML !== html) {
+    block.innerHTML = html;
+  }
 
   if (!existing) {
     detailsContainer.appendChild(block);
@@ -237,9 +248,16 @@ export default function AdminPlayerPreviewLinks() {
   useEffect(() => {
     const teamId = getTeamIdFromPathname(pathname);
     let cancelled = false;
+    let observer: MutationObserver | null = null;
     let statusByMembershipId = new Map<string, LoginStatusItem>();
 
-    addPreviewLinks(pathname, statusByMembershipId);
+    const runSafely = () => {
+      observer?.disconnect();
+      addPreviewLinks(pathname, statusByMembershipId);
+      observer?.observe(document.body, { childList: true, subtree: true });
+    };
+
+    runSafely();
 
     if (teamId) {
       fetch(`/api/admin/team/${teamId}/squad-login-status`, { cache: "no-store" })
@@ -252,14 +270,14 @@ export default function AdminPlayerPreviewLinks() {
           statusByMembershipId = new Map(
             payload.items.map((item) => [item.membershipId, item]),
           );
-          addPreviewLinks(pathname, statusByMembershipId);
+          runSafely();
         })
         .catch(() => {
-          if (!cancelled) addPreviewLinks(pathname, statusByMembershipId);
+          if (!cancelled) runSafely();
         });
     }
 
-    const observer = new MutationObserver(() => addPreviewLinks(pathname, statusByMembershipId));
+    observer = new MutationObserver(runSafely);
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -267,7 +285,7 @@ export default function AdminPlayerPreviewLinks() {
 
     return () => {
       cancelled = true;
-      observer.disconnect();
+      observer?.disconnect();
     };
   }, [pathname]);
 
