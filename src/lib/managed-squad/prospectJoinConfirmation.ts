@@ -206,6 +206,10 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
     return { ok: false as const, status: "prospect_not_found" as const };
   }
 
+  if (!prospect.teamId || !prospect.team) {
+    return { ok: false as const, status: "prospect_not_found" as const };
+  }
+
   const email = prospect.email?.trim().toLowerCase() || null;
 
   if (!email) {
