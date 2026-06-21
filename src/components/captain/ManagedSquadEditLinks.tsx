@@ -385,7 +385,7 @@ async function markPlayerDuplicate(input: {
       throw new Error(payload?.error ?? "Player could not be marked as a duplicate.");
     }
 
-    window.location.href = "/admin/player-prospects";
+    window.location.reload();
   } catch (error) {
     input.button.disabled = false;
     input.button.textContent = originalText;
