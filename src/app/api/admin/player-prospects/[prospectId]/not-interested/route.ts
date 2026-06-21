@@ -37,7 +37,10 @@ export async function POST(
 
     await prisma.teamPlayerProspect.update({
       where: { id: prospect.id },
-      data: { status: "DECLINED" },
+      data: {
+        teamId: null,
+        status: "DECLINED",
+      },
     });
 
     revalidatePath("/admin/player-prospects");
