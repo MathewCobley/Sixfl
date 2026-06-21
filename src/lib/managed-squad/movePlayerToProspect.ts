@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
-type ProspectMoveStatus = "BACKUP" | "DECLINED";
+type ProspectMoveStatus = "BACKUP" | "DECLINED" | "DUPLICATE";
 
 type TeamMemberProfileSnapshot = {
   sourceProspectId: string | null;
@@ -140,6 +140,13 @@ function getProspectMoveCopy(status: ProspectMoveStatus, previousRole: string) {
     return {
       source: "Marked not interested from squad",
       notes: `Marked as not interested and removed from the active squad. Previous role: ${previousRole}.`,
+    };
+  }
+
+  if (status === "DUPLICATE") {
+    return {
+      source: "Marked duplicate from squad",
+      notes: `Marked as a duplicate record and removed from the active squad. Previous role: ${previousRole}.`,
     };
   }
 
