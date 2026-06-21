@@ -192,7 +192,7 @@ async function getTeamCommunicationRecipientContext(input: {
       },
     });
 
-    if (!prospect) {
+    if (!prospect?.team) {
       redirect(`/admin/teams/${teamId}/communications?error=Player%20prospect%20not%20found.`);
     }
 
@@ -257,386 +257,76 @@ async function getTeamCommunicationRecipientContext(input: {
 
 export async function sendTeamCommunicationMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
-
   const teamId = getTrimmedValue(formData.get("teamId"));
-  const from = getSafeRedirectPath(formData.get("from"), `/admin/teams/${teamId}/communications`);
-  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
-  const subject = getTrimmedValue(formData.get("subject"));
-  const body = getTrimmedValue(formData.get("body"));
-  const templateId = getTrimmedValue(formData.get("templateId")) || null;
-  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
-  const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
-  const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
   const recipientType = getTrimmedValue(formData.get("recipientType")) || "team";
   const recipientId = getTrimmedValue(formData.get("recipientId")) || null;
+  const channel = getTrimmedValue(formData.get("channel"));
+  const subject = getTrimmedValue(formData.get("subject"));
+  const body = getTrimmedValue(formData.get("body"));
+  const from = getSafeRedirectPath(formData.get("from"), teamId ? `/admin/teams/${teamId}/communications` : "/admin/communications");
 
   if (!teamId) {
-    redirect("/admin/teams?error=missing_id");
+    redirect(`${from}?error=${encodeURIComponent("Team is required.")}`);
+  }
+
+  if (channel !== NotificationChannel.EMAIL && channel !== NotificationChannel.SMS) {
+    redirect(`${from}?error=${encodeURIComponent("Choose email or SMS.")}`);
   }
 
   if (!body) {
-    redirect(`${from}?error=Message%20body%20is%20required.`);
+    redirect(`${from}?error=${encodeURIComponent("Message body is required.")}`);
   }
 
-  const channel =
-    channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  redirectIfUnresolvedTemplatePlaceholder({ from, subject, body });
 
   if (channel === NotificationChannel.EMAIL && !subject) {
-    redirect(`${from}?error=Email%20subject%20is%20required.`);
+    redirect(`${from}?error=${encodeURIComponent("Email subject is required.")}`);
   }
 
-  redirectIfUnresolvedTemplatePlaceholder({
-    from,
-    subject: channel === NotificationChannel.EMAIL ? subject : null,
-    body,
-  });
-
-  const context = await getTeamCommunicationRecipientContext({
-    teamId,
-    recipientType,
-    recipientId,
-  });
-
-  if (channel === NotificationChannel.EMAIL && !context.recipient.email?.trim()) {
-    redirect(`${from}?error=This%20recipient%20does%20not%20have%20an%20email%20address.`);
-  }
-
-  if (channel === NotificationChannel.SMS && !context.recipient.phone?.trim()) {
-    redirect(`${from}?error=This%20recipient%20does%20not%20have%20a%20mobile%20number.`);
-  }
-
-  const dispatch = await queueDirectNotification({
-    recipientId: context.recipient.id,
-    channel,
-    audience: context.audience,
-    subject: channel === NotificationChannel.EMAIL ? subject : null,
-    body,
-    isTransactional: false,
-    sourceType: context.sourceType,
-    sourceId: context.sourceId,
-    emailBranding:
-      channel === NotificationChannel.EMAIL ? context.emailBranding : undefined,
-    emailCta:
-      channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
-        ? {
-            label: ctaLabel,
-            url: ctaUrl,
-          }
-        : undefined,
-    metadata: {
-      origin: "team_communications_hub",
-      originLabel: "Sent from communications hub",
-      teamId,
-      templateId,
-      templateKey,
-      ctaLabel,
-      ctaUrl,
-      ...context.metadata,
-    },
-    createdByUserId: user?.id ?? null,
-  });
-
-  await logNotificationDispatchToThread({
-    dispatch,
-    recipient: context.recipient,
-  });
-
-  redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
-}
-
-export async function sendProspectCommunicationMessageAction(formData: FormData) {
-  const { user } = await requireAdmin();
-
-  const teamId = getTrimmedValue(formData.get("teamId"));
-  const prospectId = getTrimmedValue(formData.get("prospectId"));
-  const from = getSafeRedirectPath(formData.get("from"), `/admin/teams/${teamId}/prospects`);
-  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
-  const subject = getTrimmedValue(formData.get("subject"));
-  const body = getTrimmedValue(formData.get("body"));
-  const templateId = getTrimmedValue(formData.get("templateId")) || null;
-  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
-  const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
-  const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
-
-  if (!teamId || !prospectId) {
-    redirect("/admin/teams?error=missing_id");
-  }
-
-  if (!body) {
-    redirect(`${from}?error=Message%20body%20is%20required.`);
-  }
-
-  const prospect = await prisma.teamPlayerProspect.findFirst({
-    where: {
-      id: prospectId,
-      teamId,
-    },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phone: true,
-      status: true,
-      team: {
-        select: {
-          name: true,
-          league: {
-            select: {
-              name: true,
-              season: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!prospect) {
-    redirect(`/admin/teams/${teamId}/prospects?error=Prospect%20not%20found.`);
-  }
-
-  const channel =
-    channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
-
-  if (channel === NotificationChannel.EMAIL && !subject) {
-    redirect(`${from}?error=Email%20subject%20is%20required.`);
-  }
-
-  redirectIfUnresolvedTemplatePlaceholder({
-    from,
-    subject: channel === NotificationChannel.EMAIL ? subject : null,
-    body,
-  });
-
-  const displayName = [prospect.firstName, prospect.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  const recipient = await upsertNotificationRecipient({
-    sourceType: NotificationRecipientSourceType.GENERAL,
-    sourceId: `team-prospect:${prospect.id}`,
-    audience: NotificationAudience.PLAYER,
-    displayName: displayName || prospect.firstName,
-    email: prospect.email?.trim() || null,
-    phone: getPhoneDisplayValue(prospect.phone),
-    marketingEmailOptIn: true,
-    marketingSmsOptIn: true,
-    transactionalEmailOptIn: true,
-    transactionalSmsOptIn: true,
-    metadata: {
-      teamId,
-      prospectId: prospect.id,
-      entityType: "TEAM_PROSPECT",
-    },
-  });
-
-  if (channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
-    redirect(`${from}?error=This%20prospect%20does%20not%20have%20an%20email%20address.`);
-  }
-
-  if (channel === NotificationChannel.SMS && !recipient.phone?.trim()) {
-    redirect(`${from}?error=This%20prospect%20does%20not%20have%20a%20mobile%20number.`);
-  }
-
-  const dispatch = await queueDirectNotification({
-    recipientId: recipient.id,
-    channel,
-    audience: NotificationAudience.PLAYER,
-    subject: channel === NotificationChannel.EMAIL ? subject : null,
-    body,
-    isTransactional: false,
-    sourceType: "TEAM_PLAYER_PROSPECT",
-    sourceId: prospect.id,
-    emailBranding:
-      channel === NotificationChannel.EMAIL
-        ? {
-            teamName: prospect.team.name,
-            leagueName: prospect.team.league
-              ? `${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}`
-              : null,
-          }
-        : undefined,
-    emailCta:
-      channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
-        ? {
-            label: ctaLabel,
-            url: ctaUrl,
-          }
-        : undefined,
-    metadata: {
-      origin: "prospect_communications_hub",
-      originLabel: "Sent from communications hub",
-      teamId,
-      prospectId: prospect.id,
-      templateId,
-      templateKey,
-      ctaLabel,
-      ctaUrl,
-    },
-    createdByUserId: user?.id ?? null,
-  });
-
-  await logNotificationDispatchToThread({
-    dispatch,
-    recipient,
-  });
-
-  await prisma.teamPlayerProspect.update({
-    where: { id: prospect.id },
-    data: {
-      ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
-      lastContactedAt: new Date(),
-    },
-  });
-
-  redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
-}
-
-export async function sendLeagueCommunicationMessageAction(formData: FormData) {
-  const { user } = await requireAdmin();
-
-  const leagueId = getTrimmedValue(formData.get("leagueId"));
-  const from = getSafeRedirectPath(
-    formData.get("from"),
-    `/admin/leagues/${leagueId}/communications`,
-  );
-  const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
-  const subject = getTrimmedValue(formData.get("subject"));
-  const body = getTrimmedValue(formData.get("body"));
-  const templateId = getTrimmedValue(formData.get("templateId")) || null;
-  const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
-  const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
-  const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
-  const selectedTeamIds = formData
-    .getAll("teamIds")
-    .map((value) => String(value).trim())
-    .filter(Boolean);
-
-  if (!leagueId) {
-    redirect("/admin/leagues?error=missing_id");
-  }
-
-  if (!body) {
-    redirect(`${from}?error=Message%20body%20is%20required.`);
-  }
-
-  const channel =
-    channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
-
-  if (channel === NotificationChannel.EMAIL && !subject) {
-    redirect(`${from}?error=Email%20subject%20is%20required.`);
-  }
-
-  redirectIfUnresolvedTemplatePlaceholder({
-    from,
-    subject: channel === NotificationChannel.EMAIL ? subject : null,
-    body,
-  });
-
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true },
-  });
-
-  if (!league) {
-    redirect("/admin/leagues?error=missing_id");
-  }
-
-  const teams = await prisma.team.findMany({
-    where: {
-      leagueId,
-      ...(selectedTeamIds.length > 0
-        ? {
-            id: {
-              in: selectedTeamIds,
-            },
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-    },
-    orderBy: [{ name: "asc" }],
-  });
-
-  if (teams.length === 0) {
-    redirect(`${from}?error=No%20teams%20selected%20for%20this%20league%20message.`);
-  }
-
-  let deliveredCount = 0;
-  let skippedCount = 0;
-  let failedCount = 0;
-  const failedTeamNames: string[] = [];
-
-  for (const team of teams) {
-    try {
-      const result = await sendTeamBroadcastMessage({
-        teamId: team.id,
+  try {
+    if (recipientType === "team") {
+      await sendTeamBroadcastMessage({
+        teamId,
         channel,
+        subject: subject || null,
+        body,
+        from,
+        createdByUserId: user?.id ?? null,
+      });
+    } else {
+      const context = await getTeamCommunicationRecipientContext({
+        teamId,
+        recipientType,
+        recipientId,
+      });
+
+      const dispatch = await queueDirectNotification({
+        recipientId: context.recipient.id,
+        channel,
+        audience: context.audience,
         subject: channel === NotificationChannel.EMAIL ? subject : null,
         body,
-        templateId,
-        templateKey,
-        ctaLabel,
-        ctaUrl,
-        origin: "league_communications_hub",
-        originLabel: "Sent from league communications hub",
+        isTransactional: false,
+        sourceType: context.sourceType,
+        sourceId: context.sourceId,
         metadata: {
-          leagueId,
-          broadcastType: "league",
+          ...context.metadata,
+          teamId,
+          origin: "admin_team_communications",
+          originLabel: "Sent from team communications",
+          emailBranding: context.emailBranding,
         },
         createdByUserId: user?.id ?? null,
       });
 
-      if (result.skipped) {
-        skippedCount += 1;
-      } else {
-        deliveredCount += 1;
-      }
-    } catch (error) {
-      failedCount += 1;
-      failedTeamNames.push(team.name);
-
-      console.error("League communication failed for team", {
-        leagueId,
-        teamId: team.id,
-        teamName: team.name,
-        channel,
-        error: getErrorMessage(error),
+      await logNotificationDispatchToThread({
+        dispatch,
+        recipient: context.recipient,
       });
     }
+
+    redirect(`${from}?saved=${encodeURIComponent("Message queued.")}`);
+  } catch (error) {
+    redirect(`${from}?error=${encodeURIComponent(getErrorMessage(error))}`);
   }
-
-  if (deliveredCount === 0 && failedCount > 0) {
-    const failedNames = failedTeamNames.slice(0, 3).join(", ");
-    const suffix = failedTeamNames.length > 3 ? ` and ${failedTeamNames.length - 3} more` : "";
-
-    redirect(
-      `${from}?error=${encodeURIComponent(
-        `No ${channel.toLowerCase()} messages were queued. ${failedCount} team${failedCount === 1 ? "" : "s"} failed${failedNames ? `: ${failedNames}${suffix}` : ""}. Check the server logs for the exact error.`,
-      )}`,
-    );
-  }
-
-  const params = new URLSearchParams({
-    saved: "queued",
-    channel: channel.toLowerCase(),
-    count: String(deliveredCount),
-    skipped: String(skippedCount),
-    failed: String(failedCount),
-  });
-
-  if (failedCount > 0) {
-    const failedNames = failedTeamNames.slice(0, 3).join(", ");
-    const suffix = failedTeamNames.length > 3 ? ` and ${failedTeamNames.length - 3} more` : "";
-    params.set(
-      "warning",
-      `${failedCount} team${failedCount === 1 ? "" : "s"} failed${failedNames ? `: ${failedNames}${suffix}` : ""}.`,
-    );
-  }
-
-  redirect(`${from}?${params.toString()}`);
 }
