@@ -37,6 +37,32 @@ function stripCtaPlaceholder(value: string) {
   return value.replace(/\{\{\s*cta\s*\}\}/gi, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+async function recordSuccessfulLogin(input: { userId?: string | null; email?: string | null }) {
+  const userId = input.userId?.trim() || null;
+  const email = input.email?.trim().toLowerCase() || null;
+
+  try {
+    if (userId) {
+      await prisma.$executeRaw`
+        UPDATE "User"
+        SET "lastLoginAt" = NOW()
+        WHERE "id" = ${userId}
+      `;
+      return;
+    }
+
+    if (email) {
+      await prisma.$executeRaw`
+        UPDATE "User"
+        SET "lastLoginAt" = NOW()
+        WHERE LOWER("email") = ${email}
+      `;
+    }
+  } catch (error) {
+    console.warn("Could not record successful login timestamp", error);
+  }
+}
+
 async function getPendingSquadActivationContext(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -175,6 +201,15 @@ export const authOptions: NextAuthOptions = {
     error: "/login",
   },
   debug: process.env.NEXTAUTH_DEBUG === "true",
+
+  events: {
+    async signIn({ user }) {
+      await recordSuccessfulLogin({
+        userId: user.id,
+        email: user.email,
+      });
+    },
+  },
 
   callbacks: {
     async signIn({ user, account }) {
