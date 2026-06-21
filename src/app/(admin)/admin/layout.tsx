@@ -15,6 +15,7 @@ import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditBut
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
+import PlayerProspectsNotInterestedBridge from "@/components/admin/player-prospects/PlayerProspectsNotInterestedBridge";
 import AdminSocialResultsGeneratorLinksBridge from "@/components/admin/social/AdminSocialResultsGeneratorLinksBridge";
 import AppHeader from "@/components/layout/AppHeader";
 
@@ -42,6 +43,7 @@ export default async function AdminLayout({
       <AdminLeadEditButtonBridge />
       <AdminSocialResultsGeneratorLinksBridge />
       <EmailTemplateListControlsBridge />
+      <PlayerProspectsNotInterestedBridge />
       <AdminSidebarDesktopColumnsBridge />
       <AppHeader variant="admin" />
 
