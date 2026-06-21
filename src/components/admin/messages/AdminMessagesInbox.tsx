@@ -41,12 +41,7 @@ type InboxThreadListItem = {
   latestInboundAt: string | null;
   latestOutboundAt: string | null;
   team: InboxTeam | null;
-  league: {
-    id: string;
-    name: string;
-    season: string | null;
-    slug: string;
-  } | null;
+  league: InboxLeague | null;
   latestMessage: {
     id: string;
     direction: "INBOUND" | "OUTBOUND";
@@ -70,12 +65,7 @@ type SelectedThread = {
   latestInboundAt: string | null;
   latestOutboundAt: string | null;
   team: InboxTeam | null;
-  league: {
-    id: string;
-    name: string;
-    season: string | null;
-    slug: string;
-  } | null;
+  league: InboxLeague | null;
   recipient: {
     id: string;
     displayName: string | null;
@@ -96,7 +86,7 @@ type SelectedThread = {
     toNumber: string | null;
     fromEmail: string | null;
     toEmail: string | null;
-    providerStatus: string | null;
+    providerStatus?: string | null;
     sentAt: string | null;
     receivedAt: string | null;
     readAt: string | null;
@@ -118,7 +108,7 @@ type AdminMessagesInboxProps = {
   selectedFilter: "unread" | "open" | "archived" | "all";
   selectedThreadId: string | null;
   selectedThread: SelectedThread;
-  leagues: InboxLeague[];
+  leagues?: InboxLeague[];
 };
 
 function formatDateTime(value: string | null) {
@@ -177,7 +167,7 @@ export default function AdminMessagesInbox({
   selectedFilter,
   selectedThreadId,
   selectedThread,
-  leagues,
+  leagues = [],
 }: AdminMessagesInboxProps) {
   const filterItems = useMemo(
     () => [
@@ -255,9 +245,7 @@ export default function AdminMessagesInbox({
                           : "border-white/10 bg-black/20 hover:border-white/15 hover:bg-white/[0.04]"
                     }`}
                   >
-                    {hasUnreadInbound ? (
-                      <div className="absolute inset-y-0 left-0 w-1.5 bg-amber-300" />
-                    ) : null}
+                    {hasUnreadInbound ? <div className="absolute inset-y-0 left-0 w-1.5 bg-amber-300" /> : null}
 
                     <div className="flex items-start gap-3">
                       <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold ${hasUnreadInbound ? "border-amber-300/30 bg-amber-300/10 text-amber-100" : "border-white/10 bg-white/[0.04] text-white"}`}>
@@ -304,17 +292,11 @@ export default function AdminMessagesInbox({
 
                         {hasUnreadInbound ? (
                           <div className="mt-3 rounded-2xl border border-amber-300/20 bg-black/20 px-3 py-2">
-                            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">
-                              Unread inbound message
-                            </div>
-                            <div className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-white">
-                              {getPreviewText(thread)}
-                            </div>
+                            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">Unread inbound message</div>
+                            <div className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-white">{getPreviewText(thread)}</div>
                           </div>
                         ) : (
-                          <div className="mt-3 line-clamp-2 text-sm leading-6 text-white/65">
-                            {getPreviewText(thread)}
-                          </div>
+                          <div className="mt-3 line-clamp-2 text-sm leading-6 text-white/65">{getPreviewText(thread)}</div>
                         )}
 
                         <div className="mt-3 flex items-center justify-between gap-3 text-xs text-white/40">
@@ -337,7 +319,7 @@ export default function AdminMessagesInbox({
         </div>
       </div>
 
-      <AdminMessageThreadReplyRouter selectedFilter={selectedFilter} thread={selectedThread} />
+      <AdminMessageThreadReplyRouter selectedFilter={selectedFilter} thread={selectedThread as never} />
     </section>
   );
 }
