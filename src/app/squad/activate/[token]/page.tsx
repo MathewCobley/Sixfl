@@ -46,24 +46,28 @@ function buildLoginUrl(input: { token: string; email: string | null }) {
   return `/login?${params.toString()}`;
 }
 
+function InvalidActivationLinkCard() {
+  return (
+    <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
+      <div className="mx-auto max-w-2xl rounded-3xl border border-red-400/20 bg-red-500/10 p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-200/80">
+          Activation link
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold">This activation link is not valid</h1>
+        <p className="mt-3 text-sm leading-6 text-red-100/80">
+          Please ask your team organiser to send you a fresh squad activation email.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default async function SquadActivationPage({ params }: PageProps) {
   const { token } = await params;
   const prospectId = verifySquadActivationToken(token);
 
   if (!prospectId) {
-    return (
-      <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
-        <div className="mx-auto max-w-2xl rounded-3xl border border-red-400/20 bg-red-500/10 p-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-200/80">
-            Activation link
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold">This activation link is not valid</h1>
-          <p className="mt-3 text-sm leading-6 text-red-100/80">
-            Please ask your team organiser to send you a fresh squad activation email.
-          </p>
-        </div>
-      </div>
-    );
+    return <InvalidActivationLinkCard />;
   }
 
   const prospect = await prisma.teamPlayerProspect.findUnique({
@@ -101,7 +105,15 @@ export default async function SquadActivationPage({ params }: PageProps) {
     },
   });
 
-  if (!prospect || prospect.status !== "ACTIVE_SQUAD") {
+  if (!prospect) {
+    return <InvalidActivationLinkCard />;
+  }
+
+  if (!prospect.teamId || !prospect.team) {
+    return <InvalidActivationLinkCard />;
+  }
+
+  if (prospect.status !== "ACTIVE_SQUAD") {
     return (
       <div className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
         <div className="mx-auto max-w-2xl rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6">
@@ -113,7 +125,7 @@ export default async function SquadActivationPage({ params }: PageProps) {
             This can happen if your account has already been linked or the squad place has been changed by the organiser.
           </p>
           <Link
-            href={`/player/team/${prospect?.teamId ?? ""}`}
+            href={`/player/team/${prospect.teamId}`}
             className="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
           >
             Go to team area
