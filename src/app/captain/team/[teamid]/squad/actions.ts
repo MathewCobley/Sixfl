@@ -13,10 +13,14 @@ import {
   TeamRole,
 } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
-import { requireCaptain } from "@/lib/requireCaptain";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { queueDirectNotification } from "@/lib/notifications/service";
+import { prisma } from "@/lib/prisma";
+import { requireCaptain } from "@/lib/requireCaptain";
+import {
+  findSquadDuplicateMatches,
+  getDuplicateBlockMessage,
+} from "@/lib/squad/duplicateGuard";
 
 const ALLOWED_ROLES: TeamRole[] = [
   "CAPTAIN",
@@ -174,6 +178,16 @@ export async function addSquadMemberAction(formData: FormData) {
 
   if (!email) {
     redirect(getErrorRedirect(teamid, "Enter an email address."));
+  }
+
+  const duplicateMatches = await findSquadDuplicateMatches({
+    teamId: teamid,
+    candidate: { email },
+  });
+  const duplicateMessage = getDuplicateBlockMessage(duplicateMatches);
+
+  if (duplicateMessage) {
+    redirect(getErrorRedirect(teamid, duplicateMessage));
   }
 
   const user = await prisma.user.findUnique({
@@ -419,43 +433,28 @@ export async function sendSquadEmailAction(formData: FormData) {
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
-    select: {
-      id: true,
-      name: true,
-      members: {
-        where: {
-          id: { in: selectedMemberIds },
-        },
-        select: {
-          id: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-    },
+    select: { id: true, name: true },
   });
 
   if (!team) {
     redirect(getErrorRedirect(teamid, "Team not found."));
   }
 
-  const recipients = team.members.filter((member) => Boolean(member.user.email?.trim()));
+  const members = await prisma.teamMember.findMany({
+    where: { id: { in: selectedMemberIds }, teamId: teamid },
+    include: { user: true },
+  });
+
+  const recipients = members.filter((member) => Boolean(member.user.email?.trim()));
 
   if (recipients.length === 0) {
-    redirect(getErrorRedirect(teamid, "None of the selected squad members have an email address."));
+    redirect(getErrorRedirect(teamid, "No selected squad members have email addresses."));
   }
 
   for (const member of recipients) {
-    const email = member.user.email?.trim().toLowerCase();
-    if (!email) continue;
-
-    const firstName = (member.user.name || "").trim().split(/\s+/).filter(Boolean)[0] || "there";
-    const fullName = member.user.name?.trim() || firstName;
+    const email = member.user.email!.trim();
+    const firstName = (member.user.name ?? email).split(/\s+/)[0] ?? "there";
+    const fullName = member.user.name ?? email;
     const personalisedSubject = personaliseSquadText(subject, {
       firstName,
       fullName,
@@ -467,142 +466,28 @@ export async function sendSquadEmailAction(formData: FormData) {
       teamName: team.name,
     });
 
-    const recipient = await ensureSquadUserNotificationRecipient({
-      userId: member.user.id,
-      email,
-      displayName: member.user.name?.trim() || null,
-      teamId: teamid,
-      teamName: team.name,
-    });
-
     await queueDirectNotification({
-      recipientId: recipient.id,
       channel: NotificationChannel.EMAIL,
-      audience: NotificationAudience.USER,
+      audience: NotificationAudience.PLAYER,
+      recipientSourceType: NotificationRecipientSourceType.USER,
+      recipientSourceId: member.user.id,
       subject: personalisedSubject,
       body: personalisedBody,
       isTransactional: false,
-      sourceType: "TEAM",
-      sourceId: teamid,
+      sourceType: "TEAM_MEMBER",
+      sourceId: member.id,
+      templateId,
+      templateKey,
       metadata: {
-        origin: "admin_managed_squad_email",
-        originLabel: "Sent to squad from admin managed squad tools",
-        teamId: teamid,
-        membershipId: member.id,
-        userId: member.user.id,
-        templateId,
-        templateKey,
+        origin: "captain_squad_email",
+        originLabel: "Sent to squad member from captain hub",
+        teamId: team.id,
+        memberId: member.id,
       },
       createdByUserId: user?.id ?? null,
     });
   }
 
   revalidatePath(`/captain/team/${teamid}/squad`);
-  revalidatePath(`/captain/team/${teamid}/captain-squad`);
-  redirect(getSuccessRedirect(teamid, `squad-email-sent`));
-}
-
-export async function sendSquadSmsAction(formData: FormData) {
-  const teamid = String(formData.get("teamid") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
-  const selectedMemberIds = formData
-    .getAll("memberIds")
-    .map((value) => String(value).trim())
-    .filter(Boolean);
-
-  const { user } = await requireAdminSquadAccess(teamid);
-
-  if (!body) {
-    redirect(getErrorRedirect(teamid, "SMS body is required."));
-  }
-
-  if (selectedMemberIds.length === 0) {
-    redirect(getErrorRedirect(teamid, "Select at least one squad member."));
-  }
-
-  const team = await prisma.team.findUnique({
-    where: { id: teamid },
-    select: {
-      id: true,
-      name: true,
-      members: {
-        where: {
-          id: { in: selectedMemberIds },
-        },
-        select: {
-          id: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!team) {
-    redirect(getErrorRedirect(teamid, "Team not found."));
-  }
-
-  const recipients = await prisma.notificationRecipient.findMany({
-    where: {
-      sourceType: NotificationRecipientSourceType.USER,
-      sourceId: {
-        in: team.members.map((member) => member.user.id),
-      },
-    },
-    select: {
-      id: true,
-      sourceId: true,
-      phone: true,
-    },
-  });
-
-  const recipientByUserId = new Map(recipients.map((recipient) => [recipient.sourceId || "", recipient]));
-
-  const smsTargets = team.members
-    .map((member) => ({
-      member,
-      recipient: recipientByUserId.get(member.user.id) ?? null,
-    }))
-    .filter((item) => Boolean(item.recipient?.phone?.trim()));
-
-  if (smsTargets.length === 0) {
-    redirect(getErrorRedirect(teamid, "None of the selected squad members have a linked mobile number."));
-  }
-
-  for (const item of smsTargets) {
-    const firstName = (item.member.user.name || "").trim().split(/\s+/).filter(Boolean)[0] || "there";
-    const fullName = item.member.user.name?.trim() || firstName;
-    const personalisedBody = personaliseSquadText(body, {
-      firstName,
-      fullName,
-      teamName: team.name,
-    });
-
-    await queueDirectNotification({
-      recipientId: item.recipient!.id,
-      channel: NotificationChannel.SMS,
-      audience: NotificationAudience.USER,
-      body: personalisedBody,
-      isTransactional: false,
-      sourceType: "TEAM",
-      sourceId: teamid,
-      metadata: {
-        origin: "admin_managed_squad_sms",
-        originLabel: "Sent to squad from admin managed squad tools",
-        teamId: teamid,
-        membershipId: item.member.id,
-        userId: item.member.user.id,
-      },
-      createdByUserId: user?.id ?? null,
-    });
-  }
-
-  revalidatePath(`/captain/team/${teamid}/squad`);
-  revalidatePath(`/captain/team/${teamid}/captain-squad`);
-  redirect(getSuccessRedirect(teamid, `squad-sms-sent`));
+  redirect(getSuccessRedirect(teamid, "squad-email-sent"));
 }
