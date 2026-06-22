@@ -4,6 +4,7 @@
 
 import type { ReactNode } from "react";
 import AppHeader from "@/components/layout/AppHeader";
+import PublicAiPredictorDuplicateTextFix from "@/components/layout/PublicAiPredictorDuplicateTextFix";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
 import SiteFooter from "@/components/layout/SiteFooter";
@@ -18,6 +19,7 @@ export default function PublicLayout({
       <AppHeader variant="public" />
       <PublicLeagueLandingSpacingBridge />
       <PublicFixtureWinChanceBridge />
+      <PublicAiPredictorDuplicateTextFix />
       <main className="bg-black">{children}</main>
       <SiteFooter />
     </div>
