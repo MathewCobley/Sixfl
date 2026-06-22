@@ -251,7 +251,7 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
 
   const helper = document.createElement("div");
   helper.className = "mt-1 text-xs text-white/45";
-  helper.textContent = `OpenAI match preview · ${fixture.winChance.confidence} confidence · Just for fun`;
+  helper.textContent = `Match preview · ${fixture.winChance.confidence} confidence · Just for fun`;
 
   headingWrap.appendChild(eyebrow);
   headingWrap.appendChild(helper);
