@@ -173,6 +173,7 @@ export async function POST(request: Request) {
         kickoffAt: true,
         pitch: true,
         status: true,
+        publishedAt: true,
         homeTeam: {
           select: {
             id: true,
@@ -223,6 +224,13 @@ export async function POST(request: Request) {
 
   if (!fixture || !league || !nextHomeTeam || !nextAwayTeam) {
     return NextResponse.json({ error: "Fixture or team not found." }, { status: 404 });
+  }
+
+  if (!fixture.publishedAt) {
+    return NextResponse.json({
+      queued: 0,
+      reason: "Draft fixture changes are not emailed until fixtures have been published.",
+    });
   }
 
   const changeLines = buildChangeLines({
