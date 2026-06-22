@@ -8,10 +8,17 @@ import { Fragment } from "react";
 import { Listbox, Transition } from "@headlessui/react";
 import { ChevronUpDownIcon, CheckIcon } from "@heroicons/react/20/solid";
 
-export type TemplateOption = {
-  value: string;
-  label: string;
-};
+export type TemplateOption =
+  | {
+      value: string;
+      label: string;
+      description?: string | null;
+    }
+  | {
+      id: string;
+      name: string;
+      description?: string | null;
+    };
 
 type Props = {
   label?: string;
@@ -22,6 +29,14 @@ type Props = {
   placeholder?: string;
 };
 
+function getOptionValue(option: TemplateOption) {
+  return "value" in option ? option.value : option.id;
+}
+
+function getOptionLabel(option: TemplateOption) {
+  return "label" in option ? option.label : option.name;
+}
+
 export default function TemplateSelect({
   label = "Email template",
   value,
@@ -30,7 +45,7 @@ export default function TemplateSelect({
   disabled = false,
   placeholder = "Select email template",
 }: Props) {
-  const selected = options.find((option) => option.value === value) ?? null;
+  const selected = options.find((option) => getOptionValue(option) === value) ?? null;
   const hasSelection = !!selected;
 
   return (
@@ -55,7 +70,7 @@ export default function TemplateSelect({
                 hasSelection ? "text-white" : "text-white/45",
               ].join(" ")}
             >
-              {hasSelection ? selected.label : placeholder}
+              {hasSelection ? getOptionLabel(selected) : placeholder}
             </span>
 
             <ChevronUpDownIcon
@@ -75,40 +90,45 @@ export default function TemplateSelect({
               leaveTo="opacity-0 translate-y-1"
             >
               <Listbox.Options className="absolute z-[100] mt-2 max-h-64 w-full overflow-auto rounded-xl border border-white/10 bg-zinc-950 p-1 shadow-2xl ring-1 ring-black/40 focus:outline-none">
-                {options.map((option) => (
-                  <Listbox.Option
-                    key={option.value}
-                    value={option.value}
-                    className={({ active }) =>
-                      [
-                        "relative cursor-pointer select-none rounded-lg px-3 py-2.5 pr-10 text-sm transition",
-                        active ? "bg-white/8 text-white" : "text-white/85",
-                      ].join(" ")
-                    }
-                  >
-                    {({ selected }) => (
-                      <>
-                        <span
-                          className={[
-                            "block truncate",
-                            selected ? "font-medium text-emerald-300" : "",
-                          ].join(" ")}
-                        >
-                          {option.label}
-                        </span>
+                {options.map((option) => {
+                  const optionValue = getOptionValue(option);
+                  const optionLabel = getOptionLabel(option);
 
-                        {selected ? (
-                          <span className="absolute inset-y-0 right-3 flex items-center text-emerald-400">
-                            <CheckIcon
-                              className="h-5 w-5"
-                              aria-hidden="true"
-                            />
+                  return (
+                    <Listbox.Option
+                      key={optionValue}
+                      value={optionValue}
+                      className={({ active }) =>
+                        [
+                          "relative cursor-pointer select-none rounded-lg px-3 py-2.5 pr-10 text-sm transition",
+                          active ? "bg-white/8 text-white" : "text-white/85",
+                        ].join(" ")
+                      }
+                    >
+                      {({ selected }) => (
+                        <>
+                          <span
+                            className={[
+                              "block truncate",
+                              selected ? "font-medium text-emerald-300" : "",
+                            ].join(" ")}
+                          >
+                            {optionLabel}
                           </span>
-                        ) : null}
-                      </>
-                    )}
-                  </Listbox.Option>
-                ))}
+
+                          {selected ? (
+                            <span className="absolute inset-y-0 right-3 flex items-center text-emerald-400">
+                              <CheckIcon
+                                className="h-5 w-5"
+                                aria-hidden="true"
+                              />
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </Listbox.Option>
+                  );
+                })}
               </Listbox.Options>
             </Transition>
           )}
