@@ -61,7 +61,13 @@ function truncateSentence(value: string, maxLength: number) {
   const cleaned = cleanText(value);
   if (cleaned.length <= maxLength) return cleaned;
 
-  return `${cleaned.slice(0, maxLength - 1).trim()}…`;
+  const hardCut = cleaned.slice(0, maxLength - 1).trim();
+  const lastSpace = hardCut.lastIndexOf(" ");
+  const wordBoundaryCut = lastSpace > Math.floor(maxLength * 0.65)
+    ? hardCut.slice(0, lastSpace).trim()
+    : hardCut;
+
+  return `${wordBoundaryCut.replace(/[.,;:!?-]+$/, "")}…`;
 }
 
 function getFavourite(input: FixtureAiPreviewInput) {
@@ -117,7 +123,7 @@ function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAi
   if (!cleaned) return getFallbackFixtureAiPreview(input);
 
   const [firstSentence, ...rest] = cleaned.split(/(?<=[.!?])\s+/);
-  const headline = truncateSentence(firstSentence || "SIXFL AI Predictor", 78);
+  const headline = truncateSentence(firstSentence || "SIXFL AI Predictor", 96);
   const summary = truncateSentence(rest.join(" ") || cleaned, 260);
 
   return {
