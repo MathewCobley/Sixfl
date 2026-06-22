@@ -41,6 +41,7 @@ type RecipientOption = {
   value: string;
   type: "team" | "teamMember" | "prospect";
   label: string;
+  templateName: string;
   email: string | null;
   phone: string | null;
   roleLabel?: string | null;
@@ -262,6 +263,7 @@ export default function TeamCommunicationsComposer({
     : `${siteUrl}/admin/teams/${teamId}/availability`;
   const adminMatchFeesUrl = `${siteUrl}/admin/teams/${teamId}/match-fees`;
   const captainUrl = captainDashboardUrl?.trim() || claimLink?.trim() || `${siteUrl}/captain/team/${teamId}`;
+  const teamContactTemplateName = contactName?.trim() || "there";
 
   const recipientOptions = useMemo<RecipientOption[]>(
     () => [
@@ -270,7 +272,10 @@ export default function TeamCommunicationsComposer({
             {
               value: getRecipientValue({ type: "team" }),
               type: "team" as const,
-              label: `${teamName} team contact`,
+              label: contactName?.trim()
+                ? `${contactName.trim()} · ${teamName} team contact`
+                : `${teamName} team contact`,
+              templateName: contactName?.trim() || "there",
               email: toEmail,
               phone: toPhone,
               roleLabel: "Team contact",
@@ -282,13 +287,14 @@ export default function TeamCommunicationsComposer({
         value: getRecipientValue({ type: recipient.type, id: recipient.id }),
         type: recipient.type,
         label: recipient.label,
+        templateName: recipient.label,
         email: recipient.email,
         phone: recipient.phone,
         roleLabel: recipient.roleLabel,
         statusLabel: recipient.statusLabel,
       })),
     ],
-    [playerRecipients, showTeamContactRecipient, teamName, toEmail, toPhone],
+    [contactName, playerRecipients, showTeamContactRecipient, teamName, toEmail, toPhone],
   );
 
   const selectedRecipients = useMemo(() => {
@@ -301,18 +307,21 @@ export default function TeamCommunicationsComposer({
   const selectedEmailCount = selectedRecipients.filter((recipient) => recipient.email?.trim()).length;
   const selectedSmsCount = selectedRecipients.filter((recipient) => recipient.phone?.trim()).length;
 
-  const templateContext = useMemo(
-    () => ({
-      firstName: selectedCount === 1 ? getFirstName(primaryRecipient?.label || contactName) : "",
-      fullName: selectedCount === 1 ? primaryRecipient?.label || contactName?.trim() || "" : "",
+  const templateContext = useMemo(() => {
+    const templateName = selectedCount === 1
+      ? primaryRecipient?.templateName?.trim() || teamContactTemplateName
+      : "";
+
+    return {
+      firstName: selectedCount === 1 ? getFirstName(templateName) || "there" : "",
+      fullName: selectedCount === 1 ? templateName || "there" : "",
       teamName: teamName.trim(),
       leagueName: leagueName?.trim() || "",
       claimCode: claimCode?.trim() || "",
       claimLink: claimLink?.trim() || "",
       captainDashboardUrl: captainUrl,
-    }),
-    [captainUrl, claimCode, claimLink, contactName, leagueName, primaryRecipient?.label, selectedCount, teamName],
-  );
+    };
+  }, [captainUrl, claimCode, claimLink, leagueName, primaryRecipient?.templateName, selectedCount, teamContactTemplateName, teamName]);
 
   const selectedEmailTemplate = useMemo(
     () => emailTemplates.find((template) => template.id === selectedEmailTemplateId) ?? null,
@@ -388,410 +397,312 @@ export default function TeamCommunicationsComposer({
     setSmsBody(resolveText(template.body, templateContext));
   }
 
-  function toggleRecipient(value: string) {
-    setSelectedRecipientValues((current) => {
-      if (current.includes(value)) {
-        const next = current.filter((item) => item !== value);
-        return next.length ? next : current;
-      }
+  useEffect(() => {
+    if (!selectedEmailTemplate) return;
 
-      return [...current, value];
-    });
-  }
+    setEmailSubject(resolveText(selectedEmailTemplate.subject, templateContext));
+    setEmailBody(resolveText(selectedEmailTemplate.body, templateContext));
+  }, [selectedEmailTemplate, templateContext]);
 
-  function selectAllPlayers() {
-    const playerValues = recipientOptions
-      .filter((recipient) => recipient.type !== "team")
-      .map((recipient) => recipient.value);
+  useEffect(() => {
+    if (!selectedSmsTemplate) return;
 
-    setSelectedRecipientValues(playerValues.length ? playerValues : [fallbackRecipientValue]);
-  }
+    setSmsBody(resolveText(selectedSmsTemplate.body, templateContext));
+  }, [selectedSmsTemplate, templateContext]);
 
-  function selectAll() {
-    const allValues = recipientOptions.map((recipient) => recipient.value);
-    setSelectedRecipientValues(allValues.length ? allValues : [fallbackRecipientValue]);
-  }
-
-  function clearToPrimaryOnly() {
-    setSelectedRecipientValues([fallbackRecipientValue]);
-  }
-
-  function selectAvailabilityGroup(response: AvailabilityResponse) {
-    const values = recipientOptions
-      .filter((recipient) => {
-        if (recipient.type !== "teamMember") return false;
-        return availabilityByRecipientValue[recipient.value]?.response === response;
-      })
-      .map((recipient) => recipient.value);
-
-    if (values.length) {
-      setSelectedRecipientValues(values);
-    }
-  }
-
-  function insertEmailSnippet(snippet: string) {
+  function appendToEmail(snippet: string) {
     setEmailBody((current) => appendSnippet(current, snippet));
   }
 
-  function insertSmsSnippet(snippet: string) {
+  function appendToSms(snippet: string) {
     setSmsBody((current) => appendSnippet(current, snippet));
   }
 
-  const quickLinks = [
-    {
-      label: "Availability link",
-      emailSnippet: `Please confirm your availability here:\n${availabilityUrl}`,
-      smsSnippet: `Please confirm your availability here: ${availabilityUrl}`,
-    },
-    {
-      label: "Player dashboard",
-      emailSnippet: `Open your SIXFL player dashboard here:\n${playerDashboardUrl}`,
-      smsSnippet: `Open your SIXFL player dashboard here: ${playerDashboardUrl}`,
-    },
-    {
-      label: "Captain/dashboard link",
-      emailSnippet: `Open the SIXFL team dashboard here:\n${captainUrl}`,
-      smsSnippet: `Open the SIXFL team dashboard here: ${captainUrl}`,
-    },
-    {
-      label: "Admin availability",
-      emailSnippet: `Admin availability dashboard:\n${adminAvailabilityUrl}`,
-      smsSnippet: `Admin availability dashboard: ${adminAvailabilityUrl}`,
-    },
-    {
-      label: "Match fees",
-      emailSnippet: `Match fees dashboard:\n${adminMatchFeesUrl}`,
-      smsSnippet: `Match fees dashboard: ${adminMatchFeesUrl}`,
-    },
-  ];
+  const availabilitySnippet = latestAvailability?.fixture
+    ? [
+        `Availability link for ${latestAvailability.fixture.label}:`,
+        availabilityUrl,
+      ].join("\n")
+    : ["Availability link:", availabilityUrl].join("\n");
+  const adminAvailabilitySnippet = latestAvailability?.fixture
+    ? [
+        `Admin availability view for ${latestAvailability.fixture.label}:`,
+        adminAvailabilityUrl,
+      ].join("\n")
+    : ["Admin availability view:", adminAvailabilityUrl].join("\n");
+  const matchFeesSnippet = ["Match fee admin link:", adminMatchFeesUrl].join("\n");
+  const playerDashboardSnippet = ["Player dashboard link:", playerDashboardUrl].join("\n");
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6">
-        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300/80">
-          Recipients
+    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+            Outbound message
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Compose message</h2>
+          <p className="mt-2 text-sm leading-6 text-white/60">
+            Send one-off email or SMS messages. Availability and payment snippets can be added without retyping links.
+          </p>
         </div>
-        <div className="mt-2 text-xl font-semibold text-white">Choose who to contact</div>
-        <p className="mt-1 text-sm text-white/60">
-          Tick one or more recipients. This lets you send the same message to several linked players/prospects at once.
-        </p>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={selectAllPlayers}
-            className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-          >
-            Select all players
-          </button>
-          <button
-            type="button"
-            onClick={selectAll}
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/[0.08]"
-          >
-            Select all
-          </button>
-          <button
-            type="button"
-            onClick={clearToPrimaryOnly}
-            className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/65 transition hover:bg-white/[0.06]"
-          >
-            {showTeamContactRecipient ? "Team contact only" : "Primary recipient only"}
-          </button>
+        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-white/55">
+          {availabilityLoading
+            ? "Loading latest availability…"
+            : latestAvailability?.fixture
+              ? `Latest availability: ${latestAvailability.fixture.label}`
+              : "No upcoming availability fixture found"}
         </div>
+      </div>
 
-        <div className="mt-4 rounded-2xl border border-sky-400/15 bg-sky-500/[0.06] p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-200/70">
-                Latest fixture availability
-              </div>
-              <div className="mt-1 text-sm font-semibold text-white">
-                {availabilityLoading
-                  ? "Loading next fixture..."
-                  : latestAvailability?.fixture?.label ?? "No upcoming fixture found"}
-              </div>
-              <p className="mt-1 text-xs text-white/50">
-                Use this to quickly message players who have not answered, are unavailable, or are maybe for the next match.
-              </p>
-            </div>
-
-            <a
-              href={adminAvailabilityUrl}
-              className="inline-flex items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/15"
-            >
-              Open availability dashboard
-            </a>
+      <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">Recipients</p>
+            <p className="mt-1 text-xs text-white/45">
+              Select one or more recipients. Team contact uses the saved contact name for template fields such as first name.
+            </p>
           </div>
-
-          {latestAvailability?.fixture ? (
-            <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => selectAvailabilityGroup("AVAILABLE")}
-                className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-emerald-100 transition hover:bg-emerald-500/15"
-              >
-                Available: {availabilityCounts.available}
-              </button>
-              <button
-                type="button"
-                onClick={() => selectAvailabilityGroup("MAYBE")}
-                className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-100 transition hover:bg-amber-500/15"
-              >
-                Maybe: {availabilityCounts.maybe}
-              </button>
-              <button
-                type="button"
-                onClick={() => selectAvailabilityGroup("UNAVAILABLE")}
-                className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-red-100 transition hover:bg-red-500/15"
-              >
-                Unavailable: {availabilityCounts.unavailable}
-              </button>
-              <button
-                type="button"
-                onClick={() => selectAvailabilityGroup("NO_RESPONSE")}
-                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65 transition hover:bg-white/[0.08]"
-              >
-                No response: {availabilityCounts.noResponse}
-              </button>
-            </div>
-          ) : null}
+          <div className="flex flex-wrap gap-2 text-xs text-white/55">
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">
+              {selectedCount} selected
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">
+              {selectedEmailCount} email
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">
+              {selectedSmsCount} SMS
+            </span>
+          </div>
         </div>
 
-        <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 grid gap-2 lg:grid-cols-2">
           {recipientOptions.map((recipient) => {
             const checked = selectedRecipientValues.includes(recipient.value);
-            const availability = availabilityByRecipientValue[recipient.value] ?? null;
+            const availability = availabilityByRecipientValue[recipient.value];
 
             return (
               <label
                 key={recipient.value}
-                className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm transition ${
+                className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 transition ${
                   checked
-                    ? "border-emerald-400/30 bg-emerald-500/10 text-white"
-                    : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.05]"
+                    ? "border-emerald-400/30 bg-emerald-500/10"
+                    : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={() => toggleRecipient(recipient.value)}
+                  onChange={(event) => {
+                    setSelectedRecipientValues((current) => {
+                      if (event.target.checked) {
+                        return Array.from(new Set([...current, recipient.value]));
+                      }
+
+                      const next = current.filter((value) => value !== recipient.value);
+                      return next.length ? next : current;
+                    });
+                  }}
                   className="mt-1"
                 />
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold text-white">{recipient.label}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-white">
+                    {recipient.label}
+                  </span>
                   <span className="mt-1 block text-xs text-white/45">
-                    {recipient.type === "team" ? "Team contact" : recipient.type === "teamMember" ? "Linked player" : "Prospect"}
+                    {recipient.email || "No email"}
+                    {recipient.phone ? ` · ${recipient.phone}` : ""}
                     {recipient.roleLabel ? ` · ${recipient.roleLabel}` : ""}
                     {recipient.statusLabel ? ` · ${recipient.statusLabel}` : ""}
                   </span>
-                  <span className="mt-1 block break-all text-xs text-white/50">
-                    Email: {recipient.email || "—"}
-                  </span>
-                  <span className="mt-1 block break-all text-xs text-white/50">
-                    SMS: {recipient.phone || "—"}
-                  </span>
-
-                  {recipient.type === "teamMember" ? (
-                    <span
-                      className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(
-                        availability?.response,
-                      )}`}
-                    >
-                      Latest fixture: {availability?.label ?? getAvailabilityShortLabel()}
+                  {availability ? (
+                    <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(availability.response)}`}>
+                      {availability.label}
+                      {availability.respondedAt ? ` · ${new Date(availability.respondedAt).toLocaleDateString("en-GB")}` : ""}
                     </span>
-                  ) : recipient.type === "prospect" ? (
-                    <span className="mt-2 inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-white/45">
-                      Latest fixture: not linked
+                  ) : (
+                    <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(undefined)}`}>
+                      {getAvailabilityShortLabel(undefined)}
                     </span>
-                  ) : null}
-
-                  {availability?.note ? (
-                    <span className="mt-2 block rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/55">
-                      Note: {availability.note}
-                    </span>
-                  ) : null}
+                  )}
                 </span>
               </label>
             );
           })}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/60">
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-            Selected: {selectedCount}
-          </span>
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-            Email-ready: {selectedEmailCount}
-          </span>
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-            SMS-ready: {selectedSmsCount}
-          </span>
-          {selectedCount > 1 ? (
-            <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-amber-100">
-              Tokens like {"{{firstName}}"} are personalised when queued.
-            </span>
-          ) : null}
-        </div>
+        {latestAvailability?.fixture ? (
+          <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white/60 sm:grid-cols-4">
+            <div><span className="text-emerald-200">Available:</span> {availabilityCounts.available}</div>
+            <div><span className="text-amber-200">Maybe:</span> {availabilityCounts.maybe}</div>
+            <div><span className="text-red-200">Unavailable:</span> {availabilityCounts.unavailable}</div>
+            <div><span className="text-white/50">No response:</span> {availabilityCounts.noResponse}</div>
+          </div>
+        ) : null}
       </div>
 
-      <MarketingToggle
-        checked={isMarketingMessage}
-        onChange={setIsMarketingMessage}
-      />
-
-      <form action={sendTeamCommunicationBulkMessageAction} className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <input type="hidden" name="teamId" value={teamId} />
-        <input type="hidden" name="from" value={fromPath} />
-        <input type="hidden" name="channel" value="EMAIL" />
-        <input type="hidden" name="isMarketing" value={isMarketingMessage ? "1" : "0"} />
-        <input type="hidden" name="templateId" value={selectedEmailTemplate?.id || ""} />
-        <input type="hidden" name="templateKey" value={selectedEmailTemplate?.key || ""} />
-        <input type="hidden" name="ctaLabel" value={selectedEmailTemplate?.ctaLabel || ""} />
-        <input type="hidden" name="ctaUrl" value={selectedEmailTemplate?.ctaUrl || ""} />
-        <input type="hidden" name="claimCode" value={claimCode || ""} />
-        <input type="hidden" name="claimLink" value={claimLink || ""} />
-        <input type="hidden" name="captainDashboardUrl" value={captainUrl} />
-        {selectedRecipientValues.map((value) => (
-          <input key={`email-${value}`} type="hidden" name="recipientValues" value={value} />
-        ))}
-
-        <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">EMAIL</div>
-        <div className="mt-2 text-xl font-semibold text-white">
-          Send email to {selectedEmailCount} selected recipient{selectedEmailCount === 1 ? "" : "s"}
-        </div>
-        <div className="mt-1 text-sm text-white/60">
-          Recipients without email addresses will be skipped.
-        </div>
-
-        <div className="mt-5 space-y-4">
-          <TemplateSelect
-            label="Email template"
-            value={selectedEmailTemplateId}
-            onChange={handleEmailTemplateChange}
-            options={emailTemplates.map((template) => ({ value: template.id, label: template.name }))}
-            placeholder="Select email template"
-          />
-
-          {selectedEmailTemplate?.description ? (
-            <p className="text-xs text-white/45">{selectedEmailTemplate.description}</p>
-          ) : null}
-
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">
-              Insert CTA / link
+      <div className="mt-6 grid gap-5 xl:grid-cols-2">
+        <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-white">Email</h3>
+              <p className="mt-1 text-xs text-white/45">Choose a template or write a fresh email.</p>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {quickLinks.map((link) => (
-                <button
-                  key={`email-${link.label}`}
-                  type="button"
-                  onClick={() => insertEmailSnippet(link.emailSnippet)}
-                  className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                >
-                  {link.label}
-                </button>
-              ))}
-            </div>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/55">
+              {selectedEmailCount} reachable
+            </span>
           </div>
 
-          <input
-            name="subject"
-            value={emailSubject}
-            onChange={(event) => setEmailSubject(event.target.value)}
-            placeholder="Subject"
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-emerald-400"
-          />
-          <textarea
-            name="body"
-            rows={8}
-            value={emailBody}
-            onChange={(event) => setEmailBody(event.target.value)}
-            placeholder="Write your message..."
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-          />
-        </div>
+          <div className="mt-4 space-y-3">
+            <TemplateSelect
+              label="Email template"
+              value={selectedEmailTemplateId}
+              onChange={handleEmailTemplateChange}
+              options={emailTemplates.map((template) => ({
+                id: template.id,
+                name: template.name,
+                description: template.description,
+              }))}
+              placeholder="Choose email template"
+            />
 
-        <button
-          type="submit"
-          disabled={selectedEmailCount === 0}
-          className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35"
-        >
-          Queue email
-        </button>
-      </form>
+            <label className="block space-y-2 text-sm text-white/65">
+              <span>Subject</span>
+              <input
+                name="subject"
+                value={emailSubject}
+                onChange={(event) => setEmailSubject(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-white outline-none transition focus:border-emerald-400/50"
+                placeholder="Subject"
+              />
+            </label>
 
-      <form action={sendTeamCommunicationBulkMessageAction} className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <input type="hidden" name="teamId" value={teamId} />
-        <input type="hidden" name="from" value={fromPath} />
-        <input type="hidden" name="channel" value="SMS" />
-        <input type="hidden" name="isMarketing" value={isMarketingMessage ? "1" : "0"} />
-        <input type="hidden" name="templateId" value={selectedSmsTemplate?.id || ""} />
-        <input type="hidden" name="templateKey" value={selectedSmsTemplate?.key || ""} />
-        <input type="hidden" name="claimCode" value={claimCode || ""} />
-        <input type="hidden" name="claimLink" value={claimLink || ""} />
-        <input type="hidden" name="captainDashboardUrl" value={captainUrl} />
-        {selectedRecipientValues.map((value) => (
-          <input key={`sms-${value}`} type="hidden" name="recipientValues" value={value} />
-        ))}
+            <label className="block space-y-2 text-sm text-white/65">
+              <span>Body</span>
+              <textarea
+                value={emailBody}
+                onChange={(event) => setEmailBody(event.target.value)}
+                rows={10}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-white outline-none transition focus:border-emerald-400/50"
+                placeholder="Write your email..."
+              />
+            </label>
 
-        <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">SMS</div>
-        <div className="mt-2 text-xl font-semibold text-white">
-          Send SMS to {selectedSmsCount} selected recipient{selectedSmsCount === 1 ? "" : "s"}
-        </div>
-        <div className="mt-1 text-sm text-white/60">
-          Recipients without mobile numbers will be skipped. Ask players to use dashboard links rather than replying YES/NO by text.
-        </div>
-
-        <div className="mt-5 space-y-4">
-          <TemplateSelect
-            label="SMS template"
-            value={selectedSmsTemplateId}
-            onChange={handleSmsTemplateChange}
-            options={smsTemplates.map((template) => ({ value: template.id, label: template.name }))}
-            placeholder="Select SMS template"
-          />
-
-          {selectedSmsTemplate?.description ? (
-            <p className="text-xs text-white/45">{selectedSmsTemplate.description}</p>
-          ) : null}
-
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">
-              Insert CTA / link
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => appendToEmail(availabilitySnippet)} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 transition hover:bg-white/[0.08]">
+                Add player availability link
+              </button>
+              <button type="button" onClick={() => appendToEmail(playerDashboardSnippet)} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 transition hover:bg-white/[0.08]">
+                Add player dashboard link
+              </button>
+              <button type="button" onClick={() => appendToEmail(adminAvailabilitySnippet)} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 transition hover:bg-white/[0.08]">
+                Add admin availability link
+              </button>
+              <button type="button" onClick={() => appendToEmail(matchFeesSnippet)} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 transition hover:bg-white/[0.08]">
+                Add match fees link
+              </button>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {quickLinks.map((link) => (
-                <button
-                  key={`sms-${link.label}`}
-                  type="button"
-                  onClick={() => insertSmsSnippet(link.smsSnippet)}
-                  className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                >
-                  {link.label}
-                </button>
+
+            <MarketingToggle checked={isMarketingMessage} onChange={setIsMarketingMessage} />
+
+            <form action={sendTeamCommunicationBulkMessageAction}>
+              <input type="hidden" name="teamId" value={teamId} />
+              <input type="hidden" name="from" value={fromPath} />
+              <input type="hidden" name="channel" value="EMAIL" />
+              <input type="hidden" name="subject" value={emailSubject} />
+              <input type="hidden" name="body" value={emailBody} />
+              <input type="hidden" name="templateId" value={selectedEmailTemplateId} />
+              <input type="hidden" name="templateKey" value={selectedEmailTemplate?.key ?? ""} />
+              <input type="hidden" name="ctaLabel" value={selectedEmailTemplate?.ctaLabel ?? ""} />
+              <input type="hidden" name="ctaUrl" value={selectedEmailTemplate?.ctaUrl ?? ""} />
+              <input type="hidden" name="claimCode" value={claimCode ?? ""} />
+              <input type="hidden" name="claimLink" value={claimLink ?? ""} />
+              <input type="hidden" name="captainDashboardUrl" value={captainUrl} />
+              <input type="hidden" name="isMarketing" value={isMarketingMessage ? "1" : "0"} />
+              {selectedRecipientValues.map((value) => (
+                <input key={value} type="hidden" name="recipientValues" value={value} />
               ))}
+              <button
+                type="submit"
+                disabled={!emailSubject.trim() || !emailBody.trim() || selectedEmailCount === 0}
+                className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Queue email
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-white">SMS</h3>
+              <p className="mt-1 text-xs text-white/45">Use for short, urgent updates only.</p>
             </div>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/55">
+              {selectedSmsCount} reachable
+            </span>
           </div>
 
-          <textarea
-            name="body"
-            rows={8}
-            value={smsBody}
-            onChange={(event) => setSmsBody(event.target.value)}
-            placeholder="Write your SMS..."
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none focus:border-emerald-400"
-          />
-        </div>
+          <div className="mt-4 space-y-3">
+            <TemplateSelect
+              label="SMS template"
+              value={selectedSmsTemplateId}
+              onChange={handleSmsTemplateChange}
+              options={smsTemplates.map((template) => ({
+                id: template.id,
+                name: template.name,
+                description: template.description,
+              }))}
+              placeholder="Choose SMS template"
+            />
 
-        <button
-          type="submit"
-          disabled={selectedSmsCount === 0}
-          className="mt-4 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:text-white/35"
-        >
-          Queue SMS
-        </button>
-      </form>
+            <label className="block space-y-2 text-sm text-white/65">
+              <span>Body</span>
+              <textarea
+                value={smsBody}
+                onChange={(event) => setSmsBody(event.target.value)}
+                rows={8}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-white outline-none transition focus:border-emerald-400/50"
+                placeholder="Write your SMS..."
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => appendToSms(availabilitySnippet)} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 transition hover:bg-white/[0.08]">
+                Add player availability link
+              </button>
+              <button type="button" onClick={() => appendToSms(playerDashboardSnippet)} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 transition hover:bg-white/[0.08]">
+                Add player dashboard link
+              </button>
+            </div>
+
+            <MarketingToggle checked={isMarketingMessage} onChange={setIsMarketingMessage} />
+
+            <form action={sendTeamCommunicationBulkMessageAction}>
+              <input type="hidden" name="teamId" value={teamId} />
+              <input type="hidden" name="from" value={fromPath} />
+              <input type="hidden" name="channel" value="SMS" />
+              <input type="hidden" name="body" value={smsBody} />
+              <input type="hidden" name="templateId" value={selectedSmsTemplateId} />
+              <input type="hidden" name="templateKey" value={selectedSmsTemplate?.key ?? ""} />
+              <input type="hidden" name="claimCode" value={claimCode ?? ""} />
+              <input type="hidden" name="claimLink" value={claimLink ?? ""} />
+              <input type="hidden" name="captainDashboardUrl" value={captainUrl} />
+              <input type="hidden" name="isMarketing" value={isMarketingMessage ? "1" : "0"} />
+              {selectedRecipientValues.map((value) => (
+                <input key={value} type="hidden" name="recipientValues" value={value} />
+              ))}
+              <button
+                type="submit"
+                disabled={!smsBody.trim() || selectedSmsCount === 0}
+                className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Queue SMS
+              </button>
+            </form>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
