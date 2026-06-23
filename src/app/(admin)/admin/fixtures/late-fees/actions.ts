@@ -206,6 +206,7 @@ export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
 
     revalidatePath("/admin/fixtures");
     revalidatePath("/admin/fixtures/late-fees");
+    revalidatePath(`/admin/teams/${teamId}/late-fees`);
     revalidatePath(`/captain/team/${teamId}`);
     revalidatePath(`/captain/team/${teamId}/fixtures`);
   } catch (error) {
@@ -237,6 +238,10 @@ export type LateConfirmationFeeRow = {
   homeLateFeeWarningAt: Date | null;
   homeLateFeeAppliedAt: Date | null;
   homeLateFeeWaivedAt: Date | null;
+  homeHistoryWarnings: number;
+  homeHistoryApplied: number;
+  homeHistoryWaived: number;
+  homeHistoryLateConfirms: number;
   awayConfirmationStatus: string | null;
   awayConfirmedAt: Date | null;
   awayIssueRaisedAt: Date | null;
@@ -247,6 +252,10 @@ export type LateConfirmationFeeRow = {
   awayLateFeeWarningAt: Date | null;
   awayLateFeeAppliedAt: Date | null;
   awayLateFeeWaivedAt: Date | null;
+  awayHistoryWarnings: number;
+  awayHistoryApplied: number;
+  awayHistoryWaived: number;
+  awayHistoryLateConfirms: number;
 };
 
 export async function getLateConfirmationFeeRows() {
@@ -272,6 +281,10 @@ export async function getLateConfirmationFeeRows() {
       home_fee."warningAt" AS "homeLateFeeWarningAt",
       home_fee."appliedAt" AS "homeLateFeeAppliedAt",
       home_fee."waivedAt" AS "homeLateFeeWaivedAt",
+      COALESCE(home_history."warnings", 0)::int AS "homeHistoryWarnings",
+      COALESCE(home_history."applied", 0)::int AS "homeHistoryApplied",
+      COALESCE(home_history."waived", 0)::int AS "homeHistoryWaived",
+      COALESCE(home_late_confirmations."lateConfirms", 0)::int AS "homeHistoryLateConfirms",
       away_confirmation."status"::text AS "awayConfirmationStatus",
       away_confirmation."confirmedAt" AS "awayConfirmedAt",
       away_confirmation."issueRaisedAt" AS "awayIssueRaisedAt",
@@ -281,7 +294,11 @@ export async function getLateConfirmationFeeRows() {
       away_fee."note" AS "awayLateFeeNote",
       away_fee."warningAt" AS "awayLateFeeWarningAt",
       away_fee."appliedAt" AS "awayLateFeeAppliedAt",
-      away_fee."waivedAt" AS "awayLateFeeWaivedAt"
+      away_fee."waivedAt" AS "awayLateFeeWaivedAt",
+      COALESCE(away_history."warnings", 0)::int AS "awayHistoryWarnings",
+      COALESCE(away_history."applied", 0)::int AS "awayHistoryApplied",
+      COALESCE(away_history."waived", 0)::int AS "awayHistoryWaived",
+      COALESCE(away_late_confirmations."lateConfirms", 0)::int AS "awayHistoryLateConfirms"
     FROM "Fixture" fixture
     INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
     INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
@@ -299,6 +316,38 @@ export async function getLateConfirmationFeeRows() {
     LEFT JOIN "FixtureConfirmationLateFee" away_fee
       ON away_fee."fixtureId" = fixture."id"
       AND away_fee."teamId" = fixture."awayTeamId"
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) FILTER (WHERE fee."status" = 'WARNING') AS "warnings",
+        COUNT(*) FILTER (WHERE fee."status" = 'APPLIED') AS "applied",
+        COUNT(*) FILTER (WHERE fee."status" = 'WAIVED') AS "waived"
+      FROM "FixtureConfirmationLateFee" fee
+      WHERE fee."teamId" = fixture."homeTeamId"
+    ) home_history ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) AS "lateConfirms"
+      FROM "FixtureCaptainConfirmation" confirmation
+      INNER JOIN "Fixture" confirmation_fixture ON confirmation_fixture."id" = confirmation."fixtureId"
+      WHERE confirmation."teamId" = fixture."homeTeamId"
+        AND confirmation."status" = 'CONFIRMED'
+        AND confirmation."confirmedAt" > confirmation_fixture."kickoffAt" - INTERVAL '72 hours'
+    ) home_late_confirmations ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) FILTER (WHERE fee."status" = 'WARNING') AS "warnings",
+        COUNT(*) FILTER (WHERE fee."status" = 'APPLIED') AS "applied",
+        COUNT(*) FILTER (WHERE fee."status" = 'WAIVED') AS "waived"
+      FROM "FixtureConfirmationLateFee" fee
+      WHERE fee."teamId" = fixture."awayTeamId"
+    ) away_history ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) AS "lateConfirms"
+      FROM "FixtureCaptainConfirmation" confirmation
+      INNER JOIN "Fixture" confirmation_fixture ON confirmation_fixture."id" = confirmation."fixtureId"
+      WHERE confirmation."teamId" = fixture."awayTeamId"
+        AND confirmation."status" = 'CONFIRMED'
+        AND confirmation."confirmedAt" > confirmation_fixture."kickoffAt" - INTERVAL '72 hours'
+    ) away_late_confirmations ON true
     WHERE fixture."status" = 'SCHEDULED'
       AND fixture."kickoffAt" >= NOW() - INTERVAL '2 days'
       AND fixture."kickoffAt" <= NOW() + INTERVAL '45 days'
