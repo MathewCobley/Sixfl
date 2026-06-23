@@ -1,0 +1,28 @@
+<svg width="900" height="900" viewBox="0 0 900 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="900" height="900" rx="180" fill="#020807"/>
+  <rect x="42" y="42" width="816" height="816" rx="156" fill="#03150F" stroke="#10B981" stroke-width="18"/>
+  <rect x="84" y="84" width="732" height="732" rx="124" fill="url(#g)" stroke="#A7F3D0" stroke-opacity="0.22" stroke-width="4"/>
+
+  <circle cx="450" cy="450" r="250" fill="#000000" fill-opacity="0.28" stroke="#10B981" stroke-opacity="0.45" stroke-width="8"/>
+  <circle cx="450" cy="450" r="196" stroke="#34D399" stroke-opacity="0.18" stroke-width="4"/>
+  <path d="M232 450H668" stroke="#34D399" stroke-opacity="0.22" stroke-width="5"/>
+  <path d="M450 232V668" stroke="#34D399" stroke-opacity="0.22" stroke-width="5"/>
+  <circle cx="450" cy="450" r="58" stroke="#34D399" stroke-opacity="0.28" stroke-width="5"/>
+
+  <path d="M270 270C325 218 387 192 450 192C513 192 575 218 630 270" stroke="#A7F3D0" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
+  <path d="M270 630C325 682 387 708 450 708C513 708 575 682 630 630" stroke="#A7F3D0" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
+
+  <text x="450" y="174" text-anchor="middle" fill="#6EE7B7" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="900" letter-spacing="8">SIXFL</text>
+  <text x="450" y="374" text-anchor="middle" fill="#FFFFFF" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="82" font-weight="900" letter-spacing="1">WETHERBY</text>
+  <text x="450" y="470" text-anchor="middle" fill="#FFFFFF" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="76" font-weight="900" letter-spacing="1">WEDNESDAY</text>
+  <text x="450" y="552" text-anchor="middle" fill="#10B981" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="48" font-weight="900" letter-spacing="5">6-A-SIDE</text>
+  <text x="450" y="748" text-anchor="middle" fill="#A7F3D0" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="800" letter-spacing="5">BOSTON SPA ACADEMY</text>
+
+  <defs>
+    <radialGradient id="g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(450 240) rotate(90) scale(620)">
+      <stop stop-color="#10B981" stop-opacity="0.28"/>
+      <stop offset="0.48" stop-color="#064E3B" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.36"/>
+    </radialGradient>
+  </defs>
+</svg>
