@@ -89,6 +89,8 @@ const launchRegistrations: LaunchRegistrationConfig[] = [
       "Tell us anything useful. For example: refereeing experience, qualifications, whether you can do Wednesday nights, or whether you are interested in regular weekly games in Wetherby.",
     teamPills: ["Wetherby", "Men’s league", "Wednesday nights"],
     refereePills: ["Wetherby", "Wednesday nights", "Launch opportunities"],
+    watermarkImageUrl: "/leagues/wetherby-wednesday.svg",
+    watermarkAlt: "Wetherby Men’s Wednesday 6-a-side League badge",
   },
   {
     area: "Northallerton",
