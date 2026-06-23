@@ -13,12 +13,18 @@ import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 
-function getErrorRedirect(teamid: string, message: string) {
-  return `/captain/team/${teamid}/squad?error=${encodeURIComponent(message)}`;
+function getSquadReturnPath(teamid: string, isAdmin: boolean) {
+  return isAdmin
+    ? `/captain/team/${teamid}/squad`
+    : `/captain/team/${teamid}/captain-squad`;
 }
 
-function getSuccessRedirect(teamid: string, saved = "player-updated") {
-  return `/captain/team/${teamid}/squad?saved=${encodeURIComponent(saved)}`;
+function getErrorRedirect(teamid: string, message: string, isAdmin: boolean) {
+  return `${getSquadReturnPath(teamid, isAdmin)}?error=${encodeURIComponent(message)}`;
+}
+
+function getSuccessRedirect(teamid: string, isAdmin: boolean, saved = "player-updated") {
+  return `${getSquadReturnPath(teamid, isAdmin)}?saved=${encodeURIComponent(saved)}`;
 }
 
 function getNullableString(value: FormDataEntryValue | null) {
@@ -80,7 +86,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   }
 
   if (Number.isNaN(playerMatchFeeOverride)) {
-    redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank."));
+    redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank.", access.isAdmin));
   }
 
   const membership = await prisma.teamMember.findFirst({
@@ -109,15 +115,15 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   });
 
   if (!membership) {
-    redirect(getErrorRedirect(teamid, "Squad member not found."));
+    redirect(getErrorRedirect(teamid, "Squad member not found.", access.isAdmin));
   }
 
   if (!displayName && !email) {
-    redirect(getErrorRedirect(teamid, "Add at least a player name or email address."));
+    redirect(getErrorRedirect(teamid, "Add at least a player name or email address.", access.isAdmin));
   }
 
   if (email && !email.includes("@")) {
-    redirect(getErrorRedirect(teamid, "Enter a valid email address."));
+    redirect(getErrorRedirect(teamid, "Enter a valid email address.", access.isAdmin));
   }
 
   if (email && email !== membership.user.email?.toLowerCase()) {
@@ -127,7 +133,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
     });
 
     if (existingEmailUser && existingEmailUser.id !== membership.userId) {
-      redirect(getErrorRedirect(teamid, "That email address is already used by another SIXFL account."));
+      redirect(getErrorRedirect(teamid, "That email address is already used by another SIXFL account.", access.isAdmin));
     }
   }
 
@@ -306,6 +312,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
   revalidatePath(`/captain/team/${teamid}/fixtures`);
   revalidatePath(`/captain/team/${teamid}/match-fees`);
   revalidatePath(`/captain/team/${teamid}/player-payments`);
@@ -314,5 +321,5 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   revalidatePath(`/admin/teams/${teamid}/communications`);
   revalidatePath("/admin/users");
 
-  redirect(getSuccessRedirect(teamid));
+  redirect(getSuccessRedirect(teamid, access.isAdmin));
 }
