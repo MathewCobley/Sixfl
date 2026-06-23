@@ -74,6 +74,23 @@ Admin preview / weaker captain views should not expose admin-only payment contro
 - Protect captain team views/actions with `requireCaptain(teamid)`.
 - Use the existing admin UI patterns and premium custom selectors; do not add native HTML selects to admin pages unless there is already a specific pattern requiring it.
 
+## Regression checklist
+
+Before changing admin, captain, player, squad, prospect, payment or fixture pages, check `docs/regression-checklist.md`.
+
+Critical controls should be rendered directly by the page or by typed React components. Avoid relying on DOM-scanning bridge components for controls such as login status, player preview, player comms, send-login buttons, pending activation controls, payment actions or captain/player preview mode.
+
+If a bridge component is still needed, it should be treated as temporary and must clearly depend on stable route/form selectors. Search for these before route/layout changes:
+
+```text
+MutationObserver
+Bridge
+querySelector
+data-
+/captain/team/
+/admin/teams/
+```
+
 ## Messaging and notification safety
 
 - Notification/cron routes must return useful JSON errors where possible.
