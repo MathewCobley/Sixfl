@@ -148,11 +148,7 @@ export default function CaptainViewModeHeader({
       pathname?.includes("/captain-squad") ||
       searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1",
   );
-  const previewHref = getPathWithPreview({
-    pathname: pathname || `/captain/team/${teamId}/captain-squad`,
-    searchParams: new URLSearchParams(searchParamsKey),
-    teamId,
-  });
+  const previewHref = `/admin/teams/${teamId}/captain-preview`;
   const fullAdminHref = isCaptainOnlyPreview
     ? getExitCaptainPreviewHref({ pathname, searchParamsKey, teamId })
     : getFullAdminHref({ pathname, teamId });
@@ -245,6 +241,7 @@ export default function CaptainViewModeHeader({
         {isAdmin && !isLimitedCaptainPreview ? (
           <Link
             href={previewHref}
+            data-captain-preview-ignore="true"
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
           >
             Preview limited captain view
