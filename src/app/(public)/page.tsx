@@ -177,12 +177,6 @@ export default function HomePage() {
 
         <SixflAiPredictorSection />
 
-        <section className="mt-12 grid gap-6 lg:mt-16 lg:grid-cols-3">
-          <HarrogatePanel />
-          <WetherbyPanel />
-          <NorthallertonPanel />
-        </section>
-
         <section id="why-sixfl" className="mt-12 lg:mt-16">
           <div className="mb-6">
             <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
@@ -428,110 +422,6 @@ function FeaturePill({ text }: { text: string }) {
   );
 }
 
-function HarrogatePanel() {
-  return (
-    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-      <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-        HARROGATE LEAGUE LIVE
-      </div>
-      <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-        Harrogate Tuesday 6-a-side at Rossett Sports Centre.
-      </h2>
-      <p className="mt-3 text-sm leading-7 text-white/70 sm:text-base">
-        Follow the public league page for upcoming fixtures, recent results,
-        participating teams and the current table.
-      </p>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-        <BenefitPill text="Fixtures & kick-offs" />
-        <BenefitPill text="League table" />
-        <BenefitPill text="Results" />
-        <BenefitPill text="Rossett Sports Centre" />
-      </div>
-      <Link
-        href={harrogateLeagueLink}
-        className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
-      >
-        VIEW HARROGATE LEAGUE
-      </Link>
-    </div>
-  );
-}
-
-function WetherbyPanel() {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-      <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
-        WETHERBY REGISTRATIONS OPEN
-      </div>
-      <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-        Wetherby Wednesday 6-a-side recruiting now.
-      </h2>
-      <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
-        Register interest for the new Wednesday night league at Boston Spa Academy.
-        Team entries, individual players and referees are welcome.
-      </p>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-        <BenefitPill text="Boston Spa Academy" />
-        <BenefitPill text="Team entries open" />
-        <BenefitPill text="Wednesday nights" />
-        <BenefitPill text="Player/referee interest" />
-      </div>
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
-        <Link
-          href={wetherbyTeamLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto lg:w-full xl:w-auto"
-        >
-          REGISTER TEAM
-        </Link>
-        <Link
-          href={wetherbyPlayerLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto lg:w-full xl:w-auto"
-        >
-          JOIN AS PLAYER
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-function NorthallertonPanel() {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-      <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
-        NORTHALLERTON REGISTRATIONS OPEN
-      </div>
-      <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-        Northallerton Wednesday 6-a-side recruiting now.
-      </h2>
-      <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
-        Register interest for the upcoming Wednesday night league in
-        Northallerton. Team entries, individual players and referees are
-        welcome.
-      </p>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-        <BenefitPill text="Free to register" />
-        <BenefitPill text="Team entries open" />
-        <BenefitPill text="Wednesday nights" />
-        <BenefitPill text="Player/referee interest" />
-      </div>
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
-        <Link
-          href={northallertonTeamLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto lg:w-full xl:w-auto"
-        >
-          REGISTER TEAM
-        </Link>
-        <Link
-          href={northallertonPlayerLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto lg:w-full xl:w-auto"
-        >
-          JOIN AS PLAYER
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 function FunnelCard({
   title,
   desc,
@@ -574,14 +464,6 @@ function PathwayCard({ title, desc }: { title: string; desc: string }) {
       </div>
       <div className="mt-3 text-sm leading-7 text-white/60">{desc}</div>
       <div className="mt-6 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
-    </div>
-  );
-}
-
-function BenefitPill({ text }: { text: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white/85">
-      ✓ {text}
     </div>
   );
 }
