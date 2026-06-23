@@ -25,8 +25,11 @@ type LoginStatusPayload = {
 };
 
 function getTeamIdFromPathname(pathname: string) {
-  const match = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
-  return match?.[1] ?? null;
+  const captainMatch = pathname.match(/\/captain\/team\/([^/]+)\/squad(?:\/)?$/);
+  if (captainMatch?.[1]) return captainMatch[1];
+
+  const adminMatch = pathname.match(/\/admin\/teams\/([^/]+)\/squad(?:\/)?$/);
+  return adminMatch?.[1] ?? null;
 }
 
 function getPlayerCommunicationsHref(input: { teamId: string; membershipId: string }) {
@@ -286,7 +289,9 @@ function addPreviewLinks(pathname: string, statusByMembershipId = new Map<string
   )
     .map((input) => input.closest("form"))
     .filter((form): form is HTMLFormElement => form instanceof HTMLFormElement)
-    .filter((form) => Boolean(form.querySelector('input[name="teamid"]')));
+    .filter((form) =>
+      Boolean(form.querySelector('input[name="teamid"], input[name="teamId"]')),
+    );
 
   for (const form of roleForms) {
     const membershipId = form
