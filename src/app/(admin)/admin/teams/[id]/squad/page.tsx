@@ -6,7 +6,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma, TeamRole } from "@prisma/client";
 
+import AdminSendPlayerLoginButton from "@/components/admin/teams/AdminSendPlayerLoginButton";
 import FormListboxField from "@/components/ui/FormListboxField";
+import {
+  getSquadLoginStatusMap,
+  type SquadLoginStatus,
+} from "@/lib/admin/squadLoginStatus";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -37,6 +42,9 @@ const roleOptions: { value: TeamRole; label: string }[] = [
   { value: "BACKUP_PLAYER", label: "Backup player" },
   { value: "COACH", label: "Coach" },
 ];
+
+const adminMemberActionClassName =
+  "inline-flex min-h-11 w-full items-center justify-center rounded-xl border px-4 py-2.5 text-center text-sm font-medium transition sm:w-auto";
 
 function getRoleLabel(role: TeamRole) {
   switch (role) {
@@ -98,6 +106,55 @@ function formatUkDateTime(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatOptionalUkDateTime(value: string | null) {
+  if (!value) return null;
+
+  try {
+    return formatUkDateTime(new Date(value));
+  } catch {
+    return null;
+  }
+}
+
+function getDashboardStatusCopy(status?: SquadLoginStatus) {
+  if (!status) {
+    return {
+      badge: "Dashboard status unknown",
+      detail: "Could not load login status.",
+      className: "border-white/10 bg-white/[0.04] text-white/55",
+    };
+  }
+
+  const lastLogin = formatOptionalUkDateTime(status.lastLoginAt);
+  const activeUntil = formatOptionalUkDateTime(status.latestSessionExpires);
+
+  if (lastLogin) {
+    return {
+      badge: status.hasActiveSession ? "Dashboard signed in" : "Dashboard used",
+      detail: `${status.hasActiveSession ? "Active session" : "Last login"}: ${lastLogin}${activeUntil ? ` · session expires ${activeUntil}` : ""}`,
+      className: status.hasActiveSession
+        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+        : "border-sky-400/20 bg-sky-500/10 text-sky-100",
+    };
+  }
+
+  if (status.hasActiveSession) {
+    return {
+      badge: "Dashboard session active",
+      detail: activeUntil
+        ? `Active session found · expires ${activeUntil}. Login time was not recorded before this feature was added.`
+        : "Active session found. Login time was not recorded before this feature was added.",
+      className: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
+    };
+  }
+
+  return {
+    badge: "No dashboard login recorded",
+    detail: "This linked account has not signed in since login tracking was added.",
+    className: "border-amber-400/20 bg-amber-500/10 text-amber-100",
+  };
 }
 
 function getSavedMessage(saved?: string) {
@@ -175,6 +232,7 @@ export default async function AdminTeamSquadPage({
   const whatsappByUserId = new Map(
     whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
   );
+  const loginStatusByMembershipId = await getSquadLoginStatusMap(team.id);
 
   const captainCount = team.members.filter(
     (member) => member.role === "CAPTAIN",
@@ -347,11 +405,13 @@ export default async function AdminTeamSquadPage({
             ) : (
               team.members.map((member) => {
                 const usesWhatsapp = whatsappByUserId.get(member.user.id) ?? false;
+                const dashboardStatus = loginStatusByMembershipId.get(member.id);
+                const dashboardCopy = getDashboardStatusCopy(dashboardStatus);
 
                 return (
                   <div
                     key={member.id}
-                    className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-center xl:justify-between"
+                    className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-start xl:justify-between"
                   >
                     <div className="flex min-w-0 items-start gap-4">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
@@ -394,37 +454,37 @@ export default async function AdminTeamSquadPage({
                         <div className="mt-1 text-xs text-white/45">
                           Added {formatUkDateTime(member.createdAt)}
                         </div>
+
+                        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${dashboardCopy.className}`}>
+                          <div className="font-semibold text-white/90">
+                            {dashboardCopy.badge}
+                          </div>
+                          <div className="mt-0.5 text-white/65">
+                            {dashboardCopy.detail}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 sm:flex-row xl:items-center">
-                      <form
-                        action={updateAdminSquadMemberRoleAction}
-                        className="flex flex-wrap items-center gap-3"
+                    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:w-[28rem] xl:max-w-[28rem] xl:shrink-0">
+                      <Link
+                        href={`/admin/teams/${team.id}/players/${member.id}/preview`}
+                        className={`${adminMemberActionClassName} border-violet-400/30 bg-violet-500/10 text-violet-100 hover:bg-violet-500/15`}
                       >
-                        <input type="hidden" name="teamId" value={team.id} />
-                        <input
-                          type="hidden"
-                          name="membershipId"
-                          value={member.id}
-                        />
+                        Player preview
+                      </Link>
 
-                        <div className="min-w-[240px]">
-                          <FormListboxField
-                            name="role"
-                            value={member.role}
-                            options={roleOptions}
-                            placeholder="Select role"
-                          />
-                        </div>
+                      <Link
+                        href={`/admin/teams/${team.id}/players/${member.id}/communications`}
+                        className={`${adminMemberActionClassName} border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15`}
+                      >
+                        Player comms
+                      </Link>
 
-                        <button
-                          type="submit"
-                          className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                        >
-                          Update role
-                        </button>
-                      </form>
+                      <AdminSendPlayerLoginButton
+                        teamId={team.id}
+                        membershipId={member.id}
+                      />
 
                       <form action={moveAdminSquadMemberToProspectsAction}>
                         <input type="hidden" name="teamId" value={team.id} />
@@ -435,13 +495,41 @@ export default async function AdminTeamSquadPage({
                         />
                         <button
                           type="submit"
-                          className="inline-flex items-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+                          className={`${adminMemberActionClassName} border-sky-400/25 bg-sky-500/10 text-sky-100 hover:bg-sky-500/15`}
                         >
                           Move to prospects
                         </button>
                       </form>
 
-                      <form action={removeAdminSquadMemberAction}>
+                      <form
+                        action={updateAdminSquadMemberRoleAction}
+                        className="grid w-full min-w-0 grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+                      >
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input
+                          type="hidden"
+                          name="membershipId"
+                          value={member.id}
+                        />
+
+                        <div className="min-w-0">
+                          <FormListboxField
+                            name="role"
+                            value={member.role}
+                            options={roleOptions}
+                            placeholder="Select role"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                        >
+                          Update role
+                        </button>
+                      </form>
+
+                      <form action={removeAdminSquadMemberAction} className="sm:col-span-2">
                         <input type="hidden" name="teamId" value={team.id} />
                         <input
                           type="hidden"
@@ -450,9 +538,9 @@ export default async function AdminTeamSquadPage({
                         />
                         <button
                           type="submit"
-                          className="inline-flex items-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/15"
                         >
-                          Remove
+                          Remove from squad
                         </button>
                       </form>
                     </div>
