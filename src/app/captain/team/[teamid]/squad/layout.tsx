@@ -4,9 +4,11 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { NotificationDispatchStatus } from "@prisma/client";
 
+import PendingActivationMoveButton from "@/components/captain/PendingActivationMoveButton";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -94,6 +96,10 @@ function getStatusClasses(dispatch?: ActivationDispatchSnapshot | null) {
   return "border-sky-400/20 bg-sky-500/10 text-sky-100";
 }
 
+function getSquadPath(teamid: string, query = "") {
+  return `/captain/team/${teamid}/squad${query}`;
+}
+
 function ActivationForm({
   teamid,
   prospectId,
@@ -126,6 +132,84 @@ function ActivationForm({
       </button>
     </form>
   );
+}
+
+async function returnPendingProspectAction(formData: FormData) {
+  "use server";
+
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+  const access = await requireCaptain(teamid);
+
+  if (!access.isAdmin) {
+    redirect(getSquadPath(teamid, "?error=Only%20SIXFL%20admin%20can%20return%20pending%20players."));
+  }
+
+  const prospect = await prisma.teamPlayerProspect.findFirst({
+    where: {
+      id: prospectId,
+      teamId: teamid,
+      status: "ACTIVE_SQUAD",
+    },
+    select: { id: true },
+  });
+
+  if (!prospect) {
+    redirect(getSquadPath(teamid, "?error=Pending%20activation%20player%20not%20found."));
+  }
+
+  await prisma.teamPlayerProspect.update({
+    where: { id: prospect.id },
+    data: {
+      teamId: null,
+      status: "CONTACTED",
+    },
+  });
+
+  revalidatePath(`/captain/team/${teamid}`);
+  revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
+  revalidatePath(`/captain/team/${teamid}/prospects`);
+  revalidatePath("/admin/player-prospects");
+
+  redirect(getSquadPath(teamid, "?saved=pending-returned"));
+}
+
+async function deletePendingProspectAction(formData: FormData) {
+  "use server";
+
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+  const access = await requireCaptain(teamid);
+
+  if (!access.isAdmin) {
+    redirect(getSquadPath(teamid, "?error=Only%20SIXFL%20admin%20can%20delete%20pending%20players."));
+  }
+
+  const prospect = await prisma.teamPlayerProspect.findFirst({
+    where: {
+      id: prospectId,
+      teamId: teamid,
+      status: "ACTIVE_SQUAD",
+    },
+    select: { id: true },
+  });
+
+  if (!prospect) {
+    redirect(getSquadPath(teamid, "?error=Pending%20activation%20player%20not%20found."));
+  }
+
+  await prisma.teamPlayerProspect.delete({
+    where: { id: prospect.id },
+  });
+
+  revalidatePath(`/captain/team/${teamid}`);
+  revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
+  revalidatePath(`/captain/team/${teamid}/prospects`);
+  revalidatePath("/admin/player-prospects");
+
+  redirect(getSquadPath(teamid, "?saved=pending-deleted"));
 }
 
 async function getPendingProspects(teamid: string) {
@@ -262,8 +346,8 @@ async function ActivationQuickSendPanel({ teamid }: { teamid: string }) {
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-100/80">
             These promoted squad players do not yet have a linked SIXFL account.
-            Send them an activation email, or send an SMS activation chase if a
-            phone number is saved.
+            Send activation links, move them to another team, return them to the
+            prospect pool, or delete a pending player directly from here.
           </p>
         </div>
         <Link
@@ -330,6 +414,31 @@ async function ActivationQuickSendPanel({ teamid }: { teamid: string }) {
                 >
                   {smsDispatch ? "Resend activation SMS" : "Send activation SMS"}
                 </ActivationForm>
+                <PendingActivationMoveButton
+                  teamId={teamid}
+                  prospectId={prospect.id}
+                  playerName={displayName}
+                />
+                <form action={returnPendingProspectAction}>
+                  <input type="hidden" name="teamid" value={teamid} />
+                  <input type="hidden" name="prospectId" value={prospect.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/15"
+                  >
+                    Return to prospects
+                  </button>
+                </form>
+                <form action={deletePendingProspectAction}>
+                  <input type="hidden" name="teamid" value={teamid} />
+                  <input type="hidden" name="prospectId" value={prospect.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-3 text-xs font-semibold text-red-100 transition hover:bg-red-500/15"
+                  >
+                    Delete pending player
+                  </button>
+                </form>
                 <Link
                   href={`/admin/teams/${teamid}/prospects/${prospect.id}/communications`}
                   className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
