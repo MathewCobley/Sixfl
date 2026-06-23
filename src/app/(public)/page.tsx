@@ -7,7 +7,7 @@ import Link from "next/link";
 export const metadata = {
   title: "SIXFL | Harrogate, Northallerton & Wetherby 6-a-side football leagues",
   description:
-    "Find local SIXFL 6-a-side football leagues in Harrogate, Northallerton and Wetherby. View fixtures, results and tables, or register interest as a team, player or referee.",
+    "Find local SIXFL 6-a-side football leagues in Harrogate, Wetherby at Boston Spa Academy and Northallerton. View fixtures, results and tables, or register interest as a team, player or referee.",
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
@@ -46,7 +46,7 @@ const areaCards = [
     eyebrow: "WETHERBY LAUNCH",
     title: "Wetherby Wednesday 6-a-side",
     status: "Registrations open",
-    body: "Wetherby team entries are now open for a new Wednesday night SIXFL league. Captains, players and referees can register interest now.",
+    body: "Wetherby team entries are now open for a new Wednesday night SIXFL league at Boston Spa Academy. Captains, players and referees can register interest now.",
     primaryLabel: "Register team",
     primaryHref: wetherbyTeamLink,
     secondaryLabel: "Join as player",
@@ -68,7 +68,7 @@ const areaCards = [
 
 const homeStats = [
   { label: "Live fixtures", value: "Harrogate" },
-  { label: "New league", value: "Wetherby" },
+  { label: "Wetherby venue", value: "Boston Spa" },
   { label: "Format", value: "6-a-side" },
   { label: "Open to", value: "Teams & players" },
 ];
@@ -129,7 +129,7 @@ export default function HomePage() {
         <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
           <div className="max-w-5xl text-left">
             <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
-              Harrogate live now • Wetherby Wednesday registrations open
+              Harrogate live now • Wetherby at Boston Spa Academy
             </div>
 
             <h1 className="mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl sm:leading-[0.95] lg:text-7xl">
@@ -373,14 +373,14 @@ function WetherbyPanel() {
         WETHERBY REGISTRATIONS OPEN
       </div>
       <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-        Wetherby Wednesday 6-a-side recruiting now.
+        Wetherby Wednesday 6-a-side at Boston Spa Academy.
       </h2>
       <p className="mt-3 text-sm leading-7 text-white/70 sm:text-base">
-        Register interest for the new Wednesday night league in Wetherby. Team
-        entries, individual players and referees are welcome.
+        Register interest for the new Wednesday night league at Boston Spa Academy.
+        Team entries, individual players and referees are welcome.
       </p>
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-        <BenefitPill text="Free to register" />
+        <BenefitPill text="Boston Spa Academy" />
         <BenefitPill text="Team entries open" />
         <BenefitPill text="Wednesday nights" />
         <BenefitPill text="Player/referee interest" />
