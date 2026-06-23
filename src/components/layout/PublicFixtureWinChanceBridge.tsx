@@ -212,6 +212,31 @@ function createPredictedResultCard(fixture: FixtureWinChanceItem) {
   return card;
 }
 
+function createAiPreviewBlock(aiPreview?: FixtureAiPreview) {
+  if (!aiPreview?.headline?.trim() && !aiPreview?.summary?.trim()) {
+    return null;
+  }
+
+  const block = document.createElement("div");
+  block.className = "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4";
+
+  if (aiPreview.headline?.trim()) {
+    const headline = document.createElement("div");
+    headline.className = "text-sm font-semibold text-white";
+    headline.textContent = aiPreview.headline.trim();
+    block.appendChild(headline);
+  }
+
+  if (aiPreview.summary?.trim()) {
+    const summary = document.createElement("p");
+    summary.className = "mt-2 text-sm leading-6 text-white/60";
+    summary.textContent = aiPreview.summary.trim();
+    block.appendChild(summary);
+  }
+
+  return block;
+}
+
 function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   const block = document.createElement("div");
   block.dataset.publicFixtureWinChance = fixture.id;
@@ -237,6 +262,8 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
 
   header.appendChild(headingWrap);
   header.appendChild(createPredictedResultCard(fixture));
+
+  const aiPreview = createAiPreviewBlock(fixture.winChance.aiPreview);
 
   const grid = document.createElement("div");
   grid.className = "mt-4 grid w-full gap-3 sm:grid-cols-3";
@@ -267,6 +294,9 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   explanation.textContent = fixture.winChance.explanation;
 
   block.appendChild(header);
+  if (aiPreview) {
+    block.appendChild(aiPreview);
+  }
   block.appendChild(grid);
   block.appendChild(explanation);
 
