@@ -24,6 +24,7 @@ type PageProps = {
   searchParams?: Promise<{
     fixtureId?: string;
     saved?: string;
+    previewMembershipId?: string;
   }>;
 };
 
@@ -125,6 +126,34 @@ function getSelectedMemberIds(input: {
   );
 }
 
+function getAvailabilityHref(input: {
+  teamId: string;
+  fixtureId?: string | null;
+  previewMembershipId?: string | null;
+}) {
+  const params = new URLSearchParams();
+  if (input.fixtureId) params.set("fixtureId", input.fixtureId);
+  if (input.previewMembershipId) {
+    params.set("previewMembershipId", input.previewMembershipId);
+  }
+
+  const query = params.toString();
+  return `/player/team/${input.teamId}/availability${query ? `?${query}` : ""}`;
+}
+
+function getTeamDashboardHref(input: {
+  teamId: string;
+  previewMembershipId?: string | null;
+}) {
+  const params = new URLSearchParams();
+  if (input.previewMembershipId) {
+    params.set("previewMembershipId", input.previewMembershipId);
+  }
+
+  const query = params.toString();
+  return `/player/team/${input.teamId}${query ? `?${query}` : ""}`;
+}
+
 export default async function PlayerAvailabilityPage({
   params,
   searchParams,
@@ -179,7 +208,53 @@ export default async function PlayerAvailabilityPage({
     redirect(`/login?callbackUrl=${encodeURIComponent(`/player/team/${teamid}/availability`)}`);
   }
 
-  const membership = user.teamMembers[0] ?? null;
+  const previewMembershipId =
+    user.role === UserRole.ADMIN ? sp.previewMembershipId?.trim() || null : null;
+
+  const previewMembership = previewMembershipId
+    ? await prisma.teamMember.findFirst({
+        where: {
+          id: previewMembershipId,
+          teamId: teamid,
+        },
+        select: {
+          id: true,
+          role: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          team: {
+            select: {
+              id: true,
+              name: true,
+              logoUrl: true,
+              matchdayTargetSize: true,
+              league: {
+                select: {
+                  id: true,
+                  name: true,
+                  season: true,
+                  slug: true,
+                  venueName: true,
+                  dayOfWeek: true,
+                },
+              },
+            },
+          },
+        },
+      })
+    : null;
+
+  if (previewMembershipId && !previewMembership) {
+    notFound();
+  }
+
+  const membership = previewMembership ?? user.teamMembers[0] ?? null;
+  const isPreviewMode = Boolean(previewMembership);
+  const previewMembershipParam = isPreviewMode ? membership?.id : null;
 
   if (!membership && user.role !== UserRole.ADMIN) {
     notFound();
@@ -264,10 +339,33 @@ export default async function PlayerAvailabilityPage({
   const playerAlreadySelected = membership ? selectedMemberIds.has(membership.id) : false;
   const availableOptionLocked = squadIsFull && !playerAlreadySelected;
   const savedMessage = getSavedMessage(sp.saved);
+  const previewedPlayerName =
+    previewMembership?.user?.name || previewMembership?.user?.email || "this player";
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
       <div className="mx-auto max-w-6xl space-y-8">
+        {isPreviewMode ? (
+          <section className="rounded-3xl border border-violet-400/25 bg-violet-500/10 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.25)]">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-100/75">
+                  Admin player preview
+                </p>
+                <p className="mt-2 text-sm leading-6 text-violet-50/80">
+                  You are viewing availability as {previewedPlayerName}. Saving this form will update that player’s real availability.
+                </p>
+              </div>
+              <Link
+                href={`/admin/teams/${teamid}`}
+                className="inline-flex items-center justify-center rounded-xl border border-violet-300/30 bg-black/20 px-4 py-2.5 text-sm font-semibold text-violet-50 transition hover:bg-violet-500/15"
+              >
+                Back to admin team
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
         <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -306,7 +404,10 @@ export default async function PlayerAvailabilityPage({
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href={`/player/team/${teamid}`}
+                href={getTeamDashboardHref({
+                  teamId: teamid,
+                  previewMembershipId: previewMembershipParam,
+                })}
                 className="inline-flex items-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/5 hover:text-white"
               >
                 Team dashboard
@@ -361,7 +462,11 @@ export default async function PlayerAvailabilityPage({
                 return (
                   <Link
                     key={fixture.id}
-                    href={`/player/team/${teamid}/availability?fixtureId=${fixture.id}`}
+                    href={getAvailabilityHref({
+                      teamId: teamid,
+                      fixtureId: fixture.id,
+                      previewMembershipId: previewMembershipParam,
+                    })}
                     className={`block rounded-2xl border p-4 transition ${
                       isSelected
                         ? "border-emerald-400/30 bg-emerald-500/10"
@@ -451,6 +556,9 @@ export default async function PlayerAvailabilityPage({
                 <form action={updatePlayerFixtureAvailabilityAction} className="mt-6 space-y-5">
                   <input type="hidden" name="teamId" value={teamid} />
                   <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                  {previewMembershipParam ? (
+                    <input type="hidden" name="previewMembershipId" value={previewMembershipParam} />
+                  ) : null}
 
                   <div className="grid gap-3 sm:grid-cols-3">
                     {[
