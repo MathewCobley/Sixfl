@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -17,12 +18,21 @@ function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-function getAvailabilityPath(teamId: string, fixtureId?: string, saved?: string) {
+function getAvailabilityPath(input: {
+  teamId: string;
+  fixtureId?: string;
+  saved?: string;
+  previewMembershipId?: string | null;
+}) {
   const params = new URLSearchParams();
-  if (fixtureId) params.set("fixtureId", fixtureId);
-  if (saved) params.set("saved", saved);
+  if (input.fixtureId) params.set("fixtureId", input.fixtureId);
+  if (input.saved) params.set("saved", input.saved);
+  if (input.previewMembershipId) {
+    params.set("previewMembershipId", input.previewMembershipId);
+  }
+
   const query = params.toString();
-  return `/player/team/${teamId}/availability${query ? `?${query}` : ""}`;
+  return `/player/team/${input.teamId}/availability${query ? `?${query}` : ""}`;
 }
 
 export async function updatePlayerFixtureAvailabilityAction(formData: FormData) {
@@ -36,15 +46,25 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
   const fixtureId = getString(formData, "fixtureId");
   const response = getString(formData, "response");
   const note = getString(formData, "note") || null;
+  const requestedPreviewMembershipId = getString(formData, "previewMembershipId") || null;
+
+  const redirectPath = (saved?: string) =>
+    getAvailabilityPath({
+      teamId,
+      fixtureId,
+      saved,
+      previewMembershipId: requestedPreviewMembershipId,
+    });
 
   if (!teamId || !fixtureId || !VALID_RESPONSES.has(response)) {
-    redirect(getAvailabilityPath(teamId, fixtureId, "invalid"));
+    redirect(redirectPath("invalid"));
   }
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email.trim().toLowerCase() },
     select: {
       id: true,
+      role: true,
       teamMembers: {
         where: { teamId },
         select: { id: true },
@@ -53,10 +73,20 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
     },
   });
 
-  const teamMember = user?.teamMembers[0] ?? null;
+  const previewMembership =
+    requestedPreviewMembershipId && user?.role === UserRole.ADMIN
+      ? await prisma.teamMember.findFirst({
+          where: {
+            id: requestedPreviewMembershipId,
+            teamId,
+          },
+          select: { id: true },
+        })
+      : null;
+  const teamMember = previewMembership ?? user?.teamMembers[0] ?? null;
 
   if (!teamMember) {
-    redirect(getAvailabilityPath(teamId, fixtureId, "not-linked"));
+    redirect(redirectPath("not-linked"));
   }
 
   const fixture = await prisma.fixture.findFirst({
@@ -93,7 +123,7 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
   });
 
   if (!fixture) {
-    redirect(getAvailabilityPath(teamId, fixtureId, "fixture-not-found"));
+    redirect(redirectPath("fixture-not-found"));
   }
 
   const targetSize =
@@ -109,7 +139,7 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
   const playerAlreadySelected = selectedMemberIds.has(teamMember.id);
 
   if (response === "AVAILABLE" && squadIsFull && !playerAlreadySelected) {
-    redirect(getAvailabilityPath(teamId, fixtureId, "squad-full"));
+    redirect(redirectPath("squad-full"));
   }
 
   await prisma.fixtureAvailability.upsert({
@@ -134,9 +164,9 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
   });
 
   revalidatePath(`/player/team/${teamId}`);
-  revalidatePath(getAvailabilityPath(teamId, fixtureId));
+  revalidatePath(getAvailabilityPath({ teamId, fixtureId }));
   revalidatePath(`/admin/teams/${teamId}/availability`);
   revalidatePath(`/captain/team/${teamId}/availability`);
 
-  redirect(getAvailabilityPath(teamId, fixtureId, "availability-updated"));
+  redirect(redirectPath("availability-updated"));
 }
