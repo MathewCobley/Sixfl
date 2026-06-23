@@ -16,6 +16,10 @@ type PageProps = {
   params: Promise<{ chargeId: string }>;
 };
 
+type VoidChargeResult =
+  | { ok: true }
+  | { ok: false; error: "invalid_charge" | "paid_charge_cannot_be_voided" | "void_failed" };
+
 async function cancelQueuedChargeMessages(chargeId: string) {
   try {
     await prisma.notificationDispatch.updateMany({
@@ -45,19 +49,10 @@ async function cancelQueuedChargeMessages(chargeId: string) {
   }
 }
 
-export default async function VoidPaymentChargePage({ params }: PageProps) {
-  await requireAdmin();
-
-  const { chargeId } = await params;
-  const id = chargeId.trim();
-
-  if (!id) {
-    redirect("/admin/payments?error=invalid_charge");
-  }
-
+async function voidPaymentCharge(chargeId: string): Promise<VoidChargeResult> {
   try {
     const charge = await prisma.paymentCharge.findUnique({
-      where: { id },
+      where: { id: chargeId },
       select: {
         id: true,
         status: true,
@@ -65,11 +60,11 @@ export default async function VoidPaymentChargePage({ params }: PageProps) {
     });
 
     if (!charge) {
-      redirect("/admin/payments?error=invalid_charge");
+      return { ok: false, error: "invalid_charge" };
     }
 
     if (charge.status === "PAID") {
-      redirect("/admin/payments?error=paid_charge_cannot_be_voided");
+      return { ok: false, error: "paid_charge_cannot_be_voided" };
     }
 
     if (charge.status !== "VOID") {
@@ -80,9 +75,28 @@ export default async function VoidPaymentChargePage({ params }: PageProps) {
 
       await cancelQueuedChargeMessages(charge.id);
     }
+
+    return { ok: true };
   } catch (error) {
-    console.error("Failed to void payment charge", { chargeId: id, error });
-    redirect("/admin/payments?error=void_failed");
+    console.error("Failed to void payment charge", { chargeId, error });
+    return { ok: false, error: "void_failed" };
+  }
+}
+
+export default async function VoidPaymentChargePage({ params }: PageProps) {
+  await requireAdmin();
+
+  const { chargeId } = await params;
+  const id = chargeId.trim();
+
+  if (!id) {
+    redirect("/admin/payments?error=invalid_charge");
+  }
+
+  const result = await voidPaymentCharge(id);
+
+  if (!result.ok) {
+    redirect(`/admin/payments?error=${result.error}`);
   }
 
   revalidatePath("/admin/payments");
