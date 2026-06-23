@@ -197,6 +197,7 @@ function createFullWinChancePanel(fixture: FixtureBadge) {
   if (!chance) return null;
 
   const wrapper = document.createElement("details");
+  wrapper.open = true;
   wrapper.dataset.fixtureFullAiFor = fixture.id;
   wrapper.className =
     "mt-3 w-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)]";
@@ -215,7 +216,7 @@ function createFullWinChancePanel(fixture: FixtureBadge) {
 
   const helper = document.createElement("div");
   helper.className = "mt-1 text-xs text-white/45";
-  helper.textContent = `${chance.confidence} confidence · Just for fun · Tap to show details`;
+  helper.textContent = `${chance.confidence} confidence · Just for fun · Match preview below`;
 
   left.appendChild(eyebrow);
   left.appendChild(helper);
