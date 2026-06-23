@@ -39,23 +39,6 @@ const CAPTAIN_FACING_REPLACEMENTS = [
 
 type CaptainAccessMode = "admin-preview" | "captain-preview" | "captain";
 
-function getPathWithPreview(input: {
-  pathname: string;
-  searchParams: URLSearchParams;
-  teamId: string;
-}) {
-  const teamPrefix = `/captain/team/${input.teamId}`;
-  const path = input.pathname === `${teamPrefix}/squad`
-    ? `${teamPrefix}/captain-squad`
-    : input.pathname;
-  const nextParams = new URLSearchParams(input.searchParams);
-
-  nextParams.set(CAPTAIN_PREVIEW_PARAM, "1");
-
-  const query = nextParams.toString();
-  return `${path}${query ? `?${query}` : ""}`;
-}
-
 function getFullAdminHref(input: { pathname: string | null; teamId: string }) {
   const fallback = `/captain/team/${input.teamId}/squad`;
   const pathname = input.pathname || fallback;
@@ -143,10 +126,8 @@ export default function CaptainViewModeHeader({
   const searchParamsKey = searchParams.toString();
   const isCaptainOnlyPreview = accessMode === "captain-preview";
   const canShowAdminControls = isAdmin || isCaptainOnlyPreview;
-  const isLimitedCaptainPreview = Boolean(
-    isCaptainOnlyPreview ||
-      pathname?.includes("/captain-squad") ||
-      searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1",
+  const isCaptainDashboardPreview = Boolean(
+    isCaptainOnlyPreview || (isAdmin && searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1"),
   );
   const previewHref = `/admin/teams/${teamId}/captain-preview`;
   const fullAdminHref = isCaptainOnlyPreview
@@ -167,7 +148,7 @@ export default function CaptainViewModeHeader({
   }, [pathname, searchParamsKey]);
 
   useEffect(() => {
-    if (!isLimitedCaptainPreview) return;
+    if (!isCaptainDashboardPreview) return;
 
     const selector = `.captain-team-shell a[href^="/captain/team/${teamId}"]:not([data-captain-preview-ignore="true"])`;
 
@@ -190,23 +171,21 @@ export default function CaptainViewModeHeader({
     observer.observe(root, { childList: true, subtree: true });
 
     return () => observer.disconnect();
-  }, [isLimitedCaptainPreview, searchParamsKey, teamId]);
+  }, [isCaptainDashboardPreview, searchParamsKey, teamId]);
 
-  const overline = isLimitedCaptainPreview
-    ? canShowAdminControls
-      ? "Admin captain preview"
-      : "Limited captain preview"
+  const overline = isCaptainDashboardPreview
+    ? "Admin captain dashboard preview"
     : isAdmin
       ? "SIXFL admin team view"
-      : "SIXFL captain hub";
+      : "SIXFL captain dashboard";
 
-  const description = isLimitedCaptainPreview
-    ? "You are viewing the limited captain version. Admin-only squad tools are hidden on this page."
+  const description = isCaptainDashboardPreview
+    ? "You are viewing the captain dashboard as a captain would see it. Admin-only squad tools are hidden on this page."
     : isAdmin
       ? isManagedTeam
         ? "Full admin view: squad controls, fixtures, results, prospects and payment tools are visible."
         : "Full admin view: fixtures, results and payment tools are visible."
-      : "Matchday control, fixtures, results and payments for your team.";
+      : "Your dashboard for matchday control, fixtures, results, payments and squad details.";
 
   return (
     <>
@@ -238,17 +217,17 @@ export default function CaptainViewModeHeader({
           </Link>
         ) : null}
 
-        {isAdmin && !isLimitedCaptainPreview ? (
+        {isAdmin && !isCaptainDashboardPreview ? (
           <Link
             href={previewHref}
             data-captain-preview-ignore="true"
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
           >
-            Preview limited captain view
+            Preview captain dashboard
           </Link>
         ) : null}
 
-        {canShowAdminControls && isLimitedCaptainPreview ? (
+        {canShowAdminControls && isCaptainDashboardPreview ? (
           <Link
             href={fullAdminHref}
             data-captain-preview-ignore="true"
@@ -257,33 +236,6 @@ export default function CaptainViewModeHeader({
             Return to full admin view
           </Link>
         ) : null}
-
-        {canShowAdminControls ? (
-          <Link
-            href={`/admin/teams/${teamId}/squad`}
-            data-captain-preview-ignore="true"
-            className="inline-flex items-center rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-500/15"
-          >
-            Admin squad console
-          </Link>
-        ) : null}
-
-        {canShowAdminControls && isLimitedCaptainPreview ? (
-          <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
-            <div className="font-medium text-white">Viewing as captain</div>
-            <div className="mt-1 text-amber-100/75">Limited preview mode.</div>
-          </div>
-        ) : isAdmin ? (
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-            <div className="font-medium text-white">Full admin view</div>
-            <div className="mt-1 text-emerald-100/70">Admin controls are visible.</div>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-            <div className="font-medium text-white">Captain view</div>
-            <div className="mt-1 text-emerald-100/70">You are signed in to manage this team.</div>
-          </div>
-        )}
       </div>
     </>
   );
