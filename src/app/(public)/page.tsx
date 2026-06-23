@@ -169,7 +169,7 @@ export default function HomePage() {
                 href={wetherbyTeamLink}
                 className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
               >
-                REGISTER WETHERBY TEAM
+                REGISTER
               </Link>
             </div>
           </div>
