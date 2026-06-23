@@ -33,7 +33,26 @@ type LeadTypeConfig = {
   notesPlaceholder: string;
 };
 
+type LaunchRegistrationConfig = {
+  area: string;
+  nightLabel: string;
+  nightValue: "WEDNESDAY";
+  leagueType: "MENS";
+  source: string;
+  teamIntro: string;
+  playerIntro: string;
+  refereeIntro: string;
+  teamNotesPlaceholder: string;
+  playerNotesPlaceholder: string;
+  refereeNotesPlaceholder: string;
+  teamPills: string[];
+  refereePills: string[];
+  watermarkImageUrl?: string;
+  watermarkAlt?: string;
+};
+
 const areaOptions = [
+  "Wetherby",
   "Northallerton",
   "Harrogate",
   "Ripon",
@@ -51,6 +70,47 @@ const preferredNightOptions = [
   { label: "Saturday", value: "SATURDAY" },
   { label: "Sunday", value: "SUNDAY" },
 ] as const;
+
+const launchRegistrations: LaunchRegistrationConfig[] = [
+  {
+    area: "Wetherby",
+    nightLabel: "Wednesday",
+    nightValue: "WEDNESDAY",
+    leagueType: "MENS",
+    source: "wetherby-wednesday-launch",
+    teamIntro: "Register interest for the new Wetherby Men’s Wednesday 6-a-side League.",
+    playerIntro: "Join the player list for the new Wetherby Men’s Wednesday 6-a-side League.",
+    refereeIntro: "Register referee interest for the new Wetherby Wednesday night 6-a-side league.",
+    teamNotesPlaceholder:
+      "Anything useful to know? For example: likely squad size, playing standard, whether you already have a full squad, or any questions about the Wetherby Wednesday league.",
+    playerNotesPlaceholder:
+      "Anything useful to know? For example: position, playing standard, whether you are joining on your own or with friends, or any questions about the Wetherby Wednesday league.",
+    refereeNotesPlaceholder:
+      "Tell us anything useful. For example: refereeing experience, qualifications, whether you can do Wednesday nights, or whether you are interested in regular weekly games in Wetherby.",
+    teamPills: ["Wetherby", "Men’s league", "Wednesday nights"],
+    refereePills: ["Wetherby", "Wednesday nights", "Launch opportunities"],
+  },
+  {
+    area: "Northallerton",
+    nightLabel: "Wednesday",
+    nightValue: "WEDNESDAY",
+    leagueType: "MENS",
+    source: "northallerton-wednesday-launch",
+    teamIntro: "Register interest for the new Northallerton Men’s Wednesday 6-a-side League.",
+    playerIntro: "Join the player list for the new Northallerton Men’s Wednesday 6-a-side League.",
+    refereeIntro: "Register referee interest for the new Northallerton Wednesday night 6-a-side league.",
+    teamNotesPlaceholder:
+      "Anything useful to know? For example: likely squad size, playing standard, whether you already have a full squad, or any questions about the Northallerton Wednesday league.",
+    playerNotesPlaceholder:
+      "Anything useful to know? For example: position, playing standard, whether you are joining on your own or with friends, or any questions about the Northallerton Wednesday league.",
+    refereeNotesPlaceholder:
+      "Tell us anything useful. For example: refereeing experience, qualifications, whether you can do Wednesday nights, or whether you are interested in regular weekly games.",
+    teamPills: ["Northallerton", "Men’s league", "Wednesday nights"],
+    refereePills: ["Northallerton", "Wednesday nights", "Launch opportunities"],
+    watermarkImageUrl: "/leagues/northallerton-wednesday.png",
+    watermarkAlt: "Northallerton Men’s Wednesday 6-a-side League badge",
+  },
+];
 
 const leadTypeConfig: Record<InterestTypeValue, LeadTypeConfig> = {
   TEAM: {
@@ -136,6 +196,16 @@ function getDefaultNight(rawNight?: string) {
   return match?.value ?? "";
 }
 
+function getActiveLaunchRegistration(defaultArea: string, defaultNight: string) {
+  return (
+    launchRegistrations.find(
+      (launch) =>
+        launch.area === defaultArea &&
+        (!defaultNight || defaultNight === launch.nightValue),
+    ) ?? null
+  );
+}
+
 function getErrorMessage(rawError?: string): string | null {
   switch (rawError) {
     case "missing":
@@ -145,56 +215,66 @@ function getErrorMessage(rawError?: string): string | null {
   }
 }
 
-function getTypeHref(type: InterestTypeValue, isNorthallertonWednesday: boolean) {
+function getTypeHref(type: InterestTypeValue, activeLaunch: LaunchRegistrationConfig | null) {
   const base = `/register-interest?type=${type.toLowerCase()}`;
 
-  if (!isNorthallertonWednesday) return base;
+  if (!activeLaunch) return base;
 
-  return `${base}&area=Northallerton&night=Wednesday`;
+  return `${base}&area=${encodeURIComponent(activeLaunch.area)}&night=${activeLaunch.nightLabel}`;
 }
 
-function getIntro(config: LeadTypeConfig, isNorthallertonWednesday: boolean) {
-  if (!isNorthallertonWednesday) return config.intro;
+function getIntro(config: LeadTypeConfig, activeLaunch: LaunchRegistrationConfig | null) {
+  if (!activeLaunch) return config.intro;
 
-  if (config.type === "TEAM") {
-    return "Register interest for the new Northallerton Men’s Wednesday 6-a-side League.";
-  }
-
-  if (config.type === "PLAYER") {
-    return "Join the player list for the new Northallerton Men’s Wednesday 6-a-side League.";
-  }
-
-  return "Register referee interest for the new Northallerton Wednesday night 6-a-side league.";
+  if (config.type === "TEAM") return activeLaunch.teamIntro;
+  if (config.type === "PLAYER") return activeLaunch.playerIntro;
+  return activeLaunch.refereeIntro;
 }
 
-function getNotesPlaceholder(config: LeadTypeConfig, isNorthallertonWednesday: boolean) {
-  if (!isNorthallertonWednesday) return config.notesPlaceholder;
+function getNotesPlaceholder(
+  config: LeadTypeConfig,
+  activeLaunch: LaunchRegistrationConfig | null,
+) {
+  if (!activeLaunch) return config.notesPlaceholder;
 
-  if (config.type === "TEAM") {
-    return "Anything useful to know? For example: likely squad size, playing standard, whether you already have a full squad, or any questions about the Northallerton Wednesday league.";
-  }
-
-  if (config.type === "PLAYER") {
-    return "Anything useful to know? For example: position, playing standard, whether you are joining on your own or with friends, or any questions about the Northallerton Wednesday league.";
-  }
-
-  return "Tell us anything useful. For example: refereeing experience, qualifications, whether you can do Wednesday nights, or whether you are interested in regular weekly games.";
+  if (config.type === "TEAM") return activeLaunch.teamNotesPlaceholder;
+  if (config.type === "PLAYER") return activeLaunch.playerNotesPlaceholder;
+  return activeLaunch.refereeNotesPlaceholder;
 }
 
-function NorthallertonLeagueWatermark() {
+function LaunchLeagueWatermark({ launch }: { launch: LaunchRegistrationConfig }) {
+  if (launch.watermarkImageUrl) {
+    return (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-1/2 hidden w-[440px] -translate-x-1/2 -translate-y-1/2 opacity-[0.28] sm:block lg:w-[500px]"
+      >
+        <Image
+          src={launch.watermarkImageUrl}
+          alt={launch.watermarkAlt ?? ""}
+          width={900}
+          height={900}
+          priority
+          className="h-auto w-full object-contain"
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute left-1/2 top-1/2 hidden w-[440px] -translate-x-1/2 -translate-y-1/2 opacity-[0.28] sm:block lg:w-[500px]"
+      className="pointer-events-none absolute left-1/2 top-1/2 hidden w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-[2.5rem] border border-emerald-500/20 bg-emerald-500/10 p-10 text-center opacity-[0.22] shadow-[0_24px_90px_rgba(16,185,129,0.18)] sm:block"
     >
-      <Image
-        src="/leagues/northallerton-wednesday.png"
-        alt=""
-        width={900}
-        height={900}
-        priority
-        className="h-auto w-full object-contain"
-      />
+      <div className="text-[11px] font-black uppercase tracking-[0.34em] text-emerald-200">
+        New league
+      </div>
+      <div className="mt-4 text-6xl font-black tracking-tight text-white">
+        {launch.area}
+      </div>
+      <div className="mt-3 text-3xl font-black uppercase tracking-[0.18em] text-emerald-200">
+        {launch.nightLabel}
+      </div>
     </div>
   );
 }
@@ -211,12 +291,10 @@ export default async function RegisterInterestPage({
   const errorMessage = getErrorMessage(sp.error);
   const defaultArea = getDefaultArea(sp.area);
   const defaultNight = getDefaultNight(sp.night);
-  const isNorthallertonLead = defaultArea === "Northallerton";
-  const isNorthallertonWednesday =
-    isNorthallertonLead && (!defaultNight || defaultNight === "WEDNESDAY");
-  const showLeagueTypeField = config.showLeagueType && !isNorthallertonWednesday;
-  const intro = getIntro(config, isNorthallertonWednesday);
-  const notesPlaceholder = getNotesPlaceholder(config, isNorthallertonWednesday);
+  const activeLaunch = getActiveLaunchRegistration(defaultArea, defaultNight);
+  const showLeagueTypeField = config.showLeagueType && !activeLaunch;
+  const intro = getIntro(config, activeLaunch);
+  const notesPlaceholder = getNotesPlaceholder(config, activeLaunch);
 
   if (success) {
     return (
@@ -253,7 +331,7 @@ export default async function RegisterInterestPage({
               </Link>
 
               <Link
-                href={getTypeHref(leadType, isNorthallertonWednesday)}
+                href={getTypeHref(leadType, activeLaunch)}
                 className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10"
               >
                 ADD ANOTHER
@@ -278,17 +356,17 @@ export default async function RegisterInterestPage({
 
           <div className="flex flex-wrap gap-2">
             <TypeLink
-              href={getTypeHref("TEAM", isNorthallertonWednesday)}
+              href={getTypeHref("TEAM", activeLaunch)}
               label="Team"
               active={leadType === "TEAM"}
             />
             <TypeLink
-              href={getTypeHref("PLAYER", isNorthallertonWednesday)}
+              href={getTypeHref("PLAYER", activeLaunch)}
               label="Player"
               active={leadType === "PLAYER"}
             />
             <TypeLink
-              href={getTypeHref("REFEREE", isNorthallertonWednesday)}
+              href={getTypeHref("REFEREE", activeLaunch)}
               label="Referee"
               active={leadType === "REFEREE"}
             />
@@ -296,7 +374,7 @@ export default async function RegisterInterestPage({
         </div>
 
         <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8">
-          {isNorthallertonWednesday ? <NorthallertonLeagueWatermark /> : null}
+          {activeLaunch ? <LaunchLeagueWatermark launch={activeLaunch} /> : null}
 
           <div className="relative z-10">
             <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300">
@@ -317,12 +395,8 @@ export default async function RegisterInterestPage({
 
             <div className="mt-4 flex flex-wrap gap-2">
               {leadType === "REFEREE" ? (
-                isNorthallertonWednesday ? (
-                  <>
-                    <Pill text="Northallerton" />
-                    <Pill text="Wednesday nights" />
-                    <Pill text="Launch opportunities" />
-                  </>
+                activeLaunch ? (
+                  activeLaunch.refereePills.map((pill) => <Pill key={pill} text={pill} />)
                 ) : (
                   <>
                     <Pill text="Weekly games" />
@@ -330,12 +404,8 @@ export default async function RegisterInterestPage({
                     <Pill text="Launch opportunities" />
                   </>
                 )
-              ) : isNorthallertonWednesday ? (
-                <>
-                  <Pill text="Northallerton" />
-                  <Pill text="Men’s league" />
-                  <Pill text="Wednesday nights" />
-                </>
+              ) : activeLaunch ? (
+                activeLaunch.teamPills.map((pill) => <Pill key={pill} text={pill} />)
               ) : (
                 <>
                   <Pill text="Men’s leagues" />
@@ -356,20 +426,16 @@ export default async function RegisterInterestPage({
               <input
                 type="hidden"
                 name="source"
-                value={
-                  isNorthallertonWednesday
-                    ? "northallerton-wednesday-launch"
-                    : "register-interest-page"
-                }
+                value={activeLaunch ? activeLaunch.source : "register-interest-page"}
               />
-              {isNorthallertonWednesday ? (
-                <input type="hidden" name="area" value="Northallerton" />
+              {activeLaunch ? (
+                <input type="hidden" name="area" value={activeLaunch.area} />
               ) : null}
-              {isNorthallertonWednesday && config.showLeagueType ? (
-                <input type="hidden" name="leagueType" value="MENS" />
+              {activeLaunch && config.showLeagueType ? (
+                <input type="hidden" name="leagueType" value={activeLaunch.leagueType} />
               ) : null}
-              {isNorthallertonWednesday ? (
-                <input type="hidden" name="preferredNights" value="WEDNESDAY" />
+              {activeLaunch ? (
+                <input type="hidden" name="preferredNights" value={activeLaunch.nightValue} />
               ) : null}
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -406,13 +472,13 @@ export default async function RegisterInterestPage({
                 )}
               </div>
 
-              {!isNorthallertonWednesday || showLeagueTypeField ? (
+              {!activeLaunch || showLeagueTypeField ? (
                 <div
                   className={`grid gap-4 ${
                     showLeagueTypeField ? "sm:grid-cols-2" : "sm:grid-cols-1"
                   }`}
                 >
-                  {!isNorthallertonWednesday ? (
+                  {!activeLaunch ? (
                     <SelectField
                       label="Area"
                       name="area"
@@ -437,7 +503,7 @@ export default async function RegisterInterestPage({
                 </div>
               ) : null}
 
-              {!isNorthallertonWednesday ? (
+              {!activeLaunch ? (
                 <PreferredNightsField defaultNight={defaultNight} />
               ) : null}
 
