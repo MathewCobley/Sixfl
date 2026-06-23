@@ -85,13 +85,9 @@ function getRoleBadgeClasses(role: TeamRole) {
 }
 
 function getInitials(name: string | null | undefined) {
-  const parts = (name || "Player")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "P";
+  const base = (name || "?").trim();
+  const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.length ? parts.map((part) => part[0]?.toUpperCase() ?? "").join("") : "?";
 }
 
 function formatUkDate(value: Date) {
@@ -104,39 +100,41 @@ function formatUkDate(value: Date) {
 
 function formatPreferredNights(value: unknown) {
   if (!value) return null;
-  if (Array.isArray(value)) return value.filter(Boolean).join(", ") || null;
+
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(", ") || null;
+  }
 
   if (typeof value === "object") {
-    return (
-      Object.values(value as Record<string, unknown>)
-        .flat()
-        .filter(Boolean)
-        .map(String)
-        .join(", ") || null
-    );
+    const values = Object.values(value as Record<string, unknown>)
+      .flat()
+      .filter(Boolean)
+      .map(String);
+
+    return values.join(", ") || null;
   }
 
   return String(value);
 }
 
 function formatAvailabilitySummary(value: string | null | undefined) {
-  const cleaned = value?.replace(/^\s*availability\s*:\s*/i, "").trim();
-  return cleaned || null;
+  if (!value?.trim()) return null;
+  return value.trim();
 }
 
-function normalisePlayerName(value: string | null | undefined) {
-  return (value ?? "").trim().toLowerCase();
+function normalisePlayerName(name: string | null | undefined) {
+  return (name ?? "").trim().toLowerCase();
 }
 
 function parseStoredContributions(value: unknown): ContributionRow[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item): ContributionRow | null => {
+    .map((item) => {
       if (!item || typeof item !== "object") return null;
 
-      const row = item as Partial<ContributionRow>;
-      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const row = item as Record<string, unknown>;
+      const name = String(row.name ?? "").trim();
       const goals = Number(row.goals ?? 0);
       const assists = Number(row.assists ?? 0);
 
@@ -185,6 +183,8 @@ function getSavedMessage(saved?: string) {
   switch (saved) {
     case "player-added":
       return "Player added to your squad.";
+    case "player-updated":
+      return "Player details updated.";
     case "login-email-sent":
       return "Dashboard sign-in email sent to the player.";
     default:
@@ -318,23 +318,35 @@ async function addCaptainPlayerAction(formData: FormData) {
   `;
 
   const member = await prisma.teamMember.create({
-    data: { teamId: teamid, userId: user.id, role: "PLAYER" },
+    data: { userId: user.id, teamId: teamid, role: TeamRole.PLAYER },
     select: { id: true },
   });
 
   if (phone) {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "TeamMemberProfile" ("id", "teamMemberId", "phone", "updatedAt") VALUES ($1, $2, $3, NOW()) ON CONFLICT ("teamMemberId") DO UPDATE SET "phone" = EXCLUDED."phone", "updatedAt" = NOW()`,
-      randomUUID(),
-      member.id,
-      phone,
-    );
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TeamMemberProfile" (
+        "id" TEXT NOT NULL,
+        "teamMemberId" TEXT NOT NULL,
+        "phone" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TeamMemberProfile_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "TeamMemberProfile_teamMemberId_key"
+      ON "TeamMemberProfile"("teamMemberId");
+    `);
+    await prisma.$executeRaw`
+      INSERT INTO "TeamMemberProfile" ("id", "teamMemberId", "phone", "updatedAt")
+      VALUES (${randomUUID()}, ${member.id}, ${phone}, NOW())
+      ON CONFLICT ("teamMemberId") DO UPDATE SET "phone" = EXCLUDED."phone", "updatedAt" = NOW()
+    `;
   }
 
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/captain-squad`);
   revalidatePath(`/captain/team/${teamid}/squad`);
-  revalidatePath(`/captain/team/${teamid}/results`);
   redirect(`/captain/team/${teamid}/captain-squad?saved=player-added`);
 }
 
@@ -346,36 +358,19 @@ async function sendCaptainPlayerDashboardLoginEmailAction(formData: FormData) {
 
   await requireCaptain(teamid);
 
-  if (!teamid || !membershipId) {
-    redirect("/captain");
-  }
-
   const membership = await prisma.teamMember.findFirst({
-    where: {
-      id: membershipId,
-      teamId: teamid,
-    },
+    where: { id: membershipId, teamId: teamid },
     select: {
-      id: true,
-      user: {
-        select: {
-          name: true,
-          email: true,
-        },
-      },
-      team: {
-        select: {
-          name: true,
-        },
-      },
+      user: { select: { email: true, name: true } },
+      team: { select: { name: true } },
     },
   });
 
   if (!membership) {
-    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Player not found in this squad.")}`);
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Player not found.")}`);
   }
 
-  const email = membership.user.email?.trim().toLowerCase() ?? "";
+  const email = membership.user.email?.trim().toLowerCase();
 
   if (!email) {
     redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("This player does not have an email address saved.")}`);
@@ -547,7 +542,7 @@ export default async function CaptainSquadViewPage({
               </span>
               {canCaptainAddPlayers ? (
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/70">
-                  Standard team
+                  Team-managed squad
                 </span>
               ) : (
                 <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
@@ -677,7 +672,7 @@ export default async function CaptainSquadViewPage({
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2 xl:w-72 xl:justify-end">
                     <Link
-                      href={`/captain/team/${teamid}/squad/${member.id}/edit`}
+                      href={`/captain/team/${teamid}/captain-squad/${member.id}/edit`}
                       className="inline-flex items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
                     >
                       Edit player
@@ -732,55 +727,34 @@ export default async function CaptainSquadViewPage({
                     className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
                   />
                 </label>
-                <label className="flex items-center gap-2 text-sm text-white/70">
-                  <input type="checkbox" name="usesWhatsapp" />
-                  Show WhatsApp icon if a phone number is saved
+                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 transition hover:border-emerald-400/30 hover:bg-emerald-500/[0.06]">
+                  <span className="flex items-center gap-3 text-sm font-medium text-white/75">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10">
+                      <img src="/WhatsApp-Logo.png" alt="" className="h-5 w-5 object-contain" />
+                    </span>
+                    Player uses WhatsApp
+                  </span>
+                  <input type="checkbox" name="usesWhatsapp" className="h-4 w-4 accent-emerald-400" />
                 </label>
                 <button
                   type="submit"
-                  className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
+                  className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400"
                 >
                   Add player
                 </button>
               </form>
             </section>
-          ) : null}
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Matchday tools
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Manage your team</h2>
-            <div className="mt-4 space-y-3 text-sm text-white/65">
-              <p>Use this page to check your squad and edit player contact details.</p>
-              <p>For each fixture, use availability to see who can play and matchday squad to confirm who actually played.</p>
-              <p>
-                {canCaptainAddPlayers
-                  ? "Need a player removed? Message SIXFL and we will update it for you."
-                  : "For managed teams, SIXFL still controls squad additions, but captains can update player contact details."}
+          ) : (
+            <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6 text-sm text-amber-100/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+                SIXFL-managed team
               </p>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Quick actions
-            </p>
-            <div className="mt-4 flex flex-col gap-3">
-              <Link href={`/captain/team/${teamid}/availability`} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
-                Manage availability
-              </Link>
-              <Link href={`/captain/team/${teamid}/match-fees`} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
-                Open matchday squad
-              </Link>
-              <Link href={`/captain/team/${teamid}/fixtures`} className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
-                Open fixtures
-              </Link>
-              <Link href={`/captain/team/${teamid}/results`} className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
-                Open results
-              </Link>
-            </div>
-          </section>
+              <h2 className="mt-2 text-xl font-semibold text-white">Player additions are managed by SIXFL</h2>
+              <p className="mt-2 leading-6">
+                Contact SIXFL if a player needs to be added to this squad. You can still edit saved details for the players already shown.
+              </p>
+            </section>
+          )}
         </div>
       </section>
     </div>
