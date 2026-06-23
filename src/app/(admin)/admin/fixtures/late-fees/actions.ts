@@ -109,6 +109,10 @@ function getTeamName(input: {
     : input.fixture.awayTeam.name;
 }
 
+function getConfirmationDeadline(kickoffAt: Date) {
+  return new Date(kickoffAt.getTime() - 72 * 60 * 60 * 1000);
+}
+
 export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
   await requireAdmin();
 
@@ -116,6 +120,7 @@ export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
   const teamId = parseRequiredString(formData.get("teamId"), "Team");
   const decision = parseDecision(formData.get("decision"));
   const note = parseNote(formData.get("note"));
+  const decisionNote = decision === "NONE" ? null : note;
   const now = new Date();
 
   let teamName: string | null = null;
@@ -134,9 +139,20 @@ export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
     }
 
     const confirmation = fixture.captainConfirmations[0] ?? null;
+    const deadline = getConfirmationDeadline(fixture.kickoffAt);
+    const confirmedOnTime = Boolean(
+      confirmation?.status === "CONFIRMED" &&
+        confirmation.confirmedAt &&
+        confirmation.confirmedAt <= deadline,
+    );
+    const deadlineMissed = now > deadline && !confirmedOnTime;
 
     if (confirmation?.status === "ISSUE_RAISED" && decision === "APPLIED") {
       throw new Error("A fee should not be applied while a captain issue is open.");
+    }
+
+    if (decision === "APPLIED" && !deadlineMissed) {
+      throw new Error("A fee can only be applied after the 72-hour confirmation deadline has been missed.");
     }
 
     await prisma.$executeRaw`
@@ -159,7 +175,7 @@ export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
         ${teamId},
         CAST(${decision} AS "FixtureConfirmationLateFeeStatus"),
         1000,
-        ${note},
+        ${decisionNote},
         ${decision === "WARNING" ? now : null},
         ${decision === "APPLIED" ? now : null},
         ${decision === "WAIVED" ? now : null},
@@ -169,21 +185,21 @@ export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
       ON CONFLICT ("fixtureId", "teamId") DO UPDATE SET
         "status" = CAST(${decision} AS "FixtureConfirmationLateFeeStatus"),
         "amountPence" = 1000,
-        "note" = ${note},
+        "note" = ${decisionNote},
         "warningAt" = CASE
-          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'WARNING' THEN ${now}
-          ELSE "FixtureConfirmationLateFee"."warningAt"
+          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'WARNING'
+            THEN COALESCE("FixtureConfirmationLateFee"."warningAt", ${now})
+          ELSE NULL
         END,
         "appliedAt" = CASE
-          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'APPLIED' THEN ${now}
-          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'NONE' THEN NULL
-          ELSE "FixtureConfirmationLateFee"."appliedAt"
+          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'APPLIED'
+            THEN COALESCE("FixtureConfirmationLateFee"."appliedAt", ${now})
+          ELSE NULL
         END,
         "waivedAt" = CASE
-          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'WAIVED' THEN ${now}
-          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'APPLIED' THEN NULL
-          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'NONE' THEN NULL
-          ELSE "FixtureConfirmationLateFee"."waivedAt"
+          WHEN CAST(${decision} AS "FixtureConfirmationLateFeeStatus") = 'WAIVED'
+            THEN COALESCE("FixtureConfirmationLateFee"."waivedAt", ${now})
+          ELSE NULL
         END,
         "updatedAt" = ${now}
     `;
