@@ -332,20 +332,19 @@ function SixflAiPredictorSection() {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-center">
           <div>
             <div className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
-              Powered by OpenAI
+              SIXFL AI Predictor
             </div>
             <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">
-              SIXFL AI Predictor
+              Match predictions, powered by SIXFL AI Predictor.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
-              Before kick-off, the SIXFL AI Predictor uses OpenAI to turn recent
-              results, goals scored, goals conceded and league position into a
-              simple match preview and win chance estimate.
+              Before kick-off, SIXFL AI Predictor turns recent results, goals
+              scored, goals conceded and league position into a simple match
+              preview and win chance estimate.
             </p>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/55">
-              It is not betting advice and it does not decide the result. It is
-              a fun match-night feature that gives teams something extra to
-              check before they play.
+              It is just for fun. It gives teams something extra to check,
+              compare and talk about before they play.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               <FeaturePill text="AI match previews" />
@@ -365,7 +364,7 @@ function SixflAiPredictorSection() {
                 </h3>
               </div>
               <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-200">
-                AI preview
+                SIXFL AI Predictor
               </span>
             </div>
 
@@ -376,9 +375,9 @@ function SixflAiPredictorSection() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/62">
-              OpenAI preview: Six Offenders edge the prediction after stronger
-              recent scoring form, but Crescent United carry enough threat to
-              make this a competitive fixture.
+              SIXFL AI Predictor: Six Offenders edge the sample prediction after
+              stronger recent scoring form, but Crescent United carry enough
+              threat to make this a competitive fixture.
             </div>
 
             <div className="mt-4 text-[11px] leading-5 text-white/35">
