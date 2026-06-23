@@ -36,6 +36,8 @@ const AI_PREVIEW_CACHE = new Map<
 >();
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+const HEADLINE_MAX_LENGTH = 68;
+const SUMMARY_MAX_LENGTH = 260;
 
 function getCacheKey(input: FixtureAiPreviewInput) {
   return JSON.stringify({
@@ -57,17 +59,38 @@ function cleanText(value: string) {
     .trim();
 }
 
+function stripBrokenHeadlineEnding(value: string) {
+  return cleanText(value)
+    .replace(/\s+(?:in|with)\s+(?:a\s+)?\d+\s*[-–]\s*\d+\s*(?:pred\w*)?(?:…|\.\.\.)?\.?$/i, "")
+    .replace(/\s+\S*(?:…|\.\.\.)$/i, "")
+    .replace(/[.,;:!?-]+$/, "")
+    .trim();
+}
+
 function truncateSentence(value: string, maxLength: number) {
   const cleaned = cleanText(value);
   if (cleaned.length <= maxLength) return cleaned;
 
-  const hardCut = cleaned.slice(0, maxLength - 1).trim();
+  const hardCut = cleaned.slice(0, maxLength).trim();
   const lastSpace = hardCut.lastIndexOf(" ");
-  const wordBoundaryCut = lastSpace > Math.floor(maxLength * 0.65)
+  const wordBoundaryCut = lastSpace > Math.floor(maxLength * 0.55)
     ? hardCut.slice(0, lastSpace).trim()
     : hardCut;
 
   return `${wordBoundaryCut.replace(/[.,;:!?-]+$/, "")}…`;
+}
+
+function cleanHeadline(value: string) {
+  const stripped = stripBrokenHeadlineEnding(value);
+  return truncateSentence(stripped || value, HEADLINE_MAX_LENGTH);
+}
+
+export function cleanFixtureAiPreviewForDisplay(preview: FixtureAiPreview): FixtureAiPreview {
+  return {
+    ...preview,
+    headline: cleanHeadline(preview.headline),
+    summary: truncateSentence(preview.summary, SUMMARY_MAX_LENGTH),
+  };
 }
 
 function getFavourite(input: FixtureAiPreviewInput) {
@@ -123,8 +146,8 @@ function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAi
   if (!cleaned) return getFallbackFixtureAiPreview(input);
 
   const [firstSentence, ...rest] = cleaned.split(/(?<=[.!?])\s+/);
-  const headline = truncateSentence(firstSentence || "SIXFL AI Predictor", 96);
-  const summary = truncateSentence(rest.join(" ") || cleaned, 260);
+  const headline = cleanHeadline(firstSentence || "SIXFL AI Predictor");
+  const summary = truncateSentence(rest.join(" ") || cleaned, SUMMARY_MAX_LENGTH);
 
   return {
     headline,
@@ -158,10 +181,10 @@ export async function getFixtureAiPreview(
       },
       body: JSON.stringify({
         model,
-        max_output_tokens: 170,
+        max_output_tokens: 150,
         instructions:
-          "You write short, fun, factual 6-a-side football match previews for SIXFL. Do not invent injuries, absences, player names or facts not provided. Keep it suitable for a public sports website. Mention that it is a prediction only if needed.",
-        input: `Write one punchy headline sentence and one short explanation sentence for this fixture. Use only this data: ${JSON.stringify({
+          "You write short, fun, factual 6-a-side football match previews for SIXFL. Do not invent injuries, absences, player names or facts not provided. Keep it suitable for a public sports website. The headline must be one short sentence under 65 characters and must not end with a partial word. Do not put the exact scoreline in the headline.",
+        input: `Write one short headline sentence and one short explanation sentence for this fixture. Use only this data: ${JSON.stringify({
           homeTeam: input.homeTeamName,
           awayTeam: input.awayTeamName,
           predictedResult: input.winChance.predictedResult.label,
