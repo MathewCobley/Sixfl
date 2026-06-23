@@ -72,6 +72,12 @@ const navigation = [
     description: "Schedule and results",
   },
   {
+    name: "Late Fees",
+    href: "/admin/fixtures/late-fees",
+    icon: ExclamationTriangleIcon,
+    description: "72h confirmation review",
+  },
+  {
     name: "Social",
     href: "/admin/social",
     icon: PhotoIcon,
