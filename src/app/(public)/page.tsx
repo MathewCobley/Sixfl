@@ -67,9 +67,9 @@ const areaCards = [
 ];
 
 const homeStats = [
-  { label: "Live fixtures", value: "Harrogate" },
-  { label: "Wetherby venue", value: "Boston Spa" },
-  { label: "Format", value: "6-a-side" },
+  { label: "Area", value: "Wetherby" },
+  { label: "Venue", value: "Boston Spa" },
+  { label: "Night", value: "Wednesday" },
   { label: "Open to", value: "Teams & players" },
 ];
 
