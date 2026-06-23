@@ -11,19 +11,14 @@ export const metadata = {
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
-const northallertonLeagueLink = "/leagues/northallerton-mens-wednesday";
 const northallertonTeamLink =
   "/register-interest?type=team&area=Northallerton&night=Wednesday";
 const northallertonPlayerLink =
   "/register-interest?type=player&area=Northallerton&night=Wednesday";
-const northallertonRefereeLink =
-  "/register-interest?type=referee&area=Northallerton&night=Wednesday";
 const wetherbyTeamLink =
   "/register-interest?type=team&area=Wetherby&night=Wednesday";
 const wetherbyPlayerLink =
   "/register-interest?type=player&area=Wetherby&night=Wednesday";
-const wetherbyRefereeLink =
-  "/register-interest?type=referee&area=Wetherby&night=Wednesday";
 const generalTeamLink = "/register-interest?type=team";
 const generalPlayerLink = "/register-interest?type=player";
 const generalRefereeLink = "/register-interest?type=referee";
@@ -58,10 +53,10 @@ const areaCards = [
     title: "Northallerton Wednesday 6-a-side",
     status: "Registrations open",
     body: "Northallerton team entries are open for the upcoming Wednesday night 6-a-side league. Individual players and referees can also register interest.",
-    primaryLabel: "View launch page",
-    primaryHref: northallertonLeagueLink,
-    secondaryLabel: "Register team",
-    secondaryHref: northallertonTeamLink,
+    primaryLabel: "Register team",
+    primaryHref: northallertonTeamLink,
+    secondaryLabel: "Join as player",
+    secondaryHref: northallertonPlayerLink,
     featured: false,
   },
 ];
@@ -353,14 +348,14 @@ function HarrogatePanel() {
 
 function WetherbyPanel() {
   return (
-    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
-      <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+      <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
         WETHERBY REGISTRATIONS OPEN
       </div>
       <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-        Wetherby Wednesday 6-a-side at Boston Spa Academy.
+        Wetherby Wednesday 6-a-side recruiting now.
       </h2>
-      <p className="mt-3 text-sm leading-7 text-white/70 sm:text-base">
+      <p className="mt-3 text-sm leading-7 text-white/65 sm:text-base">
         Register interest for the new Wednesday night league at Boston Spa Academy.
         Team entries, individual players and referees are welcome.
       </p>
@@ -410,16 +405,16 @@ function NorthallertonPanel() {
       </div>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
         <Link
-          href={northallertonLeagueLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto lg:w-full xl:w-auto"
-        >
-          VIEW LAUNCH PAGE
-        </Link>
-        <Link
           href={northallertonTeamLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto lg:w-full xl:w-auto"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto lg:w-full xl:w-auto"
         >
           REGISTER TEAM
+        </Link>
+        <Link
+          href={northallertonPlayerLink}
+          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto lg:w-full xl:w-auto"
+        >
+          JOIN AS PLAYER
         </Link>
       </div>
     </div>
