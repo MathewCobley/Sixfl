@@ -131,6 +131,14 @@ function DecisionForm({
   );
 }
 
+function HistoryPill({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/65">
+      {label}: {value}
+    </span>
+  );
+}
+
 function TeamRow({
   fixtureId,
   kickoffAt,
@@ -141,6 +149,10 @@ function TeamRow({
   lastChasedAt,
   decisionStatus,
   decisionNote,
+  historyWarnings,
+  historyApplied,
+  historyWaived,
+  historyLateConfirms,
 }: {
   fixtureId: string;
   kickoffAt: Date;
@@ -151,20 +163,28 @@ function TeamRow({
   lastChasedAt: Date | null;
   decisionStatus: string | null;
   decisionNote: string | null;
+  historyWarnings: number;
+  historyApplied: number;
+  historyWaived: number;
+  historyLateConfirms: number;
 }) {
   const deadline = getDeadline(kickoffAt);
   const confirmedOnTime = confirmationStatus === "CONFIRMED" && confirmedAt && confirmedAt <= deadline;
   const issueRaised = confirmationStatus === "ISSUE_RAISED";
   const needsDecision = new Date() > deadline && !confirmedOnTime && !issueRaised;
+  const hasHistory = historyWarnings + historyApplied + historyWaived + historyLateConfirms > 0;
 
   return (
     <div className={cx("rounded-3xl border p-5", needsDecision ? "border-red-400/25 bg-red-500/[0.06]" : "border-white/10 bg-black/20")}>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-white">{teamName}</h3>
+            <Link href={`/admin/teams/${teamId}/late-fees`} className="text-lg font-semibold text-white underline-offset-4 hover:text-emerald-200 hover:underline">
+              {teamName}
+            </Link>
             {needsDecision ? <span className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-100">72h missed</span> : null}
           </div>
+
           <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
               {getConfirmationLabel(confirmationStatus, confirmedAt, deadline)}
@@ -173,12 +193,29 @@ function TeamRow({
               {getDecisionLabel(decisionStatus)}
             </span>
           </div>
+
           <div className="mt-4 grid gap-2 text-sm text-white/55 sm:grid-cols-2">
             <div>Deadline: {formatDate(deadline)}</div>
             <div>Confirmed: {formatDate(confirmedAt)}</div>
             <div>Last chased: {formatDate(lastChasedAt)}</div>
             <div>Charge: £10</div>
           </div>
+
+          <div className={cx("mt-4 rounded-2xl border p-3", hasHistory ? "border-amber-400/15 bg-amber-500/[0.04]" : "border-white/10 bg-white/[0.03]")}>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+              Team history
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <HistoryPill label="Warnings" value={historyWarnings} />
+              <HistoryPill label="Applied" value={historyApplied} />
+              <HistoryPill label="Waived" value={historyWaived} />
+              <HistoryPill label="Late confirms" value={historyLateConfirms} />
+            </div>
+            <Link href={`/admin/teams/${teamId}/late-fees`} className="mt-3 inline-flex text-xs font-semibold text-emerald-300 hover:text-emerald-200">
+              Open full team history →
+            </Link>
+          </div>
+
           {decisionNote ? <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">{decisionNote}</div> : null}
         </div>
         <DecisionForm fixtureId={fixtureId} teamId={teamId} note={decisionNote} />
@@ -201,7 +238,7 @@ export default async function LateConfirmationFeesPage({ searchParams }: { searc
       <section className="rounded-3xl border border-emerald-400/15 bg-white/[0.03] p-6 md:p-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture confirmation policy</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Late confirmation review</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">Review teams that have not confirmed at least 72 hours before kick-off. Record a warning, apply the admin charge, or waive it with a note.</p>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">Review teams that have not confirmed at least 72 hours before kick-off. Each row now shows the team’s previous warnings, charges, waived decisions and late confirmations to help you decide fairly.</p>
         <Link href="/admin/fixtures" className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 hover:bg-white/5">Back to fixtures</Link>
       </section>
 
@@ -217,8 +254,8 @@ export default async function LateConfirmationFeesPage({ searchParams }: { searc
               <p className="mt-1 text-sm text-white/55">{formatDate(row.kickoffAt)} · {row.venueName ?? "Venue TBC"}</p>
             </div>
             <div className="grid gap-4">
-              <TeamRow fixtureId={row.fixtureId} kickoffAt={row.kickoffAt} teamId={row.homeTeamId} teamName={row.homeTeamName} confirmationStatus={row.homeConfirmationStatus} confirmedAt={row.homeConfirmedAt} lastChasedAt={row.homeLastChasedAt} decisionStatus={row.homeLateFeeStatus} decisionNote={row.homeLateFeeNote} />
-              <TeamRow fixtureId={row.fixtureId} kickoffAt={row.kickoffAt} teamId={row.awayTeamId} teamName={row.awayTeamName} confirmationStatus={row.awayConfirmationStatus} confirmedAt={row.awayConfirmedAt} lastChasedAt={row.awayLastChasedAt} decisionStatus={row.awayLateFeeStatus} decisionNote={row.awayLateFeeNote} />
+              <TeamRow fixtureId={row.fixtureId} kickoffAt={row.kickoffAt} teamId={row.homeTeamId} teamName={row.homeTeamName} confirmationStatus={row.homeConfirmationStatus} confirmedAt={row.homeConfirmedAt} lastChasedAt={row.homeLastChasedAt} decisionStatus={row.homeLateFeeStatus} decisionNote={row.homeLateFeeNote} historyWarnings={row.homeHistoryWarnings} historyApplied={row.homeHistoryApplied} historyWaived={row.homeHistoryWaived} historyLateConfirms={row.homeHistoryLateConfirms} />
+              <TeamRow fixtureId={row.fixtureId} kickoffAt={row.kickoffAt} teamId={row.awayTeamId} teamName={row.awayTeamName} confirmationStatus={row.awayConfirmationStatus} confirmedAt={row.awayConfirmedAt} lastChasedAt={row.awayLastChasedAt} decisionStatus={row.awayLateFeeStatus} decisionNote={row.awayLateFeeNote} historyWarnings={row.awayHistoryWarnings} historyApplied={row.awayHistoryApplied} historyWaived={row.awayHistoryWaived} historyLateConfirms={row.awayHistoryLateConfirms} />
             </div>
           </section>
         ))}
