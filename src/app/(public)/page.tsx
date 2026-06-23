@@ -5,9 +5,9 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "SIXFL | Harrogate & Northallerton 6-a-side football leagues",
+  title: "SIXFL | Harrogate, Northallerton & Wetherby 6-a-side football leagues",
   description:
-    "Find local SIXFL 6-a-side football leagues in Harrogate and Northallerton. View fixtures, results and tables, or register interest as a team, player or referee.",
+    "Find local SIXFL 6-a-side football leagues in Harrogate, Northallerton and Wetherby. View fixtures, results and tables, or register interest as a team, player or referee.",
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
@@ -18,6 +18,12 @@ const northallertonPlayerLink =
   "/register-interest?type=player&area=Northallerton&night=Wednesday";
 const northallertonRefereeLink =
   "/register-interest?type=referee&area=Northallerton&night=Wednesday";
+const wetherbyTeamLink =
+  "/register-interest?type=team&area=Wetherby&night=Wednesday";
+const wetherbyPlayerLink =
+  "/register-interest?type=player&area=Wetherby&night=Wednesday";
+const wetherbyRefereeLink =
+  "/register-interest?type=referee&area=Wetherby&night=Wednesday";
 const generalTeamLink = "/register-interest?type=team";
 const generalPlayerLink = "/register-interest?type=player";
 const generalRefereeLink = "/register-interest?type=referee";
@@ -37,6 +43,17 @@ const areaCards = [
     featured: true,
   },
   {
+    eyebrow: "WETHERBY LAUNCH",
+    title: "Wetherby Wednesday 6-a-side",
+    status: "Registrations open",
+    body: "Wetherby team entries are now open for a new Wednesday night SIXFL league. Captains, players and referees can register interest now.",
+    primaryLabel: "Register team",
+    primaryHref: wetherbyTeamLink,
+    secondaryLabel: "Join as player",
+    secondaryHref: wetherbyPlayerLink,
+    featured: false,
+  },
+  {
     eyebrow: "NORTHALLERTON LAUNCH",
     title: "Northallerton Wednesday 6-a-side",
     status: "Registrations open",
@@ -51,7 +68,7 @@ const areaCards = [
 
 const homeStats = [
   { label: "Live fixtures", value: "Harrogate" },
-  { label: "New league", value: "Northallerton" },
+  { label: "New league", value: "Wetherby" },
   { label: "Format", value: "6-a-side" },
   { label: "Open to", value: "Teams & players" },
 ];
@@ -92,7 +109,7 @@ const joinRoutes = [
   },
 ];
 
-const launchAreas = ["Harrogate", "Northallerton", "Ripon", "York", "Leeds"];
+const launchAreas = ["Harrogate", "Wetherby", "Northallerton", "Ripon", "York", "Leeds"];
 
 export default function HomePage() {
   return (
@@ -112,11 +129,11 @@ export default function HomePage() {
         <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
           <div className="max-w-5xl text-left">
             <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
-              Harrogate live now • Northallerton registrations open
+              Harrogate live now • Wetherby Wednesday registrations open
             </div>
 
             <h1 className="mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl sm:leading-[0.95] lg:text-7xl">
-              Local 6-a-side football in Harrogate and Northallerton.
+              Local 6-a-side football in Harrogate, Wetherby and Northallerton.
               <br />
               <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.55)]">
                 Easy to join. Easy to follow.
@@ -149,15 +166,15 @@ export default function HomePage() {
               </Link>
 
               <Link
-                href={northallertonLeagueLink}
+                href={wetherbyTeamLink}
                 className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
               >
-                REGISTER INTEREST
+                REGISTER WETHERBY TEAM
               </Link>
             </div>
           </div>
 
-          <div className="mt-10 grid gap-4 lg:grid-cols-2">
+          <div className="mt-10 grid gap-4 lg:grid-cols-3">
             {areaCards.map((area) => (
               <AreaCard key={area.title} {...area} />
             ))}
@@ -172,8 +189,9 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mt-12 grid gap-6 lg:mt-16 lg:grid-cols-2">
+        <section className="mt-12 grid gap-6 lg:mt-16 lg:grid-cols-3">
           <HarrogatePanel />
+          <WetherbyPanel />
           <NorthallertonPanel />
         </section>
 
@@ -215,7 +233,7 @@ export default function HomePage() {
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
                   Teams, individual players and referees can register interest
                   for live leagues and new launch areas. Harrogate is live now,
-                  and Northallerton registrations are open.
+                  and Wetherby and Northallerton registrations are open.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -332,7 +350,7 @@ function HarrogatePanel() {
         Follow the public league page for upcoming fixtures, recent results,
         participating teams and the current table.
       </p>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <BenefitPill text="Fixtures & kick-offs" />
         <BenefitPill text="League table" />
         <BenefitPill text="Results" />
@@ -344,6 +362,43 @@ function HarrogatePanel() {
       >
         VIEW HARROGATE LEAGUE
       </Link>
+    </div>
+  );
+}
+
+function WetherbyPanel() {
+  return (
+    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.08] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
+      <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
+        WETHERBY REGISTRATIONS OPEN
+      </div>
+      <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+        Wetherby Wednesday 6-a-side recruiting now.
+      </h2>
+      <p className="mt-3 text-sm leading-7 text-white/70 sm:text-base">
+        Register interest for the new Wednesday night league in Wetherby. Team
+        entries, individual players and referees are welcome.
+      </p>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <BenefitPill text="Free to register" />
+        <BenefitPill text="Team entries open" />
+        <BenefitPill text="Wednesday nights" />
+        <BenefitPill text="Player/referee interest" />
+      </div>
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+        <Link
+          href={wetherbyTeamLink}
+          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto lg:w-full xl:w-auto"
+        >
+          REGISTER TEAM
+        </Link>
+        <Link
+          href={wetherbyPlayerLink}
+          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto lg:w-full xl:w-auto"
+        >
+          JOIN AS PLAYER
+        </Link>
+      </div>
     </div>
   );
 }
@@ -362,22 +417,22 @@ function NorthallertonPanel() {
         Northallerton. Team entries, individual players and referees are
         welcome.
       </p>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <BenefitPill text="Free to register" />
         <BenefitPill text="Team entries open" />
         <BenefitPill text="Wednesday nights" />
         <BenefitPill text="Player/referee interest" />
       </div>
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
         <Link
           href={northallertonLeagueLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto lg:w-full xl:w-auto"
         >
           VIEW LAUNCH PAGE
         </Link>
         <Link
           href={northallertonTeamLink}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto lg:w-full xl:w-auto"
         >
           REGISTER TEAM
         </Link>
