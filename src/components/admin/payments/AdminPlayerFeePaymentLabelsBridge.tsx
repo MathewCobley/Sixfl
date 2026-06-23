@@ -20,14 +20,17 @@ type LabelsPayload = {
   labels?: PlayerFeePaymentLabel[];
 };
 
-function isUnlabelledPlayerFeePaymentCard(card: Element) {
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
+}
+
+function isUnlabelledStripePaymentCard(card: Element) {
   const text = card.textContent ?? "";
 
-  return (
-    text.includes("Unlinked payment") &&
-    text.includes("Stripe") &&
-    text.includes("£6.00")
-  );
+  return text.includes("Unlinked payment") && text.includes("Stripe");
 }
 
 function getRecentPaymentsCards() {
@@ -40,31 +43,51 @@ function getRecentPaymentsCards() {
     if (!section) return [];
 
     return Array.from(section.querySelectorAll("div.rounded-2xl")).filter(
-      isUnlabelledPlayerFeePaymentCard,
+      isUnlabelledStripePaymentCard,
     );
   });
 }
 
+function getPaymentSubtitleElement(card: Element) {
+  return Array.from(card.querySelectorAll("div")).find(
+    (element) => element.textContent?.trim() === "Unlinked payment · Stripe",
+  );
+}
+
+function findLabelForCard(
+  card: Element,
+  labels: PlayerFeePaymentLabel[],
+  usedTransactionIds: Set<string>,
+) {
+  const cardText = card.textContent ?? "";
+
+  return labels.find(
+    (label) =>
+      !usedTransactionIds.has(label.transactionId) &&
+      cardText.includes(label.teamName) &&
+      cardText.includes(formatMoney(label.amountPence)),
+  );
+}
+
 function relabelPlayerFeePayments(labels: PlayerFeePaymentLabel[]) {
   const cards = getRecentPaymentsCards();
+  const usedTransactionIds = new Set<string>();
 
-  cards.forEach((card, index) => {
-    const label = labels[index];
+  cards.forEach((card) => {
+    const label = findLabelForCard(card, labels, usedTransactionIds);
     if (!label) return;
 
-    const subtitleElement = Array.from(card.querySelectorAll("div")).find(
-      (element) => element.textContent?.trim() === "Unlinked payment · Stripe",
-    );
-
+    const subtitleElement = getPaymentSubtitleElement(card);
     if (!subtitleElement) return;
 
     const titleElement = subtitleElement.previousElementSibling;
 
     if (titleElement) {
-      titleElement.textContent = label.title;
+      titleElement.textContent = `${label.teamName} · ${label.title}`;
     }
 
     subtitleElement.textContent = label.subtitle;
+    usedTransactionIds.add(label.transactionId);
   });
 }
 
