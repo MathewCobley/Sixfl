@@ -48,6 +48,29 @@ const curatedVenues: VenueCardData[] = [
       "https://www.google.com/maps/search/?api=1&query=Rossett+Sports+Centre,+Pannal+Ash+Road,+Harrogate,+HG2+9PH",
   },
   {
+    name: "Boston Spa Academy",
+    league: "Wetherby Wednesday League",
+    location: "Wetherby / Boston Spa",
+    address: ["Clifford Moor Road", "Boston Spa", "Wetherby", "LS23 6RW"],
+    image: "/venues/boston-spa-academy.svg",
+    imageAlt: "Boston Spa Academy outdoor football pitches",
+    description:
+      "Boston Spa Academy gives the Wetherby launch a strong local football venue, with an all-weather playing area, open pitch layout and a proper setting for organised midweek 6-a-side football.",
+    features: [
+      "All-weather football surface",
+      "Floodlit evening matches",
+      "Open pitch layout",
+      "On-site parking",
+      "Wetherby / Boston Spa location",
+    ],
+    ctaHref: "/register-interest?type=team&area=Wetherby&night=Wednesday",
+    infoHref: "https://www.bostonspa.leeds.sch.uk/",
+    mapEmbedUrl:
+      "https://www.google.com/maps?q=Boston+Spa+Academy,+Clifford+Moor+Road,+Boston+Spa,+Wetherby,+LS23+6RW&output=embed",
+    mapsHref:
+      "https://www.google.com/maps/search/?api=1&query=Boston+Spa+Academy,+Clifford+Moor+Road,+Boston+Spa,+Wetherby,+LS23+6RW",
+  },
+  {
     name: "St John Fisher 3G Pitch",
     league: "Harrogate League Venue",
     location: "Harrogate",
@@ -153,6 +176,7 @@ function getLocationFromVenue(venue: {
   if (combined.includes("harrogate")) return "Harrogate";
   if (combined.includes("ripon")) return "Ripon";
   if (combined.includes("knaresborough")) return "Knaresborough";
+  if (combined.includes("boston spa") || combined.includes("wetherby")) return "Wetherby";
   if (combined.includes("york")) return "York";
   if (combined.includes("leeds")) return "Leeds";
 
@@ -164,6 +188,7 @@ function getLeagueLabel(location: string) {
   if (location === "Harrogate") return "Harrogate League Venue";
   if (location === "Ripon") return "Ripon League Venue";
   if (location === "Knaresborough") return "Knaresborough League Venue";
+  if (location === "Wetherby") return "Wetherby Wednesday League";
 
   return "SIXFL League Venue";
 }
@@ -221,7 +246,9 @@ async function getVenues() {
         ctaHref:
           location === "Northallerton"
             ? "/register-interest?type=team&area=Northallerton&night=Wednesday"
-            : "/register-interest?type=team",
+            : location === "Wetherby"
+              ? "/register-interest?type=team&area=Wetherby&night=Wednesday"
+              : "/register-interest?type=team",
         infoHref: venue.websiteUrl,
         mapEmbedUrl,
         mapsHref: venue.googleMapsUrl || buildMapsHref(venue.name, address),
