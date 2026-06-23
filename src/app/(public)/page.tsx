@@ -362,7 +362,15 @@ function SixflAiPredictorSection() {
               </span>
             </div>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-4 sm:gap-5 sm:p-5">
+              <SampleTeamBadge initials="SO" name="Six Offenders" tone="emerald" />
+              <div className="rounded-full border border-white/10 bg-black/60 px-3 py-2 text-xs font-black tracking-[0.2em] text-white/55">
+                VS
+              </div>
+              <SampleTeamBadge initials="CU" name="Crescent United" tone="sky" />
+            </div>
+
+            <div className="mt-6 space-y-4">
               {predictorSample.map((item) => (
                 <PredictionBar key={item.label} {...item} />
               ))}
@@ -382,6 +390,50 @@ function SixflAiPredictorSection() {
         </div>
       </div>
     </section>
+  );
+}
+
+function SampleTeamBadge({
+  initials,
+  name,
+  tone,
+}: {
+  initials: string;
+  name: string;
+  tone: "emerald" | "sky";
+}) {
+  const badgeStyles =
+    tone === "emerald"
+      ? {
+          outer:
+            "border-emerald-300/25 bg-gradient-to-b from-emerald-300/22 via-emerald-500/12 to-black/70 shadow-emerald-500/20",
+          inner: "border-emerald-200/30 bg-emerald-400/15 text-emerald-100",
+          accent: "bg-emerald-300/75",
+        }
+      : {
+          outer:
+            "border-sky-300/25 bg-gradient-to-b from-sky-300/22 via-sky-500/12 to-black/70 shadow-sky-500/20",
+          inner: "border-sky-200/30 bg-sky-400/15 text-sky-100",
+          accent: "bg-sky-300/75",
+        };
+
+  return (
+    <div className="flex min-w-0 flex-col items-center text-center">
+      <div
+        className={`relative flex h-28 w-28 items-center justify-center rounded-[2rem] border shadow-2xl sm:h-36 sm:w-36 ${badgeStyles.outer}`}
+        aria-label={`${name} badge`}
+        title={`${name} badge`}
+      >
+        <div className="absolute inset-3 rounded-[1.45rem] border border-white/10 bg-black/35" />
+        <div className={`absolute left-1/2 top-4 h-1.5 w-12 -translate-x-1/2 rounded-full sm:w-16 ${badgeStyles.accent}`} />
+        <div className={`relative flex h-16 w-16 items-center justify-center rounded-full border text-2xl font-black tracking-tight sm:h-20 sm:w-20 sm:text-3xl ${badgeStyles.inner}`}>
+          {initials}
+        </div>
+      </div>
+      <div className="mt-3 max-w-[9rem] text-sm font-black leading-5 text-white sm:text-base">
+        {name}
+      </div>
+    </div>
   );
 }
 
