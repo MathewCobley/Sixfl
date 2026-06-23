@@ -238,11 +238,11 @@ function createFullWinChancePanel(fixture: FixtureBadge) {
     preview.className = "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4";
 
     const headline = document.createElement("div");
-    headline.className = "text-sm font-semibold text-white";
+    headline.className = "whitespace-normal break-words text-sm font-semibold leading-5 text-white";
     headline.textContent = chance.aiPreview.headline;
 
     const paragraph = document.createElement("p");
-    paragraph.className = "mt-2 text-sm leading-6 text-white/60";
+    paragraph.className = "mt-2 whitespace-normal break-words text-sm leading-6 text-white/60";
     paragraph.textContent = chance.aiPreview.summary;
 
     preview.appendChild(headline);
