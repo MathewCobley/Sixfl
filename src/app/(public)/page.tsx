@@ -7,7 +7,7 @@ import Link from "next/link";
 export const metadata = {
   title: "SIXFL | Harrogate, Northallerton & Wetherby 6-a-side football leagues",
   description:
-    "Find local SIXFL 6-a-side football leagues in Harrogate, Wetherby at Boston Spa Academy and Northallerton. View fixtures, results and tables, or register interest as a team, player or referee.",
+    "Find local SIXFL 6-a-side football leagues in Harrogate, Wetherby at Boston Spa Academy and Northallerton. View fixtures, results, AI predictions and tables, or register interest as a team, player or referee.",
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
@@ -99,6 +99,12 @@ const joinRoutes = [
 
 const launchAreas = ["Harrogate", "Wetherby", "Northallerton", "Ripon", "York", "Leeds"];
 
+const predictorSample = [
+  { label: "Six Offenders", value: 58, tone: "emerald" },
+  { label: "Draw", value: 14, tone: "neutral" },
+  { label: "Crescent United", value: 28, tone: "sky" },
+];
+
 export default function HomePage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -168,6 +174,8 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
+        <SixflAiPredictorSection />
 
         <section className="mt-12 grid gap-6 lg:mt-16 lg:grid-cols-3">
           <HarrogatePanel />
@@ -314,6 +322,109 @@ function AreaCard({
         </Link>
       </div>
     </article>
+  );
+}
+
+function SixflAiPredictorSection() {
+  return (
+    <section className="mt-12 lg:mt-16">
+      <div className="overflow-hidden rounded-[1.5rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.035))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-center">
+          <div>
+            <div className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
+              SIXFL AI Predictor
+            </div>
+            <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">
+              Match predictions, powered by SIXFL AI Predictor.
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
+              Before kick-off, SIXFL AI Predictor turns recent results, goals
+              scored, goals conceded and league position into a simple match
+              preview and win chance estimate.
+            </p>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/55">
+              It is just for fun. It gives teams something extra to check,
+              compare and talk about before they play.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <FeaturePill text="AI match previews" />
+              <FeaturePill text="Win chance estimates" />
+              <FeaturePill text="Form-based insight" />
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-white/10 bg-black/45 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.35)] sm:rounded-[2rem] sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
+                  Sample prediction
+                </div>
+                <h3 className="mt-2 text-xl font-black text-white">
+                  Six Offenders vs Crescent United
+                </h3>
+              </div>
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-200">
+                SIXFL AI Predictor
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {predictorSample.map((item) => (
+                <PredictionBar key={item.label} {...item} />
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/62">
+              SIXFL AI Predictor: Six Offenders edge the sample prediction after
+              stronger recent scoring form, but Crescent United carry enough
+              threat to make this a competitive fixture.
+            </div>
+
+            <div className="mt-4 text-[11px] leading-5 text-white/35">
+              Example only. Live predictions update from actual SIXFL fixture
+              and results data.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PredictionBar({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+}) {
+  const barClass =
+    tone === "emerald"
+      ? "bg-emerald-400"
+      : tone === "sky"
+        ? "bg-sky-400"
+        : "bg-white/45";
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+        <span className="font-semibold text-white">{label}</span>
+        <span className="font-black text-white">{value}%</span>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-white/10">
+        <div className={`h-full rounded-full ${barClass}`} style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function FeaturePill({ text }: { text: string }) {
+  return (
+    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold tracking-[0.12em] text-emerald-200">
+      {text}
+    </span>
   );
 }
 
