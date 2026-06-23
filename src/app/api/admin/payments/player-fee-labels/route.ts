@@ -81,6 +81,13 @@ function compact(value: string | null | undefined) {
   return trimmed || null;
 }
 
+function formatPaymentMethod(method: string) {
+  return method
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function buildTitle(row: PlayerFeePaymentLabel) {
   return row.playerName
     ? `${row.playerName} · Player match fee`
@@ -91,7 +98,7 @@ function buildSubtitle(row: PlayerFeePaymentLabel) {
   const parts = [
     row.fixtureName,
     row.playerContact,
-    row.method.replaceAll("_", " "),
+    formatPaymentMethod(row.method),
   ]
     .map(compact)
     .filter((part): part is string => Boolean(part));
