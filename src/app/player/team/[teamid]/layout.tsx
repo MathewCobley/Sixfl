@@ -4,6 +4,7 @@
 
 import type { ReactNode } from "react";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
+import PlayerPreviewLinkPersistence from "@/components/player/PlayerPreviewLinkPersistence";
 
 export default async function PlayerTeamLayout({
   children,
@@ -16,6 +17,7 @@ export default async function PlayerTeamLayout({
 
   return (
     <>
+      <PlayerPreviewLinkPersistence teamId={teamid} />
       {children}
       <PlayerMessageBox teamId={teamid} />
     </>
