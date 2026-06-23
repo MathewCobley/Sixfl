@@ -66,13 +66,6 @@ const areaCards = [
   },
 ];
 
-const homeStats = [
-  { label: "Area", value: "Wetherby" },
-  { label: "Venue", value: "Boston Spa" },
-  { label: "Night", value: "Wednesday" },
-  { label: "Open to", value: "Teams & players" },
-];
-
 const whySixflPoints = [
   {
     title: "Reliable weekly fixtures",
@@ -177,14 +170,6 @@ export default function HomePage() {
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
             {areaCards.map((area) => (
               <AreaCard key={area.title} {...area} />
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-10">
-          <div className="grid grid-cols-2 gap-3 rounded-3xl border border-white/10 bg-white/[0.05] p-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-4 md:grid-cols-4">
-            {homeStats.map((stat) => (
-              <StripItem key={stat.label} label={stat.label} value={stat.value} />
             ))}
           </div>
         </section>
@@ -469,19 +454,6 @@ function FunnelCard({
         {cta} →
       </div>
     </Link>
-  );
-}
-
-function StripItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/35 px-3 py-4 sm:px-4 sm:py-5">
-      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 sm:tracking-[0.18em]">
-        {label}
-      </div>
-      <div className="mt-2 text-xl font-black tracking-tight text-white sm:text-2xl">
-        {value}
-      </div>
-    </div>
   );
 }
 
