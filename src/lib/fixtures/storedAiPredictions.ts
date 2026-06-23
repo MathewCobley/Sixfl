@@ -5,7 +5,11 @@
 import { createHash } from "crypto";
 import { Prisma } from "@prisma/client";
 
-import { getFixtureAiPreview, type FixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import {
+  cleanFixtureAiPreviewForDisplay,
+  getFixtureAiPreview,
+  type FixtureAiPreview,
+} from "@/lib/fixtures/aiPredictor";
 import { calculateFixtureWinChance, type FixtureWinChance, type WinChanceFixture } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
@@ -32,10 +36,14 @@ export type StoredFixtureAiPreview = FixtureAiPreview & {
 };
 
 function toStoredPreview(row: StoredPredictionRow): StoredFixtureAiPreview {
-  return {
+  const preview = cleanFixtureAiPreviewForDisplay({
     headline: row.headline,
     summary: row.summary,
     source: row.source === "openai" ? "openai" : "fallback",
+  });
+
+  return {
+    ...preview,
     inputHash: row.inputHash,
     generatedAt: row.generatedAt,
   };
@@ -91,11 +99,13 @@ async function savePrediction(input: {
   preview: FixtureAiPreview;
   inputHash: string;
 }) {
+  const preview = cleanFixtureAiPreviewForDisplay(input.preview);
+
   await prisma.$executeRaw`
     INSERT INTO "FixtureAiPrediction"
       ("fixtureId", "headline", "summary", "source", "inputHash", "generatedAt", "updatedAt")
     VALUES
-      (${input.fixtureId}, ${input.preview.headline}, ${input.preview.summary}, ${input.preview.source}, ${input.inputHash}, NOW(), NOW())
+      (${input.fixtureId}, ${preview.headline}, ${preview.summary}, ${preview.source}, ${input.inputHash}, NOW(), NOW())
     ON CONFLICT ("fixtureId") DO UPDATE SET
       "headline" = EXCLUDED."headline",
       "summary" = EXCLUDED."summary",
@@ -125,11 +135,13 @@ async function generateAndSave(input: {
     if (existing?.inputHash === inputHash) return toStoredPreview(existing);
   }
 
-  const preview = await getFixtureAiPreview({
-    homeTeamName: input.fixture.homeTeam.name,
-    awayTeamName: input.fixture.awayTeam.name,
-    winChance,
-  });
+  const preview = cleanFixtureAiPreviewForDisplay(
+    await getFixtureAiPreview({
+      homeTeamName: input.fixture.homeTeam.name,
+      awayTeamName: input.fixture.awayTeam.name,
+      winChance,
+    }),
+  );
 
   await savePrediction({ fixtureId: input.fixture.id, preview, inputHash });
 
