@@ -34,6 +34,7 @@ export default function PlayerPreviewLinkPersistence({
   useEffect(() => {
     if (!previewMembershipId) return;
 
+    const activePreviewMembershipId = previewMembershipId;
     const playerLinkSelector = `a[href^="/player/team/${teamId}"]`;
 
     function updatePreviewLinks() {
@@ -43,7 +44,11 @@ export default function PlayerPreviewLinkPersistence({
 
         link.setAttribute(
           "href",
-          addPreviewMembershipToHref({ href, teamId, previewMembershipId }),
+          addPreviewMembershipToHref({
+            href,
+            teamId,
+            previewMembershipId: activePreviewMembershipId,
+          }),
         );
       }
 
