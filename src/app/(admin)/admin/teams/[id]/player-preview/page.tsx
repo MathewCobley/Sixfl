@@ -4,6 +4,7 @@
 
 import { redirect } from "next/navigation";
 
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,17 @@ export default async function AdminTeamPlayerPreviewPage({
   await requireAdmin();
 
   const { id } = await params;
+  const firstMembership = await prisma.teamMember.findFirst({
+    where: { teamId: id },
+    orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
 
-  redirect(`/player/team/${id}`);
+  if (!firstMembership) {
+    redirect(`/player/team/${id}`);
+  }
+
+  redirect(
+    `/player/team/${id}?previewMembershipId=${encodeURIComponent(firstMembership.id)}`,
+  );
 }
