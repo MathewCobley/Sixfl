@@ -15,7 +15,7 @@ import {
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { requireAdmin } from "@/lib/requireAdmin";
 
-function redirectToOnboarding(params: Record<string, string>) {
+function redirectToOnboarding(params: Record<string, string>): never {
   const searchParams = new URLSearchParams(params);
   redirect(`/admin/teams/onboarding?${searchParams.toString()}`);
 }
