@@ -6,6 +6,8 @@ import Stripe from "stripe";
 
 let cachedStripeClient: Stripe | null = null;
 
+const PRODUCTION_SITE_URL = "https://www.sixfl.co.uk";
+
 export function getStripeServerClient(): Stripe {
   if (cachedStripeClient) {
     return cachedStripeClient;
@@ -32,16 +34,52 @@ export function getStripeWebhookSecret(): string {
   return value;
 }
 
+function normalisePublicSiteUrl(value: string | null | undefined) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+
+    if (!url.protocol.startsWith("http")) return null;
+
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function isLocalSiteUrl(value: string) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0";
+  } catch {
+    return false;
+  }
+}
+
 export function getPublicSiteUrl() {
-  const fallback = "https://www.sixfl.co.uk";
+  const candidateUrls = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.SITE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+    process.env.NEXTAUTH_URL,
+  ];
 
-  const value =
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    process.env.SITE_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.APP_URL?.trim() ||
-    process.env.NEXTAUTH_URL?.trim() ||
-    fallback;
+  for (const candidateUrl of candidateUrls) {
+    const url = normalisePublicSiteUrl(candidateUrl);
 
-  return value.replace(/\/+$/, "");
+    if (!url) continue;
+
+    if (process.env.NODE_ENV === "production" && isLocalSiteUrl(url)) {
+      continue;
+    }
+
+    return url;
+  }
+
+  return PRODUCTION_SITE_URL;
 }
