@@ -14,11 +14,21 @@ function getTeamId(formData: FormData) {
   return String(formData.get("teamid") ?? "").trim();
 }
 
+function isAccepted(value: FormDataEntryValue | null) {
+  return value === "on" || value === "true" || value === "accepted";
+}
+
 export async function acceptCaptainAgreementAction(formData: FormData) {
   const teamid = getTeamId(formData);
 
   if (!teamid) {
     redirect("/captain");
+  }
+
+  await requireCaptain(teamid);
+
+  if (!isAccepted(formData.get("accepted"))) {
+    redirect(`/captain/team/${teamid}/guide`);
   }
 
   const access = await requireCaptain(teamid);
@@ -36,6 +46,7 @@ export async function acceptCaptainAgreementAction(formData: FormData) {
   revalidatePath(`/captain/team/${teamid}`);
   revalidatePath(`/captain/team/${teamid}/guide`);
   revalidatePath("/admin/teams");
+  revalidatePath("/admin/teams/onboarding");
 
   redirect(`/captain/team/${teamid}?onboarding=agreement-accepted`);
 }
