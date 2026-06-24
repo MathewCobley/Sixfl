@@ -32,7 +32,7 @@ export default async function AdminCaptainOnboardingPage() {
   await requireAdmin();
 
   const teams = await prisma.team.findMany({
-    orderBy: [{ league: { name: "asc" } }, { name: "asc" }],
+    orderBy: [{ name: "asc" }],
     select: {
       id: true,
       name: true,
