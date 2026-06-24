@@ -102,6 +102,7 @@ export default function CaptainOnboardingChecklist({
     !status.hasUpcomingFixture ||
     status.nextFixtureConfirmationStatus === "CONFIRMED" ||
     status.nextFixtureConfirmationStatus === "ISSUE_RAISED";
+  const paymentsComplete = status.openTeamChargeCount === 0;
   const acceptedAt = formatAcceptedAt(status.captainAgreementAcceptedAt);
 
   const items: ChecklistItem[] = [
@@ -143,8 +144,8 @@ export default function CaptainOnboardingChecklist({
       text:
         status.openTeamChargeCount > 0
           ? `${status.openTeamChargeCount} team charge${status.openTeamChargeCount === 1 ? " is" : "s are"} currently open. Fees more than 7 days overdue may incur a £10 admin fee.`
-          : "Team fee is £40 per match unless SIXFL has agreed otherwise. Squad payments can help captains collect from players.",
-      tone: status.isAgreementAccepted ? "complete" : "attention",
+          : "No team fee is currently due. Standard team fee is £40 per match unless SIXFL has agreed otherwise.",
+      tone: paymentsComplete ? "complete" : "attention",
       href: `/captain/team/${teamId}/payments`,
       actionLabel: "Open payments",
     },
