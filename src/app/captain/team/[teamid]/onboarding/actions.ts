@@ -25,13 +25,12 @@ export async function acceptCaptainAgreementAction(formData: FormData) {
     redirect("/captain");
   }
 
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
 
   if (!isAccepted(formData.get("accepted"))) {
     redirect(`/captain/team/${teamid}/guide`);
   }
 
-  const access = await requireCaptain(teamid);
   const userId = access.user?.id ?? null;
 
   await prisma.$executeRaw`
