@@ -9,15 +9,18 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   getLateConfirmationFeeRows,
+  getPaymentLateFeeRows,
   setLateConfirmationFeeDecisionAction,
+  setLatePaymentAdminFeeDecisionAction,
   type LateConfirmationFeeRow,
+  type PaymentLateFeeRow,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Late Confirmation Review | SIXFL Admin",
+  title: "Late Fees | SIXFL Admin",
 };
 
 type SearchParams = {
@@ -27,6 +30,13 @@ type SearchParams = {
 
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
+}
+
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
 }
 
 function formatDate(value: Date | null) {
@@ -49,20 +59,42 @@ function getFixtureLabel(row: LateConfirmationFeeRow) {
   return `${row.homeTeamName} vs ${row.awayTeamName}`;
 }
 
+function getPaymentFixtureLabel(row: PaymentLateFeeRow) {
+  if (row.homeTeamName && row.awayTeamName && row.kickoffAt) {
+    return `${row.homeTeamName} vs ${row.awayTeamName} · ${formatDate(row.kickoffAt)}`;
+  }
+
+  return "Manual charge";
+}
+
 function getNotice(input: SearchParams) {
   const teamName = input.teamName?.trim() || "that team";
 
   if (input.notice === "late_fee_saved") {
     return {
       tone: "success" as const,
-      message: `Decision saved for ${teamName}.`,
+      message: `Confirmation fee decision saved for ${teamName}.`,
+    };
+  }
+
+  if (input.notice === "payment_late_fee_saved") {
+    return {
+      tone: "success" as const,
+      message: `Payment admin fee decision saved for ${teamName}.`,
     };
   }
 
   if (input.notice === "late_fee_error") {
     return {
       tone: "error" as const,
-      message: `The decision could not be saved for ${teamName}.`,
+      message: `The confirmation fee decision could not be saved for ${teamName}.`,
+    };
+  }
+
+  if (input.notice === "payment_late_fee_error") {
+    return {
+      tone: "error" as const,
+      message: `The payment admin fee decision could not be saved for ${teamName}.`,
     };
   }
 
@@ -77,8 +109,23 @@ function getDecisionLabel(status: string | null) {
       return "Waived";
     case "WARNING":
       return "Warning";
+    case "NONE":
+      return "No decision";
     default:
       return "No decision";
+  }
+}
+
+function getDecisionTone(status: string | null) {
+  switch (status) {
+    case "APPLIED":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    case "WAIVED":
+      return "border-sky-400/25 bg-sky-500/10 text-sky-100";
+    case "WARNING":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    default:
+      return "border-white/10 bg-white/5 text-white/70";
   }
 }
 
@@ -93,7 +140,42 @@ function getConfirmationLabel(status: string | null, confirmedAt: Date | null, d
   return "No confirmation";
 }
 
-function DecisionForm({
+function PaymentLateFeeDecisionForm({
+  chargeId,
+  note,
+}: {
+  chargeId: string;
+  note: string | null;
+}) {
+  return (
+    <form action={setLatePaymentAdminFeeDecisionAction} className="space-y-3">
+      <input type="hidden" name="chargeId" value={chargeId} />
+      <textarea
+        name="note"
+        rows={2}
+        defaultValue={note ?? ""}
+        placeholder="Admin note shown only internally"
+        className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-emerald-400/50"
+      />
+      <div className="grid gap-2 sm:grid-cols-4">
+        <button name="decision" value="WARNING" className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
+          Warning
+        </button>
+        <button name="decision" value="APPLIED" className="rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100">
+          Add £10
+        </button>
+        <button name="decision" value="WAIVED" className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-100">
+          Waive
+        </button>
+        <button name="decision" value="NONE" className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/75">
+          Clear
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ConfirmationDecisionForm({
   fixtureId,
   teamId,
   note,
@@ -136,6 +218,63 @@ function HistoryPill({ label, value }: { label: string; value: number }) {
     <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/65">
       {label}: {value}
     </span>
+  );
+}
+
+function PaymentLateFeeRowCard({ row }: { row: PaymentLateFeeRow }) {
+  const feeAmount = row.paymentLateFeeAmountPence || 1000;
+  const baseChargeAmount =
+    row.paymentLateFeeStatus === "APPLIED"
+      ? Math.max(0, row.amountPence - feeAmount)
+      : row.amountPence;
+
+  return (
+    <div id={`payment-charge-${row.chargeId}`} className={cx("scroll-mt-6 rounded-3xl border p-5", row.paymentLateFeeStatus === "APPLIED" ? "border-red-400/25 bg-red-500/[0.06]" : "border-amber-400/25 bg-amber-500/[0.05]")}> 
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/admin/teams/${row.teamId}`} className="text-lg font-semibold text-white underline-offset-4 hover:text-emerald-200 hover:underline">
+              {row.teamName}
+            </Link>
+            <span className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-100">
+              {row.daysLate ?? 0} days late
+            </span>
+            <span className={cx("rounded-full border px-3 py-1 text-xs font-semibold", getDecisionTone(row.paymentLateFeeStatus))}>
+              {getDecisionLabel(row.paymentLateFeeStatus)}
+            </span>
+          </div>
+
+          <h3 className="mt-3 text-base font-semibold text-white">{row.title}</h3>
+          <p className="mt-1 text-sm text-white/55">{row.description || getPaymentFixtureLabel(row)}</p>
+
+          <div className="mt-4 grid gap-2 text-sm text-white/55 sm:grid-cols-2 xl:grid-cols-3">
+            <div>Due: {formatDate(row.dueDate)}</div>
+            <div>Late fee eligible: {formatDate(row.lateFeeEligibleAt)}</div>
+            <div>Admin fee: {formatMoney(feeAmount)}</div>
+            <div>Base charge: {formatMoney(baseChargeAmount)}</div>
+            <div>Paid: {formatMoney(row.paidTotalPence)}</div>
+            <div>Outstanding: {formatMoney(row.outstandingPence)}</div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href={`/admin/payments?paymentChargeId=${encodeURIComponent(row.chargeId)}#record-payment`} className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/15">
+              Record payment
+            </Link>
+            <Link href="/admin/payments" className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/75 hover:bg-white/[0.08]">
+              Open payments
+            </Link>
+          </div>
+
+          {row.paymentLateFeeNote ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
+              {row.paymentLateFeeNote}
+            </div>
+          ) : null}
+        </div>
+
+        <PaymentLateFeeDecisionForm chargeId={row.chargeId} note={row.paymentLateFeeNote} />
+      </div>
+    </div>
   );
 }
 
@@ -189,7 +328,7 @@ function TeamRow({
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
               {getConfirmationLabel(confirmationStatus, confirmedAt, deadline)}
             </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+            <span className={cx("rounded-full border px-3 py-1", getDecisionTone(decisionStatus))}>
               {getDecisionLabel(decisionStatus)}
             </span>
           </div>
@@ -218,35 +357,88 @@ function TeamRow({
 
           {decisionNote ? <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">{decisionNote}</div> : null}
         </div>
-        <DecisionForm fixtureId={fixtureId} teamId={teamId} note={decisionNote} />
+        <ConfirmationDecisionForm fixtureId={fixtureId} teamId={teamId} note={decisionNote} />
       </div>
     </div>
   );
 }
 
-export default async function LateConfirmationFeesPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+export default async function LateFeesPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   await requireAdmin();
 
-  const [rows, resolvedSearchParams] = await Promise.all([
+  const [paymentRows, confirmationRows, resolvedSearchParams] = await Promise.all([
+    getPaymentLateFeeRows(),
     getLateConfirmationFeeRows(),
     searchParams ? searchParams : Promise.resolve({}),
   ]);
   const notice = getNotice(resolvedSearchParams);
+  const paymentFeeOutstanding = paymentRows.reduce((sum, row) => sum + row.outstandingPence, 0);
+  const appliedPaymentFees = paymentRows.filter((row) => row.paymentLateFeeStatus === "APPLIED").length;
 
   return (
     <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <section className="rounded-3xl border border-emerald-400/15 bg-white/[0.03] p-6 md:p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture confirmation policy</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Late confirmation review</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">Review teams that have not confirmed at least 72 hours before kick-off. Each row now shows the team’s previous warnings, charges, waived decisions and late confirmations to help you decide fairly.</p>
-        <Link href="/admin/fixtures" className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 hover:bg-white/5">Back to fixtures</Link>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Late fee control centre</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Late fees</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">
+          Manage payment admin fees for charges more than 7 days overdue and fixture confirmation fees for teams that miss the 72-hour confirmation deadline. Decisions stay manual so you can warn, apply, waive or clear fairly.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link href="/admin/payments" className="inline-flex rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 hover:bg-white/5">Open payments</Link>
+          <Link href="/admin/fixtures" className="inline-flex rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 hover:bg-white/5">Open fixtures</Link>
+        </div>
       </section>
 
       {notice ? <section className={cx("rounded-2xl border px-4 py-3 text-sm", notice.tone === "success" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : "border-red-400/20 bg-red-500/10 text-red-100")}>{notice.message}</section> : null}
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-100/70">Payment fee decisions</div>
+          <div className="mt-3 text-3xl font-semibold text-white">{paymentRows.length}</div>
+          <p className="mt-2 text-sm text-red-100/70">Charges more than 7 days overdue.</p>
+        </div>
+        <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/70">Outstanding in review</div>
+          <div className="mt-3 text-3xl font-semibold text-white">{formatMoney(paymentFeeOutstanding)}</div>
+          <p className="mt-2 text-sm text-amber-100/70">Current outstanding balances shown below.</p>
+        </div>
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">£10 fees added</div>
+          <div className="mt-3 text-3xl font-semibold text-white">{appliedPaymentFees}</div>
+          <p className="mt-2 text-sm text-white/50">Applied but still unpaid.</p>
+        </div>
+      </div>
+
+      <AdminCard className="space-y-5 rounded-3xl border border-red-400/20 bg-red-500/[0.04] p-5 md:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-red-100/70">Payment admin fees</p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">Fees paid more than 7 days late</h2>
+            <p className="mt-2 max-w-3xl text-sm text-white/65">
+              Use this section to manually add the £10 admin fee to the existing outstanding charge, waive it, or send a warning decision. Applying the fee increases the outstanding balance and resets any stale Stripe checkout session.
+            </p>
+          </div>
+          <span className="rounded-2xl border border-red-400/25 bg-black/20 px-4 py-3 text-sm font-semibold text-red-100">
+            {paymentRows.length} charge{paymentRows.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {paymentRows.length === 0 ? <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/55">No payment charges are more than 7 days overdue.</div> : null}
+        <div className="space-y-4">
+          {paymentRows.map((row) => <PaymentLateFeeRowCard key={row.chargeId} row={row} />)}
+        </div>
+      </AdminCard>
+
       <AdminCard className="space-y-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
-        {rows.length === 0 ? <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/55">No scheduled fixtures are inside the review window.</div> : null}
-        {rows.map((row) => (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">Fixture confirmation policy</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">72-hour confirmation review</h2>
+          <p className="mt-2 max-w-3xl text-sm text-white/65">
+            Review teams that have not confirmed at least 72 hours before kick-off. Each row shows previous warnings, charges, waived decisions and late confirmations to help you decide fairly.
+          </p>
+        </div>
+        {confirmationRows.length === 0 ? <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/55">No scheduled fixtures are inside the review window.</div> : null}
+        {confirmationRows.map((row) => (
           <section key={row.fixtureId} id={`fixture-${row.fixtureId}`} className="scroll-mt-6 space-y-4 rounded-3xl border border-white/10 bg-black/20 p-4 md:p-5">
             <div className="border-b border-white/10 pb-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/35">{row.leagueName ?? "No league"}{row.leagueSeason ? ` · ${row.leagueSeason}` : ""}</p>
