@@ -196,9 +196,15 @@ export default function CaptainOnboardingChecklist({
         ) : (
           <form action={acceptCaptainAgreementAction} className="space-y-4">
             <input type="hidden" name="teamid" value={teamId} />
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-sm leading-6 text-white/76">{CAPTAIN_AGREEMENT_TEXT}</p>
-            </div>
+            <label className="flex cursor-pointer gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <input
+                type="checkbox"
+                name="accepted"
+                required
+                className="mt-1 h-5 w-5 shrink-0 rounded border-white/20 bg-black text-emerald-400"
+              />
+              <span className="text-sm leading-6 text-white/76">{CAPTAIN_AGREEMENT_TEXT}</span>
+            </label>
             <button
               type="submit"
               className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-bold text-black transition hover:bg-emerald-200 sm:w-auto"
