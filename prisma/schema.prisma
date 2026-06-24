@@ -518,6 +518,13 @@ enum PaymentChargeStatus {
   VOID
 }
 
+enum PaymentLateFeeStatus {
+  NONE
+  WARNING
+  APPLIED
+  WAIVED
+}
+
 enum PlayerMatchFeeStatus {
   OPEN
   PAID
@@ -547,6 +554,13 @@ model PaymentCharge {
 
   status PaymentChargeStatus @default(OPEN)
 
+  latePaymentFeeStatus      PaymentLateFeeStatus @default(NONE)
+  latePaymentFeeAmountPence Int                   @default(1000)
+  latePaymentFeeNote        String?
+  latePaymentFeeWarningAt   DateTime?
+  latePaymentFeeAppliedAt   DateTime?
+  latePaymentFeeWaivedAt    DateTime?
+
   paymentToken                  String?   @unique
   lastStripeCheckoutUrl         String?
   lastStripeCheckoutSessionId   String?   @unique
@@ -568,6 +582,8 @@ model PaymentCharge {
   @@index([fixtureId])
   @@index([status])
   @@index([dueDate])
+  @@index([latePaymentFeeStatus])
+  @@index([dueDate, latePaymentFeeStatus])
 }
 
 model PaymentTransaction {
