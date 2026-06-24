@@ -1,0 +1,41 @@
+// ========================================
+// File: src/app/captain/team/[teamid]/onboarding/actions.ts
+// ========================================
+
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+import { prisma } from "@/lib/prisma";
+import { requireCaptain } from "@/lib/requireCaptain";
+
+function getTeamId(formData: FormData) {
+  return String(formData.get("teamid") ?? "").trim();
+}
+
+export async function acceptCaptainAgreementAction(formData: FormData) {
+  const teamid = getTeamId(formData);
+
+  if (!teamid) {
+    redirect("/captain");
+  }
+
+  const access = await requireCaptain(teamid);
+  const userId = access.user?.id ?? null;
+
+  await prisma.$executeRaw`
+    UPDATE "Team"
+    SET
+      "captainAgreementAcceptedAt" = COALESCE("captainAgreementAcceptedAt", NOW()),
+      "captainAgreementAcceptedById" = COALESCE("captainAgreementAcceptedById", ${userId}),
+      "onboardingCompletedAt" = COALESCE("onboardingCompletedAt", NOW())
+    WHERE "id" = ${teamid}
+  `;
+
+  revalidatePath(`/captain/team/${teamid}`);
+  revalidatePath(`/captain/team/${teamid}/guide`);
+  revalidatePath("/admin/teams");
+
+  redirect(`/captain/team/${teamid}?onboarding=agreement-accepted`);
+}
