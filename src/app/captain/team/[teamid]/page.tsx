@@ -6,7 +6,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
+import CaptainOnboardingChecklist from "@/components/captain/CaptainOnboardingChecklist";
 import CaptainDashboardLeagueTable from "@/components/captain/CaptainDashboardLeagueTable";
+import { getCaptainOnboardingStatus } from "@/lib/captain/onboarding";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getLeagueTable } from "@/lib/leagueTable";
 import { prisma } from "@/lib/prisma";
@@ -206,6 +208,7 @@ export default async function CaptainOverviewPage({
     completionResults,
     activeDisputeCount,
     paymentCharges,
+    onboardingStatus,
   ] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
@@ -322,6 +325,7 @@ export default async function CaptainOverviewPage({
         },
       },
     }),
+    getCaptainOnboardingStatus(teamid),
   ]);
 
   if (!team) {
@@ -486,6 +490,10 @@ export default async function CaptainOverviewPage({
           </div>
         </div>
       </section>
+
+      {!onboardingStatus.isChecklistComplete ? (
+        <CaptainOnboardingChecklist teamId={teamid} status={onboardingStatus} />
+      ) : null}
 
       <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
