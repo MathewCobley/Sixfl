@@ -82,6 +82,7 @@ async function ensurePaymentTransactionPlayerFeeColumn() {
 async function closePlayerMatchFeeFromStripeSession(input: {
   playerMatchFeeId: string;
   paidAt: Date;
+  paidAmountPence?: number | null;
 }) {
   const fee = await prisma.playerMatchFee.findUnique({
     where: { id: input.playerMatchFeeId },
@@ -89,20 +90,32 @@ async function closePlayerMatchFeeFromStripeSession(input: {
       id: true,
       teamId: true,
       fixtureId: true,
+      amountPence: true,
       status: true,
     },
   });
 
   if (!fee) return;
 
-  if (fee.status === "OPEN") {
+  const paidAmountPence = input.paidAmountPence ?? null;
+  const shouldSyncAmount =
+    typeof paidAmountPence === "number" &&
+    paidAmountPence > 0 &&
+    paidAmountPence !== fee.amountPence;
+
+  if (fee.status === "OPEN" || shouldSyncAmount) {
     await prisma.playerMatchFee.update({
       where: { id: input.playerMatchFeeId },
       data: {
-        status: "PAID",
-        paidAt: input.paidAt,
-        waivedAt: null,
-        cancelledAt: null,
+        ...(shouldSyncAmount ? { amountPence: paidAmountPence } : {}),
+        ...(fee.status === "OPEN"
+          ? {
+              status: "PAID",
+              paidAt: input.paidAt,
+              waivedAt: null,
+              cancelledAt: null,
+            }
+          : {}),
       },
     });
   }
@@ -138,7 +151,7 @@ async function findExistingPlayerFeeTransaction(input: {
 
   return prisma.paymentTransaction.findFirst({
     where: { OR: orFilters },
-    select: { id: true, paidAt: true },
+    select: { id: true, paidAt: true, amountPence: true },
     orderBy: { paidAt: "desc" },
   });
 }
@@ -151,9 +164,14 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
   if (!playerMatchFeeId) return false;
 
   const paidAt = new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000);
+  const amountPence = session.amount_total ?? 0;
 
   if (await hasExistingTransaction(session.id)) {
-    await closePlayerMatchFeeFromStripeSession({ playerMatchFeeId, paidAt });
+    await closePlayerMatchFeeFromStripeSession({
+      playerMatchFeeId,
+      paidAt,
+      paidAmountPence: amountPence,
+    });
     return true;
   }
 
@@ -172,21 +190,16 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
 
   if (fee.status !== "OPEN") {
     if (fee.status === "PAID") {
-      await cancelQueuedPlayerMatchFeeNotificationDispatches(
-        [fee.id],
-        "Player match fee was already paid before the queued payment reminder was sent.",
-      );
-
-      await reconcileFixtureChargeFromPlayerPayments({
-        teamId: fee.teamId,
-        fixtureId: fee.fixtureId,
+      await closePlayerMatchFeeFromStripeSession({
+        playerMatchFeeId: fee.id,
+        paidAt,
+        paidAmountPence: amountPence,
       });
     }
 
     return true;
   }
 
-  const amountPence = session.amount_total ?? 0;
   if (amountPence <= 0) return true;
 
   const paymentIntentId = getPaymentIntentId(session);
@@ -199,6 +212,7 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
     await closePlayerMatchFeeFromStripeSession({
       playerMatchFeeId: fee.id,
       paidAt: existingPlayerFeeTransaction.paidAt,
+      paidAmountPence: existingPlayerFeeTransaction.amountPence,
     });
     return true;
   }
@@ -230,6 +244,7 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
     await tx.playerMatchFee.update({
       where: { id: fee.id },
       data: {
+        amountPence,
         status: "PAID",
         paidAt,
         waivedAt: null,
