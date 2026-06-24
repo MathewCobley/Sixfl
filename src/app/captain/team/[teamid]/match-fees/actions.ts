@@ -487,8 +487,21 @@ export async function updateCaptainPlayerMatchFeeAmountAction(formData: FormData
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=invalid_amount"));
   }
 
-  await prisma.playerMatchFee.updateMany({
+  const existingFee = await prisma.playerMatchFee.findFirst({
     where: { id: feeId, teamId, fixtureId },
+    select: { id: true, status: true },
+  });
+
+  if (!existingFee) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  if (existingFee.status === "PAID") {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=fee_locked"));
+  }
+
+  await prisma.playerMatchFee.update({
+    where: { id: existingFee.id },
     data: { amountPence },
   });
 
