@@ -18,9 +18,9 @@ type ReminderConfig = {
 function getReminder(pathname: string): ReminderConfig | null {
   if (/\/captain\/team\/[^/]+\/availability(?:\/)?$/.test(pathname)) {
     return {
-      eyebrow: "Availability rule",
+      eyebrow: "Avoidable admin fee",
       title: "Confirm at least 72 hours before kick-off",
-      body: "Availability must be confirmed at least 72 hours before kick-off. Late confirmation may affect your fixture or lead to an admin fee.",
+      body: "We do not want to charge admin fees. The £10 late availability fee is only there for avoidable late confirmations that create extra admin, fixture chasing or rearranging work.",
     };
   }
 
@@ -34,9 +34,9 @@ function getReminder(pathname: string): ReminderConfig | null {
 
   if (/\/captain\/team\/[^/]+\/payments(?:\/)?$/.test(pathname)) {
     return {
-      eyebrow: "Payment reminder",
-      title: "Late fees may apply after 7 days",
-      body: "Team fees should be paid on time. Fees more than 7 days overdue may incur a £10 admin fee.",
+      eyebrow: "Avoidable admin fee",
+      title: "Please keep team fees up to date",
+      body: "We do not want to charge late payment admin fees. The £10 late payment fee is only there if a team fee is more than 7 days overdue and SIXFL has to spend extra time chasing it.",
     };
   }
 
