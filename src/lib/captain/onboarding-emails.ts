@@ -212,6 +212,7 @@ async function getCandidateTeam(teamId: string) {
 async function queueStage(input: {
   row: CaptainOnboardingEmailRow;
   stage: CaptainOnboardingEmailStage;
+  manual?: boolean;
 }) {
   const captainEmail = getCaptainEmail(input.row);
 
@@ -250,7 +251,7 @@ async function queueStage(input: {
       type: "captain_onboarding",
       stage: input.stage,
       teamId: input.row.id,
-      manual: false,
+      manual: input.manual === true,
     } satisfies Prisma.InputJsonValue,
   });
 
@@ -275,34 +276,7 @@ export async function queueCaptainOnboardingEmailForTeam(input: {
     return "not_due" as const;
   }
 
-  const result = await queueStage({ row, stage: input.stage });
-
-  if (result !== "queued") {
-    return result;
-  }
-
-  if (input.manual) {
-    await prisma.notificationDispatch.updateMany({
-      where: {
-        sourceType: "TEAM",
-        sourceId: input.teamId,
-        metadata: {
-          path: ["stage"],
-          equals: input.stage,
-        },
-      },
-      data: {
-        metadata: {
-          type: "captain_onboarding",
-          stage: input.stage,
-          teamId: input.teamId,
-          manual: true,
-        },
-      },
-    }).catch(() => undefined);
-  }
-
-  return "queued" as const;
+  return queueStage({ row, stage: input.stage, manual: input.manual });
 }
 
 export async function runCaptainOnboardingEmailJob(): Promise<CaptainOnboardingEmailJobSummary> {
