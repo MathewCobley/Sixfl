@@ -276,6 +276,7 @@ export default async function CaptainTeamLayout({
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: `/captain/team/${teamid}/guide`, label: "Guide" },
+    { href: `/captain/team/${teamid}/help`, label: "Help" },
     { href: squadHref, label: "Squad" },
     ...(access.isAdmin
       ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
