@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
 import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -199,6 +200,7 @@ export default async function CaptainPaymentsPage({
               select: {
                 id: true,
                 amountPence: true,
+                notes: true,
               },
             },
             fixture: {
@@ -217,6 +219,15 @@ export default async function CaptainPaymentsPage({
                 },
               },
             },
+          },
+        },
+        playerMatchFees: {
+          where: {
+            status: "PAID",
+          },
+          select: {
+            fixtureId: true,
+            amountPence: true,
           },
         },
       },
@@ -247,18 +258,22 @@ export default async function CaptainPaymentsPage({
     },
   });
 
-  const openCharges = team.paymentCharges.filter(
-    (charge) => charge.status !== "PAID" && charge.status !== "VOID",
+  const chargeSummaries = summariseChargesWithPlayerMatchFees(
+    team.paymentCharges,
+    team.playerMatchFees,
   );
 
-  const outstandingTotal = openCharges.reduce((sum, charge) => {
-    const paid = charge.transactions.reduce(
-      (txSum, tx) => txSum + tx.amountPence,
-      0,
-    );
+  const openCharges = chargeSummaries.filter(
+    (summary) =>
+      summary.displayStatus !== "PAID" &&
+      summary.displayStatus !== "VOID" &&
+      summary.outstandingPence > 0,
+  );
 
-    return sum + Math.max(charge.amountPence - paid, 0);
-  }, 0);
+  const outstandingTotal = openCharges.reduce(
+    (sum, summary) => sum + summary.outstandingPence,
+    0,
+  );
 
   const subscriptionMessage = getSubscriptionMessage(sp.subscription);
   const canOpenPortal = Boolean(subscription?.stripeCustomerId);
@@ -393,19 +408,13 @@ export default async function CaptainPaymentsPage({
               No charges recorded yet.
             </div>
           ) : (
-            team.paymentCharges.map((charge) => {
-              const paid = charge.transactions.reduce(
-                (sum, tx) => sum + tx.amountPence,
-                0,
-              );
-              const outstanding =
-                charge.status === "VOID" ? 0 : Math.max(charge.amountPence - paid, 0);
+            chargeSummaries.map(({ charge, paidPence, outstandingPence, displayStatus }) => {
               const fixtureLabel = getFixtureLabel(charge.fixture);
               const canPayOnline =
                 Boolean(charge.paymentToken) &&
-                charge.status !== "PAID" &&
-                charge.status !== "VOID" &&
-                outstanding > 0;
+                displayStatus !== "PAID" &&
+                displayStatus !== "VOID" &&
+                outstandingPence > 0;
 
               return (
                 <div key={charge.id} className="px-6 py-5">
@@ -446,17 +455,17 @@ export default async function CaptainPaymentsPage({
                           {formatMoney(charge.amountPence)}
                         </div>
                         <div className="mt-1 text-sm text-white/55">
-                          Paid {formatMoney(paid)} · Outstanding{" "}
-                          {formatMoney(outstanding)}
+                          Paid {formatMoney(paidPence)} · Outstanding {" "}
+                          {formatMoney(outstandingPence)}
                         </div>
                         <div className="mt-2">
                           <span
                             className={[
                               "inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]",
-                              getChargeStatusTone(charge.status),
+                              getChargeStatusTone(displayStatus),
                             ].join(" ")}
                           >
-                            {formatChargeStatus(charge.status)}
+                            {formatChargeStatus(displayStatus)}
                           </span>
                         </div>
                       </div>
@@ -468,9 +477,9 @@ export default async function CaptainPaymentsPage({
                         >
                           Pay now
                         </Link>
-                      ) : charge.status !== "PAID" &&
-                        charge.status !== "VOID" &&
-                        outstanding > 0 ? (
+                      ) : displayStatus !== "PAID" &&
+                        displayStatus !== "VOID" &&
+                        outstandingPence > 0 ? (
                         <div className="text-xs text-white/45">
                           Online payment link not ready yet.
                         </div>
