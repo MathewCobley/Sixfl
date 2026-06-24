@@ -10,6 +10,7 @@ import { TeamRole } from "@prisma/client";
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
+import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
 import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
@@ -274,6 +275,7 @@ export default async function CaptainTeamLayout({
 
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
+    { href: `/captain/team/${teamid}/guide`, label: "Guide" },
     { href: squadHref, label: "Squad" },
     ...(access.isAdmin
       ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
@@ -297,6 +299,7 @@ export default async function CaptainTeamLayout({
       <ProspectsReadableLayout />
       <CaptainFixtureBadgesBridge />
       <CaptainMatchdayAvailabilityBadgesBridge />
+      <CaptainOnboardingReminderBridge />
       {access.isAdmin ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin ? <PendingActivationDeleteLinks /> : null}
       {access.isAdmin ? <PendingActivationReturnLinks /> : null}
