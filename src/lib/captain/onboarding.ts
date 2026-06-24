@@ -2,7 +2,11 @@
 // File: src/lib/captain/onboarding.ts
 // ========================================
 
-import { FixtureCaptainConfirmationStatus, TeamRole } from "@prisma/client";
+import {
+  FixtureCaptainConfirmationStatus,
+  Prisma,
+  TeamRole,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -85,7 +89,7 @@ export async function getTeamOnboardingSummaries(teamIds: string[]) {
         "onboardingFirstFixtureEmailSentAt",
         "onboardingPostFirstMatchEmailSentAt"
       FROM "Team"
-      WHERE "id" IN (${uniqueTeamIds})
+      WHERE "id" IN (${Prisma.join(uniqueTeamIds)})
     `;
 
     rows.forEach((row) => summaries.set(row.id, normaliseSummary(row)));
