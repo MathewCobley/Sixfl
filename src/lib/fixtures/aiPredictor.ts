@@ -56,40 +56,66 @@ function cleanText(value: string) {
     .replace(/\s+/g, " ")
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
+    .replace(/\.{3,}|…/g, "")
     .trim();
 }
 
 function stripBrokenHeadlineEnding(value: string) {
   return cleanText(value)
-    .replace(/\s+(?:in|with)\s+(?:a\s+)?\d+\s*[-–]\s*\d+\s*(?:pred\w*)?(?:…|\.\.\.)?\.?$/i, "")
-    .replace(/\s+\S*(?:…|\.\.\.)$/i, "")
+    .replace(/\s+(?:in|with)\s+(?:a\s+)?\d+\s*[-–]\s*\d+\s*(?:pred\w*)?\.?$/i, "")
     .replace(/[.,;:!?-]+$/, "")
     .trim();
 }
 
-function truncateSentence(value: string, maxLength: number) {
+function trimAtWordBoundary(value: string, maxLength: number) {
   const cleaned = cleanText(value);
   if (cleaned.length <= maxLength) return cleaned;
 
   const hardCut = cleaned.slice(0, maxLength).trim();
   const lastSpace = hardCut.lastIndexOf(" ");
-  const wordBoundaryCut = lastSpace > Math.floor(maxLength * 0.55)
-    ? hardCut.slice(0, lastSpace).trim()
-    : hardCut;
 
-  return `${wordBoundaryCut.replace(/[.,;:!?-]+$/, "")}…`;
+  if (lastSpace > Math.floor(maxLength * 0.55)) {
+    return hardCut.slice(0, lastSpace).replace(/[.,;:!?-]+$/, "").trim();
+  }
+
+  return hardCut.replace(/[.,;:!?-]+$/, "").trim();
+}
+
+function limitCompleteText(value: string, maxLength: number) {
+  const cleaned = cleanText(value);
+  if (cleaned.length <= maxLength) return cleaned;
+
+  const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const completeSentences: string[] = [];
+  let currentLength = 0;
+
+  for (const sentence of sentences) {
+    const nextLength = currentLength + sentence.length + (completeSentences.length ? 1 : 0);
+    if (nextLength > maxLength) break;
+
+    completeSentences.push(sentence);
+    currentLength = nextLength;
+  }
+
+  if (completeSentences.length > 0) {
+    return completeSentences.join(" ").trim();
+  }
+
+  return trimAtWordBoundary(cleaned, maxLength);
 }
 
 function cleanHeadline(value: string) {
   const stripped = stripBrokenHeadlineEnding(value);
-  return truncateSentence(stripped || value, HEADLINE_MAX_LENGTH);
+  const limited = limitCompleteText(stripped || value, HEADLINE_MAX_LENGTH);
+
+  return limited.replace(/[.,;:!?-]+$/, "").trim() || "SIXFL AI Predictor";
 }
 
 export function cleanFixtureAiPreviewForDisplay(preview: FixtureAiPreview): FixtureAiPreview {
   return {
     ...preview,
     headline: cleanHeadline(preview.headline),
-    summary: truncateSentence(preview.summary, SUMMARY_MAX_LENGTH),
+    summary: limitCompleteText(preview.summary, SUMMARY_MAX_LENGTH),
   };
 }
 
@@ -138,6 +164,14 @@ function extractOpenAIText(payload: OpenAIResponsePayload) {
   return parts.join("\n").trim();
 }
 
+function getSafeHeadline(input: FixtureAiPreviewInput) {
+  const favourite = getFavourite(input);
+
+  return favourite === "a tight draw"
+    ? "The predictor expects a close one"
+    : `${favourite} edge the predictor`;
+}
+
 function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAiPreview {
   const cleaned = cleanText(text)
     .replace(/^headline:\s*/i, "")
@@ -146,11 +180,11 @@ function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAi
   if (!cleaned) return getFallbackFixtureAiPreview(input);
 
   const [firstSentence, ...rest] = cleaned.split(/(?<=[.!?])\s+/);
-  const headline = cleanHeadline(firstSentence || "SIXFL AI Predictor");
-  const summary = truncateSentence(rest.join(" ") || cleaned, SUMMARY_MAX_LENGTH);
+  const headline = cleanHeadline(firstSentence || getSafeHeadline(input));
+  const summary = limitCompleteText(rest.join(" ") || cleaned, SUMMARY_MAX_LENGTH);
 
   return {
-    headline,
+    headline: headline.length >= 8 ? headline : getSafeHeadline(input),
     summary,
     source: "openai",
   };
@@ -183,7 +217,7 @@ export async function getFixtureAiPreview(
         model,
         max_output_tokens: 150,
         instructions:
-          "You write short, fun, factual 6-a-side football match previews for SIXFL. Do not invent injuries, absences, player names or facts not provided. Keep it suitable for a public sports website. The headline must be one short sentence under 65 characters and must not end with a partial word. Do not put the exact scoreline in the headline.",
+          "You write short, fun, factual 6-a-side football match previews for SIXFL. Do not invent injuries, absences, player names or facts not provided. Keep it suitable for a public sports website. The headline must be one short sentence under 65 characters, must not end with a partial word, and must not use ellipses. Do not put the exact scoreline in the headline.",
         input: `Write one short headline sentence and one short explanation sentence for this fixture. Use only this data: ${JSON.stringify({
           homeTeam: input.homeTeamName,
           awayTeam: input.awayTeamName,
