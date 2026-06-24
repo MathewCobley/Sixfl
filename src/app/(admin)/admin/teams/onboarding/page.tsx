@@ -5,9 +5,14 @@
 import Link from "next/link";
 
 import { getTeamOnboardingSummaries } from "@/lib/captain/onboarding";
+import {
+  CAPTAIN_ONBOARDING_EMAIL_STAGE_LABELS,
+  type CaptainOnboardingEmailStage,
+} from "@/lib/captain/onboarding-emails";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { sendCaptainOnboardingEmailAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,6 +20,18 @@ export const revalidate = 0;
 export const metadata = {
   title: "Captain Onboarding | SIXFL Admin",
 };
+
+type SearchParams = {
+  sent?: string;
+  label?: string;
+  error?: string;
+};
+
+const manualEmailStages: CaptainOnboardingEmailStage[] = [
+  "welcome",
+  "firstFixture",
+  "postFirstMatch",
+];
 
 function formatDate(value: Date | null) {
   if (!value) return "—";
@@ -28,8 +45,51 @@ function formatDate(value: Date | null) {
   });
 }
 
-export default async function AdminCaptainOnboardingPage() {
+function getErrorMessage(error?: string) {
+  switch (error) {
+    case "missing_details":
+      return "Email could not be sent because the team or email type was missing.";
+    case "missing_team":
+      return "Email could not be sent because the team could not be found.";
+    case "missing_email":
+      return "Email could not be sent because no captain/contact email is saved for that team.";
+    case "not_sent":
+      return "Email could not be queued.";
+    default:
+      return null;
+  }
+}
+
+function ManualEmailButton({
+  teamId,
+  stage,
+}: {
+  teamId: string;
+  stage: CaptainOnboardingEmailStage;
+}) {
+  return (
+    <form action={sendCaptainOnboardingEmailAction}>
+      <input type="hidden" name="teamId" value={teamId} />
+      <input type="hidden" name="stage" value={stage} />
+      <button
+        type="submit"
+        className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15 sm:w-auto"
+      >
+        Send {CAPTAIN_ONBOARDING_EMAIL_STAGE_LABELS[stage]}
+      </button>
+    </form>
+  );
+}
+
+export default async function AdminCaptainOnboardingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
   await requireAdmin();
+
+  const sp = (await searchParams) ?? {};
+  const errorMessage = getErrorMessage(sp.error);
 
   const teams = await prisma.team.findMany({
     orderBy: [{ name: "asc" }],
@@ -71,7 +131,7 @@ export default async function AdminCaptainOnboardingPage() {
             Captain onboarding
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-            Check which captains have accepted the captain agreement and whether onboarding emails have been sent.
+            Check which captains have accepted the captain agreement and whether onboarding emails have been sent. You can also send any onboarding email manually from here.
           </p>
         </div>
 
@@ -82,6 +142,18 @@ export default async function AdminCaptainOnboardingPage() {
           Back to teams
         </Link>
       </div>
+
+      {sp.sent ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          {sp.label || "Onboarding"} email queued and immediate sending attempted.
+        </div>
+      ) : null}
+
+      {errorMessage ? (
+        <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
+          {errorMessage}
+        </div>
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
@@ -105,11 +177,12 @@ export default async function AdminCaptainOnboardingPage() {
       </section>
 
       <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-        <div className="grid gap-4 border-b border-white/10 px-6 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-white/45 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
+        <div className="grid gap-4 border-b border-white/10 px-6 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-white/45 md:grid-cols-[1.2fr_0.9fr_0.8fr_1.35fr_1fr]">
           <div>Team</div>
           <div>Captain</div>
           <div>Agreement</div>
           <div>Onboarding emails</div>
+          <div>Manual send</div>
         </div>
 
         <div className="divide-y divide-white/10">
@@ -124,7 +197,7 @@ export default async function AdminCaptainOnboardingPage() {
             return (
               <div
                 key={team.id}
-                className="grid gap-4 px-6 py-5 text-sm md:grid-cols-[1.3fr_1fr_1fr_1fr] md:items-center"
+                className="grid gap-4 px-6 py-5 text-sm md:grid-cols-[1.2fr_0.9fr_0.8fr_1.35fr_1fr] md:items-center"
               >
                 <div className="min-w-0">
                   <Link
@@ -161,6 +234,12 @@ export default async function AdminCaptainOnboardingPage() {
                   <div>Welcome: {formatDate(onboarding?.onboardingWelcomeEmailSentAt ?? null)}</div>
                   <div>First fixture: {formatDate(onboarding?.onboardingFirstFixtureEmailSentAt ?? null)}</div>
                   <div>Post match: {formatDate(onboarding?.onboardingPostFirstMatchEmailSentAt ?? null)}</div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {manualEmailStages.map((stage) => (
+                    <ManualEmailButton key={stage} teamId={team.id} stage={stage} />
+                  ))}
                 </div>
               </div>
             );
