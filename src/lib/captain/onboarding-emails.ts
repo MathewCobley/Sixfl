@@ -37,9 +37,15 @@ export type CaptainOnboardingEmailJobSummary = {
   errors: string[];
 };
 
-type OnboardingEmailStage = "welcome" | "firstFixture" | "postFirstMatch";
+export type CaptainOnboardingEmailStage = "welcome" | "firstFixture" | "postFirstMatch";
 
-const TEMPLATE_KEYS: Record<OnboardingEmailStage, string> = {
+export const CAPTAIN_ONBOARDING_EMAIL_STAGE_LABELS: Record<CaptainOnboardingEmailStage, string> = {
+  welcome: "Welcome",
+  firstFixture: "First fixture",
+  postFirstMatch: "Post-match",
+};
+
+const TEMPLATE_KEYS: Record<CaptainOnboardingEmailStage, string> = {
   welcome: "captain-onboarding-welcome",
   firstFixture: "captain-first-fixture-reminder",
   postFirstMatch: "captain-post-first-match",
@@ -69,9 +75,19 @@ function getCaptainEmail(row: CaptainOnboardingEmailRow) {
   );
 }
 
+function isCaptainOnboardingEmailStage(value: string): value is CaptainOnboardingEmailStage {
+  return value === "welcome" || value === "firstFixture" || value === "postFirstMatch";
+}
+
+export function parseCaptainOnboardingEmailStage(value: FormDataEntryValue | string | null) {
+  const parsed = String(value ?? "").trim();
+
+  return isCaptainOnboardingEmailStage(parsed) ? parsed : null;
+}
+
 function shouldQueueStage(input: {
   row: CaptainOnboardingEmailRow;
-  stage: OnboardingEmailStage;
+  stage: CaptainOnboardingEmailStage;
   now: Date;
 }) {
   const sevenDaysFromNow = new Date(input.now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -94,7 +110,7 @@ function shouldQueueStage(input: {
 
 async function markStageQueued(input: {
   teamId: string;
-  stage: OnboardingEmailStage;
+  stage: CaptainOnboardingEmailStage;
 }) {
   switch (input.stage) {
     case "welcome":
@@ -121,49 +137,54 @@ async function markStageQueued(input: {
   }
 }
 
+function selectCaptainOnboardingEmailRow() {
+  return Prisma.sql`
+    t."id",
+    t."name",
+    t."contactName",
+    t."contactEmail",
+    t."secondaryContactEmail",
+    (
+      SELECT u."name"
+      FROM "TeamMember" tm
+      INNER JOIN "User" u ON u."id" = tm."userId"
+      WHERE tm."teamId" = t."id"
+        AND tm."role" = 'CAPTAIN'
+      ORDER BY tm."createdAt" ASC
+      LIMIT 1
+    ) AS "captainName",
+    (
+      SELECT u."email"
+      FROM "TeamMember" tm
+      INNER JOIN "User" u ON u."id" = tm."userId"
+      WHERE tm."teamId" = t."id"
+        AND tm."role" = 'CAPTAIN'
+      ORDER BY tm."createdAt" ASC
+      LIMIT 1
+    ) AS "captainEmail",
+    t."captainAgreementAcceptedAt",
+    t."onboardingWelcomeEmailSentAt",
+    t."onboardingFirstFixtureEmailSentAt",
+    t."onboardingPostFirstMatchEmailSentAt",
+    (
+      SELECT MIN(f."kickoffAt")
+      FROM "Fixture" f
+      WHERE (f."homeTeamId" = t."id" OR f."awayTeamId" = t."id")
+        AND f."status" = 'SCHEDULED'
+        AND f."kickoffAt" > NOW()
+    ) AS "nextFixtureAt",
+    EXISTS (
+      SELECT 1
+      FROM "Fixture" f
+      INNER JOIN "MatchResult" r ON r."fixtureId" = f."id"
+      WHERE f."homeTeamId" = t."id" OR f."awayTeamId" = t."id"
+    ) AS "hasCompletedMatch"
+  `;
+}
+
 async function getCandidateTeams() {
   return prisma.$queryRaw<CaptainOnboardingEmailRow[]>`
-    SELECT
-      t."id",
-      t."name",
-      t."contactName",
-      t."contactEmail",
-      t."secondaryContactEmail",
-      (
-        SELECT u."name"
-        FROM "TeamMember" tm
-        INNER JOIN "User" u ON u."id" = tm."userId"
-        WHERE tm."teamId" = t."id"
-          AND tm."role" = 'CAPTAIN'
-        ORDER BY tm."createdAt" ASC
-        LIMIT 1
-      ) AS "captainName",
-      (
-        SELECT u."email"
-        FROM "TeamMember" tm
-        INNER JOIN "User" u ON u."id" = tm."userId"
-        WHERE tm."teamId" = t."id"
-          AND tm."role" = 'CAPTAIN'
-        ORDER BY tm."createdAt" ASC
-        LIMIT 1
-      ) AS "captainEmail",
-      t."captainAgreementAcceptedAt",
-      t."onboardingWelcomeEmailSentAt",
-      t."onboardingFirstFixtureEmailSentAt",
-      t."onboardingPostFirstMatchEmailSentAt",
-      (
-        SELECT MIN(f."kickoffAt")
-        FROM "Fixture" f
-        WHERE (f."homeTeamId" = t."id" OR f."awayTeamId" = t."id")
-          AND f."status" = 'SCHEDULED'
-          AND f."kickoffAt" > NOW()
-      ) AS "nextFixtureAt",
-      EXISTS (
-        SELECT 1
-        FROM "Fixture" f
-        INNER JOIN "MatchResult" r ON r."fixtureId" = f."id"
-        WHERE f."homeTeamId" = t."id" OR f."awayTeamId" = t."id"
-      ) AS "hasCompletedMatch"
+    SELECT ${selectCaptainOnboardingEmailRow()}
     FROM "Team" t
     WHERE t."captainUserId" IS NOT NULL
        OR t."contactEmail" IS NOT NULL
@@ -177,9 +198,20 @@ async function getCandidateTeams() {
   `;
 }
 
+async function getCandidateTeam(teamId: string) {
+  const rows = await prisma.$queryRaw<CaptainOnboardingEmailRow[]>`
+    SELECT ${selectCaptainOnboardingEmailRow()}
+    FROM "Team" t
+    WHERE t."id" = ${teamId}
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
+}
+
 async function queueStage(input: {
   row: CaptainOnboardingEmailRow;
-  stage: OnboardingEmailStage;
+  stage: CaptainOnboardingEmailStage;
 }) {
   const captainEmail = getCaptainEmail(input.row);
 
@@ -218,10 +250,57 @@ async function queueStage(input: {
       type: "captain_onboarding",
       stage: input.stage,
       teamId: input.row.id,
+      manual: false,
     } satisfies Prisma.InputJsonValue,
   });
 
   await markStageQueued({ teamId: input.row.id, stage: input.stage });
+
+  return "queued" as const;
+}
+
+export async function queueCaptainOnboardingEmailForTeam(input: {
+  teamId: string;
+  stage: CaptainOnboardingEmailStage;
+  force?: boolean;
+  manual?: boolean;
+}) {
+  const row = await getCandidateTeam(input.teamId);
+
+  if (!row) {
+    return "missing_team" as const;
+  }
+
+  if (!input.force && !shouldQueueStage({ row, stage: input.stage, now: new Date() })) {
+    return "not_due" as const;
+  }
+
+  const result = await queueStage({ row, stage: input.stage });
+
+  if (result !== "queued") {
+    return result;
+  }
+
+  if (input.manual) {
+    await prisma.notificationDispatch.updateMany({
+      where: {
+        sourceType: "TEAM",
+        sourceId: input.teamId,
+        metadata: {
+          path: ["stage"],
+          equals: input.stage,
+        },
+      },
+      data: {
+        metadata: {
+          type: "captain_onboarding",
+          stage: input.stage,
+          teamId: input.teamId,
+          manual: true,
+        },
+      },
+    }).catch(() => undefined);
+  }
 
   return "queued" as const;
 }
@@ -252,7 +331,7 @@ export async function runCaptainOnboardingEmailJob(): Promise<CaptainOnboardingE
   const now = new Date();
 
   for (const row of rows) {
-    for (const stage of Object.keys(TEMPLATE_KEYS) as OnboardingEmailStage[]) {
+    for (const stage of Object.keys(TEMPLATE_KEYS) as CaptainOnboardingEmailStage[]) {
       if (!shouldQueueStage({ row, stage, now })) {
         summary.alreadySentOrNotDue += 1;
         continue;
