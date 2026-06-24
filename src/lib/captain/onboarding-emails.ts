@@ -129,8 +129,24 @@ async function getCandidateTeams() {
       t."contactName",
       t."contactEmail",
       t."secondaryContactEmail",
-      u."name" AS "captainName",
-      u."email" AS "captainEmail",
+      (
+        SELECT u."name"
+        FROM "TeamMember" tm
+        INNER JOIN "User" u ON u."id" = tm."userId"
+        WHERE tm."teamId" = t."id"
+          AND tm."role" = 'CAPTAIN'
+        ORDER BY tm."createdAt" ASC
+        LIMIT 1
+      ) AS "captainName",
+      (
+        SELECT u."email"
+        FROM "TeamMember" tm
+        INNER JOIN "User" u ON u."id" = tm."userId"
+        WHERE tm."teamId" = t."id"
+          AND tm."role" = 'CAPTAIN'
+        ORDER BY tm."createdAt" ASC
+        LIMIT 1
+      ) AS "captainEmail",
       t."captainAgreementAcceptedAt",
       t."onboardingWelcomeEmailSentAt",
       t."onboardingFirstFixtureEmailSentAt",
@@ -149,14 +165,14 @@ async function getCandidateTeams() {
         WHERE f."homeTeamId" = t."id" OR f."awayTeamId" = t."id"
       ) AS "hasCompletedMatch"
     FROM "Team" t
-    LEFT JOIN "TeamMember" tm
-      ON tm."teamId" = t."id"
-      AND tm."role" = 'CAPTAIN'
-    LEFT JOIN "User" u
-      ON u."id" = tm."userId"
     WHERE t."captainUserId" IS NOT NULL
        OR t."contactEmail" IS NOT NULL
-       OR u."email" IS NOT NULL
+       OR EXISTS (
+        SELECT 1
+        FROM "TeamMember" tm
+        WHERE tm."teamId" = t."id"
+          AND tm."role" = 'CAPTAIN'
+      )
     ORDER BY t."name" ASC
   `;
 }
