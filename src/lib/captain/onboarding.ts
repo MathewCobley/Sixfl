@@ -46,6 +46,37 @@ type RawCaptainOnboardingSummary = {
   onboardingPostFirstMatchEmailSentAt: Date | null;
 };
 
+let captainOnboardingColumnPromise: Promise<void> | null = null;
+
+async function ensureCaptainOnboardingColumns() {
+  captainOnboardingColumnPromise ??= (async () => {
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "Team"
+        ADD COLUMN IF NOT EXISTS "captainAgreementAcceptedAt" TIMESTAMP(3),
+        ADD COLUMN IF NOT EXISTS "captainAgreementAcceptedById" TEXT,
+        ADD COLUMN IF NOT EXISTS "onboardingCompletedAt" TIMESTAMP(3),
+        ADD COLUMN IF NOT EXISTS "onboardingWelcomeEmailSentAt" TIMESTAMP(3),
+        ADD COLUMN IF NOT EXISTS "onboardingFirstFixtureEmailSentAt" TIMESTAMP(3),
+        ADD COLUMN IF NOT EXISTS "onboardingPostFirstMatchEmailSentAt" TIMESTAMP(3);
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "Team_captainAgreementAcceptedAt_idx"
+        ON "Team"("captainAgreementAcceptedAt");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "Team_onboardingCompletedAt_idx"
+        ON "Team"("onboardingCompletedAt");
+    `);
+  })().catch((error) => {
+    captainOnboardingColumnPromise = null;
+    throw error;
+  });
+
+  return captainOnboardingColumnPromise;
+}
+
 function emptySummary(teamId: string): CaptainOnboardingSummary {
   return {
     teamId,
@@ -79,6 +110,8 @@ export async function getTeamOnboardingSummaries(teamIds: string[]) {
   if (uniqueTeamIds.length === 0) return summaries;
 
   try {
+    await ensureCaptainOnboardingColumns();
+
     const rows = await prisma.$queryRaw<RawCaptainOnboardingSummary[]>`
       SELECT
         "id",
