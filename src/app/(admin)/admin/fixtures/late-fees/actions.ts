@@ -13,6 +13,11 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 type LateFeeDecision = "NONE" | "WARNING" | "APPLIED" | "WAIVED";
+type LateFeeNotice =
+  | "late_fee_saved"
+  | "late_fee_error"
+  | "payment_late_fee_saved"
+  | "payment_late_fee_error";
 
 const ALLOWED_DECISIONS = new Set<LateFeeDecision>([
   "NONE",
@@ -20,6 +25,9 @@ const ALLOWED_DECISIONS = new Set<LateFeeDecision>([
   "APPLIED",
   "WAIVED",
 ]);
+
+const PAYMENT_LATE_FEE_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_PAYMENT_LATE_FEE_PENCE = 1000;
 
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
   const parsed = String(value ?? "").trim();
@@ -47,9 +55,10 @@ function parseNote(value: FormDataEntryValue | null) {
 }
 
 function buildRedirect(input: {
-  notice: "late_fee_saved" | "late_fee_error";
+  notice: LateFeeNotice;
   teamName?: string | null;
   fixtureId?: string | null;
+  sectionId?: string | null;
 }) {
   const searchParams = new URLSearchParams();
   searchParams.set("notice", input.notice);
@@ -59,9 +68,11 @@ function buildRedirect(input: {
   }
 
   const query = searchParams.toString();
-  const hash = input.fixtureId?.trim()
-    ? `#fixture-${input.fixtureId.trim()}`
-    : "";
+  const hash = input.sectionId?.trim()
+    ? `#${input.sectionId.trim()}`
+    : input.fixtureId?.trim()
+      ? `#fixture-${input.fixtureId.trim()}`
+      : "";
 
   return `/admin/fixtures/late-fees?${query}${hash}`;
 }
@@ -111,6 +122,14 @@ function getTeamName(input: {
 
 function getConfirmationDeadline(kickoffAt: Date) {
   return new Date(kickoffAt.getTime() - 72 * 60 * 60 * 1000);
+}
+
+function getChargeStatus(input: { amountPence: number; paidTotalPence: number }) {
+  const outstandingPence = input.amountPence - input.paidTotalPence;
+
+  if (outstandingPence <= 0) return "PAID";
+  if (input.paidTotalPence > 0) return "PART_PAID";
+  return "OPEN";
 }
 
 export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
@@ -215,6 +234,219 @@ export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
   }
 
   redirect(buildRedirect({ notice: "late_fee_saved", teamName, fixtureId }));
+}
+
+export async function setLatePaymentAdminFeeDecisionAction(formData: FormData) {
+  await requireAdmin();
+
+  const chargeId = parseRequiredString(formData.get("chargeId"), "Charge");
+  const decision = parseDecision(formData.get("decision"));
+  const note = parseNote(formData.get("note"));
+  const decisionNote = decision === "NONE" ? null : note;
+  const now = new Date();
+  let teamName: string | null = null;
+
+  try {
+    const [charge] = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        teamId: string;
+        teamName: string;
+        status: string;
+        amountPence: number;
+        dueDate: Date | null;
+        paidTotalPence: number;
+        latePaymentFeeStatus: LateFeeDecision;
+        latePaymentFeeAmountPence: number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        charge."id",
+        charge."teamId",
+        team."name" AS "teamName",
+        charge."status"::text AS "status",
+        charge."amountPence",
+        charge."dueDate",
+        COALESCE(SUM(transaction."amountPence"), 0)::int AS "paidTotalPence",
+        charge."latePaymentFeeStatus"::text AS "latePaymentFeeStatus",
+        charge."latePaymentFeeAmountPence" AS "latePaymentFeeAmountPence"
+      FROM "PaymentCharge" charge
+      INNER JOIN "Team" team ON team."id" = charge."teamId"
+      LEFT JOIN "PaymentTransaction" transaction ON transaction."chargeId" = charge."id"
+      WHERE charge."id" = ${chargeId}
+      GROUP BY charge."id", team."name"
+      LIMIT 1
+    `);
+
+    if (!charge || charge.status === "PAID" || charge.status === "VOID") {
+      throw new Error("Charge is not open for late payment fee management.");
+    }
+
+    teamName = charge.teamName;
+    const overdueAt = charge.dueDate
+      ? new Date(charge.dueDate.getTime() + PAYMENT_LATE_FEE_GRACE_PERIOD_MS)
+      : null;
+    const isLateFeeEligible = Boolean(overdueAt && overdueAt <= now);
+    const outstandingBeforeDecision = charge.amountPence - charge.paidTotalPence;
+
+    if (decision === "APPLIED" && (!isLateFeeEligible || outstandingBeforeDecision <= 0)) {
+      throw new Error("A payment admin fee can only be applied to an outstanding charge more than 7 days after the due date.");
+    }
+
+    const feeAmountPence =
+      charge.latePaymentFeeAmountPence > 0
+        ? charge.latePaymentFeeAmountPence
+        : DEFAULT_PAYMENT_LATE_FEE_PENCE;
+    const wasApplied = charge.latePaymentFeeStatus === "APPLIED";
+    const willBeApplied = decision === "APPLIED";
+    const amountDeltaPence =
+      !wasApplied && willBeApplied
+        ? feeAmountPence
+        : wasApplied && !willBeApplied
+          ? -feeAmountPence
+          : 0;
+    const nextAmountPence = Math.max(0, charge.amountPence + amountDeltaPence);
+    const nextStatus = getChargeStatus({
+      amountPence: nextAmountPence,
+      paidTotalPence: charge.paidTotalPence,
+    });
+
+    await prisma.$executeRaw`
+      UPDATE "PaymentCharge"
+      SET
+        "amountPence" = ${nextAmountPence},
+        "status" = CAST(${nextStatus} AS "PaymentChargeStatus"),
+        "latePaymentFeeStatus" = CAST(${decision} AS "PaymentLateFeeStatus"),
+        "latePaymentFeeAmountPence" = ${feeAmountPence},
+        "latePaymentFeeNote" = ${decisionNote},
+        "latePaymentFeeWarningAt" = CASE
+          WHEN CAST(${decision} AS "PaymentLateFeeStatus") = 'WARNING'
+            THEN COALESCE("latePaymentFeeWarningAt", ${now})
+          ELSE NULL
+        END,
+        "latePaymentFeeAppliedAt" = CASE
+          WHEN CAST(${decision} AS "PaymentLateFeeStatus") = 'APPLIED'
+            THEN COALESCE("latePaymentFeeAppliedAt", ${now})
+          ELSE NULL
+        END,
+        "latePaymentFeeWaivedAt" = CASE
+          WHEN CAST(${decision} AS "PaymentLateFeeStatus") = 'WAIVED'
+            THEN COALESCE("latePaymentFeeWaivedAt", ${now})
+          ELSE NULL
+        END,
+        "lastStripeCheckoutUrl" = CASE WHEN ${amountDeltaPence} <> 0 THEN NULL ELSE "lastStripeCheckoutUrl" END,
+        "lastStripeCheckoutSessionId" = CASE WHEN ${amountDeltaPence} <> 0 THEN NULL ELSE "lastStripeCheckoutSessionId" END,
+        "lastStripeCheckoutCreatedAt" = CASE WHEN ${amountDeltaPence} <> 0 THEN NULL ELSE "lastStripeCheckoutCreatedAt" END,
+        "lastStripeCheckoutAmountPence" = CASE WHEN ${amountDeltaPence} <> 0 THEN NULL ELSE "lastStripeCheckoutAmountPence" END,
+        "updatedAt" = ${now}
+      WHERE "id" = ${chargeId}
+    `;
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin/fixtures/late-fees");
+    revalidatePath(`/captain/team/${charge.teamId}`);
+    revalidatePath(`/captain/team/${charge.teamId}/payments`);
+  } catch (error) {
+    console.error("Failed to set late payment admin fee decision", error);
+    redirect(
+      buildRedirect({
+        notice: "payment_late_fee_error",
+        teamName,
+        sectionId: `payment-charge-${chargeId}`,
+      }),
+    );
+  }
+
+  redirect(
+    buildRedirect({
+      notice: "payment_late_fee_saved",
+      teamName,
+      sectionId: `payment-charge-${chargeId}`,
+    }),
+  );
+}
+
+export type PaymentLateFeeRow = {
+  chargeId: string;
+  teamId: string;
+  teamName: string;
+  title: string;
+  description: string | null;
+  chargeStatus: string;
+  amountPence: number;
+  paidTotalPence: number;
+  outstandingPence: number;
+  dueDate: Date | null;
+  createdAt: Date;
+  daysLate: number | null;
+  lateFeeEligibleAt: Date | null;
+  paymentLateFeeStatus: LateFeeDecision;
+  paymentLateFeeAmountPence: number;
+  paymentLateFeeNote: string | null;
+  paymentLateFeeWarningAt: Date | null;
+  paymentLateFeeAppliedAt: Date | null;
+  paymentLateFeeWaivedAt: Date | null;
+  fixtureId: string | null;
+  kickoffAt: Date | null;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
+};
+
+export async function getPaymentLateFeeRows() {
+  return prisma.$queryRaw<PaymentLateFeeRow[]>(Prisma.sql`
+    WITH charge_totals AS (
+      SELECT
+        charge."id" AS "chargeId",
+        charge."teamId" AS "teamId",
+        team."name" AS "teamName",
+        charge."title" AS "title",
+        charge."description" AS "description",
+        charge."status"::text AS "chargeStatus",
+        charge."amountPence" AS "amountPence",
+        COALESCE(SUM(transaction."amountPence"), 0)::int AS "paidTotalPence",
+        (charge."amountPence" - COALESCE(SUM(transaction."amountPence"), 0))::int AS "outstandingPence",
+        charge."dueDate" AS "dueDate",
+        charge."createdAt" AS "createdAt",
+        CASE
+          WHEN charge."dueDate" IS NULL THEN NULL
+          ELSE FLOOR(EXTRACT(EPOCH FROM (NOW() - charge."dueDate")) / 86400)::int
+        END AS "daysLate",
+        CASE
+          WHEN charge."dueDate" IS NULL THEN NULL
+          ELSE charge."dueDate" + INTERVAL '7 days'
+        END AS "lateFeeEligibleAt",
+        charge."latePaymentFeeStatus"::text AS "paymentLateFeeStatus",
+        charge."latePaymentFeeAmountPence" AS "paymentLateFeeAmountPence",
+        charge."latePaymentFeeNote" AS "paymentLateFeeNote",
+        charge."latePaymentFeeWarningAt" AS "paymentLateFeeWarningAt",
+        charge."latePaymentFeeAppliedAt" AS "paymentLateFeeAppliedAt",
+        charge."latePaymentFeeWaivedAt" AS "paymentLateFeeWaivedAt",
+        charge."fixtureId" AS "fixtureId",
+        fixture."kickoffAt" AS "kickoffAt",
+        home_team."name" AS "homeTeamName",
+        away_team."name" AS "awayTeamName"
+      FROM "PaymentCharge" charge
+      INNER JOIN "Team" team ON team."id" = charge."teamId"
+      LEFT JOIN "PaymentTransaction" transaction ON transaction."chargeId" = charge."id"
+      LEFT JOIN "Fixture" fixture ON fixture."id" = charge."fixtureId"
+      LEFT JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
+      LEFT JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
+      WHERE charge."status" NOT IN ('PAID', 'VOID')
+      GROUP BY charge."id", team."name", fixture."id", home_team."name", away_team."name"
+    )
+    SELECT *
+    FROM charge_totals
+    WHERE "outstandingPence" > 0
+      AND (
+        ("dueDate" IS NOT NULL AND "lateFeeEligibleAt" <= NOW())
+        OR "paymentLateFeeStatus" <> 'NONE'
+      )
+    ORDER BY
+      CASE WHEN "paymentLateFeeStatus" = 'APPLIED' THEN 1 ELSE 0 END ASC,
+      "lateFeeEligibleAt" ASC NULLS LAST,
+      "teamName" ASC,
+      "title" ASC
+  `);
 }
 
 export type LateConfirmationFeeRow = {
