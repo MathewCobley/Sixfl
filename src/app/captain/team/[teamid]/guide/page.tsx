@@ -46,7 +46,8 @@ const guideSections = [
     items: [
       "Availability should be confirmed at least 72 hours before kick-off.",
       "If there is a problem, raise it early through the fixture tools rather than waiting until matchday.",
-      "We do not want to charge admin fees, but a £10 late availability admin fee may be added if avoidable late confirmation creates extra admin, fixture chasing or rearranging work.",
+      "We do not want to charge admin fees, but a £10 late confirmation admin fee may be added if avoidable late confirmation creates extra admin, fixture chasing or rearranging work.",
+      "SIXFL may send reminders or warnings first where practical, but captains should not rely on a warning before acting.",
     ],
   },
   {
@@ -55,7 +56,7 @@ const guideSections = [
       "The standard team fee is £40 per fixture unless SIXFL has agreed otherwise.",
       "The captain remains responsible for the team fee even when squad payments are used.",
       "We do not want to charge late payment admin fees, but a £10 late payment admin fee may be added if a team fee is more than 7 days overdue and SIXFL has to spend extra time chasing it.",
-      "Payment issues should be raised early so they can be sorted before they become a problem.",
+      "Payment reminders or warnings may be sent first where practical, but payment issues should still be raised early so they can be sorted before they become a problem.",
     ],
   },
   {
