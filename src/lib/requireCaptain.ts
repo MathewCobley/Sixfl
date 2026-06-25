@@ -39,16 +39,9 @@ type RequireCaptainResult = {
   accessMode: "admin-preview" | "captain-preview" | "captain";
 };
 
-async function isCaptainOnlyPreviewEnabled(input: {
-  teamId: string;
-  isAdmin: boolean;
-}) {
-  if (!input.isAdmin) return false;
-
+async function getPreviewTeamId() {
   const cookieStore = await cookies();
-  const previewTeamId = cookieStore.get(CAPTAIN_ONLY_PREVIEW_COOKIE)?.value;
-
-  return previewTeamId === input.teamId;
+  return cookieStore.get(CAPTAIN_ONLY_PREVIEW_COOKIE)?.value ?? null;
 }
 
 export async function requireCaptain(
@@ -73,10 +66,16 @@ export async function requireCaptain(
 
   const email = session.user.email.toLowerCase().trim();
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, name: true, role: true },
-  });
+  const [user, team] = await Promise.all([
+    prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, name: true, role: true },
+    }),
+    prisma.team.findUnique({
+      where: { id: teamId },
+      select: { id: true, teamMode: true },
+    }),
+  ]);
 
   const membership = user
     ? await prisma.teamMember.findFirst({
@@ -98,14 +97,13 @@ export async function requireCaptain(
     : null;
 
   const rawIsAdmin = user?.role === UserRole.ADMIN;
-  const isCaptainOnlyPreview = await isCaptainOnlyPreviewEnabled({
-    teamId,
-    isAdmin: rawIsAdmin,
-  });
-  const isAdmin = rawIsAdmin && !isCaptainOnlyPreview;
-  const isCaptain = Boolean(membership) || isCaptainOnlyPreview;
+  const isManagedTeam = team?.teamMode === "MANAGED";
+  const previewTeamId = rawIsAdmin && !isManagedTeam ? await getPreviewTeamId() : null;
+  const isCaptainOnlyPreview = Boolean(rawIsAdmin && !isManagedTeam && previewTeamId === teamId);
+  const isAdmin = Boolean(rawIsAdmin && !isCaptainOnlyPreview);
+  const isCaptain = Boolean(!isManagedTeam && (membership || isCaptainOnlyPreview));
 
-  if (!rawIsAdmin && !membership) {
+  if ((!rawIsAdmin && !membership) || (isManagedTeam && !rawIsAdmin)) {
     if (process.env.NODE_ENV !== "production") {
       return {
         session,
