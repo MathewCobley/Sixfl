@@ -4,13 +4,14 @@
 
 import {
   NotificationAudience,
+  NotificationChannel,
   NotificationRecipientSourceType,
   Prisma,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
-import { queueNotificationFromTemplate } from "@/lib/notifications/service";
+import { queueDirectNotification } from "@/lib/notifications/service";
 
 type CaptainOnboardingEmailRow = {
   id: string;
@@ -45,10 +46,56 @@ export const CAPTAIN_ONBOARDING_EMAIL_STAGE_LABELS: Record<CaptainOnboardingEmai
   postFirstMatch: "Post-match",
 };
 
-const TEMPLATE_KEYS: Record<CaptainOnboardingEmailStage, string> = {
-  welcome: "captain-onboarding-welcome",
-  firstFixture: "captain-first-fixture-reminder",
-  postFirstMatch: "captain-post-first-match",
+const STAGE_CONTENT: Record<
+  CaptainOnboardingEmailStage,
+  {
+    subject: string;
+    body: (input: { captainName: string }) => string;
+    ctaLabel: string;
+  }
+> = {
+  welcome: {
+    subject: "Welcome to SIXFL - complete your team setup",
+    ctaLabel: "Open captain area",
+    body: ({ captainName }) => [
+      `Hi ${captainName},`,
+      "",
+      "Welcome to SIXFL. Your team is now set up.",
+      "",
+      "Please log in to your captain area and complete the team setup checklist before your first fixture. It only takes a few minutes and covers your squad, availability, payments and matchday responsibilities.",
+      "",
+      "Thanks,",
+      "SIXFL",
+    ].join("\n"),
+  },
+  firstFixture: {
+    subject: "Your first SIXFL fixture is coming up",
+    ctaLabel: "Open captain area",
+    body: ({ captainName }) => [
+      `Hi ${captainName},`,
+      "",
+      "Your first SIXFL fixture is coming up. Please confirm availability, check your squad details and make sure payment arrangements are sorted before matchday.",
+      "",
+      "You can use the captain checklist and guide in your dashboard if you need a reminder.",
+      "",
+      "Thanks,",
+      "SIXFL",
+    ].join("\n"),
+  },
+  postFirstMatch: {
+    subject: "Thanks for your first SIXFL game",
+    ctaLabel: "Open captain area",
+    body: ({ captainName }) => [
+      `Hi ${captainName},`,
+      "",
+      "Hope you enjoyed your first SIXFL game.",
+      "",
+      "Your captain area is where you can find fixtures, squad details, payments, results and support. The Captain Guide is also there if you need a quick reminder of weekly responsibilities.",
+      "",
+      "Thanks,",
+      "SIXFL",
+    ].join("\n"),
+  },
 };
 
 function getSiteUrl() {
@@ -222,7 +269,6 @@ async function queueStage(input: {
 
   const siteUrl = getSiteUrl();
   const captainDashboardUrl = `${siteUrl}/captain/team/${input.row.id}`;
-  const captainGuideUrl = `${siteUrl}/captain/team/${input.row.id}/guide`;
   const recipient = await upsertNotificationRecipient({
     sourceType: NotificationRecipientSourceType.TEAM,
     sourceId: input.row.id,
@@ -235,17 +281,25 @@ async function queueStage(input: {
       source: "captain_onboarding",
     },
   });
+  const content = STAGE_CONTENT[input.stage];
+  const captainName = getCaptainName(input.row);
 
-  await queueNotificationFromTemplate({
-    templateKey: TEMPLATE_KEYS[input.stage],
+  await queueDirectNotification({
     recipientId: recipient.id,
+    channel: NotificationChannel.EMAIL,
+    audience: NotificationAudience.TEAM,
+    subject: content.subject,
+    body: content.body({ captainName }),
     sourceType: "TEAM",
     sourceId: input.row.id,
+    emailCta: {
+      label: content.ctaLabel,
+      url: captainDashboardUrl,
+    },
     variables: {
-      captainName: getCaptainName(input.row),
+      captainName,
       teamName: input.row.name,
       captainDashboardUrl,
-      captainGuideUrl,
     },
     metadata: {
       type: "captain_onboarding",
@@ -305,7 +359,7 @@ export async function runCaptainOnboardingEmailJob(): Promise<CaptainOnboardingE
   const now = new Date();
 
   for (const row of rows) {
-    for (const stage of Object.keys(TEMPLATE_KEYS) as CaptainOnboardingEmailStage[]) {
+    for (const stage of Object.keys(STAGE_CONTENT) as CaptainOnboardingEmailStage[]) {
       if (!shouldQueueStage({ row, stage, now })) {
         summary.alreadySentOrNotDue += 1;
         continue;
