@@ -224,6 +224,9 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   const venueId = String(formData.get("venueId") ?? "").trim() || null;
   const status = parseFixtureStatus(formData.get("status"));
   const refereeIdsByPitch = getRefereeIdsByPitch(formData, pitches);
+  const selectedRefereeIds = refereeIdsByPitch.filter(
+    (refereeId): refereeId is string => refereeId !== null,
+  );
 
   const [league, teams, venue, selectedReferees] = await Promise.all([
     prisma.league.findUnique({
@@ -248,7 +251,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     prisma.user.findMany({
       where: {
         id: {
-          in: refereeIdsByPitch.filter((id): id is string => Boolean(id)),
+          in: selectedRefereeIds,
         },
         role: "REFEREE",
       },
@@ -269,8 +272,8 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   }
 
   const validRefereeIds = new Set(selectedReferees.map((referee) => referee.id));
-  const invalidRefereeIds = refereeIdsByPitch.filter(
-    (refereeId): refereeId is string => Boolean(refereeId) && !validRefereeIds.has(refereeId),
+  const invalidRefereeIds = selectedRefereeIds.filter(
+    (refereeId) => !validRefereeIds.has(refereeId),
   );
 
   if (invalidRefereeIds.length > 0) {
