@@ -1,0 +1,5 @@
+/* Hide the old bulk fixture generator card on the fixtures console.
+   The improved generator now lives at /admin/fixtures/generate. */
+body:has(input[name="homeTeamId"]) div:has(> form input[name="doubleRoundRobin"]) {
+  display: none !important;
+}
