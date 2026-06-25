@@ -1,216 +1,178 @@
-// src/app/admin/fixtures/generate/page.tsx
+// ========================================
+// File: src/app/(admin)/admin/fixtures/generate/page.tsx
+// ========================================
 
 import Link from "next/link";
-import AdminCard from "@/components/admin/AdminCard";
-import { requireAdmin } from "@/lib/admin";
-import { prisma } from "@/lib/prisma";
-import { generateFixtures } from "../actions";
 import { FixtureStatus } from "@prisma/client";
 
-export default async function GenerateFixturesPage() {
+import AdminCard from "@/components/admin/AdminCard";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/requireAdmin";
+import { generateDraftFixturesWithPitchRefereesAction } from "./actions";
+
+function leagueLabel(league: { name: string; season: string | null }) {
+  return league.season ? `${league.name} • ${league.season}` : league.name;
+}
+
+function refereeLabel(referee: { name: string | null; email: string | null }) {
+  if (referee.name && referee.email) return `${referee.name} • ${referee.email}`;
+  return referee.name || referee.email || "Unnamed referee";
+}
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const inputClass = "h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20";
+const labelClass = "mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45";
+
+export default async function ImprovedFixtureGeneratorPage() {
   await requireAdmin();
 
-  const [leagues, venues] = await Promise.all([
+  const [leagues, venues, referees] = await Promise.all([
     prisma.league.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
-      select: { id: true, name: true, season: true, isActive: true },
+      select: { id: true, name: true, season: true },
     }),
     prisma.venue.findMany({
-      orderBy: { name: "asc" },
+      orderBy: [{ name: "asc" }],
       select: { id: true, name: true },
+    }),
+    prisma.user.findMany({
+      where: { role: "REFEREE" },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      select: { id: true, name: true, email: true },
     }),
   ]);
 
-  // Default date
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  const defaultDate = `${yyyy}-${mm}-${dd}`;
-
   return (
-    <AdminCard title="Generate Fixtures">
-      <div className="text-sm text-white/70">
-        Generates a round-robin schedule for all teams assigned to a league.
+    <div className="mx-auto max-w-5xl space-y-8 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+      <div>
+        <Link href="/admin/fixtures" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">
+          ← Back to fixtures
+        </Link>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+          Improved bulk fixture generator
+        </h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
+          Generate a full draft schedule with pitch-specific referees. This does not publish fixtures, email teams, or create match fees.
+        </p>
       </div>
 
-      <form action={generateFixtures} className="mt-4 space-y-4">
-        {/* LEAGUE */}
-        <div>
-          <label className="mb-1 block text-sm text-white/70">League</label>
-          <select
-            name="leagueId"
-            required
-            defaultValue={leagues[0]?.id ?? ""}
-            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-          >
-            {leagues.length === 0 ? (
-              <option value="">No leagues found</option>
-            ) : (
-              leagues.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                  {l.season ? ` — ${l.season}` : ""}
-                  {l.isActive ? "" : " (inactive)"}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
+      <AdminCard className="rounded-3xl border border-emerald-400/15 bg-white/[0.03] p-6 md:p-8">
+        <form action={generateDraftFixturesWithPitchRefereesAction} className="space-y-8">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className={labelClass}>League</label>
+              <select name="leagueId" required className={inputClass}>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
+                ))}
+              </select>
+            </div>
 
-        {/* DATE + TIME */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm text-white/70">
-              Start date
-            </label>
-            <input
-              name="startDate"
-              type="date"
-              defaultValue={defaultDate}
-              required
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-            />
+            <div>
+              <label className={labelClass}>Start date</label>
+              <input type="date" name="startDate" required className={inputClass} />
+            </div>
+
+            <div>
+              <label className={labelClass}>Start time</label>
+              <input type="time" name="startTime" defaultValue="19:00" required className={inputClass} />
+              <p className="mt-2 text-xs leading-5 text-white/45">Times are UK/London fixture times. 19:00 means 7pm.</p>
+            </div>
+
+            <div>
+              <label className={labelClass}>Venue</label>
+              <select name="venueId" className={inputClass}>
+                <option value="">No venue</option>
+                {venues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>{venue.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Fixture status</label>
+              <select name="status" defaultValue={FixtureStatus.SCHEDULED} className={inputClass}>
+                <option value={FixtureStatus.SCHEDULED}>Scheduled</option>
+                <option value={FixtureStatus.POSTPONED}>Postponed</option>
+                <option value={FixtureStatus.CANCELLED}>Cancelled</option>
+              </select>
+              <p className="mt-2 text-xs leading-5 text-white/45">Generated fixtures stay draft until you publish a selected week.</p>
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-white/70">
-              Start time
-            </label>
-            <input
-              name="startTime"
-              type="time"
-              defaultValue="20:00"
-              required
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-            />
-          </div>
-        </div>
-
-        {/* SCHEDULING OPTIONS */}
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-sm text-white/70">
-              Week gap (days)
-            </label>
-            <input
-              name="weekGapDays"
-              type="number"
-              defaultValue={7}
-              min={1}
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-            />
+          <div className="grid gap-6 md:grid-cols-5">
+            <div>
+              <label className={labelClass}>Pitches</label>
+              <input type="number" name="pitches" min={1} max={6} defaultValue={1} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Max games per night</label>
+              <input type="number" name="maxGamesPerNight" min={1} defaultValue={3} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Slot minutes</label>
+              <input type="number" name="slotMinutes" min={10} defaultValue={40} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Week gap days</label>
+              <input type="number" name="weekGapDays" min={1} defaultValue={7} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Start week</label>
+              <input type="number" name="startRound" min={1} defaultValue={1} className={inputClass} />
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-white/70">
-              Slot minutes
-            </label>
-            <input
-              name="slotMinutes"
-              type="number"
-              defaultValue={40}
-              min={10}
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-            />
+          <div className="rounded-3xl border border-white/10 bg-black/25 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">Pitch referees</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Assign one referee per pitch</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
+              Pitch 1 uses the Pitch 1 referee, Pitch 2 uses the Pitch 2 referee, and so on.
+            </p>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }, (_, index) => (
+                <div key={index + 1}>
+                  <label className={labelClass}>Pitch {index + 1} referee</label>
+                  <select name={`refereeIdByPitch${index + 1}`} className={inputClass}>
+                    <option value="">Unassigned</option>
+                    {referees.map((referee) => (
+                      <option key={referee.id} value={referee.id}>{refereeLabel(referee)}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-white/70">
-              Pitches
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <input type="checkbox" name="doubleRoundRobin" className="mt-1" />
+              <span>
+                <span className="block text-sm font-semibold text-white">Double round robin</span>
+                <span className="mt-1 block text-sm leading-6 text-white/50">Every team plays each opponent twice.</span>
+              </span>
             </label>
-            <input
-              name="pitches"
-              type="number"
-              defaultValue={1}
-              min={1}
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-            />
+
+            <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4">
+              <input type="checkbox" name="clearExisting" className="mt-1" />
+              <span>
+                <span className="block text-sm font-semibold text-red-100">Clear existing fixtures first</span>
+                <span className="mt-1 block text-sm leading-6 text-red-100/65">Only tick this when regenerating a schedule from scratch.</span>
+              </span>
+            </label>
           </div>
-        </div>
 
-        {/* ROUND */}
-        <div>
-          <label className="mb-1 block text-sm text-white/70">
-            Starting round
-          </label>
-          <input
-            name="startRound"
-            type="number"
-            defaultValue={1}
-            min={1}
-            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-          />
-        </div>
-
-        {/* VENUE */}
-        <div>
-          <label className="mb-1 block text-sm text-white/70">
-            Venue (optional)
-          </label>
-          <select
-            name="venueId"
-            defaultValue=""
-            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-          >
-            <option value="">No venue</option>
-            {venues.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* STATUS */}
-        <div>
-          <label className="mb-1 block text-sm text-white/70">
-            Fixture status
-          </label>
-          <select
-            name="status"
-            defaultValue="SCHEDULED"
-            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none"
-          >
-            {Object.values(FixtureStatus).map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* OPTIONS */}
-        <div className="flex flex-col gap-2 text-sm text-white/70">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" name="doubleRoundRobin" />
-            Double round robin (home & away)
-          </label>
-
-          <label className="flex items-center gap-2">
-            <input type="checkbox" name="clearExisting" defaultChecked />
-            Clear existing fixtures before generating
-          </label>
-        </div>
-
-        {/* BUTTONS */}
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={leagues.length === 0}
-            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-black hover:bg-emerald-400"
-          >
-            Generate fixtures
-          </button>
-
-          <Link
-            href="/admin/fixtures"
-            className="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm hover:bg-black/30"
-          >
-            Back
-          </Link>
-        </div>
-      </form>
-    </AdminCard>
+          <div className="flex flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
+            <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">
+              Generate draft fixtures
+            </button>
+            <p className="text-sm leading-6 text-white/45">Publishing and payment emails are handled separately.</p>
+          </div>
+        </form>
+      </AdminCard>
+    </div>
   );
 }
