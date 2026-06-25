@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
+import CaptainAdminFeeRouteNotice from "@/components/captain/CaptainAdminFeeRouteNotice";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
@@ -394,6 +395,7 @@ export default async function CaptainTeamLayout({
         <main className="captain-team-main min-w-0 space-y-8">
           <CaptainSupportPanel teamId={team.id} />
           {children}
+          <CaptainAdminFeeRouteNotice teamId={team.id} />
         </main>
       </div>
     </div>
