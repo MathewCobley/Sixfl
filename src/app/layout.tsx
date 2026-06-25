@@ -4,6 +4,7 @@
 
 import "./globals.css";
 import "./mobile.css";
+import "./hide-old-fixture-generator.css";
 import type { ReactNode } from "react";
 import Providers from "./providers";
 
