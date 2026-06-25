@@ -12,6 +12,7 @@ import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadge
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
+import CaptainSupportPanel from "@/components/captain/CaptainSupportPanel";
 import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import PendingActivationDeleteLinks from "@/components/captain/PendingActivationDeleteLinks";
@@ -275,8 +276,6 @@ export default async function CaptainTeamLayout({
 
   const navItems = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
-    { href: `/captain/team/${teamid}/guide`, label: "Guide" },
-    { href: `/captain/team/${teamid}/help`, label: "Help" },
     { href: squadHref, label: "Squad" },
     ...(access.isAdmin
       ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
@@ -392,7 +391,10 @@ export default async function CaptainTeamLayout({
           </nav>
         </header>
 
-        <main className="captain-team-main min-w-0">{children}</main>
+        <main className="captain-team-main min-w-0 space-y-8">
+          <CaptainSupportPanel teamId={team.id} />
+          {children}
+        </main>
       </div>
     </div>
   );
