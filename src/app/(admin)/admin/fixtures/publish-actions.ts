@@ -49,6 +49,17 @@ function parseRequiredString(value: FormDataEntryValue | null, fieldName: string
   return str;
 }
 
+function parseRequiredPositiveInt(value: FormDataEntryValue | null, fieldName: string) {
+  const rawValue = String(value ?? "").trim();
+  const parsed = Number(rawValue);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${fieldName} must be a whole number of 1 or more.`);
+  }
+
+  return parsed;
+}
+
 function getSiteUrl() {
   return (
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
@@ -66,6 +77,7 @@ function buildAbsoluteUrl(path: string) {
 function buildAdminFixturesHref(input: {
   publish: "success" | "none" | "error";
   leagueId: string;
+  round?: number;
   published?: number;
   digestQueued?: number;
   digestSkipped?: number;
@@ -76,6 +88,10 @@ function buildAdminFixturesHref(input: {
   const searchParams = new URLSearchParams();
   searchParams.set("publish", input.publish);
   searchParams.set("leagueId", input.leagueId);
+
+  if (typeof input.round === "number") {
+    searchParams.set("round", String(input.round));
+  }
 
   if (typeof input.published === "number") {
     searchParams.set("published", String(input.published));
@@ -189,16 +205,18 @@ async function withSerializableRetry<T>(callback: () => Promise<T>): Promise<T> 
   throw new Error("Unable to complete fixture publish.");
 }
 
-async function claimUnpublishedLeagueFixtures(
-  leagueId: string,
-): Promise<PublishFixtureRecord[]> {
+async function claimUnpublishedLeagueFixtures(input: {
+  leagueId: string;
+  round?: number;
+}): Promise<PublishFixtureRecord[]> {
   return withSerializableRetry(async () => {
     return prisma.$transaction(
       async (tx) => {
         const unpublishedFixtures = await tx.fixture.findMany({
           where: {
-            leagueId,
+            leagueId: input.leagueId,
             publishedAt: null,
+            ...(typeof input.round === "number" ? { round: input.round } : {}),
           },
           orderBy: {
             kickoffAt: "asc",
@@ -241,8 +259,9 @@ async function claimUnpublishedLeagueFixtures(
             id: {
               in: fixtureIds,
             },
-            leagueId,
+            leagueId: input.leagueId,
             publishedAt: null,
+            ...(typeof input.round === "number" ? { round: input.round } : {}),
           },
           data: {
             publishedAt,
@@ -322,25 +341,22 @@ async function queueTemplateNotificationOnce(input: {
   } as const;
 }
 
-export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
-  await requireAdmin();
-
-  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
-
+async function publishAndEmailFixtureBatch(input: { leagueId: string; round?: number }) {
   try {
     getEmailReplyDomain();
   } catch {
     redirect(
       buildAdminFixturesHref({
         publish: "error",
-        leagueId,
+        leagueId: input.leagueId,
+        round: input.round,
         publishError: "reply_not_configured",
       }),
     );
   }
 
   const league = await prisma.league.findUnique({
-    where: { id: leagueId },
+    where: { id: input.leagueId },
     select: {
       id: true,
       name: true,
@@ -353,12 +369,12 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     throw new Error("League not found.");
   }
 
-  const unpublishedFixtures = await claimUnpublishedLeagueFixtures(leagueId);
+  const unpublishedFixtures = await claimUnpublishedLeagueFixtures(input);
 
   if (unpublishedFixtures.length === 0) {
     revalidatePath("/admin/fixtures");
-    revalidatePath(`/admin/leagues/${leagueId}`);
-    revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+    revalidatePath(`/admin/leagues/${input.leagueId}`);
+    revalidatePath(`/admin/leagues/${input.leagueId}/fixtures`);
 
     if (league.slug) {
       revalidatePath(`/leagues/${league.slug}`);
@@ -368,7 +384,8 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
     redirect(
       buildAdminFixturesHref({
         publish: "none",
-        leagueId,
+        leagueId: input.leagueId,
+        round: input.round,
       }),
     );
   }
@@ -411,6 +428,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
         teamName: snapshot.teamName || teamDetails.name,
         leagueId: league.id,
         leagueName: leagueDisplayName,
+        publishRound: input.round ?? null,
         fixtureIds: teamFixtures.map((fixture) => fixture.id),
       },
       variables: {
@@ -461,6 +479,7 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
             teamName: teamDetails.name,
             leagueId: league.id,
             leagueName: leagueDisplayName,
+            publishRound: input.round ?? null,
             fixtureId: fixture.id,
             fixtureName,
           },
@@ -489,8 +508,8 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
   }
 
   revalidatePath("/admin/fixtures");
-  revalidatePath(`/admin/leagues/${leagueId}`);
-  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${input.leagueId}`);
+  revalidatePath(`/admin/leagues/${input.leagueId}/fixtures`);
 
   if (league.slug) {
     revalidatePath(`/leagues/${league.slug}`);
@@ -500,7 +519,8 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
   redirect(
     buildAdminFixturesHref({
       publish: "success",
-      leagueId,
+      leagueId: input.leagueId,
+      round: input.round,
       published: unpublishedFixtures.length,
       digestQueued,
       digestSkipped,
@@ -508,4 +528,21 @@ export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
       reminderSkipped,
     }),
   );
+}
+
+export async function publishAndEmailLeagueFixturesAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+
+  await publishAndEmailFixtureBatch({ leagueId });
+}
+
+export async function publishAndEmailLeagueFixtureWeekAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+  const round = parseRequiredPositiveInt(formData.get("round"), "Week");
+
+  await publishAndEmailFixtureBatch({ leagueId, round });
 }
