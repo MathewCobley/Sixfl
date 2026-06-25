@@ -49,10 +49,7 @@ type TeamChargeSummary = {
 };
 
 function formatMoney(amountPence: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(amountPence / 100);
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(amountPence / 100);
 }
 
 function formatUkDateTime(value: Date) {
@@ -67,11 +64,7 @@ function formatUkDateTime(value: Date) {
 
 function dateKey(value: Date | null | undefined) {
   if (!value) return null;
-  return formatDateTimeInLondon(value, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  return formatDateTimeInLondon(value, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 function getFixtureLabel(input: { homeTeamName: string; awayTeamName: string }) {
@@ -79,69 +72,46 @@ function getFixtureLabel(input: { homeTeamName: string; awayTeamName: string }) 
 }
 
 function getFeeStatusLabel(status: PlayerMatchFeeStatus) {
-  switch (status) {
-    case "PAID":
-      return "Paid";
-    case "WAIVED":
-      return "Waived";
-    case "CANCELLED":
-      return "Cancelled";
-    default:
-      return "Unpaid";
-  }
+  if (status === "PAID") return "Paid";
+  if (status === "WAIVED") return "Waived";
+  if (status === "CANCELLED") return "Cancelled";
+  return "Unpaid";
 }
 
 function getFeeStatusClasses(status: PlayerMatchFeeStatus) {
-  switch (status) {
-    case "PAID":
-      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-    case "WAIVED":
-      return "border-sky-400/25 bg-sky-500/10 text-sky-100";
-    case "CANCELLED":
-      return "border-red-400/25 bg-red-500/10 text-red-100";
-    default:
-      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
-  }
+  if (status === "PAID") return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+  if (status === "WAIVED") return "border-sky-400/25 bg-sky-500/10 text-sky-100";
+  if (status === "CANCELLED") return "border-red-400/25 bg-red-500/10 text-red-100";
+  return "border-amber-400/25 bg-amber-500/10 text-amber-100";
 }
 
 function getToneClasses(tone: Tone) {
-  switch (tone) {
-    case "emerald":
-      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70";
-    case "amber":
-      return "border-amber-400/25 bg-amber-500/10 text-amber-100/70";
-    case "sky":
-      return "border-sky-400/20 bg-sky-500/10 text-sky-100/70";
-    case "red":
-      return "border-red-400/20 bg-red-500/10 text-red-100/70";
-    default:
-      return "border-white/10 bg-white/[0.04] text-white/45";
-  }
+  if (tone === "emerald") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70";
+  if (tone === "amber") return "border-amber-400/25 bg-amber-500/10 text-amber-100/70";
+  if (tone === "sky") return "border-sky-400/20 bg-sky-500/10 text-sky-100/70";
+  if (tone === "red") return "border-red-400/20 bg-red-500/10 text-red-100/70";
+  return "border-white/10 bg-white/[0.04] text-white/45";
 }
 
-function getPillClasses(tone: Tone) {
-  switch (tone) {
-    case "emerald":
-      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-    case "amber":
-      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
-    case "sky":
-      return "border-sky-400/25 bg-sky-500/10 text-sky-100";
-    case "red":
-      return "border-red-400/25 bg-red-500/10 text-red-100";
-    default:
-      return "border-white/10 bg-white/[0.04] text-white/60";
-  }
+function isPlayerMatchFeeTransaction(transaction: { notes: string | null }) {
+  const notes = transaction.notes?.toLowerCase() ?? "";
+  return notes.includes("player match fee paid online") || notes.includes("player fee id:");
+}
+
+function getDisplayChargeStatus(input: {
+  storedStatus: PaymentChargeStatus;
+  amountPence: number;
+  paidPence: number;
+}): PaymentChargeStatus {
+  if (input.storedStatus === "VOID" || input.storedStatus === "PAID") return input.storedStatus;
+  if (input.paidPence >= input.amountPence) return "PAID";
+  if (input.paidPence > 0) return "PART_PAID";
+  return input.storedStatus;
 }
 
 function isTeamChargePaid(charge?: TeamChargeSummary | null) {
   if (!charge) return false;
   return charge.status === "PAID" || charge.paidPence >= charge.amountPence;
-}
-
-function isTeamChargeOpen(charge?: TeamChargeSummary | null) {
-  if (!charge) return false;
-  return charge.status !== "PAID" && charge.status !== "VOID" && charge.outstandingPence > 0;
 }
 
 function isAdjustedTeamCharge(input: { teamFeePence: number; teamCharge?: TeamChargeSummary | null }) {
@@ -153,184 +123,29 @@ function getAdjustmentAmount(input: { teamFeePence: number; teamCharge?: TeamCha
   return input.teamFeePence - input.teamCharge.amountPence;
 }
 
-function getAdjustmentLine(input: { teamFeePence: number; teamCharge?: TeamChargeSummary | null }) {
-  if (!isAdjustedTeamCharge(input) || !input.teamCharge) return null;
-
-  const difference = getAdjustmentAmount(input);
-  const adjustmentText = difference > 0
-    ? `${formatMoney(difference)} adjustment removed`
-    : `${formatMoney(Math.abs(difference))} added adjustment`;
-
-  return `Standard team fee ${formatMoney(input.teamFeePence)}; adjusted ledger charge ${formatMoney(input.teamCharge.amountPence)} (${adjustmentText}).`;
-}
-
 function getAllocationStatus(input: { allocatedPence: number; teamFeePence: number }) {
   const unallocatedPence = Math.max(input.teamFeePence - input.allocatedPence, 0);
   const overAllocatedPence = Math.max(input.allocatedPence - input.teamFeePence, 0);
 
-  if (unallocatedPence > 0) {
-    return {
-      label: `Not collected by player links ${formatMoney(unallocatedPence)}`,
-      helper: `${formatMoney(input.allocatedPence)} allocated from ${formatMoney(input.teamFeePence)} standard team fee`,
-      tone: "amber" as Tone,
-      unallocatedPence,
-      overAllocatedPence,
-    };
-  }
-
-  if (overAllocatedPence > 0) {
-    return {
-      label: `Over allocated ${formatMoney(overAllocatedPence)}`,
-      helper: `${formatMoney(input.allocatedPence)} allocated against ${formatMoney(input.teamFeePence)} standard team fee`,
-      tone: "sky" as Tone,
-      unallocatedPence,
-      overAllocatedPence,
-    };
-  }
-
-  return {
-    label: "Fully allocated",
-    helper: `${formatMoney(input.allocatedPence)} allocated against ${formatMoney(input.teamFeePence)} standard team fee`,
-    tone: "emerald" as Tone,
-    unallocatedPence,
-    overAllocatedPence,
-  };
-}
-
-function getFixturePaymentBadge(input: {
-  summary?: FixturePaymentSummary;
-  teamFeePence: number;
-  teamCharge?: TeamChargeSummary | null;
-}) {
-  const summary = input.summary ?? {
-    players: 0,
-    paidCount: 0,
-    openCount: 0,
-    waivedCount: 0,
-    totalPence: 0,
-    paidPence: 0,
-    openPence: 0,
-    waivedPence: 0,
-  };
-
-  const allocation = getAllocationStatus({
-    allocatedPence: summary.totalPence,
-    teamFeePence: input.teamFeePence,
-  });
-  const chargePaid = isTeamChargePaid(input.teamCharge);
-  const chargeOpen = isTeamChargeOpen(input.teamCharge);
-  const chargeVoided = input.teamCharge?.status === "VOID";
-  const adjusted = isAdjustedTeamCharge(input);
-  const adjustmentLine = getAdjustmentLine(input);
-  const ledgerOutstandingPence = input.teamCharge?.outstandingPence ?? 0;
-  const ledgerAmountPence = input.teamCharge?.amountPence ?? input.teamFeePence;
-
-  if (chargePaid) {
-    return {
-      label: adjusted ? "Adjusted charge paid" : "Team paid",
-      classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
-      pills: [
-        { label: adjusted ? `Adjusted charge ${formatMoney(ledgerAmountPence)}` : "Team paid", tone: "emerald" as Tone },
-        { label: "No action needed", tone: "emerald" as Tone },
-        { label: `Player outstanding ${formatMoney(summary.openPence)}`, tone: summary.openPence > 0 ? "amber" as Tone : "white" as Tone },
-      ],
-      lines: [
-        ...(adjustmentLine ? [adjustmentLine] : []),
-        `Team ledger: paid ${formatMoney(input.teamCharge?.paidPence ?? input.teamFeePence)} / ${formatMoney(ledgerAmountPence)}`,
-        "No action needed for the team fee",
-        `Player allocation ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)} standard team fee`,
-        `Player payments outstanding ${formatMoney(summary.openPence)}`,
-      ],
-    };
-  }
-
-  if (chargeVoided) {
-    return {
-      label: "Voided",
-      classes: "border-sky-400/25 bg-sky-500/10 text-sky-100",
-      pills: [
-        { label: "Team charge voided", tone: "sky" as Tone },
-        { label: "No action needed", tone: "emerald" as Tone },
-        { label: `Player outstanding ${formatMoney(summary.openPence)}`, tone: summary.openPence > 0 ? "amber" as Tone : "white" as Tone },
-      ],
-      lines: [
-        ...(adjustmentLine ? [adjustmentLine] : []),
-        `Team ledger: ${input.teamCharge?.title ?? "Charge"} was voided`,
-        "No team payment is required for this fixture charge",
-        `Player allocation ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)} standard team fee`,
-        `Player payments outstanding ${formatMoney(summary.openPence)}`,
-      ],
-    };
-  }
-
-  if (!chargeOpen && !input.teamCharge) {
-    return {
-      label: "No team charge outstanding",
-      classes: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
-      pills: [
-        { label: "No team charge outstanding", tone: "emerald" as Tone },
-        { label: `Player outstanding ${formatMoney(summary.openPence)}`, tone: summary.openPence > 0 ? "amber" as Tone : "white" as Tone },
-      ],
-      lines: [
-        `Standard team fee ${formatMoney(input.teamFeePence)}`,
-        "Team ledger: no open charge for this fixture",
-        `Player allocation ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)} standard team fee`,
-        `Player payments outstanding ${formatMoney(summary.openPence)}`,
-      ],
-    };
-  }
-
-  const playerOutstandingTone: Tone = summary.openPence > 0 ? "amber" : "white";
-  const teamCoverTone: Tone = ledgerOutstandingPence > 0 ? "red" : "emerald";
-
-  return {
-    label: adjusted ? "Adjusted charge" : summary.players > 0 ? "Outstanding" : "Not started",
-    classes: ledgerOutstandingPence > 0
-      ? "border-red-400/25 bg-red-500/10 text-red-100"
-      : "border-white/10 bg-white/[0.04] text-white/55",
-    pills: [
-      { label: allocation.label, tone: allocation.tone },
-      { label: `Player outstanding ${formatMoney(summary.openPence)}`, tone: playerOutstandingTone },
-      { label: `${adjusted ? "Adjusted charge still to cover" : "Team still to cover"} ${formatMoney(ledgerOutstandingPence)}`, tone: teamCoverTone },
-    ],
-    lines: [
-      ...(adjustmentLine ? [adjustmentLine] : []),
-      input.teamCharge
-        ? `Team ledger: outstanding ${formatMoney(ledgerOutstandingPence)} of adjusted charge ${formatMoney(ledgerAmountPence)}`
-        : "Team ledger: no charge found",
-      `Player allocation ${formatMoney(summary.totalPence)} / ${formatMoney(input.teamFeePence)} standard team fee`,
-      allocation.overAllocatedPence > 0
-        ? `Over allocated ${formatMoney(allocation.overAllocatedPence)}`
-        : `${formatMoney(allocation.unallocatedPence)} not collected by player links`,
-      `Player payments outstanding ${formatMoney(summary.openPence)}`,
-    ],
-  };
+  if (unallocatedPence > 0) return { tone: "amber" as Tone, unallocatedPence, overAllocatedPence };
+  if (overAllocatedPence > 0) return { tone: "sky" as Tone, unallocatedPence, overAllocatedPence };
+  return { tone: "emerald" as Tone, unallocatedPence, overAllocatedPence };
 }
 
 function getSavedMessage(saved?: string) {
-  switch (saved) {
-    case "collection_created":
-      return "Squad payment collection updated. Player payment emails have been queued where email addresses are saved.";
-    default:
-      return null;
+  if (saved === "collection_created") {
+    return "Squad payment collection updated. Player payment emails have been queued where email addresses are saved.";
   }
+  return null;
 }
 
 function getErrorMessage(error?: string) {
-  switch (error) {
-    case "missing_fixture":
-      return "Choose a fixture first.";
-    case "invalid_amount":
-      return "Enter a valid default amount per player.";
-    case "invalid_player_amount":
-      return "One of the player amounts is not valid. Use 0.00 for waived players or a positive amount for payment links.";
-    case "no_players":
-      return "Select at least one player to collect from.";
-    case "fixture_not_found":
-      return "That fixture could not be found for this team.";
-    default:
-      return null;
-  }
+  if (error === "missing_fixture") return "Choose a fixture first.";
+  if (error === "invalid_amount") return "Enter a valid default amount per player.";
+  if (error === "invalid_player_amount") return "One of the player amounts is not valid. Use 0.00 for waived players or a positive amount for payment links.";
+  if (error === "no_players") return "Select at least one player to collect from.";
+  if (error === "fixture_not_found") return "That fixture could not be found for this team.";
+  return null;
 }
 
 function getPlayerName(fee: {
@@ -339,21 +154,12 @@ function getPlayerName(fee: {
 }) {
   if (fee.teamMember) return fee.teamMember.user.name || fee.teamMember.user.email || "Unnamed member";
   if (fee.prospect) {
-    return (
-      [fee.prospect.firstName, fee.prospect.lastName].filter(Boolean).join(" ") ||
-      fee.prospect.email ||
-      fee.prospect.phone ||
-      "Unnamed player"
-    );
+    return [fee.prospect.firstName, fee.prospect.lastName].filter(Boolean).join(" ") || fee.prospect.email || fee.prospect.phone || "Unnamed player";
   }
   return "Unknown player";
 }
 
-function getPlayerContact(input: {
-  memberEmail?: string | null;
-  prospectEmail?: string | null;
-  prospectPhone?: string | null;
-}) {
+function getPlayerContact(input: { memberEmail?: string | null; prospectEmail?: string | null; prospectPhone?: string | null }) {
   return [input.memberEmail, input.prospectEmail, input.prospectPhone].filter(Boolean).join(" · ") || "No contact saved";
 }
 
@@ -364,22 +170,14 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
-    select: {
-      id: true,
-      name: true,
-      matchdayTargetSize: true,
-      league: { select: { id: true, name: true, season: true } },
-    },
+    select: { id: true, name: true, matchdayTargetSize: true, league: { select: { id: true, name: true, season: true } } },
   });
 
   if (!team) notFound();
 
   const [fixtures, members, prospects, allCharges] = await Promise.all([
     prisma.fixture.findMany({
-      where: {
-        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
-        status: { in: ["SCHEDULED", "COMPLETED"] },
-      },
+      where: { OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }], status: { in: ["SCHEDULED", "COMPLETED"] } },
       orderBy: [{ kickoffAt: "desc" }],
       take: 40,
       include: {
@@ -408,7 +206,7 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
         status: true,
         dueDate: true,
         title: true,
-        transactions: { select: { amountPence: true } },
+        transactions: { select: { amountPence: true, notes: true } },
       },
     }),
   ]);
@@ -421,44 +219,9 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
       })
     : [];
 
-  const teamChargeByFixtureId = new Map<string, TeamChargeSummary>();
-  const teamChargeByDate = new Map<string, TeamChargeSummary>();
-
-  function toSummary(charge: (typeof allCharges)[number]): TeamChargeSummary {
-    const paidPence = charge.transactions.reduce((sum, transaction) => sum + transaction.amountPence, 0);
-    return {
-      amountPence: charge.amountPence,
-      paidPence,
-      outstandingPence: charge.status === "VOID" ? 0 : Math.max(charge.amountPence - paidPence, 0),
-      status: charge.status,
-      title: charge.title,
-      dueDate: charge.dueDate,
-      fixtureId: charge.fixtureId,
-    };
-  }
-
-  for (const charge of allCharges) {
-    const summary = toSummary(charge);
-    if (charge.fixtureId && !teamChargeByFixtureId.has(charge.fixtureId)) {
-      teamChargeByFixtureId.set(charge.fixtureId, summary);
-    }
-  }
-
-  for (const charge of allCharges) {
-    const key = dateKey(charge.dueDate);
-    if (!key) continue;
-    const summary = toSummary(charge);
-    const current = teamChargeByDate.get(key);
-    if (!current) {
-      teamChargeByDate.set(key, summary);
-      continue;
-    }
-    if (isTeamChargeOpen(summary) && !isTeamChargeOpen(current)) {
-      teamChargeByDate.set(key, summary);
-    }
-  }
-
   const paymentSummaryByFixtureId = new Map<string, FixturePaymentSummary>();
+  const paidPlayerTotalByFixtureId = new Map<string, number>();
+
   for (const fee of fixturePaymentRows) {
     const existing = paymentSummaryByFixtureId.get(fee.fixtureId) ?? {
       players: 0,
@@ -470,25 +233,64 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
       openPence: 0,
       waivedPence: 0,
     };
+
     existing.players += 1;
     existing.totalPence += fee.amountPence;
+
     if (fee.status === "PAID") {
       existing.paidCount += 1;
       existing.paidPence += fee.amountPence;
+      paidPlayerTotalByFixtureId.set(fee.fixtureId, (paidPlayerTotalByFixtureId.get(fee.fixtureId) ?? 0) + fee.amountPence);
     }
+
     if (fee.status === "OPEN") {
       existing.openCount += 1;
       existing.openPence += fee.amountPence;
     }
+
     if (fee.status === "WAIVED") {
       existing.waivedCount += 1;
       existing.waivedPence += fee.amountPence;
     }
+
     paymentSummaryByFixtureId.set(fee.fixtureId, existing);
   }
 
+  const teamChargeByFixtureId = new Map<string, (typeof allCharges)[number]>();
+  const teamChargeByDate = new Map<string, (typeof allCharges)[number]>();
+
+  function toSummary(charge: (typeof allCharges)[number], relatedFixtureId = charge.fixtureId): TeamChargeSummary {
+    const directPaidPence = charge.transactions.reduce((sum, transaction) => {
+      if (isPlayerMatchFeeTransaction(transaction)) return sum;
+      return sum + transaction.amountPence;
+    }, 0);
+    const playerPaidPence = relatedFixtureId ? paidPlayerTotalByFixtureId.get(relatedFixtureId) ?? 0 : 0;
+    const paidPence = directPaidPence + playerPaidPence;
+    const status = getDisplayChargeStatus({ storedStatus: charge.status, amountPence: charge.amountPence, paidPence });
+
+    return {
+      amountPence: charge.amountPence,
+      paidPence,
+      outstandingPence: status === "VOID" || status === "PAID" ? 0 : Math.max(charge.amountPence - paidPence, 0),
+      status,
+      title: charge.title,
+      dueDate: charge.dueDate,
+      fixtureId: charge.fixtureId,
+    };
+  }
+
+  for (const charge of allCharges) {
+    if (charge.fixtureId && !teamChargeByFixtureId.has(charge.fixtureId)) teamChargeByFixtureId.set(charge.fixtureId, charge);
+  }
+
+  for (const charge of allCharges) {
+    const key = dateKey(charge.dueDate);
+    if (key && !teamChargeByDate.has(key)) teamChargeByDate.set(key, charge);
+  }
+
   function getChargeForFixture(fixture: (typeof fixtures)[number]) {
-    return teamChargeByFixtureId.get(fixture.id) ?? teamChargeByDate.get(dateKey(fixture.kickoffAt) ?? "") ?? null;
+    const charge = teamChargeByFixtureId.get(fixture.id) ?? teamChargeByDate.get(dateKey(fixture.kickoffAt) ?? "") ?? null;
+    return charge ? toSummary(charge, fixture.id) : null;
   }
 
   const now = new Date();
@@ -513,6 +315,7 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
 
   let fees = await loadFees();
   const openFeeIdsWithoutLinks = fees.filter((fee) => fee.status === "OPEN" && (!fee.paymentToken || !fee.paymentUrl)).map((fee) => fee.id);
+
   if (openFeeIdsWithoutLinks.length > 0) {
     await ensurePlayerMatchFeePaymentDetailsForFees(openFeeIdsWithoutLinks);
     fees = await loadFees();
@@ -533,13 +336,16 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
     return !((email && linkedMemberKeys.has(email)) || (fullName && linkedMemberKeys.has(fullName)));
   });
 
-  const totals = activeFees.reduce((acc, fee) => {
-    acc.total += fee.amountPence;
-    if (fee.status === "PAID") acc.paid += fee.amountPence;
-    if (fee.status === "OPEN") acc.open += fee.amountPence;
-    if (fee.status === "WAIVED") acc.waived += fee.amountPence;
-    return acc;
-  }, { total: 0, paid: 0, open: 0, waived: 0 });
+  const totals = activeFees.reduce(
+    (acc, fee) => {
+      acc.total += fee.amountPence;
+      if (fee.status === "PAID") acc.paid += fee.amountPence;
+      if (fee.status === "OPEN") acc.open += fee.amountPence;
+      if (fee.status === "WAIVED") acc.waived += fee.amountPence;
+      return acc;
+    },
+    { total: 0, paid: 0, open: 0, waived: 0 },
+  );
 
   const paidCount = activeFees.filter((fee) => fee.status === "PAID").length;
   const openCount = activeFees.filter((fee) => fee.status === "OPEN").length;
@@ -553,17 +359,19 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
   const selectedAdjustmentAmount = getAdjustmentAmount({ teamFeePence, teamCharge: selectedTeamCharge });
   const allocation = getAllocationStatus({ allocatedPence: totals.total, teamFeePence });
   const teamFeeStillToCoverPence = selectedTeamChargePaid || selectedTeamChargeVoided ? 0 : selectedTeamCharge?.outstandingPence ?? 0;
+  const selectedFixturePaymentSummary = selectedFixture ? paymentSummaryByFixtureId.get(selectedFixture.id) : null;
   const savedMessage = getSavedMessage(sp.saved);
   const errorMessage = getErrorMessage(sp.error);
 
   return (
     <div className="space-y-8">
       <SquadPaymentAmountSync />
+
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Squad payments</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Collect money from your players</h2>
-          <p className="mt-3 max-w-3xl text-sm text-white/65 sm:text-base">Set a default amount, adjust individual player amounts for subs or guests, then share secure Stripe payment links and track who has paid. The team fee status mirrors the team payment ledger.</p>
+          <p className="mt-3 max-w-3xl text-sm text-white/65 sm:text-base">Set a default amount, adjust individual player amounts for subs or guests, then share secure Stripe payment links and track who has paid. The team fee status mirrors the team payment ledger after player payments are counted.</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href={`/captain/team/${team.id}`} className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white">Back to captain hub</Link>
             <Link href={`/captain/team/${team.id}/squad`} className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20">Open squad</Link>
@@ -576,30 +384,56 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: "Standard team fee", value: formatMoney(teamFeePence), text: selectedTeamChargeAdjusted && selectedTeamCharge ? `Ledger charge adjusted to ${formatMoney(selectedTeamCharge.amountPence)}.` : selectedTeamChargePaid ? "Team charge already paid." : selectedTeamChargeVoided ? "Team charge voided." : selectedTeamCharge ? "Open team charge in ledger." : "No open charge in ledger.", tone: selectedTeamChargePaid || selectedTeamChargeVoided || !selectedTeamCharge ? "emerald" as Tone : "white" as Tone },
-          { label: "Ledger charge", value: selectedTeamCharge ? formatMoney(selectedTeamCharge.amountPence) : formatMoney(teamFeePence), text: selectedTeamChargeAdjusted ? `${formatMoney(Math.abs(selectedAdjustmentAmount))} ${selectedAdjustmentAmount > 0 ? "removed from" : "added to"} the standard fee.` : "Same as standard team fee.", tone: selectedTeamChargeAdjusted ? "sky" as Tone : "white" as Tone },
+          {
+            label: "Your team fee",
+            value: formatMoney(teamFeePence),
+            text: selectedTeamChargeAdjusted && selectedTeamCharge ? `Ledger charge adjusted to ${formatMoney(selectedTeamCharge.amountPence)}.` : selectedTeamChargePaid ? "Team charge already paid." : selectedTeamChargeVoided ? "Team charge voided." : selectedTeamCharge ? "Open team charge in ledger." : "No open charge in ledger.",
+            tone: selectedTeamChargePaid || selectedTeamChargeVoided || !selectedTeamCharge ? "emerald" as Tone : "white" as Tone,
+          },
+          {
+            label: "Ledger charge",
+            value: selectedTeamCharge ? formatMoney(selectedTeamCharge.amountPence) : formatMoney(teamFeePence),
+            text: selectedTeamChargeAdjusted ? `${formatMoney(Math.abs(selectedAdjustmentAmount))} ${selectedAdjustmentAmount > 0 ? "removed from" : "added to"} the team fee.` : "Same as team match fee.",
+            tone: selectedTeamChargeAdjusted ? "sky" as Tone : "white" as Tone,
+          },
           { label: "Collected", value: formatMoney(totals.paid), text: `${paidCount} player payments · ${waivedCount} no-link rows`, tone: "emerald" as Tone },
           { label: "Player payments outstanding", value: formatMoney(totals.open), text: `${openCount} unpaid player${openCount === 1 ? "" : "s"}`, tone: openCount > 0 ? "amber" as Tone : "white" as Tone },
-          { label: "Ledger still to cover", value: formatMoney(teamFeeStillToCoverPence), text: selectedTeamChargeAdjusted && selectedTeamCharge ? `Adjusted from ${formatMoney(teamFeePence)} to ${formatMoney(selectedTeamCharge.amountPence)}.` : selectedTeamChargeVoided ? "Voided — no action needed." : selectedTeamChargePaid || !selectedTeamCharge ? "No action needed." : "Mirrors open team charges.", tone: teamFeeStillToCoverPence > 0 ? "red" as Tone : "emerald" as Tone },
+          { label: "Ledger still to cover", value: formatMoney(teamFeeStillToCoverPence), text: selectedTeamChargePaid || selectedTeamChargeVoided || !selectedTeamCharge ? "No action needed." : "Team charge minus paid player fees.", tone: teamFeeStillToCoverPence > 0 ? "red" as Tone : "emerald" as Tone },
         ].map((item) => <div key={item.label} className={`rounded-3xl border p-5 ${getToneClasses(item.tone)}`}><p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{item.label}</p><p className="mt-3 text-3xl font-semibold text-white">{item.value}</p><p className="mt-2 text-sm text-white/55">{item.text}</p></div>)}
       </section>
 
       <section className={`rounded-3xl border p-5 text-sm ${getToneClasses(selectedTeamChargePaid || selectedTeamChargeVoided || !selectedTeamCharge ? "emerald" : allocation.tone)}`}>
         <div className="font-semibold text-white">Allocation and payment check</div>
-        <p className="mt-2 text-white/70">The standard team fee is {formatMoney(teamFeePence)}. {selectedTeamChargeAdjusted && selectedTeamCharge ? `The ledger charge has been adjusted to ${formatMoney(selectedTeamCharge.amountPence)}, so the amount still to cover is based on the adjusted ledger charge.` : "The amount still to cover is based on the team payment ledger."} Player allocation is currently {formatMoney(totals.total)} / {formatMoney(teamFeePence)} standard team fee.</p>
+        <p className="mt-2 text-white/70">The team fee is {formatMoney(teamFeePence)}. The amount still to cover is based on the team payment ledger, less paid player match fees. Player allocation is currently {formatMoney(totals.total)} / {formatMoney(teamFeePence)} team fee.</p>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.3fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Choose fixture</h2>
-          <p className="mt-1 text-sm text-white/55">Newest fixtures are shown first. Team fee status mirrors the payment ledger, including adjusted charges.</p>
+          <p className="mt-1 text-sm text-white/55">Newest fixtures are shown first. Team fee status includes player payments and adjusted charges.</p>
           <div className="mt-5 space-y-2">
             {fixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No fixtures are available for this team yet.</div> : null}
             {fixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               const isPast = fixture.kickoffAt < now;
-              const paymentBadge = getFixturePaymentBadge({ summary: paymentSummaryByFixtureId.get(fixture.id), teamFeePence: fixture.matchFeePence ?? 4000, teamCharge: getChargeForFixture(fixture) });
-              return <Link key={fixture.id} href={`/captain/team/${team.id}/player-payments?fixtureId=${fixture.id}`} className={`block rounded-2xl border p-4 transition ${isSelected ? "border-emerald-400/30 bg-emerald-500/10 text-white" : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.06]"}`}><div className="flex flex-wrap items-center gap-2"><div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>{isPast ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100">Past fixture</span> : null}<span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${paymentBadge.classes}`}>{paymentBadge.label}</span></div><div className="mt-1 text-xs text-white/50">{formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}</div><div className="mt-3 flex flex-wrap gap-2">{paymentBadge.pills.map((pill) => <span key={pill.label} className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getPillClasses(pill.tone)}`}>{pill.label}</span>)}</div><div className="mt-3 grid gap-1 text-xs text-white/55">{paymentBadge.lines.map((line) => <div key={line}>{line}</div>)}</div></Link>;
+              const teamCharge = getChargeForFixture(fixture);
+              const summary = paymentSummaryByFixtureId.get(fixture.id);
+              const stillToCover = teamCharge?.outstandingPence ?? 0;
+              return (
+                <Link key={fixture.id} href={`/captain/team/${team.id}/player-payments?fixtureId=${fixture.id}`} className={`block rounded-2xl border p-4 transition ${isSelected ? "border-emerald-400/30 bg-emerald-500/10 text-white" : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.06]"}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>
+                    {isPast ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100">Past fixture</span> : null}
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${stillToCover > 0 ? getFeeStatusClasses("OPEN") : getFeeStatusClasses("PAID")}`}>{stillToCover > 0 ? "Outstanding" : "Covered"}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-white/50">{formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}</div>
+                  <div className="mt-3 grid gap-1 text-xs text-white/55">
+                    <div>Team ledger: {teamCharge ? `${formatMoney(teamCharge.paidPence)} paid / ${formatMoney(teamCharge.amountPence)} charge` : "no charge found"}</div>
+                    <div>Player payments: {formatMoney(summary?.paidPence ?? 0)} collected · {formatMoney(summary?.openPence ?? 0)} outstanding</div>
+                    <div>Ledger still to cover: {formatMoney(stillToCover)}</div>
+                  </div>
+                </Link>
+              );
             })}
           </div>
         </div>
@@ -607,7 +441,18 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Create / update collection</h2>
           <p className="mt-1 text-sm text-white/55">Set a default amount, then adjust any individual player amount. Use the collection method options for payment links, direct captain payments, or waived players.</p>
-          {selectedFixture ? <form action={createCaptainSquadPaymentCollectionAction} className="mt-5 space-y-5"><input type="hidden" name="teamId" value={team.id} /><input type="hidden" name="fixtureId" value={selectedFixture.id} /><div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4"><label htmlFor="amount" className="text-sm font-medium text-emerald-50">Default amount per player</label><div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center"><input id="amount" name="amount" type="text" inputMode="decimal" defaultValue={(defaultAmount / 100).toFixed(2)} className="w-full max-w-[180px] rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60" /><p className="text-sm text-emerald-100/70">This fills the standard amount. Change individual player boxes below for subs or guests.</p></div></div><div className={`grid gap-4 ${selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}><div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-white">Linked squad members</h3><div className="mt-3 space-y-2">{members.map((member) => { const existingFee = feeByMemberId.get(member.id); const isPaid = existingFee?.status === "PAID"; const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2); return <div key={member.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>{isPaid ? <input type="hidden" name="player" value={`member:${member.id}`} /> : null}<label className="flex items-start gap-3 text-white/75"><input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={selectedMemberIds.has(member.id)} disabled={isPaid} className="mt-1" /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>{existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}</span><span className="mt-1 block text-xs text-white/45">{member.user.email || "No email saved"}</span></span></label><div className="mt-3 flex items-center gap-2 pl-7"><label htmlFor={`amount_member_${member.id}`} className="text-xs font-medium text-white/50">Amount</label><input id={`amount_member_${member.id}`} name={`amount_member_${member.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />{isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}</div></div>; })}</div></div>{selectableProspects.length > 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-white">Extra / unlinked players</h3><div className="mt-3 space-y-2">{selectableProspects.map((prospect) => { const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim(); const existingFee = feeByProspectId.get(prospect.id); const isPaid = existingFee?.status === "PAID"; const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2); return <div key={prospect.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>{isPaid ? <input type="hidden" name="player" value={`prospect:${prospect.id}`} /> : null}<label className="flex items-start gap-3 text-white/75"><input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={selectedProspectIds.has(prospect.id)} disabled={isPaid} className="mt-1" /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed player"}</span>{existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}</span><span className="block text-xs text-white/45">{[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact saved"}</span></span></label><div className="mt-3 flex items-center gap-2 pl-7"><label htmlFor={`amount_prospect_${prospect.id}`} className="text-xs font-medium text-white/50">Amount</label><input id={`amount_prospect_${prospect.id}`} name={`amount_prospect_${prospect.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />{isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}</div></div>; })}</div></div> : null}</div><button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">Create / refresh payment links</button></form> : <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a fixture before collecting player payments.</div>}
+          {selectedFixture ? (
+            <form action={createCaptainSquadPaymentCollectionAction} className="mt-5 space-y-5">
+              <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+              <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4"><label htmlFor="amount" className="text-sm font-medium text-emerald-50">Default amount per player</label><div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center"><input id="amount" name="amount" type="text" inputMode="decimal" defaultValue={(defaultAmount / 100).toFixed(2)} className="w-full max-w-[180px] rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60" /><p className="text-sm text-emerald-100/70">This fills the standard amount. Change individual player boxes below for subs or guests.</p></div></div>
+              <div className={`grid gap-4 ${selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-white">Linked squad members</h3><div className="mt-3 space-y-2">{members.map((member) => { const existingFee = feeByMemberId.get(member.id); const isPaid = existingFee?.status === "PAID"; const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2); return <div key={member.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>{isPaid ? <input type="hidden" name="player" value={`member:${member.id}`} /> : null}<label className="flex items-start gap-3 text-white/75"><input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={selectedMemberIds.has(member.id)} disabled={isPaid} className="mt-1" /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>{existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}</span><span className="mt-1 block text-xs text-white/45">{member.user.email || "No email saved"}</span></span></label><div className="mt-3 flex items-center gap-2 pl-7"><label htmlFor={`amount_member_${member.id}`} className="text-xs font-medium text-white/50">Amount</label><input id={`amount_member_${member.id}`} name={`amount_member_${member.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />{isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}</div></div>; })}</div></div>
+                {selectableProspects.length > 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-white">Extra / unlinked players</h3><div className="mt-3 space-y-2">{selectableProspects.map((prospect) => { const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim(); const existingFee = feeByProspectId.get(prospect.id); const isPaid = existingFee?.status === "PAID"; const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2); return <div key={prospect.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>{isPaid ? <input type="hidden" name="player" value={`prospect:${prospect.id}`} /> : null}<label className="flex items-start gap-3 text-white/75"><input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={selectedProspectIds.has(prospect.id)} disabled={isPaid} className="mt-1" /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed player"}</span>{existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}</span><span className="block text-xs text-white/45">{[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact saved"}</span></span></label><div className="mt-3 flex items-center gap-2 pl-7"><label htmlFor={`amount_prospect_${prospect.id}`} className="text-xs font-medium text-white/50">Amount</label><input id={`amount_prospect_${prospect.id}`} name={`amount_prospect_${prospect.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />{isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}</div></div>; })}</div></div> : null}
+              </div>
+              <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">Create / refresh payment links</button>
+            </form>
+          ) : <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a fixture before collecting player payments.</div>}
         </div>
       </section>
 
