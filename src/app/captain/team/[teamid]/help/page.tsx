@@ -41,7 +41,7 @@ const sections: HelpSection[] = [
   },
   {
     id: "squad",
-    title: "Squad management",
+    title: "Squd management",
     intro: "Keep your squad list tidy so availability, matchday planning and player payment links work properly.",
     steps: [
       "Add each regular player to your squad.",
@@ -96,8 +96,9 @@ const sections: HelpSection[] = [
     title: "Avoidable admin fees",
     intro: "Admin fees are not normal weekly charges. SIXFL does not want to charge them. They are only there when avoidable late action creates extra admin work.",
     steps: [
-      "The late payment admin fee may be added if a team fee is more than 7 days overdue and SIXFL has to spend extra time chasing it.",
-      "The late availability admin fee may be added if avoidable late confirmation creates extra fixture chasing or rearranging work.",
+      "The late payment admin fee is £10. It may be added if a team fee is more than 7 days overdue and SIXFL has to spend extra time chasing it.",
+      "The late confirmation admin fee is £10. It may be added if avoidable late availability confirmation creates extra fixture chasing or rearranging work.",
+      "SIXFL may send reminders or warnings first where practical, but repeated or avoidable late action can still lead to the admin fee being added.",
       "You can avoid both by confirming availability on time and keeping team fees up to date.",
     ],
   },
@@ -109,7 +110,7 @@ const sections: HelpSection[] = [
       "Open Fixtures or Availability when your next game appears.",
       "Confirm the fixture if your team can play.",
       "Raise an issue early if you cannot play or are not sure.",
-      "Do not wait until matchday if there is a problem.",
+      "Do not wait until matchday if there is a problem. Avoidable late confirmation may lead to a £10 late confirmation admin fee.",
     ],
     example: {
       title: "Dummy availability example",
