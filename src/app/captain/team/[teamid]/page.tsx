@@ -11,6 +11,7 @@ import CaptainDashboardLeagueTable from "@/components/captain/CaptainDashboardLe
 import { getCaptainOnboardingStatus } from "@/lib/captain/onboarding";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getLeagueTable } from "@/lib/leagueTable";
+import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -208,6 +209,7 @@ export default async function CaptainOverviewPage({
     completionResults,
     activeDisputeCount,
     paymentCharges,
+    paidPlayerMatchFees,
     onboardingStatus,
   ] = await Promise.all([
     prisma.team.findUnique({
@@ -321,8 +323,19 @@ export default async function CaptainOverviewPage({
         transactions: {
           select: {
             amountPence: true,
+            notes: true,
           },
         },
+      },
+    }),
+    prisma.playerMatchFee.findMany({
+      where: {
+        teamId: teamid,
+        status: "PAID",
+      },
+      select: {
+        fixtureId: true,
+        amountPence: true,
       },
     }),
     getCaptainOnboardingStatus(teamid),
@@ -358,16 +371,21 @@ export default async function CaptainOverviewPage({
     return goalsRecorded < goalsFor || !playerOfMatchName;
   }).length;
 
-  const outstandingBalance = paymentCharges.reduce((sum, charge) => {
-    const paid = charge.transactions.reduce(
-      (txSum, tx) => txSum + tx.amountPence,
-      0,
-    );
-
-    return sum + Math.max(charge.amountPence - paid, 0);
-  }, 0);
-
-  const openChargeCount = paymentCharges.length;
+  const chargeSummaries = summariseChargesWithPlayerMatchFees(
+    paymentCharges,
+    paidPlayerMatchFees,
+  );
+  const openChargeSummaries = chargeSummaries.filter(
+    (summary) =>
+      summary.displayStatus !== "PAID" &&
+      summary.displayStatus !== "VOID" &&
+      summary.outstandingPence > 0,
+  );
+  const outstandingBalance = openChargeSummaries.reduce(
+    (sum, summary) => sum + summary.outstandingPence,
+    0,
+  );
+  const openChargeCount = openChargeSummaries.length;
 
   return (
     <div className="space-y-8">
