@@ -182,6 +182,7 @@ export async function getCaptainOnboardingStatus(teamId: string): Promise<Captai
   const availabilityComplete = !nextFixture || nextFixtureConfirmationStatus === "CONFIRMED" || nextFixtureConfirmationStatus === "ISSUE_RAISED";
   const squadComplete = squadMembers.length >= 6;
   const emailsComplete = squadMembers.length === 0 || squadEmailCount === squadMembers.length;
+  const paymentsComplete = openTeamChargeCount === 0;
 
   return {
     ...summary,
@@ -194,6 +195,6 @@ export async function getCaptainOnboardingStatus(teamId: string): Promise<Captai
     nextFixtureConfirmationStatus,
     openTeamChargeCount,
     isAgreementAccepted,
-    isChecklistComplete: isAgreementAccepted && squadComplete && emailsComplete && availabilityComplete,
+    isChecklistComplete: isAgreementAccepted && squadComplete && emailsComplete && availabilityComplete && paymentsComplete,
   };
 }
