@@ -7,7 +7,10 @@ import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import FixtureMatchupGrid from "@/components/admin/fixtures/FixtureMatchupGrid";
 import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
-import { publishAndEmailLeagueFixturesAction } from "@/app/(admin)/admin/fixtures/publish-actions";
+import {
+  publishAndEmailLeagueFixtureWeekAction,
+  publishAndEmailLeagueFixturesAction,
+} from "@/app/(admin)/admin/fixtures/publish-actions";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -56,6 +59,8 @@ function buildPublishNotice(input: {
   const leagueId = getSearchParamValue(input.searchParams.leagueId);
   const leagueName =
     input.leagues.find((league) => league.id === leagueId)?.name ?? "this league";
+  const round = getSearchParamValue(input.searchParams.round);
+  const scopeLabel = round ? `Week ${round} for ${leagueName}` : leagueName;
 
   const published = Number(getSearchParamValue(input.searchParams.published) ?? 0);
   const digestQueued = Number(
@@ -74,7 +79,7 @@ function buildPublishNotice(input: {
 
   if (publish === "success") {
     const summaryParts = [
-      `${formatCount(published, "fixture")} published for ${leagueName}`,
+      `${formatCount(published, "fixture")} published for ${scopeLabel}`,
       `${formatCount(digestQueued, "digest email")} queued`,
       `${formatCount(reminderQueued, "reminder email")} queued`,
     ];
@@ -95,21 +100,21 @@ function buildPublishNotice(input: {
   if (publish === "none") {
     return {
       tone: "info",
-      message: `No draft fixtures were waiting to be published for ${leagueName}.`,
+      message: `No draft fixtures were waiting to be published for ${scopeLabel}.`,
     };
   }
 
   if (publish === "error" && publishError === "reply_not_configured") {
     return {
       tone: "error",
-      message: `Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the deployed environment before publishing fixtures for ${leagueName}.`,
+      message: `Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the deployed environment before publishing fixtures for ${scopeLabel}.`,
     };
   }
 
   if (publish === "error") {
     return {
       tone: "error",
-      message: `Publishing fixtures for ${leagueName} could not be completed.`,
+      message: `Publishing fixtures for ${scopeLabel} could not be completed.`,
     };
   }
 
@@ -306,7 +311,15 @@ export default async function AdminFixturesPage({
 
   const publishSummary = leagues.map((league) => {
     const leagueFixtures = fixtures.filter((fixture) => fixture.leagueId === league.id);
-    const drafts = leagueFixtures.filter((fixture) => fixture.publishedAt === null).length;
+    const draftFixtures = leagueFixtures.filter((fixture) => fixture.publishedAt === null);
+    const draftRounds = Array.from(
+      new Set(
+        draftFixtures
+          .map((fixture) => fixture.round)
+          .filter((round): round is number => typeof round === "number"),
+      ),
+    ).sort((a, b) => a - b);
+    const drafts = draftFixtures.length;
     const published = leagueFixtures.length - drafts;
     const scheduled = leagueFixtures.filter(
       (fixture) => fixture.status === "SCHEDULED",
@@ -318,6 +331,7 @@ export default async function AdminFixturesPage({
       drafts,
       published,
       scheduled,
+      draftRounds,
       isActive: league.id === activeLeagueId,
     };
   });
@@ -442,8 +456,7 @@ export default async function AdminFixturesPage({
               Send fixtures to teams
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-white/60">
-              Draft fixtures stay private until you publish them. Publishing sends the
-              fixture digest to team contacts and queues reminder emails before kickoff.
+              Draft fixtures stay private until you publish them. Publish one week at a time to keep later fixtures in draft, or use the publish-all control only when the full schedule is ready.
             </p>
           </div>
         </div>
@@ -498,12 +511,19 @@ export default async function AdminFixturesPage({
         <div className="grid gap-4 px-6 py-6 md:grid-cols-2 md:px-8 xl:grid-cols-3">
           {publishSummary.map((item) => {
             const publishDisabled = item.drafts === 0 || !emailReplyConfigured;
+            const weekPublishDisabled =
+              item.drafts === 0 || item.draftRounds.length === 0 || !emailReplyConfigured;
+            const defaultRound = item.draftRounds[0] ?? 1;
             const publishLabel =
               item.drafts === 0
                 ? "No draft fixtures to publish"
                 : !emailReplyConfigured
                   ? "Configure reply email before publishing"
-                  : `Publish ${formatCount(item.drafts, "draft fixture")} & email teams`;
+                  : `Publish all ${formatCount(item.drafts, "draft fixture")}`;
+            const weekLabel =
+              item.draftRounds.length > 0
+                ? `Draft weeks: ${item.draftRounds.join(", ")}`
+                : "No draft weeks detected";
 
             return (
               <div
@@ -573,13 +593,43 @@ export default async function AdminFixturesPage({
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  <form action={publishAndEmailLeagueFixturesAction}>
+                <div className="mt-5 space-y-4">
+                  <form action={publishAndEmailLeagueFixtureWeekAction} className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
                     <input type="hidden" name="leagueId" value={item.league.id} />
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">
+                      Publish one week only
+                    </label>
+                    <div className="flex gap-3">
+                      <input
+                        type="number"
+                        name="round"
+                        min={1}
+                        defaultValue={defaultRound}
+                        disabled={weekPublishDisabled}
+                        className="h-12 w-28 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+                      />
+                      <button
+                        type="submit"
+                        disabled={weekPublishDisabled}
+                        className="inline-flex h-12 flex-1 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Publish week
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-emerald-50/70">
+                      {weekLabel}. Only fixtures from the chosen week are made live and emailed.
+                    </p>
+                  </form>
+
+                  <form action={publishAndEmailLeagueFixturesAction} className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+                    <input type="hidden" name="leagueId" value={item.league.id} />
+                    <p className="mb-3 text-xs leading-5 text-amber-100/80">
+                      Use this only when you want every remaining draft fixture for this league to go live and email teams.
+                    </p>
                     <button
                       type="submit"
                       disabled={publishDisabled}
-                      className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-amber-300/30 bg-amber-300 px-5 text-sm font-semibold text-black transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {publishLabel}
                     </button>
