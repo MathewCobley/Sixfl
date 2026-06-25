@@ -2,9 +2,12 @@
 // File: src/lib/payments/charge-summary.ts
 // ========================================
 
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
+
 type TeamChargeForSummary = {
   amountPence: number;
   fixtureId?: string | null;
+  dueDate?: Date | null;
   status: string;
   transactions: Array<{
     amountPence: number;
@@ -15,7 +18,20 @@ type TeamChargeForSummary = {
 type PaidPlayerMatchFeeForSummary = {
   fixtureId: string;
   amountPence: number;
+  fixture?: {
+    kickoffAt: Date;
+  } | null;
 };
+
+function getLondonDateKey(value: Date | null | undefined) {
+  if (!value) return null;
+
+  return formatDateTimeInLondon(value, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
 
 export function isPlayerMatchFeeTransaction(transaction: { notes?: string | null }) {
   const notes = transaction.notes?.toLowerCase() ?? "";
@@ -40,6 +56,20 @@ export function buildPaidPlayerMatchFeeTotalsByFixture(
 ) {
   return paidPlayerMatchFees.reduce((totals, fee) => {
     totals.set(fee.fixtureId, (totals.get(fee.fixtureId) ?? 0) + fee.amountPence);
+
+    return totals;
+  }, new Map<string, number>());
+}
+
+export function buildPaidPlayerMatchFeeTotalsByDate(
+  paidPlayerMatchFees: PaidPlayerMatchFeeForSummary[],
+) {
+  return paidPlayerMatchFees.reduce((totals, fee) => {
+    const dateKey = getLondonDateKey(fee.fixture?.kickoffAt);
+
+    if (!dateKey) return totals;
+
+    totals.set(dateKey, (totals.get(dateKey) ?? 0) + fee.amountPence);
 
     return totals;
   }, new Map<string, number>());
@@ -84,12 +114,18 @@ export function summariseChargesWithPlayerMatchFees<TCharge extends TeamChargeFo
   const playerMatchFeeTotalsByFixture = buildPaidPlayerMatchFeeTotalsByFixture(
     paidPlayerMatchFees,
   );
+  const playerMatchFeeTotalsByDate = buildPaidPlayerMatchFeeTotalsByDate(
+    paidPlayerMatchFees,
+  );
 
   return charges.map((charge) => {
     const directPaidPence = getDirectChargePaidTotal(charge.transactions);
+    const dueDateKey = getLondonDateKey(charge.dueDate);
     const playerPaidPence = charge.fixtureId
       ? playerMatchFeeTotalsByFixture.get(charge.fixtureId) ?? 0
-      : 0;
+      : dueDateKey
+        ? playerMatchFeeTotalsByDate.get(dueDateKey) ?? 0
+        : 0;
     const paidPence = directPaidPence + playerPaidPence;
     const displayStatus = getDisplayChargeStatus({
       storedStatus: charge.status,
