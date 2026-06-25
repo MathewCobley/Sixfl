@@ -223,23 +223,23 @@ export default function CaptainViewModeHeader({
         ) : null}
 
         {canPreviewCaptainDashboard && !isCaptainDashboardPreview ? (
-          <Link
+          <a
             href={previewHref}
             data-captain-preview-ignore="true"
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
           >
             Preview captain dashboard
-          </Link>
+          </a>
         ) : null}
 
         {canShowAdminControls && isCaptainDashboardPreview ? (
-          <Link
+          <a
             href={fullAdminHref}
             data-captain-preview-ignore="true"
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
           >
             Return to full admin view
-          </Link>
+          </a>
         ) : null}
       </div>
     </>
