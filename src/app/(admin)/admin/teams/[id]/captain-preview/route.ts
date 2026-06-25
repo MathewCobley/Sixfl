@@ -10,15 +10,33 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+function isLocalOrigin(value: string | null | undefined) {
+  if (!value) return true;
+
+  try {
+    const url = new URL(value);
+    return ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname);
+  } catch {
+    return true;
+  }
+}
+
 function getPublicOrigin(request: Request) {
   const requestUrl = new URL(request.url);
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+
+  if (forwardedHost && !forwardedHost.includes("localhost") && !forwardedHost.includes("127.0.0.1")) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
   const configuredOrigin =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXTAUTH_URL ||
     process.env.APP_URL;
 
-  if (configuredOrigin) {
+  if (configuredOrigin && (process.env.NODE_ENV !== "production" || !isLocalOrigin(configuredOrigin))) {
     return new URL(configuredOrigin).origin;
   }
 
