@@ -41,7 +41,7 @@ const sections: HelpSection[] = [
   },
   {
     id: "squad",
-    title: "Squd management",
+    title: "Squad management",
     intro: "Keep your squad list tidy so availability, matchday planning and player payment links work properly.",
     steps: [
       "Add each regular player to your squad.",
