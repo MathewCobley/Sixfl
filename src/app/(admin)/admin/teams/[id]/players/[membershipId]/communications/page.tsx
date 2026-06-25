@@ -141,10 +141,26 @@ function getSourceLabel(input: { metadata: unknown; sourceType?: string | null }
     return "Managed squad availability automation";
   }
 
+  if (input.sourceType === "LEAD") return "Original lead history";
   if (input.sourceType === "TEAM_MEMBER") return "Player communications hub";
   if (input.sourceType === "TEAM_PLAYER_PROSPECT") return "Prospect communications hub";
 
   return originLabel;
+}
+
+function extractSourceLeadIds(...values: Array<string | null | undefined>) {
+  const leadIds = new Set<string>();
+
+  for (const value of values) {
+    if (!value) continue;
+
+    for (const match of value.matchAll(/Source lead ID:\s*([a-zA-Z0-9_-]+)/gi)) {
+      const leadId = match[1]?.trim();
+      if (leadId) leadIds.add(leadId);
+    }
+  }
+
+  return Array.from(leadIds);
 }
 
 export default async function AdminPlayerCommunicationsPage({
@@ -196,6 +212,13 @@ export default async function AdminPlayerCommunicationsPage({
   const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);
   const profile = profiles.get(member.id) ?? null;
   const sourceProspectId = profile?.sourceProspectId?.trim() || null;
+  const linkedProspect = sourceProspectId
+    ? await prisma.teamPlayerProspect.findUnique({
+        where: { id: sourceProspectId },
+        select: { notes: true },
+      })
+    : null;
+  const sourceLeadIds = extractSourceLeadIds(profile?.notes, linkedProspect?.notes);
   const playerName = member.user.name?.trim() || member.user.email?.trim() || "Player";
   const leagueName = member.team.league
     ? `${member.team.league.name}${member.team.league.season ? ` — ${member.team.league.season}` : ""}`
@@ -223,6 +246,14 @@ export default async function AdminPlayerCommunicationsPage({
           },
         ]
       : []),
+    ...(sourceLeadIds.length > 0
+      ? [
+          {
+            sourceType: "LEAD",
+            sourceId: { in: sourceLeadIds },
+          },
+        ]
+      : []),
     ...(playerMatchFeeIds.length > 0
       ? [
           {
@@ -233,7 +264,7 @@ export default async function AdminPlayerCommunicationsPage({
       : []),
   ];
 
-  const [threads, dispatches, emailTemplates, smsTemplates] = await Promise.all([
+  const [threads, dispatches, leadEmails, emailTemplates, smsTemplates] = await Promise.all([
     prisma.messageThread.findMany({
       where: { OR: communicationSourceFilters },
       include: {
@@ -273,6 +304,21 @@ export default async function AdminPlayerCommunicationsPage({
         },
       },
       orderBy: [{ createdAt: "desc" }],
+      take: 100,
+    }),
+    prisma.interestLeadEmail.findMany({
+      where: {
+        interestLeadId: { in: sourceLeadIds },
+      },
+      include: {
+        interestLead: {
+          select: {
+            contactName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [{ sentAt: "desc" }],
       take: 100,
     }),
     prisma.emailTemplate.findMany({
@@ -383,9 +429,31 @@ export default async function AdminPlayerCommunicationsPage({
       canCancelQueuedSms: false,
     }));
 
-  const timeline = [...messageTimelineItems, ...unloggedDispatchTimelineItems].sort(
-    (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
-  );
+  const leadEmailTimelineItems: TimelineItem[] = leadEmails.map((email) => ({
+    id: `lead-email-${email.id}`,
+    channel: NotificationChannel.EMAIL,
+    direction: "OUTBOUND" as const,
+    statusLabel: "SENT",
+    sourceLabel: "Original lead email history",
+    templateName: null,
+    templateKey: null,
+    subject: email.subject,
+    bodyText: email.body,
+    bodyHtml: null,
+    contactName: email.interestLead.contactName || playerName,
+    contactValue: email.sentTo || email.interestLead.email || null,
+    occurredAt: email.sentAt,
+    failureReason: null,
+    messageEntryId: null,
+    threadId: null,
+    canCancelQueuedSms: false,
+  }));
+
+  const timeline = [
+    ...messageTimelineItems,
+    ...unloggedDispatchTimelineItems,
+    ...leadEmailTimelineItems,
+  ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 
   const queuedCount = getQueuedCount(filters.count);
   const skippedCount = Number(filters.skipped ?? "0");
@@ -437,7 +505,7 @@ export default async function AdminPlayerCommunicationsPage({
           </Link>
           <h1 className="text-3xl font-semibold text-white">{playerName} communications</h1>
           <p className="text-sm text-white/60">
-            Player-level message hub for this linked squad member. It includes direct player messages, managed squad availability reminders, and any linked prospect/payment history.
+            Player-level message hub for this linked squad member. It includes direct player messages, managed squad availability reminders, linked prospect/payment history, and original lead history where available.
           </p>
         </div>
 
@@ -448,6 +516,11 @@ export default async function AdminPlayerCommunicationsPage({
           {sourceProspectId ? (
             <Link href={`/admin/teams/${member.team.id}/prospects/${sourceProspectId}/communications`} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
               Linked prospect comms
+            </Link>
+          ) : null}
+          {sourceLeadIds.length > 0 ? (
+            <Link href={`/admin/leads/${sourceLeadIds[0]}`} className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15">
+              Original lead
             </Link>
           ) : null}
         </div>
@@ -479,6 +552,11 @@ export default async function AdminPlayerCommunicationsPage({
                 <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">Linked prospect history included</span>
               ) : (
                 <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">No linked prospect record</span>
+              )}
+              {sourceLeadIds.length > 0 ? (
+                <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-100">Original lead history included</span>
+              ) : (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/55">No source lead detected</span>
               )}
             </div>
           </div>
