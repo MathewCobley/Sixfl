@@ -9,6 +9,25 @@ import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
+function getPublicOrigin(request: Request) {
+  const requestUrl = new URL(request.url);
+  const configuredOrigin =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXTAUTH_URL ||
+    process.env.APP_URL;
+
+  if (configuredOrigin) {
+    return new URL(configuredOrigin).origin;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return "https://sixfl.co.uk";
+  }
+
+  return requestUrl.origin;
+}
+
 function getSafeRedirect(input: {
   origin: string;
   teamId: string;
@@ -25,7 +44,9 @@ function getSafeRedirect(input: {
     const target = new URL(requestedTo, input.origin);
     const allowedPrefix = `/captain/team/${input.teamId}`;
 
-    if (target.origin === input.origin && target.pathname.startsWith(allowedPrefix)) {
+    if (target.pathname.startsWith(allowedPrefix)) {
+      target.protocol = new URL(input.origin).protocol;
+      target.host = new URL(input.origin).host;
       target.searchParams.delete("captainPreview");
       return target;
     }
@@ -43,11 +64,10 @@ export async function GET(
   await requireAdmin();
 
   const { id } = await params;
-  const url = new URL(request.url);
   const target = getSafeRedirect({
-    origin: url.origin,
+    origin: getPublicOrigin(request),
     teamId: id,
-    requestedTo: url.searchParams.get("to"),
+    requestedTo: new URL(request.url).searchParams.get("to"),
   });
   const response = NextResponse.redirect(target);
 
