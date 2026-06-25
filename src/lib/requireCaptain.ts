@@ -126,10 +126,6 @@ export async function requireCaptain(
     membership,
     isAdmin,
     isCaptain,
-    accessMode: isCaptainOnlyPreview
-      ? "captain-preview"
-      : rawIsAdmin && !membership
-        ? "admin-preview"
-        : "captain",
+    accessMode: isCaptainOnlyPreview ? "captain-preview" : "captain",
   };
 }
