@@ -28,6 +28,18 @@ function appendCoveredNote(description: string | null, paidTotalPence: number) {
   return `${cleaned}\n${note}`;
 }
 
+function appendPartPaidNote(description: string | null, paidTotalPence: number) {
+  const note = `Part-covered by player payments totalling £${(paidTotalPence / 100).toFixed(2)}.`;
+  const cleaned = description?.trim();
+
+  if (!cleaned) return note;
+  if (cleaned.includes("Part-covered by player payments") || cleaned.includes("Covered by player payments")) {
+    return cleaned;
+  }
+
+  return `${cleaned}\n${note}`;
+}
+
 async function linkPlayerFeeTransactionsToCharge(input: {
   playerMatchFeeIds: string[];
   chargeId: string;
@@ -82,12 +94,12 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
   if (paidTotalPence <= 0) return null;
 
   const fixtureDateKey = getLondonDateKey(fixture.kickoffAt);
-  const openStatuses: PaymentChargeStatus[] = ["OPEN", "PART_PAID"];
+  const reconcilableStatuses: PaymentChargeStatus[] = ["OPEN", "PART_PAID", "PAID"];
 
   const charges = await prisma.paymentCharge.findMany({
     where: {
       teamId: input.teamId,
-      status: { in: openStatuses },
+      status: { in: reconcilableStatuses },
       OR: [
         { fixtureId: input.fixtureId },
         ...(fixtureDateKey ? [{ dueDate: { not: null } }] : []),
@@ -99,6 +111,7 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
       description: true,
       fixtureId: true,
       dueDate: true,
+      status: true,
     },
     orderBy: [{ fixtureId: "desc" }, { dueDate: "asc" }, { createdAt: "asc" }],
   });
@@ -108,13 +121,16 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     charges.find((charge) => getLondonDateKey(charge.dueDate) === fixtureDateKey) ??
     null;
 
-  if (!matchingCharge || paidTotalPence < matchingCharge.amountPence) {
+  if (!matchingCharge) {
     return {
-      chargeId: matchingCharge?.id ?? null,
+      chargeId: null,
       paidTotalPence,
       covered: false,
     };
   }
+
+  const isCovered = paidTotalPence >= matchingCharge.amountPence;
+  const nextStatus: PaymentChargeStatus = isCovered ? "PAID" : "PART_PAID";
 
   await linkPlayerFeeTransactionsToCharge({
     playerMatchFeeIds: paidFees.map((fee) => fee.id),
@@ -124,16 +140,21 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
   await prisma.paymentCharge.update({
     where: { id: matchingCharge.id },
     data: {
-      status: "PAID",
-      description: appendCoveredNote(matchingCharge.description, paidTotalPence),
+      fixtureId: matchingCharge.fixtureId ?? input.fixtureId,
+      status: nextStatus,
+      description: isCovered
+        ? appendCoveredNote(matchingCharge.description, paidTotalPence)
+        : appendPartPaidNote(matchingCharge.description, paidTotalPence),
     },
   });
 
-  await cancelQueuedMatchFeeNotificationDispatches([matchingCharge.id]);
+  if (isCovered) {
+    await cancelQueuedMatchFeeNotificationDispatches([matchingCharge.id]);
+  }
 
   return {
     chargeId: matchingCharge.id,
     paidTotalPence,
-    covered: true,
+    covered: isCovered,
   };
 }
