@@ -176,21 +176,21 @@ export default function CaptainViewModeHeader({
     return () => observer.disconnect();
   }, [isCaptainDashboardPreview, isManagedTeam, searchParamsKey, teamId]);
 
-  const overline = isManagedTeam
-    ? "SIXFL full admin managed squad"
+  const currentViewLabel = isManagedTeam
+    ? "Full Admin View — Managed Squad"
     : isCaptainDashboardPreview
-      ? "Admin captain dashboard preview"
+      ? "Captain Preview"
       : isAdmin
-        ? "SIXFL admin team view"
-        : "SIXFL captain dashboard";
+        ? "Full Admin View"
+        : "Captain View";
 
-  const description = isManagedTeam
-    ? "Full admin view: this managed squad is controlled by SIXFL. Captain preview is not used for managed squads."
+  const currentViewDescription = isManagedTeam
+    ? "This team is managed by SIXFL. Captain preview is disabled and all controls are admin-only."
     : isCaptainDashboardPreview
-      ? "You are viewing the captain dashboard as a captain would see it. Admin-only squad tools are hidden on this page."
+      ? "You are seeing what the team captain sees. Admin-only controls should be hidden."
       : isAdmin
-        ? "Full admin view: fixtures, results and payment tools are visible."
-        : "Your dashboard for matchday control, fixtures, results, payments and squad details.";
+        ? "You are using the full SIXFL admin view. Fixtures, results, squad and payment tools are available."
+        : "You are using the captain dashboard for this team.";
 
   return (
     <>
@@ -203,44 +203,59 @@ export default function CaptainViewModeHeader({
         `}</style>
       ) : null}
 
-      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-        {overline}
-      </p>
+      <div className="rounded-3xl border border-emerald-400/20 bg-black/20 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+              Current view
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm font-bold text-emerald-50">
+                {currentViewLabel}
+              </span>
+              {isManagedTeam ? (
+                <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
+                  Captain preview unavailable
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65 sm:text-base">
+              {currentViewDescription}
+            </p>
+          </div>
 
-      <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-        {description}
-      </p>
+          <div className="flex flex-wrap gap-3">
+            {canShowAdminControls ? (
+              <Link
+                href={`/admin/teams/${teamId}`}
+                data-captain-preview-ignore="true"
+                className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+              >
+                Admin team page
+              </Link>
+            ) : null}
 
-      <div className="mt-5 flex flex-wrap gap-3">
-        {canShowAdminControls ? (
-          <Link
-            href={`/admin/teams/${teamId}`}
-            data-captain-preview-ignore="true"
-            className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
-          >
-            Back to admin team
-          </Link>
-        ) : null}
+            {canPreviewCaptainDashboard && !isCaptainDashboardPreview ? (
+              <a
+                href={previewHref}
+                data-captain-preview-ignore="true"
+                className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
+              >
+                Switch to Captain Preview
+              </a>
+            ) : null}
 
-        {canPreviewCaptainDashboard && !isCaptainDashboardPreview ? (
-          <a
-            href={previewHref}
-            data-captain-preview-ignore="true"
-            className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
-          >
-            Preview captain dashboard
-          </a>
-        ) : null}
-
-        {canShowAdminControls && isCaptainDashboardPreview ? (
-          <a
-            href={fullAdminHref}
-            data-captain-preview-ignore="true"
-            className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/15"
-          >
-            Return to full admin view
-          </a>
-        ) : null}
+            {canShowAdminControls && isCaptainDashboardPreview ? (
+              <a
+                href={fullAdminHref}
+                data-captain-preview-ignore="true"
+                className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
+              >
+                Switch back to Full Admin View
+              </a>
+            ) : null}
+          </div>
+        </div>
       </div>
     </>
   );
