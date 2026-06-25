@@ -42,6 +42,9 @@ async function runManagedSquadAvailabilityReminderJob() {
   const fixtures = await prisma.fixture.findMany({
     where: {
       status: "SCHEDULED",
+      publishedAt: {
+        not: null,
+      },
       kickoffAt: {
         gt: now,
         lte: addDays(now, 14),
