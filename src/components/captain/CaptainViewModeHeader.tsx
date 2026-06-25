@@ -124,10 +124,11 @@ export default function CaptainViewModeHeader({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsKey = searchParams.toString();
-  const isCaptainOnlyPreview = accessMode === "captain-preview";
+  const isCaptainOnlyPreview = !isManagedTeam && accessMode === "captain-preview";
   const canShowAdminControls = isAdmin || isCaptainOnlyPreview;
+  const canPreviewCaptainDashboard = isAdmin && !isManagedTeam;
   const isCaptainDashboardPreview = Boolean(
-    isCaptainOnlyPreview || (isAdmin && searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1"),
+    isCaptainOnlyPreview || (!isManagedTeam && isAdmin && searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1"),
   );
   const previewHref = `/admin/teams/${teamId}/captain-preview`;
   const fullAdminHref = isCaptainOnlyPreview
@@ -135,6 +136,8 @@ export default function CaptainViewModeHeader({
     : getFullAdminHref({ pathname, teamId });
 
   useEffect(() => {
+    if (isManagedTeam) return;
+
     const root = document.querySelector(".captain-team-shell") ?? document.body;
     const frame = window.requestAnimationFrame(rewriteCaptainFacingText);
     const observer = new MutationObserver(rewriteCaptainFacingText);
@@ -145,10 +148,10 @@ export default function CaptainViewModeHeader({
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [pathname, searchParamsKey]);
+  }, [isManagedTeam, pathname, searchParamsKey]);
 
   useEffect(() => {
-    if (!isCaptainDashboardPreview) return;
+    if (!isCaptainDashboardPreview || isManagedTeam) return;
 
     const selector = `.captain-team-shell a[href^="/captain/team/${teamId}"]:not([data-captain-preview-ignore="true"])`;
 
@@ -171,21 +174,23 @@ export default function CaptainViewModeHeader({
     observer.observe(root, { childList: true, subtree: true });
 
     return () => observer.disconnect();
-  }, [isCaptainDashboardPreview, searchParamsKey, teamId]);
+  }, [isCaptainDashboardPreview, isManagedTeam, searchParamsKey, teamId]);
 
-  const overline = isCaptainDashboardPreview
-    ? "Admin captain dashboard preview"
-    : isAdmin
-      ? "SIXFL admin team view"
-      : "SIXFL captain dashboard";
+  const overline = isManagedTeam
+    ? "SIXFL full admin managed squad"
+    : isCaptainDashboardPreview
+      ? "Admin captain dashboard preview"
+      : isAdmin
+        ? "SIXFL admin team view"
+        : "SIXFL captain dashboard";
 
-  const description = isCaptainDashboardPreview
-    ? "You are viewing the captain dashboard as a captain would see it. Admin-only squad tools are hidden on this page."
-    : isAdmin
-      ? isManagedTeam
-        ? "Full admin view: squad controls, fixtures, results, prospects and payment tools are visible."
-        : "Full admin view: fixtures, results and payment tools are visible."
-      : "Your dashboard for matchday control, fixtures, results, payments and squad details.";
+  const description = isManagedTeam
+    ? "Full admin view: this managed squad is controlled by SIXFL. Captain preview is not used for managed squads."
+    : isCaptainDashboardPreview
+      ? "You are viewing the captain dashboard as a captain would see it. Admin-only squad tools are hidden on this page."
+      : isAdmin
+        ? "Full admin view: fixtures, results and payment tools are visible."
+        : "Your dashboard for matchday control, fixtures, results, payments and squad details.";
 
   return (
     <>
@@ -217,7 +222,7 @@ export default function CaptainViewModeHeader({
           </Link>
         ) : null}
 
-        {isAdmin && !isCaptainDashboardPreview ? (
+        {canPreviewCaptainDashboard && !isCaptainDashboardPreview ? (
           <Link
             href={previewHref}
             data-captain-preview-ignore="true"
