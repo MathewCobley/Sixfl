@@ -3,7 +3,7 @@
 // ========================================
 
 import Link from "next/link";
-import { PaymentMethod, PlayerMatchFeeStatus } from "@prisma/client";
+import { PaymentChargeStatus, PaymentMethod, PlayerMatchFeeStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -11,7 +11,7 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
-import { summariseCharge } from "@/lib/payments/charge-status";
+import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
 import {
   buildChargePaymentUrl,
   cancelQueuedMatchFeeNotificationDispatches,
@@ -112,6 +112,19 @@ function formatDueLabel(value: Date | null) {
   return formatDateTimeLabel(value);
 }
 
+function formatChargeStatusLabel(status: string) {
+  if (status === "PART_PAID") return "PART PAID";
+  return status.replaceAll("_", " ");
+}
+
+function isChargeDisplayClosed(status: string) {
+  return status === "PAID" || status === "VOID";
+}
+
+function getChargeKey(input: { teamId: string; fixtureId: string | null }) {
+  return input.fixtureId ? `${input.teamId}:${input.fixtureId}` : null;
+}
+
 function getPlayerFeeName(input: {
   teamMember: { user: { name: string | null; email: string | null } } | null;
   prospect: {
@@ -146,6 +159,11 @@ function getPlayerFeeContact(input: {
   return "No contact";
 }
 
+function isPlayerFeePaymentNotes(value: string | null) {
+  const notes = value?.toLowerCase() ?? "";
+  return notes.includes("player match fee paid online") || notes.includes("player fee id:");
+}
+
 const methodOptions = [
   { value: PaymentMethod.BANK_TRANSFER, label: "Bank transfer" },
   { value: PaymentMethod.STRIPE, label: "Stripe" },
@@ -153,6 +171,34 @@ const methodOptions = [
   { value: PaymentMethod.CARD, label: "Card" },
   { value: PaymentMethod.OTHER, label: "Other" },
 ];
+
+async function getChargeSummaryWithPlayerPayments(chargeId: string) {
+  const charge = await prisma.paymentCharge.findUnique({
+    where: { id: chargeId },
+    include: {
+      transactions: { select: { amountPence: true, notes: true } },
+    },
+  });
+
+  if (!charge) return null;
+
+  const paidPlayerMatchFees = charge.fixtureId
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          teamId: charge.teamId,
+          fixtureId: charge.fixtureId,
+          status: PlayerMatchFeeStatus.PAID,
+        },
+        select: { fixtureId: true, amountPence: true },
+      })
+    : [];
+
+  const [summary] = summariseChargesWithPlayerMatchFees([charge], paidPlayerMatchFees);
+
+  if (!summary) return null;
+
+  return { charge, summary };
+}
 
 async function createChargeAction(formData: FormData) {
   "use server";
@@ -216,12 +262,13 @@ async function recordPaymentAction(formData: FormData) {
   }
 
   if (chargeId) {
-    const charge = await prisma.paymentCharge.findUnique({
-      where: { id: chargeId },
-      select: { id: true, teamId: true, status: true },
-    });
+    const existing = await getChargeSummaryWithPlayerPayments(chargeId);
 
-    if (!charge || charge.teamId !== teamId || charge.status === "PAID" || charge.status === "VOID") {
+    if (
+      !existing ||
+      existing.charge.teamId !== teamId ||
+      isChargeDisplayClosed(existing.summary.displayStatus)
+    ) {
       redirect("/admin/payments?error=invalid_payment");
     }
   }
@@ -239,23 +286,17 @@ async function recordPaymentAction(formData: FormData) {
   });
 
   if (chargeId) {
-    const charge = await prisma.paymentCharge.findUnique({
-      where: { id: chargeId },
-      include: { transactions: { select: { amountPence: true } } },
-    });
+    const refreshed = await getChargeSummaryWithPlayerPayments(chargeId);
 
-    if (charge) {
-      const summary = summariseCharge({
-        amountPence: charge.amountPence,
-        transactions: charge.transactions,
-      });
+    if (refreshed) {
+      const nextStatus = refreshed.summary.displayStatus as PaymentChargeStatus;
 
       await prisma.paymentCharge.update({
         where: { id: chargeId },
-        data: { status: summary.status },
+        data: { status: nextStatus },
       });
 
-      if (summary.status === "PAID") {
+      if (nextStatus === PaymentChargeStatus.PAID) {
         await cancelQueuedMatchFeeNotificationDispatches([chargeId]);
       }
     }
@@ -284,20 +325,27 @@ async function sendTeamChargeReminderAction(formData: FormData) {
           awayTeam: { select: { name: true } },
         },
       },
-      transactions: { select: { amountPence: true } },
+      transactions: { select: { amountPence: true, notes: true } },
     },
   });
 
   if (!charge) redirect("/admin/payments?error=invalid_charge");
 
-  const summary = summariseCharge({
-    amountPence: charge.amountPence,
-    transactions: charge.transactions,
-  });
+  const paidPlayerMatchFees = charge.fixtureId
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          teamId: charge.teamId,
+          fixtureId: charge.fixtureId,
+          status: PlayerMatchFeeStatus.PAID,
+        },
+        select: { fixtureId: true, amountPence: true },
+      })
+    : [];
+  const [summary] = summariseChargesWithPlayerMatchFees([charge], paidPlayerMatchFees);
 
   if (
-    charge.status === "PAID" ||
-    charge.status === "VOID" ||
+    !summary ||
+    isChargeDisplayClosed(summary.displayStatus) ||
     summary.outstandingPence <= 0 ||
     !charge.paymentToken
   ) {
@@ -332,7 +380,7 @@ async function sendTeamChargeReminderAction(formData: FormData) {
       fixtureName,
       kickoffLabel,
       paymentUrl: buildChargePaymentUrl(charge.paymentToken),
-      reminderIntro: "Your team match fee is still unpaid.",
+      reminderIntro: `Your team match fee still has ${formatMoney(summary.outstandingPence)} outstanding.`,
     },
     createdByUserId: user?.id ?? null,
   });
@@ -385,7 +433,7 @@ export default async function AdminPaymentsPage({
 
   const sp = (await searchParams) ?? {};
 
-  const [teams, charges, transactions, openPlayerFeesRaw] = await Promise.all([
+  const [teams, charges, transactions, openPlayerFeesRaw, paidPlayerMatchFees] = await Promise.all([
     prisma.team.findMany({
       orderBy: [{ name: "asc" }],
       select: {
@@ -398,7 +446,7 @@ export default async function AdminPaymentsPage({
       orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
       include: {
         team: { select: { id: true, name: true } },
-        transactions: { select: { amountPence: true } },
+        transactions: { select: { amountPence: true, notes: true } },
       },
     }),
     prisma.paymentTransaction.findMany({
@@ -433,7 +481,22 @@ export default async function AdminPaymentsPage({
         },
       },
     }),
+    prisma.playerMatchFee.findMany({
+      where: { status: PlayerMatchFeeStatus.PAID },
+      select: {
+        teamId: true,
+        fixtureId: true,
+        amountPence: true,
+      },
+    }),
   ]);
+
+  const paidPlayerMatchFeesByTeamId = new Map<string, typeof paidPlayerMatchFees>();
+  for (const fee of paidPlayerMatchFees) {
+    const existing = paidPlayerMatchFeesByTeamId.get(fee.teamId) ?? [];
+    existing.push(fee);
+    paidPlayerMatchFeesByTeamId.set(fee.teamId, existing);
+  }
 
   const playerPaymentDetails = await Promise.all(
     openPlayerFeesRaw.map((fee) => ensurePlayerMatchFeePaymentDetails(fee.id)),
@@ -448,11 +511,14 @@ export default async function AdminPaymentsPage({
 
   const chargeRows = charges
     .map((charge) => {
-      const summary = summariseCharge({
-        amountPence: charge.amountPence,
-        transactions: charge.transactions,
-      });
-      const isClosed = charge.status === "PAID" || charge.status === "VOID";
+      const teamPaidFees = paidPlayerMatchFeesByTeamId.get(charge.teamId) ?? [];
+      const [summary] = summariseChargesWithPlayerMatchFees([charge], teamPaidFees);
+
+      if (!summary) {
+        throw new Error(`Unable to summarise payment charge ${charge.id}.`);
+      }
+
+      const isClosed = isChargeDisplayClosed(summary.displayStatus);
       const needsAdminChase =
         !isClosed &&
         summary.outstandingPence > 0 &&
@@ -462,8 +528,8 @@ export default async function AdminPaymentsPage({
       return { charge, summary, needsAdminChase };
     })
     .sort((a, b) => {
-      const aOpen = a.charge.status !== "PAID" && a.charge.status !== "VOID";
-      const bOpen = b.charge.status !== "PAID" && b.charge.status !== "VOID";
+      const aOpen = !isChargeDisplayClosed(a.summary.displayStatus) && a.summary.outstandingPence > 0;
+      const bOpen = !isChargeDisplayClosed(b.summary.displayStatus) && b.summary.outstandingPence > 0;
       if (aOpen !== bOpen) return aOpen ? -1 : 1;
 
       if (a.needsAdminChase !== b.needsAdminChase) return a.needsAdminChase ? -1 : 1;
@@ -480,7 +546,12 @@ export default async function AdminPaymentsPage({
     });
 
   const openChargeRows = chargeRows.filter(
-    (row) => row.charge.status !== "PAID" && row.charge.status !== "VOID",
+    (row) => !isChargeDisplayClosed(row.summary.displayStatus) && row.summary.outstandingPence > 0,
+  );
+  const chargeKeysWithLedgerRows = new Set(
+    chargeRows
+      .map((row) => getChargeKey({ teamId: row.charge.teamId, fixtureId: row.charge.fixtureId }))
+      .filter(Boolean) as string[],
   );
   const openChargeIds = openChargeRows.map((row) => row.charge.id);
   const teamChargeChases = openChargeIds.length
@@ -528,7 +599,11 @@ export default async function AdminPaymentsPage({
     0,
   );
   const playerFeeOutstanding = openPlayerFees.reduce((sum, fee) => sum + fee.amountPence, 0);
-  const totalOutstanding = teamChargeOutstanding + playerFeeOutstanding;
+  const standalonePlayerFeeOutstanding = openPlayerFees.reduce((sum, fee) => {
+    const hasLedgerCharge = chargeKeysWithLedgerRows.has(getChargeKey({ teamId: fee.teamId, fixtureId: fee.fixtureId }) ?? "");
+    return hasLedgerCharge ? sum : sum + fee.amountPence;
+  }, 0);
+  const totalOutstanding = teamChargeOutstanding + standalonePlayerFeeOutstanding;
   const needsAdminChaseCount = chargeRows.filter((row) => row.needsAdminChase).length;
 
   const teamOptions = teams.map((team) => ({
@@ -551,7 +626,7 @@ export default async function AdminPaymentsPage({
     ? formatAmountInput(selectedPaymentChargeRow.summary.outstandingPence)
     : "";
   const recordPaymentHelpText = selectedPaymentChargeRow
-    ? `Ready to record a payment against ${selectedPaymentChargeRow.charge.team.name} · ${selectedPaymentChargeRow.charge.title}. The amount has been set to the outstanding balance.`
+    ? `Ready to record a payment against ${selectedPaymentChargeRow.charge.team.name} · ${selectedPaymentChargeRow.charge.title}. The amount has been set to the outstanding balance after squad payments.`
     : "Select a team and link an open charge to record a payment against it.";
   const defaultPaidAt = formatDateTimeLocalInput(new Date());
 
@@ -591,12 +666,14 @@ export default async function AdminPaymentsPage({
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Open items</div>
           <div className="mt-3 text-3xl font-semibold text-white">{openChargeRows.length + openPlayerFees.length}</div>
-          <p className="mt-2 text-sm text-white/50">Team charges + player fees.</p>
+          <p className="mt-2 text-sm text-white/50">Team charges + player payment links.</p>
         </div>
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/70">Outstanding</div>
           <div className="mt-3 text-3xl font-semibold text-white">{formatMoney(totalOutstanding)}</div>
-          <p className="mt-2 text-sm text-amber-100/75">Includes {formatMoney(playerFeeOutstanding)} from player fees.</p>
+          <p className="mt-2 text-sm text-amber-100/75">
+            Team charge balances now include paid squad payments.
+          </p>
         </div>
         <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-100/70">Needs admin chase</div>
@@ -615,7 +692,7 @@ export default async function AdminPaymentsPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-100/70">Player match fees</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">{formatMoney(playerFeeOutstanding)} pending from players</h2>
               <p className="mt-2 max-w-3xl text-sm text-white/65">
-                These open player fees are included in the outstanding total above. Use the reminder button to queue the next missing reminder.
+                Paid player fees reduce the related team charge automatically. Open player fees remain listed here for chasing individuals.
               </p>
             </div>
             <span className="rounded-2xl border border-amber-400/25 bg-black/20 px-4 py-3 text-sm font-semibold text-amber-100">
@@ -697,7 +774,7 @@ export default async function AdminPaymentsPage({
       <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
         <div className="space-y-2">
           <h2 className="text-xl font-semibold text-white">Team charges</h2>
-          <p className="text-sm text-white/55">Red items are unpaid after the automatic reminder window.</p>
+          <p className="text-sm text-white/55">Calculated from team charge payments plus paid squad/player match fees for the same fixture.</p>
         </div>
         <div className="mt-4 space-y-3">
           {chargeRows.length === 0 ? (
@@ -706,15 +783,14 @@ export default async function AdminPaymentsPage({
             chargeRows.map((row) => {
               const lastChasedAt = lastTeamChargeChaseByChargeId.get(row.charge.id) ?? null;
               const canChaseTeamCharge =
-                row.charge.status !== "PAID" &&
-                row.charge.status !== "VOID" &&
+                !isChargeDisplayClosed(row.summary.displayStatus) &&
                 row.summary.outstandingPence > 0 &&
                 Boolean(row.charge.paymentToken);
               const canRecordPayment =
-                row.charge.status !== "PAID" &&
-                row.charge.status !== "VOID" &&
+                !isChargeDisplayClosed(row.summary.displayStatus) &&
                 row.summary.outstandingPence > 0;
-              const canVoidCharge = row.charge.status !== "PAID" && row.charge.status !== "VOID";
+              const canVoidCharge = !isChargeDisplayClosed(row.summary.displayStatus);
+              const statusChanged = row.summary.displayStatus !== row.charge.status;
 
               return (
                 <div key={row.charge.id} className={`rounded-2xl border bg-[#0d1428] p-4 ${row.needsAdminChase ? "border-red-500/30" : "border-white/10"}`}>
@@ -725,7 +801,8 @@ export default async function AdminPaymentsPage({
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {row.charge.dueDate ? <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Due {formatDueLabel(row.charge.dueDate)}</span> : null}
                         {row.needsAdminChase ? <span className="rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-red-200">Needs admin chase</span> : null}
-                        {row.summary.outstandingPence > 0 && row.charge.status !== "VOID" ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">Awaiting payment</span> : null}
+                        {row.summary.outstandingPence > 0 && row.summary.displayStatus !== "VOID" ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200">Awaiting payment</span> : null}
+                        {row.summary.playerPaidPence > 0 ? <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-200">Squad paid {formatMoney(row.summary.playerPaidPence)}</span> : null}
                         <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/[0.05] text-white/55"}`}>{formatLastChasedLabel(lastChasedAt)}</span>
                       </div>
                       {(canRecordPayment || canChaseTeamCharge || canVoidCharge) ? (
@@ -747,8 +824,10 @@ export default async function AdminPaymentsPage({
                     </div>
                     <div className="text-right">
                       <div className="text-base font-semibold text-white">{formatMoney(row.charge.amountPence)}</div>
-                      <div className="mt-1 text-sm text-white/55">Paid {formatMoney(row.summary.paidTotalPence)} · Outstanding {formatMoney(row.summary.outstandingPence)}</div>
-                      <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">{row.charge.status}</div>
+                      <div className="mt-1 text-sm text-white/55">Paid {formatMoney(row.summary.paidPence)} · Outstanding {formatMoney(row.summary.outstandingPence)}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
+                        {formatChargeStatusLabel(row.summary.displayStatus)}{statusChanged ? ` · stored ${formatChargeStatusLabel(row.charge.status)}` : ""}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -766,7 +845,9 @@ export default async function AdminPaymentsPage({
             <div key={payment.id} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-[#0d1428] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="font-semibold text-white">{payment.team.name}</div>
-                <div className="mt-1 text-sm text-white/55">{payment.charge?.title ?? "Unlinked payment"} · {formatPaymentMethodLabel(payment.method)}</div>
+                <div className="mt-1 text-sm text-white/55">
+                  {payment.charge?.title ?? (isPlayerFeePaymentNotes(payment.notes) ? "Squad player payment" : "Unlinked payment")} · {formatPaymentMethodLabel(payment.method)}
+                </div>
               </div>
               <div className="text-sm text-white/60 sm:text-right">
                 <div className="font-semibold text-white">{formatMoney(payment.amountPence)}</div>
