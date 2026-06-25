@@ -36,6 +36,15 @@ function getPlayerCommunicationsHref(input: { teamId: string; membershipId: stri
   return `/admin/teams/${input.teamId}/players/${input.membershipId}/communications`;
 }
 
+function normaliseText(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function isLoginEmailControl(control: HTMLElement) {
+  const text = normaliseText(control.textContent);
+  return text === "send login email" || text === "login email sent" || text === "sending login email..." || text === "sending login email…";
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return null;
 
@@ -258,11 +267,29 @@ function addDashboardLoginEmailButton(input: {
   teamId: string;
   membershipId: string;
 }) {
-  const existingButton = input.actionsContainer.querySelector<HTMLButtonElement>(
-    `button[data-dashboard-login-email="${input.membershipId}"]`,
+  const injectedButtons = Array.from(
+    input.actionsContainer.querySelectorAll<HTMLButtonElement>(
+      `button[data-dashboard-login-email="${input.membershipId}"]`,
+    ),
   );
 
-  if (existingButton) return;
+  const existingNativeLoginControls = Array.from(
+    input.actionsContainer.querySelectorAll<HTMLElement>("button, a"),
+  ).filter((control) => !control.dataset.dashboardLoginEmail && isLoginEmailControl(control));
+
+  if (existingNativeLoginControls.length > 0) {
+    for (const button of injectedButtons) {
+      button.remove();
+    }
+    return;
+  }
+
+  if (injectedButtons.length > 0) {
+    for (const button of injectedButtons.slice(1)) {
+      button.remove();
+    }
+    return;
+  }
 
   const button = document.createElement("button");
   button.type = "button";
@@ -318,7 +345,7 @@ function addPreviewLinks(pathname: string, statusByMembershipId = new Map<string
     if (!existingLink) {
       const previewLink = document.createElement("a");
       previewLink.href = `/admin/teams/${teamId}/players/${membershipId}/preview`;
-      previewLink.textContent = "Player preview";
+      previewLink.textContent = "Preview as player";
       previewLink.dataset.adminPlayerPreviewLink = membershipId;
       previewLink.className = `${injectedLinkClassName} border border-violet-400/30 bg-violet-500/10 text-violet-100 hover:bg-violet-500/15`;
 
