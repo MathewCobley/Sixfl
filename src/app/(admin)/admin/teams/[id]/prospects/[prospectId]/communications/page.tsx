@@ -63,6 +63,11 @@ function getProspectName(input: { firstName: string; lastName: string | null }) 
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
+function normaliseEmail(value?: string | null) {
+  const parsed = value?.trim().toLowerCase();
+  return parsed || null;
+}
+
 function formatUkDateTime(value: Date) {
   return formatDateTimeInLondon(value, {
     day: "2-digit",
@@ -175,6 +180,7 @@ export default async function AdminProspectCommunicationsPage({
     firstName: prospect.firstName,
     lastName: prospect.lastName,
   }) || prospect.firstName;
+  const prospectEmail = normaliseEmail(prospect.email);
 
   const playerMatchFees = await prisma.playerMatchFee.findMany({
     where: {
@@ -204,10 +210,40 @@ export default async function AdminProspectCommunicationsPage({
       : []),
   ];
 
+  const threadFallbackFilters = prospectEmail
+    ? [
+        { emailNormalized: prospectEmail },
+        {
+          contactEmail: {
+            equals: prospectEmail,
+            mode: "insensitive" as const,
+          },
+        },
+      ]
+    : [];
+
+  const dispatchFallbackFilters = prospectEmail
+    ? [
+        {
+          recipient: {
+            emailNormalized: prospectEmail,
+          },
+        },
+        {
+          recipient: {
+            email: {
+              equals: prospectEmail,
+              mode: "insensitive" as const,
+            },
+          },
+        },
+      ]
+    : [];
+
   const [threads, dispatches, emailTemplates, smsTemplates] = await Promise.all([
     prisma.messageThread.findMany({
       where: {
-        OR: communicationSourceFilters,
+        OR: [...communicationSourceFilters, ...threadFallbackFilters],
       },
       include: {
         messages: {
@@ -235,7 +271,7 @@ export default async function AdminProspectCommunicationsPage({
     }),
     prisma.notificationDispatch.findMany({
       where: {
-        OR: communicationSourceFilters,
+        OR: [...communicationSourceFilters, ...dispatchFallbackFilters],
       },
       include: {
         recipient: true,
@@ -299,7 +335,9 @@ export default async function AdminProspectCommunicationsPage({
             metadata: message.dispatch.metadata,
             sourceType: message.dispatch.sourceType,
           })
-        : "Inbox thread",
+        : thread.sourceType || thread.emailNormalized === prospectEmail
+          ? "Email-matched history"
+          : "Inbox thread",
       templateName: message.dispatch?.template?.name ?? null,
       templateKey: message.dispatch?.template?.key ?? null,
       subject: message.subject || `${message.channel} message`,
@@ -326,10 +364,13 @@ export default async function AdminProspectCommunicationsPage({
       channel: dispatch.channel,
       direction: "OUTBOUND" as const,
       statusLabel: formatDispatchStatus(dispatch.status),
-      sourceLabel: getSourceLabel({
-        metadata: dispatch.metadata,
-        sourceType: dispatch.sourceType,
-      }),
+      sourceLabel:
+        dispatch.sourceType || dispatch.recipient.emailNormalized === prospectEmail
+          ? getSourceLabel({
+              metadata: dispatch.metadata,
+              sourceType: dispatch.sourceType,
+            })
+          : "Email-matched history",
       templateName: dispatch.template?.name ?? null,
       templateKey: dispatch.template?.key ?? null,
       subject:
@@ -406,7 +447,7 @@ export default async function AdminProspectCommunicationsPage({
           </Link>
           <h1 className="text-3xl font-semibold text-white">{prospectName} communications</h1>
           <p className="text-sm text-white/60">
-            Central message hub for this prospect. This page now uses the same shared sending rules as team communications.
+            Central message hub for this prospect. This page now includes direct prospect history and older email-matched message history where available.
           </p>
         </div>
 
@@ -452,6 +493,9 @@ export default async function AdminProspectCommunicationsPage({
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Phone: {prospect.phone || "—"}</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Status: {prospect.status}</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Team: {prospect.team.name}</span>
+              {prospectEmail ? (
+                <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-100">Email fallback enabled</span>
+              ) : null}
             </div>
           </div>
 
