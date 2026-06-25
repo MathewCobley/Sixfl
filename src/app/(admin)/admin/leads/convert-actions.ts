@@ -5,9 +5,16 @@
 "use server";
 
 import crypto from "crypto";
+import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
+
+import {
+  appendSIXFLTextSignature,
+  buildSIXFLEmailHtml,
+} from "@/lib/email/buildEmail";
+import { createDashboardLoginLink } from "@/lib/auth/sendDashboardLoginEmail";
 import { queueManagedSquadJoinConfirmationEmail } from "@/lib/managed-squad/prospectJoinConfirmation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -70,6 +77,109 @@ async function generateUniqueClaimCode(tx: Prisma.TransactionClient) {
   }
 
   throw new Error("Failed to generate a unique team claim code.");
+}
+
+function getEmailFrom() {
+  const from = process.env.EMAIL_FROM?.trim();
+
+  if (!from) {
+    throw new Error("Email sending is not configured.");
+  }
+
+  return from;
+}
+
+function getFirstName(name: string | null | undefined, email: string) {
+  const fromName = name?.trim().split(/\s+/).filter(Boolean)[0];
+  const fromEmail = email.split("@")[0]?.replace(/[._-]+/g, " ").trim().split(/\s+/)[0];
+
+  return fromName || fromEmail || "there";
+}
+
+async function sendCaptainClaimEmail(input: {
+  teamId: string;
+  teamName: string;
+  captainEmail: string;
+  captainName: string | null;
+  claimCode: string;
+}) {
+  const email = input.captainEmail.trim().toLowerCase();
+  const loginLink = await createDashboardLoginLink({
+    email,
+    callbackPath: `/claim?code=${encodeURIComponent(input.claimCode)}`,
+  });
+  const firstName = getFirstName(input.captainName, email);
+  const body = [
+    `Hi ${firstName},`,
+    "",
+    `${input.teamName} has now been set up on SIXFL.`,
+    "",
+    "Use the secure button below to sign in and claim your team captain access. The claim code will be filled in for you after sign-in.",
+    "",
+    "{{cta}}",
+    "",
+    "Once claimed, you will be able to manage fixtures, squad details, player payments and availability from your captain area.",
+    "",
+    "Thanks,",
+    "SIXFL",
+  ].join("\n");
+  const textBody = [
+    `Hi ${firstName},`,
+    "",
+    `${input.teamName} has now been set up on SIXFL.`,
+    "",
+    "Use this secure link to sign in and claim your team captain access:",
+    loginLink.url,
+    "",
+    "Once claimed, you will be able to manage fixtures, squad details, player payments and availability from your captain area.",
+    "",
+    `Claim code: ${input.claimCode}`,
+    "",
+    "Thanks,",
+    "SIXFL",
+  ].join("\n");
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  await resend.emails.send({
+    from: getEmailFrom(),
+    to: email,
+    subject: `Claim your SIXFL captain access for ${input.teamName}`,
+    text: appendSIXFLTextSignature(textBody),
+    html: buildSIXFLEmailHtml({
+      body,
+      cta: {
+        label: "Claim captain access",
+        url: loginLink.url,
+      },
+      branding: {
+        teamName: input.teamName,
+      },
+    }),
+  });
+
+  await prisma.team.update({
+    where: { id: input.teamId },
+    data: {
+      captainInviteSentAt: new Date(),
+      captainInviteSentTo: email,
+    },
+  });
+}
+
+async function sendCaptainClaimEmailSafely(input: {
+  teamId: string;
+  teamName: string;
+  captainEmail: string;
+  captainName: string | null;
+  claimCode: string;
+}) {
+  try {
+    await sendCaptainClaimEmail(input);
+    return "sent" as const;
+  } catch (error) {
+    console.error("Failed to send captain claim email", error);
+    return "error" as const;
+  }
 }
 
 async function queueJoinConfirmationSafely(input: {
@@ -146,7 +256,14 @@ export async function convertLeadToTeamAction(
   });
 
   let result:
-    | { teamId: string; alreadyConverted: false }
+    | {
+        teamId: string;
+        alreadyConverted: false;
+        claimCode: string;
+        captainEmail: string;
+        captainName: string | null;
+        teamName: string;
+      }
     | { teamId: string; alreadyConverted: true };
 
   try {
@@ -222,6 +339,10 @@ export async function convertLeadToTeamAction(
       return {
         teamId: team.id,
         alreadyConverted: false as const,
+        claimCode,
+        captainEmail: email,
+        captainName: freshLead.contactName?.trim() || null,
+        teamName,
       };
     });
   } catch (error) {
@@ -243,7 +364,17 @@ export async function convertLeadToTeamAction(
     redirect(`/admin/teams/${result.teamId}?fromLead=${leadId}&existing=1`);
   }
 
-  redirect(`/admin/teams/${result.teamId}?created=1&fromLead=${leadId}`);
+  const inviteStatus = await sendCaptainClaimEmailSafely({
+    teamId: result.teamId,
+    teamName: result.teamName,
+    captainEmail: result.captainEmail,
+    captainName: result.captainName,
+    claimCode: result.claimCode,
+  });
+
+  revalidatePath(`/admin/teams/${result.teamId}`);
+
+  redirect(`/admin/teams/${result.teamId}?created=1&fromLead=${leadId}&invite=${inviteStatus}`);
 }
 
 export async function convertLeadToManagedSquadPlayerAction(formData: FormData) {
