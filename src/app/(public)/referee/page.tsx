@@ -394,23 +394,31 @@ export default async function RefereePage() {
                   <p className="mt-4 text-sm text-white/55">
                     Open the night page to enter scores, record any cash collected and submit your cashup when the night is complete.
                   </p>
-
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <Link
-                      href={`/referee/night/${nextNight.id}`}
-                      className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-                    >
-                      Open next night
-                    </Link>
-                    <a
-                      href="#referee-nights"
-                      className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
-                    >
-                      View all nights
-                    </a>
-                  </div>
                 </>
               ) : null}
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href="/referee/availability"
+                  className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                >
+                  Mark availability
+                </Link>
+                {nextNight ? (
+                  <Link
+                    href={`/referee/night/${nextNight.id}`}
+                    className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                  >
+                    Open next night
+                  </Link>
+                ) : null}
+                <a
+                  href="#referee-nights"
+                  className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                >
+                  View all nights
+                </a>
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -422,7 +430,19 @@ export default async function RefereePage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <Link
+            href="/referee/availability"
+            className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+              Availability
+            </p>
+            <p className="mt-3 text-2xl font-semibold text-white">Mark dates</p>
+            <p className="mt-2 text-sm leading-5 text-emerald-100/70">
+              Tell SIXFL which league nights you can referee next month.
+            </p>
+          </Link>
           <StatCard label="Fixtures covered" value={totalFixtures} text="Across all assigned referee nights." tone="neutral" />
           <StatCard label="Settled nights" value={settledNights.length} text="Completed and reconciled." tone="emerald" />
           <StatCard label="Paid to date" value={formatMoney(paidToReferee)} text="Referee payments marked settled by SIXFL." tone="sky" />
