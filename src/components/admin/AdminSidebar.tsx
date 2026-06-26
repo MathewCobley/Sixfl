@@ -19,6 +19,7 @@ import {
   TrophyIcon,
   UserGroupIcon,
   UsersIcon,
+  WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 
 type AdminSidebarProps = {
@@ -76,6 +77,12 @@ const navigation = [
     href: "/admin/fixtures/generate",
     icon: CalendarDaysIcon,
     description: "Draft fixtures by pitch",
+  },
+  {
+    name: "Fixture Backfill",
+    href: "/admin/fixtures/backfill",
+    icon: WrenchScrewdriverIcon,
+    description: "Fees and referees",
   },
   {
     name: "Late Fees",
