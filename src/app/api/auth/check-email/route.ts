@@ -54,12 +54,15 @@ export async function POST(req: Request) {
       canLogin: false,
       claimCode: null,
       teamName: null,
+      userRole: null,
+      isReferee: false,
     });
   }
 
   const [user, pendingCaptain, captainLoginContext, pendingSquadActivation] = await Promise.all([
     prisma.user.findUnique({
       where: { email: normalizedEmail },
+      select: { id: true, role: true },
     }),
     getPendingCaptainContext(normalizedEmail),
     getCaptainLoginContext(normalizedEmail),
@@ -77,5 +80,7 @@ export async function POST(req: Request) {
       captainLoginContext?.teamName ??
       pendingSquadActivation?.teamName ??
       null,
+    userRole: user?.role ?? null,
+    isReferee: user?.role === "REFEREE",
   });
 }
