@@ -49,6 +49,16 @@ const guideSections = [
       "We do not want to charge admin fees, but a £10 late confirmation admin fee may be added if avoidable late confirmation creates extra admin, fixture chasing or rearranging work.",
       "SIXFL may send reminders or warnings first where practical, but captains should not rely on a warning before acting.",
     ],
+  }, 
+  {
+    title: "Earliest and latest kick-off times",
+    items: [
+      "Tell SIXFL early if your team has a regular timing rule, such as not being able to play before 19:00 or after 20:20.",
+      "Keep the rule clear and realistic so it can be considered when fixtures are generated.",
+      "SIXFL will try to accommodate genuine timing restrictions where possible, but this depends on venue slots, referees, opposition and the wider league schedule.",
+      "Timing rules are requests rather than guarantees.",
+      "If a published kick-off time creates a genuine problem, raise it through the fixture tools as early as possible.",
+    ],
   },
   {
     title: "Payments and late fees",
