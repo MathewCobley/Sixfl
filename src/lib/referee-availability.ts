@@ -12,9 +12,9 @@ import {
   type PreferredNight,
 } from "@prisma/client";
 
-import { queueDirectNotification } from "@/lib/notifications/service";
-import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { processNotificationQueue } from "@/lib/notifications/processor";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { queueDirectNotification } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 
 export type RefereeAvailabilityStatus =
@@ -174,8 +174,12 @@ function preferredNightToUtcDay(day: PreferredNight) {
   }
 }
 
+async function queryAvailabilityLeagues(sql: Prisma.Sql) {
+  return prisma.$queryRaw<RefereeAvailabilityLeague[]>(sql);
+}
+
 export async function getActiveRefereeAvailabilityLeagues() {
-  return prisma.$queryRaw<RefereeAvailabilityLeague[]>(Prisma.sql`
+  return queryAvailabilityLeagues(Prisma.sql`
     SELECT
       id,
       name,
@@ -189,6 +193,54 @@ export async function getActiveRefereeAvailabilityLeagues() {
       AND "dayOfWeek" <> 'ANY'
     ORDER BY "dayOfWeek" ASC, name ASC
   `);
+}
+
+async function getManualRefereeCoverageLeagues(refereeId: string) {
+  return queryAvailabilityLeagues(Prisma.sql`
+    SELECT
+      l.id,
+      l.name,
+      l.season,
+      l."dayOfWeek",
+      l."venueName",
+      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    FROM "RefereeLeagueCoverage" rlc
+    JOIN "League" l ON l.id = rlc."leagueId"
+    WHERE rlc."refereeId" = ${refereeId}
+      AND l."isActive" = TRUE
+      AND l."dayOfWeek" IS NOT NULL
+      AND l."dayOfWeek" <> 'ANY'
+    ORDER BY l."dayOfWeek" ASC, l.name ASC
+  `).catch(() => []);
+}
+
+async function getAssignedRefereeCoverageLeagues(refereeId: string) {
+  return queryAvailabilityLeagues(Prisma.sql`
+    SELECT DISTINCT
+      l.id,
+      l.name,
+      l.season,
+      l."dayOfWeek",
+      l."venueName",
+      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    FROM "Fixture" f
+    JOIN "League" l ON l.id = f."leagueId"
+    WHERE f."refereeId" = ${refereeId}
+      AND l."isActive" = TRUE
+      AND l."dayOfWeek" IS NOT NULL
+      AND l."dayOfWeek" <> 'ANY'
+    ORDER BY l."dayOfWeek" ASC, l.name ASC
+  `);
+}
+
+export async function getRefereeAvailabilityLeagues(refereeId: string) {
+  const manualCoverage = await getManualRefereeCoverageLeagues(refereeId);
+
+  if (manualCoverage.length > 0) {
+    return manualCoverage;
+  }
+
+  return getAssignedRefereeCoverageLeagues(refereeId);
 }
 
 export function getLeagueDatesInMonth(input: {
@@ -236,7 +288,7 @@ export async function ensureRefereeAvailabilityRows(input: {
   monthKey: string;
   requested?: boolean;
 }) {
-  const leagues = await getActiveRefereeAvailabilityLeagues();
+  const leagues = await getRefereeAvailabilityLeagues(input.refereeId);
   const rows = leagues.flatMap((league) =>
     getLeagueDatesInMonth({ monthKey: input.monthKey, dayOfWeek: league.dayOfWeek }).map(
       (date) => ({ league, date }),
@@ -311,6 +363,11 @@ export async function getRefereeAvailabilityMonth(input: {
 }) {
   await ensureRefereeAvailabilityRows({ refereeId: input.refereeId, monthKey: input.monthKey });
   const bounds = getMonthBounds(input.monthKey);
+  const leagues = await getRefereeAvailabilityLeagues(input.refereeId);
+  const leagueIds = leagues.map((league) => league.id);
+  const leagueFilter = leagueIds.length
+    ? Prisma.sql`AND ra."leagueId" IN (${Prisma.join(leagueIds)})`
+    : Prisma.sql`AND FALSE`;
 
   const rows = await prisma.$queryRaw<RawAvailabilityRow[]>(Prisma.sql`
     SELECT
@@ -330,10 +387,9 @@ export async function getRefereeAvailabilityMonth(input: {
     WHERE ra."refereeId" = ${input.refereeId}
       AND ra."availabilityDate" >= ${bounds.startDate}::date
       AND ra."availabilityDate" <= ${bounds.endDate}::date
+      ${leagueFilter}
     ORDER BY ra."availabilityDate" ASC, l.name ASC
   `);
-
-  const leagues = await getActiveRefereeAvailabilityLeagues();
 
   return {
     monthKey: input.monthKey,
@@ -382,6 +438,18 @@ export async function updateRefereeAvailability(input: {
 
 export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
   const referees = await getRefereesForAvailability();
+  const coverageEntries = await Promise.all(
+    referees.map(async (referee) => ({
+      refereeId: referee.id,
+      leagues: await getRefereeAvailabilityLeagues(referee.id),
+    })),
+  );
+  const allowedLeagueIdsByReferee = new Map(
+    coverageEntries.map((entry) => [
+      entry.refereeId,
+      new Set(entry.leagues.map((league) => league.id)),
+    ]),
+  );
   const refereeIds = referees.map((referee) => referee.id);
   const refereeFilter = refereeIds.length
     ? Prisma.sql`AND ra."refereeId" IN (${Prisma.join(refereeIds)})`
@@ -419,13 +487,17 @@ export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
     ORDER BY ra."availabilityDate" ASC, l.name ASC, u.name ASC NULLS LAST, u.email ASC NULLS LAST
   `);
 
+  const filteredRows = rows.filter((row) =>
+    allowedLeagueIdsByReferee.get(row.refereeId)?.has(row.leagueId),
+  );
+
   return {
     monthKey,
     monthLabel: bounds.monthLabel,
     startDate: bounds.startDate,
     endDate: bounds.endDate,
     referees,
-    rows: rows.map((row) => ({
+    rows: filteredRows.map((row) => ({
       ...toSlot(row),
       refereeId: row.refereeId,
       refereeName: row.refereeName,
@@ -524,9 +596,9 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: {
         body: [
           `Hi ${getFirstName(referee.name || referee.email)},`,
           "",
-          `Please mark your referee availability for ${bounds.monthLabel}.`,
+          `Please mark your referee availability for ${bounds.monthLabel}.",
           "",
-          "You will only see the dates where an active SIXFL league is due to run.",
+          "You will only see the league dates this referee has been set to cover.",
           "",
           "Open your availability page here:",
           "{{cta}}",
