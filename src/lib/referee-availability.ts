@@ -524,7 +524,7 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: {
         body: [
           `Hi ${getFirstName(referee.name || referee.email)},`,
           "",
-          `Please mark your referee availability for ${bounds.monthLabel}.",
+          `Please mark your referee availability for ${bounds.monthLabel}.`,
           "",
           "You will only see the dates where an active SIXFL league is due to run.",
           "",
