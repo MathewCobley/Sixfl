@@ -73,10 +73,7 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
-function getFixtureLabel(input: {
-  homeTeamName: string;
-  awayTeamName: string;
-}) {
+function getFixtureLabel(input: { homeTeamName: string; awayTeamName: string }) {
   return `${input.homeTeamName} vs ${input.awayTeamName}`;
 }
 
@@ -149,9 +146,7 @@ function getRoleLabel(role: TeamRole) {
 
 function getTeamInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-
   if (parts.length === 0) return "S";
-
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "S";
 }
 
@@ -178,9 +173,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         select: {
           id: true,
           role: true,
-          team: {
-            select: teamSelect,
-          },
+          team: { select: teamSelect },
         },
         take: 1,
       },
@@ -196,16 +189,11 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   const previewMembership = previewMembershipId
     ? await prisma.teamMember.findFirst({
-        where: {
-          id: previewMembershipId,
-          teamId: teamid,
-        },
+        where: { id: previewMembershipId, teamId: teamid },
         select: {
           id: true,
           role: true,
-          team: {
-            select: teamSelect,
-          },
+          team: { select: teamSelect },
         },
       })
     : null;
@@ -218,18 +206,17 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   const team =
     membership?.team ??
-    (await prisma.team.findUnique({
-      where: { id: teamid },
-      select: teamSelect,
-    }));
+    (await prisma.team.findUnique({ where: { id: teamid }, select: teamSelect }));
 
   if (!team) notFound();
 
   const now = new Date();
+  const publishedFixtureFilter = { publishedAt: { not: null } };
 
   const [upcomingFixtures, recentFixtures, squadMembers, playerFees] = await Promise.all([
     prisma.fixture.findMany({
       where: {
+        ...publishedFixtureFilter,
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
         kickoffAt: { gte: now },
         status: { in: [FixtureStatus.SCHEDULED, FixtureStatus.POSTPONED] },
@@ -249,6 +236,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     }),
     prisma.fixture.findMany({
       where: {
+        ...publishedFixtureFilter,
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
         kickoffAt: { lt: now },
       },
@@ -261,12 +249,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         homeTeamId: true,
         homeTeam: { select: { name: true } },
         awayTeam: { select: { name: true } },
-        result: {
-          select: {
-            homeScore: true,
-            awayScore: true,
-          },
-        },
+        result: { select: { homeScore: true, awayScore: true } },
       },
     }),
     prisma.teamMember.findMany({
@@ -275,11 +258,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       select: {
         id: true,
         role: true,
-        user: {
-          select: {
-            name: true,
-          },
-        },
+        user: { select: { name: true } },
       },
     }),
     membership
@@ -287,6 +266,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           where: {
             teamId: teamid,
             teamMemberId: membership.id,
+            fixture: publishedFixtureFilter,
             status: {
               in: [
                 PlayerMatchFeeStatus.OPEN,
@@ -319,26 +299,15 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       : Promise.resolve([]),
   ]);
 
-  const openFees = playerFees.filter(
-    (fee) => fee.status === PlayerMatchFeeStatus.OPEN,
-  );
-  const paidFees = playerFees.filter(
-    (fee) => fee.status === PlayerMatchFeeStatus.PAID,
-  );
-  const waivedFees = playerFees.filter(
-    (fee) => fee.status === PlayerMatchFeeStatus.WAIVED,
-  );
-  const outstandingPence = openFees.reduce(
-    (sum, fee) => sum + fee.amountPence,
-    0,
-  );
+  const openFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.OPEN);
+  const paidFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.PAID);
+  const waivedFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.WAIVED);
+  const outstandingPence = openFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const paidPence = paidFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const nextOpenFee = openFees
     .slice()
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
-  const feesByFixtureId = new Map(
-    playerFees.map((fee) => [fee.fixtureId, fee]),
-  );
+  const feesByFixtureId = new Map(playerFees.map((fee) => [fee.fixtureId, fee]));
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
@@ -348,11 +317,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
             <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
               <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-emerald-400/20 bg-black/30 shadow-[0_14px_40px_rgba(0,0,0,0.35)] sm:h-24 sm:w-24">
                 {team.logoUrl ? (
-                  <img
-                    src={team.logoUrl}
-                    alt={`${team.name} badge`}
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={team.logoUrl} alt={`${team.name} badge`} className="h-full w-full object-cover" />
                 ) : (
                   <span className="text-2xl font-black tracking-tight text-emerald-100 sm:text-3xl">
                     {getTeamInitials(team.name)}
@@ -374,8 +339,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                 <div className="mt-5 flex flex-wrap gap-2">
                   {team.league?.name ? (
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                      {team.league.name}
-                      {team.league.season ? ` · ${team.league.season}` : ""}
+                      {team.league.name}{team.league.season ? ` · ${team.league.season}` : ""}
                     </span>
                   ) : null}
                   {team.league?.dayOfWeek ? (
@@ -399,11 +363,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href={
-                  upcomingFixtures[0]
-                    ? `/player/team/${teamid}/availability?fixtureId=${upcomingFixtures[0].id}`
-                    : `/player/team/${teamid}/availability`
-                }
+                href={upcomingFixtures[0] ? `/player/team/${teamid}/availability?fixtureId=${upcomingFixtures[0].id}` : `/player/team/${teamid}/availability`}
                 className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
               >
                 Confirm availability
@@ -428,21 +388,13 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
         <section className="grid gap-4 md:grid-cols-3">
           <div className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">
-              Next action
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
-              Confirm your availability
-            </h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">Next action</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Confirm your availability</h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
               Let SIXFL know if you can play so the matchday squad can be planned properly.
             </p>
             <Link
-              href={
-                upcomingFixtures[0]
-                  ? `/player/team/${teamid}/availability?fixtureId=${upcomingFixtures[0].id}`
-                  : `/player/team/${teamid}/availability`
-              }
+              href={upcomingFixtures[0] ? `/player/team/${teamid}/availability?fixtureId=${upcomingFixtures[0].id}` : `/player/team/${teamid}/availability`}
               className="mt-4 inline-flex items-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
             >
               Open availability
@@ -450,9 +402,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           </div>
 
           <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-              Match fees
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Match fees</p>
             <h2 className="mt-2 text-xl font-semibold text-white">
               {outstandingPence > 0 ? `${formatMoney(outstandingPence)} due` : "All paid up"}
             </h2>
@@ -462,29 +412,17 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                 : "No match fees are waiting for you right now."}
             </p>
             {nextOpenFee?.paymentUrl ? (
-              <Link
-                href={nextOpenFee.paymentUrl}
-                target="_blank"
-                className="mt-4 inline-flex items-center rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300"
-              >
+              <Link href={nextOpenFee.paymentUrl} target="_blank" className="mt-4 inline-flex items-center rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300">
                 Pay now
               </Link>
-            ) : outstandingPence > 0 ? (
-              <span className="mt-4 inline-flex rounded-xl border border-amber-400/20 bg-black/20 px-4 py-2.5 text-sm font-medium text-amber-100/80">
-                Payment link pending
-              </span>
             ) : null}
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Upcoming fixtures
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
-              {upcomingFixtures.length} shown
-            </h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Upcoming fixtures</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">{upcomingFixtures.length} shown</h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
-              Each fixture now has its own availability button so you know exactly which match you are responding for.
+              Only published fixtures are shown here.
             </p>
           </div>
         </section>
@@ -492,9 +430,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         <section className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.06] p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-                Payments
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Payments</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Payments history</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-100/70">
                 See your open, paid and waived player match fees for this team.
@@ -536,30 +472,17 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                         </span>
                       </div>
                       <h3 className="mt-3 text-sm font-semibold text-white">
-                        {getFixtureLabel({
-                          homeTeamName: fee.fixture.homeTeam.name,
-                          awayTeamName: fee.fixture.awayTeam.name,
-                        })}
+                        {getFixtureLabel({ homeTeamName: fee.fixture.homeTeam.name, awayTeamName: fee.fixture.awayTeam.name })}
                       </h3>
-                      <p className="mt-1 text-xs text-white/45">
-                        Fixture: {formatFixtureDate(fee.fixture.kickoffAt)}
-                      </p>
-                      <p className="mt-1 text-xs text-white/45">
-                        Added: {formatPaymentDate(fee.createdAt)} · Paid: {formatPaymentDate(fee.paidAt)}
-                      </p>
+                      <p className="mt-1 text-xs text-white/45">Fixture: {formatFixtureDate(fee.fixture.kickoffAt)}</p>
+                      <p className="mt-1 text-xs text-white/45">Added: {formatPaymentDate(fee.createdAt)} · Paid: {formatPaymentDate(fee.paidAt)}</p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
-                        <Link
-                          href={fee.paymentUrl}
-                          target="_blank"
-                          className="inline-flex items-center rounded-xl bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
-                        >
-                          Pay this fee
-                        </Link>
-                      ) : null}
-                    </div>
+                    {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
+                      <Link href={fee.paymentUrl} target="_blank" className="inline-flex items-center rounded-xl bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300">
+                        Pay this fee
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
               ))
@@ -571,9 +494,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                  Fixtures
-                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Fixtures</p>
                 <h2 className="mt-2 text-xl font-semibold text-white">Upcoming fixtures</h2>
               </div>
               <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/60">
@@ -595,23 +516,13 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <div className="font-semibold text-white">
-                            {getFixtureLabel({
-                              homeTeamName: fixture.homeTeam.name,
-                              awayTeamName: fixture.awayTeam.name,
-                            })}
+                            {getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}
                           </div>
                           <div className="mt-1 text-sm text-white/60">
-                            Opponent: {getOpponentName({
-                              teamId: teamid,
-                              homeTeamId: fixture.homeTeamId,
-                              homeTeamName: fixture.homeTeam.name,
-                              awayTeamName: fixture.awayTeam.name,
-                            })}
+                            Opponent: {getOpponentName({ teamId: teamid, homeTeamId: fixture.homeTeamId, homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}
                           </div>
                           <div className="mt-2 text-sm text-white/55">
-                            {formatFixtureDate(fixture.kickoffAt)}
-                            {fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
-                            {fixture.pitch ? ` · ${fixture.pitch}` : ""}
+                            {formatFixtureDate(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}{fixture.pitch ? ` · ${fixture.pitch}` : ""}
                           </div>
                           {fee ? (
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -619,11 +530,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                                 Fee: {formatMoney(fee.amountPence)} · {getFeeStatusLabel(fee.status)}
                               </span>
                               {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
-                                <Link
-                                  href={fee.paymentUrl}
-                                  target="_blank"
-                                  className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-100 transition hover:bg-amber-500/15"
-                                >
+                                <Link href={fee.paymentUrl} target="_blank" className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-100 transition hover:bg-amber-500/15">
                                   Pay fee
                                 </Link>
                               ) : null}
@@ -634,10 +541,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusClasses(fixture.status)}`}>
                             {fixture.status}
                           </span>
-                          <Link
-                            href={`/player/team/${teamid}/availability?fixtureId=${fixture.id}`}
-                            className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                          >
+                          <Link href={`/player/team/${teamid}/availability?fixtureId=${fixture.id}`} className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
                             Confirm availability
                           </Link>
                         </div>
@@ -651,25 +555,17 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
           <div className="space-y-6">
             <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Squad
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Squad</p>
               <h2 className="mt-2 text-xl font-semibold text-white">Linked squad members</h2>
               <div className="mt-5 space-y-2">
                 {squadMembers.length === 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
-                    No linked squad members yet.
-                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">No linked squad members yet.</div>
                 ) : (
                   squadMembers.map((member) => (
                     <div key={member.id} className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white">
-                          {member.user.name || "Squad member"}
-                        </div>
-                        <div className="mt-1 text-xs text-white/45">
-                          Contact details are managed privately by SIXFL.
-                        </div>
+                        <div className="truncate text-sm font-semibold text-white">{member.user.name || "Squad member"}</div>
+                        <div className="mt-1 text-xs text-white/45">Contact details are managed privately by SIXFL.</div>
                       </div>
                       <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/70">
                         {getRoleLabel(member.role)}
@@ -681,31 +577,20 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
             </section>
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Recent
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Recent</p>
               <h2 className="mt-2 text-xl font-semibold text-white">Recent results</h2>
               <div className="mt-5 space-y-2">
                 {recentFixtures.length === 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
-                    No recent fixtures found.
-                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">No recent fixtures found.</div>
                 ) : (
                   recentFixtures.map((fixture) => (
                     <div key={fixture.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                       <div className="text-sm font-semibold text-white">
-                        {getFixtureLabel({
-                          homeTeamName: fixture.homeTeam.name,
-                          awayTeamName: fixture.awayTeam.name,
-                        })}
+                        {getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}
                       </div>
-                      <div className="mt-1 text-xs text-white/50">
-                        {formatFixtureDate(fixture.kickoffAt)}
-                      </div>
+                      <div className="mt-1 text-xs text-white/50">{formatFixtureDate(fixture.kickoffAt)}</div>
                       <div className="mt-2 text-sm text-white/70">
-                        {fixture.result
-                          ? `${fixture.result.homeScore} - ${fixture.result.awayScore}`
-                          : fixture.status}
+                        {fixture.result ? `${fixture.result.homeScore} - ${fixture.result.awayScore}` : fixture.status}
                       </div>
                     </div>
                   ))
