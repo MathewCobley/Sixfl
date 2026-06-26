@@ -12,6 +12,7 @@ import {
   getRefereeNightSummaries,
   type RefereeNightStatus,
 } from "@/lib/referee-nights";
+import { getRefereeProfilesByUserIds } from "@/lib/referees/profile";
 import { createRefereeNightAction } from "./actions";
 
 function statusClasses(status: RefereeNightStatus) {
@@ -59,6 +60,8 @@ export default async function AdminRefereeNightsPage() {
       select: { id: true, name: true },
     }),
   ]);
+
+  const refereeProfileMap = await getRefereeProfilesByUserIds(referees.map((referee) => referee.id));
 
   const submittedCount = nights.filter((night) => night.status === "SUBMITTED").length;
   const unsettledCount = nights.filter(
@@ -110,7 +113,7 @@ export default async function AdminRefereeNightsPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">Create night</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Set up a referee night</h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
-              Choose the league, date and venue. Matching fixtures will be attached automatically.
+              Choose the league, date and venue. Matching fixtures will be attached automatically. Leave the fee blank to use the referee's saved standard night fee.
             </p>
           </div>
 
@@ -119,11 +122,17 @@ export default async function AdminRefereeNightsPage() {
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Referee</label>
               <select name="refereeId" required className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none">
                 <option value="">Choose referee</option>
-                {referees.map((referee) => (
-                  <option key={referee.id} value={referee.id}>
-                    {referee.name || referee.email || "Unnamed referee"}{referee.role === "ADMIN" ? " · admin" : ""}
-                  </option>
-                ))}
+                {referees.map((referee) => {
+                  const profile = refereeProfileMap.get(referee.id);
+                  const feeLabel = profile?.standardNightFeePence ? ` · standard ${formatMoney(profile.standardNightFeePence)}` : "";
+                  const activeLabel = profile?.isActive === false ? " · inactive" : "";
+
+                  return (
+                    <option key={referee.id} value={referee.id}>
+                      {referee.name || referee.email || "Unnamed referee"}{referee.role === "ADMIN" ? " · admin" : ""}{feeLabel}{activeLabel}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -156,7 +165,7 @@ export default async function AdminRefereeNightsPage() {
               </div>
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Night fee (£)</label>
-                <input type="number" name="feePounds" step="0.01" min="0" placeholder="45.00" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none" />
+                <input type="number" name="feePounds" step="0.01" min="0" placeholder="Blank = saved standard fee" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none" />
               </div>
             </div>
 
