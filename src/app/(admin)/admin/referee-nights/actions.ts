@@ -18,6 +18,7 @@ import {
 } from "@/lib/referee-nights";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getRefereeProfileByUserId } from "@/lib/referees/profile";
 
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -31,6 +32,17 @@ function readRequired(formData: FormData, key: string, label: string) {
 
 function normaliseOptional(value: string) {
   return value.trim() || null;
+}
+
+async function getNightFeePence(formData: FormData, refereeId: string) {
+  const enteredFee = parseMoneyToPence(formData.get("feePounds"));
+
+  if (enteredFee !== null) {
+    return enteredFee;
+  }
+
+  const profile = await getRefereeProfileByUserId(refereeId);
+  return profile?.standardNightFeePence ?? 0;
 }
 
 async function attachMatchingFixtures(input: {
@@ -82,7 +94,7 @@ export async function createRefereeNightAction(formData: FormData) {
   const leagueId = readRequired(formData, "leagueId", "League");
   const venueId = normaliseOptional(readString(formData, "venueId"));
   const nightDate = readRequired(formData, "nightDate", "Night date");
-  const feePence = parseMoneyToPence(formData.get("feePounds")) ?? 0;
+  const feePence = await getNightFeePence(formData, refereeId);
   const adminNotes = normaliseOptional(readString(formData, "adminNotes"));
   const id = createRefereeNightId();
 
