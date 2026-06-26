@@ -72,7 +72,7 @@ const navigation = [
     description: "Schedule and results",
   },
   {
-    name: "Fixture Generator",
+    name: "Bulk Fixture Generator",
     href: "/admin/fixtures/generate",
     icon: CalendarDaysIcon,
     description: "Draft fixtures by pitch",
