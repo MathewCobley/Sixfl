@@ -246,14 +246,14 @@ export default function AdminSidebar({
           </div>
         </div>
 
-        <nav className="max-h-[calc(100dvh-18rem)] space-y-4 overflow-y-auto p-3 sixfl-mobile-scroll xl:max-h-none xl:space-y-2 xl:overflow-visible xl:p-2 2xl:space-y-3 2xl:p-3">
+        <nav className="max-h-[calc(100dvh-18rem)] space-y-3 overflow-y-auto p-3 sixfl-mobile-scroll xl:max-h-none xl:space-y-2 xl:overflow-visible xl:p-2 2xl:space-y-2.5 2xl:p-3">
           {navigationGroups.map((group) => (
             <section key={group.title} className="space-y-1.5">
               <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/28 2xl:text-[11px]">
                 {group.title}
               </div>
 
-              <div className="grid gap-2 xl:gap-1.5 2xl:gap-2">
+              <div className="grid grid-cols-2 gap-2 xl:gap-1.5 2xl:gap-2">
                 {group.items.map((item) => {
                   const active = activeHref === item.href;
                   const Icon = item.icon;
