@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
+import RefereeCashMethodSelect from "@/components/referee/RefereeCashMethodSelect";
 import { requireReferee } from "@/lib/admin";
 import {
   formatKickoffTime,
@@ -69,12 +70,7 @@ function CashForm({
           placeholder="Collected £"
           className="h-11 rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none placeholder:text-white/35"
         />
-        <select name="method" defaultValue="CASH" className="h-11 rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none">
-          <option value="CASH">Cash</option>
-          <option value="CARD">Card</option>
-          <option value="BANK_TRANSFER">Bank transfer</option>
-          <option value="OTHER">Other</option>
-        </select>
+        <RefereeCashMethodSelect name="method" defaultValue="CASH" />
       </div>
       <input
         name="notes"
