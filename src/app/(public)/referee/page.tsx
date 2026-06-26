@@ -35,7 +35,7 @@ function formatStatus(status: RefereeNightStatus) {
 }
 
 export default async function RefereePage() {
-  const { user } = await requireReferee();
+  const { user, isAdminPreview } = await requireReferee();
 
   const nights = await getRefereeNightSummaries(
     user.role === UserRole.ADMIN ? undefined : { refereeId: user.id },
@@ -51,6 +51,33 @@ export default async function RefereePage() {
   return (
     <div className="min-h-screen bg-black px-4 py-6 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-8">
+        {isAdminPreview ? (
+          <section className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-5 text-sm text-amber-100">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="font-semibold text-white">Referee preview mode</div>
+                <p className="mt-1 text-amber-50/80">
+                  You are seeing the live referee dashboard as {user.name || user.email || "this referee"}.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/admin/referees/${user.id}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${user.id}`)}`}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-semibold text-white transition hover:bg-black/30"
+                >
+                  Switch back to admin view
+                </Link>
+                <Link
+                  href={`/admin/referees/${user.id}`}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-semibold text-white transition hover:bg-black/30"
+                >
+                  Open profile
+                </Link>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
