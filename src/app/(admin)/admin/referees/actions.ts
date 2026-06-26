@@ -12,19 +12,26 @@ import {
   NotificationChannel,
   NotificationDispatchStatus,
   NotificationRecipientSourceType,
+  NotificationTemplateKind,
   UserRole,
 } from "@prisma/client";
 
 import { recordOutboundSms } from "@/lib/messaging/service";
 import { normalizePhoneNumber } from "@/lib/notifications/phone";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import {
+  queueDirectNotification,
+  queueNotificationFromTemplate,
+} from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   parseMoneyToPence,
   upsertRefereeProfile,
 } from "@/lib/referees/profile";
+import { getPublicSiteUrl } from "@/lib/stripe/client";
+
+const REFEREE_INVITE_TEMPLATE_KEY = "referee-invite-email";
 
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -56,6 +63,69 @@ function isValidEmail(value: string) {
 
 function readStandardNightFeePence(formData: FormData) {
   return parseMoneyToPence(readString(formData, "standardNightFee"));
+}
+
+function getFirstName(name?: string | null, email?: string | null) {
+  const source = name?.trim() || email?.split("@")[0] || "there";
+  return source.trim().split(/\s+/)[0] || "there";
+}
+
+function buildRefereeLoginUrl(email: string) {
+  const url = new URL("/login", `${getPublicSiteUrl()}/`);
+  url.searchParams.set("email", email);
+  url.searchParams.set("callbackUrl", "/referee");
+  return url.toString();
+}
+
+async function ensureRefereeInviteEmailTemplate() {
+  await prisma.notificationTemplate.upsert({
+    where: { key: REFEREE_INVITE_TEMPLATE_KEY },
+    update: {
+      name: "Referee invite email",
+      description: "Invite email for a referee to access their SIXFL referee dashboard using the normal magic-link login flow.",
+      kind: NotificationTemplateKind.TRANSACTIONAL,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.REFEREE,
+      subject: "You’ve been added as a SIXFL referee",
+      body: [
+        "Hi {{firstName}},",
+        "",
+        "You’ve been added as a SIXFL referee.",
+        "",
+        "Use the button below to open the normal SIXFL login page with this email address. The login page will send you a secure magic link, and you’ll be taken to your referee dashboard after signing in.",
+        "",
+        "No separate claim code is needed for referee access.",
+        "",
+        "{{cta}}",
+      ].join("\n"),
+      ctaLabel: "Open referee login",
+      ctaUrlKey: "refereeLoginUrl",
+      isActive: true,
+    },
+    create: {
+      key: REFEREE_INVITE_TEMPLATE_KEY,
+      name: "Referee invite email",
+      description: "Invite email for a referee to access their SIXFL referee dashboard using the normal magic-link login flow.",
+      kind: NotificationTemplateKind.TRANSACTIONAL,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.REFEREE,
+      subject: "You’ve been added as a SIXFL referee",
+      body: [
+        "Hi {{firstName}},",
+        "",
+        "You’ve been added as a SIXFL referee.",
+        "",
+        "Use the button below to open the normal SIXFL login page with this email address. The login page will send you a secure magic link, and you’ll be taken to your referee dashboard after signing in.",
+        "",
+        "No separate claim code is needed for referee access.",
+        "",
+        "{{cta}}",
+      ].join("\n"),
+      ctaLabel: "Open referee login",
+      ctaUrlKey: "refereeLoginUrl",
+      isActive: true,
+    },
+  });
 }
 
 async function syncRefereeRecipient(input: {
@@ -444,4 +514,90 @@ export async function sendRefereeSmsAction(formData: FormData) {
   revalidatePath("/admin/messaging");
 
   redirect(getRefereeProfilePath(referee.id, { sms: "queued" }, "sms"));
+}
+
+export async function sendRefereeInviteAction(formData: FormData) {
+  const { user: adminUser } = await requireAdmin();
+  const refereeId = readString(formData, "refereeId");
+
+  if (!refereeId) {
+    redirect(getRefereesPath("error=missing_referee"));
+  }
+
+  const referee = await prisma.user.findUnique({
+    where: { id: refereeId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdFromLeadId: true,
+    },
+  });
+
+  if (!referee || referee.role !== UserRole.REFEREE) {
+    redirect(getRefereesPath("error=missing_referee"));
+  }
+
+  const email = referee.email?.trim().toLowerCase();
+
+  if (!email) {
+    redirect(getRefereesPath(`error=missing_referee_email&userId=${referee.id}`));
+  }
+
+  await ensureRefereeInviteEmailTemplate();
+
+  const [profile, sourceLead] = await Promise.all([
+    prisma.$queryRaw<Array<{ phone: string | null; standardNightFeePence: number }>>`
+      SELECT "phone", "standardNightFeePence"
+      FROM "RefereeProfile"
+      WHERE "userId" = ${referee.id}
+      LIMIT 1
+    `.catch(() => []),
+    referee.createdFromLeadId
+      ? prisma.interestLead.findUnique({
+          where: { id: referee.createdFromLeadId },
+          select: { phone: true },
+        })
+      : null,
+  ]);
+
+  const phone = profile[0]?.phone || sourceLead?.phone || null;
+  const recipient = await syncRefereeRecipient({
+    userId: referee.id,
+    name: referee.name,
+    email,
+    phone,
+    createdFromLeadId: referee.createdFromLeadId,
+    standardNightFeePence: profile[0]?.standardNightFeePence ?? 0,
+  });
+
+  const dispatch = await queueNotificationFromTemplate({
+    templateKey: REFEREE_INVITE_TEMPLATE_KEY,
+    recipientId: recipient.id,
+    variables: {
+      firstName: getFirstName(referee.name, email),
+      fullName: referee.name || email,
+      refereeEmail: email,
+      refereeLoginUrl: buildRefereeLoginUrl(email),
+    },
+    sourceType: "REFEREE_INVITE",
+    sourceId: referee.id,
+    metadata: {
+      origin: "referee_admin_invite",
+      refereeUserId: referee.id,
+      loginDestination: "/referee",
+    },
+    createdByUserId: adminUser?.id ?? null,
+  });
+
+  if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
+    redirect(getRefereesPath(`error=invite_not_queued&userId=${referee.id}`));
+  }
+
+  revalidatePath("/admin/referees");
+  revalidatePath(`/admin/referees/${referee.id}`);
+  revalidatePath("/admin/queue");
+
+  redirect(getRefereesPath(`invite=queued&userId=${referee.id}`));
 }
