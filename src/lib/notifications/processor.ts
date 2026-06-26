@@ -148,6 +148,14 @@ async function getQueuedMatchFeeCancellationReason(input: {
       id: input.sourceId,
     },
     include: {
+      fixture: {
+        select: {
+          id: true,
+          publishedAt: true,
+          status: true,
+          kickoffAt: true,
+        },
+      },
       transactions: {
         select: {
           amountPence: true,
@@ -158,6 +166,18 @@ async function getQueuedMatchFeeCancellationReason(input: {
 
   if (!charge) {
     return "Match fee charge no longer exists.";
+  }
+
+  if (!charge.fixture) {
+    return "Match fee charge is not linked to a fixture.";
+  }
+
+  if (!charge.fixture.publishedAt) {
+    return "Fixture is not published. SIXFL does not send payment messages for unpublished fixtures.";
+  }
+
+  if (charge.fixture.status !== "SCHEDULED" || charge.fixture.kickoffAt <= new Date()) {
+    return "Fixture is no longer scheduled before queued payment message was sent.";
   }
 
   if (charge.status === "VOID") {
