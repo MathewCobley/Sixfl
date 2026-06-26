@@ -214,6 +214,21 @@ function getFirstName(value: string | null | undefined) {
   return value?.trim().split(/\s+/)[0] || "there";
 }
 
+function dedupeAvailabilityLeagues(leagues: RefereeAvailabilityLeague[]) {
+  const byId = new Map<string, RefereeAvailabilityLeague>();
+
+  for (const league of leagues) {
+    if (!byId.has(league.id)) {
+      byId.set(league.id, league);
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    const dayCompare = a.dayOfWeek.localeCompare(b.dayOfWeek);
+    return dayCompare === 0 ? a.name.localeCompare(b.name) : dayCompare;
+  });
+}
+
 async function queryAvailabilityLeagues(sql: Prisma.Sql) {
   return prisma.$queryRaw<RefereeAvailabilityLeague[]>(sql);
 }
@@ -240,7 +255,7 @@ async function getManualRefereeCoverageLeagues(refereeId: string) {
   `).catch(() => []);
 }
 
-async function getAssignedRefereeCoverageLeagues(refereeId: string) {
+async function getFixtureRefereeCoverageLeagues(refereeId: string) {
   return queryAvailabilityLeagues(Prisma.sql`
     SELECT DISTINCT l.id, l.name, l.season, l."dayOfWeek", l."venueName", COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
     FROM "Fixture" f
@@ -250,13 +265,36 @@ async function getAssignedRefereeCoverageLeagues(refereeId: string) {
       AND l."dayOfWeek" IS NOT NULL
       AND l."dayOfWeek" <> 'ANY'
     ORDER BY l."dayOfWeek" ASC, l.name ASC
-  `);
+  `).catch(() => []);
+}
+
+async function getRefereeNightCoverageLeagues(refereeId: string) {
+  return queryAvailabilityLeagues(Prisma.sql`
+    SELECT DISTINCT l.id, l.name, l.season, l."dayOfWeek", l."venueName", COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    FROM "RefereeNight" rn
+    JOIN "League" l ON l.id = rn."leagueId"
+    WHERE rn."refereeId" = ${refereeId}
+      AND rn."status" <> 'CANCELLED'
+      AND l."isActive" = TRUE
+      AND l."dayOfWeek" IS NOT NULL
+      AND l."dayOfWeek" <> 'ANY'
+    ORDER BY l."dayOfWeek" ASC, l.name ASC
+  `).catch(() => []);
 }
 
 export async function getRefereeAvailabilityLeagues(refereeId: string) {
   const manualCoverage = await getManualRefereeCoverageLeagues(refereeId);
-  if (manualCoverage.length > 0) return manualCoverage;
-  return getAssignedRefereeCoverageLeagues(refereeId);
+
+  if (manualCoverage.length > 0) {
+    return manualCoverage;
+  }
+
+  const [fixtureCoverage, refereeNightCoverage] = await Promise.all([
+    getFixtureRefereeCoverageLeagues(refereeId),
+    getRefereeNightCoverageLeagues(refereeId),
+  ]);
+
+  return dedupeAvailabilityLeagues([...fixtureCoverage, ...refereeNightCoverage]);
 }
 
 export function getLeagueDatesInMonth(input: { monthKey: string; dayOfWeek: PreferredNight }) {
