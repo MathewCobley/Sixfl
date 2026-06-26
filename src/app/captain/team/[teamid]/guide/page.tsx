@@ -28,16 +28,22 @@ const guideSections = [
       "Add your squad and make sure player names are clear.",
       "Add player email addresses if you want to use squad payment links.",
       "Check your first fixture, venue and kick-off time.",
-      "Read the matchday rules and captain responsibilities below.",
+      "Read the match rules and captain responsibilities below.",
     ],
   },
   {
     title: "Matchday rules",
     items: [
-      "Arrive in good time and be ready for the published kick-off slot.",
+      "Standard SIXFL matches are 6-a-side: five outfield players plus a goalkeeper, unless SIXFL has confirmed a venue-specific format.",
+      "Kick-ins replace throw-ins. The ball should be stationary on or just behind the touchline and opponents should give space.",
+      "A goal cannot be scored directly from a kick-in unless another player touches the ball first.",
+      "Rolling substitutions are allowed where the venue setup permits it. The player coming off should leave before the replacement joins play.",
+      "Goalkeepers may handle the ball inside their own area only. Normal pass-back rules apply where the goalkeeper receives a deliberate pass from a team-mate.",
+      "No slide tackles. Players should stay on their feet when challenging for the ball.",
+      "Free kicks, corners, goal kicks and penalties are controlled by the referee. The referee will set the position, distance and whether play is direct or indirect.",
       "Players should follow venue rules and wear suitable footwear and shin pads where required.",
       "Captains are expected to manage their team's behaviour before, during and after the match.",
-      "Referee decisions must be respected on the night. Concerns can be raised afterwards through the proper channel.",
+      "Referee decisions are final on the night. Concerns can be raised afterwards through the captain area.",
       "Scores and result details should be checked promptly after the game.",
     ],
   },
@@ -193,7 +199,7 @@ export default async function CaptainGuidePage({
             Matchday rules and captain terms
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68 sm:text-base">
-            A short reference for {team.name}. This keeps matchday rules, payment responsibilities, captain terms and key SIXFL processes in one place.
+            A short reference for {team.name}. This keeps match rules, payment responsibilities, captain terms and key SIXFL processes in one place.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
