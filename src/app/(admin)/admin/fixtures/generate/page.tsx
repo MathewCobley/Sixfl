@@ -8,7 +8,10 @@ import { FixtureStatus } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { generateDraftFixturesWithPitchRefereesAction } from "./actions";
+import {
+  backfillFixtureMatchFeeChargesAction,
+  generateDraftFixturesWithPitchRefereesAction,
+} from "./actions";
 
 function leagueLabel(league: { name: string; season: string | null }) {
   return league.season ? `${league.name} • ${league.season}` : league.name;
@@ -25,8 +28,18 @@ export const revalidate = 0;
 const inputClass = "h-14 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20";
 const labelClass = "mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45";
 
-export default async function ImprovedFixtureGeneratorPage() {
+type SearchParams = {
+  backfilled?: string;
+  paymentRequests?: string;
+};
+
+export default async function ImprovedFixtureGeneratorPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
   await requireAdmin();
+  const sp = (await searchParams) ?? {};
 
   const [leagues, venues, referees] = await Promise.all([
     prisma.league.findMany({
@@ -44,6 +57,10 @@ export default async function ImprovedFixtureGeneratorPage() {
     }),
   ]);
 
+  const backfilledCount = Number(sp.backfilled ?? "");
+  const paymentRequestCount = Number(sp.paymentRequests ?? "");
+  const hasBackfillNotice = Number.isFinite(backfilledCount) && sp.backfilled !== undefined;
+
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
       <div>
@@ -57,6 +74,57 @@ export default async function ImprovedFixtureGeneratorPage() {
           Generate a full draft schedule with pitch-specific referees. Enter the session start, last kick-off time, number of pitches and slot length; the generator fills every pitch in each available time slot.
         </p>
       </div>
+
+      {hasBackfillNotice ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          Backfilled payment charges for {backfilledCount} fixture{backfilledCount === 1 ? "" : "s"}. Queued {Number.isFinite(paymentRequestCount) ? paymentRequestCount : 0} payment message{paymentRequestCount === 1 ? "" : "s"}.
+        </div>
+      ) : null}
+
+      <AdminCard className="rounded-3xl border border-amber-400/25 bg-amber-500/[0.06] p-6 md:p-8">
+        <form action={backfillFixtureMatchFeeChargesAction} className="space-y-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/80">Existing fixtures</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Backfill missing match fee charges</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
+              Use this for fixtures already created without fees. It only adds payment charges to upcoming scheduled fixtures that do not already have active charges. It does not amend fixtures or send amended fixture emails.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+            <div>
+              <label className={labelClass}>League</label>
+              <select name="leagueId" required className={inputClass}>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Team fee</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-white/45">£</span>
+                <input type="number" name="matchFeePounds" min="0.01" step="0.01" defaultValue="40.00" className={`${inputClass} pl-8`} />
+              </div>
+            </div>
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-black/25 p-4">
+            <input type="checkbox" name="sendPaymentRequests" defaultChecked className="mt-1" />
+            <span>
+              <span className="block text-sm font-semibold text-white">Queue normal payment request emails/SMS</span>
+              <span className="mt-1 block text-sm leading-6 text-white/55">
+                This queues the standard match-fee payment messages and future reminders. It does not send fixture amendment emails.
+              </span>
+            </span>
+          </label>
+
+          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/15 px-6 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20">
+            Backfill missing charges
+          </button>
+        </form>
+      </AdminCard>
 
       <AdminCard className="rounded-3xl border border-emerald-400/15 bg-white/[0.03] p-6 md:p-8">
         <form action={generateDraftFixturesWithPitchRefereesAction} className="space-y-8">
