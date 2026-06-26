@@ -23,6 +23,8 @@ type SmsTemplate = {
   description: string | null;
 };
 
+type ProspectTemplate = EmailTemplate | SmsTemplate;
+
 type HiddenField = {
   name: string;
   value: string;
@@ -42,6 +44,10 @@ type Props = {
   variant?: "primary" | "secondary";
   applyPersonalization?: boolean;
 };
+
+function isEmailTemplate(template: ProspectTemplate): template is EmailTemplate {
+  return "subject" in template && typeof template.subject === "string";
+}
 
 function getPanelClasses(variant: "primary" | "secondary") {
   return variant === "secondary"
@@ -78,7 +84,7 @@ export default function ProspectTemplateMessageForm({
   variant = "primary",
   applyPersonalization = true,
 }: Props) {
-  const templates = useMemo(
+  const templates = useMemo<ProspectTemplate[]>(
     () => (channel === "EMAIL" ? emailTemplates : smsTemplates),
     [channel, emailTemplates, smsTemplates],
   );
@@ -95,7 +101,7 @@ export default function ProspectTemplateMessageForm({
 
     setSelectedTemplateId(template.id);
 
-    if (channel === "EMAIL" && "subject" in template) {
+    if (channel === "EMAIL" && isEmailTemplate(template)) {
       setSubject(template.subject);
     }
 
