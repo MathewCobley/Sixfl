@@ -42,6 +42,19 @@ function statusClasses(status: RefereeAvailabilityStatus) {
   }
 }
 
+function peerCheckedClasses(status: RefereeAvailabilityStatus) {
+  switch (status) {
+    case "AVAILABLE":
+      return "peer-checked:border-emerald-400/35 peer-checked:bg-emerald-500/15 peer-checked:text-emerald-100";
+    case "MAYBE":
+      return "peer-checked:border-amber-400/35 peer-checked:bg-amber-500/15 peer-checked:text-amber-100";
+    case "UNAVAILABLE":
+      return "peer-checked:border-red-400/35 peer-checked:bg-red-500/15 peer-checked:text-red-100";
+    default:
+      return "peer-checked:border-white/20 peer-checked:bg-white/[0.08] peer-checked:text-white";
+  }
+}
+
 function getLeagueLabel(slot: RefereeAvailabilitySlot) {
   return `${slot.leagueName}${slot.leagueSeason ? ` · ${slot.leagueSeason}` : ""}`;
 }
@@ -191,20 +204,19 @@ export default async function RefereeAvailabilityPage({ searchParams }: PageProp
 
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
                           {STATUS_OPTIONS.map((option) => (
-                            <label
-                              key={option.value}
-                              className={`flex cursor-pointer items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                                slot.status === option.value ? statusClasses(option.value) : "border-white/10 bg-black/20 text-white/55 hover:bg-white/[0.05]"
-                              }`}
-                            >
+                            <label key={option.value} className="cursor-pointer">
                               <input
                                 type="radio"
                                 name={`status_${rowIndex}`}
                                 value={option.value}
                                 defaultChecked={slot.status === option.value}
-                                className="sr-only"
+                                className="peer sr-only"
                               />
-                              {option.label}
+                              <span
+                                className={`flex items-center justify-center rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/55 transition hover:bg-white/[0.05] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-emerald-300 ${peerCheckedClasses(option.value)}`}
+                              >
+                                {option.label}
+                              </span>
                             </label>
                           ))}
                         </div>
