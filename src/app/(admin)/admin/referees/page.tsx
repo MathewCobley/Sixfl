@@ -6,8 +6,14 @@ import Link from "next/link";
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { createRefereeAction } from "./actions";
 
-type SearchParams = Promise<{ q?: string }>;
+type SearchParams = Promise<{
+  q?: string;
+  referee?: string;
+  error?: string;
+  userId?: string;
+}>;
 
 function formatDate(value: Date | null | undefined) {
   if (!value) return "—";
@@ -53,6 +59,19 @@ function ContactButton({ href, label }: { href: string | null; label: string }) 
   );
 }
 
+function getErrorMessage(error?: string) {
+  switch (error) {
+    case "missing_referee_details":
+      return "Please enter at least a name and email address for the referee.";
+    case "invalid_referee_email":
+      return "Please enter a valid referee email address.";
+    case "admin_user_already_assignable":
+      return "That email belongs to an admin user. Admin users can already be assigned to referee nights.";
+    default:
+      return null;
+  }
+}
+
 export default async function AdminRefereesPage({
   searchParams,
 }: {
@@ -62,6 +81,12 @@ export default async function AdminRefereesPage({
 
   const sp = (await searchParams) ?? {};
   const query = String(sp.q ?? "").trim();
+  const errorMessage = getErrorMessage(sp.error);
+  const successMessage = sp.referee
+    ? sp.referee === "updated"
+      ? "Referee updated and added to the live referee list."
+      : "Referee added to the live referee list."
+    : null;
 
   const referees = await prisma.user.findMany({
     where: {
@@ -158,6 +183,52 @@ export default async function AdminRefereesPage({
         </div>
       </div>
 
+      {successMessage ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+          {successMessage}
+        </div>
+      ) : null}
+
+      {errorMessage ? (
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          {errorMessage}
+        </div>
+      ) : null}
+
+      <details className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-400/10 shadow-[0_20px_70px_rgba(0,0,0,0.3)]">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/10 sm:px-6">
+          + Add referee
+        </summary>
+        <form action={createRefereeAction} className="grid gap-4 border-t border-emerald-400/15 bg-black/20 px-5 py-5 sm:grid-cols-2 sm:px-6 xl:grid-cols-[1fr_1fr_0.8fr_0.8fr_auto]">
+          <input
+            name="name"
+            required
+            placeholder="Referee name"
+            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
+          />
+          <input
+            name="email"
+            type="email"
+            required
+            placeholder="Email address"
+            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
+          />
+          <input
+            name="phone"
+            placeholder="Phone"
+            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
+          />
+          <input
+            name="area"
+            placeholder="Area"
+            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
+          />
+          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300">
+            Add referee
+          </button>
+        </form>
+      </details>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => (
           <div key={card.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -182,11 +253,7 @@ export default async function AdminRefereesPage({
         {referees.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 p-8 text-center">
             <h2 className="text-lg font-bold text-white">No referees found</h2>
-            <p className="mt-2 text-sm leading-6 text-white/60">Convert a referee lead first, or adjust your search.</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-3">
-              <Link href="/admin/leads?type=REFEREE" className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Open referee leads</Link>
-              <Link href="/admin/fixtures" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Open fixtures</Link>
-            </div>
+            <p className="mt-2 text-sm leading-6 text-white/60">Convert a referee lead first, or add a referee above.</p>
           </div>
         ) : (
           referees.map((referee) => {
@@ -243,7 +310,7 @@ export default async function AdminRefereesPage({
                         <div className="mt-4"><Link href="/admin/fixtures" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Manage fixtures</Link></div>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-4"><div className="text-sm font-semibold text-white">No fixtures assigned yet</div><p className="mt-2 text-sm leading-6 text-white/60">This referee is live in the system but has not yet been attached to any fixtures.</p></div>
+                      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-4"><div className="text-sm font-semibold text-white">No fixtures assigned yet</div><p className="mt-2 text-sm leading-6 text-white/60">This referee is live in the system but has not yet been attached to any fixture.</p></div>
                     )}
                   </div>
                 </div>
