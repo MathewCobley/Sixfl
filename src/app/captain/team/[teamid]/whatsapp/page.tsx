@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -405,6 +406,7 @@ export default async function CaptainWhatsAppPage({
 
   const fixtures = await prisma.fixture.findMany({
     where: {
+      ...publishedFixtureWhere,
       OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
       kickoffAt: { gte: new Date() },
       status: "SCHEDULED",
