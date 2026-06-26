@@ -1,13 +1,8 @@
-
 // ========================================
 // File: src/app/(admin)/admin/leagues/actions.ts
 // ========================================
 
 "use server";
-
-// ========================================
-// Imports
-// ========================================
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -16,16 +11,13 @@ import {
   NotificationAudience,
   NotificationChannel,
   PreferredNight,
+  Prisma,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { getEmailReplyDomain } from "@/lib/resend/client";
-
-// ========================================
-// Types
-// ========================================
 
 export type LeagueFormState = {
   success?: boolean;
@@ -52,10 +44,6 @@ type ParsedLeagueInput = {
   ctaText: string | null;
 };
 
-// ========================================
-// Constants
-// ========================================
-
 const DAY_OPTIONS = new Set<PreferredNight>([
   "MONDAY",
   "TUESDAY",
@@ -72,10 +60,6 @@ const LEAGUE_TYPE_OPTIONS = new Set<LeagueType>([
   "WOMENS",
   "YOUTH",
 ]);
-
-// ========================================
-// Helpers
-// ========================================
 
 function normaliseText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -100,6 +84,33 @@ function isValidImagePath(value: string) {
   return /^https?:\/\//i.test(value) || value.startsWith("/");
 }
 
+function parseRequiredRefereesPerNight(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return 1;
+
+  const parsed = Number(raw);
+
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 20) {
+    return null;
+  }
+
+  return parsed;
+}
+
+async function setLeagueRequiredRefereesPerNight(input: {
+  leagueId: string;
+  requiredRefereesPerNight: number;
+}) {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "League"
+    SET
+      "requiredRefereesPerNight" = ${input.requiredRefereesPerNight},
+      "updatedAt" = NOW()
+    WHERE id = ${input.leagueId}
+  `);
+}
+
 function redirectIfEmailRepliesNotConfigured(path: string) {
   try {
     getEmailReplyDomain();
@@ -110,6 +121,7 @@ function redirectIfEmailRepliesNotConfigured(path: string) {
 
 function parseLeagueInput(formData: FormData): {
   data: ParsedLeagueInput;
+  requiredRefereesPerNight: number;
   errors: Record<string, string[]>;
 } {
   const errors: Record<string, string[]> = {};
@@ -130,6 +142,9 @@ function parseLeagueInput(formData: FormData): {
   const ctaText = normaliseText(formData.get("ctaText"));
 
   const isActive = parseBoolean(formData.get("isActive"));
+  const requiredRefereesPerNight = parseRequiredRefereesPerNight(
+    formData.get("requiredRefereesPerNight"),
+  );
 
   const rawDayOfWeek = String(formData.get("dayOfWeek") ?? "").trim();
   const rawLeagueType = String(formData.get("leagueType") ?? "").trim();
@@ -168,6 +183,12 @@ function parseLeagueInput(formData: FormData): {
     errors.leagueType = ["Please choose a valid league type."];
   }
 
+  if (requiredRefereesPerNight === null) {
+    errors.requiredRefereesPerNight = [
+      "Referees needed per night must be a whole number between 0 and 20.",
+    ];
+  }
+
   if (heroImageUrl && !isValidImagePath(heroImageUrl)) {
     errors.heroImageUrl = [
       "Hero image must be a full URL or a site-relative path starting with /.",
@@ -202,13 +223,10 @@ function parseLeagueInput(formData: FormData): {
       badgeUrl,
       ctaText,
     },
+    requiredRefereesPerNight: requiredRefereesPerNight ?? 1,
     errors,
   };
 }
-
-// ========================================
-// Actions
-// ========================================
 
 export async function createLeagueAction(
   _prevState: LeagueFormState,
@@ -216,7 +234,7 @@ export async function createLeagueAction(
 ): Promise<LeagueFormState> {
   await requireAdmin();
 
-  const { data, errors } = parseLeagueInput(formData);
+  const { data, requiredRefereesPerNight, errors } = parseLeagueInput(formData);
 
   if (Object.keys(errors).length > 0) {
     return {
@@ -264,7 +282,13 @@ export async function createLeagueAction(
     },
   });
 
+  await setLeagueRequiredRefereesPerNight({
+    leagueId: league.id,
+    requiredRefereesPerNight,
+  });
+
   revalidatePath("/admin/leagues");
+  revalidatePath("/admin/referee-availability");
   revalidatePath("/");
   revalidatePath("/leagues");
   revalidatePath(`/leagues/${league.slug}`);
@@ -290,7 +314,7 @@ export async function updateLeagueAction(
     };
   }
 
-  const { data, errors } = parseLeagueInput(formData);
+  const { data, requiredRefereesPerNight, errors } = parseLeagueInput(formData);
 
   if (Object.keys(errors).length > 0) {
     return {
@@ -343,8 +367,14 @@ export async function updateLeagueAction(
     data,
   });
 
+  await setLeagueRequiredRefereesPerNight({
+    leagueId,
+    requiredRefereesPerNight,
+  });
+
   revalidatePath("/admin/leagues");
   revalidatePath(`/admin/leagues/${leagueId}`);
+  revalidatePath("/admin/referee-availability");
   revalidatePath("/");
   revalidatePath("/leagues");
   revalidatePath(`/leagues/${data.slug}`);
@@ -422,13 +452,6 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
       continue;
     }
 
-    const variables = {
-      teamName: team.name,
-      leagueName: league.name,
-      leagueSeason: league.season ?? "",
-      contactName: recipient.displayName ?? team.name,
-    };
-
     await queueDirectNotification({
       recipientId: recipient.id,
       channel,
@@ -436,25 +459,21 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
       subject: channel === NotificationChannel.EMAIL ? subject : null,
       body,
       isTransactional: true,
-      sourceType: "TEAM",
-      sourceId: team.id,
-      variables,
+      sourceType: "LEAGUE_TEAM_MESSAGE",
+      sourceId: league.id,
       emailBranding:
         channel === NotificationChannel.EMAIL
           ? {
               teamName: team.name,
-              teamLogoUrl: team.logoUrl ?? null,
-              leagueName: league.season
-                ? `${league.name} — ${league.season}`
-                : league.name,
+              teamLogoUrl: team.logoUrl,
+              leagueName: `${league.name}${league.season ? ` — ${league.season}` : ""}`,
             }
           : undefined,
       metadata: {
         origin: "league_admin",
-        originLabel: `Sent from league page: ${league.name}`,
+        originLabel: "Sent from league page",
         leagueId: league.id,
         leagueName: league.name,
-        leagueSeason: league.season,
         teamId: team.id,
         teamName: team.name,
       },
@@ -465,54 +484,8 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
   }
 
   revalidatePath(`/admin/leagues/${leagueId}`);
-  for (const team of league.teams) {
-    revalidatePath(`/admin/teams/${team.id}`);
-  }
+  revalidatePath("/admin/messaging");
+  revalidatePath("/admin/queue");
 
-  redirect(
-    `/admin/leagues/${leagueId}?messageQueued=1&messageCount=${sentCount}&channel=${channel.toLowerCase()}`,
-  );
-}
-
-export async function deleteLeagueAction(leagueId: string) {
-  await requireAdmin();
-
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: {
-      id: true,
-      slug: true,
-      _count: {
-        select: {
-          teams: true,
-          fixtures: true,
-          interestLeads: true,
-        },
-      },
-    },
-  });
-
-  if (!league) {
-    redirect("/admin/leagues");
-  }
-
-  const hasLinkedRecords =
-    league._count.teams > 0 ||
-    league._count.fixtures > 0 ||
-    league._count.interestLeads > 0;
-
-  if (hasLinkedRecords) {
-    redirect(`/admin/leagues/${league.id}?deleteError=linked-records`);
-  }
-
-  await prisma.league.delete({
-    where: { id: leagueId },
-  });
-
-  revalidatePath("/admin/leagues");
-  revalidatePath("/");
-  revalidatePath("/leagues");
-  revalidatePath(`/leagues/${league.slug}`);
-
-  redirect("/admin/leagues?deleted=1");
+  redirect(`/admin/leagues/${leagueId}?messageQueued=${sentCount}&channel=${channel.toLowerCase()}`);
 }
