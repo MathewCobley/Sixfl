@@ -32,7 +32,7 @@ export default function CommunicationsTeamLauncher({ teams }: { teams: TeamOptio
           </div>
           <h2 className="text-2xl font-semibold text-white">Start a team message</h2>
           <p className="max-w-2xl text-sm text-white/60">
-            Pick one team for a direct message, or open the all-team picker to email any mix of teams, including teams that are not in a current league.
+            Pick one team for a direct message, or open the all-team picker to email or SMS any mix of teams, including teams that are not in a current league.
           </p>
         </div>
 
@@ -41,7 +41,7 @@ export default function CommunicationsTeamLauncher({ teams }: { teams: TeamOptio
             href="/admin/messaging/teams"
             className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
           >
-            Email selected teams
+            Email / SMS selected teams
           </Link>
 
           {selectedTeam ? (
