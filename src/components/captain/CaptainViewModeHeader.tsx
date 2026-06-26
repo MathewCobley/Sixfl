@@ -227,6 +227,16 @@ export default function CaptainViewModeHeader({
           <div className="flex flex-wrap gap-3">
             {canShowAdminControls ? (
               <Link
+                href="/admin"
+                data-captain-preview-ignore="true"
+                className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+              >
+                Admin home
+              </Link>
+            ) : null}
+
+            {canShowAdminControls ? (
+              <Link
                 href={`/admin/teams/${teamId}`}
                 data-captain-preview-ignore="true"
                 className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
