@@ -137,7 +137,7 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
 
   if (isOverview(pathname, teamId)) {
     return (
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Link href={`/captain/team/${teamId}/help`} className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">How-to help</p>
           <h2 className="mt-3 text-xl font-semibold text-white">How to use the captain area</h2>
@@ -150,6 +150,12 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
           <p className="mt-2 text-sm leading-6 text-white/62">Kick-ins, substitutions, goalkeeper rules, fouls, penalties, referee decisions and venue-specific rules.</p>
         </Link>
 
+        <Link href={`/captain/team/${teamId}/guide`} className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 transition hover:bg-amber-500/15">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">League Rules</p>
+          <h2 className="mt-3 text-xl font-semibold text-white">Captain T&Cs</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-50/72">Captain agreement, fixture availability, payment responsibilities, cancellations and avoidable admin fees.</p>
+        </Link>
+
         <button type="button" onClick={() => setIsOpen((value) => !value)} className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 text-left transition hover:bg-sky-500/15">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">Support</p>
           <h2 className="mt-3 text-xl font-semibold text-white">Contact SIXFL</h2>
@@ -157,7 +163,7 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
         </button>
 
         {isOpen ? (
-          <div className="md:col-span-3">
+          <div className="md:col-span-2 xl:col-span-4">
             <SupportForm
               teamId={teamId}
               pathname={pathname}
