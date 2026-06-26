@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { NotificationAudience, NotificationRecipientSourceType } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
@@ -116,6 +117,7 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
     prisma.fixture.findFirst({
       where: {
         id: fixtureId,
+        ...publishedFixtureWhere,
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
       },
       select: { id: true },
@@ -177,6 +179,7 @@ export async function sendAvailabilitySmsChaseAction(formData: FormData) {
   const fixture = await prisma.fixture.findFirst({
     where: {
       id: fixtureId,
+      ...publishedFixtureWhere,
       OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
     },
     select: {
