@@ -4,7 +4,7 @@
 
 "use server";
 
-import { FixtureStatus } from "@prisma/client";
+import { FixtureStatus, PaymentChargeStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -13,7 +13,10 @@ import {
   getLondonMinutesSinceMidnight,
   parseLondonDateTime,
 } from "@/lib/datetime/london";
-import { syncFixtureMatchFeeCharges } from "@/lib/payments/fixture-match-fees";
+import {
+  queueFixtureMatchFeeEmails,
+  syncFixtureMatchFeeCharges,
+} from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -241,6 +244,129 @@ function getRefereeIdsByPitch(formData: FormData, pitches: number) {
   });
 }
 
+function revalidateFixturePaymentPaths(leagueId: string, leagueSlug?: string | null) {
+  revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/fixtures/generate");
+  revalidatePath("/admin/payments");
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+
+  if (leagueSlug) {
+    revalidatePath(`/leagues/${leagueSlug}`);
+    revalidatePath(`/leagues/${leagueSlug}/fixtures`);
+  }
+}
+
+export async function backfillFixtureMatchFeeChargesAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+  const matchFeePence = parseMoneyPence(formData.get("matchFeePounds"), "Team match fee");
+  const sendPaymentRequests = String(formData.get("sendPaymentRequests") || "") === "on";
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { id: true, name: true, season: true, slug: true },
+  });
+
+  if (!league) {
+    throw new Error("League not found.");
+  }
+
+  const fixtures = await prisma.fixture.findMany({
+    where: {
+      leagueId,
+      status: FixtureStatus.SCHEDULED,
+      kickoffAt: { gte: new Date() },
+    },
+    orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
+    include: {
+      homeTeam: { select: { id: true, name: true, logoUrl: true } },
+      awayTeam: { select: { id: true, name: true, logoUrl: true } },
+      paymentCharges: {
+        where: { status: { not: PaymentChargeStatus.VOID } },
+        select: { id: true },
+      },
+    },
+  });
+
+  const fixturesMissingCharges = fixtures.filter(
+    (fixture) => fixture.paymentCharges.length === 0,
+  );
+
+  if (fixturesMissingCharges.length === 0) {
+    revalidateFixturePaymentPaths(league.id, league.slug);
+    redirect(`/admin/fixtures/generate?backfilled=0&paymentRequests=0`);
+  }
+
+  const createdChargeGroups: Array<{
+    fixtureId: string;
+    kickoffAt: Date;
+    homeTeam: { id: string; name: string; logoUrl: string | null };
+    awayTeam: { id: string; name: string; logoUrl: string | null };
+    charges: Array<{
+      id: string;
+      teamId: string;
+      teamName: string;
+      teamLogoUrl: string | null;
+      paymentToken: string | null;
+      amountPence: number;
+    }>;
+  }> = [];
+
+  await prisma.$transaction(async (tx) => {
+    for (const fixture of fixturesMissingCharges) {
+      const result = await syncFixtureMatchFeeCharges({
+        db: tx,
+        fixtureId: fixture.id,
+        leagueId,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt: fixture.kickoffAt,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        homeMatchFeePence: matchFeePence,
+        awayMatchFeePence: matchFeePence,
+      });
+
+      createdChargeGroups.push({
+        fixtureId: fixture.id,
+        kickoffAt: fixture.kickoffAt,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        charges: result.activeCharges,
+      });
+    }
+  });
+
+  let queuedPaymentMessages = 0;
+
+  if (sendPaymentRequests) {
+    for (const group of createdChargeGroups) {
+      const result = await queueFixtureMatchFeeEmails({
+        fixtureId: group.fixtureId,
+        leagueId,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt: group.kickoffAt,
+        homeTeam: group.homeTeam,
+        awayTeam: group.awayTeam,
+        homeMatchFeePence: matchFeePence,
+        awayMatchFeePence: matchFeePence,
+        charges: group.charges,
+      });
+
+      queuedPaymentMessages += result.queued;
+    }
+  }
+
+  revalidateFixturePaymentPaths(league.id, league.slug);
+
+  redirect(
+    `/admin/fixtures/generate?backfilled=${fixturesMissingCharges.length}&paymentRequests=${queuedPaymentMessages}`,
+  );
+}
+
 export async function generateDraftFixturesWithPitchRefereesAction(formData: FormData) {
   await requireAdmin();
 
@@ -451,16 +577,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     }
   });
 
-  revalidatePath("/admin/fixtures");
-  revalidatePath("/admin/fixtures/generate");
-  revalidatePath("/admin/payments");
-  revalidatePath(`/admin/leagues/${leagueId}`);
-  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
-
-  if (league.slug) {
-    revalidatePath(`/leagues/${league.slug}`);
-    revalidatePath(`/leagues/${league.slug}/fixtures`);
-  }
+  revalidateFixturePaymentPaths(leagueId, league.slug);
 
   redirect(
     `/admin/fixtures?leagueId=${encodeURIComponent(leagueId)}&generated=${fixturesToCreate.length}`,
