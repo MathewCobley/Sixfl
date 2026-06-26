@@ -32,6 +32,26 @@ const guideSections = [
     ],
   },
   {
+    title: "Matchday rules",
+    items: [
+      "Arrive in good time and be ready for the published kick-off slot.",
+      "Players should follow venue rules and wear suitable footwear and shin pads where required.",
+      "Captains are expected to manage their team's behaviour before, during and after the match.",
+      "Referee decisions must be respected on the night. Concerns can be raised afterwards through the proper channel.",
+      "Scores and result details should be checked promptly after the game.",
+    ],
+  },
+  {
+    title: "Captain terms and conditions",
+    items: [
+      "The captain is responsible for team communication, squad management, fixture confirmation and making sure team fees are covered.",
+      "The captain should raise fixture, payment or player issues early using the captain area or official SIXFL contact routes.",
+      "Late cancellations can affect the opposition, referee, venue and league schedule, so SIXFL should be told as early as possible.",
+      "Repeated late payment, late confirmation, poor conduct or avoidable fixture issues may lead to admin fees, fixture action or review of the team's place in the league.",
+      "The captain agreement below records that the captain understands and accepts these responsibilities.",
+    ],
+  },
+  {
     title: "Weekly responsibilities",
     items: [
       "Check your fixtures as soon as they are published.",
@@ -79,26 +99,6 @@ const guideSections = [
     ],
   },
   {
-    title: "Matchday rules",
-    items: [
-      "Arrive in good time and be ready for the published kick-off slot.",
-      "Players should follow venue rules and wear suitable footwear and shin pads where required.",
-      "Captains are expected to manage their team's behaviour before, during and after the match.",
-      "Referee decisions must be respected on the night. Concerns can be raised afterwards through the proper channel.",
-      "Scores and result details should be checked promptly after the game.",
-    ],
-  },
-  {
-    title: "Captain terms and conditions",
-    items: [
-      "The captain is responsible for team communication, squad management, fixture confirmation and making sure team fees are covered.",
-      "The captain should raise fixture, payment or player issues early using the captain area or official SIXFL contact routes.",
-      "Late cancellations can affect the opposition, referee, venue and league schedule, so SIXFL should be told as early as possible.",
-      "Repeated late payment, late confirmation, poor conduct or avoidable fixture issues may lead to admin fees, fixture action or review of the team's place in the league.",
-      "The captain agreement below records that the captain understands and accepts these responsibilities.",
-    ],
-  },
-  {
     title: "Referees and results",
     items: [
       "Referees manage the game on the night and their decisions should be respected.",
@@ -123,6 +123,21 @@ const guideSections = [
     ],
   },
 ];
+
+const quickLinks = [
+  "Matchday rules",
+  "Captain terms and conditions",
+  "Earliest and latest kick-off times",
+  "Payments and late fees",
+];
+
+function getSectionId(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 function formatAcceptedAt(value: Date | null) {
   if (!value) return null;
@@ -175,7 +190,7 @@ export default async function CaptainGuidePage({
             Guide & Rules
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Everything captains need to know
+            Matchday rules and captain terms
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68 sm:text-base">
             A short reference for {team.name}. This keeps matchday rules, payment responsibilities, captain terms and key SIXFL processes in one place.
@@ -197,11 +212,27 @@ export default async function CaptainGuidePage({
         </div>
       </section>
 
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {quickLinks.map((title) => (
+          <a
+            key={title}
+            href={`#${getSectionId(title)}`}
+            className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 transition hover:bg-emerald-500/15"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+              Jump to
+            </p>
+            <p className="mt-2 text-sm font-semibold text-white">{title}</p>
+          </a>
+        ))}
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-3">
         {guideSections.map((section) => (
           <article
             key={section.title}
-            className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"
+            id={getSectionId(section.title)}
+            className="scroll-mt-28 rounded-3xl border border-white/10 bg-white/[0.04] p-5"
           >
             <h2 className="text-lg font-semibold text-white">{section.title}</h2>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-white/62">
