@@ -17,11 +17,7 @@ import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 
-export type RefereeAvailabilityStatus =
-  | "AVAILABLE"
-  | "MAYBE"
-  | "UNAVAILABLE"
-  | "NO_RESPONSE";
+export type RefereeAvailabilityStatus = "AVAILABLE" | "MAYBE" | "UNAVAILABLE" | "NO_RESPONSE";
 
 export type RefereeAvailabilityLeague = {
   id: string;
@@ -100,15 +96,13 @@ export function formatAvailabilityDate(value: string | Date) {
   return DATE_FORMATTER.format(date);
 }
 
-export function getDefaultAvailabilityMonthKey(now = new Date()) {
-  return getNextMonthKey(now);
+export function getNextMonthKey(now = new Date()) {
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 12, 0, 0));
+  return toMonthKey(next);
 }
 
-export function getNextMonthKey(now = new Date()) {
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-  const next = new Date(Date.UTC(year, month + 1, 1, 12, 0, 0));
-  return toMonthKey(next);
+export function getDefaultAvailabilityMonthKey(now = new Date()) {
+  return getNextMonthKey(now);
 }
 
 export function toMonthKey(date: Date) {
@@ -117,9 +111,9 @@ export function toMonthKey(date: Date) {
 
 export function normaliseMonthKey(value?: string | null) {
   const candidate = value?.trim();
+
   if (candidate && /^\d{4}-\d{2}$/.test(candidate)) {
-    const [, monthText] = candidate.split("-");
-    const month = Number(monthText);
+    const month = Number(candidate.split("-")[1]);
     if (month >= 1 && month <= 12) return candidate;
   }
 
@@ -174,149 +168,6 @@ function preferredNightToUtcDay(day: PreferredNight) {
   }
 }
 
-async function queryAvailabilityLeagues(sql: Prisma.Sql) {
-  return prisma.$queryRaw<RefereeAvailabilityLeague[]>(sql);
-}
-
-export async function getActiveRefereeAvailabilityLeagues() {
-  return queryAvailabilityLeagues(Prisma.sql`
-    SELECT
-      id,
-      name,
-      season,
-      "dayOfWeek",
-      "venueName",
-      COALESCE("requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
-    FROM "League"
-    WHERE "isActive" = TRUE
-      AND "dayOfWeek" IS NOT NULL
-      AND "dayOfWeek" <> 'ANY'
-    ORDER BY "dayOfWeek" ASC, name ASC
-  `);
-}
-
-async function getManualRefereeCoverageLeagues(refereeId: string) {
-  return queryAvailabilityLeagues(Prisma.sql`
-    SELECT
-      l.id,
-      l.name,
-      l.season,
-      l."dayOfWeek",
-      l."venueName",
-      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
-    FROM "RefereeLeagueCoverage" rlc
-    JOIN "League" l ON l.id = rlc."leagueId"
-    WHERE rlc."refereeId" = ${refereeId}
-      AND l."isActive" = TRUE
-      AND l."dayOfWeek" IS NOT NULL
-      AND l."dayOfWeek" <> 'ANY'
-    ORDER BY l."dayOfWeek" ASC, l.name ASC
-  `).catch(() => []);
-}
-
-async function getAssignedRefereeCoverageLeagues(refereeId: string) {
-  return queryAvailabilityLeagues(Prisma.sql`
-    SELECT DISTINCT
-      l.id,
-      l.name,
-      l.season,
-      l."dayOfWeek",
-      l."venueName",
-      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
-    FROM "Fixture" f
-    JOIN "League" l ON l.id = f."leagueId"
-    WHERE f."refereeId" = ${refereeId}
-      AND l."isActive" = TRUE
-      AND l."dayOfWeek" IS NOT NULL
-      AND l."dayOfWeek" <> 'ANY'
-    ORDER BY l."dayOfWeek" ASC, l.name ASC
-  `);
-}
-
-export async function getRefereeAvailabilityLeagues(refereeId: string) {
-  const manualCoverage = await getManualRefereeCoverageLeagues(refereeId);
-  if (manualCoverage.length > 0) return manualCoverage;
-  return getAssignedRefereeCoverageLeagues(refereeId);
-}
-
-export function getLeagueDatesInMonth(input: {
-  monthKey: string;
-  dayOfWeek: PreferredNight;
-}) {
-  const targetDay = preferredNightToUtcDay(input.dayOfWeek);
-  if (targetDay === null) return [];
-
-  const bounds = getMonthBounds(input.monthKey);
-  const dates: string[] = [];
-  const current = new Date(bounds.start);
-
-  while (current <= bounds.end) {
-    if (current.getUTCDay() === targetDay) dates.push(toDateKey(current));
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-
-  return dates;
-}
-
-export async function getRefereesForAvailability() {
-  return prisma.$queryRaw<AvailabilityReferee[]>(Prisma.sql`
-    SELECT
-      u.id,
-      u.name,
-      u.email,
-      u.role
-    FROM "User" u
-    LEFT JOIN "RefereeProfile" rp ON rp."userId" = u.id
-    WHERE u.email IS NOT NULL
-      AND (
-        u.role::text = 'REFEREE'
-        OR (rp."userId" IS NOT NULL AND rp."isActive" = TRUE)
-      )
-    ORDER BY u.name ASC NULLS LAST, u.email ASC NULLS LAST
-  `);
-}
-
-export async function ensureRefereeAvailabilityRows(input: {
-  refereeId: string;
-  monthKey: string;
-  requested?: boolean;
-}) {
-  const leagues = await getRefereeAvailabilityLeagues(input.refereeId);
-  const rows = leagues.flatMap((league) =>
-    getLeagueDatesInMonth({ monthKey: input.monthKey, dayOfWeek: league.dayOfWeek }).map(
-      (date) => ({ league, date }),
-    ),
-  );
-
-  if (rows.length === 0) return { created: 0, total: 0 };
-
-  let created = 0;
-
-  await prisma.$transaction(async (tx) => {
-    for (const row of rows) {
-      const result = await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "RefereeAvailability" (
-          "id", "refereeId", "leagueId", "availabilityDate", "requestedMonth", "lastRequestedAt", "updatedAt"
-        ) VALUES (
-          ${randomUUID()}, ${input.refereeId}, ${row.league.id}, ${row.date}::date, ${input.monthKey}, ${input.requested ? new Date() : null}, NOW()
-        )
-        ON CONFLICT ("refereeId", "leagueId", "availabilityDate") DO UPDATE
-        SET
-          "requestedMonth" = COALESCE("RefereeAvailability"."requestedMonth", EXCLUDED."requestedMonth"),
-          "lastRequestedAt" = CASE
-            WHEN ${input.requested ? 1 : 0} = 1 THEN NOW()
-            ELSE "RefereeAvailability"."lastRequestedAt"
-          END,
-          "updatedAt" = NOW()
-      `);
-
-      created += Number(result ?? 0);
-    }
-  });
-
-  return { created, total: rows.length };
-}
-
 function normaliseRawDate(value: string | Date) {
   if (value instanceof Date) return toDateKey(value);
   return String(value).slice(0, 10);
@@ -348,31 +199,131 @@ function toSlot(row: RawAvailabilityRow): RefereeAvailabilitySlot {
   };
 }
 
-export async function getRefereeAvailabilityMonth(input: {
-  refereeId: string;
-  monthKey: string;
-}) {
+function getSiteUrl() {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.SITE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim() ||
+    "https://www.sixfl.co.uk"
+  ).replace(/\/+$/, "");
+}
+
+function getFirstName(value: string | null | undefined) {
+  return value?.trim().split(/\s+/)[0] || "there";
+}
+
+async function queryAvailabilityLeagues(sql: Prisma.Sql) {
+  return prisma.$queryRaw<RefereeAvailabilityLeague[]>(sql);
+}
+
+export async function getActiveRefereeAvailabilityLeagues() {
+  return queryAvailabilityLeagues(Prisma.sql`
+    SELECT id, name, season, "dayOfWeek", "venueName", COALESCE("requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    FROM "League"
+    WHERE "isActive" = TRUE AND "dayOfWeek" IS NOT NULL AND "dayOfWeek" <> 'ANY'
+    ORDER BY "dayOfWeek" ASC, name ASC
+  `);
+}
+
+async function getManualRefereeCoverageLeagues(refereeId: string) {
+  return queryAvailabilityLeagues(Prisma.sql`
+    SELECT l.id, l.name, l.season, l."dayOfWeek", l."venueName", COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    FROM "RefereeLeagueCoverage" rlc
+    JOIN "League" l ON l.id = rlc."leagueId"
+    WHERE rlc."refereeId" = ${refereeId}
+      AND l."isActive" = TRUE
+      AND l."dayOfWeek" IS NOT NULL
+      AND l."dayOfWeek" <> 'ANY'
+    ORDER BY l."dayOfWeek" ASC, l.name ASC
+  `).catch(() => []);
+}
+
+async function getAssignedRefereeCoverageLeagues(refereeId: string) {
+  return queryAvailabilityLeagues(Prisma.sql`
+    SELECT DISTINCT l.id, l.name, l.season, l."dayOfWeek", l."venueName", COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    FROM "Fixture" f
+    JOIN "League" l ON l.id = f."leagueId"
+    WHERE f."refereeId" = ${refereeId}
+      AND l."isActive" = TRUE
+      AND l."dayOfWeek" IS NOT NULL
+      AND l."dayOfWeek" <> 'ANY'
+    ORDER BY l."dayOfWeek" ASC, l.name ASC
+  `);
+}
+
+export async function getRefereeAvailabilityLeagues(refereeId: string) {
+  const manualCoverage = await getManualRefereeCoverageLeagues(refereeId);
+  if (manualCoverage.length > 0) return manualCoverage;
+  return getAssignedRefereeCoverageLeagues(refereeId);
+}
+
+export function getLeagueDatesInMonth(input: { monthKey: string; dayOfWeek: PreferredNight }) {
+  const targetDay = preferredNightToUtcDay(input.dayOfWeek);
+  if (targetDay === null) return [];
+
+  const bounds = getMonthBounds(input.monthKey);
+  const dates: string[] = [];
+  const current = new Date(bounds.start);
+
+  while (current <= bounds.end) {
+    if (current.getUTCDay() === targetDay) dates.push(toDateKey(current));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  return dates;
+}
+
+export async function getRefereesForAvailability() {
+  return prisma.$queryRaw<AvailabilityReferee[]>(Prisma.sql`
+    SELECT u.id, u.name, u.email, u.role
+    FROM "User" u
+    LEFT JOIN "RefereeProfile" rp ON rp."userId" = u.id
+    WHERE u.email IS NOT NULL
+      AND (u.role::text = 'REFEREE' OR (rp."userId" IS NOT NULL AND rp."isActive" = TRUE))
+    ORDER BY u.name ASC NULLS LAST, u.email ASC NULLS LAST
+  `);
+}
+
+export async function ensureRefereeAvailabilityRows(input: { refereeId: string; monthKey: string; requested?: boolean }) {
+  const leagues = await getRefereeAvailabilityLeagues(input.refereeId);
+  const rows = leagues.flatMap((league) =>
+    getLeagueDatesInMonth({ monthKey: input.monthKey, dayOfWeek: league.dayOfWeek }).map((date) => ({ league, date })),
+  );
+
+  if (rows.length === 0) return { created: 0, total: 0 };
+
+  let created = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const row of rows) {
+      const result = await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "RefereeAvailability" ("id", "refereeId", "leagueId", "availabilityDate", "requestedMonth", "lastRequestedAt", "updatedAt")
+        VALUES (${randomUUID()}, ${input.refereeId}, ${row.league.id}, ${row.date}::date, ${input.monthKey}, ${input.requested ? new Date() : null}, NOW())
+        ON CONFLICT ("refereeId", "leagueId", "availabilityDate") DO UPDATE
+        SET "requestedMonth" = COALESCE("RefereeAvailability"."requestedMonth", EXCLUDED."requestedMonth"),
+            "lastRequestedAt" = CASE WHEN ${input.requested ? 1 : 0} = 1 THEN NOW() ELSE "RefereeAvailability"."lastRequestedAt" END,
+            "updatedAt" = NOW()
+      `);
+      created += Number(result ?? 0);
+    }
+  });
+
+  return { created, total: rows.length };
+}
+
+export async function getRefereeAvailabilityMonth(input: { refereeId: string; monthKey: string }) {
   await ensureRefereeAvailabilityRows({ refereeId: input.refereeId, monthKey: input.monthKey });
   const bounds = getMonthBounds(input.monthKey);
   const leagues = await getRefereeAvailabilityLeagues(input.refereeId);
   const leagueIds = leagues.map((league) => league.id);
-  const leagueFilter = leagueIds.length
-    ? Prisma.sql`AND ra."leagueId" IN (${Prisma.join(leagueIds)})`
-    : Prisma.sql`AND FALSE`;
+  const leagueFilter = leagueIds.length ? Prisma.sql`AND ra."leagueId" IN (${Prisma.join(leagueIds)})` : Prisma.sql`AND FALSE`;
 
   const rows = await prisma.$queryRaw<RawAvailabilityRow[]>(Prisma.sql`
-    SELECT
-      ra.id,
-      l.id AS "leagueId",
-      l.name AS "leagueName",
-      l.season AS "leagueSeason",
-      l."venueName" AS "venueName",
-      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight",
-      l."dayOfWeek" AS "dayOfWeek",
-      ra."availabilityDate" AS "availabilityDate",
-      ra.status,
-      ra.note,
-      ra."respondedAt" AS "respondedAt"
+    SELECT ra.id, l.id AS "leagueId", l.name AS "leagueName", l.season AS "leagueSeason", l."venueName" AS "venueName",
+      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight", l."dayOfWeek" AS "dayOfWeek",
+      ra."availabilityDate" AS "availabilityDate", ra.status, ra.note, ra."respondedAt" AS "respondedAt"
     FROM "RefereeAvailability" ra
     JOIN "League" l ON l.id = ra."leagueId"
     WHERE ra."refereeId" = ${input.refereeId}
@@ -394,31 +345,19 @@ export async function getRefereeAvailabilityMonth(input: {
 
 export async function updateRefereeAvailability(input: {
   refereeId: string;
-  updates: Array<{
-    leagueId: string;
-    date: string;
-    status: RefereeAvailabilityStatus;
-    note?: string | null;
-  }>;
+  updates: Array<{ leagueId: string; date: string; status: RefereeAvailabilityStatus; note?: string | null }>;
 }) {
-  const allowedStatuses = new Set<RefereeAvailabilityStatus>([
-    "AVAILABLE",
-    "MAYBE",
-    "UNAVAILABLE",
-    "NO_RESPONSE",
-  ]);
+  const allowedStatuses = new Set<RefereeAvailabilityStatus>(["AVAILABLE", "MAYBE", "UNAVAILABLE", "NO_RESPONSE"]);
 
   await prisma.$transaction(async (tx) => {
     for (const update of input.updates) {
       if (!allowedStatuses.has(update.status)) continue;
-
       await tx.$executeRaw(Prisma.sql`
         UPDATE "RefereeAvailability"
-        SET
-          "status" = ${update.status},
-          "note" = ${update.note?.trim() || null},
-          "respondedAt" = CASE WHEN ${update.status} = 'NO_RESPONSE' THEN NULL ELSE NOW() END,
-          "updatedAt" = NOW()
+        SET "status" = ${update.status},
+            "note" = ${update.note?.trim() || null},
+            "respondedAt" = CASE WHEN ${update.status} = 'NO_RESPONSE' THEN NULL ELSE NOW() END,
+            "updatedAt" = NOW()
         WHERE "refereeId" = ${input.refereeId}
           AND "leagueId" = ${update.leagueId}
           AND "availabilityDate" = ${update.date}::date
@@ -429,39 +368,19 @@ export async function updateRefereeAvailability(input: {
 
 export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
   const referees = await getRefereesForAvailability();
-  const coverageEntries = await Promise.all(
-    referees.map(async (referee) => ({
-      refereeId: referee.id,
-      leagues: await getRefereeAvailabilityLeagues(referee.id),
-    })),
-  );
-  const allowedLeagueIdsByReferee = new Map(
-    coverageEntries.map((entry) => [entry.refereeId, new Set(entry.leagues.map((league) => league.id))]),
-  );
+  const coverageEntries = await Promise.all(referees.map(async (referee) => ({ refereeId: referee.id, leagues: await getRefereeAvailabilityLeagues(referee.id) })));
+  const allowedLeagueIdsByReferee = new Map(coverageEntries.map((entry) => [entry.refereeId, new Set(entry.leagues.map((league) => league.id))]));
   const refereeIds = referees.map((referee) => referee.id);
-  const refereeFilter = refereeIds.length
-    ? Prisma.sql`AND ra."refereeId" IN (${Prisma.join(refereeIds)})`
-    : Prisma.sql`AND FALSE`;
+  const refereeFilter = refereeIds.length ? Prisma.sql`AND ra."refereeId" IN (${Prisma.join(refereeIds)})` : Prisma.sql`AND FALSE`;
 
   await Promise.all(referees.map((referee) => ensureRefereeAvailabilityRows({ refereeId: referee.id, monthKey })));
 
   const bounds = getMonthBounds(monthKey);
   const rows = await prisma.$queryRaw<RawAdminAvailabilityRow[]>(Prisma.sql`
-    SELECT
-      ra.id,
-      ra."refereeId" AS "refereeId",
-      u.name AS "refereeName",
-      u.email AS "refereeEmail",
-      l.id AS "leagueId",
-      l.name AS "leagueName",
-      l.season AS "leagueSeason",
-      l."venueName" AS "venueName",
-      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight",
-      l."dayOfWeek" AS "dayOfWeek",
-      ra."availabilityDate" AS "availabilityDate",
-      ra.status,
-      ra.note,
-      ra."respondedAt" AS "respondedAt"
+    SELECT ra.id, ra."refereeId" AS "refereeId", u.name AS "refereeName", u.email AS "refereeEmail",
+      l.id AS "leagueId", l.name AS "leagueName", l.season AS "leagueSeason", l."venueName" AS "venueName",
+      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight", l."dayOfWeek" AS "dayOfWeek",
+      ra."availabilityDate" AS "availabilityDate", ra.status, ra.note, ra."respondedAt" AS "respondedAt"
     FROM "RefereeAvailability" ra
     JOIN "User" u ON u.id = ra."refereeId"
     JOIN "League" l ON l.id = ra."leagueId"
@@ -479,28 +398,8 @@ export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
     startDate: bounds.startDate,
     endDate: bounds.endDate,
     referees,
-    rows: filteredRows.map((row) => ({
-      ...toSlot(row),
-      refereeId: row.refereeId,
-      refereeName: row.refereeName,
-      refereeEmail: row.refereeEmail,
-    })),
+    rows: filteredRows.map((row) => ({ ...toSlot(row), refereeId: row.refereeId, refereeName: row.refereeName, refereeEmail: row.refereeEmail })),
   };
-}
-
-function getSiteUrl() {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    process.env.SITE_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.APP_URL?.trim() ||
-    process.env.NEXTAUTH_URL?.trim() ||
-    "https://www.sixfl.co.uk"
-  ).replace(/\/+$/, "");
-}
-
-function getFirstName(value: string | null | undefined) {
-  return value?.trim().split(/\s+/)[0] || "there";
 }
 
 async function hasAvailabilityRequestDispatch(input: { refereeId: string; monthKey: string }) {
@@ -508,20 +407,14 @@ async function hasAvailabilityRequestDispatch(input: { refereeId: string; monthK
     where: {
       sourceType: "REFEREE_AVAILABILITY_MONTHLY_REQUEST",
       sourceId: `${input.refereeId}:${input.monthKey}`,
-      status: {
-        in: ["QUEUED", "PROCESSING", "SENT"],
-      },
+      status: { in: ["QUEUED", "PROCESSING", "SENT"] },
     },
     select: { id: true },
   });
-
   return Boolean(existing);
 }
 
-export async function queueMonthlyRefereeAvailabilityRequests(input: {
-  monthKey: string;
-  force?: boolean;
-}) {
+export async function queueMonthlyRefereeAvailabilityRequests(input: { monthKey: string; force?: boolean }) {
   const referees = await getRefereesForAvailability();
   const bounds = getMonthBounds(input.monthKey);
   const availabilityUrl = `${getSiteUrl()}/referee/availability?month=${encodeURIComponent(input.monthKey)}`;
@@ -545,12 +438,7 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: {
         continue;
       }
 
-      const rows = await ensureRefereeAvailabilityRows({
-        refereeId: referee.id,
-        monthKey: input.monthKey,
-        requested: true,
-      });
-
+      const rows = await ensureRefereeAvailabilityRows({ refereeId: referee.id, monthKey: input.monthKey, requested: true });
       if (rows.total === 0 || !referee.email?.trim()) {
         summary.skipped += 1;
         continue;
@@ -564,10 +452,7 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: {
         email: referee.email,
         transactionalEmailOptIn: true,
         transactionalSmsOptIn: true,
-        metadata: {
-          entityType: "REFEREE",
-          refereeId: referee.id,
-        },
+        metadata: { entityType: "REFEREE", refereeId: referee.id },
       });
 
       await queueDirectNotification({
@@ -587,27 +472,16 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: {
           "",
           "Please tick Available, Maybe or Unavailable for each date so we can plan referee cover.",
         ].join("\n"),
-        emailCta: {
-          label: `Mark ${bounds.monthLabel} availability`,
-          url: availabilityUrl,
-        },
+        emailCta: { label: `Mark ${bounds.monthLabel} availability`, url: availabilityUrl },
         sourceType: "REFEREE_AVAILABILITY_MONTHLY_REQUEST",
         sourceId: `${referee.id}:${input.monthKey}`,
-        metadata: {
-          origin: "referee_availability_monthly_request",
-          refereeId: referee.id,
-          monthKey: input.monthKey,
-          monthLabel: bounds.monthLabel,
-          availabilityUrl,
-        },
+        metadata: { origin: "referee_availability_monthly_request", refereeId: referee.id, monthKey: input.monthKey, monthLabel: bounds.monthLabel, availabilityUrl },
       });
 
       summary.queued += 1;
     } catch (error) {
       summary.skipped += 1;
-      if (summary.errors.length < 10) {
-        summary.errors.push(`${referee.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
-      }
+      if (summary.errors.length < 10) summary.errors.push(`${referee.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
 
