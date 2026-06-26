@@ -33,6 +33,9 @@ type Props = {
   emailTemplates: EmailTemplateOption[];
 };
 
+const ALL_LEAGUES_VALUE = "all";
+const NO_LEAGUE_LABEL = "No league assigned";
+
 const DEFAULT_SUMMER_LEAGUE_TEMPLATE: EmailTemplateOption = {
   id: "summer-league-returning-teams-inline-template",
   key: "summer-league-returning-teams",
@@ -60,6 +63,10 @@ const DEFAULT_SUMMER_LEAGUE_TEMPLATE: EmailTemplateOption = {
   ].join("\n"),
 };
 
+function getTeamLeagueLabel(team: TeamOption) {
+  return team.leagueLabel || NO_LEAGUE_LABEL;
+}
+
 function LeagueFilterPicker({
   options,
   value,
@@ -75,8 +82,8 @@ function LeagueFilterPicker({
         League filter
       </div>
       <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto pr-1">
-        {["all", ...options].map((option) => {
-          const label = option === "all" ? "All leagues / unassigned" : option;
+        {[ALL_LEAGUES_VALUE, ...options].map((option) => {
+          const label = option === ALL_LEAGUES_VALUE ? "All leagues / unassigned" : option;
           const active = value === option;
 
           return (
@@ -103,6 +110,8 @@ function LeagueFilterPicker({
 function TeamPicker({
   teams,
   selectedTeamIds,
+  leagueFilter,
+  onLeagueFilterChange,
   onToggle,
   onSelectAll,
   onSelectEmailReady,
@@ -110,26 +119,27 @@ function TeamPicker({
 }: {
   teams: TeamOption[];
   selectedTeamIds: string[];
+  leagueFilter: string;
+  onLeagueFilterChange: (value: string) => void;
   onToggle: (teamId: string) => void;
-  onSelectAll: () => void;
-  onSelectEmailReady: () => void;
+  onSelectAll: (teamIds: string[]) => void;
+  onSelectEmailReady: (teamIds: string[]) => void;
   onClear: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [leagueFilter, setLeagueFilter] = useState("all");
 
   const leagueOptions = useMemo(() => {
-    return Array.from(
-      new Set(teams.map((team) => team.leagueLabel || "No league assigned")),
-    ).sort((a, b) => a.localeCompare(b));
+    return Array.from(new Set(teams.map(getTeamLeagueLabel))).sort((a, b) =>
+      a.localeCompare(b),
+    );
   }, [teams]);
 
-  const filteredTeams = useMemo(() => {
+  const visibleTeams = useMemo(() => {
     const normalisedQuery = query.trim().toLowerCase();
 
     return teams.filter((team) => {
-      const leagueLabel = team.leagueLabel || "No league assigned";
-      const matchesLeague = leagueFilter === "all" || leagueLabel === leagueFilter;
+      const leagueLabel = getTeamLeagueLabel(team);
+      const matchesLeague = leagueFilter === ALL_LEAGUES_VALUE || leagueLabel === leagueFilter;
       const matchesQuery =
         !normalisedQuery ||
         team.name.toLowerCase().includes(normalisedQuery) ||
@@ -139,17 +149,28 @@ function TeamPicker({
     });
   }, [leagueFilter, query, teams]);
 
+  const visibleTeamIds = visibleTeams.map((team) => team.id);
+  const visibleEmailReadyTeamIds = visibleTeams
+    .filter((team) => team.emailReady)
+    .map((team) => team.id);
+  const selectedVisibleCount = visibleTeamIds.filter((teamId) =>
+    selectedTeamIds.includes(teamId),
+  ).length;
+  const selectedVisibleEmailReadyCount = visibleEmailReadyTeamIds.filter((teamId) =>
+    selectedTeamIds.includes(teamId),
+  ).length;
+
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-sm font-semibold text-white">Choose teams</div>
           <div className="mt-1 text-xs text-white/50">
-            Pick exactly which teams should receive this email. Teams with no email are shown but will be skipped.
+            Pick exactly which teams should receive this email. Changing the league filter now changes the recipient selection.
           </div>
         </div>
         <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/70">
-          {selectedTeamIds.length} selected
+          {selectedVisibleCount} of {visibleTeams.length} visible selected · {selectedTeamIds.length} total
         </div>
       </div>
 
@@ -164,24 +185,30 @@ function TeamPicker({
         <LeagueFilterPicker
           options={leagueOptions}
           value={leagueFilter}
-          onChange={setLeagueFilter}
+          onChange={onLeagueFilterChange}
         />
       </div>
+
+      {leagueFilter !== ALL_LEAGUES_VALUE ? (
+        <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-xs leading-5 text-emerald-100/85">
+          Sending is currently limited to <strong>{leagueFilter}</strong>. {selectedVisibleEmailReadyCount} visible email-ready team{selectedVisibleEmailReadyCount === 1 ? "" : "s"} selected.
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={onSelectAll}
+          onClick={() => onSelectAll(visibleTeamIds)}
           className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/10"
         >
-          Select all
+          Select visible teams
         </button>
         <button
           type="button"
-          onClick={onSelectEmailReady}
+          onClick={() => onSelectEmailReady(visibleEmailReadyTeamIds)}
           className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
         >
-          Select email-ready only
+          Select visible email-ready only
         </button>
         <button
           type="button"
@@ -193,11 +220,11 @@ function TeamPicker({
       </div>
 
       <div className="mt-4 max-h-[360px] overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-3">
-        {filteredTeams.length === 0 ? (
+        {visibleTeams.length === 0 ? (
           <div className="px-3 py-6 text-sm text-white/45">No teams match that filter.</div>
         ) : (
           <div className="grid gap-2 md:grid-cols-2">
-            {filteredTeams.map((team) => {
+            {visibleTeams.map((team) => {
               const selected = selectedTeamIds.includes(team.id);
 
               return (
@@ -215,9 +242,7 @@ function TeamPicker({
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold text-white">{team.name}</div>
-                      <div className="mt-1 text-xs text-white/45">
-                        {team.leagueLabel || "No league assigned"}
-                      </div>
+                      <div className="mt-1 text-xs text-white/45">{getTeamLeagueLabel(team)}</div>
                     </div>
                     <span
                       className={[
@@ -248,6 +273,7 @@ export default function AllTeamsCommunicationsComposer({
   const [selectedTemplateId, setSelectedTemplateId] = useState(DEFAULT_SUMMER_LEAGUE_TEMPLATE.id);
   const [subject, setSubject] = useState(DEFAULT_SUMMER_LEAGUE_TEMPLATE.subject);
   const [body, setBody] = useState(DEFAULT_SUMMER_LEAGUE_TEMPLATE.body);
+  const [selectedLeagueFilter, setSelectedLeagueFilter] = useState(ALL_LEAGUES_VALUE);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(() =>
     teams.filter((team) => team.emailReady).map((team) => team.id),
   );
@@ -263,6 +289,18 @@ export default function AllTeamsCommunicationsComposer({
     const availableTeamIds = new Set(teams.map((team) => team.id));
     setSelectedTeamIds((current) => current.filter((teamId) => availableTeamIds.has(teamId)));
   }, [teams]);
+
+  function getEmailReadyTeamIdsForLeague(leagueFilter: string) {
+    return teams
+      .filter((team) => leagueFilter === ALL_LEAGUES_VALUE || getTeamLeagueLabel(team) === leagueFilter)
+      .filter((team) => team.emailReady)
+      .map((team) => team.id);
+  }
+
+  function handleLeagueFilterChange(leagueFilter: string) {
+    setSelectedLeagueFilter(leagueFilter);
+    setSelectedTeamIds(getEmailReadyTeamIdsForLeague(leagueFilter));
+  }
 
   function handleTemplateChange(templateId: string) {
     setSelectedTemplateId(templateId);
@@ -301,6 +339,7 @@ export default function AllTeamsCommunicationsComposer({
       <input type="hidden" name="templateKey" value={selectedTemplate.key} />
       <input type="hidden" name="ctaLabel" value={selectedTemplate.ctaLabel || ""} />
       <input type="hidden" name="ctaUrl" value={selectedTemplate.ctaUrl || ""} />
+      <input type="hidden" name="selectedLeagueFilter" value={selectedLeagueFilter} />
       {selectedTeamIds.map((teamId) => (
         <input key={teamId} type="hidden" name="teamIds" value={teamId} />
       ))}
@@ -336,11 +375,11 @@ export default function AllTeamsCommunicationsComposer({
         <TeamPicker
           teams={teams}
           selectedTeamIds={selectedTeamIds}
+          leagueFilter={selectedLeagueFilter}
+          onLeagueFilterChange={handleLeagueFilterChange}
           onToggle={toggleTeam}
-          onSelectAll={() => setSelectedTeamIds(teams.map((team) => team.id))}
-          onSelectEmailReady={() =>
-            setSelectedTeamIds(teams.filter((team) => team.emailReady).map((team) => team.id))
-          }
+          onSelectAll={(teamIds) => setSelectedTeamIds(teamIds)}
+          onSelectEmailReady={(teamIds) => setSelectedTeamIds(teamIds)}
           onClear={() => setSelectedTeamIds([])}
         />
 
