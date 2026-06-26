@@ -463,7 +463,7 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: { monthKey:
         body: [
           `Hi ${getFirstName(referee.name || referee.email)},`,
           "",
-          `Please mark your referee availability for ${bounds.monthLabel}.",
+          "Please mark your referee availability for " + bounds.monthLabel + ".",
           "",
           "You will only see the league dates this referee has been set to cover.",
           "",
