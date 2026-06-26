@@ -273,6 +273,8 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
     }),
   ]);
 
+  void stats;
+
   const templates = emailTemplatesRaw.map((template) => ({
     id: template.id,
     key: template.key,
@@ -363,37 +365,17 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
         <SummaryCard title="Popular night" value={popularNight ? formatPreferredNight(popularNight[0] as PreferredNight) : "—"} subtext={popularNight ? `${popularNight[1]} preference${popularNight[1] === 1 ? "" : "s"}` : "No night preference yet"} />
       </div>
 
-      <AdminCard className="space-y-5 p-6">
-        <div className="flex flex-wrap gap-3">
-          <FilterChip label="All" href="/admin/leads" active={!selectedType && !selectedStatus && !selectedArea && !selectedNight} />
-          {Object.values(InterestType).map((type) => <FilterChip key={type} label={formatInterestType(type)} href={buildHref({ type })} active={selectedType === type} />)}
-          {Object.values(LeadStatus).map((status) => <FilterChip key={status} label={formatLeadStatus(status)} href={buildHref({ type: selectedType, status })} active={selectedStatus === status} />)}
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <BulkLeadEmailForm
-            templates={templates}
-            selectedType={selectedType}
-            selectedStatus={selectedStatus}
-            selectedArea={selectedArea}
-            selectedNight={selectedNight}
-            recipientCount={emailRecipientLeads.length}
-            recipientPreview={emailRecipientPreview}
-            managedTeamOptions={managedTeamOptions}
-            action={sendBulkLeadEmailAction}
-          />
-
-          <BulkLeadSmsForm
-            templates={smsTemplates}
-            selectedType={selectedType}
-            selectedStatus={selectedStatus}
-            selectedArea={selectedArea}
-            selectedNight={selectedNight}
-            recipientCount={smsRecipientLeads.length}
-            recipientPreview={smsRecipientPreview}
-            managedTeamOptions={managedTeamOptions}
-            action={sendBulkLeadSmsAction}
-          />
+      <AdminCard className="p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">Filters</p>
+            <p className="mt-1 text-sm text-white/55">Filter the lead list without opening bulk messaging.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <FilterChip label="All" href="/admin/leads" active={!selectedType && !selectedStatus && !selectedArea && !selectedNight} />
+            {Object.values(InterestType).map((type) => <FilterChip key={type} label={formatInterestType(type)} href={buildHref({ type })} active={selectedType === type} />)}
+            {Object.values(LeadStatus).map((status) => <FilterChip key={status} label={formatLeadStatus(status)} href={buildHref({ type: selectedType, status })} active={selectedStatus === status} />)}
+          </div>
         </div>
       </AdminCard>
 
@@ -443,6 +425,56 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
             ))
           )}
         </div>
+      </AdminCard>
+
+      <AdminCard className="overflow-hidden p-0">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none flex-col gap-4 px-6 py-5 transition hover:bg-white/[0.03] md:flex-row md:items-center md:justify-between [&::-webkit-details-marker]:hidden">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300/80">Bulk messaging</p>
+              <h2 className="mt-1 text-xl font-black text-white">Open bulk email / SMS tools</h2>
+              <p className="mt-1 text-sm text-white/55">Hidden by default so the Leads page stays focused on enquiries.</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold text-white/65">
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{emailRecipientLeads.length} email-ready</span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{smsRecipientLeads.length} SMS-ready</span>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-100 group-open:hidden">Open</span>
+              <span className="hidden rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 group-open:inline-flex">Close</span>
+            </div>
+          </summary>
+
+          <div className="border-t border-white/10 p-6">
+            <div className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100/90">
+              Bulk messaging uses the current filters above. Check the recipient preview before queueing anything.
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <BulkLeadEmailForm
+                templates={templates}
+                selectedType={selectedType}
+                selectedStatus={selectedStatus}
+                selectedArea={selectedArea}
+                selectedNight={selectedNight}
+                recipientCount={emailRecipientLeads.length}
+                recipientPreview={emailRecipientPreview}
+                managedTeamOptions={managedTeamOptions}
+                action={sendBulkLeadEmailAction}
+              />
+
+              <BulkLeadSmsForm
+                templates={smsTemplates}
+                selectedType={selectedType}
+                selectedStatus={selectedStatus}
+                selectedArea={selectedArea}
+                selectedNight={selectedNight}
+                recipientCount={smsRecipientLeads.length}
+                recipientPreview={smsRecipientPreview}
+                managedTeamOptions={managedTeamOptions}
+                action={sendBulkLeadSmsAction}
+              />
+            </div>
+          </div>
+        </details>
       </AdminCard>
     </div>
   );
