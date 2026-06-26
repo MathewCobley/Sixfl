@@ -422,7 +422,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                 <div className="grid gap-3 md:grid-cols-3">
                   <Detail label="Free kit" value={formatYesNo(lead.wantsFreeKit)} />
                   <Detail label="Marketing consent" value={formatYesNo(lead.marketingConsent)} />
-                  <Detail label="Notes" value={lead.notes || lead.message || "—"} />
+                  <Detail label="Message" value={lead.message || "—"} />
                 </div>
               </div>
             ))
