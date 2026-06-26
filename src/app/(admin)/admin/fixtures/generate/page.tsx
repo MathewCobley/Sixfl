@@ -12,6 +12,7 @@ import {
   backfillFixtureMatchFeeChargesAction,
   generateDraftFixturesWithPitchRefereesAction,
 } from "./actions";
+import { backfillRefereeAssignmentsAction } from "./referee-backfill-actions";
 
 function leagueLabel(league: { name: string; season: string | null }) {
   return league.season ? `${league.name} • ${league.season}` : league.name;
@@ -31,6 +32,9 @@ const labelClass = "mb-2 block text-xs font-semibold uppercase tracking-[0.2em] 
 type SearchParams = {
   backfilled?: string;
   paymentRequests?: string;
+  refBackfilled?: string;
+  refAssigned?: string;
+  refEmails?: string;
 };
 
 export default async function ImprovedFixtureGeneratorPage({
@@ -61,6 +65,11 @@ export default async function ImprovedFixtureGeneratorPage({
   const paymentRequestCount = Number(sp.paymentRequests ?? "");
   const hasBackfillNotice = Number.isFinite(backfilledCount) && sp.backfilled !== undefined;
 
+  const refereeBackfilledCount = Number(sp.refBackfilled ?? "");
+  const refereeAssignedCount = Number(sp.refAssigned ?? "");
+  const refereeEmailCount = Number(sp.refEmails ?? "");
+  const hasRefereeBackfillNotice = Number.isFinite(refereeBackfilledCount) && sp.refBackfilled !== undefined;
+
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
       <div>
@@ -78,6 +87,12 @@ export default async function ImprovedFixtureGeneratorPage({
       {hasBackfillNotice ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           Backfilled payment charges for {backfilledCount} fixture{backfilledCount === 1 ? "" : "s"}. Queued {Number.isFinite(paymentRequestCount) ? paymentRequestCount : 0} payment message{paymentRequestCount === 1 ? "" : "s"}.
+        </div>
+      ) : null}
+
+      {hasRefereeBackfillNotice ? (
+        <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+          Linked {refereeBackfilledCount} fixture{refereeBackfilledCount === 1 ? "" : "s"} to referee night{refereeBackfilledCount === 1 ? "" : "s"}. Filled {Number.isFinite(refereeAssignedCount) ? refereeAssignedCount : 0} blank referee assignment{refereeAssignedCount === 1 ? "" : "s"}. Queued {Number.isFinite(refereeEmailCount) ? refereeEmailCount : 0} referee email{refereeEmailCount === 1 ? "" : "s"}.
         </div>
       ) : null}
 
@@ -122,6 +137,71 @@ export default async function ImprovedFixtureGeneratorPage({
 
           <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/15 px-6 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20">
             Backfill missing charges
+          </button>
+        </form>
+      </AdminCard>
+
+      <AdminCard className="rounded-3xl border border-sky-400/25 bg-sky-500/[0.06] p-6 md:p-8">
+        <form action={backfillRefereeAssignmentsAction} className="space-y-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-200/80">Existing fixtures</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Backfill referee assignments</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
+              Use this when fixtures already exist but referee nights/emails need setting up. It fills blank referee assignments from the pitch referees below, creates referee nights, and queues referee emails only. Team fixture emails are not resent.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+            <div>
+              <label className={labelClass}>League</label>
+              <select name="leagueId" required className={inputClass}>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Referee night fee</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-white/45">£</span>
+                <input type="number" name="refereeFeePounds" min="0" step="0.01" defaultValue="45.00" className={`${inputClass} pl-8`} />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Pitch referees</p>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Existing referee assignments are kept. Blank assignments are filled using the fixture pitch number.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }, (_, index) => (
+                <div key={index + 1}>
+                  <label className={labelClass}>Pitch {index + 1} referee</label>
+                  <select name={`refereeIdByPitch${index + 1}`} className={inputClass}>
+                    <option value="">Leave blank</option>
+                    {referees.map((referee) => (
+                      <option key={referee.id} value={referee.id}>{refereeLabel(referee)}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-black/25 p-4">
+            <input type="checkbox" name="sendRefereeEmails" defaultChecked className="mt-1" />
+            <span>
+              <span className="block text-sm font-semibold text-white">Queue referee assignment emails</span>
+              <span className="mt-1 block text-sm leading-6 text-white/55">
+                Sends referee-only assignment emails for newly linked referee nights. It will not send team fixture amendment emails.
+              </span>
+            </span>
+          </label>
+
+          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/15 px-6 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/20">
+            Backfill referee assignments
           </button>
         </form>
       </AdminCard>
