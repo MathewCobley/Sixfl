@@ -13,11 +13,11 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import AdminCard from "@/components/admin/AdminCard";
 import BulkLeadEmailForm from "@/components/admin/leads/BulkLeadEmailForm";
+import { updateLeadStatus } from "./actions";
 import {
   sendBulkLeadEmailAction,
   sendBulkLeadSmsAction,
-  updateLeadStatus,
-} from "./actions";
+} from "./guarded-bulk-actions";
 import BulkLeadSmsForm from "@/components/admin/leads/BulkLeadSmsForm";
 
 type SearchParams = Promise<{
@@ -258,8 +258,8 @@ function StatusButton({
         className={[
           "inline-flex h-9 items-center justify-center rounded-xl border px-3 text-xs font-bold tracking-[0.12em] transition",
           isActive
-            ? "cursor-default border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-            : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10 hover:text-white",
+            ? "cursor-not-allowed border-white/5 bg-white/[0.03] text-white/30"
+            : "border-white/10 bg-white/[0.04] text-white/70 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300",
         ].join(" ")}
       >
         {formatLeadStatus(nextStatus)}
@@ -268,68 +268,26 @@ function StatusButton({
   );
 }
 
-type AreaSummary = {
-  area: string;
-  total: number;
-  teams: number;
-  players: number;
-  referees: number;
-};
-
-type LaunchSignal = {
-  area: string;
-  night: PreferredNight;
-  total: number;
-  teams: number;
-  players: number;
-  referees: number;
-};
-
-type RecipientPreviewItem = {
-  id: string;
-  contactName: string | null;
-  email: string;
-};
-type SmsRecipientPreviewItem = {
-  id: string;
-  contactName: string | null;
-  phone: string;
-};
-type BulkEmailTemplate = {
-  id: string;
-  key: string;
-  label: string;
-  subject: string;
-  body: string;
-  interestType: InterestType | null;
-  ctaLabel: string | null;
-  ctaUrlKey: string | null;
-};
-
 export default async function AdminLeadsPage({
   searchParams,
 }: {
-  searchParams?: SearchParams;
+  searchParams: SearchParams;
 }) {
   await requireAdmin();
 
-  const sp = (await searchParams) ?? {};
-
-  const selectedType = isInterestType(sp.type?.toUpperCase())
-    ? (sp.type?.toUpperCase() as InterestType)
+  const resolvedSearchParams = await searchParams;
+  const selectedType = isInterestType(resolvedSearchParams.type)
+    ? resolvedSearchParams.type
+    : undefined;
+  const selectedStatus = isLeadStatus(resolvedSearchParams.status)
+    ? resolvedSearchParams.status
+    : undefined;
+  const selectedArea = resolvedSearchParams.area?.trim() || undefined;
+  const selectedNight = isPreferredNight(resolvedSearchParams.night)
+    ? resolvedSearchParams.night
     : undefined;
 
-  const selectedStatus = isLeadStatus(sp.status?.toUpperCase())
-    ? (sp.status?.toUpperCase() as LeadStatus)
-    : undefined;
-
-  const selectedNight = isPreferredNight(sp.night?.toUpperCase())
-    ? (sp.night?.toUpperCase() as PreferredNight)
-    : undefined;
-
-  const selectedArea = sp.area?.trim() || undefined;
-
-  const where = {
+  const leadWhere = {
     ...(selectedType ? { interestType: selectedType } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
     ...(selectedArea ? { area: selectedArea } : {}),
@@ -344,100 +302,25 @@ export default async function AdminLeadsPage({
       : {}),
   };
 
-  const recipientWhere = {
-    ...where,
-    AND: [
-      {
-        email: {
-          not: null,
-        },
-      },
-      {
-        email: {
-          not: "",
-        },
-      },
-    ],
-  };
-
-  const returnTo = buildHref({
-    type: selectedType,
-    status: selectedStatus,
-    area: selectedArea,
-    night: selectedNight,
-  });
-
-  const [
-    leads,
-    totalCount,
-    teamCount,
-    playerCount,
-    refereeCount,
-    allAreas,
-    newCount,
-    contactedCount,
-    allLeadsForSummary,
-    recipientCount,
-    recipientPreview,
-    leadTemplates,
-    smsRecipientCount,
-    smsRecipientPreview,
-  ] = await Promise.all([
+  const [leads, stats, templates, smsTemplates, managedTeams] = await Promise.all([
     prisma.interestLead.findMany({
-      where,
+      where: leadWhere,
       orderBy: { createdAt: "desc" },
       include: {
-        preferredNights: {
-          orderBy: { createdAt: "asc" },
-        },
+        preferredNights: true,
       },
     }),
-    prisma.interestLead.count(),
-    prisma.interestLead.count({ where: { interestType: "TEAM" } }),
-    prisma.interestLead.count({ where: { interestType: "PLAYER" } }),
-    prisma.interestLead.count({ where: { interestType: "REFEREE" } }),
-    prisma.interestLead.findMany({
-      distinct: ["area"],
-      select: { area: true },
-      orderBy: { area: "asc" },
-    }),
-    prisma.interestLead.count({ where: { status: "NEW" } }),
-    prisma.interestLead.count({ where: { status: "CONTACTED" } }),
-    prisma.interestLead.findMany({
-      select: {
-        area: true,
-        interestType: true,
-        leagueType: true,
-        preferredNights: {
-          select: {
-            night: true,
-          },
-        },
-      },
-    }),
-    prisma.interestLead.count({
-      where: recipientWhere,
-    }),
-    prisma.interestLead.findMany({
-      where: recipientWhere,
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        contactName: true,
-        email: true,
-      },
+    prisma.interestLead.groupBy({
+      by: ["interestType", "status"],
+      _count: true,
     }),
     prisma.emailTemplate.findMany({
-      where: {
-        audience: "LEAD",
-        isActive: true,
-      },
-      orderBy: [{ name: "asc" }],
+      where: { isActive: true },
+      orderBy: [{ interestType: "asc" }, { label: "asc" }],
       select: {
         id: true,
         key: true,
-        name: true,
+        label: true,
         subject: true,
         body: true,
         interestType: true,
@@ -445,986 +328,277 @@ export default async function AdminLeadsPage({
         ctaUrlKey: true,
       },
     }),
-    prisma.interestLead.count({
-      where: {
-        ...where,
-        AND: [
-          {
-            phone: {
-              not: null,
-            },
-          },
-          {
-            phone: {
-              not: "",
-            },
-          },
-        ],
-      },
-    }),
-    prisma.interestLead.findMany({
-      where: {
-        ...where,
-        AND: [
-          {
-            phone: {
-              not: null,
-            },
-          },
-          {
-            phone: {
-              not: "",
-            },
-          },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+    prisma.smsTemplate.findMany({
+      where: { isActive: true },
+      orderBy: [{ interestType: "asc" }, { label: "asc" }],
       select: {
         id: true,
-        contactName: true,
-        phone: true,
+        key: true,
+        label: true,
+        body: true,
+        description: true,
+        interestType: true,
+        ctaUrlKey: true,
+      },
+    }),
+    prisma.team.findMany({
+      where: {
+        teamMode: "MANAGED",
+        isRecruiting: true,
+        joinSlug: {
+          not: null,
+        },
+      },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        joinSlug: true,
       },
     }),
   ]);
-  const managedTeams = await prisma.team.findMany({
-    where: {
-      teamMode: "MANAGED",
-      isRecruiting: true,
-      joinSlug: {
-        not: null,
-      },
-    },
-    orderBy: [{ name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      joinSlug: true,
-      league: {
-        select: {
-          name: true,
-          season: true,
-        },
-      },
-    },
-  });
-  const areas = allAreas
-    .map((x) => x.area)
-    .filter((value): value is string => Boolean(value));
 
-  const areaMap = new Map<string, AreaSummary>();
+  const totalLeads = leads.length;
+  const newLeads = leads.filter((lead) => lead.status === "NEW").length;
+  const teamLeads = leads.filter((lead) => lead.interestType === "TEAM").length;
+  const playerLeads = leads.filter((lead) => lead.interestType === "PLAYER").length;
+  const refereeLeads = leads.filter((lead) => lead.interestType === "REFEREE").length;
 
-  for (const lead of allLeadsForSummary) {
-    const area = lead.area?.trim();
-    if (!area) continue;
+  const topArea = Object.entries(
+    leads.reduce<Record<string, number>>((acc, lead) => {
+      const area = lead.area?.trim() || "Unknown";
+      acc[area] = (acc[area] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1] - a[1])[0];
 
-    if (!areaMap.has(area)) {
-      areaMap.set(area, {
-        area,
-        total: 0,
-        teams: 0,
-        players: 0,
-        referees: 0,
-      });
-    }
+  const preferredNightCounts = leads.reduce<Record<string, number>>((acc, lead) => {
+    const nights = lead.preferredNights.length
+      ? lead.preferredNights.map((item) => item.night)
+      : ["ANY" as PreferredNight];
 
-    const summary = areaMap.get(area)!;
-    summary.total += 1;
-
-    if (lead.interestType === "TEAM") summary.teams += 1;
-    if (lead.interestType === "PLAYER") summary.players += 1;
-    if (lead.interestType === "REFEREE") summary.referees += 1;
-  }
-
-  const areaSummaries = Array.from(areaMap.values()).sort((a, b) => {
-    if (b.total !== a.total) return b.total - a.total;
-    return a.area.localeCompare(b.area);
-  });
-
-  const topArea = areaSummaries[0];
-
-  const preferredNightCounts = allLeadsForSummary.reduce<
-    Partial<Record<PreferredNight, number>>
-  >((acc, lead) => {
-    const uniqueNights = Array.from(
-      new Set(lead.preferredNights.map((item) => item.night)),
-    );
-
-    for (const night of uniqueNights) {
+    for (const night of nights) {
       acc[night] = (acc[night] ?? 0) + 1;
     }
 
     return acc;
   }, {});
 
-  const mostPopularNightEntry = Object.entries(preferredNightCounts).sort(
+  const popularNight = Object.entries(preferredNightCounts).sort(
     (a, b) => b[1] - a[1],
-  )[0] as [PreferredNight, number] | undefined;
+  )[0];
 
-  const mostPopularNight = mostPopularNightEntry
-    ? `${formatPreferredNight(mostPopularNightEntry[0])}`
-    : "—";
+  const emailRecipientLeads = leads.filter((lead) => lead.email?.trim());
+  const smsRecipientLeads = leads.filter((lead) => lead.phone?.trim());
+  const emailRecipientPreview = emailRecipientLeads.slice(0, 50).map((lead) => ({
+    id: lead.id,
+    contactName: lead.contactName,
+    email: lead.email || "",
+  }));
+  const smsRecipientPreview = smsRecipientLeads.slice(0, 50).map((lead) => ({
+    id: lead.id,
+    contactName: lead.contactName,
+    phone: lead.phone || "",
+  }));
+  const managedTeamOptions = managedTeams.map((team) => ({
+    value: team.id,
+    label: team.name,
+  }));
 
-  const mensCount = allLeadsForSummary.filter(
-    (lead) => lead.leagueType === "MENS",
-  ).length;
-  const womensCount = allLeadsForSummary.filter(
-    (lead) => lead.leagueType === "WOMENS",
-  ).length;
-  const youthCount = allLeadsForSummary.filter(
-    (lead) => lead.leagueType === "YOUTH",
-  ).length;
-
-  const launchSignalMap = new Map<string, LaunchSignal>();
-
-  for (const lead of allLeadsForSummary) {
-    const area = lead.area?.trim();
-    if (!area) continue;
-
-    const uniqueNights = Array.from(
-      new Set(lead.preferredNights.map((item) => item.night)),
-    ).filter((night) => night !== "ANY");
-
-    for (const night of uniqueNights) {
-      const key = `${area}__${night}`;
-
-      if (!launchSignalMap.has(key)) {
-        launchSignalMap.set(key, {
-          area,
-          night,
-          total: 0,
-          teams: 0,
-          players: 0,
-          referees: 0,
-        });
-      }
-
-      const signal = launchSignalMap.get(key)!;
-      signal.total += 1;
-
-      if (lead.interestType === "TEAM") signal.teams += 1;
-      if (lead.interestType === "PLAYER") signal.players += 1;
-      if (lead.interestType === "REFEREE") signal.referees += 1;
-    }
-  }
-
-  const launchSignals = Array.from(launchSignalMap.values()).sort((a, b) => {
-    if (b.total !== a.total) return b.total - a.total;
-    if (a.area !== b.area) return a.area.localeCompare(b.area);
-    return formatPreferredNight(a.night).localeCompare(
-      formatPreferredNight(b.night),
-    );
+  const currentHref = buildHref({
+    type: selectedType,
+    status: selectedStatus,
+    area: selectedArea,
+    night: selectedNight,
   });
 
-  const strongestLaunchSignal = launchSignals[0];
-
-  const bulkEmailTemplates: BulkEmailTemplate[] = leadTemplates.map(
-    (template) => ({
-      id: template.id,
-      key: template.key,
-      label: template.name,
-      subject: template.subject,
-      body: template.body,
-      interestType: template.interestType,
-      ctaLabel: template.ctaLabel,
-      ctaUrlKey: template.ctaUrlKey,
-    }),
-  );
-
-  const previewRecipients: RecipientPreviewItem[] = recipientPreview
-    .filter((recipient): recipient is typeof recipient & { email: string } =>
-      Boolean(recipient.email),
-    )
-    .map((recipient) => ({
-      id: recipient.id,
-      contactName: recipient.contactName,
-      email: recipient.email,
-    }));
-    const previewSmsRecipients: SmsRecipientPreviewItem[] = smsRecipientPreview
-    .filter((recipient): recipient is typeof recipient & { phone: string } =>
-      Boolean(recipient.phone),
-    )
-    .map((recipient) => ({
-      id: recipient.id,
-      contactName: recipient.contactName,
-      phone: recipient.phone,
-    }));
-    const managedTeamOptions = managedTeams.map((team) => ({
-      value: team.id,
-      label: `${team.name}${
-        team.league?.name
-          ? ` · ${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
-          : ""
-      }`,
-    }));
   return (
-    <AdminCard title="Leads">
-      <div className="space-y-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="text-sm text-white/65">
-              View team, player and referee interest captured through the SIXFL
-              funnel.
-            </div>
-            <div className="mt-1 text-xs text-white/45">
-              {leads.length} result{leads.length === 1 ? "" : "s"} shown
-              {selectedType || selectedStatus || selectedArea || selectedNight
-                ? " with filters applied"
-                : ` from ${totalCount} total leads`}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/admin"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-            >
-              Back to admin
-            </Link>
-
-            <Link
-              href="/admin/leads"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-            >
-              Clear filters
-            </Link>
-
-            <Link
-              href="/admin/leads/new"
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500"
-            >
-              Add lead
-            </Link>
-
-            <Link
-              href="/admin/leads/import"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-            >
-              Import CSV
-            </Link>
-
-            <Link
-              href="/admin/leads/import-sms"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium hover:bg-black/30"
-            >
-              Import SMS CSV
-            </Link>
-          </div>
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-[0.24em] text-emerald-400">
+            Admin
+          </p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight text-white md:text-5xl">
+            Interest leads
+          </h1>
+          <p className="mt-3 max-w-3xl text-white/60">
+            View enquiries, filter demand and contact potential teams, players and referees.
+          </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="TOTAL LEADS"
-            value={totalCount}
-            subtext="All captured interest"
-          />
-          <StatCard
-            label="TEAM INTEREST"
-            value={teamCount}
-            subtext="Captains and organisers"
-          />
-          <StatCard
-            label="PLAYER INTEREST"
-            value={playerCount}
-            subtext="Waiting list players"
-          />
-          <StatCard
-            label="REFEREE INTEREST"
-            value={refereeCount}
-            subtext="Officials pipeline"
-          />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="NEW" value={newCount} subtext="Needs follow-up" />
-          <StatCard
-            label="CONTACTED"
-            value={contactedCount}
-            subtext="Already touched"
-          />
-          <StatCard
-            label="FILTERED RESULTS"
-            value={leads.length}
-            subtext="Current view"
-          />
-          <StatCard
-            label="AREAS"
-            value={areas.length}
-            subtext="Distinct demand zones"
-          />
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
-            LEAD SUMMARY
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              title="TOP AREA"
-              value={topArea ? topArea.area : "—"}
-              subtext={
-                topArea
-                  ? `${topArea.total} total leads • ${topArea.teams} teams • ${topArea.players} players • ${topArea.referees} referees`
-                  : "No area data yet"
-              }
-            />
-            <SummaryCard
-              title="MOST POPULAR NIGHT"
-              value={mostPopularNight}
-              subtext={
-                mostPopularNightEntry
-                  ? `${mostPopularNightEntry[1]} leads selected this night`
-                  : "No night preference data yet"
-              }
-            />
-            <SummaryCard
-              title="MEN’S / WOMEN’S / YOUTH"
-              value={`${mensCount} / ${womensCount} / ${youthCount}`}
-              subtext="Demand split by league type"
-            />
-            <SummaryCard
-              title="LAUNCH READINESS"
-              value={
-                strongestLaunchSignal
-                  ? `${strongestLaunchSignal.area} • ${formatPreferredNight(
-                      strongestLaunchSignal.night,
-                    )}`
-                  : "Need more leads"
-              }
-              subtext={
-                strongestLaunchSignal
-                  ? `${strongestLaunchSignal.total} total signals across teams, players and referees`
-                  : "Capture more demand before deciding"
-              }
-            />
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-              Area demand snapshot
-            </div>
-
-            {areaSummaries.length === 0 ? (
-              <div className="mt-3 text-sm text-white/60">
-                No area data available yet.
-              </div>
-            ) : (
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-white/50">
-                    <tr>
-                      <th className="px-3 py-2 font-semibold">Area</th>
-                      <th className="px-3 py-2 font-semibold">Total</th>
-                      <th className="px-3 py-2 font-semibold">Teams</th>
-                      <th className="px-3 py-2 font-semibold">Players</th>
-                      <th className="px-3 py-2 font-semibold">Referees</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {areaSummaries.slice(0, 8).map((summary) => (
-                      <tr
-                        key={summary.area}
-                        className="border-t border-white/10 text-white/80"
-                      >
-                        <td className="px-3 py-2 font-medium text-white">
-                          {summary.area}
-                        </td>
-                        <td className="px-3 py-2">{summary.total}</td>
-                        <td className="px-3 py-2">{summary.teams}</td>
-                        <td className="px-3 py-2">{summary.players}</td>
-                        <td className="px-3 py-2">{summary.referees}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
-            LAUNCH SIGNALS
-          </div>
-
-          <div className="mt-2 text-sm text-white/60">
-            Strongest area + night combinations based on current lead demand.
-          </div>
-
-          {launchSignals.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
-              No launch signal data yet.
-            </div>
-          ) : (
-            <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-white/5 text-white/70">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Area</th>
-                    <th className="px-4 py-3 font-semibold">Night</th>
-                    <th className="px-4 py-3 font-semibold">Total</th>
-                    <th className="px-4 py-3 font-semibold">Teams</th>
-                    <th className="px-4 py-3 font-semibold">Players</th>
-                    <th className="px-4 py-3 font-semibold">Referees</th>
-                    <th className="px-4 py-3 font-semibold">Signal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {launchSignals.slice(0, 12).map((signal) => (
-                    <tr
-                      key={`${signal.area}-${signal.night}`}
-                      className="border-t border-white/10 text-white/80"
-                    >
-                      <td className="px-4 py-3 font-medium text-white">
-                        {signal.area}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatPreferredNight(signal.night)}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-white">
-                        {signal.total}
-                      </td>
-                      <td className="px-4 py-3">{signal.teams}</td>
-                      <td className="px-4 py-3">{signal.players}</td>
-                      <td className="px-4 py-3">{signal.referees}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={[
-                            "rounded-full border px-2.5 py-1 text-xs font-bold",
-                            signal.total >= 8
-                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-                              : signal.total >= 5
-                                ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
-                                : "border-white/10 bg-white/5 text-white/65",
-                          ].join(" ")}
-                        >
-                          {signal.total >= 8
-                            ? "Strong"
-                            : signal.total >= 5
-                              ? "Building"
-                              : "Early"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold tracking-[0.2em] text-white/55">
-            FILTERS
-          </div>
-
-          <div className="mt-4 space-y-4">
-            <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                Lead type
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <FilterChip
-                  label="All"
-                  href={buildHref({
-                    status: selectedStatus,
-                    area: selectedArea,
-                    night: selectedNight,
-                  })}
-                  active={!selectedType}
-                />
-                <FilterChip
-                  label="Team"
-                  href={buildHref({
-                    type: "TEAM",
-                    status: selectedStatus,
-                    area: selectedArea,
-                    night: selectedNight,
-                  })}
-                  active={selectedType === "TEAM"}
-                />
-                <FilterChip
-                  label="Player"
-                  href={buildHref({
-                    type: "PLAYER",
-                    status: selectedStatus,
-                    area: selectedArea,
-                    night: selectedNight,
-                  })}
-                  active={selectedType === "PLAYER"}
-                />
-                <FilterChip
-                  label="Referee"
-                  href={buildHref({
-                    type: "REFEREE",
-                    status: selectedStatus,
-                    area: selectedArea,
-                    night: selectedNight,
-                  })}
-                  active={selectedType === "REFEREE"}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                Status
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <FilterChip
-                  label="All"
-                  href={buildHref({
-                    type: selectedType,
-                    area: selectedArea,
-                    night: selectedNight,
-                  })}
-                  active={!selectedStatus}
-                />
-                {(["NEW", "CONTACTED", "QUALIFIED", "CLOSED"] as LeadStatus[]).map(
-                  (status) => (
-                    <FilterChip
-                      key={status}
-                      label={formatLeadStatus(status)}
-                      href={buildHref({
-                        type: selectedType,
-                        status,
-                        area: selectedArea,
-                        night: selectedNight,
-                      })}
-                      active={selectedStatus === status}
-                    />
-                  ),
-                )}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                Preferred night
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <FilterChip
-                  label="All"
-                  href={buildHref({
-                    type: selectedType,
-                    status: selectedStatus,
-                    area: selectedArea,
-                  })}
-                  active={!selectedNight}
-                />
-                {(
-                  [
-                    "MONDAY",
-                    "TUESDAY",
-                    "WEDNESDAY",
-                    "THURSDAY",
-                    "FRIDAY",
-                    "SATURDAY",
-                    "SUNDAY",
-                    "ANY",
-                  ] as PreferredNight[]
-                ).map((night) => (
-                  <FilterChip
-                    key={night}
-                    label={formatPreferredNight(night)}
-                    href={buildHref({
-                      type: selectedType,
-                      status: selectedStatus,
-                      area: selectedArea,
-                      night,
-                    })}
-                    active={selectedNight === night}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {areas.length > 0 ? (
-              <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                  Area
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <FilterChip
-                    label="All"
-                    href={buildHref({
-                      type: selectedType,
-                      status: selectedStatus,
-                      night: selectedNight,
-                    })}
-                    active={!selectedArea}
-                  />
-                  {areas.map((area) => (
-                    <FilterChip
-                      key={area}
-                      label={area}
-                      href={buildHref({
-                        type: selectedType,
-                        status: selectedStatus,
-                        area,
-                        night: selectedNight,
-                      })}
-                      active={selectedArea === area}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {leads.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/60">
-            No leads found for the current filters.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="overflow-x-auto rounded-2xl border border-white/10">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-white/5 text-white/70">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Type</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Area</th>
-                    <th className="px-4 py-3 font-semibold">League</th>
-                    <th className="px-4 py-3 font-semibold">Nights</th>
-                    <th className="px-4 py-3 font-semibold">Email</th>
-                    <th className="px-4 py-3 font-semibold">Created</th>
-                    <th className="px-4 py-3 font-semibold">Action</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {leads.map((lead) => (
-                    <tr
-                      key={lead.id}
-                      className="border-t border-white/10 align-top hover:bg-white/[0.03]"
-                    >
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
-                            lead.interestType,
-                          )}`}
-                        >
-                          {formatInterestType(lead.interestType)}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
-                            lead.status,
-                          )}`}
-                        >
-                          {formatLeadStatus(lead.status)}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/admin/leads/${lead.id}`}
-                          className="block transition hover:opacity-90"
-                        >
-                          <div className="font-medium text-white hover:text-emerald-300">
-                            {lead.contactName}
-                          </div>
-                          <div className="mt-1 text-xs text-white/50">
-                            {lead.teamName || "—"}
-                          </div>
-                        </Link>
-                      </td>
-
-                      <td className="px-4 py-3 text-white/85">
-                        {lead.area ?? "—"}
-                      </td>
-
-                      <td className="px-4 py-3 text-white/85">
-                        {formatLeagueType(lead.leagueType)}
-                      </td>
-
-                      <td className="px-4 py-3 text-white/85">
-                        {formatPreferredNights(lead.preferredNights)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          {lead.email ? (
-                            <a
-                              href={`mailto:${lead.email}`}
-                              className="break-all text-emerald-300 hover:text-emerald-200"
-                            >
-                              {lead.email}
-                            </a>
-                          ) : (
-                            <span className="text-white/40">No email</span>
-                          )}
-
-                          {lead.phone ? (
-                            <a
-                              href={`tel:${lead.phone}`}
-                              className="mt-1 text-xs text-white/50"
-                            >
-                              {lead.phone}
-                            </a>
-                          ) : null}
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3 text-white/60">
-                        {formatDate(lead.createdAt)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/admin/leads/${lead.id}`}
-                          className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20"
-                        >
-                          View lead
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="grid gap-4">
-              {leads.map((lead) => (
-                <div
-                  key={`${lead.id}-detail`}
-                  className="rounded-2xl border border-white/10 bg-black/20 p-4"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-lg font-bold text-white">
-                          {lead.contactName}
-                        </div>
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${typeClasses(
-                            lead.interestType,
-                          )}`}
-                        >
-                          {formatInterestType(lead.interestType)}
-                        </span>
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(
-                            lead.status,
-                          )}`}
-                        >
-                          {formatLeadStatus(lead.status)}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 text-sm text-white/55">
-                        Captured {formatDate(lead.createdAt)}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href={`/admin/leads/${lead.id}`}
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20"
-                      >
-                        View lead
-                      </Link>
-
-                      {lead.phone ? (
-                        <a
-                          href={`tel:${lead.phone}`}
-                          className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white hover:bg-white/10"
-                        >
-                          Call lead
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusButton
-                      id={lead.id}
-                      nextStatus="NEW"
-                      currentStatus={lead.status}
-                      returnTo={returnTo}
-                    />
-                    <StatusButton
-                      id={lead.id}
-                      nextStatus="CONTACTED"
-                      currentStatus={lead.status}
-                      returnTo={returnTo}
-                    />
-                    <StatusButton
-                      id={lead.id}
-                      nextStatus="QUALIFIED"
-                      currentStatus={lead.status}
-                      returnTo={returnTo}
-                    />
-                    <StatusButton
-                      id={lead.id}
-                      nextStatus="CLOSED"
-                      currentStatus={lead.status}
-                      returnTo={returnTo}
-                    />
-                  </div>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <Detail label="Email" value={lead.email ?? "—"} />
-                    <Detail label="Phone" value={lead.phone ?? "—"} />
-                    <Detail label="Team name" value={lead.teamName ?? "—"} />
-                    <Detail label="Area" value={lead.area ?? "—"} />
-                    <Detail
-                      label="League type"
-                      value={formatLeagueType(lead.leagueType)}
-                    />
-                    <Detail
-                      label="Preferred nights"
-                      value={formatPreferredNights(lead.preferredNights)}
-                    />
-                    <Detail
-                      label="Status"
-                      value={formatLeadStatus(lead.status)}
-                    />
-                    <Detail label="Source" value={lead.source ?? "—"} />
-                    <Detail
-                      label="Free kit interest"
-                      value={formatYesNo(lead.wantsFreeKit)}
-                    />
-                    <Detail
-                      label="Marketing consent"
-                      value={formatYesNo(lead.marketingConsent)}
-                    />
-                    <Detail label="Updated" value={formatDate(lead.updatedAt)} />
-                    <Detail label="Lead ID" value={lead.id} />
-                  </div>
-
-                  <div className="mt-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                      Message
-                    </div>
-                    <div className="mt-2 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                      {lead.message ?? "—"}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
-                  QUICK VIEW
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-white/70">
-                  <div>
-                    Newest lead: {leads[0] ? formatDate(leads[0].createdAt) : "—"}
-                  </div>
-                  <div>
-                    Active filter type:{" "}
-                    {selectedType ? formatInterestType(selectedType) : "All"}
-                  </div>
-                  <div>Active filter area: {selectedArea || "All"}</div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
-                  WHAT TO LOOK FOR
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-white/70">
-                  <div>Clusters by preferred night</div>
-                  <div>Repeated demand in the same area</div>
-                  <div>Women’s and youth demand by location</div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-[11px] font-bold tracking-[0.18em] text-white/50">
-                  NEXT STEP
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-white/70">
-                  <div>Contact high-intent team leads first</div>
-                  <div>Group player demand by area and night</div>
-                  <div>Build referee coverage before launch week</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
-          <div className="mb-4 flex flex-col gap-2 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
-                BULK EMAIL
-              </div>
-              <div className="mt-2 text-lg font-black text-white">
-                Contact filtered leads
-              </div>
-              <div className="mt-1 text-sm text-white/60">
-                Send a campaign to the current filtered lead set, with preview
-                recipients shown before sending.
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-right">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
-                Matching recipients
-              </div>
-              <div className="mt-1 text-lg font-black text-white">
-                {recipientCount}
-              </div>
-            </div>
-          </div>
-
-          <BulkLeadEmailForm
-            action={sendBulkLeadEmailAction}
-            selectedType={selectedType}
-            selectedStatus={selectedStatus}
-            selectedArea={selectedArea}
-            selectedNight={selectedNight}
-            recipientCount={recipientCount}
-            recipientPreview={previewRecipients}
-            templates={bulkEmailTemplates}
-            managedTeamOptions={managedTeamOptions}
-          />
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_42%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
-          <div className="mb-4 flex flex-col gap-2 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="text-[11px] font-bold tracking-[0.2em] text-emerald-300/80">
-                BULK SMS
-              </div>
-              <div className="mt-2 text-lg font-black text-white">
-                Text filtered leads
-              </div>
-              <div className="mt-1 text-sm text-white/60">
-                Send an SMS to the current filtered lead set, with preview recipients shown before sending.
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-right">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
-                Matching SMS recipients
-              </div>
-              <div className="mt-1 text-lg font-black text-white">
-                {smsRecipientCount}
-              </div>
-            </div>
-          </div>
-
-          <BulkLeadSmsForm
-            action={sendBulkLeadSmsAction}
-            selectedType={selectedType}
-            selectedStatus={selectedStatus}
-            selectedArea={selectedArea}
-            selectedNight={selectedNight}
-            recipientCount={smsRecipientCount}
-            recipientPreview={previewSmsRecipients}
-          />
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/admin/leads/import"
+            className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white transition hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+          >
+            Import CSV
+          </Link>
+          <Link
+            href="/admin/leads/new"
+            className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-5 py-3 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+          >
+            Add lead
+          </Link>
         </div>
       </div>
-    </AdminCard>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Total" value={totalLeads} subtext="Matching leads" />
+        <StatCard label="New" value={newLeads} subtext="Awaiting contact" />
+        <StatCard label="Teams" value={teamLeads} subtext="Team enquiries" />
+        <StatCard label="Players" value={playerLeads} subtext="Individual players" />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <SummaryCard
+          title="Demand split"
+          value={`${teamLeads} teams • ${playerLeads} players • ${refereeLeads} refs`}
+          subtext="Current filtered view"
+        />
+        <SummaryCard
+          title="Top area"
+          value={topArea ? `${topArea[0]} (${topArea[1]})` : "—"}
+          subtext="Most common location"
+        />
+        <SummaryCard
+          title="Popular night"
+          value={popularNight ? `${formatPreferredNight(popularNight[0] as PreferredNight)} (${popularNight[1]})` : "—"}
+          subtext="Preferred night demand"
+        />
+      </div>
+
+      <AdminCard className="space-y-5 p-6">
+        <div className="flex flex-wrap gap-3">
+          <FilterChip label="All" href="/admin/leads" active={!selectedType && !selectedStatus && !selectedArea && !selectedNight} />
+          {Object.values(InterestType).map((type) => (
+            <FilterChip
+              key={type}
+              label={formatInterestType(type)}
+              href={buildHref({ type })}
+              active={selectedType === type}
+            />
+          ))}
+          {Object.values(LeadStatus).map((status) => (
+            <FilterChip
+              key={status}
+              label={formatLeadStatus(status)}
+              href={buildHref({ type: selectedType, status })}
+              active={selectedStatus === status}
+            />
+          ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <BulkLeadEmailForm
+            templates={templates}
+            selectedType={selectedType}
+            selectedStatus={selectedStatus}
+            selectedArea={selectedArea}
+            selectedNight={selectedNight}
+            recipientCount={emailRecipientLeads.length}
+            recipientPreview={emailRecipientPreview}
+            managedTeamOptions={managedTeamOptions}
+            action={sendBulkLeadEmailAction}
+          />
+
+          <BulkLeadSmsForm
+            templates={smsTemplates}
+            selectedType={selectedType}
+            selectedStatus={selectedStatus}
+            selectedArea={selectedArea}
+            selectedNight={selectedNight}
+            recipientCount={smsRecipientLeads.length}
+            recipientPreview={smsRecipientPreview}
+            managedTeamOptions={managedTeamOptions}
+            action={sendBulkLeadSmsAction}
+          />
+        </div>
+      </AdminCard>
+
+      <AdminCard className="overflow-hidden p-0">
+        <div className="border-b border-white/10 px-6 py-5">
+          <div className="text-sm text-white/55">
+            Showing <span className="font-semibold text-white">{leads.length}</span> lead{leads.length === 1 ? "" : "s"}
+          </div>
+        </div>
+
+        <div className="divide-y divide-white/10">
+          {leads.length === 0 ? (
+            <div className="px-6 py-10 text-center text-white/55">
+              No leads match the current filters.
+            </div>
+          ) : (
+            leads.map((lead) => (
+              <div key={lead.id} className="space-y-5 px-6 py-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className={["rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em]", typeClasses(lead.interestType)].join(" ")}>
+                        {formatInterestType(lead.interestType)}
+                      </span>
+                      <span className={["rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em]", statusClasses(lead.status)].join(" ")}>
+                        {formatLeadStatus(lead.status)}
+                      </span>
+                      {lead.wantsFreeKit ? (
+                        <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-amber-300">
+                          Free kit
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <h2 className="mt-3 text-2xl font-black text-white">
+                      {lead.teamName || lead.contactName || "Unnamed lead"}
+                    </h2>
+                    <p className="mt-1 text-sm text-white/45">
+                      Created {formatDate(lead.createdAt)}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {Object.values(LeadStatus).map((status) => (
+                      <StatusButton
+                        key={status}
+                        id={lead.id}
+                        currentStatus={lead.status}
+                        nextStatus={status}
+                        returnTo={currentHref}
+                      />
+                    ))}
+                    <Link
+                      href={`/admin/leads/${lead.id}`}
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20"
+                    >
+                      Open
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                  <Detail label="Contact" value={lead.contactName || "—"} />
+                  <Detail label="Email" value={lead.email || "—"} />
+                  <Detail label="Phone" value={lead.phone || "—"} />
+                  <Detail label="Area" value={lead.area || "—"} />
+                  <Detail label="League" value={formatLeagueType(lead.leagueType)} />
+                  <Detail label="Night" value={formatPreferredNights(lead.preferredNights)} />
+                </div>
+
+                {lead.message ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-relaxed text-white/70">
+                    {lead.message}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-4 text-xs text-white/45">
+                  <span>Source: {lead.source || "—"}</span>
+                  <span>Marketing: {formatYesNo(lead.marketingConsent)}</span>
+                  {lead.contactedAt ? <span>Contacted: {formatDate(lead.contactedAt)}</span> : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </AdminCard>
+    </div>
   );
 }
