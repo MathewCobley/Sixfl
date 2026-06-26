@@ -145,9 +145,9 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
         </Link>
 
         <Link href={`/captain/team/${teamId}/guide`} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 transition hover:border-white/20 hover:bg-white/[0.07]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Rules</p>
-          <h2 className="mt-3 text-xl font-semibold text-white">Rules and responsibilities</h2>
-          <p className="mt-2 text-sm leading-6 text-white/62">Captain agreement, availability deadlines, payments, conduct and avoidable admin fees.</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Guide & Rules</p>
+          <h2 className="mt-3 text-xl font-semibold text-white">Matchday rules and captain terms</h2>
+          <p className="mt-2 text-sm leading-6 text-white/62">Matchday rules, captain agreement, availability deadlines, payments, conduct and avoidable admin fees.</p>
         </Link>
 
         <button type="button" onClick={() => setIsOpen((value) => !value)} className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 text-left transition hover:bg-sky-500/15">
