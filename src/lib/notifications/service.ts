@@ -13,20 +13,22 @@ import {
   NotificationTemplateKind,
   Prisma,
 } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+
 import {
   appendSIXFLTextSignature,
   buildSIXFLEmailHtml,
   type SIXFLEmailBranding,
   type SIXFLPaymentSummary,
 } from "@/lib/email/buildEmail";
+import { getUnpublishedFixtureBlockReason } from "@/lib/fixtures/publishing";
+import { prisma } from "@/lib/prisma";
 import { getEmailReplyDomain } from "@/lib/resend/client";
-import { shortenSmsBodyLinks } from "./sms-short-links";
 import { getNotificationRecipientById } from "./recipients";
 import {
   renderNotificationText,
   type NotificationTemplateVariables,
 } from "./renderer";
+import { shortenSmsBodyLinks } from "./sms-short-links";
 
 export type QueueNotificationFromTemplateInput = {
   templateKey: string;
@@ -340,8 +342,7 @@ function buildQueuedContentDirect(input: {
   if (input.channel === NotificationChannel.EMAIL) {
     const ctaLabel = input.emailCta?.label?.trim();
     const ctaUrl = input.emailCta?.url?.trim();
-    const ctaText =
-      ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : null;
+    const ctaText = ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : null;
 
     const plainTextBody = ctaText
       ? /\{\{\s*cta\s*\}\}/i.test(renderedBody)
@@ -392,65 +393,110 @@ function canQueueForRecipient(input: {
   isTransactional: boolean;
 }) {
   if (input.recipient.isSuppressed) {
-    return {
-      ok: false,
-      reason: "Recipient is suppressed.",
-    };
+    return { ok: false, reason: "Recipient is suppressed." };
   }
 
   if (input.channel === NotificationChannel.EMAIL) {
-    if (!input.recipient.email?.trim()) {
-      return { ok: false, reason: "Recipient has no email address." };
-    }
-
-    if (!input.recipient.preferences?.emailEnabled) {
-      return { ok: false, reason: "Recipient email notifications are disabled." };
-    }
+    if (!input.recipient.email?.trim()) return { ok: false, reason: "Recipient has no email address." };
+    if (!input.recipient.preferences?.emailEnabled) return { ok: false, reason: "Recipient email notifications are disabled." };
 
     if (input.isTransactional) {
-      if (!input.recipient.transactionalEmailOptIn) {
-        return {
-          ok: false,
-          reason: "Transactional email is disabled for recipient.",
-        };
-      }
-    } else {
-      if (
-        !input.recipient.marketingEmailOptIn ||
-        !input.recipient.preferences?.marketingEmailEnabled
-      ) {
-        return { ok: false, reason: "Marketing email is disabled for recipient." };
-      }
+      if (!input.recipient.transactionalEmailOptIn) return { ok: false, reason: "Transactional email is disabled for recipient." };
+    } else if (!input.recipient.marketingEmailOptIn || !input.recipient.preferences?.marketingEmailEnabled) {
+      return { ok: false, reason: "Marketing email is disabled for recipient." };
     }
   }
 
   if (input.channel === NotificationChannel.SMS) {
-    if (!input.recipient.phone?.trim()) {
-      return { ok: false, reason: "Recipient has no phone number." };
-    }
-
-    if (!input.recipient.preferences?.smsEnabled) {
-      return { ok: false, reason: "Recipient SMS notifications are disabled." };
-    }
+    if (!input.recipient.phone?.trim()) return { ok: false, reason: "Recipient has no phone number." };
+    if (!input.recipient.preferences?.smsEnabled) return { ok: false, reason: "Recipient SMS notifications are disabled." };
 
     if (input.isTransactional) {
-      if (!input.recipient.transactionalSmsOptIn) {
-        return {
-          ok: false,
-          reason: "Transactional SMS is disabled for recipient.",
-        };
-      }
-    } else {
-      if (
-        !input.recipient.marketingSmsOptIn ||
-        !input.recipient.preferences?.marketingSmsEnabled
-      ) {
-        return { ok: false, reason: "Marketing SMS is disabled for recipient." };
-      }
+      if (!input.recipient.transactionalSmsOptIn) return { ok: false, reason: "Transactional SMS is disabled for recipient." };
+    } else if (!input.recipient.marketingSmsOptIn || !input.recipient.preferences?.marketingSmsEnabled) {
+      return { ok: false, reason: "Marketing SMS is disabled for recipient." };
     }
   }
 
   return { ok: true as const };
+}
+
+async function createNonQueuedTemplateDispatch(input: {
+  template: NotificationTemplate;
+  recipient: NotificationRecipient;
+  isTransactional: boolean;
+  rendered: ResolvedQueuedContent;
+  status: NotificationDispatchStatus.SKIPPED | NotificationDispatchStatus.CANCELLED;
+  reason: string;
+  variables?: NotificationTemplateVariables;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  metadata?: Prisma.InputJsonValue;
+  scheduledFor: Date;
+  createdByUserId?: string | null;
+}) {
+  const dispatch = await prisma.notificationDispatch.create({
+    data: {
+      recipientId: input.recipient.id,
+      templateId: input.template.id,
+      channel: input.template.channel,
+      audience: input.template.audience,
+      status: input.status,
+      cancelledAt: input.status === NotificationDispatchStatus.CANCELLED ? new Date() : null,
+      isTransactional: input.isTransactional,
+      subject: input.rendered.subject,
+      bodyText: input.rendered.bodyText,
+      bodyHtml: input.rendered.bodyHtml,
+      sourceType: input.sourceType?.trim() || null,
+      sourceId: input.sourceId?.trim() || null,
+      variables: (input.variables ?? {}) as Prisma.InputJsonValue,
+      metadata: input.metadata,
+      scheduledFor: input.scheduledFor,
+      failureReason: input.reason,
+      createdByUserId: input.createdByUserId?.trim() || null,
+    },
+  });
+
+  return applySmsShortLinks(dispatch);
+}
+
+async function createNonQueuedDirectDispatch(input: {
+  recipient: NotificationRecipient;
+  channel: NotificationChannel;
+  audience: NotificationAudience;
+  isTransactional: boolean;
+  rendered: ResolvedQueuedContent;
+  status: NotificationDispatchStatus.SKIPPED | NotificationDispatchStatus.CANCELLED;
+  reason: string;
+  variables?: Prisma.InputJsonValue;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  metadata?: Prisma.InputJsonValue;
+  scheduledFor: Date;
+  createdByUserId?: string | null;
+}) {
+  const dispatch = await prisma.notificationDispatch.create({
+    data: {
+      recipientId: input.recipient.id,
+      channel: input.channel,
+      audience: input.audience,
+      status: input.status,
+      cancelledAt: input.status === NotificationDispatchStatus.CANCELLED ? new Date() : null,
+      isTransactional: input.isTransactional,
+      subject: input.rendered.subject,
+      bodyText: input.rendered.bodyText,
+      bodyHtml: input.rendered.bodyHtml,
+      sourceType: input.sourceType?.trim() || null,
+      sourceId: input.sourceId?.trim() || null,
+      variables: input.variables,
+      metadata: input.metadata,
+      scheduledFor: input.scheduledFor,
+      failureReason: input.reason,
+      createdByUserId: input.createdByUserId?.trim() || null,
+    },
+  });
+
+  return applySmsShortLinks(dispatch);
 }
 
 export async function queueNotificationFromTemplate(
@@ -470,8 +516,40 @@ export async function queueNotificationFromTemplate(
     throw new Error("Notification recipient not found.");
   }
 
-  const isTransactional =
-    template.kind === NotificationTemplateKind.TRANSACTIONAL;
+  const isTransactional = template.kind === NotificationTemplateKind.TRANSACTIONAL;
+  const rendered = buildQueuedContentFromTemplate({
+    template,
+    variables: input.variables,
+    emailBranding: input.emailBranding,
+    paymentSummary: input.paymentSummary,
+  });
+  const scheduledFor = resolveScheduledFor({
+    channel: template.channel,
+    scheduledFor: input.scheduledFor,
+  });
+
+  const fixtureBlockReason = await getUnpublishedFixtureBlockReason({
+    sourceType: input.sourceType,
+    sourceId: input.sourceId,
+    metadata: input.metadata,
+  });
+
+  if (fixtureBlockReason) {
+    return createNonQueuedTemplateDispatch({
+      template,
+      recipient,
+      isTransactional,
+      rendered,
+      status: NotificationDispatchStatus.CANCELLED,
+      reason: fixtureBlockReason,
+      variables: input.variables,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      metadata: input.metadata,
+      scheduledFor,
+      createdByUserId: input.createdByUserId,
+    });
+  }
 
   const allowed = canQueueForRecipient({
     recipient,
@@ -479,41 +557,21 @@ export async function queueNotificationFromTemplate(
     isTransactional,
   });
 
-  const rendered = buildQueuedContentFromTemplate({
-    template,
-    variables: input.variables,
-    emailBranding: input.emailBranding,
-    paymentSummary: input.paymentSummary,
-  });
-
-  const scheduledFor = resolveScheduledFor({
-    channel: template.channel,
-    scheduledFor: input.scheduledFor,
-  });
-
   if (!allowed.ok) {
-    const dispatch = await prisma.notificationDispatch.create({
-      data: {
-        recipientId: recipient.id,
-        templateId: template.id,
-        channel: template.channel,
-        audience: template.audience,
-        status: NotificationDispatchStatus.SKIPPED,
-        isTransactional,
-        subject: rendered.subject,
-        bodyText: rendered.bodyText,
-        bodyHtml: rendered.bodyHtml,
-        sourceType: input.sourceType?.trim() || null,
-        sourceId: input.sourceId?.trim() || null,
-        variables: (input.variables ?? {}) as Prisma.InputJsonValue,
-        metadata: input.metadata,
-        scheduledFor,
-        failureReason: allowed.reason,
-        createdByUserId: input.createdByUserId?.trim() || null,
-      },
+    return createNonQueuedTemplateDispatch({
+      template,
+      recipient,
+      isTransactional,
+      rendered,
+      status: NotificationDispatchStatus.SKIPPED,
+      reason: allowed.reason,
+      variables: input.variables,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      metadata: input.metadata,
+      scheduledFor,
+      createdByUserId: input.createdByUserId,
     });
-
-    return applySmsShortLinks(dispatch);
   }
 
   if (template.channel === NotificationChannel.EMAIL) {
@@ -551,13 +609,6 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
   }
 
   const isTransactional = true;
-
-  const allowed = canQueueForRecipient({
-    recipient,
-    channel: input.channel,
-    isTransactional,
-  });
-
   const rendered = buildQueuedContentDirect({
     channel: input.channel,
     subject: input.subject,
@@ -567,34 +618,57 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     emailCta: input.emailCta,
     paymentSummary: input.paymentSummary,
   });
-
   const scheduledFor = resolveScheduledFor({
     channel: input.channel,
     scheduledFor: input.scheduledFor,
   });
 
-  if (!allowed.ok) {
-    const dispatch = await prisma.notificationDispatch.create({
-      data: {
-        recipientId: recipient.id,
-        channel: input.channel,
-        audience: input.audience,
-        status: NotificationDispatchStatus.SKIPPED,
-        isTransactional,
-        subject: rendered.subject,
-        bodyText: rendered.bodyText,
-        bodyHtml: rendered.bodyHtml,
-        sourceType: input.sourceType?.trim() || null,
-        sourceId: input.sourceId?.trim() || null,
-        variables: input.variables,
-        metadata: input.metadata,
-        scheduledFor,
-        failureReason: allowed.reason,
-        createdByUserId: input.createdByUserId?.trim() || null,
-      },
-    });
+  const fixtureBlockReason = await getUnpublishedFixtureBlockReason({
+    sourceType: input.sourceType,
+    sourceId: input.sourceId,
+    metadata: input.metadata,
+  });
 
-    return applySmsShortLinks(dispatch);
+  if (fixtureBlockReason) {
+    return createNonQueuedDirectDispatch({
+      recipient,
+      channel: input.channel,
+      audience: input.audience,
+      isTransactional,
+      rendered,
+      status: NotificationDispatchStatus.CANCELLED,
+      reason: fixtureBlockReason,
+      variables: input.variables,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      metadata: input.metadata,
+      scheduledFor,
+      createdByUserId: input.createdByUserId,
+    });
+  }
+
+  const allowed = canQueueForRecipient({
+    recipient,
+    channel: input.channel,
+    isTransactional,
+  });
+
+  if (!allowed.ok) {
+    return createNonQueuedDirectDispatch({
+      recipient,
+      channel: input.channel,
+      audience: input.audience,
+      isTransactional,
+      rendered,
+      status: NotificationDispatchStatus.SKIPPED,
+      reason: allowed.reason,
+      variables: input.variables,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      metadata: input.metadata,
+      scheduledFor,
+      createdByUserId: input.createdByUserId,
+    });
   }
 
   if (input.channel === NotificationChannel.EMAIL) {
