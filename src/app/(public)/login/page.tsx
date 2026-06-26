@@ -72,7 +72,9 @@ function LoginForm() {
         ? data.claimCode
           ? `/claim?code=${encodeURIComponent(data.claimCode)}`
           : "/claim"
-        : "/dashboard";
+        : data.isReferee
+          ? "/referee"
+          : "/dashboard";
 
     const result = await signIn("email", {
       email,
@@ -153,7 +155,7 @@ function LoginForm() {
         </form>
 
         <p className="mt-4 text-xs text-white/50">
-          Registered SIXFL users, pending captains and invited squad players can log in here using the email address connected to their invite.
+          Registered SIXFL users, referees, pending captains and invited squad players can log in here using the email address connected to their invite.
         </p>
       </div>
     </div>
