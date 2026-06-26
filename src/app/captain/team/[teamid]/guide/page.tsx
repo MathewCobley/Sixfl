@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Captain Guide | SIXFL",
+  title: "Captain Guide & Rules | SIXFL",
 };
 
 const guideSections = [
@@ -49,7 +49,7 @@ const guideSections = [
       "We do not want to charge admin fees, but a £10 late confirmation admin fee may be added if avoidable late confirmation creates extra admin, fixture chasing or rearranging work.",
       "SIXFL may send reminders or warnings first where practical, but captains should not rely on a warning before acting.",
     ],
-  }, 
+  },
   {
     title: "Earliest and latest kick-off times",
     items: [
@@ -79,12 +79,23 @@ const guideSections = [
     ],
   },
   {
-    title: "Matchday conduct",
+    title: "Matchday rules",
     items: [
-      "Arrive in good time and be ready for your kick-off slot.",
-      "Players should wear suitable footwear and shin pads where required by the venue or competition rules.",
-      "Referee decisions must be respected. Concerns can be raised afterwards through the proper channel.",
-      "Captains are expected to manage their team's behaviour on and around the pitch.",
+      "Arrive in good time and be ready for the published kick-off slot.",
+      "Players should follow venue rules and wear suitable footwear and shin pads where required.",
+      "Captains are expected to manage their team's behaviour before, during and after the match.",
+      "Referee decisions must be respected on the night. Concerns can be raised afterwards through the proper channel.",
+      "Scores and result details should be checked promptly after the game.",
+    ],
+  },
+  {
+    title: "Captain terms and conditions",
+    items: [
+      "The captain is responsible for team communication, squad management, fixture confirmation and making sure team fees are covered.",
+      "The captain should raise fixture, payment or player issues early using the captain area or official SIXFL contact routes.",
+      "Late cancellations can affect the opposition, referee, venue and league schedule, so SIXFL should be told as early as possible.",
+      "Repeated late payment, late confirmation, poor conduct or avoidable fixture issues may lead to admin fees, fixture action or review of the team's place in the league.",
+      "The captain agreement below records that the captain understands and accepts these responsibilities.",
     ],
   },
   {
@@ -161,13 +172,13 @@ export default async function CaptainGuidePage({
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-            Captain Guide
+            Guide & Rules
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             Everything captains need to know
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68 sm:text-base">
-            A short reference for {team.name}. This keeps the key SIXFL rules and responsibilities in one place without bombarding captains with emails.
+            A short reference for {team.name}. This keeps matchday rules, payment responsibilities, captain terms and key SIXFL processes in one place.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
@@ -208,7 +219,7 @@ export default async function CaptainGuidePage({
       <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
         <div className="border-b border-white/10 px-6 py-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Captain agreement
+            Captain terms
           </p>
           <h2 className="mt-2 text-xl font-semibold text-white">
             Confirm responsibility
