@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Captain Guide & Rules | SIXFL",
+  title: "Captain Guide & Terms | SIXFL",
 };
 
 const guideSections = [
@@ -28,23 +28,7 @@ const guideSections = [
       "Add your squad and make sure player names are clear.",
       "Add player email addresses if you want to use squad payment links.",
       "Check your first fixture, venue and kick-off time.",
-      "Read the match rules and captain responsibilities below.",
-    ],
-  },
-  {
-    title: "Matchday rules",
-    items: [
-      "Standard SIXFL matches are 6-a-side: five outfield players plus a goalkeeper, unless SIXFL has confirmed a venue-specific format.",
-      "Kick-ins replace throw-ins. The ball should be stationary on or just behind the touchline and opponents should give space.",
-      "A goal cannot be scored directly from a kick-in unless another player touches the ball first.",
-      "Rolling substitutions are allowed where the venue setup permits it. The player coming off should leave before the replacement joins play.",
-      "Goalkeepers may handle the ball inside their own area only. Normal pass-back rules apply where the goalkeeper receives a deliberate pass from a team-mate.",
-      "No slide tackles. Players should stay on their feet when challenging for the ball.",
-      "Free kicks, corners, goal kicks and penalties are controlled by the referee. The referee will set the position, distance and whether play is direct or indirect.",
-      "Players should follow venue rules and wear suitable footwear and shin pads where required.",
-      "Captains are expected to manage their team's behaviour before, during and after the match.",
-      "Referee decisions are final on the night. Concerns can be raised afterwards through the captain area.",
-      "Scores and result details should be checked promptly after the game.",
+      "Read the captain responsibilities and terms below.",
     ],
   },
   {
@@ -131,8 +115,8 @@ const guideSections = [
 ];
 
 const quickLinks = [
-  "Matchday rules",
   "Captain terms and conditions",
+  "Availability confirmation",
   "Earliest and latest kick-off times",
   "Payments and late fees",
 ];
@@ -193,13 +177,13 @@ export default async function CaptainGuidePage({
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-            Guide & Rules
+            Captain guide
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Matchday rules and captain terms
+            Captain guide and terms
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68 sm:text-base">
-            A short reference for {team.name}. This keeps match rules, payment responsibilities, captain terms and key SIXFL processes in one place.
+            A short reference for {team.name}. This keeps payment responsibilities, captain terms and key SIXFL processes in one place. Playing rules are kept on the separate Match Rules page.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
@@ -209,10 +193,10 @@ export default async function CaptainGuidePage({
               Back to dashboard
             </Link>
             <Link
-              href={`/captain/team/${team.id}/fixtures`}
+              href={`/captain/team/${team.id}/rules`}
               className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
             >
-              Open fixtures
+              Open match rules
             </Link>
           </div>
         </div>
