@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toLondonDateInputValue } from "@/lib/datetime/london";
+import { queueRefereeNightBookedEmail } from "@/lib/referee-night-emails";
 import {
   createRefereeNightId,
   findFixturesForNight,
@@ -114,6 +115,15 @@ export async function createRefereeNightAction(formData: FormData) {
   });
 
   await recalculateRefereeNightCashup(id);
+
+  try {
+    await queueRefereeNightBookedEmail({
+      refereeNightId: id,
+      createdByUserId: user?.id ?? null,
+    });
+  } catch (error) {
+    console.warn("Could not queue referee booking email", error);
+  }
 
   revalidatePath("/admin/referee-nights");
   revalidatePath(`/admin/referee-nights/${id}`);
