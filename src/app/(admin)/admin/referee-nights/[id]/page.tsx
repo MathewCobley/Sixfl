@@ -220,8 +220,8 @@ export default async function AdminRefereeNightDetailPage({
 
                   return (
                     <div key={fixture.id} className="px-6 py-5">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
                             <span>{formatKickoffTime(fixture.kickoffAt)}</span>
                             {fixture.pitch ? <><span>•</span><span>{fixture.pitch}</span></> : null}
@@ -236,14 +236,14 @@ export default async function AdminRefereeNightDetailPage({
                           </div>
                         </div>
 
-                        <div className="grid min-w-[300px] grid-cols-2 gap-3 text-sm">
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                            <div className="font-semibold text-white">{fixture.homeTeam.name}</div>
+                        <div className="grid w-full grid-cols-2 gap-3 text-sm lg:w-[420px]">
+                          <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3">
+                            <div className="truncate font-semibold text-white">{fixture.homeTeam.name}</div>
                             <div className="mt-1 text-white/45">Charge {formatMoney(homeCharge?.amountPence ?? 0)}</div>
                             <div className="mt-1 text-emerald-200">Collected {formatMoney(homeCollected)}</div>
                           </div>
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                            <div className="font-semibold text-white">{fixture.awayTeam.name}</div>
+                          <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3">
+                            <div className="truncate font-semibold text-white">{fixture.awayTeam.name}</div>
                             <div className="mt-1 text-white/45">Charge {formatMoney(awayCharge?.amountPence ?? 0)}</div>
                             <div className="mt-1 text-emerald-200">Collected {formatMoney(awayCollected)}</div>
                           </div>
