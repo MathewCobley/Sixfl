@@ -3,15 +3,14 @@
 // ========================================
 
 import {
-  NotificationAttemptStatus,
-  NotificationAudience,
-  NotificationChannel,
-  NotificationDispatch,
-  NotificationDispatchStatus,
-  NotificationRecipient,
-  NotificationTemplate,
-  NotificationTemplateKind,
   Prisma,
+  type NotificationAttemptStatus,
+  type NotificationAudience,
+  type NotificationChannel,
+  type NotificationDispatch,
+  type NotificationDispatchStatus,
+  type NotificationRecipient,
+  type NotificationTemplate,
 } from "@prisma/client";
 
 import {
@@ -29,6 +28,21 @@ import {
   type NotificationTemplateVariables,
 } from "./renderer";
 import { shortenSmsBodyLinks } from "./sms-short-links";
+
+const DISPATCH_STATUS = {
+  QUEUED: "QUEUED",
+  PROCESSING: "PROCESSING",
+  SENT: "SENT",
+  FAILED: "FAILED",
+  CANCELLED: "CANCELLED",
+  SKIPPED: "SKIPPED",
+} as const satisfies Record<NotificationDispatchStatus, NotificationDispatchStatus>;
+
+const ATTEMPT_STATUS = {
+  PENDING: "PENDING",
+  SUCCESS: "SUCCESS",
+  FAILED: "FAILED",
+} as const satisfies Record<NotificationAttemptStatus, NotificationAttemptStatus>;
 
 export type QueueNotificationFromTemplateInput = {
   templateKey: string;
@@ -70,6 +84,8 @@ type ResolvedQueuedContent = {
   bodyHtml: string | null;
 };
 
+type NonQueuedDispatchStatus = Extract<NotificationDispatchStatus, "SKIPPED" | "CANCELLED">;
+
 const SIXFL_SMS_SIGNATURE = "SIXFL";
 const SMS_QUIET_HOURS_START_HOUR = 21;
 const SMS_QUIET_HOURS_END_HOUR = 9;
@@ -90,9 +106,7 @@ function normaliseSmsText(body: string) {
 function appendSIXFLSmsSignature(body: string) {
   const trimmedBody = normaliseSmsText(body);
 
-  if (!trimmedBody) {
-    return SIXFL_SMS_SIGNATURE;
-  }
+  if (!trimmedBody) return SIXFL_SMS_SIGNATURE;
 
   const withoutExistingSignature = trimmedBody
     .replace(/\n?\n?[\u2014\-]?\s*SIXFL\s*$/i, "")
@@ -160,10 +174,7 @@ function getUtcDateForUkLocalTime(input: {
 }
 
 function getNextUkDate(input: { year: number; month: number; day: number }) {
-  const noonUtc = getUtcDateForUkLocalTime({
-    ...input,
-    hour: 12,
-  });
+  const noonUtc = getUtcDateForUkLocalTime({ ...input, hour: 12 });
   const nextDay = new Date(noonUtc.getTime() + 24 * 60 * 60 * 1000);
   const nextDayParts = getUkDateParts(nextDay);
 
@@ -180,17 +191,13 @@ function resolveScheduledFor(input: {
 }) {
   const requestedDate = input.scheduledFor ?? new Date();
 
-  if (input.channel !== NotificationChannel.SMS) {
-    return requestedDate;
-  }
+  if (input.channel !== "SMS") return requestedDate;
 
   const ukParts = getUkDateParts(requestedDate);
 
   if (ukParts.hour >= SMS_QUIET_HOURS_START_HOUR) {
-    const nextUkDate = getNextUkDate(ukParts);
-
     return getUtcDateForUkLocalTime({
-      ...nextUkDate,
+      ...getNextUkDate(ukParts),
       hour: SMS_QUIET_HOURS_END_HOUR,
     });
   }
@@ -207,6 +214,17 @@ function resolveScheduledFor(input: {
   return requestedDate;
 }
 
+function cleanPlainTextTemplateBody(body: string) {
+  return body.replace(/\{\{\s*cta\s*\}\}/gi, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function coerceVariables(
+  value?: Prisma.InputJsonValue | NotificationTemplateVariables,
+): NotificationTemplateVariables {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as NotificationTemplateVariables;
+}
+
 function resolveEmailCtaUrl(input: {
   ctaUrlKey?: string | null;
   variables?: NotificationTemplateVariables;
@@ -219,20 +237,6 @@ function resolveEmailCtaUrl(input: {
 
   const url = String(rawValue).trim();
   return url || null;
-}
-
-function cleanPlainTextTemplateBody(body: string) {
-  return body.replace(/\{\{\s*cta\s*\}\}/gi, "").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function coerceVariables(
-  value?: Prisma.InputJsonValue | NotificationTemplateVariables,
-): NotificationTemplateVariables {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return value as NotificationTemplateVariables;
 }
 
 function ensureEmailRepliesConfigured() {
@@ -248,9 +252,7 @@ function getMetadataObject(value: Prisma.JsonValue | null) {
 }
 
 async function applySmsShortLinks(dispatch: NotificationDispatch) {
-  if (dispatch.channel !== NotificationChannel.SMS) {
-    return dispatch;
-  }
+  if (dispatch.channel !== "SMS") return dispatch;
 
   const shortened = shortenSmsBodyLinks({
     dispatchId: dispatch.id,
@@ -285,10 +287,9 @@ function buildQueuedContentFromTemplate(input: {
   const renderedSubject = input.template.subject
     ? renderNotificationText(input.template.subject, input.variables)
     : null;
-
   const renderedBody = renderNotificationText(input.template.body, input.variables);
 
-  if (input.template.channel === NotificationChannel.EMAIL) {
+  if (input.template.channel === "EMAIL") {
     const cleanedBody = cleanPlainTextTemplateBody(renderedBody);
     const signedTextBody = appendSIXFLTextSignature(cleanedBody);
     const ctaUrl = resolveEmailCtaUrl({
@@ -304,10 +305,7 @@ function buildQueuedContentFromTemplate(input: {
         branding: input.emailBranding,
         cta:
           input.template.ctaLabel && ctaUrl
-            ? {
-                label: input.template.ctaLabel,
-                url: ctaUrl,
-              }
+            ? { label: input.template.ctaLabel, url: ctaUrl }
             : undefined,
         payment: input.paymentSummary,
       }),
@@ -327,10 +325,7 @@ function buildQueuedContentDirect(input: {
   body: string;
   variables?: Prisma.InputJsonValue | NotificationTemplateVariables;
   emailBranding?: SIXFLEmailBranding;
-  emailCta?: {
-    label: string;
-    url: string;
-  };
+  emailCta?: { label: string; url: string };
   paymentSummary?: SIXFLPaymentSummary;
 }): ResolvedQueuedContent {
   const variables = coerceVariables(input.variables);
@@ -339,22 +334,19 @@ function buildQueuedContentDirect(input: {
     : null;
   const renderedBody = renderNotificationText(input.body.trim(), variables);
 
-  if (input.channel === NotificationChannel.EMAIL) {
+  if (input.channel === "EMAIL") {
     const ctaLabel = input.emailCta?.label?.trim();
     const ctaUrl = input.emailCta?.url?.trim();
     const ctaText = ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : null;
-
     const plainTextBody = ctaText
       ? /\{\{\s*cta\s*\}\}/i.test(renderedBody)
         ? renderedBody.replace(/\{\{\s*cta\s*\}\}/gi, ctaText).replace(/\n{3,}/g, "\n\n").trim()
         : `${renderedBody}\n\n${ctaText}`.replace(/\n{3,}/g, "\n\n").trim()
       : cleanPlainTextTemplateBody(renderedBody);
 
-    const signedTextBody = appendSIXFLTextSignature(plainTextBody);
-
     return {
       subject: renderedSubject,
-      bodyText: signedTextBody,
+      bodyText: appendSIXFLTextSignature(plainTextBody),
       bodyHtml: buildSIXFLEmailHtml({
         body: renderedBody,
         branding: input.emailBranding,
@@ -392,14 +384,11 @@ function canQueueForRecipient(input: {
   channel: NotificationChannel;
   isTransactional: boolean;
 }) {
-  if (input.recipient.isSuppressed) {
-    return { ok: false, reason: "Recipient is suppressed." };
-  }
+  if (input.recipient.isSuppressed) return { ok: false, reason: "Recipient is suppressed." };
 
-  if (input.channel === NotificationChannel.EMAIL) {
+  if (input.channel === "EMAIL") {
     if (!input.recipient.email?.trim()) return { ok: false, reason: "Recipient has no email address." };
     if (!input.recipient.preferences?.emailEnabled) return { ok: false, reason: "Recipient email notifications are disabled." };
-
     if (input.isTransactional) {
       if (!input.recipient.transactionalEmailOptIn) return { ok: false, reason: "Transactional email is disabled for recipient." };
     } else if (!input.recipient.marketingEmailOptIn || !input.recipient.preferences?.marketingEmailEnabled) {
@@ -407,10 +396,9 @@ function canQueueForRecipient(input: {
     }
   }
 
-  if (input.channel === NotificationChannel.SMS) {
+  if (input.channel === "SMS") {
     if (!input.recipient.phone?.trim()) return { ok: false, reason: "Recipient has no phone number." };
     if (!input.recipient.preferences?.smsEnabled) return { ok: false, reason: "Recipient SMS notifications are disabled." };
-
     if (input.isTransactional) {
       if (!input.recipient.transactionalSmsOptIn) return { ok: false, reason: "Transactional SMS is disabled for recipient." };
     } else if (!input.recipient.marketingSmsOptIn || !input.recipient.preferences?.marketingSmsEnabled) {
@@ -426,7 +414,7 @@ async function createNonQueuedTemplateDispatch(input: {
   recipient: NotificationRecipient;
   isTransactional: boolean;
   rendered: ResolvedQueuedContent;
-  status: NotificationDispatchStatus.SKIPPED | NotificationDispatchStatus.CANCELLED;
+  status: NonQueuedDispatchStatus;
   reason: string;
   variables?: NotificationTemplateVariables;
   sourceType?: string | null;
@@ -442,7 +430,7 @@ async function createNonQueuedTemplateDispatch(input: {
       channel: input.template.channel,
       audience: input.template.audience,
       status: input.status,
-      cancelledAt: input.status === NotificationDispatchStatus.CANCELLED ? new Date() : null,
+      cancelledAt: input.status === DISPATCH_STATUS.CANCELLED ? new Date() : null,
       isTransactional: input.isTransactional,
       subject: input.rendered.subject,
       bodyText: input.rendered.bodyText,
@@ -466,7 +454,7 @@ async function createNonQueuedDirectDispatch(input: {
   audience: NotificationAudience;
   isTransactional: boolean;
   rendered: ResolvedQueuedContent;
-  status: NotificationDispatchStatus.SKIPPED | NotificationDispatchStatus.CANCELLED;
+  status: NonQueuedDispatchStatus;
   reason: string;
   variables?: Prisma.InputJsonValue;
   sourceType?: string | null;
@@ -481,7 +469,7 @@ async function createNonQueuedDirectDispatch(input: {
       channel: input.channel,
       audience: input.audience,
       status: input.status,
-      cancelledAt: input.status === NotificationDispatchStatus.CANCELLED ? new Date() : null,
+      cancelledAt: input.status === DISPATCH_STATUS.CANCELLED ? new Date() : null,
       isTransactional: input.isTransactional,
       subject: input.rendered.subject,
       bodyText: input.rendered.bodyText,
@@ -499,34 +487,21 @@ async function createNonQueuedDirectDispatch(input: {
   return applySmsShortLinks(dispatch);
 }
 
-export async function queueNotificationFromTemplate(
-  input: QueueNotificationFromTemplateInput,
-) {
-  const template = await prisma.notificationTemplate.findUnique({
-    where: { key: input.templateKey },
-  });
-
-  if (!template || !template.isActive) {
-    throw new Error("Notification template not found or inactive.");
-  }
+export async function queueNotificationFromTemplate(input: QueueNotificationFromTemplateInput) {
+  const template = await prisma.notificationTemplate.findUnique({ where: { key: input.templateKey } });
+  if (!template || !template.isActive) throw new Error("Notification template not found or inactive.");
 
   const recipient = await getNotificationRecipientById(input.recipientId);
+  if (!recipient) throw new Error("Notification recipient not found.");
 
-  if (!recipient) {
-    throw new Error("Notification recipient not found.");
-  }
-
-  const isTransactional = template.kind === NotificationTemplateKind.TRANSACTIONAL;
+  const isTransactional = template.kind === "TRANSACTIONAL";
   const rendered = buildQueuedContentFromTemplate({
     template,
     variables: input.variables,
     emailBranding: input.emailBranding,
     paymentSummary: input.paymentSummary,
   });
-  const scheduledFor = resolveScheduledFor({
-    channel: template.channel,
-    scheduledFor: input.scheduledFor,
-  });
+  const scheduledFor = resolveScheduledFor({ channel: template.channel, scheduledFor: input.scheduledFor });
 
   const fixtureBlockReason = await getUnpublishedFixtureBlockReason({
     sourceType: input.sourceType,
@@ -540,7 +515,7 @@ export async function queueNotificationFromTemplate(
       recipient,
       isTransactional,
       rendered,
-      status: NotificationDispatchStatus.CANCELLED,
+      status: DISPATCH_STATUS.CANCELLED,
       reason: fixtureBlockReason,
       variables: input.variables,
       sourceType: input.sourceType,
@@ -551,19 +526,14 @@ export async function queueNotificationFromTemplate(
     });
   }
 
-  const allowed = canQueueForRecipient({
-    recipient,
-    channel: template.channel,
-    isTransactional,
-  });
-
+  const allowed = canQueueForRecipient({ recipient, channel: template.channel, isTransactional });
   if (!allowed.ok) {
     return createNonQueuedTemplateDispatch({
       template,
       recipient,
       isTransactional,
       rendered,
-      status: NotificationDispatchStatus.SKIPPED,
+      status: DISPATCH_STATUS.SKIPPED,
       reason: allowed.reason,
       variables: input.variables,
       sourceType: input.sourceType,
@@ -574,9 +544,7 @@ export async function queueNotificationFromTemplate(
     });
   }
 
-  if (template.channel === NotificationChannel.EMAIL) {
-    ensureEmailRepliesConfigured();
-  }
+  if (template.channel === "EMAIL") ensureEmailRepliesConfigured();
 
   const dispatch = await prisma.notificationDispatch.create({
     data: {
@@ -584,7 +552,7 @@ export async function queueNotificationFromTemplate(
       templateId: template.id,
       channel: template.channel,
       audience: template.audience,
-      status: NotificationDispatchStatus.QUEUED,
+      status: DISPATCH_STATUS.QUEUED,
       isTransactional,
       subject: rendered.subject,
       bodyText: rendered.bodyText,
@@ -603,12 +571,9 @@ export async function queueNotificationFromTemplate(
 
 export async function queueDirectNotification(input: QueueDirectNotificationInput) {
   const recipient = await getNotificationRecipientById(input.recipientId);
+  if (!recipient) throw new Error("Notification recipient not found.");
 
-  if (!recipient) {
-    throw new Error("Notification recipient not found.");
-  }
-
-  const isTransactional = true;
+  const isTransactional = input.isTransactional ?? true;
   const rendered = buildQueuedContentDirect({
     channel: input.channel,
     subject: input.subject,
@@ -618,10 +583,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     emailCta: input.emailCta,
     paymentSummary: input.paymentSummary,
   });
-  const scheduledFor = resolveScheduledFor({
-    channel: input.channel,
-    scheduledFor: input.scheduledFor,
-  });
+  const scheduledFor = resolveScheduledFor({ channel: input.channel, scheduledFor: input.scheduledFor });
 
   const fixtureBlockReason = await getUnpublishedFixtureBlockReason({
     sourceType: input.sourceType,
@@ -636,7 +598,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       audience: input.audience,
       isTransactional,
       rendered,
-      status: NotificationDispatchStatus.CANCELLED,
+      status: DISPATCH_STATUS.CANCELLED,
       reason: fixtureBlockReason,
       variables: input.variables,
       sourceType: input.sourceType,
@@ -647,12 +609,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     });
   }
 
-  const allowed = canQueueForRecipient({
-    recipient,
-    channel: input.channel,
-    isTransactional,
-  });
-
+  const allowed = canQueueForRecipient({ recipient, channel: input.channel, isTransactional });
   if (!allowed.ok) {
     return createNonQueuedDirectDispatch({
       recipient,
@@ -660,7 +617,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       audience: input.audience,
       isTransactional,
       rendered,
-      status: NotificationDispatchStatus.SKIPPED,
+      status: DISPATCH_STATUS.SKIPPED,
       reason: allowed.reason,
       variables: input.variables,
       sourceType: input.sourceType,
@@ -671,16 +628,14 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     });
   }
 
-  if (input.channel === NotificationChannel.EMAIL) {
-    ensureEmailRepliesConfigured();
-  }
+  if (input.channel === "EMAIL") ensureEmailRepliesConfigured();
 
   const dispatch = await prisma.notificationDispatch.create({
     data: {
       recipientId: recipient.id,
       channel: input.channel,
       audience: input.audience,
-      status: NotificationDispatchStatus.QUEUED,
+      status: DISPATCH_STATUS.QUEUED,
       isTransactional,
       subject: rendered.subject,
       bodyText: rendered.bodyText,
@@ -700,23 +655,13 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
 export async function getDueNotificationDispatches(limit = 50) {
   return prisma.notificationDispatch.findMany({
     where: {
-      status: NotificationDispatchStatus.QUEUED,
-      scheduledFor: {
-        lte: new Date(),
-      },
+      status: DISPATCH_STATUS.QUEUED,
+      scheduledFor: { lte: new Date() },
     },
     include: {
-      recipient: {
-        include: {
-          preferences: true,
-        },
-      },
+      recipient: { include: { preferences: true } },
       template: true,
-      attempts: {
-        orderBy: {
-          attemptedAt: "desc",
-        },
-      },
+      attempts: { orderBy: { attemptedAt: "desc" } },
     },
     orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }],
     take: limit,
@@ -727,7 +672,7 @@ export async function markNotificationDispatchProcessing(dispatchId: string) {
   return prisma.notificationDispatch.update({
     where: { id: dispatchId },
     data: {
-      status: NotificationDispatchStatus.PROCESSING,
+      status: DISPATCH_STATUS.PROCESSING,
       processedAt: new Date(),
     },
   });
@@ -744,7 +689,7 @@ export async function markNotificationDispatchSent(input: {
       data: {
         dispatchId: input.dispatchId,
         provider: input.provider,
-        status: NotificationAttemptStatus.SUCCESS,
+        status: ATTEMPT_STATUS.SUCCESS,
         responsePayload: input.responsePayload,
       },
     });
@@ -752,7 +697,7 @@ export async function markNotificationDispatchSent(input: {
     return tx.notificationDispatch.update({
       where: { id: input.dispatchId },
       data: {
-        status: NotificationDispatchStatus.SENT,
+        status: DISPATCH_STATUS.SENT,
         provider: input.provider,
         providerMessageId: input.providerMessageId?.trim() || null,
         sentAt: new Date(),
@@ -774,7 +719,7 @@ export async function markNotificationDispatchFailed(input: {
       data: {
         dispatchId: input.dispatchId,
         provider: input.provider,
-        status: NotificationAttemptStatus.FAILED,
+        status: ATTEMPT_STATUS.FAILED,
         requestPayload: input.requestPayload,
         responsePayload: input.responsePayload,
         errorMessage: input.errorMessage,
@@ -784,7 +729,7 @@ export async function markNotificationDispatchFailed(input: {
     return tx.notificationDispatch.update({
       where: { id: input.dispatchId },
       data: {
-        status: NotificationDispatchStatus.FAILED,
+        status: DISPATCH_STATUS.FAILED,
         failedAt: new Date(),
         failureReason: input.errorMessage,
         provider: input.provider,
@@ -793,14 +738,11 @@ export async function markNotificationDispatchFailed(input: {
   });
 }
 
-export async function markNotificationDispatchCancelled(
-  dispatchId: string,
-  reason?: string,
-) {
+export async function markNotificationDispatchCancelled(dispatchId: string, reason?: string) {
   return prisma.notificationDispatch.update({
     where: { id: dispatchId },
     data: {
-      status: NotificationDispatchStatus.CANCELLED,
+      status: DISPATCH_STATUS.CANCELLED,
       cancelledAt: new Date(),
       failureReason: reason?.trim() || null,
     },
