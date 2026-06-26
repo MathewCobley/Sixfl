@@ -4,18 +4,10 @@
 
 "use client";
 
-// ========================================
-// Imports
-// ========================================
-
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { LeagueType, PreferredNight } from "@prisma/client";
 import type { LeagueFormState } from "@/app/(admin)/admin/leagues/actions";
-
-// ========================================
-// Types
-// ========================================
 
 type LeagueFormValues = {
   name: string;
@@ -26,6 +18,7 @@ type LeagueFormValues = {
   dayOfWeek: PreferredNight | "";
   leagueType: LeagueType | "";
   venueName: string;
+  requiredRefereesPerNight: string;
   kickoffInfo: string;
   format: string;
   surface: string;
@@ -43,10 +36,6 @@ type LeagueFormProps = {
   ) => Promise<LeagueFormState>;
   initialValues?: Partial<LeagueFormValues>;
 };
-
-// ========================================
-// Constants
-// ========================================
 
 const initialState: LeagueFormState = {};
 
@@ -68,10 +57,6 @@ const leagueTypeOptions: Array<{ value: LeagueType | ""; label: string }> = [
   { value: "WOMENS", label: "Womens" },
   { value: "YOUTH", label: "Youth" },
 ];
-
-// ========================================
-// Helpers
-// ========================================
 
 function slugify(value: string) {
   return value
@@ -104,6 +89,8 @@ function Input({
   defaultValue,
   placeholder,
   type = "text",
+  min,
+  step,
   hasError = false,
 }: {
   id: string;
@@ -111,6 +98,8 @@ function Input({
   defaultValue?: string;
   placeholder?: string;
   type?: string;
+  min?: string;
+  step?: string;
   hasError?: boolean;
 }) {
   return (
@@ -118,6 +107,8 @@ function Input({
       id={id}
       name={name}
       type={type}
+      min={min}
+      step={step}
       defaultValue={defaultValue}
       placeholder={placeholder}
       className={`w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 ${
@@ -207,10 +198,6 @@ function SubmitButton({ mode }: { mode: "create" | "edit" }) {
   );
 }
 
-// ========================================
-// Component
-// ========================================
-
 export default function LeagueForm({
   mode,
   action,
@@ -228,6 +215,7 @@ export default function LeagueForm({
       dayOfWeek: initialValues?.dayOfWeek ?? "",
       leagueType: initialValues?.leagueType ?? "",
       venueName: initialValues?.venueName ?? "",
+      requiredRefereesPerNight: initialValues?.requiredRefereesPerNight ?? "1",
       kickoffInfo: initialValues?.kickoffInfo ?? "",
       format: initialValues?.format ?? "",
       surface: initialValues?.surface ?? "",
@@ -369,6 +357,26 @@ export default function LeagueForm({
             hasError={Boolean(state.errors?.leagueType)}
           />
           <FieldError errors={state.errors} name="leagueType" />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="requiredRefereesPerNight" className="block text-sm font-medium text-white">
+            Referees needed per night
+          </label>
+          <Input
+            id="requiredRefereesPerNight"
+            name="requiredRefereesPerNight"
+            type="number"
+            min="0"
+            step="1"
+            defaultValue={values.requiredRefereesPerNight}
+            placeholder="1"
+            hasError={Boolean(state.errors?.requiredRefereesPerNight)}
+          />
+          <p className="text-xs text-white/40">
+            Used by referee availability to flag if a league night is under-covered.
+          </p>
+          <FieldError errors={state.errors} name="requiredRefereesPerNight" />
         </div>
 
         <div className="space-y-2">
