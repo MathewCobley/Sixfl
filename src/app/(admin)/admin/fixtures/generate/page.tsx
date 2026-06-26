@@ -10,7 +10,6 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   backfillFixtureMatchFeeChargesAction,
-  cancelUnpublishedFixturePaymentQueueAction,
   generateDraftFixturesWithPitchRefereesAction,
 } from "./actions";
 import { backfillRefereeAssignmentsAction } from "./referee-backfill-actions";
@@ -36,9 +35,6 @@ type SearchParams = {
   refBackfilled?: string;
   refAssigned?: string;
   refEmails?: string;
-  unpublishedCancelled?: string;
-  unpublishedVoided?: string;
-  unpublishedEntries?: string;
 };
 
 export default async function ImprovedFixtureGeneratorPage({
@@ -74,11 +70,6 @@ export default async function ImprovedFixtureGeneratorPage({
   const refereeEmailCount = Number(sp.refEmails ?? "");
   const hasRefereeBackfillNotice = Number.isFinite(refereeBackfilledCount) && sp.refBackfilled !== undefined;
 
-  const unpublishedCancelled = Number(sp.unpublishedCancelled ?? "");
-  const unpublishedVoided = Number(sp.unpublishedVoided ?? "");
-  const unpublishedEntries = Number(sp.unpublishedEntries ?? "");
-  const hasUnpublishedCleanupNotice = sp.unpublishedCancelled !== undefined;
-
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
       <div>
@@ -93,12 +84,6 @@ export default async function ImprovedFixtureGeneratorPage({
         </p>
       </div>
 
-      {hasUnpublishedCleanupNotice ? (
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-          Cancelled {Number.isFinite(unpublishedCancelled) ? unpublishedCancelled : 0} queued unpublished-fixture payment message{unpublishedCancelled === 1 ? "" : "s"}, marked {Number.isFinite(unpublishedEntries) ? unpublishedEntries : 0} queued message entr{unpublishedEntries === 1 ? "y" : "ies"} as cancelled, and voided {Number.isFinite(unpublishedVoided) ? unpublishedVoided : 0} unpublished-fixture charge{unpublishedVoided === 1 ? "" : "s"} with no payments.
-        </div>
-      ) : null}
-
       {hasBackfillNotice ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           Backfilled payment charges for {backfilledCount} published fixture{backfilledCount === 1 ? "" : "s"}. Queued {Number.isFinite(paymentRequestCount) ? paymentRequestCount : 0} payment message{paymentRequestCount === 1 ? "" : "s"}.
@@ -110,21 +95,6 @@ export default async function ImprovedFixtureGeneratorPage({
           Linked {refereeBackfilledCount} fixture{refereeBackfilledCount === 1 ? "" : "s"} to referee night{refereeBackfilledCount === 1 ? "" : "s"}. Filled {Number.isFinite(refereeAssignedCount) ? refereeAssignedCount : 0} blank referee assignment{refereeAssignedCount === 1 ? "" : "s"}. Queued {Number.isFinite(refereeEmailCount) ? refereeEmailCount : 0} referee email{refereeEmailCount === 1 ? "" : "s"}.
         </div>
       ) : null}
-
-      <AdminCard className="rounded-3xl border border-red-400/25 bg-red-500/[0.08] p-6 md:p-8">
-        <form action={cancelUnpublishedFixturePaymentQueueAction} className="space-y-5">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-red-200/80">Emergency cleanup</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Cancel unpublished fixture payment messages</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
-              Cancels queued match-fee payment emails/SMS for unpublished fixtures and voids unpaid charges attached to unpublished fixtures. This protects draft fixtures from being sent out.
-            </p>
-          </div>
-          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-red-400/30 bg-red-500/20 px-6 text-sm font-semibold text-red-50 transition hover:bg-red-500/30">
-            Cancel unpublished payment queue
-          </button>
-        </form>
-      </AdminCard>
 
       <AdminCard className="rounded-3xl border border-amber-400/25 bg-amber-500/[0.06] p-6 md:p-8">
         <form action={backfillFixtureMatchFeeChargesAction} className="space-y-5">
