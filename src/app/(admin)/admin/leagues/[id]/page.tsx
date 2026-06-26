@@ -10,10 +10,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
 import LeagueForm from "@/components/admin/leagues/LeagueForm";
 import TeamBadge from "@/components/admin/TeamBadge";
-import {
-  deleteLeagueAction,
-  updateLeagueAction,
-} from "@/app/(admin)/admin/leagues/actions";
+import { updateLeagueAction } from "@/app/(admin)/admin/leagues/actions";
 
 function formatDay(dayOfWeek: string | null) {
   if (!dayOfWeek) {
@@ -127,10 +124,8 @@ export default async function EditLeaguePage({
   }
 
   const boundUpdateAction = updateLeagueAction.bind(null, league.id);
-  const boundDeleteAction = deleteLeagueAction.bind(null, league.id);
 
   const created = resolvedSearchParams?.created === "1";
-  const deleteError = resolvedSearchParams?.deleteError === "linked-records";
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -171,13 +166,6 @@ export default async function EditLeaguePage({
       {created ? (
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
           League created successfully.
-        </div>
-      ) : null}
-
-      {deleteError ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          You cannot delete a league while it still has linked teams, fixtures,
-          or leads.
         </div>
       ) : null}
 
@@ -330,19 +318,6 @@ export default async function EditLeaguePage({
               </div>
             </dl>
           </div>
-
-          <form action={boundDeleteAction} className="rounded-3xl border border-red-500/20 bg-red-500/5 p-6">
-            <h2 className="text-lg font-semibold text-red-200">Danger zone</h2>
-            <p className="mt-2 text-sm leading-6 text-red-100/70">
-              Delete this league only if it has no linked teams, fixtures or leads.
-            </p>
-            <button
-              type="submit"
-              className="mt-5 inline-flex items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15"
-            >
-              Delete league
-            </button>
-          </form>
         </div>
       </div>
     </div>
