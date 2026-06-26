@@ -114,6 +114,12 @@ const navigation = [
     description: "Officials and assignments",
   },
   {
+    name: "Referee Nights",
+    href: "/admin/referee-nights",
+    icon: CalendarDaysIcon,
+    description: "Night fees and cashups",
+  },
+  {
     name: "Leads",
     href: "/admin/leads",
     icon: UsersIcon,
