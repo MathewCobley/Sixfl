@@ -54,7 +54,7 @@ export default async function ImprovedFixtureGeneratorPage() {
           Bulk Fixture Generator
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Generate a full draft schedule with pitch-specific referees. This does not publish fixtures, email teams, or create match fees.
+          Generate a full draft schedule with pitch-specific referees. Enter the session start, last kick-off time, number of pitches and slot length; the generator fills every pitch in each available time slot.
         </p>
       </div>
 
@@ -78,7 +78,13 @@ export default async function ImprovedFixtureGeneratorPage() {
             <div>
               <label className={labelClass}>Start time</label>
               <input type="time" name="startTime" defaultValue="19:00" required className={inputClass} />
-              <p className="mt-2 text-xs leading-5 text-white/45">Times are UK/London fixture times. 19:00 means 7pm.</p>
+              <p className="mt-2 text-xs leading-5 text-white/45">First kick-off time. 19:00 means 7pm UK time.</p>
+            </div>
+
+            <div>
+              <label className={labelClass}>Last game start time</label>
+              <input type="time" name="lastGameStartTime" defaultValue="20:20" required className={inputClass} />
+              <p className="mt-2 text-xs leading-5 text-white/45">Latest kick-off in the session. Example: 19:00 start, 20:20 last game, 40 min slots = 19:00, 19:40 and 20:20.</p>
             </div>
 
             <div>
@@ -102,14 +108,11 @@ export default async function ImprovedFixtureGeneratorPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-5">
+          <div className="grid gap-6 md:grid-cols-4">
             <div>
               <label className={labelClass}>Pitches</label>
-              <input type="number" name="pitches" min={1} max={6} defaultValue={1} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Max games per night</label>
-              <input type="number" name="maxGamesPerNight" min={1} defaultValue={3} className={inputClass} />
+              <input type="number" name="pitches" min={1} max={6} defaultValue={2} className={inputClass} />
+              <p className="mt-2 text-xs leading-5 text-white/45">The generator fills Pitch 1, Pitch 2, etc. at the same kick-off time before moving to the next slot.</p>
             </div>
             <div>
               <label className={labelClass}>Slot minutes</label>
