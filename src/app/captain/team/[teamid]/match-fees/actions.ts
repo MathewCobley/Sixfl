@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import { queuePlayerMatchFeeReminder } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
@@ -85,6 +86,7 @@ async function assertFixtureBelongsToTeam(input: { fixtureId: string; teamId: st
   const fixture = await prisma.fixture.findFirst({
     where: {
       id: input.fixtureId,
+      ...publishedFixtureWhere,
       OR: [{ homeTeamId: input.teamId }, { awayTeamId: input.teamId }],
     },
     select: { id: true },
