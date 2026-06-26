@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 
+import RefereeTabs from "@/components/referee/RefereeTabs";
 import { requireReferee } from "@/lib/admin";
 import {
   formatAvailabilityDate,
@@ -28,19 +29,6 @@ const STATUS_OPTIONS: Array<{ value: RefereeAvailabilityStatus; label: string }>
   { value: "UNAVAILABLE", label: "Unavailable" },
   { value: "NO_RESPONSE", label: "No response" },
 ];
-
-function statusClasses(status: RefereeAvailabilityStatus) {
-  switch (status) {
-    case "AVAILABLE":
-      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-    case "MAYBE":
-      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
-    case "UNAVAILABLE":
-      return "border-red-400/25 bg-red-500/10 text-red-100";
-    default:
-      return "border-white/10 bg-white/[0.04] text-white/55";
-  }
-}
 
 function peerCheckedClasses(status: RefereeAvailabilityStatus) {
   switch (status) {
@@ -85,7 +73,7 @@ export default async function RefereeAvailabilityPage({ searchParams }: PageProp
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-8">
+      <div className="mx-auto max-w-6xl space-y-6">
         {isAdminPreview ? (
           <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -105,6 +93,8 @@ export default async function RefereeAvailabilityPage({ searchParams }: PageProp
           </section>
         ) : null}
 
+        <RefereeTabs active="availability" />
+
         <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
           <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
             <div>
@@ -119,12 +109,6 @@ export default async function RefereeAvailabilityPage({ searchParams }: PageProp
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href="/referee"
-                  className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
-                >
-                  Back to referee dashboard
-                </Link>
                 <Link
                   href={`/referee/availability?month=${previousMonth}`}
                   className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
