@@ -53,6 +53,13 @@ export type RefereeAvailabilityMonth = {
   slots: RefereeAvailabilitySlot[];
 };
 
+type AvailabilityReferee = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: UserRole;
+};
+
 type RawAvailabilityRow = {
   id: string | null;
   leagueId: string;
@@ -209,23 +216,21 @@ export function getLeagueDatesInMonth(input: {
 }
 
 export async function getRefereesForAvailability() {
-  return prisma.user.findMany({
-    where: {
-      role: {
-        in: [UserRole.REFEREE, UserRole.ADMIN],
-      },
-      email: {
-        not: null,
-      },
-    },
-    orderBy: [{ name: "asc" }, { email: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-    },
-  });
+  return prisma.$queryRaw<AvailabilityReferee[]>(Prisma.sql`
+    SELECT
+      u.id,
+      u.name,
+      u.email,
+      u.role
+    FROM "User" u
+    LEFT JOIN "RefereeProfile" rp ON rp."userId" = u.id
+    WHERE u.email IS NOT NULL
+      AND (
+        u.role = ${UserRole.REFEREE}::"UserRole"
+        OR (rp."userId" IS NOT NULL AND rp."isActive" = TRUE)
+      )
+    ORDER BY u.name ASC NULLS LAST, u.email ASC NULLS LAST
+  `);
 }
 
 export async function ensureRefereeAvailabilityRows(input: {
@@ -372,6 +377,10 @@ export async function updateRefereeAvailability(input: {
 
 export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
   const referees = await getRefereesForAvailability();
+  const refereeIds = referees.map((referee) => referee.id);
+  const refereeFilter = refereeIds.length
+    ? Prisma.sql`AND ra."refereeId" IN (${Prisma.join(refereeIds)})`
+    : Prisma.sql`AND FALSE`;
 
   await Promise.all(
     referees.map((referee) =>
@@ -400,6 +409,7 @@ export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
     JOIN "League" l ON l.id = ra."leagueId"
     WHERE ra."availabilityDate" >= ${bounds.startDate}::date
       AND ra."availabilityDate" <= ${bounds.endDate}::date
+      ${refereeFilter}
     ORDER BY u.name ASC NULLS LAST, u.email ASC NULLS LAST, ra."availabilityDate" ASC, l.name ASC
   `);
 
