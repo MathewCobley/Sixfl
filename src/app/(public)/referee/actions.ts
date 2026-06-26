@@ -15,6 +15,20 @@ import {
   recalculateRefereeNightCashup,
 } from "@/lib/referee-nights";
 
+const DISCIPLINARY_INCIDENT_TYPES = [
+  "DISSENT",
+  "FIGHTING",
+  "AGGRESSIVE_CONDUCT",
+  "OFFENSIVE_LANGUAGE",
+  "THREATENING_BEHAVIOUR",
+  "OTHER",
+] as const;
+
+const DISCIPLINARY_SEVERITIES = ["NOTE", "WARNING", "SERIOUS", "URGENT"] as const;
+
+type DisciplinaryIncidentType = (typeof DISCIPLINARY_INCIDENT_TYPES)[number];
+type DisciplinarySeverity = (typeof DISCIPLINARY_SEVERITIES)[number];
+
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
   const str = String(value ?? "").trim();
   if (!str) throw new Error(`${fieldName} is required.`);
@@ -43,6 +57,20 @@ function parsePaymentMethod(value: FormDataEntryValue | null) {
   return ["CASH", "CARD", "BANK_TRANSFER", "OTHER"].includes(method)
     ? method
     : "CASH";
+}
+
+function parseDisciplinaryIncidentType(value: FormDataEntryValue | null): DisciplinaryIncidentType {
+  const incidentType = String(value ?? "").trim().toUpperCase();
+  return DISCIPLINARY_INCIDENT_TYPES.includes(incidentType as DisciplinaryIncidentType)
+    ? (incidentType as DisciplinaryIncidentType)
+    : "OTHER";
+}
+
+function parseDisciplinarySeverity(value: FormDataEntryValue | null): DisciplinarySeverity {
+  const severity = String(value ?? "").trim().toUpperCase();
+  return DISCIPLINARY_SEVERITIES.includes(severity as DisciplinarySeverity)
+    ? (severity as DisciplinarySeverity)
+    : "NOTE";
 }
 
 async function assertNightAccess(input: {
@@ -271,6 +299,48 @@ export async function recordRefereeNightCashAction(formData: FormData) {
   revalidatePath("/admin/payments");
 
   redirect(`/referee/night/${refereeNightId}?saved=cash`);
+}
+
+export async function recordFixtureDisciplinaryNoteAction(formData: FormData) {
+  const { user } = await requireReferee();
+
+  const refereeNightId = parseRequiredString(formData.get("refereeNightId"), "Referee night");
+  const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture");
+  const teamId = parseRequiredString(formData.get("teamId"), "Team");
+  const incidentType = parseDisciplinaryIncidentType(formData.get("incidentType"));
+  const severity = parseDisciplinarySeverity(formData.get("severity"));
+  const description = parseRequiredString(formData.get("description"), "Disciplinary note");
+
+  await assertNightAccess({ refereeNightId, fixtureId, user });
+
+  const fixture = await prisma.fixture.findUnique({
+    where: { id: fixtureId },
+    select: {
+      id: true,
+      homeTeamId: true,
+      awayTeamId: true,
+    },
+  });
+
+  if (!fixture) throw new Error("Fixture not found.");
+  if (fixture.homeTeamId !== teamId && fixture.awayTeamId !== teamId) {
+    throw new Error("Selected team is not part of this fixture.");
+  }
+
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO "FixtureDisciplinaryNote" (
+      "id", "fixtureId", "teamId", "refereeNightId", "reportedByUserId", "incidentType", "severity", "description", "createdAt", "updatedAt"
+    ) VALUES (
+      ${randomUUID()}, ${fixtureId}, ${teamId}, ${refereeNightId}, ${user.id}, ${incidentType}::"FixtureDisciplinaryIncidentType", ${severity}::"FixtureDisciplinarySeverity", ${description}, NOW(), NOW()
+    )
+  `);
+
+  revalidatePath("/referee");
+  revalidatePath(`/referee/night/${refereeNightId}`);
+  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
+  revalidatePath("/admin/referee-nights");
+
+  redirect(`/referee/night/${refereeNightId}?saved=discipline`);
 }
 
 export async function submitRefereeNightCashupAction(formData: FormData) {
