@@ -220,7 +220,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
     ...(selectedNight ? { preferredNights: { some: { night: selectedNight } } } : {}),
   };
 
-  const [leads, stats, emailTemplatesRaw, smsTemplates, managedTeams] = await Promise.all([
+  const [leads, stats, emailTemplatesRaw, smsTemplatesRaw, managedTeams] = await Promise.all([
     prisma.interestLead.findMany({
       where: leadWhere,
       orderBy: { createdAt: "desc" },
@@ -244,16 +244,21 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
         ctaUrlKey: true,
       },
     }),
-    prisma.smsTemplate.findMany({
-      where: { isActive: true },
-      orderBy: [{ interestType: "asc" }, { label: "asc" }],
+    prisma.notificationTemplate.findMany({
+      where: {
+        isActive: true,
+        channel: "SMS",
+        audience: {
+          in: ["LEAD", "GENERAL"],
+        },
+      },
+      orderBy: [{ audience: "asc" }, { name: "asc" }],
       select: {
         id: true,
         key: true,
-        label: true,
-        body: true,
+        name: true,
         description: true,
-        interestType: true,
+        body: true,
         ctaUrlKey: true,
       },
     }),
@@ -276,6 +281,16 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
     body: template.body,
     interestType: template.interestType,
     ctaLabel: template.ctaLabel,
+    ctaUrlKey: template.ctaUrlKey,
+  }));
+
+  const smsTemplates = smsTemplatesRaw.map((template) => ({
+    id: template.id,
+    key: template.key,
+    label: template.name,
+    body: template.body,
+    description: template.description,
+    interestType: null,
     ctaUrlKey: template.ctaUrlKey,
   }));
 
