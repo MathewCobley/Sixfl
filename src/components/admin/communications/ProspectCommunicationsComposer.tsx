@@ -28,7 +28,7 @@ type SmsTemplateOption = {
 };
 
 type Props = {
-  teamId: string;
+  teamId?: string | null;
   prospectId: string;
   fromPath: string;
   toEmail: string | null;
@@ -138,7 +138,7 @@ export default function ProspectCommunicationsComposer({
         action={sendProspectCommunicationMessageAction}
         className="rounded-3xl border border-white/10 bg-white/5 p-6"
       >
-        <input type="hidden" name="teamId" value={teamId} />
+        <input type="hidden" name="teamId" value={teamId ?? ""} />
         <input type="hidden" name="prospectId" value={prospectId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="EMAIL" />
@@ -193,7 +193,7 @@ export default function ProspectCommunicationsComposer({
         action={sendProspectCommunicationMessageAction}
         className="rounded-3xl border border-white/10 bg-white/5 p-6"
       >
-        <input type="hidden" name="teamId" value={teamId} />
+        <input type="hidden" name="teamId" value={teamId ?? ""} />
         <input type="hidden" name="prospectId" value={prospectId} />
         <input type="hidden" name="from" value={fromPath} />
         <input type="hidden" name="channel" value="SMS" />
