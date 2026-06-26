@@ -150,11 +150,11 @@ export default function CaptainOnboardingChecklist({
       actionLabel: "Open payments",
     },
     {
-      title: "Read matchday rules",
-      text: "Check kick-off times, late arrival expectations, footwear, shin pads, referee decisions and team conduct before your first game.",
+      title: "Read matchday rules and captain terms",
+      text: "Check kick-off times, late arrival expectations, footwear, shin pads, referee decisions, team conduct and captain responsibilities before your first game.",
       tone: status.isAgreementAccepted ? "complete" : "attention",
       href: `/captain/team/${teamId}/guide`,
-      actionLabel: "Read guide",
+      actionLabel: "Guide & Rules",
     },
   ];
 
@@ -178,7 +178,7 @@ export default function CaptainOnboardingChecklist({
             href={`/captain/team/${teamId}/guide`}
             className="inline-flex items-center justify-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
           >
-            Captain Guide
+            Guide & Rules
           </Link>
         </div>
       </div>
