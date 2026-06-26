@@ -321,6 +321,7 @@ export default async function AdminRefereesPage({
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Link href={`/admin/referees/${referee.id}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Edit referee</Link>
+                        <Link href={`/admin/referees/${referee.id}#comms`} className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Comms</Link>
                         {contactEmail ? (
                           <form action={sendRefereeInviteAction}>
                             <input type="hidden" name="refereeId" value={referee.id} />
@@ -329,7 +330,7 @@ export default async function AdminRefereesPage({
                             </button>
                           </form>
                         ) : null}
-                        <Link href={`/admin/referees/${referee.id}#sms`} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200">Send SMS via SIXFL</Link>
+                        <Link href={`/admin/referees/${referee.id}#comms`} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200">Send SMS via SIXFL</Link>
                         <Link href={`/admin/referees/${referee.id}/preview`} className="inline-flex h-10 items-center justify-center rounded-xl border border-sky-300/20 bg-sky-300/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/15">Preview dashboard</Link>
                         {sourceLead ? <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Email via SIXFL</Link> : null}
                         <ContactButton href={whatsappHref} label="WhatsApp" />
