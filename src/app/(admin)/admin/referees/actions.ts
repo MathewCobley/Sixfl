@@ -4,6 +4,7 @@
 
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -35,6 +36,17 @@ const REFEREE_INVITE_TEMPLATE_KEY = "referee-invite-email";
 
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function readStringArray(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(key)
+        .map((value) => String(value).trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function normaliseEmail(value: string) {
@@ -75,6 +87,35 @@ function buildRefereeLoginUrl(email: string) {
   url.searchParams.set("email", email);
   url.searchParams.set("callbackUrl", "/referee");
   return url.toString();
+}
+
+async function syncRefereeLeagueCoverage(refereeId: string, leagueIds: string[]) {
+  const validLeagues = leagueIds.length
+    ? await prisma.league.findMany({
+        where: {
+          id: { in: leagueIds },
+          isActive: true,
+        },
+        select: { id: true },
+      })
+    : [];
+  const validLeagueIds = validLeagues.map((league) => league.id);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      DELETE FROM "RefereeLeagueCoverage"
+      WHERE "refereeId" = ${refereeId}
+    `;
+
+    for (const leagueId of validLeagueIds) {
+      await tx.$executeRaw`
+        INSERT INTO "RefereeLeagueCoverage" ("id", "refereeId", "leagueId", "updatedAt")
+        VALUES (${randomUUID()}, ${refereeId}, ${leagueId}, NOW())
+        ON CONFLICT ("refereeId", "leagueId") DO UPDATE
+        SET "updatedAt" = NOW()
+      `;
+    }
+  });
 }
 
 async function ensureRefereeInviteEmailTemplate() {
@@ -287,6 +328,7 @@ export async function createRefereeAction(formData: FormData) {
   revalidatePath("/admin/referees");
   revalidatePath(`/admin/referees/${result.user.id}`);
   revalidatePath(`/admin/referees/${result.user.id}/preview`);
+  revalidatePath("/admin/referee-availability");
   revalidatePath("/admin/leads");
 
   redirect(getRefereesPath(`referee=${result.mode}&userId=${result.user.id}`));
@@ -300,6 +342,7 @@ export async function updateRefereeAction(formData: FormData) {
   const email = normaliseEmail(readString(formData, "email"));
   const phone = readString(formData, "phone") || null;
   const area = readString(formData, "area") || null;
+  const leagueCoverageIds = readStringArray(formData, "leagueCoverageIds");
   const notes = readString(formData, "notes") || null;
   const standardNightFeePence = readStandardNightFeePence(formData);
   const isActive = formData.get("isActive") === "on";
@@ -408,9 +451,14 @@ export async function updateRefereeAction(formData: FormData) {
     standardNightFeePence,
   });
 
+  await syncRefereeLeagueCoverage(updatedUser.id, leagueCoverageIds);
+
   revalidatePath("/admin/referees");
   revalidatePath(`/admin/referees/${updatedUser.id}`);
   revalidatePath(`/admin/referees/${updatedUser.id}/preview`);
+  revalidatePath("/admin/referee-availability");
+  revalidatePath("/referee");
+  revalidatePath("/referee/availability");
   revalidatePath("/admin/leads");
 
   redirect(getRefereeProfilePath(updatedUser.id, { updated: 1 }));
