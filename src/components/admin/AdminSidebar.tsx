@@ -28,141 +28,178 @@ type AdminSidebarProps = {
   unreadMessagingCount?: number;
 };
 
-const navigation = [
+const navigationGroups = [
   {
-    name: "Overview",
-    href: "/admin",
-    icon: ShieldCheckIcon,
-    exact: true,
-    description: "Admin dashboard",
+    title: "Start",
+    items: [
+      {
+        name: "Overview",
+        href: "/admin",
+        icon: ShieldCheckIcon,
+        exact: true,
+        description: "Admin dashboard",
+      },
+      {
+        name: "Search",
+        href: "/admin/search",
+        icon: MagnifyingGlassIcon,
+        description: "Find by mobile or email",
+      },
+    ],
   },
   {
-    name: "Search",
-    href: "/admin/search",
-    icon: MagnifyingGlassIcon,
-    description: "Find by mobile or email",
+    title: "League setup",
+    items: [
+      {
+        name: "Teams",
+        href: "/admin/teams",
+        icon: UserGroupIcon,
+        description: "Squads and captains",
+      },
+      {
+        name: "Users",
+        href: "/admin/users",
+        icon: UsersIcon,
+        description: "Names and linked accounts",
+      },
+      {
+        name: "Leagues",
+        href: "/admin/leagues",
+        icon: TrophyIcon,
+        description: "League setup",
+      },
+      {
+        name: "Venues",
+        href: "/admin/venues",
+        icon: MapPinIcon,
+        description: "Match locations",
+      },
+    ],
   },
   {
-    name: "Teams",
-    href: "/admin/teams",
-    icon: UserGroupIcon,
-    description: "Squads and captains",
+    title: "Fixtures",
+    items: [
+      {
+        name: "Fixtures",
+        href: "/admin/fixtures",
+        icon: CalendarDaysIcon,
+        description: "Schedule and results",
+      },
+      {
+        name: "Bulk generator",
+        href: "/admin/fixtures/generate",
+        icon: CalendarDaysIcon,
+        description: "Draft fixtures by pitch",
+      },
+      {
+        name: "Fixture backfill",
+        href: "/admin/fixtures/backfill",
+        icon: WrenchScrewdriverIcon,
+        description: "Fees and referees",
+      },
+      {
+        name: "Late fees",
+        href: "/admin/fixtures/late-fees",
+        icon: ExclamationTriangleIcon,
+        description: "72h confirmation review",
+      },
+      {
+        name: "Result disputes",
+        href: "/admin/results",
+        icon: ExclamationTriangleIcon,
+        description: "Captain-raised issues",
+      },
+    ],
   },
   {
-    name: "Users",
-    href: "/admin/users",
-    icon: UsersIcon,
-    description: "Names and linked accounts",
+    title: "Referees",
+    items: [
+      {
+        name: "Referees",
+        href: "/admin/referees",
+        icon: ShieldCheckIcon,
+        description: "Officials and assignments",
+      },
+      {
+        name: "Referee nights",
+        href: "/admin/referee-nights",
+        icon: CalendarDaysIcon,
+        description: "Night fees and cashups",
+      },
+    ],
   },
   {
-    name: "Leagues",
-    href: "/admin/leagues",
-    icon: TrophyIcon,
-    description: "League setup",
+    title: "Payments",
+    items: [
+      {
+        name: "Payments",
+        href: "/admin/payments",
+        icon: DocumentTextIcon,
+        description: "Charges and payments",
+      },
+      {
+        name: "Subscriptions",
+        href: "/admin/payments/subscriptions",
+        icon: CreditCardIcon,
+        description: "Recurring Stripe billing",
+      },
+    ],
   },
   {
-    name: "Venues",
-    href: "/admin/venues",
-    icon: MapPinIcon,
-    description: "Match locations",
+    title: "Recruitment",
+    items: [
+      {
+        name: "Leads",
+        href: "/admin/leads",
+        icon: UsersIcon,
+        description: "Inbound enquiries",
+      },
+      {
+        name: "Player prospects",
+        href: "/admin/player-prospects",
+        icon: UsersIcon,
+        description: "Individual player pipeline",
+      },
+      {
+        name: "Prospect teams",
+        href: "/admin/team-prospects",
+        icon: UserGroupIcon,
+        description: "Team enquiries and dropouts",
+      },
+    ],
   },
   {
-    name: "Fixtures",
-    href: "/admin/fixtures",
-    icon: CalendarDaysIcon,
-    description: "Schedule and results",
-  },
-  {
-    name: "Bulk Fixture Generator",
-    href: "/admin/fixtures/generate",
-    icon: CalendarDaysIcon,
-    description: "Draft fixtures by pitch",
-  },
-  {
-    name: "Fixture Backfill",
-    href: "/admin/fixtures/backfill",
-    icon: WrenchScrewdriverIcon,
-    description: "Fees and referees",
-  },
-  {
-    name: "Late Fees",
-    href: "/admin/fixtures/late-fees",
-    icon: ExclamationTriangleIcon,
-    description: "72h confirmation review",
-  },
-  {
-    name: "Social",
-    href: "/admin/social",
-    icon: PhotoIcon,
-    description: "Drafts and publishing",
-  },
-  {
-    name: "Result Disputes",
-    href: "/admin/results",
-    icon: ExclamationTriangleIcon,
-    description: "Captain-raised issues",
-  },
-  {
-    name: "Payments",
-    href: "/admin/payments",
-    icon: DocumentTextIcon,
-    description: "Charges and payments",
-  },
-  {
-    name: "Subscriptions",
-    href: "/admin/payments/subscriptions",
-    icon: CreditCardIcon,
-    description: "Recurring Stripe billing",
-  },
-  {
-    name: "Referees",
-    href: "/admin/referees",
-    icon: ShieldCheckIcon,
-    description: "Officials and assignments",
-  },
-  {
-    name: "Referee Nights",
-    href: "/admin/referee-nights",
-    icon: CalendarDaysIcon,
-    description: "Night fees and cashups",
-  },
-  {
-    name: "Leads",
-    href: "/admin/leads",
-    icon: UsersIcon,
-    description: "Inbound enquiries",
-  },
-  {
-    name: "Player Prospects",
-    href: "/admin/player-prospects",
-    icon: UsersIcon,
-    description: "Individual player pipeline",
-  },
-  {
-    name: "Prospect Teams",
-    href: "/admin/team-prospects",
-    icon: UserGroupIcon,
-    description: "Team enquiries and dropouts",
-  },
-  {
-    name: "Communications",
-    href: "/admin/messaging",
-    icon: DocumentTextIcon,
-    description: "Email, SMS and history",
-  },
-  {
-    name: "Queue",
-    href: "/admin/queue",
-    icon: Cog6ToothIcon,
-    description: "SMS and email dispatches",
-  },
-  {
-    name: "Templates",
-    href: "/admin/templates",
-    icon: DocumentTextIcon,
-    description: "Email and SMS messaging",
+    title: "Comms & marketing",
+    items: [
+      {
+        name: "Communications",
+        href: "/admin/messaging",
+        icon: DocumentTextIcon,
+        description: "Email, SMS and history",
+      },
+      {
+        name: "Templates",
+        href: "/admin/templates",
+        icon: DocumentTextIcon,
+        description: "Email and SMS messaging",
+      },
+      {
+        name: "Queue",
+        href: "/admin/queue",
+        icon: Cog6ToothIcon,
+        description: "SMS and email dispatches",
+      },
+      {
+        name: "Social",
+        href: "/admin/social",
+        icon: PhotoIcon,
+        description: "Drafts and publishing",
+      },
+    ],
   },
 ];
+
+const navigation = navigationGroups.flatMap((group) => group.items);
 
 function isActivePath(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
@@ -209,59 +246,69 @@ export default function AdminSidebar({
           </div>
         </div>
 
-        <nav className="grid max-h-[calc(100dvh-18rem)] gap-2 overflow-y-auto p-3 sixfl-mobile-scroll xl:max-h-none xl:gap-1.5 xl:overflow-visible xl:p-2 2xl:gap-2 2xl:p-3">
-          {navigation.map((item) => {
-            const active = activeHref === item.href;
-            const Icon = item.icon;
-            const unreadCount =
-              item.name === "Communications" ? unreadMessagingCount : 0;
-            const description =
-              item.name === "Communications" && unreadCount > 0
-                ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
-                : item.description;
+        <nav className="max-h-[calc(100dvh-18rem)] space-y-4 overflow-y-auto p-3 sixfl-mobile-scroll xl:max-h-none xl:space-y-2 xl:overflow-visible xl:p-2 2xl:space-y-3 2xl:p-3">
+          {navigationGroups.map((group) => (
+            <section key={group.title} className="space-y-1.5">
+              <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/28 2xl:text-[11px]">
+                {group.title}
+              </div>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={[
-                  "group flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition xl:min-h-0 xl:gap-2 xl:rounded-xl xl:px-2.5 xl:py-2 2xl:gap-3 2xl:rounded-2xl 2xl:px-3 2xl:py-2.5",
-                  active
-                    ? "border-emerald-400/25 bg-emerald-400/12 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                    : "border-white/8 bg-white/[0.02] text-white/75 hover:border-white/15 hover:bg-white/[0.05] hover:text-white",
-                ].join(" ")}
-              >
-                <div
-                  className={[
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition xl:h-7 xl:w-7 xl:rounded-lg 2xl:h-8 2xl:w-8 2xl:rounded-xl",
-                    active
-                      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                      : "border-white/10 bg-black/30 text-white/55 group-hover:text-white/80",
-                  ].join(" ")}
-                >
-                  <Icon className="h-4.5 w-4.5 xl:h-4 xl:w-4" />
-                </div>
+              <div className="grid gap-2 xl:gap-1.5 2xl:gap-2">
+                {group.items.map((item) => {
+                  const active = activeHref === item.href;
+                  const Icon = item.icon;
+                  const unreadCount =
+                    item.name === "Communications" ? unreadMessagingCount : 0;
+                  const description =
+                    item.name === "Communications" && unreadCount > 0
+                      ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
+                      : item.description;
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="truncate text-sm font-semibold xl:text-[13px] 2xl:text-sm">
-                      {item.name}
-                    </div>
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={[
+                        "group flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition xl:min-h-0 xl:gap-2 xl:rounded-xl xl:px-2.5 xl:py-2 2xl:gap-3 2xl:rounded-2xl 2xl:px-3 2xl:py-2.5",
+                        active
+                          ? "border-emerald-400/25 bg-emerald-400/12 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                          : "border-white/8 bg-white/[0.02] text-white/75 hover:border-white/15 hover:bg-white/[0.05] hover:text-white",
+                      ].join(" ")}
+                    >
+                      <div
+                        className={[
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition xl:h-7 xl:w-7 xl:rounded-lg 2xl:h-8 2xl:w-8 2xl:rounded-xl",
+                          active
+                            ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+                            : "border-white/10 bg-black/30 text-white/55 group-hover:text-white/80",
+                        ].join(" ")}
+                      >
+                        <Icon className="h-4.5 w-4.5 xl:h-4 xl:w-4" />
+                      </div>
 
-                    {unreadCount > 0 ? (
-                      <span className="inline-flex min-w-[1.35rem] shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    ) : null}
-                  </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="truncate text-sm font-semibold xl:text-[13px] 2xl:text-sm">
+                            {item.name}
+                          </div>
 
-                  <div className="mt-0.5 truncate text-[11px] text-white/35 xl:text-[10px] 2xl:text-[11px]">
-                    {description}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+                          {unreadCount > 0 ? (
+                            <span className="inline-flex min-w-[1.35rem] shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200">
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-0.5 truncate text-[11px] text-white/35 xl:text-[10px] 2xl:text-[11px]">
+                          {description}
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </nav>
       </div>
     </aside>
