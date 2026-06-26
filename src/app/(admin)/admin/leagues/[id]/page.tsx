@@ -244,6 +244,9 @@ export default async function EditLeaguePage({
               ) : (
                 league.teams.map((team) => {
                   const contact = contactMap.get(team.id);
+                  const contactEmail = contact?.primaryContact.email;
+                  const contactPhone = contact?.primaryContact.phone;
+
                   return (
                     <Link
                       key={team.id}
@@ -257,7 +260,7 @@ export default async function EditLeaguePage({
                             {team.name}
                           </div>
                           <div className="truncate text-xs text-white/45">
-                            {contact?.email || "No email"} · {contact?.phone || "No phone"}
+                            {contactEmail || "No email"} · {contactPhone || "No phone"}
                           </div>
                         </div>
                       </div>
