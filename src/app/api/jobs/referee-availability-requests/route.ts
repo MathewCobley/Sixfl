@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   getNextMonthKey,
+  normaliseMonthKey,
   queueMonthlyRefereeAvailabilityRequests,
 } from "@/lib/referee-availability";
 
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   const requestUrl = new URL(request.url);
   const force = requestUrl.searchParams.get("force") === "1";
-  const targetMonth = requestUrl.searchParams.get("month") || getNextMonthKey();
+  const targetMonth = normaliseMonthKey(requestUrl.searchParams.get("month") || getNextMonthKey());
   const ukDate = getUkDateParts(new Date());
 
   if (ukDate.day !== 20 && !force) {
