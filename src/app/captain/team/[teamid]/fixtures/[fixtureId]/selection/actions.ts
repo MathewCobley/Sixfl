@@ -14,6 +14,7 @@ import {
 } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
@@ -424,6 +425,7 @@ export async function updateFixtureSelectionAction(formData: FormData) {
     prisma.fixture.findFirst({
       where: {
         id: fixtureId,
+        ...publishedFixtureWhere,
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
       },
       select: {
