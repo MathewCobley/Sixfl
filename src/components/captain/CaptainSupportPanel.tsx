@@ -144,10 +144,10 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
           <p className="mt-2 text-sm leading-6 text-emerald-50/72">Step-by-step help for squad payments, availability, results, scorers and Player of the Match.</p>
         </Link>
 
-        <Link href={`/captain/team/${teamId}/guide#matchday-rules`} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 transition hover:border-white/20 hover:bg-white/[0.07]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Guide & Rules</p>
-          <h2 className="mt-3 text-xl font-semibold text-white">Matchday rules and captain terms</h2>
-          <p className="mt-2 text-sm leading-6 text-white/62">Opens directly at the matchday rules, with captain terms, payments, conduct and avoidable admin fees on the same page.</p>
+        <Link href={`/captain/team/${teamId}/rules`} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 transition hover:border-white/20 hover:bg-white/[0.07]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Match Rules</p>
+          <h2 className="mt-3 text-xl font-semibold text-white">Playing rules</h2>
+          <p className="mt-2 text-sm leading-6 text-white/62">Kick-ins, substitutions, goalkeeper rules, fouls, penalties, referee decisions and venue-specific rules.</p>
         </Link>
 
         <button type="button" onClick={() => setIsOpen((value) => !value)} className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 text-left transition hover:bg-sky-500/15">
