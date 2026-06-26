@@ -7,6 +7,7 @@
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { toLondonDateInputValue } from "@/lib/datetime/london";
 import {
   createRefereeNightId,
   findFixturesForNight,
@@ -131,7 +132,7 @@ export async function refreshRefereeNightFixturesAction(formData: FormData) {
       refereeId: string;
       leagueId: string;
       venueId: string | null;
-      nightDate: Date;
+      nightDate: Date | string;
     }>
   >(Prisma.sql`
     SELECT id, "refereeId", "leagueId", "venueId", "nightDate"
@@ -143,7 +144,7 @@ export async function refreshRefereeNightFixturesAction(formData: FormData) {
   const night = nightRows[0];
   if (!night) throw new Error("Referee night not found.");
 
-  const nightDate = night.nightDate.toISOString().slice(0, 10);
+  const nightDate = toLondonDateInputValue(new Date(String(night.nightDate)));
 
   await attachMatchingFixtures({
     refereeNightId,
