@@ -23,6 +23,9 @@ const SUPPORTED_TEAM_EMAIL_TOKENS = new Set([
   "link",
 ]);
 
+const ALL_LEAGUES_VALUE = "all";
+const NO_LEAGUE_LABEL = "No league assigned";
+
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
@@ -64,6 +67,13 @@ function getErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function getTeamLeagueLabel(team: {
+  league: { name: string; season: string | null } | null;
+}) {
+  if (!team.league) return NO_LEAGUE_LABEL;
+  return `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`;
+}
+
 async function processQueuedTeamEmails(queuedCount: number) {
   if (queuedCount <= 0) return;
 
@@ -84,6 +94,7 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
   const templateKey = text(formData.get("templateKey")) || null;
   const ctaLabel = text(formData.get("ctaLabel")) || null;
   const ctaUrl = text(formData.get("ctaUrl")) || null;
+  const selectedLeagueFilter = text(formData.get("selectedLeagueFilter")) || ALL_LEAGUES_VALUE;
   const selectedTeamIds = Array.from(
     new Set(
       formData
@@ -140,14 +151,28 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: "No matching teams were found." }));
   }
 
+  const targetTeams =
+    selectedLeagueFilter && selectedLeagueFilter !== ALL_LEAGUES_VALUE
+      ? teams.filter((team) => getTeamLeagueLabel(team) === selectedLeagueFilter)
+      : teams;
+
+  if (targetTeams.length === 0) {
+    redirect(
+      appendRedirectParams(from, {
+        error: `No selected teams matched the ${selectedLeagueFilter} league filter. Nothing was queued.`,
+      }),
+    );
+  }
+
   let queuedCount = 0;
   let skippedCount = 0;
   let failedCount = 0;
   const skippedTeamNames: string[] = [];
   const failedTeamNames: string[] = [];
 
-  for (const team of teams) {
+  for (const team of targetTeams) {
     try {
+      const leagueName = getTeamLeagueLabel(team);
       const result = await sendTeamBroadcastMessage({
         teamId: team.id,
         channel: NotificationChannel.EMAIL,
@@ -161,10 +186,10 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
         originLabel: "Sent from all-teams communications picker",
         metadata: {
           broadcastType: "selected_teams",
-          selectedTeamCount: selectedTeamIds.length,
-          leagueName: team.league
-            ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
-            : null,
+          selectedTeamCount: targetTeams.length,
+          selectedLeagueFilter:
+            selectedLeagueFilter === ALL_LEAGUES_VALUE ? null : selectedLeagueFilter,
+          leagueName: team.league ? leagueName : null,
         },
         createdByUserId: user?.id ?? null,
       });
@@ -220,6 +245,10 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
     skipped: skippedCount,
     failed: failedCount,
   };
+
+  if (selectedLeagueFilter !== ALL_LEAGUES_VALUE) {
+    params.warning = `League filter applied: ${selectedLeagueFilter}. ${targetTeams.length} selected team${targetTeams.length === 1 ? "" : "s"} matched this league.`;
+  }
 
   if (skippedCount > 0) {
     const skippedNames = skippedTeamNames.slice(0, 3).join(", ");
