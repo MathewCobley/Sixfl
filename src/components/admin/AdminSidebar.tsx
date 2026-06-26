@@ -126,6 +126,12 @@ const navigationGroups = [
         icon: CalendarDaysIcon,
         description: "Night fees and cashups",
       },
+      {
+        name: "Availability",
+        href: "/admin/referee-availability",
+        icon: CalendarDaysIcon,
+        description: "Monthly referee cover",
+      },
     ],
   },
   {
