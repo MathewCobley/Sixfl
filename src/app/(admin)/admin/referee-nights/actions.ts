@@ -34,6 +34,17 @@ function normaliseOptional(value: string) {
   return value.trim() || null;
 }
 
+function readStringArray(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(key)
+        .map((value) => String(value).trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 async function getNightFeePence(formData: FormData, refereeId: string) {
   const enteredFee = parseMoneyToPence(formData.get("feePounds"));
 
@@ -43,6 +54,62 @@ async function getNightFeePence(formData: FormData, refereeId: string) {
 
   const profile = await getRefereeProfileByUserId(refereeId);
   return profile?.standardNightFeePence ?? 0;
+}
+
+async function getRefereeNightForAssignment(refereeNightId: string) {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      refereeId: string;
+      leagueId: string;
+      venueId: string | null;
+      nightDate: Date | string;
+    }>
+  >(Prisma.sql`
+    SELECT id, "refereeId", "leagueId", "venueId", "nightDate"
+    FROM "RefereeNight"
+    WHERE id = ${refereeNightId}
+    LIMIT 1
+  `);
+
+  return rows[0] ?? null;
+}
+
+async function getAllowedFixtureIdsForNight(input: {
+  leagueId: string;
+  venueId: string | null;
+  nightDate: Date | string;
+}) {
+  const nightDate = toLondonDateInputValue(new Date(String(input.nightDate)));
+  const fixtures = await findFixturesForNight({
+    leagueId: input.leagueId,
+    venueId: input.venueId,
+    nightDate,
+  });
+
+  return fixtures.map((fixture) => fixture.id);
+}
+
+async function getCurrentFixtureIds(refereeNightId: string) {
+  const rows = await prisma.$queryRaw<Array<{ fixtureId: string }>>(Prisma.sql`
+    SELECT "fixtureId"
+    FROM "RefereeNightFixture"
+    WHERE "refereeNightId" = ${refereeNightId}
+  `);
+
+  return rows.map((row) => row.fixtureId);
+}
+
+async function getExistingAssignments(fixtureIds: string[]) {
+  if (fixtureIds.length === 0) {
+    return [] as Array<{ fixtureId: string; refereeNightId: string }>;
+  }
+
+  return prisma.$queryRaw<Array<{ fixtureId: string; refereeNightId: string }>>(Prisma.sql`
+    SELECT "fixtureId", "refereeNightId"
+    FROM "RefereeNightFixture"
+    WHERE "fixtureId" IN (${Prisma.join(fixtureIds)})
+  `);
 }
 
 async function attachMatchingFixtures(input: {
@@ -67,21 +134,17 @@ async function attachMatchingFixtures(input: {
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO "RefereeNightFixture" ("id", "refereeNightId", "fixtureId")
         VALUES (${createRefereeNightId()}, ${input.refereeNightId}, ${fixture.id})
-        ON CONFLICT ("fixtureId") DO UPDATE
-        SET "refereeNightId" = EXCLUDED."refereeNightId"
+        ON CONFLICT ("fixtureId") DO NOTHING
       `);
     }
 
-    await tx.fixture.updateMany({
-      where: {
-        id: {
-          in: fixtures.map((fixture) => fixture.id),
-        },
-      },
-      data: {
-        refereeId: input.refereeId,
-      },
-    });
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Fixture" f
+      SET "refereeId" = ${input.refereeId}
+      FROM "RefereeNightFixture" rnf
+      WHERE rnf."fixtureId" = f.id
+        AND rnf."refereeNightId" = ${input.refereeNightId}
+    `);
   });
 
   return fixtures.length;
@@ -118,14 +181,6 @@ export async function createRefereeNightAction(formData: FormData) {
     )
   `);
 
-  await attachMatchingFixtures({
-    refereeNightId: id,
-    refereeId,
-    leagueId,
-    venueId,
-    nightDate,
-  });
-
   await recalculateRefereeNightCashup(id);
 
   try {
@@ -148,22 +203,8 @@ export async function refreshRefereeNightFixturesAction(formData: FormData) {
   await requireAdmin();
 
   const refereeNightId = readRequired(formData, "refereeNightId", "Referee night");
-  const nightRows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      refereeId: string;
-      leagueId: string;
-      venueId: string | null;
-      nightDate: Date | string;
-    }>
-  >(Prisma.sql`
-    SELECT id, "refereeId", "leagueId", "venueId", "nightDate"
-    FROM "RefereeNight"
-    WHERE id = ${refereeNightId}
-    LIMIT 1
-  `);
+  const night = await getRefereeNightForAssignment(refereeNightId);
 
-  const night = nightRows[0];
   if (!night) throw new Error("Referee night not found.");
 
   const nightDate = toLondonDateInputValue(new Date(String(night.nightDate)));
@@ -183,6 +224,81 @@ export async function refreshRefereeNightFixturesAction(formData: FormData) {
   revalidatePath("/referee");
 
   redirect(`/admin/referee-nights/${refereeNightId}?fixtures=refreshed`);
+}
+
+export async function updateRefereeNightFixturesAction(formData: FormData) {
+  await requireAdmin();
+
+  const refereeNightId = readRequired(formData, "refereeNightId", "Referee night");
+  const night = await getRefereeNightForAssignment(refereeNightId);
+
+  if (!night) throw new Error("Referee night not found.");
+
+  const [allowedFixtureIds, currentFixtureIds] = await Promise.all([
+    getAllowedFixtureIdsForNight({
+      leagueId: night.leagueId,
+      venueId: night.venueId,
+      nightDate: night.nightDate,
+    }),
+    getCurrentFixtureIds(refereeNightId),
+  ]);
+
+  const allowedSet = new Set(allowedFixtureIds);
+  const selectedFixtureIds = readStringArray(formData, "fixtureIds").filter((fixtureId) =>
+    allowedSet.has(fixtureId),
+  );
+  const selectedSet = new Set(selectedFixtureIds);
+  const removedFixtureIds = currentFixtureIds.filter((fixtureId) => !selectedSet.has(fixtureId));
+  const existingSelectedAssignments = await getExistingAssignments(selectedFixtureIds);
+  const affectedNightIds = new Set<string>([refereeNightId]);
+
+  for (const assignment of existingSelectedAssignments) {
+    affectedNightIds.add(assignment.refereeNightId);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (removedFixtureIds.length > 0) {
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM "RefereeNightFixture"
+        WHERE "refereeNightId" = ${refereeNightId}
+          AND "fixtureId" IN (${Prisma.join(removedFixtureIds)})
+      `);
+
+      await tx.fixture.updateMany({
+        where: {
+          id: { in: removedFixtureIds },
+          refereeId: night.refereeId,
+        },
+        data: { refereeId: null },
+      });
+    }
+
+    for (const fixtureId of selectedFixtureIds) {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "RefereeNightFixture" ("id", "refereeNightId", "fixtureId")
+        VALUES (${createRefereeNightId()}, ${refereeNightId}, ${fixtureId})
+        ON CONFLICT ("fixtureId") DO UPDATE
+        SET "refereeNightId" = EXCLUDED."refereeNightId"
+      `);
+    }
+
+    if (selectedFixtureIds.length > 0) {
+      await tx.fixture.updateMany({
+        where: {
+          id: { in: selectedFixtureIds },
+        },
+        data: { refereeId: night.refereeId },
+      });
+    }
+  });
+
+  await Promise.all(Array.from(affectedNightIds).map((nightId) => recalculateRefereeNightCashup(nightId)));
+
+  revalidatePath("/admin/referee-nights");
+  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
+  revalidatePath("/referee");
+
+  redirect(`/admin/referee-nights/${refereeNightId}?fixtures=saved`);
 }
 
 export async function updateRefereeNightAction(formData: FormData) {
