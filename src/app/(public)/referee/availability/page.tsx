@@ -105,7 +105,7 @@ export default async function RefereeAvailabilityPage({ searchParams }: PageProp
                 {data.monthLabel}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
-                Mark the dates you can referee. You only see the dates where an active SIXFL league is scheduled to run.
+                Mark the dates you can referee. These are based on the active league nights this referee is set to cover, so a Wednesday league will show the Wednesdays for this month even before fixtures are generated.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -156,7 +156,7 @@ export default async function RefereeAvailabilityPage({ searchParams }: PageProp
 
           {data.slots.length === 0 ? (
             <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/60">
-              There are no active league dates for this month yet.
+              There are no league dates for this referee this month. Check the referee's league coverage in admin.
             </section>
           ) : (
             groupedSlots.map(([leagueLabel, slots]) => (
