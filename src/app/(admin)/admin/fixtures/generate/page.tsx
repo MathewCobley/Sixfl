@@ -51,7 +51,7 @@ export default async function ImprovedFixtureGeneratorPage() {
           ← Back to fixtures
         </Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-          Improved bulk fixture generator
+          Bulk Fixture Generator
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
           Generate a full draft schedule with pitch-specific referees. This does not publish fixtures, email teams, or create match fees.
