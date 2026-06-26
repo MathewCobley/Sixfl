@@ -26,6 +26,16 @@ type Props = {
   }>;
 };
 
+type CoveredLeague = {
+  id: string;
+  name: string;
+  season: string | null;
+  slug: string | null;
+  fixtureCount: number;
+  scheduledCount: number;
+  completedCount: number;
+};
+
 function formatDate(value: Date | null | undefined) {
   if (!value) return "—";
 
@@ -77,6 +87,44 @@ function getSmsPreview(body: string) {
   const trimmed = body.trim().replace(/\s+/g, " ");
   if (!trimmed) return "—";
   return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+}
+
+function getCoveredLeagues(fixtures: Array<{
+  status: string;
+  league: { id: string; name: string; season: string | null; slug: string | null };
+}>) {
+  const leagueMap = new Map<string, CoveredLeague>();
+
+  for (const fixture of fixtures) {
+    if (!fixture.league) continue;
+
+    const existing = leagueMap.get(fixture.league.id) ?? {
+      id: fixture.league.id,
+      name: fixture.league.name,
+      season: fixture.league.season,
+      slug: fixture.league.slug,
+      fixtureCount: 0,
+      scheduledCount: 0,
+      completedCount: 0,
+    };
+
+    existing.fixtureCount += 1;
+
+    if (fixture.status === "SCHEDULED") {
+      existing.scheduledCount += 1;
+    }
+
+    if (fixture.status === "COMPLETED") {
+      existing.completedCount += 1;
+    }
+
+    leagueMap.set(fixture.league.id, existing);
+  }
+
+  return Array.from(leagueMap.values()).sort((a, b) => {
+    const nameComparison = a.name.localeCompare(b.name);
+    return nameComparison === 0 ? (a.season ?? "").localeCompare(b.season ?? "") : nameComparison;
+  });
 }
 
 export default async function AdminRefereeProfilePage({ params, searchParams }: Props) {
@@ -176,6 +224,7 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
   const completedFixtures = referee.refereedFixtures.filter(
     (fixture) => fixture.status === "COMPLETED",
   );
+  const coveredLeagues = getCoveredLeagues(referee.refereedFixtures);
   const contactPhone = profile?.phone || sourceLead?.phone || "";
   const profileIsActive = profile?.isActive ?? true;
   const feePounds = formatPenceAsPoundsInput(profile?.standardNightFeePence);
@@ -257,8 +306,8 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Total fixtures</div>
-          <div className="mt-2 text-3xl font-black text-white">{referee.refereedFixtures.length}</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Covered leagues</div>
+          <div className="mt-2 text-3xl font-black text-white">{coveredLeagues.length}</div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
           <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Scheduled</div>
@@ -289,6 +338,7 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
 
             <form action={updateRefereeAction} className="mt-5 grid gap-4 sm:grid-cols-2">
               <input type="hidden" name="refereeId" value={referee.id} />
+              <input type="hidden" name="area" value={sourceLead?.area ?? ""} />
               <label className="block">
                 <span className="text-sm font-semibold text-white">Name</span>
                 <input
@@ -318,15 +368,6 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-white">Area</span>
-                <input
-                  name="area"
-                  defaultValue={sourceLead?.area ?? ""}
-                  placeholder="Harrogate"
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35"
-                />
-              </label>
-              <label className="block">
                 <span className="text-sm font-semibold text-white">Standard night fee</span>
                 <div className="mt-2 flex h-12 items-center overflow-hidden rounded-2xl border border-white/10 bg-black/35">
                   <span className="px-4 text-sm font-semibold text-white/55">£</span>
@@ -339,6 +380,28 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
                   />
                 </div>
               </label>
+
+              <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-4 sm:col-span-2">
+                <div className="text-sm font-semibold text-white">Leagues covered</div>
+                <p className="mt-1 text-xs leading-5 text-white/50">
+                  This is calculated from the fixtures and referee nights this referee has been assigned to.
+                </p>
+
+                {coveredLeagues.length === 0 ? (
+                  <div className="mt-3 rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-3 text-sm text-white/50">
+                    No league coverage yet. Assign this referee to fixtures or referee nights to populate this list.
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {coveredLeagues.map((league) => (
+                      <span key={league.id} className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+                        {league.name}{league.season ? ` · ${league.season}` : ""} · {league.fixtureCount} fixture{league.fixtureCount === 1 ? "" : "s"}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
                 <input
                   type="checkbox"
@@ -475,6 +538,7 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Name</div><div className="mt-2 text-sm font-semibold text-white">{referee.name || "—"}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Email</div><div className="mt-2 text-sm font-semibold text-white">{referee.email || "—"}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Mobile</div><div className="mt-2 text-sm font-semibold text-white">{contactPhone || "—"}</div></div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Leagues covered</div><div className="mt-2 text-sm font-semibold text-white">{coveredLeagues.length ? coveredLeagues.map((league) => `${league.name}${league.season ? ` · ${league.season}` : ""}`).join(", ") : "—"}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Standard night fee</div><div className="mt-2 text-sm font-semibold text-white">{formatMoney(profile?.standardNightFeePence)}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Status</div><div className="mt-2 text-sm font-semibold text-white">{profileIsActive ? "Active" : "Inactive"}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Created from lead</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead ? "Yes" : "No"}</div></div>
@@ -490,7 +554,7 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
               <div className="mt-4 grid gap-3">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Contact name</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.contactName || "—"}</div></div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Phone</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.phone || "—"}</div></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Area</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.area || "—"}</div></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Original area</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.area || "—"}</div></div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Notes</div><div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">{sourceLead.message || "—"}</div></div>
               </div>
               <div className="mt-5">
