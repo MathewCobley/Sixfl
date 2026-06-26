@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import {
@@ -202,7 +203,10 @@ export default async function CaptainManagedPlayerMatchFeesPage({
 
   const [fixtures, members, prospects] = await Promise.all([
     prisma.fixture.findMany({
-      where: { OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }] },
+      where: {
+        ...publishedFixtureWhere,
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+      },
       orderBy: [{ kickoffAt: "asc" }],
       take: 30,
       include: {
@@ -240,6 +244,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
       status: {
         not: "CANCELLED",
       },
+      fixture: publishedFixtureWhere,
     },
     distinct: ["fixtureId"],
     select: {
@@ -462,11 +467,11 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           <h2 className="text-lg font-semibold text-white">Choose fixture</h2>
           <p className="mt-1 text-sm text-white/55">
             {isAdmin
-              ? "Pick the fixture you are selecting players for. Admin can open past fixtures."
+              ? "Pick the published fixture you are selecting players for. Admin can open past published fixtures."
               : "Past fixtures already submitted to SIXFL are hidden from this captain view."}
           </p>
           <div className="mt-5 space-y-2">
-            {visibleFixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No editable fixtures are available for this team.</div> : null}
+            {visibleFixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No editable published fixtures are available for this team.</div> : null}
             {visibleFixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               const isPast = fixture.kickoffAt < now;
@@ -600,7 +605,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
               </form>
             </>
           ) : (
-            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a fixture before selecting players.</div>
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a published fixture before selecting players.</div>
           )}
         </div>
       </section>
