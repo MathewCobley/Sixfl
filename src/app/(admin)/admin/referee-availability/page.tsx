@@ -26,6 +26,25 @@ type PageProps = {
   }>;
 };
 
+type AvailabilityRow = Awaited<ReturnType<typeof getAdminRefereeAvailabilityMonth>>["rows"][number];
+
+type CoverStatus = "covered" | "maybe" | "short";
+
+type CoverRow = {
+  key: string;
+  date: string;
+  leagueId: string;
+  leagueName: string;
+  leagueSeason: string | null;
+  venueName: string | null;
+  required: number;
+  available: AvailabilityRow[];
+  maybe: AvailabilityRow[];
+  unavailable: AvailabilityRow[];
+  noResponse: AvailabilityRow[];
+  status: CoverStatus;
+};
+
 function statusClasses(status: RefereeAvailabilityStatus) {
   switch (status) {
     case "AVAILABLE":
@@ -42,6 +61,38 @@ function statusClasses(status: RefereeAvailabilityStatus) {
 function statusLabel(status: RefereeAvailabilityStatus) {
   if (status === "NO_RESPONSE") return "No response";
   return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+function coverStatusClasses(status: CoverStatus) {
+  switch (status) {
+    case "covered":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+    case "maybe":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    case "short":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+  }
+}
+
+function coverStatusLabel(status: CoverStatus) {
+  switch (status) {
+    case "covered":
+      return "Covered";
+    case "maybe":
+      return "Needs confirming";
+    case "short":
+      return "Issue";
+  }
+}
+
+function getCoverRowStatus(input: {
+  required: number;
+  available: number;
+  maybe: number;
+}): CoverStatus {
+  if (input.available >= input.required) return "covered";
+  if (input.available + input.maybe >= input.required) return "maybe";
+  return "short";
 }
 
 function groupByReferee<T extends { refereeId: string; refereeName: string | null; refereeEmail: string | null }>(rows: T[]) {
@@ -61,6 +112,54 @@ function groupByReferee<T extends { refereeId: string; refereeName: string | nul
   return Array.from(groups.entries());
 }
 
+function groupByCover(rows: AvailabilityRow[]) {
+  const groups = new Map<string, CoverRow>();
+
+  for (const row of rows) {
+    const key = `${row.date}:${row.leagueId}`;
+    const existing = groups.get(key) ?? {
+      key,
+      date: row.date,
+      leagueId: row.leagueId,
+      leagueName: row.leagueName,
+      leagueSeason: row.leagueSeason,
+      venueName: row.venueName,
+      required: row.requiredRefereesPerNight,
+      available: [],
+      maybe: [],
+      unavailable: [],
+      noResponse: [],
+      status: "short" as CoverStatus,
+    };
+
+    if (row.status === "AVAILABLE") existing.available.push(row);
+    if (row.status === "MAYBE") existing.maybe.push(row);
+    if (row.status === "UNAVAILABLE") existing.unavailable.push(row);
+    if (row.status === "NO_RESPONSE") existing.noResponse.push(row);
+
+    existing.status = getCoverRowStatus({
+      required: existing.required,
+      available: existing.available.length,
+      maybe: existing.maybe.length,
+    });
+
+    groups.set(key, existing);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return a.leagueName.localeCompare(b.leagueName);
+  });
+}
+
+function formatNames(rows: AvailabilityRow[]) {
+  if (rows.length === 0) return "—";
+  return rows
+    .map((row) => row.refereeName || row.refereeEmail || "Unnamed referee")
+    .join(", ");
+}
+
 export default async function AdminRefereeAvailabilityPage({ searchParams }: PageProps) {
   await requireAdmin();
 
@@ -70,10 +169,14 @@ export default async function AdminRefereeAvailabilityPage({ searchParams }: Pag
   const nextMonth = getAdjacentMonthKey(monthKey, 1);
   const data = await getAdminRefereeAvailabilityMonth(monthKey);
   const grouped = groupByReferee(data.rows);
+  const coverRows = groupByCover(data.rows);
   const availableCount = data.rows.filter((row) => row.status === "AVAILABLE").length;
   const maybeCount = data.rows.filter((row) => row.status === "MAYBE").length;
   const unavailableCount = data.rows.filter((row) => row.status === "UNAVAILABLE").length;
   const noResponseCount = data.rows.filter((row) => row.status === "NO_RESPONSE").length;
+  const coveredCount = coverRows.filter((row) => row.status === "covered").length;
+  const maybeCoverCount = coverRows.filter((row) => row.status === "maybe").length;
+  const issueCount = coverRows.filter((row) => row.status === "short").length;
 
   return (
     <div className="space-y-8 pb-10">
@@ -87,7 +190,7 @@ export default async function AdminRefereeAvailabilityPage({ searchParams }: Pag
               {data.monthLabel}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
-              Review referee availability for the league nights that actually run this month. The monthly email job asks referees on the 20th for the coming month.
+              Clear cover table for each league night. A night is green if enough referees are available, amber if maybes are needed, and red if there is a cover issue.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -101,9 +204,9 @@ export default async function AdminRefereeAvailabilityPage({ searchParams }: Pag
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Available</p><p className="mt-3 text-3xl font-semibold text-white">{availableCount}</p></div>
-            <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Maybe</p><p className="mt-3 text-3xl font-semibold text-white">{maybeCount}</p></div>
-            <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">Unavailable</p><p className="mt-3 text-3xl font-semibold text-white">{unavailableCount}</p></div>
+            <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Covered</p><p className="mt-3 text-3xl font-semibold text-white">{coveredCount}</p></div>
+            <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Needs confirming</p><p className="mt-3 text-3xl font-semibold text-white">{maybeCoverCount}</p></div>
+            <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">Issues</p><p className="mt-3 text-3xl font-semibold text-white">{issueCount}</p></div>
             <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">No response</p><p className="mt-3 text-3xl font-semibold text-white">{noResponseCount}</p></div>
           </div>
         </div>
@@ -138,11 +241,70 @@ export default async function AdminRefereeAvailabilityPage({ searchParams }: Pag
         </div>
       </section>
 
+      <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
+        <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Cover table</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">League nights needing referees</h2>
+          </div>
+          <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/55">
+            {coverRows.length} night{coverRows.length === 1 ? "" : "s"}
+          </div>
+        </div>
+
+        {coverRows.length === 0 ? (
+          <div className="px-6 py-10 text-sm text-white/55">No league nights are available for this month.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-white/10 text-sm">
+              <thead className="bg-black/20 text-left text-[11px] uppercase tracking-[0.16em] text-white/40">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Date</th>
+                  <th className="px-5 py-3 font-semibold">League</th>
+                  <th className="px-5 py-3 text-center font-semibold">Needed</th>
+                  <th className="px-5 py-3 text-center font-semibold">Available</th>
+                  <th className="px-5 py-3 text-center font-semibold">Maybe</th>
+                  <th className="px-5 py-3 text-center font-semibold">No response</th>
+                  <th className="px-5 py-3 font-semibold">Cover status</th>
+                  <th className="px-5 py-3 font-semibold">Who can cover</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {coverRows.map((row) => (
+                  <tr key={row.key} className="align-top hover:bg-white/[0.03]">
+                    <td className="px-5 py-4 text-white/72">{formatAvailabilityDate(row.date)}</td>
+                    <td className="px-5 py-4">
+                      <div className="font-semibold text-white">{row.leagueName}{row.leagueSeason ? ` · ${row.leagueSeason}` : ""}</div>
+                      <div className="mt-1 text-xs text-white/45">{row.venueName || "Venue TBC"}</div>
+                    </td>
+                    <td className="px-5 py-4 text-center font-semibold text-white">{row.required}</td>
+                    <td className="px-5 py-4 text-center text-emerald-100">{row.available.length}</td>
+                    <td className="px-5 py-4 text-center text-amber-100">{row.maybe.length}</td>
+                    <td className="px-5 py-4 text-center text-white/55">{row.noResponse.length}</td>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${coverStatusClasses(row.status)}`}>
+                        {coverStatusLabel(row.status)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-white/65">
+                      <div>{formatNames(row.available)}</div>
+                      {row.maybe.length > 0 ? (
+                        <div className="mt-1 text-xs text-amber-100/75">Maybe: {formatNames(row.maybe)}</div>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <section className="rounded-3xl border border-white/10 bg-white/[0.04]">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Responses</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Referee availability grid</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Individual responses</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Referee response detail</h2>
           </div>
           <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/55">
             {grouped.length} referee{grouped.length === 1 ? "" : "s"}
