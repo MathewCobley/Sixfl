@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
 import { processNotificationQueue } from "@/lib/notifications/processor";
+import { queueDueRefereeNightReminderEmails } from "@/lib/referee-night-emails";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +32,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const onboarding = await runCaptainOnboardingEmailJob();
+    const refereeNights = await queueDueRefereeNightReminderEmails();
+    const queuedDispatches = onboarding.queuedDispatches + refereeNights.queued;
     const result = await processNotificationQueue(
-      Math.max(25, onboarding.queuedDispatches + 25),
+      Math.max(25, queuedDispatches + 25),
     );
 
     return NextResponse.json({
       ok: true,
       onboarding,
+      refereeNights,
       ...result,
     });
   } catch (error) {
