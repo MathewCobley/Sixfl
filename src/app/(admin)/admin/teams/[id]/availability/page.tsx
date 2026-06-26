@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { FixtureStatus, TeamMode } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -30,10 +31,7 @@ function formatUkDateTime(value: Date) {
   });
 }
 
-function getFixtureLabel(input: {
-  homeTeamName: string;
-  awayTeamName: string;
-}) {
+function getFixtureLabel(input: { homeTeamName: string; awayTeamName: string }) {
   return `${input.homeTeamName} vs ${input.awayTeamName}`;
 }
 
@@ -63,10 +61,7 @@ function getResponseClasses(response?: string | null) {
   }
 }
 
-export default async function AdminManagedTeamAvailabilityPage({
-  params,
-  searchParams,
-}: Props) {
+export default async function AdminManagedTeamAvailabilityPage({ params, searchParams }: Props) {
   await requireAdmin();
 
   const { id } = await params;
@@ -94,6 +89,7 @@ export default async function AdminManagedTeamAvailabilityPage({
   const now = new Date();
   const fixtures = await prisma.fixture.findMany({
     where: {
+      ...publishedFixtureWhere,
       OR: [{ homeTeamId: id }, { awayTeamId: id }],
       kickoffAt: { gte: now },
       status: { in: [FixtureStatus.SCHEDULED, FixtureStatus.POSTPONED] },
@@ -107,8 +103,7 @@ export default async function AdminManagedTeamAvailabilityPage({
     },
   });
 
-  const selectedFixture =
-    fixtures.find((fixture) => fixture.id === sp.fixtureId) ?? fixtures[0] ?? null;
+  const selectedFixture = fixtures.find((fixture) => fixture.id === sp.fixtureId) ?? fixtures[0] ?? null;
 
   const [members, selections] = await Promise.all([
     prisma.teamMember.findMany({
@@ -147,9 +142,7 @@ export default async function AdminManagedTeamAvailabilityPage({
       : [],
   ]);
 
-  const selectionByMemberId = new Map(
-    selections.map((selection) => [selection.teamMemberId, selection.selectionStatus]),
-  );
+  const selectionByMemberId = new Map(selections.map((selection) => [selection.teamMemberId, selection.selectionStatus]));
 
   const counts = members.reduce(
     (acc, member) => {
@@ -163,9 +156,7 @@ export default async function AdminManagedTeamAvailabilityPage({
     { available: 0, maybe: 0, unavailable: 0, noResponse: 0 },
   );
 
-  const selectedCount = selections.filter(
-    (selection) => selection.selectionStatus === "SELECTED",
-  ).length;
+  const selectedCount = selections.filter((selection) => selection.selectionStatus === "SELECTED").length;
 
   const playerAvailabilityUrl = selectedFixture
     ? `/player/team/${team.id}/availability?fixtureId=${selectedFixture.id}`
@@ -175,34 +166,23 @@ export default async function AdminManagedTeamAvailabilityPage({
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
-          <Link
-            href={`/admin/teams/${team.id}`}
-            className="text-sm text-emerald-300 hover:text-emerald-200"
-          >
+          <Link href={`/admin/teams/${team.id}`} className="text-sm text-emerald-300 hover:text-emerald-200">
             ← Back to team
           </Link>
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
             Managed team availability
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">
-            Availability dashboard
-          </h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Availability dashboard</h1>
           <p className="max-w-3xl text-sm text-white/60">
-            Players confirm availability in their SIXFL player dashboard. Do not ask them to reply YES/NO by text — use the dashboard link so every response is recorded.
+            Players confirm availability in their SIXFL player dashboard. Only published fixtures are shown here.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Link
-            href={`/admin/teams/${team.id}/match-fees`}
-            className="inline-flex items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
-          >
+          <Link href={`/admin/teams/${team.id}/match-fees`} className="inline-flex items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15">
             Player match fees
           </Link>
-          <Link
-            href={`/captain/team/${team.id}/squad`}
-            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-          >
+          <Link href={`/captain/team/${team.id}/squad`} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
             Squad view
           </Link>
         </div>
@@ -215,67 +195,25 @@ export default async function AdminManagedTeamAvailabilityPage({
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-5">
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-5">
-          <p className="text-xs uppercase tracking-[0.16em] text-emerald-100/60">Available</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{counts.available}</p>
-        </div>
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-5">
-          <p className="text-xs uppercase tracking-[0.16em] text-amber-100/60">Maybe</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{counts.maybe}</p>
-        </div>
-        <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-5">
-          <p className="text-xs uppercase tracking-[0.16em] text-red-100/60">Unavailable</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{counts.unavailable}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-xs uppercase tracking-[0.16em] text-white/45">No response</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{counts.noResponse}</p>
-        </div>
-        <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-5">
-          <p className="text-xs uppercase tracking-[0.16em] text-sky-100/60">Selected</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{selectedCount}</p>
-          <p className="mt-1 text-xs text-sky-100/70">
-            Target {team.matchdayTargetSize ?? "—"}
-          </p>
-        </div>
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-5"><p className="text-xs uppercase tracking-[0.16em] text-emerald-100/60">Available</p><p className="mt-2 text-3xl font-semibold text-white">{counts.available}</p></div>
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-5"><p className="text-xs uppercase tracking-[0.16em] text-amber-100/60">Maybe</p><p className="mt-2 text-3xl font-semibold text-white">{counts.maybe}</p></div>
+        <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-5"><p className="text-xs uppercase tracking-[0.16em] text-red-100/60">Unavailable</p><p className="mt-2 text-3xl font-semibold text-white">{counts.unavailable}</p></div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><p className="text-xs uppercase tracking-[0.16em] text-white/45">No response</p><p className="mt-2 text-3xl font-semibold text-white">{counts.noResponse}</p></div>
+        <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-5"><p className="text-xs uppercase tracking-[0.16em] text-sky-100/60">Selected</p><p className="mt-2 text-3xl font-semibold text-white">{selectedCount}</p><p className="mt-1 text-xs text-sky-100/70">Target {team.matchdayTargetSize ?? "—"}</p></div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Choose fixture</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Select the fixture you want player availability for.
-          </p>
-
+          <p className="mt-1 text-sm text-white/55">Select the published fixture you want player availability for.</p>
           <div className="mt-5 space-y-2">
-            {fixtures.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-                No upcoming fixtures exist for this team yet.
-              </div>
-            ) : null}
-
+            {fixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No upcoming published fixtures exist for this team yet.</div> : null}
             {fixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               return (
-                <Link
-                  key={fixture.id}
-                  href={`/admin/teams/${team.id}/availability?fixtureId=${fixture.id}`}
-                  className={`block rounded-2xl border p-4 transition ${
-                    isSelected
-                      ? "border-emerald-400/30 bg-emerald-500/10 text-white"
-                      : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.06]"
-                  }`}
-                >
-                  <div className="text-sm font-semibold">
-                    {getFixtureLabel({
-                      homeTeamName: fixture.homeTeam.name,
-                      awayTeamName: fixture.awayTeam.name,
-                    })}
-                  </div>
-                  <div className="mt-1 text-xs text-white/50">
-                    {formatUkDateTime(fixture.kickoffAt)}
-                    {fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
-                  </div>
+                <Link key={fixture.id} href={`/admin/teams/${team.id}/availability?fixtureId=${fixture.id}`} className={`block rounded-2xl border p-4 transition ${isSelected ? "border-emerald-400/30 bg-emerald-500/10 text-white" : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.06]"}`}>
+                  <div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>
+                  <div className="mt-1 text-xs text-white/50">{formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}</div>
                 </Link>
               );
             })}
@@ -283,80 +221,32 @@ export default async function AdminManagedTeamAvailabilityPage({
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Player responses</h2>
-              <p className="mt-1 text-sm text-white/55">
-                Share the player dashboard link below. Responses are shown here automatically.
-              </p>
+              <p className="mt-1 text-sm text-white/55">{selectedFixture ? getFixtureLabel({ homeTeamName: selectedFixture.homeTeam.name, awayTeamName: selectedFixture.awayTeam.name }) : "No fixture selected"}</p>
             </div>
-
-            <Link
-              href={playerAvailabilityUrl}
-              className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-            >
-              Player dashboard link
-            </Link>
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/65">
-            Send players this link, but ask them to answer inside the dashboard, not by text:
-            <div className="mt-2 break-all rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-white/80">
-              {playerAvailabilityUrl}
-            </div>
+            {selectedFixture ? <Link href={playerAvailabilityUrl} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">Player link</Link> : null}
           </div>
 
           <div className="mt-5 space-y-3">
-            {members.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-                No linked squad members yet.
-              </div>
-            ) : null}
-
             {members.map((member) => {
               const availability = member.fixtureAvailabilities?.[0] ?? null;
-              const selectionStatus = selectionByMemberId.get(member.id) ?? "NOT_SELECTED";
-
+              const selection = selectionByMemberId.get(member.id) ?? "NOT_SELECTED";
+              const playerName = member.user.name || member.user.email || "Unnamed player";
               return (
-                <div
-                  key={member.id}
-                  className="grid gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 lg:grid-cols-[1fr_auto] lg:items-center"
-                >
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="font-semibold text-white">
-                        {member.user.name || member.user.email || "Unnamed player"}
-                      </div>
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${getResponseClasses(availability?.response)}`}>
-                        {getResponseLabel(availability?.response)}
-                      </span>
-                      {selectionStatus === "SELECTED" ? (
-                        <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-100">
-                          Selected
-                        </span>
-                      ) : null}
+                <div key={member.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-white">{playerName}</div>
+                      <div className="mt-1 text-sm text-white/45">{member.user.email || "No email"}</div>
+                      {availability?.note ? <div className="mt-2 text-xs text-white/55">Note: {availability.note}</div> : null}
                     </div>
-                    <div className="mt-1 text-sm text-white/50">
-                      {member.user.email || "No email"}
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`rounded-full border px-3 py-1 text-xs font-medium ${getResponseClasses(availability?.response)}`}>{getResponseLabel(availability?.response)}</span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/60">{selection.replace("_", " ")}</span>
                     </div>
-                    {availability?.respondedAt ? (
-                      <div className="mt-1 text-xs text-white/35">
-                        Responded {formatUkDateTime(availability.respondedAt)}
-                      </div>
-                    ) : null}
-                    {availability?.note ? (
-                      <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/60">
-                        {availability.note}
-                      </div>
-                    ) : null}
                   </div>
-
-                  <Link
-                    href={`/admin/teams/${team.id}/match-fees?fixtureId=${selectedFixture?.id ?? ""}`}
-                    className="inline-flex items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
-                  >
-                    Match fees
-                  </Link>
                 </div>
               );
             })}
