@@ -235,11 +235,7 @@ async function getAssignedRefereeCoverageLeagues(refereeId: string) {
 
 export async function getRefereeAvailabilityLeagues(refereeId: string) {
   const manualCoverage = await getManualRefereeCoverageLeagues(refereeId);
-
-  if (manualCoverage.length > 0) {
-    return manualCoverage;
-  }
-
+  if (manualCoverage.length > 0) return manualCoverage;
   return getAssignedRefereeCoverageLeagues(refereeId);
 }
 
@@ -255,10 +251,7 @@ export function getLeagueDatesInMonth(input: {
   const current = new Date(bounds.start);
 
   while (current <= bounds.end) {
-    if (current.getUTCDay() === targetDay) {
-      dates.push(toDateKey(current));
-    }
-
+    if (current.getUTCDay() === targetDay) dates.push(toDateKey(current));
     current.setUTCDate(current.getUTCDate() + 1);
   }
 
@@ -295,9 +288,7 @@ export async function ensureRefereeAvailabilityRows(input: {
     ),
   );
 
-  if (rows.length === 0) {
-    return { created: 0, total: 0 };
-  }
+  if (rows.length === 0) return { created: 0, total: 0 };
 
   let created = 0;
 
@@ -445,21 +436,14 @@ export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
     })),
   );
   const allowedLeagueIdsByReferee = new Map(
-    coverageEntries.map((entry) => [
-      entry.refereeId,
-      new Set(entry.leagues.map((league) => league.id)),
-    ]),
+    coverageEntries.map((entry) => [entry.refereeId, new Set(entry.leagues.map((league) => league.id))]),
   );
   const refereeIds = referees.map((referee) => referee.id);
   const refereeFilter = refereeIds.length
     ? Prisma.sql`AND ra."refereeId" IN (${Prisma.join(refereeIds)})`
     : Prisma.sql`AND FALSE`;
 
-  await Promise.all(
-    referees.map((referee) =>
-      ensureRefereeAvailabilityRows({ refereeId: referee.id, monthKey }),
-    ),
-  );
+  await Promise.all(referees.map((referee) => ensureRefereeAvailabilityRows({ refereeId: referee.id, monthKey })));
 
   const bounds = getMonthBounds(monthKey);
   const rows = await prisma.$queryRaw<RawAdminAvailabilityRow[]>(Prisma.sql`
@@ -487,9 +471,7 @@ export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
     ORDER BY ra."availabilityDate" ASC, l.name ASC, u.name ASC NULLS LAST, u.email ASC NULLS LAST
   `);
 
-  const filteredRows = rows.filter((row) =>
-    allowedLeagueIdsByReferee.get(row.refereeId)?.has(row.leagueId),
-  );
+  const filteredRows = rows.filter((row) => allowedLeagueIdsByReferee.get(row.refereeId)?.has(row.leagueId));
 
   return {
     monthKey,
@@ -624,9 +606,7 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: {
     } catch (error) {
       summary.skipped += 1;
       if (summary.errors.length < 10) {
-        summary.errors.push(
-          `${referee.id}: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
+        summary.errors.push(`${referee.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
     }
   }
