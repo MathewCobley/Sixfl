@@ -4,7 +4,8 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
+import DisciplinaryNoteForm from "@/components/referee/DisciplinaryNoteForm";
 import { requireReferee } from "@/lib/admin";
 import {
   formatKickoffTime,
@@ -20,6 +21,24 @@ import {
   submitNightFixtureResultAction,
   submitRefereeNightCashupAction,
 } from "../../actions";
+
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ saved?: string; submitted?: string }>;
+};
+
+type DisciplinaryNoteRow = {
+  id: string;
+  fixtureId: string;
+  teamId: string;
+  incidentType: string;
+  severity: string;
+  description: string;
+  createdAt: Date;
+  teamName: string;
+  reportedByName: string | null;
+  reportedByEmail: string | null;
+};
 
 function statusClasses(status: RefereeNightStatus) {
   switch (status) {
@@ -41,6 +60,74 @@ function statusClasses(status: RefereeNightStatus) {
 
 function formatStatus(status: RefereeNightStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+function formatDisciplinaryIncident(value: string) {
+  switch (value) {
+    case "DISSENT":
+      return "Dissent";
+    case "FIGHTING":
+      return "Fighting / violent conduct";
+    case "AGGRESSIVE_CONDUCT":
+      return "Aggressive conduct";
+    case "OFFENSIVE_LANGUAGE":
+      return "Offensive language";
+    case "THREATENING_BEHAVIOUR":
+      return "Threatening behaviour";
+    default:
+      return "Other";
+  }
+}
+
+function formatDisciplinarySeverity(value: string) {
+  switch (value) {
+    case "WARNING":
+      return "Warning";
+    case "SERIOUS":
+      return "Serious";
+    case "URGENT":
+      return "Urgent";
+    default:
+      return "Note";
+  }
+}
+
+function severityClasses(value: string) {
+  switch (value) {
+    case "URGENT":
+      return "border-red-400/25 bg-red-500/10 text-red-100";
+    case "SERIOUS":
+      return "border-orange-400/25 bg-orange-500/10 text-orange-100";
+    case "WARNING":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/60";
+  }
+}
+
+function getSavedMessage(saved?: string, submitted?: string) {
+  if (submitted === "1") return "Cashup submitted.";
+
+  switch (saved) {
+    case "result":
+      return "Score saved.";
+    case "cash":
+      return "Cash collected recorded.";
+    case "discipline":
+      return "Disciplinary note recorded.";
+    default:
+      return null;
+  }
+}
+
+function groupDisciplinaryNotesByFixture(notes: DisciplinaryNoteRow[]) {
+  const grouped = new Map<string, DisciplinaryNoteRow[]>();
+
+  for (const note of notes) {
+    grouped.set(note.fixtureId, [...(grouped.get(note.fixtureId) ?? []), note]);
+  }
+
+  return grouped;
 }
 
 function CashForm({
@@ -86,13 +173,10 @@ function CashForm({
   );
 }
 
-export default async function RefereeNightPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function RefereeNightPage({ params, searchParams }: PageProps) {
   const { user, isAdminPreview } = await requireReferee();
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
 
   const [night, fixtures, cashByTeam] = await Promise.all([
     getRefereeNightById(id),
@@ -105,7 +189,30 @@ export default async function RefereeNightPage({
   const canAccess = user.role === UserRole.ADMIN || night.refereeId === user.id;
   if (!canAccess) notFound();
 
+  const fixtureIds = fixtures.map((fixture) => fixture.id);
+  const disciplinaryNotes = fixtureIds.length
+    ? await prisma.$queryRaw<DisciplinaryNoteRow[]>(Prisma.sql`
+        SELECT
+          note.id,
+          note."fixtureId",
+          note."teamId",
+          note."incidentType"::text AS "incidentType",
+          note."severity"::text AS "severity",
+          note.description,
+          note."createdAt",
+          team.name AS "teamName",
+          reporter.name AS "reportedByName",
+          reporter.email AS "reportedByEmail"
+        FROM "FixtureDisciplinaryNote" note
+        JOIN "Team" team ON team.id = note."teamId"
+        LEFT JOIN "User" reporter ON reporter.id = note."reportedByUserId"
+        WHERE note."fixtureId" IN (${Prisma.join(fixtureIds)})
+        ORDER BY note."createdAt" DESC
+      `)
+    : [];
+  const disciplinaryNotesByFixture = groupDisciplinaryNotesByFixture(disciplinaryNotes);
   const allFixturesHaveResults = fixtures.length > 0 && fixtures.every((fixture) => fixture.result);
+  const savedMessage = getSavedMessage(sp.saved, sp.submitted);
 
   return (
     <div className="min-h-screen bg-black px-4 py-6 text-white sm:px-6 lg:px-8">
@@ -137,6 +244,12 @@ export default async function RefereeNightPage({
           </section>
         ) : null}
 
+        {savedMessage ? (
+          <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+            {savedMessage}
+          </section>
+        ) : null}
+
         <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
           <Link href="/referee" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">← Referee dashboard</Link>
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -147,7 +260,7 @@ export default async function RefereeNightPage({
             {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}. Enter scores, record money collected and submit one night cashup.
+            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}. Enter scores, record cash collected and submit one night cashup.
           </p>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -168,6 +281,7 @@ export default async function RefereeNightPage({
             {fixtures.map((fixture) => {
               const homeCollected = cashByTeam[fixture.homeTeam.id] ?? 0;
               const awayCollected = cashByTeam[fixture.awayTeam.id] ?? 0;
+              const fixtureDisciplinaryNotes = disciplinaryNotesByFixture.get(fixture.id) ?? [];
 
               return (
                 <article key={fixture.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
@@ -216,6 +330,46 @@ export default async function RefereeNightPage({
                     <div className="grid gap-4 md:grid-cols-2">
                       <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.homeTeam.id} teamName={fixture.homeTeam.name} />
                       <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.awayTeam.id} teamName={fixture.awayTeam.name} />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/10 px-5 py-5 sm:px-6">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                      <DisciplinaryNoteForm
+                        refereeNightId={night.id}
+                        fixtureId={fixture.id}
+                        teams={[
+                          { id: fixture.homeTeam.id, name: fixture.homeTeam.name },
+                          { id: fixture.awayTeam.id, name: fixture.awayTeam.name },
+                        ]}
+                      />
+
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/45">Recorded notes</h3>
+                        {fixtureDisciplinaryNotes.length === 0 ? (
+                          <p className="mt-3 text-sm text-white/50">No disciplinary notes recorded for this fixture.</p>
+                        ) : (
+                          <div className="mt-3 space-y-3">
+                            {fixtureDisciplinaryNotes.map((note) => (
+                              <div key={note.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold text-white">{note.teamName}</span>
+                                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${severityClasses(note.severity)}`}>
+                                    {formatDisciplinarySeverity(note.severity)}
+                                  </span>
+                                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                                    {formatDisciplinaryIncident(note.incidentType)}
+                                  </span>
+                                </div>
+                                <p className="mt-2 whitespace-pre-line leading-6 text-white/70">{note.description}</p>
+                                <p className="mt-2 text-xs text-white/35">
+                                  Recorded by {note.reportedByName || note.reportedByEmail || "referee"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </article>
