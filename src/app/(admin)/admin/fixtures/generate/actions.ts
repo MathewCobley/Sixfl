@@ -94,6 +94,38 @@ function parseTimeToMinutes(value: string | null) {
   return hours * 60 + minutes;
 }
 
+function getSessionCapacity(input: {
+  startDate: string;
+  startTime: string;
+  lastGameStartTime: string;
+  slotMinutes: number;
+  pitches: number;
+}) {
+  const startDateTime = parseLondonDateTime(input.startDate, input.startTime);
+  const lastGameStartDateTime = parseLondonDateTime(
+    input.startDate,
+    input.lastGameStartTime,
+  );
+  const sessionMs = lastGameStartDateTime.getTime() - startDateTime.getTime();
+
+  if (sessionMs < 0) {
+    throw new Error("Last game start time must be after the session start time.");
+  }
+
+  const slotCount = Math.floor(sessionMs / (input.slotMinutes * 60 * 1000)) + 1;
+
+  if (slotCount < 1) {
+    throw new Error("The session needs at least one kick-off slot.");
+  }
+
+  return {
+    startDateTime,
+    lastGameStartDateTime,
+    slotCount,
+    gamesPerSession: slotCount * input.pitches,
+  };
+}
+
 function isKickoffAllowed(
   kickoffAt: Date,
   homeTeam: TeamSchedulingRule,
@@ -202,6 +234,10 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   const leagueId = parseRequiredString(formData.get("leagueId"), "League");
   const startDate = parseRequiredString(formData.get("startDate"), "Start date");
   const startTime = parseRequiredString(formData.get("startTime"), "Start time");
+  const lastGameStartTime = parseRequiredString(
+    formData.get("lastGameStartTime"),
+    "Last game start time",
+  );
   const weekGapDays = parseRequiredPositiveInt(
     formData.get("weekGapDays"),
     "Week gap days",
@@ -213,11 +249,6 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     10,
   );
   const pitches = parseRequiredPositiveInt(formData.get("pitches"), "Pitches", 1);
-  const maxGamesPerNight = parseRequiredPositiveInt(
-    formData.get("maxGamesPerNight"),
-    "Max games per night",
-    1,
-  );
   const startRound = parseRequiredPositiveInt(formData.get("startRound"), "Start week", 1);
   const doubleRoundRobin = String(formData.get("doubleRoundRobin") || "") === "on";
   const clearExisting = String(formData.get("clearExisting") || "") === "on";
@@ -227,6 +258,13 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   const selectedRefereeIds = refereeIdsByPitch.filter(
     (refereeId): refereeId is string => refereeId !== null,
   );
+  const { startDateTime, slotCount, gamesPerSession } = getSessionCapacity({
+    startDate,
+    startTime,
+    lastGameStartTime,
+    slotMinutes,
+    pitches,
+  });
 
   const [league, teams, venue, selectedReferees] = await Promise.all([
     prisma.league.findUnique({
@@ -250,9 +288,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
       : Promise.resolve(null),
     prisma.user.findMany({
       where: {
-        id: {
-          in: selectedRefereeIds,
-        },
+        id: { in: selectedRefereeIds },
         role: "REFEREE",
       },
       select: { id: true },
@@ -280,7 +316,6 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     throw new Error("One or more selected pitch referees could not be found.");
   }
 
-  const startDateTime = parseLondonDateTime(startDate, startTime);
   let rounds = generateRounds(teams.map((team) => team.id));
 
   if (doubleRoundRobin) {
@@ -309,17 +344,22 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   rounds.forEach((pairs, roundIndex) => {
     const roundNumber = startRound + roundIndex;
 
-    for (let chunkStart = 0; chunkStart < pairs.length; chunkStart += maxGamesPerNight) {
+    for (let chunkStart = 0; chunkStart < pairs.length; chunkStart += gamesPerSession) {
       const nightlyPairs = sortPairsByRestriction(
-        pairs.slice(chunkStart, chunkStart + maxGamesPerNight),
+        pairs.slice(chunkStart, chunkStart + gamesPerSession),
         teamMap,
       );
-      const roundBase = addDays(startDateTime, nightOffset * weekGapDays);
+      const sessionBase = addDays(startDateTime, nightOffset * weekGapDays);
 
       nightlyPairs.forEach((pair, nightlyIndex) => {
-        const batch = Math.floor(nightlyIndex / pitches);
+        const slotIndex = Math.floor(nightlyIndex / pitches);
         const pitchNumber = (nightlyIndex % pitches) + 1;
-        const kickoffAt = addMinutes(roundBase, batch * slotMinutes);
+
+        if (slotIndex >= slotCount) {
+          throw new Error("Fixture generation tried to use more slots than the session allows.");
+        }
+
+        const kickoffAt = addMinutes(sessionBase, slotIndex * slotMinutes);
         const homeTeam = teamMap.get(pair.homeId);
         const awayTeam = teamMap.get(pair.awayId);
 
@@ -359,14 +399,10 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
 
   await prisma.$transaction(async (tx) => {
     if (clearExisting) {
-      await tx.fixture.deleteMany({
-        where: { leagueId },
-      });
+      await tx.fixture.deleteMany({ where: { leagueId } });
     }
 
-    await tx.fixture.createMany({
-      data: fixturesToCreate,
-    });
+    await tx.fixture.createMany({ data: fixturesToCreate });
   });
 
   revalidatePath("/admin/fixtures");
@@ -379,5 +415,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     revalidatePath(`/leagues/${league.slug}/fixtures`);
   }
 
-  redirect(`/admin/fixtures?leagueId=${encodeURIComponent(leagueId)}&generated=${fixturesToCreate.length}`);
+  redirect(
+    `/admin/fixtures?leagueId=${encodeURIComponent(leagueId)}&generated=${fixturesToCreate.length}`,
+  );
 }
