@@ -27,10 +27,17 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
-function isUnlabelledStripePaymentCard(card: Element) {
+function isPlaceholderPlayerFeeSubtitle(value: string) {
+  return value === "Unlinked payment · Stripe" || value === "Squad player payment · Stripe";
+}
+
+function isPlaceholderPlayerFeePaymentCard(card: Element) {
   const text = card.textContent ?? "";
 
-  return text.includes("Unlinked payment") && text.includes("Stripe");
+  return (
+    text.includes("Stripe") &&
+    (text.includes("Unlinked payment") || text.includes("Squad player payment"))
+  );
 }
 
 function getRecentPaymentsCards() {
@@ -43,14 +50,14 @@ function getRecentPaymentsCards() {
     if (!section) return [];
 
     return Array.from(section.querySelectorAll("div.rounded-2xl")).filter(
-      isUnlabelledStripePaymentCard,
+      isPlaceholderPlayerFeePaymentCard,
     );
   });
 }
 
 function getPaymentSubtitleElement(card: Element) {
-  return Array.from(card.querySelectorAll("div")).find(
-    (element) => element.textContent?.trim() === "Unlinked payment · Stripe",
+  return Array.from(card.querySelectorAll("div")).find((element) =>
+    isPlaceholderPlayerFeeSubtitle(element.textContent?.trim() ?? ""),
   );
 }
 
