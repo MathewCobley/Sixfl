@@ -9,6 +9,7 @@ import {
   formatKickoffTime,
   formatMoney,
   formatNightDate,
+  getAssignableFixturesForRefereeNight,
   getCashCollectedByTeam,
   getRefereeNightById,
   getRefereeNightFixtures,
@@ -16,10 +17,10 @@ import {
 } from "@/lib/referee-nights";
 import {
   approveRefereeNightAction,
-  refreshRefereeNightFixturesAction,
   reopenRefereeNightAction,
   settleRefereeNightAction,
   updateRefereeNightAction,
+  updateRefereeNightFixturesAction,
 } from "../actions";
 
 function statusClasses(status: RefereeNightStatus) {
@@ -44,6 +45,27 @@ function formatStatus(status: RefereeNightStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
+function assignmentLabel(input: {
+  assignedRefereeNightId: string | null;
+  assignedRefereeName: string | null;
+  assignedRefereeEmail: string | null;
+  currentNightId: string;
+}) {
+  if (!input.assignedRefereeNightId) return "Unassigned";
+  if (input.assignedRefereeNightId === input.currentNightId) return "Assigned to this night";
+
+  return `Assigned to ${input.assignedRefereeName || input.assignedRefereeEmail || "another referee"}`;
+}
+
+function assignmentClasses(input: { assignedRefereeNightId: string | null; currentNightId: string }) {
+  if (!input.assignedRefereeNightId) return "border-white/10 bg-white/[0.04] text-white/55";
+  if (input.assignedRefereeNightId === input.currentNightId) {
+    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  }
+
+  return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+}
+
 export default async function AdminRefereeNightDetailPage({
   params,
 }: {
@@ -52,9 +74,10 @@ export default async function AdminRefereeNightDetailPage({
   await requireAdmin();
   const { id } = await params;
 
-  const [night, fixtures, cashByTeam] = await Promise.all([
+  const [night, fixtures, assignableFixtures, cashByTeam] = await Promise.all([
     getRefereeNightById(id),
     getRefereeNightFixtures(id),
+    getAssignableFixturesForRefereeNight(id),
     getCashCollectedByTeam(id),
   ]);
 
@@ -63,6 +86,9 @@ export default async function AdminRefereeNightDetailPage({
   const expectedTotal = fixtures.reduce((sum, fixture) => {
     return sum + fixture.paymentCharges.reduce((chargeSum, charge) => chargeSum + charge.amountPence, 0);
   }, 0);
+  const assignedElsewhereCount = assignableFixtures.filter(
+    (fixture) => fixture.assignedRefereeNightId && fixture.assignedRefereeNightId !== night.id,
+  ).length;
 
   return (
     <div className="space-y-8">
@@ -97,70 +123,138 @@ export default async function AdminRefereeNightDetailPage({
       </section>
 
       <section className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-        <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-          <div className="border-b border-white/10 px-6 py-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-6">
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
+            <div className="border-b border-white/10 px-6 py-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">Match assignment</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">Assign matches to this referee</h2>
+                  <p className="mt-2 text-sm leading-6 text-white/55">
+                    Tick the matches this referee is covering. Untick to remove them. Ticking a match currently assigned to another referee will move only that match.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs font-semibold text-white/60">
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">{assignableFixtures.length} matching</span>
+                  {assignedElsewhereCount > 0 ? (
+                    <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-amber-100">{assignedElsewhereCount} assigned elsewhere</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {assignableFixtures.length === 0 ? (
+              <div className="px-6 py-8 text-sm text-white/60">
+                No fixtures match this night’s league, date and venue.
+              </div>
+            ) : (
+              <form action={updateRefereeNightFixturesAction} className="space-y-4 px-6 py-6">
+                <input type="hidden" name="refereeNightId" value={night.id} />
+                <div className="grid gap-3">
+                  {assignableFixtures.map((fixture) => {
+                    const assignedToThisNight = fixture.assignedRefereeNightId === night.id;
+                    const assignedElsewhere = fixture.assignedRefereeNightId && !assignedToThisNight;
+
+                    return (
+                      <label
+                        key={fixture.id}
+                        className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:bg-white/[0.04]"
+                      >
+                        <input
+                          type="checkbox"
+                          name="fixtureIds"
+                          value={fixture.id}
+                          defaultChecked={assignedToThisNight}
+                          className="mt-1"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2 text-xs text-white/45">
+                            <span>{formatKickoffTime(fixture.kickoffAt)}</span>
+                            {fixture.pitch ? <><span>•</span><span>{fixture.pitch}</span></> : null}
+                            {fixture.round ? <><span>•</span><span>Week {fixture.round}</span></> : null}
+                          </span>
+                          <span className="mt-2 block text-base font-semibold text-white">
+                            {fixture.homeTeam.name} <span className="text-white/35">v</span> {fixture.awayTeam.name}
+                          </span>
+                          <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${assignmentClasses({ assignedRefereeNightId: fixture.assignedRefereeNightId, currentNightId: night.id })}`}>
+                            {assignmentLabel({
+                              assignedRefereeNightId: fixture.assignedRefereeNightId,
+                              assignedRefereeName: fixture.assignedRefereeName,
+                              assignedRefereeEmail: fixture.assignedRefereeEmail,
+                              currentNightId: night.id,
+                            })}
+                            {assignedElsewhere ? " · tick to move" : ""}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <button type="submit" className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300">
+                  Save match assignments
+                </button>
+              </form>
+            )}
+          </div>
+
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
+            <div className="border-b border-white/10 px-6 py-5">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">Night fixtures</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Fixtures covered</h2>
               </div>
-              <form action={refreshRefereeNightFixturesAction}>
-                <input type="hidden" name="refereeNightId" value={night.id} />
-                <button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
-                  Refresh fixtures
-                </button>
-              </form>
             </div>
-          </div>
 
-          {fixtures.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-white/60">
-              No fixtures are attached yet. Check the league, date and venue, then refresh fixtures.
-            </div>
-          ) : (
-            <div className="divide-y divide-white/10">
-              {fixtures.map((fixture) => {
-                const homeCollected = cashByTeam[fixture.homeTeam.id] ?? 0;
-                const awayCollected = cashByTeam[fixture.awayTeam.id] ?? 0;
-                const homeCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.homeTeam.id);
-                const awayCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.awayTeam.id);
+            {fixtures.length === 0 ? (
+              <div className="px-6 py-8 text-sm text-white/60">
+                No fixtures are assigned to this referee night yet. Use the match assignment panel above.
+              </div>
+            ) : (
+              <div className="divide-y divide-white/10">
+                {fixtures.map((fixture) => {
+                  const homeCollected = cashByTeam[fixture.homeTeam.id] ?? 0;
+                  const awayCollected = cashByTeam[fixture.awayTeam.id] ?? 0;
+                  const homeCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.homeTeam.id);
+                  const awayCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.awayTeam.id);
 
-                return (
-                  <div key={fixture.id} className="px-6 py-5">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
-                          <span>{formatKickoffTime(fixture.kickoffAt)}</span>
-                          {fixture.pitch ? <><span>•</span><span>{fixture.pitch}</span></> : null}
-                          {fixture.round ? <><span>•</span><span>Week {fixture.round}</span></> : null}
-                          <span>•</span><span>{fixture.status}</span>
+                  return (
+                    <div key={fixture.id} className="px-6 py-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
+                            <span>{formatKickoffTime(fixture.kickoffAt)}</span>
+                            {fixture.pitch ? <><span>•</span><span>{fixture.pitch}</span></> : null}
+                            {fixture.round ? <><span>•</span><span>Week {fixture.round}</span></> : null}
+                            <span>•</span><span>{fixture.status}</span>
+                          </div>
+                          <div className="mt-2 text-lg font-semibold text-white">
+                            {fixture.homeTeam.name} <span className="text-white/35">v</span> {fixture.awayTeam.name}
+                          </div>
+                          <div className="mt-1 text-sm text-white/55">
+                            {fixture.result ? `Result: ${fixture.result.homeScore}-${fixture.result.awayScore}${fixture.result.isDisputed ? " · disputed" : ""}` : "No result entered"}
+                          </div>
                         </div>
-                        <div className="mt-2 text-lg font-semibold text-white">
-                          {fixture.homeTeam.name} <span className="text-white/35">v</span> {fixture.awayTeam.name}
-                        </div>
-                        <div className="mt-1 text-sm text-white/55">
-                          {fixture.result ? `Result: ${fixture.result.homeScore}-${fixture.result.awayScore}${fixture.result.isDisputed ? " · disputed" : ""}` : "No result entered"}
-                        </div>
-                      </div>
 
-                      <div className="grid min-w-[300px] grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                          <div className="font-semibold text-white">{fixture.homeTeam.name}</div>
-                          <div className="mt-1 text-white/45">Charge {formatMoney(homeCharge?.amountPence ?? 0)}</div>
-                          <div className="mt-1 text-emerald-200">Collected {formatMoney(homeCollected)}</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                          <div className="font-semibold text-white">{fixture.awayTeam.name}</div>
-                          <div className="mt-1 text-white/45">Charge {formatMoney(awayCharge?.amountPence ?? 0)}</div>
-                          <div className="mt-1 text-emerald-200">Collected {formatMoney(awayCollected)}</div>
+                        <div className="grid min-w-[300px] grid-cols-2 gap-3 text-sm">
+                          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                            <div className="font-semibold text-white">{fixture.homeTeam.name}</div>
+                            <div className="mt-1 text-white/45">Charge {formatMoney(homeCharge?.amountPence ?? 0)}</div>
+                            <div className="mt-1 text-emerald-200">Collected {formatMoney(homeCollected)}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                            <div className="font-semibold text-white">{fixture.awayTeam.name}</div>
+                            <div className="mt-1 text-white/45">Charge {formatMoney(awayCharge?.amountPence ?? 0)}</div>
+                            <div className="mt-1 text-emerald-200">Collected {formatMoney(awayCollected)}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-6">
