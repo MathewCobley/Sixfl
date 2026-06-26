@@ -6,6 +6,7 @@ import { FixtureStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -50,6 +51,7 @@ export async function GET(
 
   const fixture = await prisma.fixture.findFirst({
     where: {
+      ...publishedFixtureWhere,
       OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
       kickoffAt: { gte: new Date() },
       status: { in: [FixtureStatus.SCHEDULED, FixtureStatus.POSTPONED] },
