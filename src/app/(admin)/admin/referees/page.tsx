@@ -11,7 +11,10 @@ type SearchParams = Promise<{ q?: string }>;
 
 function formatDate(value: Date | null | undefined) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(value);
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
 }
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -37,6 +40,7 @@ function buildWhatsAppHref(phone?: string | null) {
 
 function ContactButton({ href, label }: { href: string | null; label: string }) {
   if (!href) return null;
+
   return (
     <a
       href={href}
@@ -49,7 +53,11 @@ function ContactButton({ href, label }: { href: string | null; label: string }) 
   );
 }
 
-export default async function AdminRefereesPage({ searchParams }: { searchParams?: SearchParams }) {
+export default async function AdminRefereesPage({
+  searchParams,
+}: {
+  searchParams?: SearchParams;
+}) {
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
@@ -59,7 +67,12 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
     where: {
       role: UserRole.REFEREE,
       ...(query
-        ? { OR: [{ name: { contains: query, mode: "insensitive" } }, { email: { contains: query, mode: "insensitive" } }] }
+        ? {
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+            ],
+          }
         : {}),
     },
     orderBy: [{ name: "asc" }, { email: "asc" }],
@@ -83,12 +96,22 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
     },
   });
 
-  const convertedLeadIds = referees.map((referee) => referee.createdFromLeadId).filter((value): value is string => Boolean(value));
+  const convertedLeadIds = referees
+    .map((referee) => referee.createdFromLeadId)
+    .filter((value): value is string => Boolean(value));
 
   const leads = convertedLeadIds.length
     ? await prisma.interestLead.findMany({
         where: { id: { in: convertedLeadIds } },
-        select: { id: true, contactName: true, email: true, phone: true, area: true, createdAt: true, convertedAt: true },
+        select: {
+          id: true,
+          contactName: true,
+          email: true,
+          phone: true,
+          area: true,
+          createdAt: true,
+          convertedAt: true,
+        },
       })
     : [];
 
@@ -101,28 +124,46 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
     0,
   );
 
+  const statCards = [
+    { label: "Total referees", value: totalReferees, helper: "Live assignable referee users" },
+    { label: "From leads", value: withLeadCount, helper: "Converted from referee interest" },
+    { label: "Total assignments", value: totalAssignments, helper: "Fixtures linked to referees" },
+    { label: "Scheduled now", value: activeAssignments, helper: "Upcoming scheduled appointments" },
+  ];
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
-          <div className="inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">Referees</div>
-          <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Manage referee users</h1>
+          <div className="inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
+            Referees
+          </div>
+          <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+            Manage referee users
+          </h1>
           <p className="max-w-3xl text-sm leading-7 text-white/60 sm:text-base">
             This is the live referee user directory used by fixtures. Email converted referee leads through the existing lead email flow so templates, previews, signatures and history stay in one place.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link href="/admin/leads?type=REFEREE" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Referee leads</Link>
-          <Link href="/admin/fixtures" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Open fixtures</Link>
+          <Link href="/admin/leads?type=REFEREE" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">
+            Referee leads
+          </Link>
+          <Link href="/admin/referee-nights" className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15">
+            Referee nights
+          </Link>
+          <Link href="/admin/fixtures" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">
+            Open fixtures
+          </Link>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[["Total referees", totalReferees, "Live assignable referee users"], ["From leads", withLeadCount, "Converted from referee interest"], ["Total assignments", totalAssignments, "Fixtures linked to referees"], ["Scheduled now", activeAssignments, "Upcoming scheduled appointments"]].map(([label, value, helper]) => (
-          <div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">{label}</div>
-            <div className="mt-2 text-3xl font-black text-white">{value}</div>
-            <div className="mt-1 text-sm text-white/55">{helper}</div>
+        {statCards.map((card) => (
+          <div key={card.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">{card.label}</div>
+            <div className="mt-2 text-3xl font-black text-white">{card.value}</div>
+            <div className="mt-1 text-sm text-white/55">{card.helper}</div>
           </div>
         ))}
       </div>
@@ -176,6 +217,7 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <Link href={`/admin/referees/${referee.id}/preview`} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200">Preview dashboard</Link>
                         {sourceLead ? <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Email via SIXFL</Link> : null}
                         <ContactButton href={whatsappHref} label="WhatsApp" />
                         <ContactButton href={phoneHref ? `tel:${phoneHref}` : null} label="Call" />
