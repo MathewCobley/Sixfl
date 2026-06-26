@@ -72,6 +72,12 @@ const navigation = [
     description: "Schedule and results",
   },
   {
+    name: "Fixture Generator",
+    href: "/admin/fixtures/generate",
+    icon: CalendarDaysIcon,
+    description: "Draft fixtures by pitch",
+  },
+  {
     name: "Late Fees",
     href: "/admin/fixtures/late-fees",
     icon: ExclamationTriangleIcon,
