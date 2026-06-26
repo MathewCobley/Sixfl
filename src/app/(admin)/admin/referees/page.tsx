@@ -11,11 +11,12 @@ import {
   formatMoney,
   getRefereeProfilesByUserIds,
 } from "@/lib/referees/profile";
-import { createRefereeAction } from "./actions";
+import { createRefereeAction, sendRefereeInviteAction } from "./actions";
 
 type SearchParams = Promise<{
   q?: string;
   referee?: string;
+  invite?: string;
   error?: string;
   userId?: string;
 }>;
@@ -70,10 +71,14 @@ function getErrorMessage(error?: string) {
       return "Please enter at least a name and email address for the referee.";
     case "invalid_referee_email":
       return "Please enter a valid referee email address.";
+    case "missing_referee_email":
+      return "That referee needs an email address before an invite can be sent.";
     case "invalid_referee_phone":
       return "Please enter a valid UK mobile number for SMS, for example 07700 900123.";
     case "invalid_referee_fee":
       return "Please enter the referee fee as a pounds amount, for example 45 or 45.00.";
+    case "invite_not_queued":
+      return "The referee invite email could not be queued. Check the email address and notification settings.";
     case "admin_user_already_assignable":
       return "That email belongs to an admin user. Admin users can already be assigned to referee nights.";
     case "missing_referee":
@@ -93,11 +98,13 @@ export default async function AdminRefereesPage({
   const sp = (await searchParams) ?? {};
   const query = String(sp.q ?? "").trim();
   const errorMessage = getErrorMessage(sp.error);
-  const successMessage = sp.referee
-    ? sp.referee === "updated"
-      ? "Referee updated and added to the live referee list."
-      : "Referee added to the live referee list."
-    : null;
+  const successMessage = sp.invite === "queued"
+    ? "Referee invite email queued through the SIXFL notification system."
+    : sp.referee
+      ? sp.referee === "updated"
+        ? "Referee updated and added to the live referee list."
+        : "Referee added to the live referee list."
+      : null;
 
   const referees = await prisma.user.findMany({
     where: {
@@ -184,7 +191,7 @@ export default async function AdminRefereesPage({
             Manage referee users
           </h1>
           <p className="max-w-3xl text-sm leading-7 text-white/60 sm:text-base">
-            Edit referee contact details, record their standard night fee and send SMS messages through the SIXFL notification system.
+            Edit referee contact details, record their standard night fee and send invite emails or SMS messages through the SIXFL notification system.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -314,6 +321,14 @@ export default async function AdminRefereesPage({
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Link href={`/admin/referees/${referee.id}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Edit referee</Link>
+                        {contactEmail ? (
+                          <form action={sendRefereeInviteAction}>
+                            <input type="hidden" name="refereeId" value={referee.id} />
+                            <button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl bg-purple-300 px-4 text-sm font-semibold text-black transition hover:bg-purple-200">
+                              Send invite
+                            </button>
+                          </form>
+                        ) : null}
                         <Link href={`/admin/referees/${referee.id}#sms`} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200">Send SMS via SIXFL</Link>
                         <Link href={`/admin/referees/${referee.id}/preview`} className="inline-flex h-10 items-center justify-center rounded-xl border border-sky-300/20 bg-sky-300/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/15">Preview dashboard</Link>
                         {sourceLead ? <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Email via SIXFL</Link> : null}
