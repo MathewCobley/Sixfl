@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { UserRole } from "@prisma/client";
 import { requireReferee } from "@/lib/admin";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import {
   formatMoney,
   formatNightDate,
@@ -37,6 +38,20 @@ function formatStatus(status: RefereeNightStatus) {
 
 function sortNightSoonestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
   return a.nightDate.localeCompare(b.nightDate);
+}
+
+function sortNightNewestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
+  return b.nightDate.localeCompare(a.nightDate);
+}
+
+function formatLedgerDate(value: Date | null) {
+  if (!value) return "—";
+
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function StatCard({
@@ -199,6 +214,116 @@ function NightCard({ night, isNext }: { night: RefereeNightSummary; isNext: bool
   );
 }
 
+function getLedgerBalanceLabel(night: RefereeNightSummary) {
+  if (night.dueToRefereePence > 0) {
+    return night.status === "SETTLED" ? "Paid to you" : "Owed to you";
+  }
+
+  if (night.dueToSixflPence > 0) {
+    return night.status === "SETTLED" ? "Settled to SIXFL" : "You owe SIXFL";
+  }
+
+  return "Balanced";
+}
+
+function getLedgerBalanceAmount(night: RefereeNightSummary) {
+  if (night.dueToRefereePence > 0) return night.dueToRefereePence;
+  if (night.dueToSixflPence > 0) return night.dueToSixflPence;
+  return 0;
+}
+
+function getLedgerBalanceClasses(night: RefereeNightSummary) {
+  if (night.dueToRefereePence > 0) return "text-amber-100";
+  if (night.dueToSixflPence > 0) return "text-emerald-100";
+  return "text-white";
+}
+
+function getLedgerSettlementLabel(night: RefereeNightSummary) {
+  if (night.status === "SETTLED") {
+    return night.settledAt ? `Settled ${formatLedgerDate(night.settledAt)}` : "Settled";
+  }
+
+  if (night.status === "CANCELLED") return "Cancelled";
+
+  if (night.dueToRefereePence > 0) return "Not paid yet";
+  if (night.dueToSixflPence > 0) return "Not settled yet";
+  return "No balance due";
+}
+
+function RefereeLedger({ nights }: { nights: RefereeNightSummary[] }) {
+  const ledgerNights = nights
+    .filter((night) => night.status !== "CANCELLED")
+    .sort(sortNightNewestFirst);
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
+      <div className="flex flex-col gap-3 border-b border-white/10 px-6 py-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+            Referee ledger
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Money owed and paid</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
+            This shows each referee night, the fee, cash collected, the balance, and when SIXFL marked it as settled.
+          </p>
+        </div>
+        <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/55">
+          {ledgerNights.length} ledger item{ledgerNights.length === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      {ledgerNights.length === 0 ? (
+        <div className="px-6 py-10 text-sm text-white/55">
+          No ledger entries yet. Once a referee night is created, it will appear here.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-white/10 text-sm">
+            <thead className="bg-black/20 text-left text-[11px] uppercase tracking-[0.16em] text-white/40">
+              <tr>
+                <th className="px-5 py-3 font-semibold">Night</th>
+                <th className="px-5 py-3 font-semibold">League</th>
+                <th className="px-5 py-3 font-semibold">Status</th>
+                <th className="px-5 py-3 text-right font-semibold">Fee</th>
+                <th className="px-5 py-3 text-right font-semibold">Cash collected</th>
+                <th className="px-5 py-3 text-right font-semibold">Balance</th>
+                <th className="px-5 py-3 font-semibold">Paid / settled</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {ledgerNights.map((night) => (
+                <tr key={night.id} className="align-top hover:bg-white/[0.03]">
+                  <td className="px-5 py-4 text-white/72">{formatNightDate(night.nightDate)}</td>
+                  <td className="px-5 py-4">
+                    <div className="font-semibold text-white">
+                      {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
+                    </div>
+                    <div className="mt-1 text-xs text-white/45">
+                      {night.venueName || "Venue TBC"} · {night.fixtureCount} fixture{night.fixtureCount === 1 ? "" : "s"}
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(night.status)}`}>
+                      {formatStatus(night.status)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-right text-white/72">{formatMoney(night.feePence)}</td>
+                  <td className="px-5 py-4 text-right text-white/72">{formatMoney(night.cashCollectedPence)}</td>
+                  <td className={`px-5 py-4 text-right font-semibold ${getLedgerBalanceClasses(night)}`}>
+                    <div>{formatMoney(getLedgerBalanceAmount(night))}</div>
+                    <div className="mt-1 text-xs font-normal text-white/45">{getLedgerBalanceLabel(night)}</div>
+                  </td>
+                  <td className="px-5 py-4 text-white/60">{getLedgerSettlementLabel(night)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default async function RefereePage() {
   const { user, authenticatedUser, isAdminPreview } = await requireReferee();
   const isAdminOverview = authenticatedUser.role === UserRole.ADMIN && !isAdminPreview;
@@ -207,13 +332,19 @@ export default async function RefereePage() {
     isAdminOverview ? undefined : { refereeId: user.id },
   );
 
+  const activeNights = nights.filter((night) => night.status !== "CANCELLED");
   const openNights = nights.filter(
     (night) => night.status !== "SETTLED" && night.status !== "CANCELLED",
   );
   const submittedNights = nights.filter((night) => night.status === "SUBMITTED");
   const settledNights = nights.filter((night) => night.status === "SETTLED");
-  const dueToSixfl = nights.reduce((sum, night) => sum + night.dueToSixflPence, 0);
-  const dueToReferee = nights.reduce((sum, night) => sum + night.dueToRefereePence, 0);
+  const outstandingDueToSixfl = activeNights
+    .filter((night) => night.status !== "SETTLED")
+    .reduce((sum, night) => sum + night.dueToSixflPence, 0);
+  const outstandingDueToReferee = activeNights
+    .filter((night) => night.status !== "SETTLED")
+    .reduce((sum, night) => sum + night.dueToRefereePence, 0);
+  const paidToReferee = settledNights.reduce((sum, night) => sum + night.dueToRefereePence, 0);
   const totalFixtures = nights.reduce((sum, night) => sum + night.fixtureCount, 0);
   const nextNight = [...openNights].sort(sortNightSoonestFirst)[0] ?? null;
   const refereeName = user.name || user.email || "this referee";
@@ -285,15 +416,16 @@ export default async function RefereePage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <StatCard label="Open nights" value={openNights.length} text="Ready for score entry or cashup." tone="emerald" />
               <StatCard label="Submitted" value={submittedNights.length} text="Waiting for SIXFL review." tone="amber" />
-              <StatCard label="Due SIXFL" value={formatMoney(dueToSixfl)} text="Cash to pass back after your fee." tone="sky" />
-              <StatCard label="Due to you" value={formatMoney(dueToReferee)} text="Outstanding referee balance." tone="neutral" />
+              <StatCard label="Due SIXFL" value={formatMoney(outstandingDueToSixfl)} text="Outstanding cash to pass back." tone="sky" />
+              <StatCard label="Due to you" value={formatMoney(outstandingDueToReferee)} text="Outstanding referee balance." tone="neutral" />
             </div>
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-4">
           <StatCard label="Fixtures covered" value={totalFixtures} text="Across all assigned referee nights." tone="neutral" />
           <StatCard label="Settled nights" value={settledNights.length} text="Completed and reconciled." tone="emerald" />
+          <StatCard label="Paid to date" value={formatMoney(paidToReferee)} text="Referee payments marked settled by SIXFL." tone="sky" />
           <Link
             href={nextNight ? `/referee/night/${nextNight.id}` : "#referee-nights"}
             className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15"
@@ -309,6 +441,8 @@ export default async function RefereePage() {
             </p>
           </Link>
         </section>
+
+        <RefereeLedger nights={nights} />
 
         <section id="referee-nights" className="rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
