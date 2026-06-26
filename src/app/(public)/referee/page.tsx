@@ -68,6 +68,74 @@ function StatCard({
   );
 }
 
+function CurrentViewBanner({
+  isAdminPreview,
+  isAdminOverview,
+  refereeName,
+  refereeId,
+}: {
+  isAdminPreview: boolean;
+  isAdminOverview: boolean;
+  refereeName: string;
+  refereeId: string;
+}) {
+  const label = isAdminPreview
+    ? "Referee Preview"
+    : isAdminOverview
+      ? "Full Admin Referee Overview"
+      : "Referee View";
+  const description = isAdminPreview
+    ? `You are seeing exactly what ${refereeName} sees on the referee dashboard.`
+    : isAdminOverview
+      ? "You are viewing the admin-wide referee dashboard. This is not a single referee's view."
+      : "You are using your referee dashboard.";
+
+  return (
+    <section className="rounded-3xl border border-emerald-400/20 bg-black/20 p-4 sm:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+            Current view
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm font-bold text-emerald-50">
+              {label}
+            </span>
+            {isAdminPreview ? (
+              <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
+                Admin preview mode
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65 sm:text-base">
+            {description}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {isAdminPreview || isAdminOverview ? (
+            <Link
+              href="/admin"
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+            >
+              Admin home
+            </Link>
+          ) : null}
+
+          {isAdminPreview ? (
+            <Link
+              href={`/admin/referees/${refereeId}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${refereeId}`)}`}
+              className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
+            >
+              Switch back to Full Admin View
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function NightCard({ night, isNext }: { night: RefereeNightSummary; isNext: boolean }) {
   const canOpen = night.status !== "SETTLED" && night.status !== "CANCELLED";
 
@@ -132,10 +200,11 @@ function NightCard({ night, isNext }: { night: RefereeNightSummary; isNext: bool
 }
 
 export default async function RefereePage() {
-  const { user } = await requireReferee();
+  const { user, authenticatedUser, isAdminPreview } = await requireReferee();
+  const isAdminOverview = authenticatedUser.role === UserRole.ADMIN && !isAdminPreview;
 
   const nights = await getRefereeNightSummaries(
-    user.role === UserRole.ADMIN ? undefined : { refereeId: user.id },
+    isAdminOverview ? undefined : { refereeId: user.id },
   );
 
   const openNights = nights.filter(
@@ -147,10 +216,18 @@ export default async function RefereePage() {
   const dueToReferee = nights.reduce((sum, night) => sum + night.dueToRefereePence, 0);
   const totalFixtures = nights.reduce((sum, night) => sum + night.fixtureCount, 0);
   const nextNight = [...openNights].sort(sortNightSoonestFirst)[0] ?? null;
+  const refereeName = user.name || user.email || "this referee";
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-8">
+        <CurrentViewBanner
+          isAdminPreview={isAdminPreview}
+          isAdminOverview={isAdminOverview}
+          refereeName={refereeName}
+          refereeId={user.id}
+        />
+
         <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
           <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
             <div>
