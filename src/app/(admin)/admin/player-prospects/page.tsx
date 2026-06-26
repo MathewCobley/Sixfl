@@ -158,14 +158,8 @@ function formatStatus(status: string) {
 }
 
 function responseClasses(value: string | null) {
-  if (value === "YES") {
-    return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-  }
-
-  if (value === "NO") {
-    return "border-red-400/25 bg-red-500/10 text-red-100";
-  }
-
+  if (value === "YES") return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+  if (value === "NO") return "border-red-400/25 bg-red-500/10 text-red-100";
   return "border-white/10 bg-white/[0.04] text-white/55";
 }
 
@@ -176,18 +170,9 @@ function responseLabel(value: string | null) {
 }
 
 function dispatchClasses(status: string | null) {
-  if (status === "SENT") {
-    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-  }
-
-  if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") {
-    return "border-red-400/20 bg-red-500/10 text-red-100";
-  }
-
-  if (status === "QUEUED" || status === "PROCESSING") {
-    return "border-amber-400/20 bg-amber-500/10 text-amber-100";
-  }
-
+  if (status === "SENT") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") return "border-red-400/20 bg-red-500/10 text-red-100";
+  if (status === "QUEUED" || status === "PROCESSING") return "border-amber-400/20 bg-amber-500/10 text-amber-100";
   return "border-white/10 bg-white/[0.04] text-white/55";
 }
 
@@ -198,7 +183,6 @@ function dispatchLabel(input: {
   empty: string;
 }) {
   if (!input.status && !input.at) return input.empty;
-
   const when = input.at ? formatDateTime(input.at) : "date unknown";
 
   switch (input.status) {
@@ -302,12 +286,7 @@ function mapProspectRow(row: RawProspectRow): ProspectWithTeam {
 }
 
 function getProspectInterestText(prospect: ProspectWithTeam) {
-  return [
-    prospect.source,
-    prospect.notes,
-    prospect.availabilitySummary,
-    prospect.preferredPositions,
-  ]
+  return [prospect.source, prospect.notes, prospect.availabilitySummary, prospect.preferredPositions]
     .map(normaliseSearchText)
     .filter(Boolean)
     .join(" ");
@@ -328,7 +307,6 @@ function prospectMatchesLeague(prospect: ProspectWithTeam, selectedLeague: Leagu
 
   if (leagueArea && interestText.includes(leagueArea)) return true;
   if (leagueName && interestText.includes(leagueName)) return true;
-
   if (hasExplicitInterestText) return false;
 
   return prospect.team?.league?.id === selectedLeague.id;
@@ -338,13 +316,8 @@ function getActiveProspectReason(input: {
   prospect: ProspectWithTeam;
   activeSquadMembershipKeys: Set<string>;
 }) {
-  if (input.prospect.status === "DECLINED" || input.prospect.status === "DUPLICATE") {
-    return null;
-  }
-
-  if (input.prospect.status === "ACTIVE_SQUAD") {
-    return "Prospect has been promoted to an active squad or is pending activation.";
-  }
+  if (input.prospect.status === "DECLINED" || input.prospect.status === "DUPLICATE") return null;
+  if (input.prospect.status === "ACTIVE_SQUAD") return "Prospect has been promoted to an active squad or is pending activation.";
 
   const activeSquadKey = buildActiveSquadKey({
     email: input.prospect.email,
@@ -401,16 +374,13 @@ function ProspectCard({
               {formatStatus(prospect.status)}
             </span>
             {isActivePlayer ? (
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
-                Active player
-              </span>
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Active player</span>
             ) : null}
             {isUnassigned && !isClosedProspect ? (
-              <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">
-                Unassigned
-              </span>
+              <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">Unassigned</span>
             ) : null}
           </div>
+
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/45">
             {prospect.email ? <span>{prospect.email}</span> : null}
             {prospect.phone ? <span>{prospect.phone}</span> : null}
@@ -421,31 +391,15 @@ function ProspectCard({
             <div className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${responseClasses(prospect.latestPlayerResponse)}`}>
               <div className="font-semibold">YES/NO reply</div>
               <div>{responseLabel(prospect.latestPlayerResponse)}</div>
-              {prospect.latestPlayerRespondedAt ? (
-                <div className="mt-1 opacity-80">{formatDateTime(prospect.latestPlayerRespondedAt)}</div>
-              ) : null}
+              {prospect.latestPlayerRespondedAt ? <div className="mt-1 opacity-80">{formatDateTime(prospect.latestPlayerRespondedAt)}</div> : null}
             </div>
             <div className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${dispatchClasses(prospect.latestYesNoEmailStatus)}`}>
               <div className="font-semibold">YES/NO email</div>
-              <div>
-                {dispatchLabel({
-                  label: "YES/NO email",
-                  status: prospect.latestYesNoEmailStatus,
-                  at: prospect.latestYesNoEmailAt,
-                  empty: "No YES/NO email sent yet",
-                })}
-              </div>
+              <div>{dispatchLabel({ label: "YES/NO email", status: prospect.latestYesNoEmailStatus, at: prospect.latestYesNoEmailAt, empty: "No YES/NO email sent yet" })}</div>
             </div>
             <div className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${dispatchClasses(prospect.latestSigninEmailStatus)}`}>
               <div className="font-semibold">Sign-in email</div>
-              <div>
-                {dispatchLabel({
-                  label: "Sign-in email",
-                  status: prospect.latestSigninEmailStatus,
-                  at: prospect.latestSigninEmailAt,
-                  empty: "No sign-in email sent yet",
-                })}
-              </div>
+              <div>{dispatchLabel({ label: "Sign-in email", status: prospect.latestSigninEmailStatus, at: prospect.latestSigninEmailAt, empty: "No sign-in email sent yet" })}</div>
             </div>
           </div>
 
@@ -455,14 +409,10 @@ function ProspectCard({
             </div>
           ) : null}
           {prospect.preferredPositions || prospect.availabilitySummary ? (
-            <p className="mt-3 text-sm leading-6 text-white/60">
-              {[prospect.preferredPositions, prospect.availabilitySummary].filter(Boolean).join(" · ")}
-            </p>
+            <p className="mt-3 text-sm leading-6 text-white/60">{[prospect.preferredPositions, prospect.availabilitySummary].filter(Boolean).join(" · ")}</p>
           ) : null}
           {prospect.notes ? (
-            <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/50">
-              {prospect.notes}
-            </p>
+            <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/50">{prospect.notes}</p>
           ) : null}
         </div>
 
@@ -489,12 +439,7 @@ function ProspectCard({
               <div className="mt-1 text-sm text-white/45">Not currently linked to any team.</div>
               <form action={assignPlayerProspectToTeamAction} className="mt-4 space-y-3">
                 <input type="hidden" name="prospectId" value={prospect.id} />
-                <FormListboxField
-                  name="teamId"
-                  options={teamOptions}
-                  placeholder="Choose team"
-                  disabled={teamOptions.length === 0}
-                />
+                <FormListboxField name="teamId" options={teamOptions} placeholder="Choose team" disabled={teamOptions.length === 0} />
                 <button
                   type="submit"
                   disabled={teamOptions.length === 0}
@@ -508,6 +453,13 @@ function ProspectCard({
         </div>
 
         <div className="flex flex-wrap gap-2 lg:justify-end">
+          <Link
+            href={`/admin/player-prospects/${prospect.id}/communications`}
+            className="inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+          >
+            Comms & history
+          </Link>
+
           {prospect.team ? (
             <>
               <Link
@@ -520,17 +472,13 @@ function ProspectCard({
                 href={`/admin/teams/${prospect.team.id}/prospects/${prospect.id}/communications`}
                 className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
               >
-                Comms
+                Team comms
               </Link>
             </>
           ) : isClosedProspect ? (
-            <span className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/45">
-              Closed record
-            </span>
+            <span className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/45">Closed record</span>
           ) : (
-            <span className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/45">
-              Assign before team tools
-            </span>
+            <span className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/45">Assign before team tools</span>
           )}
         </div>
       </div>
@@ -587,18 +535,14 @@ export default async function AdminPlayerProspectsPage({
       LEFT JOIN "Team" t ON t."id" = p."teamId"
       LEFT JOIN "League" l ON l."id" = t."leagueId"
       LEFT JOIN LATERAL (
-        SELECT
-          r."response",
-          r."respondedAt"
+        SELECT r."response", r."respondedAt"
         FROM "PlayerInterestResponse" r
         WHERE r."prospectId" = p."id"
         ORDER BY r."respondedAt" DESC
         LIMIT 1
       ) latestResponse ON TRUE
       LEFT JOIN LATERAL (
-        SELECT
-          d."status"::text AS "status",
-          COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "emailAt"
+        SELECT d."status"::text AS "status", COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "emailAt"
         FROM "NotificationDispatch" d
         WHERE d."sourceType" = 'TEAM_PLAYER_PROSPECT'
           AND d."sourceId" = p."id"
@@ -613,9 +557,7 @@ export default async function AdminPlayerProspectsPage({
         LIMIT 1
       ) latestYesNoEmail ON TRUE
       LEFT JOIN LATERAL (
-        SELECT
-          d."status"::text AS "status",
-          COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "emailAt"
+        SELECT d."status"::text AS "status", COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "emailAt"
         FROM "NotificationDispatch" d
         LEFT JOIN "NotificationTemplate" template ON template."id" = d."templateId"
         WHERE d."sourceType" = 'TEAM_PLAYER_PROSPECT'
@@ -676,14 +618,7 @@ export default async function AdminPlayerProspectsPage({
     })),
   ];
 
-  const prospectEmails = Array.from(
-    new Set(
-      prospects
-        .map((prospect) => normaliseEmail(prospect.email))
-        .filter(Boolean),
-    ),
-  );
-
+  const prospectEmails = Array.from(new Set(prospects.map((prospect) => normaliseEmail(prospect.email)).filter(Boolean)));
   const linkedSquadUsers = prospectEmails.length
     ? await prisma.user.findMany({
         where: {
@@ -703,31 +638,21 @@ export default async function AdminPlayerProspectsPage({
     : [];
 
   const activeSquadMembershipKeys = new Set<string>();
-
   for (const user of linkedSquadUsers) {
     const email = normaliseEmail(user.email);
-
-    if (!email) {
-      continue;
-    }
-
+    if (!email) continue;
     for (const membership of user.teamMembers) {
       activeSquadMembershipKeys.add(`${email}::${membership.teamId}`);
     }
   }
 
   const activeProspectReasonById = new Map<string, string>();
-
   for (const prospect of prospects) {
     const reason = getActiveProspectReason({ prospect, activeSquadMembershipKeys });
-
-    if (reason) {
-      activeProspectReasonById.set(prospect.id, reason);
-    }
+    if (reason) activeProspectReasonById.set(prospect.id, reason);
   }
 
   const isActivelyUsedProspect = (prospect: ProspectWithTeam) => activeProspectReasonById.has(prospect.id);
-
   const pipelineProspects = prospects.filter(
     (prospect) =>
       !isActivelyUsedProspect(prospect) &&
@@ -735,14 +660,9 @@ export default async function AdminPlayerProspectsPage({
       prospect.status !== "DUPLICATE",
   );
   const unassignedProspects = pipelineProspects.filter((prospect) => !prospect.teamId);
-  const trialProspects = pipelineProspects.filter((prospect) => prospect.status === "TRIAL");
   const activeSquadProspects = prospects.filter(isActivelyUsedProspect);
-  const declinedProspects = prospects.filter(
-    (prospect) => !isActivelyUsedProspect(prospect) && prospect.status === "DECLINED",
-  );
-  const duplicateProspects = prospects.filter(
-    (prospect) => !isActivelyUsedProspect(prospect) && prospect.status === "DUPLICATE",
-  );
+  const declinedProspects = prospects.filter((prospect) => !isActivelyUsedProspect(prospect) && prospect.status === "DECLINED");
+  const duplicateProspects = prospects.filter((prospect) => !isActivelyUsedProspect(prospect) && prospect.status === "DUPLICATE");
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
   const selectedLeagueLabel = selectedLeague ? getLeagueLabel(selectedLeague) : "All leagues";
@@ -752,46 +672,22 @@ export default async function AdminPlayerProspectsPage({
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              SIXFL pipeline
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Player prospects
-            </h1>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">SIXFL pipeline</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Player prospects</h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
               Admin-owned view of individual players who may join a team. Use the league picker to focus on Northallerton, Harrogate or another league area.
             </p>
 
             <form method="get" action="/admin/player-prospects" className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-                Filter prospects
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Filter prospects</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-                <FormListboxField
-                  name="leagueId"
-                  label="League"
-                  value={selectedLeagueId}
-                  options={leagueOptions}
-                  placeholder="All leagues"
-                />
-                <button
-                  type="submit"
-                  className="inline-flex h-12 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                >
-                  Apply
-                </button>
+                <FormListboxField name="leagueId" label="League" value={selectedLeagueId} options={leagueOptions} placeholder="All leagues" />
+                <button type="submit" className="inline-flex h-12 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Apply</button>
                 {selectedLeague ? (
-                  <Link
-                    href="/admin/player-prospects"
-                    className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
-                  >
-                    Clear
-                  </Link>
+                  <Link href="/admin/player-prospects" className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white">Clear</Link>
                 ) : null}
               </div>
-              <p className="mt-3 text-xs leading-5 text-white/45">
-                Showing: <span className="font-semibold text-white/70">{selectedLeagueLabel}</span>
-              </p>
+              <p className="mt-3 text-xs leading-5 text-white/45">Showing: <span className="font-semibold text-white/70">{selectedLeagueLabel}</span></p>
             </form>
           </div>
 
@@ -804,17 +700,8 @@ export default async function AdminPlayerProspectsPage({
         </div>
       </section>
 
-      {savedMessage ? (
-        <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-          {savedMessage}
-        </section>
-      ) : null}
-
-      {errorMessage ? (
-        <section className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
-          {errorMessage}
-        </section>
-      ) : null}
+      {savedMessage ? <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">{savedMessage}</section> : null}
+      {errorMessage ? <section className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</section> : null}
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -831,14 +718,9 @@ export default async function AdminPlayerProspectsPage({
 
         <div className="mt-5 space-y-3">
           {pipelineProspects.length === 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">
-              No open player prospects match this league filter yet.
-            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">No open player prospects match this league filter yet.</div>
           ) : null}
-
-          {pipelineProspects.map((prospect) => (
-            <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} />
-          ))}
+          {pipelineProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} />)}
         </div>
       </section>
 
@@ -856,13 +738,7 @@ export default async function AdminPlayerProspectsPage({
           </div>
           <div className="mt-5 space-y-3">
             {activeSquadProspects.map((prospect) => (
-              <ProspectCard
-                key={prospect.id}
-                prospect={prospect}
-                teamOptions={teamOptions}
-                activeReason={activeProspectReasonById.get(prospect.id) ?? "Active player."}
-                muted
-              />
+              <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} activeReason={activeProspectReasonById.get(prospect.id) ?? "Active player."} muted />
             ))}
           </div>
         </section>
@@ -874,16 +750,12 @@ export default async function AdminPlayerProspectsPage({
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-100/60">Duplicated</p>
               <h2 className="mt-2 text-xl font-semibold text-white">Duplicate records kept out of the pipeline</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-orange-100/65">
-                These records are preserved for traceability but should not be used for team assignment, messaging or squad activation.
-              </p>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-orange-100/65">These records are preserved for traceability but should not be used for team assignment, messaging or squad activation.</p>
             </div>
             <div className="text-sm text-orange-100/65">{duplicateProspects.length} duplicate record{duplicateProspects.length === 1 ? "" : "s"}</div>
           </div>
           <div className="mt-5 space-y-3">
-            {duplicateProspects.map((prospect) => (
-              <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} muted />
-            ))}
+            {duplicateProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} muted />)}
           </div>
         </section>
       ) : null}
@@ -898,9 +770,7 @@ export default async function AdminPlayerProspectsPage({
             <div className="text-sm text-red-100/65">{declinedProspects.length} hidden from open list</div>
           </div>
           <div className="mt-5 space-y-3">
-            {declinedProspects.map((prospect) => (
-              <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} muted />
-            ))}
+            {declinedProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} muted />)}
           </div>
         </section>
       ) : null}
