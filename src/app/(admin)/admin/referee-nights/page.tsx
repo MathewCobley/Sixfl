@@ -82,7 +82,7 @@ export default async function AdminRefereeNightsPage() {
               Night-led referee control
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-              Assign a referee to a night, attach the fixtures for that night, set the night fee and review the end-of-night cashup.
+              Create a referee night, then open it to tick exactly which matches that referee is covering. Fixtures are no longer moved automatically between referees.
             </p>
           </div>
 
@@ -113,7 +113,7 @@ export default async function AdminRefereeNightsPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">Create night</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Set up a referee night</h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
-              Choose the league, date and venue. Matching fixtures will be attached automatically. Leave the fee blank to use the referee's saved standard night fee.
+              Choose the referee, league, date and venue, then open the created night to assign the exact matches. Leave the fee blank to use the referee's saved standard night fee.
             </p>
           </div>
 
