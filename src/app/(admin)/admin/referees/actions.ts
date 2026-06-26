@@ -26,30 +26,6 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-async function createConvertedRefereeLead(input: {
-  name: string;
-  email: string;
-  phone: string | null;
-  area: string | null;
-}) {
-  return prisma.interestLead.create({
-    data: {
-      interestType: "REFEREE",
-      status: LeadStatus.CLOSED,
-      contactName: input.name,
-      email: input.email,
-      phone: input.phone,
-      area: input.area,
-      source: "Admin added referee",
-      message: "Manually added from the referee admin page.",
-      contactedAt: new Date(),
-      convertedAt: new Date(),
-      closedAt: new Date(),
-    },
-    select: { id: true },
-  });
-}
-
 export async function createRefereeAction(formData: FormData) {
   await requireAdmin();
 
@@ -66,6 +42,15 @@ export async function createRefereeAction(formData: FormData) {
     redirect(getRefereesPath("error=invalid_referee_email"));
   }
 
+  const existingAdmin = await prisma.user.findFirst({
+    where: { email, role: UserRole.ADMIN },
+    select: { id: true },
+  });
+
+  if (existingAdmin) {
+    redirect(getRefereesPath("error=admin_user_already_assignable"));
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const existingUser = await tx.user.findUnique({
       where: { email },
@@ -76,10 +61,6 @@ export async function createRefereeAction(formData: FormData) {
         createdFromLeadId: true,
       },
     });
-
-    if (existingUser?.role === UserRole.ADMIN) {
-      throw new Error("That email belongs to an admin user. Admin users can already be assigned to referee nights.");
-    }
 
     let leadId = existingUser?.createdFromLeadId ?? null;
 
