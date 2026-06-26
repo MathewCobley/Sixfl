@@ -128,6 +128,33 @@ export default async function ImprovedFixtureGeneratorPage() {
             </div>
           </div>
 
+          <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">Payment charges</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Create team match fee charges</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
+              When enabled, each generated fixture creates one payment charge for the home team and one for the away team. The due date is set to the fixture kick-off time.
+            </p>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="flex min-h-[96px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-black/25 p-4">
+                <input type="checkbox" name="createMatchFeeCharges" defaultChecked className="mt-1" />
+                <span>
+                  <span className="block text-sm font-semibold text-white">Add payment charges automatically</span>
+                  <span className="mt-1 block text-sm leading-6 text-white/55">Creates charges immediately, but does not send payment emails.</span>
+                </span>
+              </label>
+
+              <div>
+                <label className={labelClass}>Team fee</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-white/45">£</span>
+                  <input type="number" name="matchFeePounds" min="0.01" step="0.01" defaultValue="40.00" className={`${inputClass} pl-8`} />
+                </div>
+                <p className="mt-2 text-xs leading-5 text-white/45">Default is £40 per team per fixture.</p>
+              </div>
+            </div>
+          </div>
+
           <div className="rounded-3xl border border-white/10 bg-black/25 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">Pitch referees</p>
             <h2 className="mt-2 text-xl font-semibold text-white">Assign one referee per pitch</h2>
@@ -172,7 +199,7 @@ export default async function ImprovedFixtureGeneratorPage() {
             <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">
               Generate draft fixtures
             </button>
-            <p className="text-sm leading-6 text-white/45">Publishing and payment emails are handled separately.</p>
+            <p className="text-sm leading-6 text-white/45">Generated charges appear in Admin → Payments. Payment emails are still sent separately.</p>
           </div>
         </form>
       </AdminCard>
