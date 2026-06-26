@@ -4,8 +4,8 @@
 
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { queueFixtureConfirmationSmsReminder } from "@/lib/fixtures/confirmation-reminders";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
 
   const fixtures = await prisma.fixture.findMany({
     where: {
+      publishedAt: { not: null },
       status: "SCHEDULED",
       kickoffAt: {
         gte: minStart,
