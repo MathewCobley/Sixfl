@@ -7,10 +7,7 @@ import { UserRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import {
-  formatMoney,
-  getRefereeProfilesByUserIds,
-} from "@/lib/referees/profile";
+import { formatMoney, getRefereeProfilesByUserIds } from "@/lib/referees/profile";
 import { createRefereeAction } from "./actions";
 
 type SearchParams = Promise<{
@@ -59,23 +56,20 @@ function getErrorMessage(error?: string) {
   }
 }
 
-export default async function AdminRefereesPage({
-  searchParams,
-}: {
-  searchParams?: SearchParams;
-}) {
+export default async function AdminRefereesPage({ searchParams }: { searchParams?: SearchParams }) {
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
   const query = String(sp.q ?? "").trim();
   const errorMessage = getErrorMessage(sp.error);
-  const successMessage = sp.invite === "queued"
-    ? "Referee invite email queued through the SIXFL notification system."
-    : sp.referee
-      ? sp.referee === "updated"
-        ? "Referee updated and added to the live referee list."
-        : "Referee added to the live referee list."
-      : null;
+  const successMessage =
+    sp.invite === "queued"
+      ? "Referee invite email queued through the SIXFL notification system."
+      : sp.referee
+        ? sp.referee === "updated"
+          ? "Referee updated and added to the live referee list."
+          : "Referee added to the live referee list."
+        : null;
 
   const referees = await prisma.user.findMany({
     where: {
@@ -97,6 +91,9 @@ export default async function AdminRefereesPage({
       image: true,
       createdFromLeadId: true,
       refereedFixtures: {
+        where: {
+          publishedAt: { not: null },
+        },
         select: {
           id: true,
           status: true,
@@ -138,7 +135,6 @@ export default async function AdminRefereesPage({
   const totalReferees = referees.length;
   const activeReferees = referees.filter((referee) => profileMap.get(referee.id)?.isActive !== false).length;
   const withFeeCount = referees.filter((referee) => (profileMap.get(referee.id)?.standardNightFeePence ?? 0) > 0).length;
-  const totalAssignments = referees.reduce((sum, referee) => sum + referee.refereedFixtures.length, 0);
   const activeAssignments = referees.reduce(
     (sum, referee) => sum + referee.refereedFixtures.filter((fixture) => fixture.status === "SCHEDULED").length,
     0,
@@ -148,7 +144,7 @@ export default async function AdminRefereesPage({
     { label: "Total referees", value: totalReferees, helper: "Live referee users" },
     { label: "Active", value: activeReferees, helper: "Marked active for admin" },
     { label: "Fee saved", value: withFeeCount, helper: "With a standard night fee" },
-    { label: "Scheduled now", value: activeAssignments, helper: "Upcoming scheduled appointments" },
+    { label: "Published scheduled", value: activeAssignments, helper: "Published upcoming appointments" },
   ];
 
   return (
@@ -162,7 +158,7 @@ export default async function AdminRefereesPage({
             Manage referee users
           </h1>
           <p className="max-w-3xl text-sm leading-7 text-white/60 sm:text-base">
-            Edit referee contact details, record their standard night fee and manage referee communications from the central comms area.
+            Edit referee contact details, record their standard night fee and manage referee communications from the central comms area. Fixture counts on this page only include published fixtures.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -181,52 +177,19 @@ export default async function AdminRefereesPage({
         </div>
       </div>
 
-      {successMessage ? (
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-          {successMessage}
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          {errorMessage}
-        </div>
-      ) : null}
+      {successMessage ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{successMessage}</div> : null}
+      {errorMessage ? <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">{errorMessage}</div> : null}
 
       <details className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-400/10 shadow-[0_20px_70px_rgba(0,0,0,0.3)]">
         <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/10 sm:px-6">
           + Add referee
         </summary>
         <form action={createRefereeAction} className="grid gap-4 border-t border-emerald-400/15 bg-black/20 px-5 py-5 sm:grid-cols-2 sm:px-6 xl:grid-cols-[1fr_1fr_0.75fr_0.7fr_0.65fr_auto]">
-          <input
-            name="name"
-            required
-            placeholder="Referee name"
-            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
-          />
-          <input
-            name="email"
-            type="email"
-            required
-            placeholder="Email address"
-            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
-          />
-          <input
-            name="phone"
-            placeholder="Mobile for SMS"
-            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
-          />
-          <input
-            name="area"
-            placeholder="Area"
-            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
-          />
-          <input
-            name="standardNightFee"
-            inputMode="decimal"
-            placeholder="Fee e.g. 45"
-            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
-          />
+          <input name="name" required placeholder="Referee name" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
+          <input name="email" type="email" required placeholder="Email address" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
+          <input name="phone" placeholder="Mobile for SMS" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
+          <input name="area" placeholder="Original/source area" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
+          <input name="standardNightFee" inputMode="decimal" placeholder="Fee e.g. 45" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
           <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300">
             Add referee
           </button>
@@ -263,7 +226,8 @@ export default async function AdminRefereesPage({
           referees.map((referee) => {
             const profile = profileMap.get(referee.id) ?? null;
             const sourceLead = referee.createdFromLeadId ? leadMap.get(referee.createdFromLeadId) ?? null : null;
-            const nextFixture = referee.refereedFixtures.find((fixture) => fixture.status === "SCHEDULED") ?? referee.refereedFixtures[0] ?? null;
+            const publishedFixtures = referee.refereedFixtures;
+            const nextFixture = publishedFixtures.find((fixture) => fixture.status === "SCHEDULED") ?? publishedFixtures[0] ?? null;
             const contactEmail = referee.email || sourceLead?.email || null;
             const contactPhone = profile?.phone || sourceLead?.phone || null;
             const isActive = profile?.isActive !== false;
@@ -296,15 +260,15 @@ export default async function AdminRefereesPage({
                       </div>
                     </div>
                     <div className="mt-5 grid gap-3 md:grid-cols-4">
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Total fixtures</div><div className="mt-2 text-2xl font-black text-white">{referee.refereedFixtures.length}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Published fixtures</div><div className="mt-2 text-2xl font-black text-white">{publishedFixtures.length}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Standard night fee</div><div className="mt-2 text-sm font-semibold text-white">{formatMoney(profile?.standardNightFeePence)}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Source area</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead?.area || "—"}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">SMS phone</div><div className="mt-2 text-sm font-semibold text-white">{contactPhone || "—"}</div></div>
                     </div>
                   </div>
                   <div className="border-t border-white/10 bg-white/[0.02] p-5 xl:border-l xl:border-t-0">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Next assignment</div>
-                    <div className="mt-1 text-sm text-white/60">Earliest linked fixture for this referee.</div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Next published assignment</div>
+                    <div className="mt-1 text-sm text-white/60">Earliest published linked fixture for this referee.</div>
                     {nextFixture ? (
                       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
                         <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{nextFixture.status}</span>{nextFixture.league ? <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{nextFixture.league.name}{nextFixture.league.season ? ` • ${nextFixture.league.season}` : ""}</span> : null}</div>
@@ -313,7 +277,7 @@ export default async function AdminRefereesPage({
                         <div className="mt-4"><Link href="/admin/fixtures" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Manage fixtures</Link></div>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-4"><div className="text-sm font-semibold text-white">No fixtures assigned yet</div><p className="mt-2 text-sm leading-6 text-white/60">This referee is live in the system but has not yet been attached to any fixture.</p></div>
+                      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-4"><div className="text-sm font-semibold text-white">No published fixtures assigned yet</div><p className="mt-2 text-sm leading-6 text-white/60">This referee may have draft assignments, but they are not shown here until fixtures are published.</p></div>
                     )}
                   </div>
                 </div>
