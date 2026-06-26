@@ -38,7 +38,7 @@ type SyncFixtureMatchFeeChargesInput = {
 
 type PaymentChargeDbClient = Pick<
   typeof prisma,
-  "paymentCharge" | "notificationDispatch"
+  "fixture" | "paymentCharge" | "notificationDispatch"
 >;
 
 type PaymentChargeNotificationDbClient = Pick<
@@ -114,6 +114,21 @@ function getFixtureMatchFeeReminderSchedules(kickoffAt: Date) {
     .filter((entry) => entry.scheduledFor.getTime() > Date.now());
 }
 
+function getSkippedMessageCount(input: QueueFixtureMatchFeeEmailsInput) {
+  const initialMessagesPerCharge = input.mode === "reminders_only" ? 0 : 2;
+  const reminderMessagesPerCharge = getFixtureMatchFeeReminderSchedules(input.kickoffAt).length * 2;
+  return input.charges.length * (initialMessagesPerCharge + reminderMessagesPerCharge);
+}
+
+async function isFixturePublishedForPaymentMessages(fixtureId: string) {
+  const fixture = await prisma.fixture.findUnique({
+    where: { id: fixtureId },
+    select: { publishedAt: true },
+  });
+
+  return Boolean(fixture?.publishedAt);
+}
+
 export function buildChargePaymentPath(paymentToken: string) {
   return `/pay/charge/${paymentToken}`;
 }
@@ -175,25 +190,61 @@ export async function syncFixtureMatchFeeCharges(
 ) {
   const db = input.db ?? prisma;
 
-  const existingCharges = await db.paymentCharge.findMany({
-    where: {
-      fixtureId: input.fixtureId,
-    },
-    include: {
-      transactions: {
-        select: {
-          amountPence: true,
+  const [fixture, existingCharges] = await Promise.all([
+    db.fixture.findUnique({
+      where: { id: input.fixtureId },
+      select: { publishedAt: true },
+    }),
+    db.paymentCharge.findMany({
+      where: {
+        fixtureId: input.fixtureId,
+      },
+      include: {
+        transactions: {
+          select: {
+            amountPence: true,
+          },
+        },
+        team: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
       },
-      team: {
-        select: {
-          id: true,
-          name: true,
+      orderBy: [{ createdAt: "asc" }],
+    }),
+  ]);
+
+  if (!fixture?.publishedAt) {
+    const voidedChargeIds: string[] = [];
+
+    for (const charge of existingCharges) {
+      const paidTotalPence = getChargePaidTotal(charge.transactions);
+
+      if (paidTotalPence > 0 || charge.status === PaymentChargeStatus.VOID) {
+        continue;
+      }
+
+      await db.paymentCharge.update({
+        where: { id: charge.id },
+        data: {
+          status: PaymentChargeStatus.VOID,
         },
-      },
-    },
-    orderBy: [{ createdAt: "asc" }],
-  });
+      });
+
+      voidedChargeIds.push(charge.id);
+    }
+
+    await cancelQueuedMatchFeeNotificationDispatches(voidedChargeIds, db, {
+      reason:
+        "Blocked because the fixture is not published. SIXFL does not create or send payment requests for unpublished fixtures.",
+    });
+
+    return {
+      activeCharges: [],
+    };
+  }
 
   const desiredTeams = [
     ...(input.homeMatchFeePence && input.homeMatchFeePence > 0
@@ -379,6 +430,28 @@ export async function queueFixtureMatchFeeEmails(
   input: QueueFixtureMatchFeeEmailsInput,
 ) {
   const canQueueEmail = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
+  const fixtureIsPublished = await isFixturePublishedForPaymentMessages(input.fixtureId);
+
+  if (!fixtureIsPublished) {
+    await cancelQueuedMatchFeeNotificationDispatches(
+      input.charges.map((charge) => charge.id),
+      prisma,
+      {
+        reason:
+          "Blocked because the fixture is not published. SIXFL does not send payment messages for unpublished fixtures.",
+      },
+    );
+
+    return {
+      queued: 0,
+      skipped: getSkippedMessageCount(input),
+      requestQueued: 0,
+      requestSkipped: input.mode === "reminders_only" ? 0 : input.charges.length * 2,
+      reminderQueued: 0,
+      reminderSkipped:
+        input.charges.length * getFixtureMatchFeeReminderSchedules(input.kickoffAt).length * 2,
+    };
+  }
 
   const leagueDisplayName = getLeagueDisplayName({
     leagueName: input.leagueName,
