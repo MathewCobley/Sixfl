@@ -13,6 +13,7 @@ import {
   getLondonMinutesSinceMidnight,
   parseLondonDateTime,
 } from "@/lib/datetime/london";
+import { syncFixtureMatchFeeCharges } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -24,6 +25,7 @@ type Pair = {
 type TeamSchedulingRule = {
   id: string;
   name: string;
+  logoUrl: string | null;
   latestKickoffTime: string | null;
 };
 
@@ -57,6 +59,17 @@ function parseRequiredPositiveInt(
   }
 
   return parsed;
+}
+
+function parseMoneyPence(value: FormDataEntryValue | null, fieldName: string) {
+  const raw = String(value ?? "").trim();
+  const parsed = Number(raw);
+
+  if (!raw || !Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${fieldName} must be more than £0.`);
+  }
+
+  return Math.round(parsed * 100);
 }
 
 function parseFixtureStatus(value: FormDataEntryValue | null) {
@@ -252,6 +265,10 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   const startRound = parseRequiredPositiveInt(formData.get("startRound"), "Start week", 1);
   const doubleRoundRobin = String(formData.get("doubleRoundRobin") || "") === "on";
   const clearExisting = String(formData.get("clearExisting") || "") === "on";
+  const createMatchFeeCharges = String(formData.get("createMatchFeeCharges") || "") === "on";
+  const matchFeePence = createMatchFeeCharges
+    ? parseMoneyPence(formData.get("matchFeePounds"), "Team match fee")
+    : null;
   const venueId = String(formData.get("venueId") ?? "").trim() || null;
   const status = parseFixtureStatus(formData.get("status"));
   const refereeIdsByPitch = getRefereeIdsByPitch(formData, pitches);
@@ -269,7 +286,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   const [league, teams, venue, selectedReferees] = await Promise.all([
     prisma.league.findUnique({
       where: { id: leagueId },
-      select: { id: true, slug: true },
+      select: { id: true, name: true, season: true, slug: true },
     }),
     prisma.team.findMany({
       where: { leagueId },
@@ -277,6 +294,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
       select: {
         id: true,
         name: true,
+        logoUrl: true,
         latestKickoffTime: true,
       },
     }),
@@ -337,6 +355,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     position: number;
     pitch: string;
     status: FixtureStatus;
+    matchFeePence: number | null;
   }[] = [];
 
   let nightOffset = 0;
@@ -386,6 +405,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
           position: chunkStart + nightlyIndex + 1,
           pitch: `Pitch ${pitchNumber}`,
           status,
+          matchFeePence,
         });
       });
 
@@ -394,7 +414,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   });
 
   if (fixturesToCreate.length === 0) {
-    throw new Error("No fixtures could be generated for this league.");
+    throw new Error("No fixtures could be generated.");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -402,11 +422,38 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
       await tx.fixture.deleteMany({ where: { leagueId } });
     }
 
-    await tx.fixture.createMany({ data: fixturesToCreate });
+    for (const fixtureData of fixturesToCreate) {
+      const createdFixture = await tx.fixture.create({ data: fixtureData });
+
+      if (!createMatchFeeCharges || !matchFeePence) {
+        continue;
+      }
+
+      const homeTeam = teamMap.get(fixtureData.homeTeamId);
+      const awayTeam = teamMap.get(fixtureData.awayTeamId);
+
+      if (!homeTeam || !awayTeam) {
+        throw new Error("Fixture payment charge creation failed because a team was missing.");
+      }
+
+      await syncFixtureMatchFeeCharges({
+        db: tx,
+        fixtureId: createdFixture.id,
+        leagueId,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt: fixtureData.kickoffAt,
+        homeTeam,
+        awayTeam,
+        homeMatchFeePence: matchFeePence,
+        awayMatchFeePence: matchFeePence,
+      });
+    }
   });
 
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/generate");
+  revalidatePath("/admin/payments");
   revalidatePath(`/admin/leagues/${leagueId}`);
   revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
 
