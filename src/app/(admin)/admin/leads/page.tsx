@@ -16,7 +16,6 @@ import BulkLeadEmailForm from "@/components/admin/leads/BulkLeadEmailForm";
 import BulkLeadSmsForm from "@/components/admin/leads/BulkLeadSmsForm";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { updateLeadStatus } from "./actions";
 import {
   sendBulkLeadEmailAction,
   sendBulkLeadSmsAction,
@@ -86,13 +85,10 @@ function formatPreferredNights(values: Array<{ night: PreferredNight }>) {
 
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   }).format(value);
-}
-
-function formatYesNo(value: boolean) {
-  return value ? "Yes" : "No";
 }
 
 function statusClasses(status: LeadStatus) {
@@ -161,46 +157,11 @@ function SummaryCard({ title, value, subtext }: { title: string; value: string; 
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Badge({ children, className }: { children: React.ReactNode; className: string }) {
   return (
-    <div className="min-h-[80px] rounded-xl border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">{label}</div>
-      <div className="mt-1 break-words text-sm leading-relaxed text-white/85">{value || "—"}</div>
-    </div>
-  );
-}
-
-function StatusButton({
-  id,
-  nextStatus,
-  currentStatus,
-  returnTo,
-}: {
-  id: string;
-  nextStatus: LeadStatus;
-  currentStatus: LeadStatus;
-  returnTo: string;
-}) {
-  const isActive = currentStatus === nextStatus;
-
-  return (
-    <form action={updateLeadStatus}>
-      <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="status" value={nextStatus} />
-      <input type="hidden" name="returnTo" value={returnTo} />
-      <button
-        type="submit"
-        disabled={isActive}
-        className={[
-          "inline-flex h-9 items-center justify-center rounded-xl border px-3 text-xs font-bold tracking-[0.12em] transition",
-          isActive
-            ? "cursor-not-allowed border-white/5 bg-white/[0.03] text-white/30"
-            : "border-white/10 bg-white/[0.04] text-white/70 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300",
-        ].join(" ")}
-      >
-        {formatLeadStatus(nextStatus)}
-      </button>
-    </form>
+    <span className={["inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em]", className].join(" ")}>
+      {children}
+    </span>
   );
 }
 
@@ -331,13 +292,6 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
   }));
   const managedTeamOptions = managedTeams.map((team) => ({ value: team.id, label: team.name }));
 
-  const currentHref = buildHref({
-    type: selectedType,
-    status: selectedStatus,
-    area: selectedArea,
-    night: selectedNight,
-  });
-
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -380,51 +334,74 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
       </AdminCard>
 
       <AdminCard className="overflow-hidden p-0">
-        <div className="border-b border-white/10 px-6 py-5">
-          <div className="text-sm text-white/55">Showing <span className="font-semibold text-white">{leads.length}</span> lead{leads.length === 1 ? "" : "s"}</div>
+        <div className="flex flex-col gap-1 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/40">Lead list</p>
+            <div className="mt-1 text-sm text-white/55">Showing <span className="font-semibold text-white">{leads.length}</span> lead{leads.length === 1 ? "" : "s"}</div>
+          </div>
+          <p className="text-xs text-white/35">Compact view for fast scanning</p>
         </div>
 
-        <div className="divide-y divide-white/10">
-          {leads.length === 0 ? (
-            <div className="px-6 py-10 text-center text-white/55">No leads match the current filters.</div>
-          ) : (
-            leads.map((lead) => (
-              <div key={lead.id} className="space-y-5 px-6 py-6">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className={["rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em]", typeClasses(lead.interestType)].join(" ")}>{formatInterestType(lead.interestType)}</span>
-                      <span className={["rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em]", statusClasses(lead.status)].join(" ")}>{formatLeadStatus(lead.status)}</span>
-                      {lead.wantsFreeKit ? <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-amber-300">Free kit</span> : null}
-                    </div>
-                    <h2 className="mt-3 text-2xl font-black text-white">{lead.teamName || lead.contactName || "Unnamed lead"}</h2>
-                    <p className="mt-1 text-sm text-white/45">Created {formatDate(lead.createdAt)}</p>
-                  </div>
+        {leads.length === 0 ? (
+          <div className="px-6 py-10 text-center text-white/55">No leads match the current filters.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+              <thead className="border-b border-white/10 bg-black/25 text-[11px] uppercase tracking-[0.16em] text-white/35">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Lead</th>
+                  <th className="px-4 py-3 font-semibold">Type</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Contact</th>
+                  <th className="px-4 py-3 font-semibold">Area</th>
+                  <th className="px-4 py-3 font-semibold">League</th>
+                  <th className="px-4 py-3 font-semibold">Nights</th>
+                  <th className="px-4 py-3 font-semibold">Created</th>
+                  <th className="px-4 py-3 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {leads.map((lead) => {
+                  const leadTitle = lead.teamName || lead.contactName || "Unnamed lead";
+                  const contactLine = [lead.email, lead.phone].filter(Boolean).join(" · ");
 
-                  <div className="flex flex-wrap gap-2">
-                    {Object.values(LeadStatus).map((status) => <StatusButton key={status} id={lead.id} currentStatus={lead.status} nextStatus={status} returnTo={currentHref} />)}
-                    <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">Open</Link>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-                  <Detail label="Contact" value={lead.contactName || "—"} />
-                  <Detail label="Email" value={lead.email || "—"} />
-                  <Detail label="Phone" value={lead.phone || "—"} />
-                  <Detail label="Area" value={lead.area || "—"} />
-                  <Detail label="League" value={formatLeagueType(lead.leagueType)} />
-                  <Detail label="Nights" value={formatPreferredNights(lead.preferredNights)} />
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Detail label="Free kit" value={formatYesNo(lead.wantsFreeKit)} />
-                  <Detail label="Marketing consent" value={formatYesNo(lead.marketingConsent)} />
-                  <Detail label="Message" value={lead.message || "—"} />
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                  return (
+                    <tr key={lead.id} className="align-top transition hover:bg-white/[0.035]">
+                      <td className="max-w-[230px] px-4 py-3">
+                        <div className="font-semibold text-white">{leadTitle}</div>
+                        {lead.contactName && lead.contactName !== leadTitle ? (
+                          <div className="mt-1 truncate text-xs text-white/45">{lead.contactName}</div>
+                        ) : null}
+                        {lead.wantsFreeKit ? (
+                          <div className="mt-1 text-xs font-semibold text-amber-200">Free kit</div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge className={typeClasses(lead.interestType)}>{formatInterestType(lead.interestType)}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge className={statusClasses(lead.status)}>{formatLeadStatus(lead.status)}</Badge>
+                      </td>
+                      <td className="max-w-[260px] px-4 py-3">
+                        <div className="truncate text-white/80">{contactLine || "—"}</div>
+                        {lead.message ? <div className="mt-1 truncate text-xs text-white/35">{lead.message}</div> : null}
+                      </td>
+                      <td className="px-4 py-3 text-white/70">{lead.area || "—"}</td>
+                      <td className="px-4 py-3 text-white/70">{formatLeagueType(lead.leagueType)}</td>
+                      <td className="px-4 py-3 text-white/70">{formatPreferredNights(lead.preferredNights)}</td>
+                      <td className="px-4 py-3 text-white/55">{formatDate(lead.createdAt)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
+                          Open
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </AdminCard>
 
       <AdminCard className="overflow-hidden p-0">
