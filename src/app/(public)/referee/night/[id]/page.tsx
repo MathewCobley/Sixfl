@@ -5,7 +5,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
-import RefereeCashMethodSelect from "@/components/referee/RefereeCashMethodSelect";
 import { requireReferee } from "@/lib/admin";
 import {
   formatKickoffTime,
@@ -60,17 +59,20 @@ function CashForm({
       <input type="hidden" name="refereeNightId" value={refereeNightId} />
       <input type="hidden" name="fixtureId" value={fixtureId} />
       <input type="hidden" name="teamId" value={teamId} />
+      <input type="hidden" name="method" value="CASH" />
       <div className="text-sm font-semibold text-white">{teamName}</div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_140px]">
+      <div className="mt-3">
+        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+          Cash collected
+        </label>
         <input
           name="amountPounds"
           type="number"
           min="0"
           step="0.01"
           placeholder="Collected £"
-          className="h-11 rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none placeholder:text-white/35"
+          className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none placeholder:text-white/35"
         />
-        <RefereeCashMethodSelect name="method" defaultValue="CASH" />
       </div>
       <input
         name="notes"
@@ -78,7 +80,7 @@ function CashForm({
         className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none placeholder:text-white/35"
       />
       <button type="submit" className="mt-3 inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/15">
-        Record collected
+        Record cash collected
       </button>
     </form>
   );
