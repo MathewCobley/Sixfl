@@ -4,8 +4,13 @@
 
 import Link from "next/link";
 import { UserRole } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import {
+  formatMoney,
+  getRefereeProfilesByUserIds,
+} from "@/lib/referees/profile";
 import { createRefereeAction } from "./actions";
 
 type SearchParams = Promise<{
@@ -65,8 +70,14 @@ function getErrorMessage(error?: string) {
       return "Please enter at least a name and email address for the referee.";
     case "invalid_referee_email":
       return "Please enter a valid referee email address.";
+    case "invalid_referee_phone":
+      return "Please enter a valid UK mobile number for SMS, for example 07700 900123.";
+    case "invalid_referee_fee":
+      return "Please enter the referee fee as a pounds amount, for example 45 or 45.00.";
     case "admin_user_already_assignable":
       return "That email belongs to an admin user. Admin users can already be assigned to referee nights.";
+    case "missing_referee":
+      return "That referee could not be found.";
     default:
       return null;
   }
@@ -121,28 +132,34 @@ export default async function AdminRefereesPage({
     },
   });
 
-  const convertedLeadIds = referees
-    .map((referee) => referee.createdFromLeadId)
-    .filter((value): value is string => Boolean(value));
+  const [profileMap, leads] = await Promise.all([
+    getRefereeProfilesByUserIds(referees.map((referee) => referee.id)),
+    (() => {
+      const convertedLeadIds = referees
+        .map((referee) => referee.createdFromLeadId)
+        .filter((value): value is string => Boolean(value));
 
-  const leads = convertedLeadIds.length
-    ? await prisma.interestLead.findMany({
-        where: { id: { in: convertedLeadIds } },
-        select: {
-          id: true,
-          contactName: true,
-          email: true,
-          phone: true,
-          area: true,
-          createdAt: true,
-          convertedAt: true,
-        },
-      })
-    : [];
+      return convertedLeadIds.length
+        ? prisma.interestLead.findMany({
+            where: { id: { in: convertedLeadIds } },
+            select: {
+              id: true,
+              contactName: true,
+              email: true,
+              phone: true,
+              area: true,
+              createdAt: true,
+              convertedAt: true,
+            },
+          })
+        : [];
+    })(),
+  ]);
 
   const leadMap = new Map(leads.map((lead) => [lead.id, lead]));
   const totalReferees = referees.length;
-  const withLeadCount = referees.filter((referee) => Boolean(referee.createdFromLeadId)).length;
+  const activeReferees = referees.filter((referee) => profileMap.get(referee.id)?.isActive !== false).length;
+  const withFeeCount = referees.filter((referee) => (profileMap.get(referee.id)?.standardNightFeePence ?? 0) > 0).length;
   const totalAssignments = referees.reduce((sum, referee) => sum + referee.refereedFixtures.length, 0);
   const activeAssignments = referees.reduce(
     (sum, referee) => sum + referee.refereedFixtures.filter((fixture) => fixture.status === "SCHEDULED").length,
@@ -150,9 +167,9 @@ export default async function AdminRefereesPage({
   );
 
   const statCards = [
-    { label: "Total referees", value: totalReferees, helper: "Live assignable referee users" },
-    { label: "From leads", value: withLeadCount, helper: "Converted from referee interest" },
-    { label: "Total assignments", value: totalAssignments, helper: "Fixtures linked to referees" },
+    { label: "Total referees", value: totalReferees, helper: "Live referee users" },
+    { label: "Active", value: activeReferees, helper: "Marked active for admin" },
+    { label: "Fee saved", value: withFeeCount, helper: "With a standard night fee" },
     { label: "Scheduled now", value: activeAssignments, helper: "Upcoming scheduled appointments" },
   ];
 
@@ -167,7 +184,7 @@ export default async function AdminRefereesPage({
             Manage referee users
           </h1>
           <p className="max-w-3xl text-sm leading-7 text-white/60 sm:text-base">
-            This is the live referee user directory used by fixtures. Email converted referee leads through the existing lead email flow so templates, previews, signatures and history stay in one place.
+            Edit referee contact details, record their standard night fee and send SMS messages through the SIXFL notification system.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -176,6 +193,9 @@ export default async function AdminRefereesPage({
           </Link>
           <Link href="/admin/referee-nights" className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15">
             Referee nights
+          </Link>
+          <Link href="/admin/messaging" className="inline-flex h-11 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-400/15">
+            SMS inbox
           </Link>
           <Link href="/admin/fixtures" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">
             Open fixtures
@@ -199,7 +219,7 @@ export default async function AdminRefereesPage({
         <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/10 sm:px-6">
           + Add referee
         </summary>
-        <form action={createRefereeAction} className="grid gap-4 border-t border-emerald-400/15 bg-black/20 px-5 py-5 sm:grid-cols-2 sm:px-6 xl:grid-cols-[1fr_1fr_0.8fr_0.8fr_auto]">
+        <form action={createRefereeAction} className="grid gap-4 border-t border-emerald-400/15 bg-black/20 px-5 py-5 sm:grid-cols-2 sm:px-6 xl:grid-cols-[1fr_1fr_0.75fr_0.7fr_0.65fr_auto]">
           <input
             name="name"
             required
@@ -215,12 +235,18 @@ export default async function AdminRefereesPage({
           />
           <input
             name="phone"
-            placeholder="Phone"
+            placeholder="Mobile for SMS"
             className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
           />
           <input
             name="area"
             placeholder="Area"
+            className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
+          />
+          <input
+            name="standardNightFee"
+            inputMode="decimal"
+            placeholder="Fee e.g. 45"
             className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35"
           />
           <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300">
@@ -257,12 +283,14 @@ export default async function AdminRefereesPage({
           </div>
         ) : (
           referees.map((referee) => {
+            const profile = profileMap.get(referee.id) ?? null;
             const sourceLead = referee.createdFromLeadId ? leadMap.get(referee.createdFromLeadId) ?? null : null;
             const nextFixture = referee.refereedFixtures.find((fixture) => fixture.status === "SCHEDULED") ?? referee.refereedFixtures[0] ?? null;
             const contactEmail = referee.email || sourceLead?.email || null;
-            const contactPhone = sourceLead?.phone || null;
+            const contactPhone = profile?.phone || sourceLead?.phone || null;
             const phoneHref = normaliseUkPhoneForHref(contactPhone);
             const whatsappHref = buildWhatsAppHref(contactPhone);
+            const isActive = profile?.isActive !== false;
 
             return (
               <div key={referee.id} className="overflow-hidden rounded-3xl border border-white/10 bg-black/25 shadow-[0_18px_70px_rgba(0,0,0,0.28)]">
@@ -275,6 +303,7 @@ export default async function AdminRefereesPage({
                           <div className="flex flex-wrap items-center gap-2">
                             <h2 className="truncate text-xl font-bold text-white">{referee.name?.trim() || "Unnamed referee"}</h2>
                             <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-300">Referee</span>
+                            <span className={["rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em]", isActive ? "border-sky-400/20 bg-sky-400/10 text-sky-200" : "border-red-400/20 bg-red-400/10 text-red-200"].join(" ")}>{isActive ? "Active" : "Inactive"}</span>
                             {sourceLead ? <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-300">From lead</span> : null}
                           </div>
                           <div className="mt-2 space-y-1 text-sm text-white/65">
@@ -284,19 +313,20 @@ export default async function AdminRefereesPage({
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Link href={`/admin/referees/${referee.id}/preview`} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200">Preview dashboard</Link>
+                        <Link href={`/admin/referees/${referee.id}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Edit referee</Link>
+                        <Link href={`/admin/referees/${referee.id}#sms`} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200">Send SMS via SIXFL</Link>
+                        <Link href={`/admin/referees/${referee.id}/preview`} className="inline-flex h-10 items-center justify-center rounded-xl border border-sky-300/20 bg-sky-300/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/15">Preview dashboard</Link>
                         {sourceLead ? <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Email via SIXFL</Link> : null}
                         <ContactButton href={whatsappHref} label="WhatsApp" />
                         <ContactButton href={phoneHref ? `tel:${phoneHref}` : null} label="Call" />
-                        <ContactButton href={phoneHref ? `sms:${phoneHref}` : null} label="Text" />
-                        <Link href={`/admin/referees/${referee.id}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Open profile</Link>
                         {sourceLead ? <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Open lead</Link> : null}
                       </div>
                     </div>
-                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                    <div className="mt-5 grid gap-3 md:grid-cols-4">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Total fixtures</div><div className="mt-2 text-2xl font-black text-white">{referee.refereedFixtures.length}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Standard night fee</div><div className="mt-2 text-sm font-semibold text-white">{formatMoney(profile?.standardNightFeePence)}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Source area</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead?.area || "—"}</div></div>
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Source phone</div><div className="mt-2 text-sm font-semibold text-white">{contactPhone || "—"}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">SMS phone</div><div className="mt-2 text-sm font-semibold text-white">{contactPhone || "—"}</div></div>
                     </div>
                   </div>
                   <div className="border-t border-white/10 bg-white/[0.02] p-5 xl:border-l xl:border-t-0">
