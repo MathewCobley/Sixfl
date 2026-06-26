@@ -13,6 +13,7 @@ import {
   type RefereeNightStatus,
 } from "@/lib/referee-nights";
 import { getRefereeProfilesByUserIds } from "@/lib/referees/profile";
+import FormListboxField from "@/components/ui/FormListboxField";
 import { createRefereeNightAction } from "./actions";
 
 function statusClasses(status: RefereeNightStatus) {
@@ -62,6 +63,26 @@ export default async function AdminRefereeNightsPage() {
   ]);
 
   const refereeProfileMap = await getRefereeProfilesByUserIds(referees.map((referee) => referee.id));
+  const refereeOptions = referees.map((referee) => {
+    const profile = refereeProfileMap.get(referee.id);
+    const feeLabel = profile?.standardNightFeePence
+      ? ` · standard ${formatMoney(profile.standardNightFeePence)}`
+      : "";
+    const activeLabel = profile?.isActive === false ? " · inactive" : "";
+
+    return {
+      value: referee.id,
+      label: `${referee.name || referee.email || "Unnamed referee"}${referee.role === "ADMIN" ? " · admin" : ""}${feeLabel}${activeLabel}`,
+    };
+  });
+  const leagueOptions = leagues.map((league) => ({
+    value: league.id,
+    label: `${league.name}${league.season ? ` · ${league.season}` : ""}`,
+  }));
+  const venueOptions = venues.map((venue) => ({
+    value: venue.id,
+    label: venue.name,
+  }));
 
   const submittedCount = nights.filter((night) => night.status === "SUBMITTED").length;
   const unsettledCount = nights.filter(
@@ -119,43 +140,30 @@ export default async function AdminRefereeNightsPage() {
 
           <form action={createRefereeNightAction} className="space-y-5 px-6 py-6">
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Referee</label>
-              <select name="refereeId" required className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none">
-                <option value="">Choose referee</option>
-                {referees.map((referee) => {
-                  const profile = refereeProfileMap.get(referee.id);
-                  const feeLabel = profile?.standardNightFeePence ? ` · standard ${formatMoney(profile.standardNightFeePence)}` : "";
-                  const activeLabel = profile?.isActive === false ? " · inactive" : "";
-
-                  return (
-                    <option key={referee.id} value={referee.id}>
-                      {referee.name || referee.email || "Unnamed referee"}{referee.role === "ADMIN" ? " · admin" : ""}{feeLabel}{activeLabel}
-                    </option>
-                  );
-                })}
-              </select>
+              <div className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Referee</div>
+              <FormListboxField
+                name="refereeId"
+                options={refereeOptions}
+                placeholder="Choose referee"
+              />
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">League</label>
-              <select name="leagueId" required className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none">
-                <option value="">Choose league</option>
-                {leagues.map((league) => (
-                  <option key={league.id} value={league.id}>
-                    {league.name}{league.season ? ` · ${league.season}` : ""}
-                  </option>
-                ))}
-              </select>
+              <div className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">League</div>
+              <FormListboxField
+                name="leagueId"
+                options={leagueOptions}
+                placeholder="Choose league"
+              />
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Venue</label>
-              <select name="venueId" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none">
-                <option value="">Any venue for this league/date</option>
-                {venues.map((venue) => (
-                  <option key={venue.id} value={venue.id}>{venue.name}</option>
-                ))}
-              </select>
+              <div className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Venue</div>
+              <FormListboxField
+                name="venueId"
+                options={venueOptions}
+                placeholder="Any venue for this league/date"
+              />
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
