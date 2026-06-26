@@ -103,6 +103,35 @@ function getOpponentName(input: {
     : input.homeTeamName;
 }
 
+function getPlayerAvailabilityHref(input: {
+  teamId: string;
+  fixtureId?: string | null;
+  previewMembershipId?: string | null;
+}) {
+  const params = new URLSearchParams();
+  const fixtureId = input.fixtureId?.trim();
+  const previewMembershipId = input.previewMembershipId?.trim();
+
+  if (fixtureId) params.set("fixtureId", fixtureId);
+  if (previewMembershipId) params.set("previewMembershipId", previewMembershipId);
+
+  const query = params.toString();
+  return `/player/team/${input.teamId}/availability${query ? `?${query}` : ""}`;
+}
+
+function getAdminAvailabilityHref(input: {
+  teamId: string;
+  fixtureId?: string | null;
+}) {
+  const params = new URLSearchParams();
+  const fixtureId = input.fixtureId?.trim();
+
+  if (fixtureId) params.set("fixtureId", fixtureId);
+
+  const query = params.toString();
+  return `/admin/teams/${input.teamId}/availability${query ? `?${query}` : ""}`;
+}
+
 function getTeamDashboardHref(input: {
   teamId: string;
   previewMembershipId?: string | null;
@@ -116,10 +145,17 @@ function getTeamDashboardHref(input: {
 export default async function PlayerAvailabilityPage({ params, searchParams }: PageProps) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
+  const fixtureIdParam = sp.fixtureId?.trim() || null;
+  const previewMembershipIdParam = sp.previewMembershipId?.trim() || null;
+  const currentAvailabilityHref = getPlayerAvailabilityHref({
+    teamId: teamid,
+    fixtureId: fixtureIdParam,
+    previewMembershipId: previewMembershipIdParam,
+  });
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
-    redirect(`/login?callbackUrl=${encodeURIComponent(`/player/team/${teamid}/availability`)}`);
+    redirect(`/login?callbackUrl=${encodeURIComponent(currentAvailabilityHref)}`);
   }
 
   const user = await prisma.user.findUnique({
@@ -148,9 +184,13 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
     },
   });
 
-  if (!user) redirect(`/login?callbackUrl=${encodeURIComponent(`/player/team/${teamid}/availability`)}`);
+  if (!user) redirect(`/login?callbackUrl=${encodeURIComponent(currentAvailabilityHref)}`);
 
-  const previewMembershipId = user.role === UserRole.ADMIN ? sp.previewMembershipId?.trim() || null : null;
+  const adminAvailabilityHref = getAdminAvailabilityHref({
+    teamId: teamid,
+    fixtureId: fixtureIdParam,
+  });
+  const previewMembershipId = user.role === UserRole.ADMIN ? previewMembershipIdParam : null;
   const previewMembership = previewMembershipId
     ? await prisma.teamMember.findFirst({
         where: { id: previewMembershipId, teamId: teamid },
@@ -170,10 +210,13 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
       })
     : null;
 
-  if (previewMembershipId && !previewMembership) notFound();
+  if (previewMembershipId && !previewMembership) redirect(adminAvailabilityHref);
 
   const membership = previewMembership ?? user.teamMembers[0] ?? null;
-  if (!membership) notFound();
+  if (!membership) {
+    if (user.role === UserRole.ADMIN) redirect(adminAvailabilityHref);
+    notFound();
+  }
 
   const previewMembershipParam = previewMembership ? membership.id : null;
   const team = membership.team;
