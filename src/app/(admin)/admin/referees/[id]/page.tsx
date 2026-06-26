@@ -16,14 +16,8 @@ import {
 import { sendRefereeSmsAction, updateRefereeAction } from "../actions";
 
 type Props = {
-  params: Promise<{
-    id: string;
-  }>;
-  searchParams?: Promise<{
-    updated?: string;
-    sms?: string;
-    error?: string;
-  }>;
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ updated?: string; sms?: string; error?: string }>;
 };
 
 type CoveredLeague = {
@@ -34,6 +28,15 @@ type CoveredLeague = {
   fixtureCount: number;
   scheduledCount: number;
   completedCount: number;
+};
+
+type ActiveLeagueOption = {
+  id: string;
+  name: string;
+  season: string | null;
+  dayOfWeek: string | null;
+  venueName: string | null;
+  isActive: boolean;
 };
 
 function formatDate(value: Date | null | undefined) {
@@ -49,10 +52,7 @@ function getInitials(name?: string | null, email?: string | null) {
   const source = name?.trim() || email?.trim() || "R";
   const parts = source.split(/\s+/).filter(Boolean).slice(0, 2);
 
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return parts.map((part) => part.charAt(0).toUpperCase()).join("");
 }
 
@@ -91,7 +91,7 @@ function getSmsPreview(body: string) {
 
 function getCoveredLeagues(fixtures: Array<{
   status: string;
-  league: { id: string; name: string; season: string | null; slug: string | null };
+  league: { id: string; name: string; season: string | null; slug: string | null } | null;
 }>) {
   const leagueMap = new Map<string, CoveredLeague>();
 
@@ -109,15 +109,8 @@ function getCoveredLeagues(fixtures: Array<{
     };
 
     existing.fixtureCount += 1;
-
-    if (fixture.status === "SCHEDULED") {
-      existing.scheduledCount += 1;
-    }
-
-    if (fixture.status === "COMPLETED") {
-      existing.completedCount += 1;
-    }
-
+    if (fixture.status === "SCHEDULED") existing.scheduledCount += 1;
+    if (fixture.status === "COMPLETED") existing.completedCount += 1;
     leagueMap.set(fixture.league.id, existing);
   }
 
@@ -125,6 +118,16 @@ function getCoveredLeagues(fixtures: Array<{
     const nameComparison = a.name.localeCompare(b.name);
     return nameComparison === 0 ? (a.season ?? "").localeCompare(b.season ?? "") : nameComparison;
   });
+}
+
+function getLeagueLabel(league: { name: string; season: string | null }) {
+  return `${league.name}${league.season ? ` · ${league.season}` : ""}`;
+}
+
+function dayLabel(dayOfWeek: string | null) {
+  if (!dayOfWeek) return "Day not set";
+  if (dayOfWeek === "ANY") return "Any day";
+  return dayOfWeek.charAt(0) + dayOfWeek.slice(1).toLowerCase();
 }
 
 export default async function AdminRefereeProfilePage({ params, searchParams }: Props) {
@@ -143,7 +146,6 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
       name: true,
       email: true,
       role: true,
-      image: true,
       createdFromLeadId: true,
       refereedFixtures: {
         orderBy: [{ kickoffAt: "asc" }],
@@ -151,26 +153,9 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
           id: true,
           status: true,
           kickoffAt: true,
-          league: {
-            select: {
-              id: true,
-              name: true,
-              season: true,
-              slug: true,
-            },
-          },
-          homeTeam: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          awayTeam: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          league: { select: { id: true, name: true, season: true, slug: true } },
+          homeTeam: { select: { id: true, name: true } },
+          awayTeam: { select: { id: true, name: true } },
         },
       },
     },
@@ -180,7 +165,7 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
     return notFound();
   }
 
-  const [profile, sourceLead, recentSmsDispatches] = await Promise.all([
+  const [profile, sourceLead, recentSmsDispatches, activeLeagues, coverageRows] = await Promise.all([
     getRefereeProfileByUserId(referee.id),
     referee.createdFromLeadId
       ? prisma.interestLead.findUnique({
@@ -216,15 +201,33 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
         createdAt: true,
       },
     }),
+    prisma.league.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: "asc" }, { season: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        season: true,
+        dayOfWeek: true,
+        venueName: true,
+        isActive: true,
+      },
+    }) as Promise<ActiveLeagueOption[]>,
+    prisma.$queryRaw<Array<{ leagueId: string }>>`
+      SELECT "leagueId"
+      FROM "RefereeLeagueCoverage"
+      WHERE "refereeId" = ${referee.id}
+    `.catch(() => []),
   ]);
 
-  const scheduledFixtures = referee.refereedFixtures.filter(
-    (fixture) => fixture.status === "SCHEDULED",
-  );
-  const completedFixtures = referee.refereedFixtures.filter(
-    (fixture) => fixture.status === "COMPLETED",
-  );
-  const coveredLeagues = getCoveredLeagues(referee.refereedFixtures);
+  const scheduledFixtures = referee.refereedFixtures.filter((fixture) => fixture.status === "SCHEDULED");
+  const completedFixtures = referee.refereedFixtures.filter((fixture) => fixture.status === "COMPLETED");
+  const fixtureCoveredLeagues = getCoveredLeagues(referee.refereedFixtures);
+  const fixtureCoveredLeagueIds = new Set(fixtureCoveredLeagues.map((league) => league.id));
+  const manualCoverageIds = new Set(coverageRows.map((row) => row.leagueId));
+  const hasManualCoverage = manualCoverageIds.size > 0;
+  const selectedCoverageIds = hasManualCoverage ? manualCoverageIds : fixtureCoveredLeagueIds;
+  const displayedCoveredLeagues = activeLeagues.filter((league) => selectedCoverageIds.has(league.id));
   const contactPhone = profile?.phone || sourceLead?.phone || "";
   const profileIsActive = profile?.isActive ?? true;
   const feePounds = formatPenceAsPoundsInput(profile?.standardNightFeePence);
@@ -233,10 +236,7 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
-          <Link
-            href="/admin/referees"
-            className="text-sm font-medium text-emerald-300 transition hover:text-emerald-200"
-          >
+          <Link href="/admin/referees" className="text-sm font-medium text-emerald-300 transition hover:text-emerald-200">
             ← Back to referees
           </Link>
 
@@ -244,21 +244,12 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl border border-emerald-500/20 bg-emerald-500/10 text-lg font-black text-emerald-300">
               {getInitials(referee.name, referee.email)}
             </div>
-
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-3xl font-black tracking-tight text-white">
-                  {referee.name?.trim() || "Unnamed referee"}
-                </h1>
-
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-300">
-                  Referee
-                </span>
-                <span className={["rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em]", profileIsActive ? "border-sky-400/20 bg-sky-400/10 text-sky-200" : "border-red-400/20 bg-red-400/10 text-red-200"].join(" ")}>
-                  {profileIsActive ? "Active" : "Inactive"}
-                </span>
+                <h1 className="text-3xl font-black tracking-tight text-white">{referee.name?.trim() || "Unnamed referee"}</h1>
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-300">Referee</span>
+                <span className={["rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em]", profileIsActive ? "border-sky-400/20 bg-sky-400/10 text-sky-200" : "border-red-400/20 bg-red-400/10 text-red-200"].join(" ")}>{profileIsActive ? "Active" : "Inactive"}</span>
               </div>
-
               <div className="mt-2 space-y-1 text-sm text-white/65">
                 <div>{referee.email || "No email address"}</div>
                 <div>{contactPhone || "No mobile number"}</div>
@@ -268,265 +259,97 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <a
-            href="#sms"
-            className="inline-flex h-11 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200"
-          >
-            Send SMS
-          </a>
-          <Link
-            href="/admin/fixtures"
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
-          >
-            Manage fixtures
-          </Link>
-
-          {sourceLead ? (
-            <Link
-              href={`/admin/leads/${sourceLead.id}`}
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400"
-            >
-              Open source lead
-            </Link>
-          ) : null}
+          <a href="#sms" className="inline-flex h-11 items-center justify-center rounded-xl bg-sky-300 px-4 text-sm font-semibold text-black transition hover:bg-sky-200">Send SMS</a>
+          <Link href="/admin/fixtures" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Manage fixtures</Link>
+          {sourceLead ? <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Open source lead</Link> : null}
         </div>
       </div>
 
-      {updatedMessage || smsMessage ? (
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-          {updatedMessage ?? smsMessage}
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          {errorMessage}
-        </div>
-      ) : null}
+      {updatedMessage || smsMessage ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{updatedMessage ?? smsMessage}</div> : null}
+      {errorMessage ? <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">{errorMessage}</div> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Covered leagues</div>
-          <div className="mt-2 text-3xl font-black text-white">{coveredLeagues.length}</div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Scheduled</div>
-          <div className="mt-2 text-3xl font-black text-white">{scheduledFixtures.length}</div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Completed</div>
-          <div className="mt-2 text-3xl font-black text-white">{completedFixtures.length}</div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Night fee</div>
-          <div className="mt-2 text-3xl font-black text-white">{formatMoney(profile?.standardNightFeePence)}</div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">SMS</div>
-          <div className="mt-2 text-sm font-semibold text-white">{contactPhone ? "Ready" : "Needs phone"}</div>
-        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Leagues covered</div><div className="mt-2 text-3xl font-black text-white">{displayedCoveredLeagues.length}</div></div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Scheduled</div><div className="mt-2 text-3xl font-black text-white">{scheduledFixtures.length}</div></div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Completed</div><div className="mt-2 text-3xl font-black text-white">{completedFixtures.length}</div></div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Night fee</div><div className="mt-2 text-3xl font-black text-white">{formatMoney(profile?.standardNightFeePence)}</div></div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">SMS</div><div className="mt-2 text-sm font-semibold text-white">{contactPhone ? "Ready" : "Needs phone"}</div></div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(380px,0.9fr)]">
         <div className="space-y-6">
           <section className="rounded-3xl border border-emerald-400/20 bg-emerald-400/10 p-5 sm:p-6">
             <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-100/70">Edit referee</div>
-            <h2 className="mt-2 text-xl font-bold text-white">Contact, fee and status</h2>
-            <p className="mt-2 text-sm leading-6 text-emerald-50/70">
-              This controls the referee details used by admin, SMS, assignments and future referee night cashups.
-            </p>
+            <h2 className="mt-2 text-xl font-bold text-white">Contact, fee, coverage and status</h2>
+            <p className="mt-2 text-sm leading-6 text-emerald-50/70">Tick the leagues this referee can cover. Availability requests will use these league choices.</p>
 
             <form action={updateRefereeAction} className="mt-5 grid gap-4 sm:grid-cols-2">
               <input type="hidden" name="refereeId" value={referee.id} />
               <input type="hidden" name="area" value={sourceLead?.area ?? ""} />
-              <label className="block">
-                <span className="text-sm font-semibold text-white">Name</span>
-                <input
-                  name="name"
-                  required
-                  defaultValue={referee.name ?? ""}
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-white">Email</span>
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  defaultValue={referee.email ?? ""}
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-white">Mobile for SMS</span>
-                <input
-                  name="phone"
-                  defaultValue={contactPhone}
-                  placeholder="07700 900123"
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-white">Standard night fee</span>
-                <div className="mt-2 flex h-12 items-center overflow-hidden rounded-2xl border border-white/10 bg-black/35">
-                  <span className="px-4 text-sm font-semibold text-white/55">£</span>
-                  <input
-                    name="standardNightFee"
-                    inputMode="decimal"
-                    defaultValue={feePounds}
-                    placeholder="45"
-                    className="h-full w-full bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/35"
-                  />
-                </div>
-              </label>
+              <label className="block"><span className="text-sm font-semibold text-white">Name</span><input name="name" required defaultValue={referee.name ?? ""} className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35" /></label>
+              <label className="block"><span className="text-sm font-semibold text-white">Email</span><input name="email" type="email" required defaultValue={referee.email ?? ""} className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35" /></label>
+              <label className="block"><span className="text-sm font-semibold text-white">Mobile for SMS</span><input name="phone" defaultValue={contactPhone} placeholder="07700 900123" className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35" /></label>
+              <label className="block"><span className="text-sm font-semibold text-white">Standard night fee</span><div className="mt-2 flex h-12 items-center overflow-hidden rounded-2xl border border-white/10 bg-black/35"><span className="px-4 text-sm font-semibold text-white/55">£</span><input name="standardNightFee" inputMode="decimal" defaultValue={feePounds} placeholder="45" className="h-full w-full bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/35" /></div></label>
 
               <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-4 sm:col-span-2">
-                <div className="text-sm font-semibold text-white">Leagues covered</div>
-                <p className="mt-1 text-xs leading-5 text-white/50">
-                  This is calculated from the fixtures and referee nights this referee has been assigned to.
-                </p>
-
-                {coveredLeagues.length === 0 ? (
-                  <div className="mt-3 rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-3 text-sm text-white/50">
-                    No league coverage yet. Assign this referee to fixtures or referee nights to populate this list.
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Leagues covered</div>
+                    <p className="mt-1 text-xs leading-5 text-white/50">Tick the leagues this referee can cover. Untick to remove them.</p>
                   </div>
+                  {!hasManualCoverage && fixtureCoveredLeagues.length > 0 ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Currently inferred from fixtures</span> : null}
+                </div>
+
+                {activeLeagues.length === 0 ? (
+                  <div className="mt-3 rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-3 text-sm text-white/50">No active leagues available.</div>
                 ) : (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {coveredLeagues.map((league) => (
-                      <span key={league.id} className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
-                        {league.name}{league.season ? ` · ${league.season}` : ""} · {league.fixtureCount} fixture{league.fixtureCount === 1 ? "" : "s"}
-                      </span>
-                    ))}
+                  <div className="mt-4 grid gap-2 md:grid-cols-2">
+                    {activeLeagues.map((league) => {
+                      const checked = selectedCoverageIds.has(league.id);
+                      return (
+                        <label key={league.id} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75 transition hover:bg-white/[0.06]">
+                          <input type="checkbox" name="leagueCoverageIds" value={league.id} defaultChecked={checked} className="mt-1 h-4 w-4 rounded border-white/20 bg-black text-emerald-400" />
+                          <span>
+                            <span className="block font-semibold text-white">{getLeagueLabel(league)}</span>
+                            <span className="mt-1 block text-xs text-white/45">{dayLabel(league.dayOfWeek)}{league.venueName ? ` · ${league.venueName}` : ""}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
-                <input
-                  type="checkbox"
-                  name="isActive"
-                  defaultChecked={profileIsActive}
-                  className="h-5 w-5 rounded border-white/20 bg-black text-emerald-400"
-                />
-                <span>
-                  <span className="block text-sm font-semibold text-white">Active referee</span>
-                  <span className="block text-xs text-white/50">Use this to mark someone unavailable without deleting them.</span>
-                </span>
-              </label>
-              <label className="block sm:col-span-2">
-                <span className="text-sm font-semibold text-white">Admin notes</span>
-                <textarea
-                  name="notes"
-                  rows={4}
-                  defaultValue={profile?.notes ?? ""}
-                  placeholder="Availability, payment notes, preferences, reliability notes..."
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
-                />
-              </label>
-              <div className="sm:col-span-2">
-                <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-bold text-black transition hover:bg-emerald-300">
-                  Save referee
-                </button>
-              </div>
+              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3"><input type="checkbox" name="isActive" defaultChecked={profileIsActive} className="h-5 w-5 rounded border-white/20 bg-black text-emerald-400" /><span><span className="block text-sm font-semibold text-white">Active referee</span><span className="block text-xs text-white/50">Use this to mark someone unavailable without deleting them.</span></span></label>
+              <label className="block sm:col-span-2"><span className="text-sm font-semibold text-white">Admin notes</span><textarea name="notes" rows={4} defaultValue={profile?.notes ?? ""} placeholder="Availability, payment notes, preferences, reliability notes..." className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35" /></label>
+              <div className="sm:col-span-2"><button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-bold text-black transition hover:bg-emerald-300">Save referee</button></div>
             </form>
           </section>
 
           <section id="sms" className="scroll-mt-28 rounded-3xl border border-sky-400/20 bg-sky-400/10 p-5 sm:p-6">
             <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-100/70">SMS via SIXFL</div>
             <h2 className="mt-2 text-xl font-bold text-white">Send referee SMS</h2>
-            <p className="mt-2 text-sm leading-6 text-sky-50/70">
-              This queues an SMS through the existing SIXFL notification system, records it in messaging and respects SMS opt-out/suppression rules.
-            </p>
-
             <form action={sendRefereeSmsAction} className="mt-5 space-y-4">
               <input type="hidden" name="refereeId" value={referee.id} />
-              <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/70">
-                <span className="font-semibold text-white">To:</span> {referee.name || referee.email || "Referee"} {contactPhone ? `· ${contactPhone}` : "· no mobile saved"}
-              </div>
-              <label className="block">
-                <span className="text-sm font-semibold text-white">Message</span>
-                <textarea
-                  name="body"
-                  required
-                  rows={5}
-                  placeholder="Hi, are you available to referee on Tuesday night?"
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
-                />
-              </label>
-              <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-sky-300 px-5 text-sm font-bold text-black transition hover:bg-sky-200">
-                Queue SMS via SIXFL
-              </button>
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/70"><span className="font-semibold text-white">To:</span> {referee.name || referee.email || "Referee"} {contactPhone ? `· ${contactPhone}` : "· no mobile saved"}</div>
+              <label className="block"><span className="text-sm font-semibold text-white">Message</span><textarea name="body" required rows={5} placeholder="Hi, are you available to referee on Tuesday night?" className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35" /></label>
+              <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-sky-300 px-5 text-sm font-bold text-black transition hover:bg-sky-200">Queue SMS via SIXFL</button>
             </form>
 
             <div className="mt-6">
               <h3 className="text-sm font-bold uppercase tracking-[0.16em] text-white/45">Recent referee SMS</h3>
-              {recentSmsDispatches.length === 0 ? (
-                <p className="mt-3 text-sm text-white/55">No SMS messages have been queued for this referee yet.</p>
-              ) : (
+              {recentSmsDispatches.length === 0 ? <p className="mt-3 text-sm text-white/55">No SMS messages have been queued for this referee yet.</p> : (
                 <div className="mt-3 space-y-3">
-                  {recentSmsDispatches.map((dispatch) => (
-                    <div key={dispatch.id} className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">
-                          {dispatch.status}
-                        </span>
-                        <span className="text-xs text-white/45">Queued {formatDate(dispatch.createdAt)}</span>
-                        {dispatch.sentAt ? <span className="text-xs text-emerald-200">Sent {formatDate(dispatch.sentAt)}</span> : null}
-                        {dispatch.failedAt ? <span className="text-xs text-red-200">Failed {formatDate(dispatch.failedAt)}</span> : null}
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-white/68">{getSmsPreview(dispatch.bodyText)}</p>
-                      {dispatch.failureReason ? <p className="mt-2 text-xs text-red-200">{dispatch.failureReason}</p> : null}
-                    </div>
-                  ))}
+                  {recentSmsDispatches.map((dispatch) => <div key={dispatch.id} className="rounded-2xl border border-white/10 bg-black/25 p-4"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{dispatch.status}</span><span className="text-xs text-white/45">Queued {formatDate(dispatch.createdAt)}</span>{dispatch.sentAt ? <span className="text-xs text-emerald-200">Sent {formatDate(dispatch.sentAt)}</span> : null}{dispatch.failedAt ? <span className="text-xs text-red-200">Failed {formatDate(dispatch.failedAt)}</span> : null}</div><p className="mt-3 text-sm leading-6 text-white/68">{getSmsPreview(dispatch.bodyText)}</p>{dispatch.failureReason ? <p className="mt-2 text-xs text-red-200">{dispatch.failureReason}</p> : null}</div>)}
                 </div>
               )}
             </div>
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-black/25 p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Fixture assignments</div>
-                <h2 className="mt-2 text-xl font-bold text-white">Referee fixture history</h2>
-              </div>
-
-              <Link href="/admin/fixtures" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">
-                Open fixtures
-              </Link>
-            </div>
-
-            {referee.refereedFixtures.length === 0 ? (
-              <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5">
-                <div className="text-sm font-semibold text-white">No fixtures assigned</div>
-                <p className="mt-2 text-sm leading-6 text-white/60">This referee exists in the live assignment pool but has not yet been attached to any fixture.</p>
-              </div>
-            ) : (
-              <div className="mt-5 space-y-3">
-                {referee.refereedFixtures.map((fixture) => (
-                  <div key={fixture.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">
-                        {formatStatus(fixture.status)}
-                      </span>
-                      {fixture.league ? (
-                        <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">
-                          {fixture.league.name}{fixture.league.season ? ` • ${fixture.league.season}` : ""}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-3 text-lg font-bold text-white">{fixture.homeTeam?.name || "Home"} v {fixture.awayTeam?.name || "Away"}</div>
-                    <div className="mt-2 text-sm text-white/60">{formatDate(fixture.kickoffAt)}</div>
-                    {fixture.league?.slug ? (
-                      <div className="mt-4">
-                        <Link href={`/leagues/${fixture.league.slug}/fixtures`} className="text-sm font-medium text-emerald-300 transition hover:text-emerald-200">
-                          View public league fixtures →
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+            <div className="flex items-start justify-between gap-4"><div><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Fixture assignments</div><h2 className="mt-2 text-xl font-bold text-white">Referee fixture history</h2></div><Link href="/admin/fixtures" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Open fixtures</Link></div>
+            {referee.refereedFixtures.length === 0 ? <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5"><div className="text-sm font-semibold text-white">No fixtures assigned</div><p className="mt-2 text-sm leading-6 text-white/60">This referee exists in the live assignment pool but has not yet been attached to any fixture.</p></div> : (
+              <div className="mt-5 space-y-3">{referee.refereedFixtures.map((fixture) => <div key={fixture.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{formatStatus(fixture.status)}</span>{fixture.league ? <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{fixture.league.name}{fixture.league.season ? ` • ${fixture.league.season}` : ""}</span> : null}</div><div className="mt-3 text-lg font-bold text-white">{fixture.homeTeam?.name || "Home"} v {fixture.awayTeam?.name || "Away"}</div><div className="mt-2 text-sm text-white/60">{formatDate(fixture.kickoffAt)}</div></div>)}</div>
             )}
           </section>
         </div>
@@ -538,32 +361,14 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Name</div><div className="mt-2 text-sm font-semibold text-white">{referee.name || "—"}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Email</div><div className="mt-2 text-sm font-semibold text-white">{referee.email || "—"}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Mobile</div><div className="mt-2 text-sm font-semibold text-white">{contactPhone || "—"}</div></div>
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Leagues covered</div><div className="mt-2 text-sm font-semibold text-white">{coveredLeagues.length ? coveredLeagues.map((league) => `${league.name}${league.season ? ` · ${league.season}` : ""}`).join(", ") : "—"}</div></div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Leagues covered</div><div className="mt-2 text-sm font-semibold text-white">{displayedCoveredLeagues.length ? displayedCoveredLeagues.map(getLeagueLabel).join(", ") : "—"}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Standard night fee</div><div className="mt-2 text-sm font-semibold text-white">{formatMoney(profile?.standardNightFeePence)}</div></div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Status</div><div className="mt-2 text-sm font-semibold text-white">{profileIsActive ? "Active" : "Inactive"}</div></div>
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Created from lead</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead ? "Yes" : "No"}</div></div>
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Converted</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead?.convertedAt ? formatDate(sourceLead.convertedAt) : "—"}</div></div>
               {profile?.notes ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Admin notes</div><div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">{profile.notes}</div></div> : null}
             </div>
           </div>
 
-          {sourceLead ? (
-            <div className="rounded-3xl border border-white/10 bg-black/25 p-5 sm:p-6">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Source lead</div>
-              <h2 className="mt-2 text-xl font-bold text-white">Original referee interest</h2>
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Contact name</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.contactName || "—"}</div></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Phone</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.phone || "—"}</div></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Original area</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.area || "—"}</div></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Notes</div><div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">{sourceLead.message || "—"}</div></div>
-              </div>
-              <div className="mt-5">
-                <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">
-                  Open lead
-                </Link>
-              </div>
-            </div>
-          ) : null}
+          {sourceLead ? <div className="rounded-3xl border border-white/10 bg-black/25 p-5 sm:p-6"><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Source lead</div><h2 className="mt-2 text-xl font-bold text-white">Original referee interest</h2><div className="mt-4 grid gap-3"><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Contact name</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.contactName || "—"}</div></div><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Phone</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.phone || "—"}</div></div><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Original area</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead.area || "—"}</div></div><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Notes</div><div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/75">{sourceLead.message || "—"}</div></div></div><div className="mt-5"><Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Open lead</Link></div></div> : null}
         </div>
       </div>
     </div>
