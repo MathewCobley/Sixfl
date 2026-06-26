@@ -92,6 +92,7 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
   const fixture = await prisma.fixture.findFirst({
     where: {
       id: fixtureId,
+      publishedAt: { not: null },
       OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
     },
     select: {
