@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
@@ -231,6 +232,7 @@ export default async function CaptainAvailabilityPage({
 
   const fixtures = await prisma.fixture.findMany({
     where: {
+      ...publishedFixtureWhere,
       OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
       kickoffAt: { gte: new Date() },
       status: "SCHEDULED",
