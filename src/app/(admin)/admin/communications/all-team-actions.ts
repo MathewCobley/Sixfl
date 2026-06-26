@@ -13,7 +13,7 @@ import { processNotificationQueue } from "@/lib/notifications/processor";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
-const SUPPORTED_TEAM_EMAIL_TOKENS = new Set([
+const SUPPORTED_TEAM_MESSAGE_TOKENS = new Set([
   "firstName",
   "name",
   "fullName",
@@ -56,7 +56,7 @@ function appendRedirectParams(
 
 function getUnsupportedTemplateTokens(...values: string[]) {
   const tokens = new Set(values.flatMap((value) => extractNotificationTokens(value)));
-  return Array.from(tokens).filter((token) => !SUPPORTED_TEAM_EMAIL_TOKENS.has(token));
+  return Array.from(tokens).filter((token) => !SUPPORTED_TEAM_MESSAGE_TOKENS.has(token));
 }
 
 function getErrorMessage(error: unknown) {
@@ -74,13 +74,25 @@ function getTeamLeagueLabel(team: {
   return `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`;
 }
 
-async function processQueuedTeamEmails(queuedCount: number) {
+function getChannelLabel(channel: NotificationChannel) {
+  return channel === NotificationChannel.SMS ? "SMS" : "email";
+}
+
+function getChannelQueuedNoun(channel: NotificationChannel) {
+  return channel === NotificationChannel.SMS ? "SMS messages" : "emails";
+}
+
+function getMissingContactLabel(channel: NotificationChannel) {
+  return channel === NotificationChannel.SMS ? "mobile numbers" : "email addresses";
+}
+
+async function processQueuedTeamMessages(queuedCount: number) {
   if (queuedCount <= 0) return;
 
   try {
     await processNotificationQueue(Math.max(queuedCount + 10, 25));
   } catch (error) {
-    console.error("Failed to process selected team emails immediately", error);
+    console.error("Failed to process selected team messages immediately", error);
   }
 }
 
@@ -88,6 +100,10 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
   const { user } = await requireAdmin();
 
   const from = safeRedirect(formData.get("from"), "/admin/messaging/teams");
+  const channelInput = text(formData.get("channel")).toUpperCase();
+  const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const channelLabel = getChannelLabel(channel);
+  const queuedNoun = getChannelQueuedNoun(channel);
   const subject = text(formData.get("subject"));
   const body = text(formData.get("body"));
   const templateId = text(formData.get("templateId")) || null;
@@ -108,22 +124,25 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: "Message body is required." }));
   }
 
-  if (!subject) {
+  if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(appendRedirectParams(from, { error: "Email subject is required." }));
   }
 
   if (selectedTeamIds.length === 0) {
-    redirect(appendRedirectParams(from, { error: "Select at least one team before queueing the email." }));
+    redirect(appendRedirectParams(from, { error: `Select at least one team before queueing the ${channelLabel}.` }));
   }
 
-  const unsupportedTokens = getUnsupportedTemplateTokens(subject, body);
+  const unsupportedTokens = getUnsupportedTemplateTokens(
+    channel === NotificationChannel.EMAIL ? subject : "",
+    body,
+  );
 
   if (unsupportedTokens.length > 0) {
     const listedTokens = unsupportedTokens.map((token) => `{{${token}}}`).join(", ");
 
     redirect(
       appendRedirectParams(from, {
-        error: `This selected-teams email contains unsupported placeholder${unsupportedTokens.length === 1 ? "" : "s"}: ${listedTokens}. Supported placeholders are {{firstName}}, {{name}}, {{fullName}}, {{teamName}}, {{leagueName}}, {{signupUrl}} and {{link}}.`,
+        error: `This selected-teams message contains unsupported placeholder${unsupportedTokens.length === 1 ? "" : "s"}: ${listedTokens}. Supported placeholders are {{firstName}}, {{name}}, {{fullName}}, {{teamName}}, {{leagueName}}, {{signupUrl}} and {{link}}.`,
       }),
     );
   }
@@ -175,17 +194,23 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
       const leagueName = getTeamLeagueLabel(team);
       const result = await sendTeamBroadcastMessage({
         teamId: team.id,
-        channel: NotificationChannel.EMAIL,
-        subject,
+        channel,
+        subject: channel === NotificationChannel.EMAIL ? subject : null,
         body,
         templateId,
         templateKey,
         ctaLabel,
         ctaUrl,
-        origin: "all_teams_communications_hub",
-        originLabel: "Sent from all-teams communications picker",
+        origin:
+          channel === NotificationChannel.SMS
+            ? "all_teams_sms_communications_hub"
+            : "all_teams_communications_hub",
+        originLabel:
+          channel === NotificationChannel.SMS
+            ? "Sent from all-teams SMS picker"
+            : "Sent from all-teams email picker",
         metadata: {
-          broadcastType: "selected_teams",
+          broadcastType: channel === NotificationChannel.SMS ? "selected_teams_sms" : "selected_teams_email",
           selectedTeamCount: targetTeams.length,
           selectedLeagueFilter:
             selectedLeagueFilter === ALL_LEAGUES_VALUE ? null : selectedLeagueFilter,
@@ -207,13 +232,14 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
       console.error("All-team communication failed for team", {
         teamId: team.id,
         teamName: team.name,
+        channel,
         error: getErrorMessage(error),
       });
     }
   }
 
   if (queuedCount > 0) {
-    await processQueuedTeamEmails(queuedCount);
+    await processQueuedTeamMessages(queuedCount);
   }
 
   if (queuedCount === 0 && failedCount > 0) {
@@ -222,7 +248,7 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
 
     redirect(
       appendRedirectParams(from, {
-        error: `No emails were queued. ${failedCount} team${failedCount === 1 ? "" : "s"} failed${failedNames ? `: ${failedNames}${suffix}` : ""}. Check the server logs for the exact error.`,
+        error: `No ${queuedNoun} were queued. ${failedCount} team${failedCount === 1 ? "" : "s"} failed${failedNames ? `: ${failedNames}${suffix}` : ""}. Check the server logs for the exact error.`,
       }),
     );
   }
@@ -233,14 +259,14 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
 
     redirect(
       appendRedirectParams(from, {
-        error: `No emails were queued. ${skippedCount} selected team${skippedCount === 1 ? "" : "s"} were skipped${skippedNames ? `: ${skippedNames}${suffix}` : ""}. Check the team contact email addresses.`,
+        error: `No ${queuedNoun} were queued. ${skippedCount} selected team${skippedCount === 1 ? "" : "s"} were skipped${skippedNames ? `: ${skippedNames}${suffix}` : ""}. Check the team contact ${getMissingContactLabel(channel)}.`,
       }),
     );
   }
 
   const params: Record<string, string | number> = {
     saved: "queued",
-    channel: "email",
+    channel: channel.toLowerCase(),
     count: queuedCount,
     skipped: skippedCount,
     failed: failedCount,
