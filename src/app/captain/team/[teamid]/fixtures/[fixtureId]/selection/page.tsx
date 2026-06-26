@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { updateFixtureSelectionAction } from "./actions";
@@ -87,6 +88,7 @@ export default async function CaptainFixtureSelectionPage({
   const fixture = await prisma.fixture.findFirst({
     where: {
       id: fixtureId,
+      ...publishedFixtureWhere,
       OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
     },
     include: {
