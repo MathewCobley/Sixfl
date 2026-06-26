@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { Prisma, UserRole } from "@prisma/client";
 import DisciplinaryNoteForm from "@/components/referee/DisciplinaryNoteForm";
 import { requireReferee } from "@/lib/admin";
+import { prisma } from "@/lib/prisma";
 import {
   formatKickoffTime,
   formatMoney,
