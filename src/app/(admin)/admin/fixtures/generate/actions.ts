@@ -244,17 +244,74 @@ function getRefereeIdsByPitch(formData: FormData, pitches: number) {
   });
 }
 
-function revalidateFixturePaymentPaths(leagueId: string, leagueSlug?: string | null) {
+function revalidateFixturePaymentPaths(leagueId?: string | null, leagueSlug?: string | null) {
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/generate");
   revalidatePath("/admin/payments");
-  revalidatePath(`/admin/leagues/${leagueId}`);
-  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+
+  if (leagueId) {
+    revalidatePath(`/admin/leagues/${leagueId}`);
+    revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  }
 
   if (leagueSlug) {
     revalidatePath(`/leagues/${leagueSlug}`);
     revalidatePath(`/leagues/${leagueSlug}/fixtures`);
   }
+}
+
+export async function cancelUnpublishedFixturePaymentQueueAction() {
+  await requireAdmin();
+
+  const cancelledEntries = await prisma.$executeRawUnsafe(`
+    UPDATE "MessageEntry" me
+    SET "providerStatus" = 'cancelled', "updatedAt" = NOW()
+    FROM "NotificationDispatch" nd
+    JOIN "PaymentCharge" pc ON pc."id" = nd."sourceId"
+    JOIN "Fixture" f ON f."id" = pc."fixtureId"
+    WHERE me."notificationDispatchId" = nd."id"
+      AND nd."status" = 'QUEUED'
+      AND nd."sourceType" IN ('FIXTURE_MATCH_FEE', 'FIXTURE_MATCH_FEE_REMINDER')
+      AND f."publishedAt" IS NULL
+  `);
+
+  const cancelledDispatches = await prisma.$executeRawUnsafe(`
+    UPDATE "NotificationDispatch" nd
+    SET
+      "status" = 'CANCELLED',
+      "cancelledAt" = NOW(),
+      "failureReason" = 'Cancelled because the fixture is not published. SIXFL does not send payment messages for unpublished fixtures.',
+      "updatedAt" = NOW()
+    FROM "PaymentCharge" pc
+    JOIN "Fixture" f ON f."id" = pc."fixtureId"
+    WHERE nd."sourceId" = pc."id"
+      AND nd."status" = 'QUEUED'
+      AND nd."sourceType" IN ('FIXTURE_MATCH_FEE', 'FIXTURE_MATCH_FEE_REMINDER')
+      AND f."publishedAt" IS NULL
+  `);
+
+  const voidedCharges = await prisma.$executeRawUnsafe(`
+    UPDATE "PaymentCharge" pc
+    SET
+      "status" = 'VOID',
+      "updatedAt" = NOW()
+    FROM "Fixture" f
+    WHERE f."id" = pc."fixtureId"
+      AND f."publishedAt" IS NULL
+      AND pc."status" <> 'VOID'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "PaymentTransaction" pt
+        WHERE pt."chargeId" = pc."id"
+      )
+  `);
+
+  revalidateFixturePaymentPaths();
+  revalidatePath("/admin/messaging");
+
+  redirect(
+    `/admin/fixtures/generate?unpublishedCancelled=${cancelledDispatches}&unpublishedVoided=${voidedCharges}&unpublishedEntries=${cancelledEntries}`,
+  );
 }
 
 export async function backfillFixtureMatchFeeChargesAction(formData: FormData) {
@@ -278,6 +335,7 @@ export async function backfillFixtureMatchFeeChargesAction(formData: FormData) {
       leagueId,
       status: FixtureStatus.SCHEDULED,
       kickoffAt: { gte: new Date() },
+      publishedAt: { not: null },
     },
     orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
     include: {
@@ -549,31 +607,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     }
 
     for (const fixtureData of fixturesToCreate) {
-      const createdFixture = await tx.fixture.create({ data: fixtureData });
-
-      if (!createMatchFeeCharges || !matchFeePence) {
-        continue;
-      }
-
-      const homeTeam = teamMap.get(fixtureData.homeTeamId);
-      const awayTeam = teamMap.get(fixtureData.awayTeamId);
-
-      if (!homeTeam || !awayTeam) {
-        throw new Error("Fixture payment charge creation failed because a team was missing.");
-      }
-
-      await syncFixtureMatchFeeCharges({
-        db: tx,
-        fixtureId: createdFixture.id,
-        leagueId,
-        leagueName: league.name,
-        leagueSeason: league.season,
-        kickoffAt: fixtureData.kickoffAt,
-        homeTeam,
-        awayTeam,
-        homeMatchFeePence: matchFeePence,
-        awayMatchFeePence: matchFeePence,
-      });
+      await tx.fixture.create({ data: fixtureData });
     }
   });
 
