@@ -3,15 +3,16 @@
 // ========================================
 
 import { NotificationChannel } from "@prisma/client";
+import { getUnpublishedFixtureBlockReason } from "@/lib/fixtures/publishing";
+import {
+  findOrCreateEmailThreadForOutbound,
+  linkDispatchToThread,
+} from "@/lib/messaging/service";
 import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
 import { prisma } from "@/lib/prisma";
-import {
-  findOrCreateEmailThreadForOutbound,
-  linkDispatchToThread,
-} from "@/lib/messaging/service";
 import { sendEmailWithResend } from "./providers/resend";
 import { sendSmsWithTwilio } from "./providers/twilio";
 import {
@@ -37,17 +38,11 @@ export type ProcessNotificationQueueResult = {
 };
 
 function getMetadataRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
-function getMetadataString(
-  metadata: Record<string, unknown> | null,
-  key: string,
-): string | null {
+function getMetadataString(metadata: Record<string, unknown> | null, key: string) {
   const value = metadata?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -57,16 +52,10 @@ function getFixtureReminderFixtureId(input: {
   sourceId: string | null;
 }) {
   const metadataFixtureId = getMetadataString(input.metadata, "fixtureId");
-
-  if (metadataFixtureId) {
-    return metadataFixtureId;
-  }
+  if (metadataFixtureId) return metadataFixtureId;
 
   const sourceId = input.sourceId?.trim();
-
-  if (!sourceId) {
-    return null;
-  }
+  if (!sourceId) return null;
 
   return sourceId.split(":")[0]?.trim() || null;
 }
@@ -79,45 +68,32 @@ function getManagedSquadAvailabilityRefs(input: {
   const metadataTeamMemberId = getMetadataString(input.metadata, "teamMemberId");
 
   if (metadataFixtureId && metadataTeamMemberId) {
-    return {
-      fixtureId: metadataFixtureId,
-      teamMemberId: metadataTeamMemberId,
-    };
+    return { fixtureId: metadataFixtureId, teamMemberId: metadataTeamMemberId };
   }
 
   const parts = input.sourceId?.trim().split(":") ?? [];
   const fixtureId = metadataFixtureId ?? parts[0]?.trim() ?? null;
   const teamMemberId = metadataTeamMemberId ?? parts[1]?.trim() ?? null;
 
-  if (!fixtureId || !teamMemberId) {
-    return null;
-  }
-
+  if (!fixtureId || !teamMemberId) return null;
   return { fixtureId, teamMemberId };
 }
 
-function buildLastMessagePreview(body: string): string {
+function buildLastMessagePreview(body: string) {
   const trimmed = body.trim().replace(/\s+/g, " ");
   if (!trimmed) return "";
   return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
 }
 
-function isQueuedMatchFeeNotification(
-  sourceType: string | null | undefined,
-) {
-  return (
-    sourceType === "FIXTURE_MATCH_FEE" ||
-    sourceType === "FIXTURE_MATCH_FEE_REMINDER"
-  );
+function isQueuedMatchFeeNotification(sourceType: string | null | undefined) {
+  return sourceType === "FIXTURE_MATCH_FEE" || sourceType === "FIXTURE_MATCH_FEE_REMINDER";
 }
 
 function isFixtureReminderNotification(sourceType: string | null | undefined) {
   return sourceType === "FIXTURE_REMINDER";
 }
 
-function isManagedSquadAvailabilityNotification(
-  sourceType: string | null | undefined,
-) {
+function isManagedSquadAvailabilityNotification(sourceType: string | null | undefined) {
   return (
     sourceType === "MANAGED_SQUAD_AVAILABILITY_REQUEST" ||
     sourceType === "MANAGED_SQUAD_AVAILABILITY_CHASE_24H" ||
@@ -125,9 +101,7 @@ function isManagedSquadAvailabilityNotification(
   );
 }
 
-function isFixtureConfirmationSmsNotification(
-  sourceType: string | null | undefined,
-) {
+function isFixtureConfirmationSmsNotification(sourceType: string | null | undefined) {
   return (
     sourceType === "FIXTURE_CONFIRMATION_CHASE_SMS" ||
     sourceType === "FIXTURE_CONFIRMATION_AUTO_SMS_72H" ||
@@ -139,62 +113,32 @@ async function getQueuedMatchFeeCancellationReason(input: {
   sourceType: string | null;
   sourceId: string | null;
 }) {
-  if (!isQueuedMatchFeeNotification(input.sourceType) || !input.sourceId) {
-    return null;
-  }
+  if (!isQueuedMatchFeeNotification(input.sourceType) || !input.sourceId) return null;
 
   const charge = await prisma.paymentCharge.findUnique({
-    where: {
-      id: input.sourceId,
-    },
+    where: { id: input.sourceId },
     include: {
       fixture: {
-        select: {
-          id: true,
-          publishedAt: true,
-          status: true,
-          kickoffAt: true,
-        },
+        select: { id: true, publishedAt: true, status: true, kickoffAt: true },
       },
-      transactions: {
-        select: {
-          amountPence: true,
-        },
-      },
+      transactions: { select: { amountPence: true } },
     },
   });
 
-  if (!charge) {
-    return "Match fee charge no longer exists.";
-  }
-
-  if (!charge.fixture) {
-    return "Match fee charge is not linked to a fixture.";
-  }
-
-  if (!charge.fixture.publishedAt) {
-    return "Fixture is not published. SIXFL does not send payment messages for unpublished fixtures.";
-  }
-
+  if (!charge) return "Match fee charge no longer exists.";
+  if (!charge.fixture) return "Match fee charge is not linked to a fixture.";
+  if (!charge.fixture.publishedAt) return "Fixture is not published. SIXFL does not send payment messages for unpublished fixtures.";
   if (charge.fixture.status !== "SCHEDULED" || charge.fixture.kickoffAt <= new Date()) {
     return "Fixture is no longer scheduled before queued payment message was sent.";
   }
+  if (charge.status === "VOID") return "Match fee charge was voided before queued payment email was sent.";
 
-  if (charge.status === "VOID") {
-    return "Match fee charge was voided before queued payment email was sent.";
-  }
-
-  const paidTotalPence = getChargePaidTotal(charge.transactions);
   const outstandingPence = getChargeOutstandingPence(
     charge.amountPence,
-    paidTotalPence,
+    getChargePaidTotal(charge.transactions),
   );
 
-  if (outstandingPence <= 0) {
-    return "Match fee charge was paid before queued payment email was sent.";
-  }
-
-  return null;
+  return outstandingPence <= 0 ? "Match fee charge was paid before queued payment email was sent." : null;
 }
 
 async function getQueuedFixtureReminderCancellationReason(input: {
@@ -203,43 +147,20 @@ async function getQueuedFixtureReminderCancellationReason(input: {
   metadata: Record<string, unknown> | null;
   createdAt: Date;
 }) {
-  if (!isFixtureReminderNotification(input.sourceType)) {
-    return null;
-  }
+  if (!isFixtureReminderNotification(input.sourceType)) return null;
 
-  const fixtureId = getFixtureReminderFixtureId({
-    metadata: input.metadata,
-    sourceId: input.sourceId,
-  });
-
-  if (!fixtureId) {
-    return "Fixture reminder is missing its fixture reference.";
-  }
+  const fixtureId = getFixtureReminderFixtureId({ metadata: input.metadata, sourceId: input.sourceId });
+  if (!fixtureId) return "Fixture reminder is missing its fixture reference.";
 
   const fixture = await prisma.fixture.findUnique({
-    where: {
-      id: fixtureId,
-    },
-    select: {
-      id: true,
-      updatedAt: true,
-      status: true,
-      kickoffAt: true,
-    },
+    where: { id: fixtureId },
+    select: { id: true, updatedAt: true, publishedAt: true, status: true, kickoffAt: true },
   });
 
-  if (!fixture) {
-    return "Fixture was deleted before queued reminder email was sent.";
-  }
-
-  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
-    return "Fixture is no longer scheduled before queued reminder email was sent.";
-  }
-
-  if (fixture.updatedAt.getTime() > input.createdAt.getTime()) {
-    return "Fixture was changed before queued reminder email was sent.";
-  }
-
+  if (!fixture) return "Fixture was deleted before queued reminder email was sent.";
+  if (!fixture.publishedAt) return "Fixture is not published before queued reminder email was sent.";
+  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) return "Fixture is no longer scheduled before queued reminder email was sent.";
+  if (fixture.updatedAt.getTime() > input.createdAt.getTime()) return "Fixture was changed before queued reminder email was sent.";
   return null;
 }
 
@@ -248,56 +169,26 @@ async function getQueuedManagedSquadAvailabilityCancellationReason(input: {
   sourceId: string | null;
   metadata: Record<string, unknown> | null;
 }) {
-  if (!isManagedSquadAvailabilityNotification(input.sourceType)) {
-    return null;
-  }
+  if (!isManagedSquadAvailabilityNotification(input.sourceType)) return null;
 
-  const refs = getManagedSquadAvailabilityRefs({
-    metadata: input.metadata,
-    sourceId: input.sourceId,
-  });
-
-  if (!refs) {
-    return "Managed squad availability reminder is missing its fixture or player reference.";
-  }
+  const refs = getManagedSquadAvailabilityRefs({ metadata: input.metadata, sourceId: input.sourceId });
+  if (!refs) return "Managed squad availability reminder is missing its fixture or player reference.";
 
   const [fixture, availability] = await Promise.all([
     prisma.fixture.findUnique({
-      where: {
-        id: refs.fixtureId,
-      },
-      select: {
-        id: true,
-        status: true,
-        kickoffAt: true,
-      },
+      where: { id: refs.fixtureId },
+      select: { id: true, publishedAt: true, status: true, kickoffAt: true },
     }),
     prisma.fixtureAvailability.findUnique({
-      where: {
-        fixtureId_teamMemberId: {
-          fixtureId: refs.fixtureId,
-          teamMemberId: refs.teamMemberId,
-        },
-      },
-      select: {
-        response: true,
-        respondedAt: true,
-      },
+      where: { fixtureId_teamMemberId: refs },
+      select: { response: true, respondedAt: true },
     }),
   ]);
 
-  if (!fixture) {
-    return "Fixture was deleted before queued managed squad availability reminder was sent.";
-  }
-
-  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
-    return "Fixture is no longer scheduled before queued managed squad availability reminder was sent.";
-  }
-
-  if (availability && availability.response !== "NO_RESPONSE") {
-    return "Player had already responded before queued managed squad availability reminder was sent.";
-  }
-
+  if (!fixture) return "Fixture was deleted before queued managed squad availability reminder was sent.";
+  if (!fixture.publishedAt) return "Fixture is not published before queued managed squad availability reminder was sent.";
+  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) return "Fixture is no longer scheduled before queued managed squad availability reminder was sent.";
+  if (availability && availability.response !== "NO_RESPONSE") return "Player had already responded before queued managed squad availability reminder was sent.";
   return null;
 }
 
@@ -306,40 +197,20 @@ async function getQueuedFixtureConfirmationSmsCancellationReason(input: {
   metadata: Record<string, unknown> | null;
   createdAt: Date;
 }) {
-  if (!isFixtureConfirmationSmsNotification(input.sourceType)) {
-    return null;
-  }
+  if (!isFixtureConfirmationSmsNotification(input.sourceType)) return null;
 
   const fixtureId = getMetadataString(input.metadata, "fixtureId");
-
-  if (!fixtureId) {
-    return "Fixture confirmation SMS is missing its fixture reference.";
-  }
+  if (!fixtureId) return "Fixture confirmation SMS is missing its fixture reference.";
 
   const fixture = await prisma.fixture.findUnique({
-    where: {
-      id: fixtureId,
-    },
-    select: {
-      id: true,
-      updatedAt: true,
-      status: true,
-      kickoffAt: true,
-    },
+    where: { id: fixtureId },
+    select: { id: true, updatedAt: true, publishedAt: true, status: true, kickoffAt: true },
   });
 
-  if (!fixture) {
-    return "Fixture was deleted before queued confirmation SMS was sent.";
-  }
-
-  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
-    return "Fixture is no longer available for confirmation before queued SMS was sent.";
-  }
-
-  if (fixture.updatedAt.getTime() > input.createdAt.getTime()) {
-    return "Fixture was changed before queued confirmation SMS was sent.";
-  }
-
+  if (!fixture) return "Fixture was deleted before queued confirmation SMS was sent.";
+  if (!fixture.publishedAt) return "Fixture is not published before queued confirmation SMS was sent.";
+  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) return "Fixture is no longer available for confirmation before queued SMS was sent.";
+  if (fixture.updatedAt.getTime() > input.createdAt.getTime()) return "Fixture was changed before queued confirmation SMS was sent.";
   return null;
 }
 
@@ -371,13 +242,8 @@ async function recordOutboundEmailToThread(params: {
   });
 
   const existing = await prisma.messageEntry.findFirst({
-    where: {
-      notificationDispatchId: params.dispatchId,
-    },
-    select: {
-      id: true,
-      createdAt: true,
-    },
+    where: { notificationDispatchId: params.dispatchId },
+    select: { id: true, createdAt: true },
   });
 
   if (existing) {
@@ -466,64 +332,32 @@ export async function processNotificationQueue(limit = 25) {
   for (const dispatch of dueDispatches) {
     try {
       const metadata = getMetadataRecord(dispatch.metadata);
-      const queuedMatchFeeCancellationReason =
-        await getQueuedMatchFeeCancellationReason({
-          sourceType: dispatch.sourceType,
-          sourceId: dispatch.sourceId,
-        });
-      const queuedFixtureReminderCancellationReason =
-        await getQueuedFixtureReminderCancellationReason({
-          sourceType: dispatch.sourceType,
-          sourceId: dispatch.sourceId,
-          metadata,
-          createdAt: dispatch.createdAt,
-        });
-      const queuedManagedSquadAvailabilityCancellationReason =
-        await getQueuedManagedSquadAvailabilityCancellationReason({
-          sourceType: dispatch.sourceType,
-          sourceId: dispatch.sourceId,
-          metadata,
-        });
-      const queuedFixtureConfirmationSmsCancellationReason =
-        await getQueuedFixtureConfirmationSmsCancellationReason({
-          sourceType: dispatch.sourceType,
-          metadata,
-          createdAt: dispatch.createdAt,
-        });
+      const unpublishedFixtureBlockReason = await getUnpublishedFixtureBlockReason({
+        sourceType: dispatch.sourceType,
+        sourceId: dispatch.sourceId,
+        metadata: dispatch.metadata,
+      });
       const cancellationReason =
-        queuedMatchFeeCancellationReason ??
-        queuedFixtureReminderCancellationReason ??
-        queuedManagedSquadAvailabilityCancellationReason ??
-        queuedFixtureConfirmationSmsCancellationReason;
+        unpublishedFixtureBlockReason ??
+        (await getQueuedMatchFeeCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId })) ??
+        (await getQueuedFixtureReminderCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId, metadata, createdAt: dispatch.createdAt })) ??
+        (await getQueuedManagedSquadAvailabilityCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId, metadata })) ??
+        (await getQueuedFixtureConfirmationSmsCancellationReason({ sourceType: dispatch.sourceType, metadata, createdAt: dispatch.createdAt }));
 
       if (cancellationReason) {
         await markNotificationDispatchCancelled(dispatch.id, cancellationReason);
-
         result.skipped += 1;
-        result.items.push({
-          dispatchId: dispatch.id,
-          status: "skipped",
-          channel: dispatch.channel,
-          message: cancellationReason,
-        });
+        result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: cancellationReason });
         continue;
       }
 
       if (dispatch.channel === NotificationChannel.EMAIL) {
         if (!dispatch.recipient.email?.trim()) {
           result.skipped += 1;
-          result.items.push({
-            dispatchId: dispatch.id,
-            status: "skipped",
-            channel: dispatch.channel,
-            message: "Recipient email missing.",
-          });
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Recipient email missing." });
           continue;
         }
-
-        if (!dispatch.subject?.trim()) {
-          throw new Error("Email dispatch is missing a subject.");
-        }
+        if (!dispatch.subject?.trim()) throw new Error("Email dispatch is missing a subject.");
 
         await markNotificationDispatchProcessing(dispatch.id);
 
@@ -533,18 +367,12 @@ export async function processNotificationQueue(limit = 25) {
           leagueId: getMetadataString(metadata, "leagueId"),
           sourceType: dispatch.sourceType,
           sourceId: dispatch.sourceId,
-          contactName:
-            getMetadataString(metadata, "contactName") ??
-            dispatch.recipient.displayName ??
-            null,
+          contactName: getMetadataString(metadata, "contactName") ?? dispatch.recipient.displayName ?? null,
           contactEmail: dispatch.recipient.email,
         });
 
         const replyTo = thread.replyAddress?.trim();
-
-        if (!replyTo) {
-          throw new Error("Email thread reply address is missing.");
-        }
+        if (!replyTo) throw new Error("Email thread reply address is missing.");
 
         const sendResult = await sendEmailWithResend({
           to: dispatch.recipient.email,
@@ -567,10 +395,7 @@ export async function processNotificationQueue(limit = 25) {
           leagueId: getMetadataString(metadata, "leagueId"),
           sourceType: dispatch.sourceType,
           sourceId: dispatch.sourceId,
-          contactName:
-            getMetadataString(metadata, "contactName") ??
-            dispatch.recipient.displayName ??
-            null,
+          contactName: getMetadataString(metadata, "contactName") ?? dispatch.recipient.displayName ?? null,
           toEmail: dispatch.recipient.email,
           dispatchId: dispatch.id,
           subject: dispatch.subject,
@@ -583,33 +408,20 @@ export async function processNotificationQueue(limit = 25) {
         });
 
         result.sent += 1;
-        result.items.push({
-          dispatchId: dispatch.id,
-          status: "sent",
-          channel: dispatch.channel,
-          provider: sendResult.provider,
-        });
+        result.items.push({ dispatchId: dispatch.id, status: "sent", channel: dispatch.channel, provider: sendResult.provider });
         continue;
       }
 
       if (dispatch.channel === NotificationChannel.SMS) {
         if (!dispatch.recipient.phone?.trim()) {
           result.skipped += 1;
-          result.items.push({
-            dispatchId: dispatch.id,
-            status: "skipped",
-            channel: dispatch.channel,
-            message: "Recipient phone missing.",
-          });
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Recipient phone missing." });
           continue;
         }
 
         await markNotificationDispatchProcessing(dispatch.id);
 
-        const sendResult = await sendSmsWithTwilio({
-          to: dispatch.recipient.phone,
-          body: dispatch.bodyText,
-        });
+        const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });
 
         await markNotificationDispatchSent({
           dispatchId: dispatch.id,
@@ -625,10 +437,7 @@ export async function processNotificationQueue(limit = 25) {
           leagueId: getMetadataString(metadata, "leagueId"),
           sourceType: dispatch.sourceType,
           sourceId: dispatch.sourceId,
-          contactName:
-            getMetadataString(metadata, "contactName") ??
-            dispatch.recipient.displayName ??
-            null,
+          contactName: getMetadataString(metadata, "contactName") ?? dispatch.recipient.displayName ?? null,
           phone: dispatch.recipient.phone,
           body: dispatch.bodyText,
           fromNumber: sendResult.fromNumber,
@@ -642,30 +451,18 @@ export async function processNotificationQueue(limit = 25) {
         });
 
         result.sent += 1;
-        result.items.push({
-          dispatchId: dispatch.id,
-          status: "sent",
-          channel: dispatch.channel,
-          provider: sendResult.provider,
-        });
+        result.items.push({ dispatchId: dispatch.id, status: "sent", channel: dispatch.channel, provider: sendResult.provider });
         continue;
       }
 
       result.skipped += 1;
-      result.items.push({
-        dispatchId: dispatch.id,
-        status: "skipped",
-        channel: dispatch.channel,
-        message: "Unsupported notification channel.",
-      });
+      result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Unsupported notification channel." });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Notification processing failed.";
+      const message = error instanceof Error ? error.message : "Notification processing failed.";
 
       await markNotificationDispatchFailed({
         dispatchId: dispatch.id,
-        provider:
-          dispatch.channel === NotificationChannel.EMAIL ? "resend" : "twilio",
+        provider: dispatch.channel === NotificationChannel.EMAIL ? "resend" : "twilio",
         errorMessage: message,
       });
 
@@ -674,8 +471,7 @@ export async function processNotificationQueue(limit = 25) {
         dispatchId: dispatch.id,
         status: "failed",
         channel: dispatch.channel,
-        provider:
-          dispatch.channel === NotificationChannel.EMAIL ? "resend" : "twilio",
+        provider: dispatch.channel === NotificationChannel.EMAIL ? "resend" : "twilio",
         message,
       });
     }
