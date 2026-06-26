@@ -9,9 +9,9 @@ import {
   NotificationDispatchStatus,
   NotificationTemplateKind,
 } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { prisma } from "@/lib/prisma";
 
 export type FixtureConfirmationReminderMode =
   | "manual"
@@ -144,10 +144,7 @@ function resolveFixtureConfirmationTemplateBody(input: {
   return body;
 }
 
-function renderTemplateText(
-  body: string,
-  replacements: Record<string, string>,
-) {
+function renderTemplateText(body: string, replacements: Record<string, string>) {
   return Object.entries(replacements).reduce((output, [token, value]) => {
     const pattern = new RegExp(`{{\\s*${token}\\s*}}`, "gi");
     return output.replace(pattern, value);
@@ -213,6 +210,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
       id: true,
       kickoffAt: true,
       status: true,
+      publishedAt: true,
       leagueId: true,
       updatedAt: true,
       league: {
@@ -264,7 +262,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
   const team = isHome ? fixture.homeTeam : fixture.awayTeam;
   const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
 
-  if (fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
+  if (fixture.publishedAt === null || fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
     return { ok: false, status: "not_available", teamName: team.name };
   }
 
@@ -274,18 +272,12 @@ export async function queueFixtureConfirmationSmsReminder(input: {
     return { ok: false, status: "confirmed", teamName: team.name };
   }
 
-  if (
-    existingConfirmation?.status === FixtureCaptainConfirmationStatus.ISSUE_RAISED
-  ) {
+  if (existingConfirmation?.status === FixtureCaptainConfirmationStatus.ISSUE_RAISED) {
     return { ok: false, status: "issue_raised", teamName: team.name };
   }
 
   const sourceType = getSourceType(input.mode);
-  const sourceId = getSourceId({
-    fixtureId: fixture.id,
-    teamId: input.teamId,
-    mode: input.mode,
-  });
+  const sourceId = getSourceId({ fixtureId: fixture.id, teamId: input.teamId, mode: input.mode });
 
   const existingDispatches = await prisma.notificationDispatch.findMany({
     where: {
@@ -316,9 +308,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
   if (staleQueuedDispatchIds.length > 0) {
     await prisma.notificationDispatch.updateMany({
       where: {
-        id: {
-          in: staleQueuedDispatchIds,
-        },
+        id: { in: staleQueuedDispatchIds },
         status: NotificationDispatchStatus.QUEUED,
       },
       data: {
@@ -331,7 +321,6 @@ export async function queueFixtureConfirmationSmsReminder(input: {
 
   const activeExistingDispatch = existingDispatches.find((dispatch) => {
     if (staleQueuedDispatchIds.includes(dispatch.id)) return false;
-
     return fixture.updatedAt.getTime() <= dispatch.createdAt.getTime();
   });
 
