@@ -60,6 +60,12 @@ export type RefereeNightFixtureView = {
   }>;
 };
 
+export type RefereeNightAssignableFixtureView = RefereeNightFixtureView & {
+  assignedRefereeNightId: string | null;
+  assignedRefereeName: string | null;
+  assignedRefereeEmail: string | null;
+};
+
 export type CashByTeam = Record<string, number>;
 
 export function createRefereeNightId() {
@@ -199,8 +205,7 @@ export async function getRefereeNightFixtureIds(refereeNightId: string) {
   return rows.map((row) => row.fixtureId);
 }
 
-export async function getRefereeNightFixtures(refereeNightId: string) {
-  const fixtureIds = await getRefereeNightFixtureIds(refereeNightId);
+async function getFixturesByIds(fixtureIds: string[]) {
   if (fixtureIds.length === 0) return [];
 
   const fixtures = await prisma.fixture.findMany({
@@ -240,6 +245,59 @@ export async function getRefereeNightFixtures(refereeNightId: string) {
   });
 
   return fixtures as RefereeNightFixtureView[];
+}
+
+export async function getRefereeNightFixtures(refereeNightId: string) {
+  const fixtureIds = await getRefereeNightFixtureIds(refereeNightId);
+  return getFixturesByIds(fixtureIds);
+}
+
+export async function getAssignableFixturesForRefereeNight(refereeNightId: string) {
+  const night = await getRefereeNightById(refereeNightId);
+  if (!night) return [];
+
+  const matchingFixtureRefs = await findFixturesForNight({
+    leagueId: night.leagueId,
+    venueId: night.venueId,
+    nightDate: night.nightDate,
+  });
+  const matchingFixtureIds = matchingFixtureRefs.map((fixture) => fixture.id);
+  if (matchingFixtureIds.length === 0) return [];
+
+  const [fixtures, assignmentRows] = await Promise.all([
+    getFixturesByIds(matchingFixtureIds),
+    prisma.$queryRaw<
+      Array<{
+        fixtureId: string;
+        refereeNightId: string;
+        refereeName: string | null;
+        refereeEmail: string | null;
+      }>
+    >(Prisma.sql`
+      SELECT
+        rnf."fixtureId" AS "fixtureId",
+        rn.id AS "refereeNightId",
+        u.name AS "refereeName",
+        u.email AS "refereeEmail"
+      FROM "RefereeNightFixture" rnf
+      JOIN "RefereeNight" rn ON rn.id = rnf."refereeNightId"
+      JOIN "User" u ON u.id = rn."refereeId"
+      WHERE rnf."fixtureId" IN (${Prisma.join(matchingFixtureIds)})
+    `),
+  ]);
+
+  const assignmentByFixtureId = new Map(assignmentRows.map((row) => [row.fixtureId, row]));
+
+  return fixtures.map((fixture) => {
+    const assignment = assignmentByFixtureId.get(fixture.id);
+
+    return {
+      ...fixture,
+      assignedRefereeNightId: assignment?.refereeNightId ?? null,
+      assignedRefereeName: assignment?.refereeName ?? null,
+      assignedRefereeEmail: assignment?.refereeEmail ?? null,
+    } satisfies RefereeNightAssignableFixtureView;
+  });
 }
 
 export async function getCashCollectedByTeam(refereeNightId: string) {
