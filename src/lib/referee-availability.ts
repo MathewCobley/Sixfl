@@ -29,6 +29,7 @@ export type RefereeAvailabilityLeague = {
   season: string | null;
   dayOfWeek: PreferredNight;
   venueName: string | null;
+  requiredRefereesPerNight: number;
 };
 
 export type RefereeAvailabilitySlot = {
@@ -37,6 +38,7 @@ export type RefereeAvailabilitySlot = {
   leagueName: string;
   leagueSeason: string | null;
   venueName: string | null;
+  requiredRefereesPerNight: number;
   dayOfWeek: PreferredNight;
   date: string;
   status: RefereeAvailabilityStatus;
@@ -66,6 +68,7 @@ type RawAvailabilityRow = {
   leagueName: string;
   leagueSeason: string | null;
   venueName: string | null;
+  requiredRefereesPerNight: number | bigint | null;
   dayOfWeek: PreferredNight;
   availabilityDate: string | Date;
   status: RefereeAvailabilityStatus | null;
@@ -172,25 +175,20 @@ function preferredNightToUtcDay(day: PreferredNight) {
 }
 
 export async function getActiveRefereeAvailabilityLeagues() {
-  return prisma.league.findMany({
-    where: {
-      isActive: true,
-      dayOfWeek: {
-        not: null,
-      },
-      NOT: {
-        dayOfWeek: "ANY",
-      },
-    },
-    orderBy: [{ dayOfWeek: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      season: true,
-      dayOfWeek: true,
-      venueName: true,
-    },
-  }) as Promise<RefereeAvailabilityLeague[]>;
+  return prisma.$queryRaw<RefereeAvailabilityLeague[]>(Prisma.sql`
+    SELECT
+      id,
+      name,
+      season,
+      "dayOfWeek",
+      "venueName",
+      COALESCE("requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    FROM "League"
+    WHERE "isActive" = TRUE
+      AND "dayOfWeek" IS NOT NULL
+      AND "dayOfWeek" <> 'ANY'
+    ORDER BY "dayOfWeek" ASC, name ASC
+  `);
 }
 
 export function getLeagueDatesInMonth(input: {
@@ -226,7 +224,7 @@ export async function getRefereesForAvailability() {
     LEFT JOIN "RefereeProfile" rp ON rp."userId" = u.id
     WHERE u.email IS NOT NULL
       AND (
-        u.role = ${UserRole.REFEREE}::"UserRole"
+        u.role::text = 'REFEREE'
         OR (rp."userId" IS NOT NULL AND rp."isActive" = TRUE)
       )
     ORDER BY u.name ASC NULLS LAST, u.email ASC NULLS LAST
@@ -286,6 +284,11 @@ function normaliseStatus(value: string | null | undefined): RefereeAvailabilityS
   return "NO_RESPONSE";
 }
 
+function normaliseRequiredReferees(value: number | bigint | null | undefined) {
+  const parsed = Number(value ?? 1);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1;
+}
+
 function toSlot(row: RawAvailabilityRow): RefereeAvailabilitySlot {
   return {
     id: row.id,
@@ -293,6 +296,7 @@ function toSlot(row: RawAvailabilityRow): RefereeAvailabilitySlot {
     leagueName: row.leagueName,
     leagueSeason: row.leagueSeason,
     venueName: row.venueName,
+    requiredRefereesPerNight: normaliseRequiredReferees(row.requiredRefereesPerNight),
     dayOfWeek: row.dayOfWeek,
     date: normaliseRawDate(row.availabilityDate),
     status: normaliseStatus(row.status),
@@ -315,6 +319,7 @@ export async function getRefereeAvailabilityMonth(input: {
       l.name AS "leagueName",
       l.season AS "leagueSeason",
       l."venueName" AS "venueName",
+      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight",
       l."dayOfWeek" AS "dayOfWeek",
       ra."availabilityDate" AS "availabilityDate",
       ra.status,
@@ -399,6 +404,7 @@ export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
       l.name AS "leagueName",
       l.season AS "leagueSeason",
       l."venueName" AS "venueName",
+      COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight",
       l."dayOfWeek" AS "dayOfWeek",
       ra."availabilityDate" AS "availabilityDate",
       ra.status,
@@ -410,7 +416,7 @@ export async function getAdminRefereeAvailabilityMonth(monthKey: string) {
     WHERE ra."availabilityDate" >= ${bounds.startDate}::date
       AND ra."availabilityDate" <= ${bounds.endDate}::date
       ${refereeFilter}
-    ORDER BY u.name ASC NULLS LAST, u.email ASC NULLS LAST, ra."availabilityDate" ASC, l.name ASC
+    ORDER BY ra."availabilityDate" ASC, l.name ASC, u.name ASC NULLS LAST, u.email ASC NULLS LAST
   `);
 
   return {
@@ -518,7 +524,7 @@ export async function queueMonthlyRefereeAvailabilityRequests(input: {
         body: [
           `Hi ${getFirstName(referee.name || referee.email)},`,
           "",
-          `Please mark your referee availability for ${bounds.monthLabel}.`,
+          `Please mark your referee availability for ${bounds.monthLabel}.",
           "",
           "You will only see the dates where an active SIXFL league is due to run.",
           "",
