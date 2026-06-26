@@ -31,17 +31,32 @@ function getNotice(params: SearchParams) {
   }
 
   if (params.saved === "queued") {
+    const channel = params.channel?.toUpperCase() === "SMS" ? "SMS" : "Email";
+    const missingDetails = channel === "SMS" ? "mobile numbers" : "email details";
     const count = Number(params.count ?? "0");
     const skipped = Number(params.skipped ?? "0");
     const failed = Number(params.failed ?? "0");
 
     return {
       tone: "success" as const,
-      message: `Email queued to ${Number.isFinite(count) ? count : 0} team${count === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} skipped because email details were missing` : ""}${failed > 0 ? ` · ${failed} failed` : ""}.`,
+      message: `${channel} queued to ${Number.isFinite(count) ? count : 0} team${count === 1 ? "" : "s"}${skipped > 0 ? ` · ${skipped} skipped because ${missingDetails} were missing` : ""}${failed > 0 ? ` · ${failed} failed` : ""}.`,
     };
   }
 
   return null;
+}
+
+function resolveTemplateCtaUrl(ctaUrlKey: string | null, input: { baseUrl: string; paymentUrl: string }) {
+  switch (ctaUrlKey) {
+    case "signupUrl":
+      return `${input.baseUrl}/register-interest`;
+    case "paymentUrl":
+      return input.paymentUrl;
+    case "link":
+      return input.baseUrl;
+    default:
+      return null;
+  }
 }
 
 export default async function AdminAllTeamsCommunicationsPage({
@@ -55,7 +70,7 @@ export default async function AdminAllTeamsCommunicationsPage({
   const notice = getNotice(sp);
   const warningMessage = sp.warning ? decodeURIComponent(sp.warning) : null;
 
-  const [teams, emailTemplates] = await Promise.all([
+  const [teams, emailTemplates, smsTemplates] = await Promise.all([
     prisma.team.findMany({
       orderBy: [{ name: "asc" }],
       select: {
@@ -88,6 +103,24 @@ export default async function AdminAllTeamsCommunicationsPage({
         ctaUrlKey: true,
       },
     }),
+    prisma.notificationTemplate.findMany({
+      where: {
+        isActive: true,
+        channel: "SMS",
+        audience: {
+          in: ["TEAM", "GENERAL"],
+        },
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        body: true,
+        description: true,
+        ctaUrlKey: true,
+      },
+    }),
   ]);
 
   const snapshots = await Promise.all(teams.map((team) => getTeamContactSnapshot(team.id)));
@@ -103,12 +136,10 @@ export default async function AdminAllTeamsCommunicationsPage({
   const fixedPaymentUrl = "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
   const resolvedEmailTemplates = emailTemplates.map((template) => {
-    const ctaUrl =
-      template.ctaUrlKey === "signupUrl"
-        ? `${baseUrl}/register-interest`
-        : template.ctaUrlKey === "paymentUrl"
-          ? fixedPaymentUrl
-          : null;
+    const ctaUrl = resolveTemplateCtaUrl(template.ctaUrlKey, {
+      baseUrl,
+      paymentUrl: fixedPaymentUrl,
+    });
 
     return {
       id: template.id,
@@ -118,6 +149,22 @@ export default async function AdminAllTeamsCommunicationsPage({
       body: template.body,
       description: template.description,
       ctaLabel: template.ctaLabel,
+      ctaUrl,
+    };
+  });
+
+  const resolvedSmsTemplates = smsTemplates.map((template) => {
+    const ctaUrl = resolveTemplateCtaUrl(template.ctaUrlKey, {
+      baseUrl,
+      paymentUrl: fixedPaymentUrl,
+    });
+
+    return {
+      id: template.id,
+      key: template.key,
+      name: template.name,
+      body: template.body,
+      description: template.description,
       ctaUrl,
     };
   });
@@ -134,6 +181,7 @@ export default async function AdminAllTeamsCommunicationsPage({
         name: team.name,
         leagueLabel,
         emailReady: Boolean(snapshot?.primaryContact.email?.trim()),
+        smsReady: Boolean(snapshot?.primaryContact.phone?.trim()),
       };
     })
     .sort((a, b) => {
@@ -144,6 +192,7 @@ export default async function AdminAllTeamsCommunicationsPage({
     });
 
   const emailReadyCount = teamOptions.filter((team) => team.emailReady).length;
+  const smsReadyCount = teamOptions.filter((team) => team.smsReady).length;
   const noLeagueCount = teamOptions.filter((team) => !team.leagueLabel).length;
 
   return (
@@ -160,10 +209,10 @@ export default async function AdminAllTeamsCommunicationsPage({
             All teams
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
-            Email selected teams
+            Email or SMS selected teams
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-            Send an email across any mix of teams, including old, inactive or
+            Send an email or SMS across any mix of teams, including old, inactive or
             unassigned teams. Use the picker to choose exactly who receives it.
           </p>
         </div>
@@ -176,7 +225,7 @@ export default async function AdminAllTeamsCommunicationsPage({
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Teams loaded
@@ -188,6 +237,12 @@ export default async function AdminAllTeamsCommunicationsPage({
             Email ready
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">{emailReadyCount}</p>
+        </div>
+        <div className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">
+            SMS ready
+          </p>
+          <p className="mt-3 text-3xl font-semibold text-white">{smsReadyCount}</p>
         </div>
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
@@ -219,6 +274,7 @@ export default async function AdminAllTeamsCommunicationsPage({
         fromPath="/admin/messaging/teams"
         teams={teamOptions}
         emailTemplates={resolvedEmailTemplates}
+        smsTemplates={resolvedSmsTemplates}
       />
     </div>
   );
