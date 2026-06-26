@@ -10,10 +10,7 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
-import {
-  sendAvailabilitySmsChaseAction,
-  updateFixtureAvailabilityAction,
-} from "./actions";
+import { updateFixtureAvailabilityAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -669,18 +666,6 @@ export default async function CaptainAvailabilityPage({
                               className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
                             >
                               Save response
-                            </button>
-                          </form>
-
-                          <form action={sendAvailabilitySmsChaseAction}>
-                            <input type="hidden" name="teamid" value={teamid} />
-                            <input type="hidden" name="fixtureId" value={fixture.id} />
-                            <input type="hidden" name="teamMemberId" value={member.id} />
-                            <button
-                              type="submit"
-                              className="inline-flex items-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
-                            >
-                              Chase by SMS
                             </button>
                           </form>
                         </div>
