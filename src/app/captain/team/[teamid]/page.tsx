@@ -232,6 +232,7 @@ export default async function CaptainOverviewPage({
     prisma.fixture.findMany({
       where: {
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        publishedAt: { not: null },
         kickoffAt: { gte: new Date() },
         result: null,
         status: "SCHEDULED",
@@ -257,6 +258,7 @@ export default async function CaptainOverviewPage({
     prisma.fixture.findMany({
       where: {
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        publishedAt: { not: null },
         result: { isNot: null },
       },
       orderBy: [{ kickoffAt: "desc" }],
@@ -289,6 +291,7 @@ export default async function CaptainOverviewPage({
     prisma.fixture.findMany({
       where: {
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        publishedAt: { not: null },
         result: { isNot: null },
       },
       orderBy: [{ kickoffAt: "desc" }],
@@ -402,7 +405,7 @@ export default async function CaptainOverviewPage({
                     homeTeamName: nextFixture.homeTeam.name,
                     awayTeamName: nextFixture.awayTeam.name,
                   })
-                : "No upcoming fixture"}
+                : "No upcoming published fixture"}
             </h2>
 
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
@@ -410,7 +413,7 @@ export default async function CaptainOverviewPage({
                 ? `${formatDateTime(nextFixture.kickoffAt)} · ${
                     nextFixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"
                   }`
-                : "As soon as your next match is scheduled, it will appear here."}
+                : "Your next match will appear here once SIXFL publishes the fixture."}
             </p>
 
             {nextFixture && nextFixtureStatus ? (
@@ -536,7 +539,7 @@ export default async function CaptainOverviewPage({
           <div className="divide-y divide-white/10">
             {upcomingFixtures.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">
-                No upcoming fixtures yet.
+                No published upcoming fixtures yet.
               </div>
             ) : (
               upcomingFixtures.map((fixture, index) => {
