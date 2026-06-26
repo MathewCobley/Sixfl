@@ -14,6 +14,7 @@ import {
   NotificationDispatchStatus,
   NotificationRecipientSourceType,
   NotificationTemplateKind,
+  Prisma,
   UserRole,
 } from "@prisma/client";
 
@@ -57,7 +58,11 @@ function getRefereesPath(query?: string) {
   return query ? `/admin/referees?${query}` : "/admin/referees";
 }
 
-function getRefereeProfilePath(refereeId: string, extras?: Record<string, string | number | boolean | null | undefined>, hash?: string) {
+function getRefereeProfilePath(
+  refereeId: string,
+  extras?: Record<string, string | number | boolean | null | undefined>,
+  hash?: string,
+) {
   const search = new URLSearchParams();
 
   for (const [key, value] of Object.entries(extras ?? {})) {
@@ -116,6 +121,23 @@ async function syncRefereeLeagueCoverage(refereeId: string, leagueIds: string[])
       `;
     }
   });
+}
+
+async function syncDraftRefereeNightFeesToProfile(input: {
+  refereeId: string;
+  standardNightFeePence: number;
+}) {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "RefereeNight"
+    SET
+      "feePence" = ${input.standardNightFeePence},
+      "retainedByRefereePence" = LEAST("cashCollectedPence", ${input.standardNightFeePence}),
+      "dueToSixflPence" = GREATEST(0, "cashCollectedPence" - ${input.standardNightFeePence}),
+      "dueToRefereePence" = GREATEST(0, ${input.standardNightFeePence} - "cashCollectedPence"),
+      "updatedAt" = NOW()
+    WHERE "refereeId" = ${input.refereeId}
+      AND "status" IN ('DRAFT', 'REOPENED')
+  `);
 }
 
 async function ensureRefereeInviteEmailTemplate() {
@@ -452,10 +474,15 @@ export async function updateRefereeAction(formData: FormData) {
   });
 
   await syncRefereeLeagueCoverage(updatedUser.id, leagueCoverageIds);
+  await syncDraftRefereeNightFeesToProfile({
+    refereeId: updatedUser.id,
+    standardNightFeePence,
+  });
 
   revalidatePath("/admin/referees");
   revalidatePath(`/admin/referees/${updatedUser.id}`);
   revalidatePath(`/admin/referees/${updatedUser.id}/preview`);
+  revalidatePath("/admin/referee-nights");
   revalidatePath("/admin/referee-availability");
   revalidatePath("/referee");
   revalidatePath("/referee/availability");
