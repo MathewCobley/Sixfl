@@ -8,7 +8,10 @@ import FormListboxField, { type FormListboxOption } from "@/components/ui/FormLi
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { assignPlayerProspectToTeamAction } from "./actions";
+import {
+  assignPlayerProspectToTeamAction,
+  sendPlayerProspectSquadInviteAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -44,6 +47,7 @@ type RawProspectRow = {
   leagueArea: string | null;
   leagueName: string | null;
   leagueSeason: string | null;
+  leagueDayOfWeek: string | null;
   latestPlayerResponse: string | null;
   latestPlayerRespondedAt: Date | null;
   latestYesNoEmailStatus: string | null;
@@ -77,7 +81,13 @@ type ProspectWithTeam = {
     id: string;
     name: string;
     teamMode: string;
-    league: { id: string; name: string; season: string | null; area: string | null } | null;
+    league: {
+      id: string;
+      name: string;
+      season: string | null;
+      area: string | null;
+      dayOfWeek: string | null;
+    } | null;
   } | null;
 };
 
@@ -119,15 +129,8 @@ function normaliseSearchText(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? "";
 }
 
-function buildActiveSquadKey(input: { email: string | null; teamId: string | null }) {
-  const email = normaliseEmail(input.email);
-  return email && input.teamId ? `${email}::${input.teamId}` : null;
-}
-
 function getStatusClasses(status: string) {
   switch (status) {
-    case "NEW":
-      return "border-white/10 bg-white/5 text-white/75";
     case "CONTACTED":
       return "border-sky-400/25 bg-sky-500/10 text-sky-100";
     case "TRIAL":
@@ -140,6 +143,7 @@ function getStatusClasses(status: string) {
       return "border-red-400/25 bg-red-500/10 text-red-100";
     case "DUPLICATE":
       return "border-orange-400/25 bg-orange-500/10 text-orange-100";
+    case "NEW":
     default:
       return "border-white/10 bg-white/5 text-white/75";
   }
@@ -171,7 +175,9 @@ function responseLabel(value: string | null) {
 
 function dispatchClasses(status: string | null) {
   if (status === "SENT") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-  if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") return "border-red-400/20 bg-red-500/10 text-red-100";
+  if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") {
+    return "border-red-400/20 bg-red-500/10 text-red-100";
+  }
   if (status === "QUEUED" || status === "PROCESSING") return "border-amber-400/20 bg-amber-500/10 text-amber-100";
   return "border-white/10 bg-white/[0.04] text-white/55";
 }
@@ -207,6 +213,10 @@ function getSavedMessage(saved?: string) {
   switch (saved) {
     case "assigned":
       return "Prospect assigned to team.";
+    case "squad-invite-queued":
+      return "Squad invite email queued. The player will receive the activation link for their team.";
+    case "squad-invite-already-sent":
+      return "A squad invite email has already been queued or sent for this player.";
     default:
       return saved ? "Saved." : null;
   }
@@ -226,20 +236,16 @@ function StatCard({
   label: string;
   value: number;
   helper: string;
-  tone?: "white" | "emerald" | "amber" | "sky" | "red" | "orange";
+  tone?: "white" | "emerald" | "sky" | "orange";
 }) {
   const toneClasses =
     tone === "emerald"
       ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
-      : tone === "amber"
-        ? "border-amber-400/20 bg-amber-500/10 text-amber-100/70"
-        : tone === "sky"
-          ? "border-sky-400/20 bg-sky-500/10 text-sky-100/70"
-          : tone === "red"
-            ? "border-red-400/20 bg-red-500/10 text-red-100/70"
-            : tone === "orange"
-              ? "border-orange-400/20 bg-orange-500/10 text-orange-100/70"
-              : "border-white/10 bg-white/[0.04] text-white/45";
+      : tone === "sky"
+        ? "border-sky-400/20 bg-sky-500/10 text-sky-100/70"
+        : tone === "orange"
+          ? "border-orange-400/20 bg-orange-500/10 text-orange-100/70"
+          : "border-white/10 bg-white/[0.04] text-white/45";
 
   return (
     <div className={`rounded-3xl border p-5 ${toneClasses}`}>
@@ -277,9 +283,16 @@ function mapProspectRow(row: RawProspectRow): ProspectWithTeam {
           id: row.teamId,
           name: row.teamName,
           teamMode: row.teamMode ?? "STANDARD",
-          league: row.leagueName && row.leagueId
-            ? { id: row.leagueId, name: row.leagueName, season: row.leagueSeason, area: row.leagueArea }
-            : null,
+          league:
+            row.leagueName && row.leagueId
+              ? {
+                  id: row.leagueId,
+                  name: row.leagueName,
+                  season: row.leagueSeason,
+                  area: row.leagueArea,
+                  dayOfWeek: row.leagueDayOfWeek,
+                }
+              : null,
         }
       : null,
   };
@@ -319,10 +332,8 @@ function getActiveProspectReason(input: {
   if (input.prospect.status === "DECLINED" || input.prospect.status === "DUPLICATE") return null;
   if (input.prospect.status === "ACTIVE_SQUAD") return "Prospect has been promoted to an active squad or is pending activation.";
 
-  const activeSquadKey = buildActiveSquadKey({
-    email: input.prospect.email,
-    teamId: input.prospect.teamId,
-  });
+  const email = normaliseEmail(input.prospect.email);
+  const activeSquadKey = email && input.prospect.teamId ? `${email}::${input.prospect.teamId}` : null;
 
   if (activeSquadKey && input.activeSquadMembershipKeys.has(activeSquadKey)) {
     return "Email matches a player already attached to this team squad.";
@@ -336,11 +347,13 @@ function ProspectCard({
   teamOptions,
   activeReason = null,
   muted = false,
+  selectedLeagueId = "",
 }: {
   prospect: ProspectWithTeam;
   teamOptions: FormListboxOption[];
   activeReason?: string | null;
   muted?: boolean;
+  selectedLeagueId?: string;
 }) {
   const name = getProspectName(prospect);
   const teamLeague = prospect.team?.league
@@ -349,16 +362,7 @@ function ProspectCard({
   const isUnassigned = !prospect.team;
   const isActivePlayer = Boolean(activeReason);
   const isClosedProspect = prospect.status === "DECLINED" || prospect.status === "DUPLICATE";
-  const poolLabel = prospect.status === "DUPLICATE"
-    ? "Duplicate record"
-    : prospect.status === "DECLINED"
-      ? "Not interested"
-      : "Unassigned prospect";
-  const poolHelp = prospect.status === "DUPLICATE"
-    ? "Marked as a duplicate and kept out of the open pipeline."
-    : prospect.status === "DECLINED"
-      ? "Kept for history but not part of the open pipeline."
-      : "Not currently linked to any team.";
+  const canSendSquadInvite = Boolean(prospect.team && prospect.email?.trim() && !isClosedProspect && !isActivePlayer);
 
   return (
     <article
@@ -382,7 +386,7 @@ function ProspectCard({
           </div>
 
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/45">
-            {prospect.email ? <span>{prospect.email}</span> : null}
+            {prospect.email ? <span>{prospect.email}</span> : <span>No email</span>}
             {prospect.phone ? <span>{prospect.phone}</span> : null}
             {prospect.source ? <span>Source: {prospect.source}</span> : null}
           </div>
@@ -398,8 +402,8 @@ function ProspectCard({
               <div>{dispatchLabel({ label: "YES/NO email", status: prospect.latestYesNoEmailStatus, at: prospect.latestYesNoEmailAt, empty: "No YES/NO email sent yet" })}</div>
             </div>
             <div className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${dispatchClasses(prospect.latestSigninEmailStatus)}`}>
-              <div className="font-semibold">Sign-in email</div>
-              <div>{dispatchLabel({ label: "Sign-in email", status: prospect.latestSigninEmailStatus, at: prospect.latestSigninEmailAt, empty: "No sign-in email sent yet" })}</div>
+              <div className="font-semibold">Squad invite</div>
+              <div>{dispatchLabel({ label: "Squad invite", status: prospect.latestSigninEmailStatus, at: prospect.latestSigninEmailAt, empty: "No squad invite sent yet" })}</div>
             </div>
           </div>
 
@@ -422,16 +426,31 @@ function ProspectCard({
           </div>
           {prospect.team ? (
             <>
-              <Link href={`/admin/teams/${prospect.team.id}/prospects`} className="mt-2 block font-semibold text-emerald-200 hover:text-emerald-100">
-                {prospect.team.name}
-              </Link>
+              <div className="mt-2 font-semibold text-emerald-200">{prospect.team.name}</div>
               <div className="mt-1 text-sm text-white/45">{teamLeague}</div>
               <div className="mt-2 text-xs text-white/35">Mode: {String(prospect.team.teamMode)}</div>
+              {canSendSquadInvite ? (
+                <form action={sendPlayerProspectSquadInviteAction} className="mt-4">
+                  <input type="hidden" name="prospectId" value={prospect.id} />
+                  <input type="hidden" name="leagueId" value={selectedLeagueId} />
+                  <button
+                    type="submit"
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
+                  >
+                    Send squad invite
+                  </button>
+                </form>
+              ) : null}
+              {prospect.team && !prospect.email?.trim() && !isClosedProspect ? (
+                <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
+                  Add an email address before sending a squad invite.
+                </div>
+              ) : null}
             </>
           ) : isClosedProspect ? (
             <>
-              <div className="mt-2 font-semibold text-orange-100">{poolLabel}</div>
-              <div className="mt-1 text-sm text-white/45">{poolHelp}</div>
+              <div className="mt-2 font-semibold text-orange-100">{prospect.status === "DUPLICATE" ? "Duplicate record" : "Not interested"}</div>
+              <div className="mt-1 text-sm text-white/45">Kept for history but not part of the open pipeline.</div>
             </>
           ) : (
             <>
@@ -463,13 +482,13 @@ function ProspectCard({
           {prospect.team ? (
             <>
               <Link
-                href={`/admin/teams/${prospect.team.id}/prospects`}
+                href={`/admin/teams/${prospect.team.id}/squad`}
                 className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
               >
-                Manage
+                Manage squad
               </Link>
               <Link
-                href={`/admin/teams/${prospect.team.id}/prospects/${prospect.id}/communications`}
+                href={`/admin/teams/${prospect.team.id}/communications`}
                 className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
               >
                 Team comms
@@ -525,6 +544,7 @@ export default async function AdminPlayerProspectsPage({
         l."area" AS "leagueArea",
         l."name" AS "leagueName",
         l."season" AS "leagueSeason",
+        l."dayOfWeek"::text AS "leagueDayOfWeek",
         latestResponse."response" AS "latestPlayerResponse",
         latestResponse."respondedAt" AS "latestPlayerRespondedAt",
         latestYesNoEmail."status" AS "latestYesNoEmailStatus",
@@ -560,11 +580,14 @@ export default async function AdminPlayerProspectsPage({
         SELECT d."status"::text AS "status", COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "emailAt"
         FROM "NotificationDispatch" d
         LEFT JOIN "NotificationTemplate" template ON template."id" = d."templateId"
-        WHERE d."sourceType" = 'TEAM_PLAYER_PROSPECT'
-          AND d."sourceId" = p."id"
+        WHERE d."sourceId" = p."id"
           AND d."channel" = 'EMAIL'
           AND (
-            template."key" = 'squad-activation-email'
+            d."sourceType" = 'MANAGED_SQUAD_JOIN_CONFIRMATION'
+            OR template."key" = 'managed-squad-join-confirmation-email'
+            OR template."key" = 'squad-activation-email'
+            OR d."metadata"::text ILIKE '%managed-squad-join-confirmation-email%'
+            OR d."metadata"::text ILIKE '%joinConfirmationUrl%'
             OR d."metadata"::text ILIKE '%squad-activation-email%'
             OR d."subject" ILIKE '%activation%'
             OR d."subject" ILIKE '%sign in%'
@@ -675,7 +698,7 @@ export default async function AdminPlayerProspectsPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">SIXFL pipeline</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Player prospects</h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-              Admin-owned view of individual players who may join a team. Use the league picker to focus on Northallerton, Harrogate or another league area.
+              Admin-owned view of individual players who may join a team. Assign players, send squad invites, and keep comms history in one place.
             </p>
 
             <form method="get" action="/admin/player-prospects" className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4">
@@ -720,7 +743,9 @@ export default async function AdminPlayerProspectsPage({
           {pipelineProspects.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">No open player prospects match this league filter yet.</div>
           ) : null}
-          {pipelineProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} />)}
+          {pipelineProspects.map((prospect) => (
+            <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} selectedLeagueId={selectedLeagueId} />
+          ))}
         </div>
       </section>
 
@@ -738,7 +763,14 @@ export default async function AdminPlayerProspectsPage({
           </div>
           <div className="mt-5 space-y-3">
             {activeSquadProspects.map((prospect) => (
-              <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} activeReason={activeProspectReasonById.get(prospect.id) ?? "Active player."} muted />
+              <ProspectCard
+                key={prospect.id}
+                prospect={prospect}
+                teamOptions={teamOptions}
+                activeReason={activeProspectReasonById.get(prospect.id) ?? "Active player."}
+                selectedLeagueId={selectedLeagueId}
+                muted
+              />
             ))}
           </div>
         </section>
@@ -755,7 +787,7 @@ export default async function AdminPlayerProspectsPage({
             <div className="text-sm text-orange-100/65">{duplicateProspects.length} duplicate record{duplicateProspects.length === 1 ? "" : "s"}</div>
           </div>
           <div className="mt-5 space-y-3">
-            {duplicateProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} muted />)}
+            {duplicateProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} selectedLeagueId={selectedLeagueId} muted />)}
           </div>
         </section>
       ) : null}
@@ -770,7 +802,7 @@ export default async function AdminPlayerProspectsPage({
             <div className="text-sm text-red-100/65">{declinedProspects.length} hidden from open list</div>
           </div>
           <div className="mt-5 space-y-3">
-            {declinedProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} muted />)}
+            {declinedProspects.map((prospect) => <ProspectCard key={prospect.id} prospect={prospect} teamOptions={teamOptions} selectedLeagueId={selectedLeagueId} muted />)}
           </div>
         </section>
       ) : null}
