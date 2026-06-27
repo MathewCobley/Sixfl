@@ -22,6 +22,11 @@ export const MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY =
 const MANAGED_SQUAD_JOIN_CONFIRMATION_SOURCE_TYPE =
   "MANAGED_SQUAD_JOIN_CONFIRMATION";
 
+const SQUAD_INVITE_TEMPLATE_NAME = "Squad invite email";
+const SQUAD_INVITE_ORIGIN_LABEL = "Squad invite email";
+const SQUAD_INVITE_TEMPLATE_DESCRIPTION =
+  "Email sent when a player prospect is added to a squad, asking them to confirm and activate their squad place.";
+
 function getSiteUrl() {
   return (
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
@@ -74,65 +79,52 @@ function getTeamContextLine(team: {
     return `${team.name} plays at ${venueName}.`;
   }
 
-  return `${team.name} is a managed SIXFL squad.`;
+  return `${team.name} is a SIXFL squad.`;
+}
+
+function getSquadInviteBody() {
+  return [
+    "Hi {{firstName}},",
+    "",
+    "You’ve been added to the {{teamName}} squad on SIXFL.",
+    "",
+    "{{teamContextLine}}",
+    "",
+    "Please tap below to confirm your place and activate your squad access:",
+    "",
+    "{{cta}}",
+    "",
+    "Once confirmed, you’ll be included in squad messages and fixture availability checks when games are coming up.",
+    "",
+    "Thanks,",
+    "SIXFL",
+  ].join("\n");
 }
 
 export async function ensureManagedSquadJoinConfirmationTemplate() {
   return prisma.notificationTemplate.upsert({
     where: { key: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY },
     update: {
-      name: "Managed squad join confirmation email",
-      description:
-        "Low-friction welcome email sent when a player lead is added to a managed squad, asking them to confirm they still want to join.",
+      name: SQUAD_INVITE_TEMPLATE_NAME,
+      description: SQUAD_INVITE_TEMPLATE_DESCRIPTION,
       kind: NotificationTemplateKind.TRANSACTIONAL,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.PLAYER,
       subject: "Confirm your place with {{teamName}}",
-      body: [
-        "Hi {{firstName}},",
-        "",
-        "You’ve been added to the {{teamName}} squad list on SIXFL.",
-        "",
-        "{{teamContextLine}}",
-        "",
-        "To keep things simple, please tap below if you still want to join:",
-        "",
-        "{{cta}}",
-        "",
-        "Once confirmed, we’ll include you in squad messages and fixture availability checks when games are coming up.",
-        "",
-        "Thanks,",
-        "SIXFL",
-      ].join("\n"),
+      body: getSquadInviteBody(),
       ctaLabel: "Yes, I want to join",
       ctaUrlKey: "joinConfirmationUrl",
       isActive: true,
     },
     create: {
       key: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY,
-      name: "Managed squad join confirmation email",
-      description:
-        "Low-friction welcome email sent when a player lead is added to a managed squad, asking them to confirm they still want to join.",
+      name: SQUAD_INVITE_TEMPLATE_NAME,
+      description: SQUAD_INVITE_TEMPLATE_DESCRIPTION,
       kind: NotificationTemplateKind.TRANSACTIONAL,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.PLAYER,
       subject: "Confirm your place with {{teamName}}",
-      body: [
-        "Hi {{firstName}},",
-        "",
-        "You’ve been added to the {{teamName}} squad list on SIXFL.",
-        "",
-        "{{teamContextLine}}",
-        "",
-        "To keep things simple, please tap below if you still want to join:",
-        "",
-        "{{cta}}",
-        "",
-        "Once confirmed, we’ll include you in squad messages and fixture availability checks when games are coming up.",
-        "",
-        "Thanks,",
-        "SIXFL",
-      ].join("\n"),
+      body: getSquadInviteBody(),
       ctaLabel: "Yes, I want to join",
       ctaUrlKey: "joinConfirmationUrl",
       isActive: true,
@@ -272,8 +264,8 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
     sourceType: MANAGED_SQUAD_JOIN_CONFIRMATION_SOURCE_TYPE,
     sourceId: prospect.id,
     metadata: {
-      origin: "managed_squad_lead_conversion",
-      originLabel: "Managed squad join confirmation email",
+      origin: "squad_invite",
+      originLabel: SQUAD_INVITE_ORIGIN_LABEL,
       teamId: prospect.teamId,
       prospectId: prospect.id,
       contactName: displayName,
