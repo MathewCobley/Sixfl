@@ -55,11 +55,12 @@ function statusClasses(status: RefereeNightStatus) {
       return "border-red-400/20 bg-red-500/10 text-red-200";
     case "DRAFT":
     default:
-      return "border-white/10 bg-white/[0.05] text-white/70";
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
   }
 }
 
 function formatStatus(status: RefereeNightStatus) {
+  if (status === "DRAFT") return "Scheduled";
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
@@ -159,16 +160,16 @@ function CashForm({
           min="0"
           step="0.01"
           placeholder="Collected £"
-          className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none placeholder:text-white/35"
+          className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-base text-white outline-none placeholder:text-white/35 sm:h-11 sm:text-sm"
         />
       </div>
       <input
         name="notes"
         placeholder="Optional note"
-        className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none placeholder:text-white/35"
+        className="mt-3 h-12 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-base text-white outline-none placeholder:text-white/35 sm:h-11 sm:text-sm"
       />
-      <button type="submit" className="mt-3 inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/15">
-        Record cash collected
+      <button type="submit" className="mt-3 inline-flex h-12 w-full items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/15 sm:h-10 sm:w-auto">
+        Record cash
       </button>
     </form>
   );
@@ -216,8 +217,8 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
   const savedMessage = getSavedMessage(sp.saved, sp.submitted);
 
   return (
-    <div className="min-h-screen bg-black px-4 py-6 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-8">
+    <div className="min-h-screen bg-black px-4 pb-28 pt-4 text-white sm:px-6 sm:py-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-8">
         {isAdminPreview ? (
           <section className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-5 text-sm text-amber-100">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -251,25 +252,25 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
           </section>
         ) : null}
 
-        <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
+        <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:p-6 md:p-8">
           <Link href="/referee" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">← Referee dashboard</Link>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusClasses(night.status)}`}>{formatStatus(night.status)}</span>
             <span className="text-sm text-white/55">{formatNightDate(night.nightDate)}</span>
           </div>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl md:text-4xl">
             {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}. Enter scores, record cash collected and submit one night cashup.
+            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}. Save scores first, then record cash or notes only where needed.
           </p>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Night fee</div><div className="mt-1 text-lg font-semibold text-white">{formatMoney(night.feePence)}</div></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Collected</div><div className="mt-1 text-lg font-semibold text-white">{formatMoney(night.cashCollectedPence)}</div></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-white/40">You keep</div><div className="mt-1 text-lg font-semibold text-white">{formatMoney(night.retainedByRefereePence)}</div></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Owe SIXFL</div><div className="mt-1 text-lg font-semibold text-emerald-200">{formatMoney(night.dueToSixflPence)}</div></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-white/40">SIXFL owes you</div><div className="mt-1 text-lg font-semibold text-amber-200">{formatMoney(night.dueToRefereePence)}</div></div>
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">Night fee</div><div className="mt-1 text-base font-semibold text-white sm:text-lg">{formatMoney(night.feePence)}</div></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">Collected</div><div className="mt-1 text-base font-semibold text-white sm:text-lg">{formatMoney(night.cashCollectedPence)}</div></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">You keep</div><div className="mt-1 text-base font-semibold text-white sm:text-lg">{formatMoney(night.retainedByRefereePence)}</div></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">Owe SIXFL</div><div className="mt-1 text-base font-semibold text-emerald-200 sm:text-lg">{formatMoney(night.dueToSixflPence)}</div></div>
+            <div className="col-span-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:col-span-1 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">SIXFL owes you</div><div className="mt-1 text-base font-semibold text-amber-200 sm:text-lg">{formatMoney(night.dueToRefereePence)}</div></div>
           </div>
         </section>
 
@@ -278,100 +279,112 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
             No fixtures are attached to this referee night yet.
           </div>
         ) : (
-          <section className="space-y-5">
-            {fixtures.map((fixture) => {
+          <section className="space-y-4 sm:space-y-5">
+            {fixtures.map((fixture, fixtureIndex) => {
               const homeCollected = cashByTeam[fixture.homeTeam.id] ?? 0;
               const awayCollected = cashByTeam[fixture.awayTeam.id] ?? 0;
               const fixtureDisciplinaryNotes = disciplinaryNotesByFixture.get(fixture.id) ?? [];
+              const fixtureLabel = `${fixture.homeTeam.name} v ${fixture.awayTeam.name}`;
 
               return (
                 <article key={fixture.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-                  <div className="border-b border-white/10 px-5 py-5 sm:px-6">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
+                          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">Match {fixtureIndex + 1}</span>
                           <span>{formatKickoffTime(fixture.kickoffAt)}</span>
                           {fixture.pitch ? <><span>•</span><span>{fixture.pitch}</span></> : null}
                           {fixture.round ? <><span>•</span><span>Week {fixture.round}</span></> : null}
                         </div>
-                        <h2 className="mt-2 text-xl font-semibold text-white">
+                        <h2 className="mt-2 text-lg font-semibold leading-tight text-white sm:text-xl">
                           {fixture.homeTeam.name} <span className="text-white/35">v</span> {fixture.awayTeam.name}
                         </h2>
                         <div className="mt-1 text-sm text-white/55">
                           {fixture.result ? `Current result: ${fixture.result.homeScore}-${fixture.result.awayScore}${fixture.result.isDisputed ? " · disputed" : ""}` : "No result entered"}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-white/45">{fixture.homeTeam.name}</div><div className="font-semibold text-emerald-200">{formatMoney(homeCollected)}</div></div>
-                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-white/45">{fixture.awayTeam.name}</div><div className="font-semibold text-emerald-200">{formatMoney(awayCollected)}</div></div>
+                      <div className="grid grid-cols-2 gap-2 text-sm sm:gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="truncate text-white/45">{fixture.homeTeam.name}</div><div className="font-semibold text-emerald-200">{formatMoney(homeCollected)}</div></div>
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="truncate text-white/45">{fixture.awayTeam.name}</div><div className="font-semibold text-emerald-200">{formatMoney(awayCollected)}</div></div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-                    <form action={submitNightFixtureResultAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="space-y-3 px-4 py-4 sm:px-6 sm:py-5">
+                    <form action={submitNightFixtureResultAction} className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
                       <input type="hidden" name="refereeNightId" value={night.id} />
                       <input type="hidden" name="fixtureId" value={fixture.id} />
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/45">Score</h3>
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-100/70">1. Score</h3>
                       <div className="mt-4 grid grid-cols-2 gap-3">
                         <label className="text-sm text-white/70">
-                          {fixture.homeTeam.name}
-                          <input name="homeScore" type="number" min="0" step="1" defaultValue={fixture.result?.homeScore ?? 0} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none" />
+                          <span className="block truncate">{fixture.homeTeam.name}</span>
+                          <input name="homeScore" type="number" min="0" step="1" defaultValue={fixture.result?.homeScore ?? 0} className="mt-2 h-14 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-center text-xl font-semibold text-white outline-none sm:h-11 sm:text-base" />
                         </label>
                         <label className="text-sm text-white/70">
-                          {fixture.awayTeam.name}
-                          <input name="awayScore" type="number" min="0" step="1" defaultValue={fixture.result?.awayScore ?? 0} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white outline-none" />
+                          <span className="block truncate">{fixture.awayTeam.name}</span>
+                          <input name="awayScore" type="number" min="0" step="1" defaultValue={fixture.result?.awayScore ?? 0} className="mt-2 h-14 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-center text-xl font-semibold text-white outline-none sm:h-11 sm:text-base" />
                         </label>
                       </div>
-                      <button type="submit" className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/15">
+                      <button type="submit" className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:w-auto">
                         {fixture.result ? "Update score" : "Save score"}
                       </button>
                     </form>
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.homeTeam.id} teamName={fixture.homeTeam.name} />
-                      <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.awayTeam.id} teamName={fixture.awayTeam.name} />
-                    </div>
-                  </div>
-
-                  <div className="border-t border-white/10 px-5 py-5 sm:px-6">
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                      <DisciplinaryNoteForm
-                        refereeNightId={night.id}
-                        fixtureId={fixture.id}
-                        teams={[
-                          { id: fixture.homeTeam.id, name: fixture.homeTeam.name },
-                          { id: fixture.awayTeam.id, name: fixture.awayTeam.name },
-                        ]}
-                      />
-
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/45">Recorded notes</h3>
-                        {fixtureDisciplinaryNotes.length === 0 ? (
-                          <p className="mt-3 text-sm text-white/50">No disciplinary notes recorded for this fixture.</p>
-                        ) : (
-                          <div className="mt-3 space-y-3">
-                            {fixtureDisciplinaryNotes.map((note) => (
-                              <div key={note.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-semibold text-white">{note.teamName}</span>
-                                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${severityClasses(note.severity)}`}>
-                                    {formatDisciplinarySeverity(note.severity)}
-                                  </span>
-                                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
-                                    {formatDisciplinaryIncident(note.incidentType)}
-                                  </span>
-                                </div>
-                                <p className="mt-2 whitespace-pre-line leading-6 text-white/70">{note.description}</p>
-                                <p className="mt-2 text-xs text-white/35">
-                                  Recorded by {note.reportedByName || note.reportedByEmail || "referee"}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                    <details className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
+                        <span>2. Cash collection</span>
+                        <span className="text-xs font-normal text-white/45">Open if cash paid</span>
+                      </summary>
+                      <div className="grid gap-3 border-t border-white/10 p-4 md:grid-cols-2">
+                        <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.homeTeam.id} teamName={fixture.homeTeam.name} />
+                        <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.awayTeam.id} teamName={fixture.awayTeam.name} />
                       </div>
-                    </div>
+                    </details>
+
+                    <details open={fixtureDisciplinaryNotes.length > 0 || undefined} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
+                        <span>3. Notes / discipline</span>
+                        <span className="text-xs font-normal text-white/45">{fixtureDisciplinaryNotes.length} recorded</span>
+                      </summary>
+                      <div className="grid gap-4 border-t border-white/10 p-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                        <DisciplinaryNoteForm
+                          refereeNightId={night.id}
+                          fixtureId={fixture.id}
+                          teams={[
+                            { id: fixture.homeTeam.id, name: fixture.homeTeam.name },
+                            { id: fixture.awayTeam.id, name: fixture.awayTeam.name },
+                          ]}
+                        />
+
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/45">Recorded notes</h3>
+                          {fixtureDisciplinaryNotes.length === 0 ? (
+                            <p className="mt-3 text-sm text-white/50">No notes recorded for {fixtureLabel}.</p>
+                          ) : (
+                            <div className="mt-3 space-y-3">
+                              {fixtureDisciplinaryNotes.map((note) => (
+                                <div key={note.id} className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-semibold text-white">{note.teamName}</span>
+                                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${severityClasses(note.severity)}`}>
+                                      {formatDisciplinarySeverity(note.severity)}
+                                    </span>
+                                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                                      {formatDisciplinaryIncident(note.incidentType)}
+                                    </span>
+                                  </div>
+                                  <p className="mt-2 whitespace-pre-line leading-6 text-white/70">{note.description}</p>
+                                  <p className="mt-2 text-xs text-white/35">
+                                    Recorded by {note.reportedByName || note.reportedByEmail || "referee"}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 </article>
               );
@@ -379,27 +392,33 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
           </section>
         )}
 
-        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-          <div className="border-b border-white/10 px-6 py-5">
+        <section id="submit-cashup" className="scroll-mt-24 overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-500/10">
+          <div className="border-b border-emerald-400/15 px-5 py-5 sm:px-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">End of night</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Submit cashup</h2>
-            <p className="mt-2 text-sm leading-6 text-white/60">
+            <p className="mt-2 text-sm leading-6 text-emerald-50/70">
               Submit once scores and money collected are recorded. Admin will approve and settle the balance.
             </p>
           </div>
-          <form action={submitRefereeNightCashupAction} className="space-y-5 px-6 py-6">
+          <form action={submitRefereeNightCashupAction} className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
             <input type="hidden" name="refereeNightId" value={night.id} />
-            <textarea name="refereeNotes" rows={4} defaultValue={night.refereeNotes ?? ""} placeholder="Any notes about cash, teams, incidents or fixture issues" className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35" />
+            <textarea name="refereeNotes" rows={4} defaultValue={night.refereeNotes ?? ""} placeholder="Any notes about cash, teams, incidents or fixture issues" className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white outline-none placeholder:text-white/35 sm:text-sm" />
             {!allFixturesHaveResults ? (
               <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
                 Some fixtures do not have scores yet. You can still submit if needed, but it is better to complete the scores first.
               </div>
             ) : null}
-            <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">
+            <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:w-auto">
               Submit night cashup
             </button>
           </form>
         </section>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/85 p-3 backdrop-blur sm:hidden">
+        <a href="#submit-cashup" className="flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-4 text-sm font-semibold text-black shadow-[0_10px_30px_rgba(16,185,129,0.25)]">
+          Finish night / submit cashup
+        </a>
       </div>
     </div>
   );
