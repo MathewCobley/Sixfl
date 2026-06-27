@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import RefereeTabs from "@/components/referee/RefereeTabs";
 import { requireReferee } from "@/lib/admin";
@@ -59,7 +60,12 @@ function groupSlotsByLeague(slots: RefereeAvailabilitySlot[]) {
 }
 
 export default async function RefereeAvailabilityPage({ searchParams }: PageProps) {
-  const { user, isAdminPreview } = await requireReferee();
+  const { user, authenticatedUser, isAdminPreview } = await requireReferee();
+
+  if (authenticatedUser.role === "ADMIN" && !isAdminPreview) {
+    redirect("/admin/referees?error=select_referee_preview");
+  }
+
   const sp = (await searchParams) ?? {};
   const monthKey = normaliseMonthKey(sp.month);
   const previousMonth = getAdjacentMonthKey(monthKey, -1);
