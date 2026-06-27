@@ -23,18 +23,19 @@ function statusClasses(status: RefereeNightStatus) {
     case "APPROVED":
       return "border-sky-400/20 bg-sky-400/10 text-sky-200";
     case "SETTLED":
-      return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-200";
     case "REOPENED":
       return "border-violet-400/20 bg-violet-400/10 text-violet-200";
     case "CANCELLED":
       return "border-red-400/20 bg-red-500/10 text-red-200";
     case "DRAFT":
     default:
-      return "border-white/10 bg-white/5 text-white/75";
+      return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
   }
 }
 
 function formatStatus(status: RefereeNightStatus) {
+  if (status === "DRAFT") return "Scheduled";
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
