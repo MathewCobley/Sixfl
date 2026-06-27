@@ -11,7 +11,10 @@ import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
-import { updateFixtureAvailabilityAction } from "./actions";
+import {
+  sendAvailabilitySmsChaseAction,
+  updateFixtureAvailabilityAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -369,7 +372,7 @@ export default async function CaptainAvailabilityPage({
               Availability
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Manage availability fixture-by-fixture. The summary now covers every upcoming open fixture shown below, so two fixtures will count as two sets of player responses.
+              Manage availability fixture-by-fixture. Use the chase button for players who have not replied.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
@@ -406,48 +409,20 @@ export default async function CaptainAvailabilityPage({
 
           <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-2">
             <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
-                Available
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">
-                {totalAvailable}
-              </p>
-              <p className="mt-2 text-xs text-emerald-100/65">
-                Across {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Available</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{totalAvailable}</p>
             </div>
             <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-                Maybe
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">
-                {totalMaybe}
-              </p>
-              <p className="mt-2 text-xs text-amber-100/65">
-                Across {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Maybe</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{totalMaybe}</p>
             </div>
             <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">
-                Unavailable
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">
-                {totalUnavailable}
-              </p>
-              <p className="mt-2 text-xs text-red-100/65">
-                Across {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">Unavailable</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{totalUnavailable}</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                No response
-              </p>
-              <p className="mt-3 text-3xl font-semibold text-white">
-                {totalNoResponse}
-              </p>
-              <p className="mt-2 text-xs text-white/45">
-                Outstanding slots
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">No response</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{totalNoResponse}</p>
             </div>
           </div>
         </div>
@@ -460,18 +435,14 @@ export default async function CaptainAvailabilityPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">
                 Multiple open fixtures
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                Work through each fixture separately
-              </h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">Work through each fixture separately</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-100/70">
                 The top numbers are totals across all upcoming fixtures. Use the fixture cards below to update the correct availability list for each match.
               </p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
               {fixtures.map((fixture) => {
-                const respondedCount = fixture.availabilities.filter(
-                  (item) => item.response !== "NO_RESPONSE",
-                ).length;
+                const respondedCount = fixture.availabilities.filter((item) => item.response !== "NO_RESPONSE").length;
                 const noResponseCount = Math.max(team.members.length - respondedCount, 0);
 
                 return (
@@ -480,12 +451,8 @@ export default async function CaptainAvailabilityPage({
                     href={`#fixture-${fixture.id}`}
                     className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm transition hover:border-sky-400/30 hover:bg-sky-500/10"
                   >
-                    <div className="font-semibold text-white">
-                      {formatDateTime(fixture.kickoffAt)}
-                    </div>
-                    <div className="mt-1 truncate text-xs text-white/55">
-                      {fixture.homeTeam.name} vs {fixture.awayTeam.name}
-                    </div>
+                    <div className="font-semibold text-white">{formatDateTime(fixture.kickoffAt)}</div>
+                    <div className="mt-1 truncate text-xs text-white/55">{fixture.homeTeam.name} vs {fixture.awayTeam.name}</div>
                     <div className="mt-2 text-xs text-sky-100/70">
                       {respondedCount} replied · {noResponseCount} no response
                     </div>
@@ -520,18 +487,10 @@ export default async function CaptainAvailabilityPage({
               fixture.availabilities.map((item) => [item.teamMemberId, item]),
             );
 
-            const availableCount = fixture.availabilities.filter(
-              (item) => item.response === "AVAILABLE",
-            ).length;
-            const maybeCount = fixture.availabilities.filter(
-              (item) => item.response === "MAYBE",
-            ).length;
-            const unavailableCount = fixture.availabilities.filter(
-              (item) => item.response === "UNAVAILABLE",
-            ).length;
-            const respondedCount = fixture.availabilities.filter(
-              (item) => item.response !== "NO_RESPONSE",
-            ).length;
+            const availableCount = fixture.availabilities.filter((item) => item.response === "AVAILABLE").length;
+            const maybeCount = fixture.availabilities.filter((item) => item.response === "MAYBE").length;
+            const unavailableCount = fixture.availabilities.filter((item) => item.response === "UNAVAILABLE").length;
+            const respondedCount = fixture.availabilities.filter((item) => item.response !== "NO_RESPONSE").length;
             const noResponseCount = Math.max(team.members.length - respondedCount, 0);
 
             return (
@@ -543,31 +502,18 @@ export default async function CaptainAvailabilityPage({
                 <div className="border-b border-white/10 px-6 py-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                        Fixture
-                      </p>
-                      <h2 className="mt-2 text-xl font-semibold text-white">
-                        {fixture.homeTeam.name} vs {fixture.awayTeam.name}
-                      </h2>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Fixture</p>
+                      <h2 className="mt-2 text-xl font-semibold text-white">{fixture.homeTeam.name} vs {fixture.awayTeam.name}</h2>
                       <p className="mt-2 text-sm text-white/60">
-                        {formatDateTime(fixture.kickoffAt)} ·{" "}
-                        {fixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}
+                        {formatDateTime(fixture.kickoffAt)} · {fixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}
                       </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                        Available {availableCount}
-                      </span>
-                      <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
-                        Maybe {maybeCount}
-                      </span>
-                      <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-100">
-                        Unavailable {unavailableCount}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                        No response {noResponseCount}
-                      </span>
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">Available {availableCount}</span>
+                      <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">Maybe {maybeCount}</span>
+                      <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-100">Unavailable {unavailableCount}</span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">No response {noResponseCount}</span>
                       <Link
                         href={`/captain/team/${teamid}/fixtures/${fixture.id}/selection`}
                         className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-4 py-1.5 text-xs font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
@@ -591,20 +537,11 @@ export default async function CaptainAvailabilityPage({
                     );
 
                     return (
-                      <div
-                        key={member.id}
-                        className="grid gap-4 px-6 py-5 xl:grid-cols-[1fr_340px]"
-                      >
+                      <div key={member.id} className="grid gap-4 px-6 py-5 xl:grid-cols-[1fr_340px]">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-base font-semibold text-white">
-                              {memberName}
-                            </div>
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getResponseClasses(
-                                response,
-                              )}`}
-                            >
+                            <div className="text-base font-semibold text-white">{memberName}</div>
+                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getResponseClasses(response)}`}>
                               {response.replace("_", " ")}
                             </span>
                           </div>
@@ -636,9 +573,7 @@ export default async function CaptainAvailabilityPage({
                           </div>
 
                           {availability?.note ? (
-                            <div className="mt-2 text-sm text-white/55">
-                              Note: {availability.note}
-                            </div>
+                            <div className="mt-2 text-sm text-white/55">Note: {availability.note}</div>
                           ) : null}
                         </div>
 
@@ -668,6 +603,19 @@ export default async function CaptainAvailabilityPage({
                               className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
                             >
                               Save response
+                            </button>
+                          </form>
+
+                          <form action={sendAvailabilitySmsChaseAction}>
+                            <input type="hidden" name="teamid" value={teamid} />
+                            <input type="hidden" name="fixtureId" value={fixture.id} />
+                            <input type="hidden" name="teamMemberId" value={member.id} />
+                            <button
+                              type="submit"
+                              disabled={!memberPhone}
+                              className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
+                            >
+                              {memberPhone ? "Chase by SMS" : "No phone to chase"}
                             </button>
                           </form>
                         </div>
