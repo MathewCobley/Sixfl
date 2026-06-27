@@ -199,7 +199,8 @@ export default async function CaptainAvailabilityPage({
   const { teamid } = await params;
   const filters = await searchParams;
 
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
+  const canOpenAdminComms = access.isAdmin;
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
@@ -404,6 +405,14 @@ export default async function CaptainAvailabilityPage({
               >
                 Open fixtures
               </Link>
+              {canOpenAdminComms ? (
+                <Link
+                  href={`/admin/teams/${teamid}/communications`}
+                  className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+                >
+                  Team communications
+                </Link>
+              ) : null}
             </div>
           </div>
 
@@ -568,8 +577,18 @@ export default async function CaptainAvailabilityPage({
                             </div>
                           </div>
 
-                          <div className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getSmsStatusClasses(smsDispatch?.status)}`}>
-                            {getSmsStatusText(smsDispatch)}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getSmsStatusClasses(smsDispatch?.status)}`}>
+                              {getSmsStatusText(smsDispatch)}
+                            </div>
+                            {canOpenAdminComms ? (
+                              <Link
+                                href={`/admin/teams/${teamid}/players/${member.id}/communications`}
+                                className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                              >
+                                Player comms
+                              </Link>
+                            ) : null}
                           </div>
 
                           {availability?.note ? (
