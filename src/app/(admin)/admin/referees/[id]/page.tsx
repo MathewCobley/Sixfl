@@ -148,6 +148,9 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
       role: true,
       createdFromLeadId: true,
       refereedFixtures: {
+        where: {
+          publishedAt: { not: null },
+        },
         orderBy: [{ kickoffAt: "asc" }],
         select: {
           id: true,
@@ -297,7 +300,7 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
                     <div className="text-sm font-semibold text-white">Leagues covered</div>
                     <p className="mt-1 text-xs leading-5 text-white/50">Tick the leagues this referee can cover. Untick to remove them.</p>
                   </div>
-                  {!hasManualCoverage && fixtureCoveredLeagues.length > 0 ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Currently inferred from fixtures</span> : null}
+                  {!hasManualCoverage && fixtureCoveredLeagues.length > 0 ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Currently inferred from published fixtures</span> : null}
                 </div>
 
                 {activeLeagues.length === 0 ? (
@@ -347,8 +350,8 @@ export default async function AdminRefereeProfilePage({ params, searchParams }: 
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-black/25 p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4"><div><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Fixture assignments</div><h2 className="mt-2 text-xl font-bold text-white">Referee fixture history</h2></div><Link href="/admin/fixtures" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Open fixtures</Link></div>
-            {referee.refereedFixtures.length === 0 ? <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5"><div className="text-sm font-semibold text-white">No fixtures assigned</div><p className="mt-2 text-sm leading-6 text-white/60">This referee exists in the live assignment pool but has not yet been attached to any fixture.</p></div> : (
+            <div className="flex items-start justify-between gap-4"><div><div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Published fixture assignments</div><h2 className="mt-2 text-xl font-bold text-white">Referee fixture history</h2></div><Link href="/admin/fixtures" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Open fixtures</Link></div>
+            {referee.refereedFixtures.length === 0 ? <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5"><div className="text-sm font-semibold text-white">No published fixtures assigned</div><p className="mt-2 text-sm leading-6 text-white/60">This referee may have draft assignments, but they are hidden here until fixtures are published.</p></div> : (
               <div className="mt-5 space-y-3">{referee.refereedFixtures.map((fixture) => <div key={fixture.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{formatStatus(fixture.status)}</span>{fixture.league ? <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{fixture.league.name}{fixture.league.season ? ` • ${fixture.league.season}` : ""}</span> : null}</div><div className="mt-3 text-lg font-bold text-white">{fixture.homeTeam?.name || "Home"} v {fixture.awayTeam?.name || "Away"}</div><div className="mt-2 text-sm text-white/60">{formatDate(fixture.kickoffAt)}</div></div>)}</div>
             )}
           </section>
