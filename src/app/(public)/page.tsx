@@ -15,19 +15,17 @@ export const metadata = {
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
-const northallertonTeamLink =
-  "/register-interest?type=team&area=Northallerton&night=Wednesday";
-const northallertonPlayerLink =
-  "/register-interest?type=player&area=Northallerton&night=Wednesday";
-const wetherbyTeamLink =
-  "/register-interest?type=team&area=Wetherby&night=Wednesday";
-const wetherbyPlayerLink =
-  "/register-interest?type=player&area=Wetherby&night=Wednesday";
+const generalRegisterLink = "/register-interest";
 const generalTeamLink = "/register-interest?type=team";
 const generalPlayerLink = "/register-interest?type=player";
 const generalRefereeLink = "/register-interest?type=referee";
+const northallertonTeamLink = "/register-interest?type=team&area=Northallerton&night=Wednesday";
+const northallertonPlayerLink = "/register-interest?type=player&area=Northallerton&night=Wednesday";
+const wetherbyTeamLink = "/register-interest?type=team&area=Wetherby&night=Wednesday";
+const wetherbyPlayerLink = "/register-interest?type=player&area=Wetherby&night=Wednesday";
 
 const leagueTypes = ["MEN’S LEAGUES", "WOMEN’S LEAGUES", "YOUTH LEAGUES"];
+const launchAreas = ["Harrogate", "Wetherby", "Northallerton", "Ripon", "York", "Leeds"];
 const predictorHomeTeamName = "Six Offenders";
 const predictorAwayTeamName = "Crescent United";
 
@@ -40,7 +38,7 @@ const areaCards = [
     primaryLabel: "View league",
     primaryHref: harrogateLeagueLink,
     secondaryLabel: "Register interest",
-    secondaryHref: generalTeamLink,
+    secondaryHref: generalRegisterLink,
     featured: true,
   },
   {
@@ -103,8 +101,6 @@ const joinRoutes = [
   },
 ];
 
-const launchAreas = ["Harrogate", "Wetherby", "Northallerton", "Ripon", "York", "Leeds"];
-
 const predictorSample = [
   { label: predictorHomeTeamName, value: 58, tone: "emerald" },
   { label: "Draw", value: 14, tone: "neutral" },
@@ -123,33 +119,19 @@ function normaliseTeamName(name: string) {
 async function getPredictorSampleTeamLogos(): Promise<PredictorSampleTeamLogos> {
   try {
     const teams = await prisma.team.findMany({
-      where: {
-        name: {
-          in: [predictorHomeTeamName, predictorAwayTeamName],
-        },
-      },
-      select: {
-        name: true,
-        logoUrl: true,
-      },
+      where: { name: { in: [predictorHomeTeamName, predictorAwayTeamName] } },
+      select: { name: true, logoUrl: true },
     });
 
-    const homeTeam = teams.find(
-      (team) => normaliseTeamName(team.name) === normaliseTeamName(predictorHomeTeamName),
-    );
-    const awayTeam = teams.find(
-      (team) => normaliseTeamName(team.name) === normaliseTeamName(predictorAwayTeamName),
-    );
+    const homeTeam = teams.find((team) => normaliseTeamName(team.name) === normaliseTeamName(predictorHomeTeamName));
+    const awayTeam = teams.find((team) => normaliseTeamName(team.name) === normaliseTeamName(predictorAwayTeamName));
 
     return {
       homeLogoUrl: homeTeam?.logoUrl ?? null,
       awayLogoUrl: awayTeam?.logoUrl ?? null,
     };
   } catch {
-    return {
-      homeLogoUrl: null,
-      awayLogoUrl: null,
-    };
+    return { homeLogoUrl: null, awayLogoUrl: null };
   }
 }
 
@@ -185,18 +167,14 @@ export default async function HomePage() {
             </h1>
 
             <p className="mt-6 max-w-3xl text-base leading-8 text-white/72 sm:text-lg">
-              Find a local SIXFL league, check live fixtures and tables, or
-              register interest for an upcoming launch as a team, player or
-              referee.
+              Find a local SIXFL league, check live fixtures and tables, or register interest for an upcoming launch as a team, player or referee.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
               {leagueTypes.map((type, index) => (
                 <span key={type} className="inline-flex items-center">
                   {type}
-                  {index < leagueTypes.length - 1 && (
-                    <span className="ml-4 text-white/25">•</span>
-                  )}
+                  {index < leagueTypes.length - 1 && <span className="ml-4 text-white/25">•</span>}
                 </span>
               ))}
             </div>
@@ -210,7 +188,7 @@ export default async function HomePage() {
               </Link>
 
               <Link
-                href={wetherbyTeamLink}
+                href={generalRegisterLink}
                 className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
               >
                 REGISTER
@@ -219,9 +197,7 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
-            {areaCards.map((area) => (
-              <AreaCard key={area.title} {...area} />
-            ))}
+            {areaCards.map((area) => <AreaCard key={area.title} {...area} />)}
           </div>
         </section>
 
@@ -229,26 +205,15 @@ export default async function HomePage() {
 
         <section id="why-sixfl" className="mt-12 lg:mt-16">
           <div className="mb-6">
-            <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">
-              WHY SIXFL
-            </div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-              Local 6-a-side made easier to follow.
-            </h2>
+            <div className="text-[11px] font-bold tracking-[0.24em] text-white/60">WHY SIXFL</div>
+            <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Local 6-a-side made easier to follow.</h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60 sm:text-base">
-              From fixtures and results to registrations and league tables,
-              SIXFL keeps the important details easy to find.
+              From fixtures and results to registrations and league tables, SIXFL keeps the important details easy to find.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            {whySixflPoints.map((point) => (
-              <PathwayCard
-                key={point.title}
-                title={point.title}
-                desc={point.desc}
-              />
-            ))}
+            {whySixflPoints.map((point) => <PathwayCard key={point.title} title={point.title} desc={point.desc} />)}
           </div>
         </section>
 
@@ -256,24 +221,15 @@ export default async function HomePage() {
           <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-8">
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
-                <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-                  JOIN A LEAGUE
-                </div>
-                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Get involved with SIXFL.
-                </h2>
+                <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">JOIN A LEAGUE</div>
+                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">Get involved with SIXFL.</h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  Teams, individual players and referees can register interest
-                  for live leagues and new launch areas. Harrogate is live now,
-                  and Wetherby and Northallerton registrations are open.
+                  Teams, individual players and referees can register interest for live leagues and new launch areas. Harrogate is live now, and Wetherby and Northallerton registrations are open.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
                   {launchAreas.map((area) => (
-                    <span
-                      key={area}
-                      className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[11px] font-bold text-white/80"
-                    >
+                    <span key={area} className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[11px] font-bold text-white/80">
                       {area}
                     </span>
                   ))}
@@ -282,14 +238,7 @@ export default async function HomePage() {
 
               <div className="grid gap-3 lg:col-span-5">
                 {joinRoutes.map((route, index) => (
-                  <FunnelCard
-                    key={route.title}
-                    title={route.title}
-                    desc={route.desc}
-                    href={route.href}
-                    cta={route.cta}
-                    featured={index === 0}
-                  />
+                  <FunnelCard key={route.title} title={route.title} desc={route.desc} href={route.href} cta={route.cta} featured={index === 0} />
                 ))}
               </div>
             </div>
@@ -322,46 +271,20 @@ function AreaCard({
   featured: boolean;
 }) {
   return (
-    <article
-      className={`rounded-[1.5rem] border p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-[1.75rem] sm:p-6 ${
-        featured
-          ? "border-emerald-500/25 bg-emerald-500/[0.08]"
-          : "border-white/10 bg-black/35"
-      }`}
-    >
+    <article className={`rounded-[1.5rem] border p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-[1.75rem] sm:p-6 ${featured ? "border-emerald-500/25 bg-emerald-500/[0.08]" : "border-white/10 bg-black/35"}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">
-          {eyebrow}
-        </div>
-        <div
-          className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
-            featured
-              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-              : "border-white/10 bg-white/5 text-white/75"
-          }`}
-        >
-          {status}
-        </div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">{eyebrow}</div>
+        <div className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${featured ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300" : "border-white/10 bg-white/5 text-white/75"}`}>{status}</div>
       </div>
 
-      <h2 className="mt-5 text-2xl font-black tracking-tight text-white sm:text-3xl">
-        {title}
-      </h2>
-      <p className="mt-3 text-sm leading-7 text-white/66 sm:text-base">
-        {body}
-      </p>
+      <h2 className="mt-5 text-2xl font-black tracking-tight text-white sm:text-3xl">{title}</h2>
+      <p className="mt-3 text-sm leading-7 text-white/66 sm:text-base">{body}</p>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <Link
-          href={primaryHref}
-          className="inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-5 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
-        >
+        <Link href={primaryHref} className="inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-5 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto">
           {primaryLabel}
         </Link>
-        <Link
-          href={secondaryHref}
-          className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto"
-        >
+        <Link href={secondaryHref} className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto">
           {secondaryLabel}
         </Link>
       </div>
@@ -369,31 +292,18 @@ function AreaCard({
   );
 }
 
-function SixflAiPredictorSection({
-  teamLogos,
-}: {
-  teamLogos: PredictorSampleTeamLogos;
-}) {
+function SixflAiPredictorSection({ teamLogos }: { teamLogos: PredictorSampleTeamLogos }) {
   return (
     <section className="mt-12 lg:mt-16">
       <div className="overflow-hidden rounded-[1.5rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.035))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-center">
           <div>
-            <div className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
-              SIXFL AI Predictor
-            </div>
-            <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">
-              Match predictions, powered by SIXFL AI Predictor.
-            </h2>
+            <div className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">SIXFL AI Predictor</div>
+            <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">Match predictions, powered by SIXFL AI Predictor.</h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
-              Before kick-off, SIXFL AI Predictor turns recent results, goals
-              scored, goals conceded and league position into a simple match
-              preview and win chance estimate.
+              Before kick-off, SIXFL AI Predictor turns recent results, goals scored, goals conceded and league position into a simple match preview and win chance estimate.
             </p>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/55">
-              It is just for fun. It gives teams something extra to check,
-              compare and talk about before they play.
-            </p>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/55">It is just for fun. It gives teams something extra to check, compare and talk about before they play.</p>
             <div className="mt-6 flex flex-wrap gap-2">
               <FeaturePill text="AI match previews" />
               <FeaturePill text="Win chance estimates" />
@@ -404,52 +314,23 @@ function SixflAiPredictorSection({
           <div className="rounded-[1.5rem] border border-white/10 bg-black/45 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.35)] sm:rounded-[2rem] sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
               <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
-                  Sample prediction
-                </div>
-                <h3 className="mt-2 text-xl font-black text-white">
-                  {predictorHomeTeamName} vs {predictorAwayTeamName}
-                </h3>
+                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">Sample prediction</div>
+                <h3 className="mt-2 text-xl font-black text-white">{predictorHomeTeamName} vs {predictorAwayTeamName}</h3>
               </div>
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-200">
-                SIXFL AI Predictor
-              </span>
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-200">SIXFL AI Predictor</span>
             </div>
 
             <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-4 sm:gap-5 sm:p-5">
-              <SampleTeamBadge
-                initials="SO"
-                logoUrl={teamLogos.homeLogoUrl}
-                name={predictorHomeTeamName}
-                tone="emerald"
-              />
-              <div className="rounded-full border border-white/10 bg-black/60 px-3 py-2 text-xs font-black tracking-[0.2em] text-white/55">
-                VS
-              </div>
-              <SampleTeamBadge
-                initials="CU"
-                logoUrl={teamLogos.awayLogoUrl}
-                name={predictorAwayTeamName}
-                tone="sky"
-              />
+              <SampleTeamBadge initials="SO" logoUrl={teamLogos.homeLogoUrl} name={predictorHomeTeamName} tone="emerald" />
+              <div className="rounded-full border border-white/10 bg-black/60 px-3 py-2 text-xs font-black tracking-[0.2em] text-white/55">VS</div>
+              <SampleTeamBadge initials="CU" logoUrl={teamLogos.awayLogoUrl} name={predictorAwayTeamName} tone="sky" />
             </div>
 
-            <div className="mt-6 space-y-4">
-              {predictorSample.map((item) => (
-                <PredictionBar key={item.label} {...item} />
-              ))}
-            </div>
-
+            <div className="mt-6 space-y-4">{predictorSample.map((item) => <PredictionBar key={item.label} {...item} />)}</div>
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/62">
-              SIXFL AI Predictor: Six Offenders edge the sample prediction after
-              stronger recent scoring form, but Crescent United carry enough
-              threat to make this a competitive fixture.
+              SIXFL AI Predictor: Six Offenders edge the sample prediction after stronger recent scoring form, but Crescent United carry enough threat to make this a competitive fixture.
             </div>
-
-            <div className="mt-4 text-[11px] leading-5 text-white/35">
-              Example only. Live predictions update from actual SIXFL fixture
-              and results data.
-            </div>
+            <div className="mt-4 text-[11px] leading-5 text-white/35">Example only. Live predictions update from actual SIXFL fixture and results data.</div>
           </div>
         </div>
       </div>
@@ -457,129 +338,55 @@ function SixflAiPredictorSection({
   );
 }
 
-function SampleTeamBadge({
-  initials,
-  logoUrl,
-  name,
-  tone,
-}: {
-  initials: string;
-  logoUrl: string | null;
-  name: string;
-  tone: "emerald" | "sky";
-}) {
-  const badgeStyles =
-    tone === "emerald"
-      ? {
-          outer:
-            "border-emerald-300/25 bg-gradient-to-b from-emerald-300/22 via-emerald-500/12 to-black/70 shadow-emerald-500/20",
-          inner: "border-emerald-200/30 bg-emerald-400/15 text-emerald-100",
-          accent: "bg-emerald-300/75",
-        }
-      : {
-          outer:
-            "border-sky-300/25 bg-gradient-to-b from-sky-300/22 via-sky-500/12 to-black/70 shadow-sky-500/20",
-          inner: "border-sky-200/30 bg-sky-400/15 text-sky-100",
-          accent: "bg-sky-300/75",
-        };
+function SampleTeamBadge({ initials, logoUrl, name, tone }: { initials: string; logoUrl: string | null; name: string; tone: "emerald" | "sky" }) {
+  const badgeStyles = tone === "emerald"
+    ? { outer: "border-emerald-300/25 bg-gradient-to-b from-emerald-300/22 via-emerald-500/12 to-black/70 shadow-emerald-500/20", inner: "border-emerald-200/30 bg-emerald-400/15 text-emerald-100", accent: "bg-emerald-300/75" }
+    : { outer: "border-sky-300/25 bg-gradient-to-b from-sky-300/22 via-sky-500/12 to-black/70 shadow-sky-500/20", inner: "border-sky-200/30 bg-sky-400/15 text-sky-100", accent: "bg-sky-300/75" };
 
   return (
     <div className="flex min-w-0 flex-col items-center text-center">
-      <div
-        className={`relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[2rem] border shadow-2xl sm:h-40 sm:w-40 ${badgeStyles.outer}`}
-        aria-label={`${name} badge`}
-        title={`${name} badge`}
-      >
+      <div className={`relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[2rem] border shadow-2xl sm:h-40 sm:w-40 ${badgeStyles.outer}`} aria-label={`${name} badge`} title={`${name} badge`}>
         {logoUrl ? (
           <div className="flex h-full w-full items-center justify-center bg-black/35 p-3 sm:p-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={logoUrl}
-              alt={`${name} badge`}
-              className="h-full w-full object-contain drop-shadow-[0_18px_24px_rgba(0,0,0,0.5)]"
-            />
+            <img src={logoUrl} alt={`${name} badge`} className="h-full w-full object-contain drop-shadow-[0_18px_24px_rgba(0,0,0,0.5)]" />
           </div>
         ) : (
           <>
             <div className="absolute inset-3 rounded-[1.45rem] border border-white/10 bg-black/35" />
             <div className={`absolute left-1/2 top-4 h-1.5 w-12 -translate-x-1/2 rounded-full sm:w-16 ${badgeStyles.accent}`} />
-            <div className={`relative flex h-16 w-16 items-center justify-center rounded-full border text-2xl font-black tracking-tight sm:h-20 sm:w-20 sm:text-3xl ${badgeStyles.inner}`}>
-              {initials}
-            </div>
+            <div className={`relative flex h-16 w-16 items-center justify-center rounded-full border text-2xl font-black tracking-tight sm:h-20 sm:w-20 sm:text-3xl ${badgeStyles.inner}`}>{initials}</div>
           </>
         )}
       </div>
-      <div className="mt-3 max-w-[9rem] text-sm font-black leading-5 text-white sm:text-base">
-        {name}
-      </div>
+      <div className="mt-3 max-w-[9rem] text-sm font-black leading-5 text-white sm:text-base">{name}</div>
     </div>
   );
 }
 
-function PredictionBar({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: string;
-}) {
-  const barClass =
-    tone === "emerald"
-      ? "bg-emerald-400"
-      : tone === "sky"
-        ? "bg-sky-400"
-        : "bg-white/45";
-
+function PredictionBar({ label, value, tone }: { label: string; value: number; tone: string }) {
+  const barClass = tone === "emerald" ? "bg-emerald-400" : tone === "sky" ? "bg-sky-400" : "bg-white/45";
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">
         <span className="font-semibold text-white">{label}</span>
         <span className="font-black text-white">{value}%</span>
       </div>
-      <div className="h-3 overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full rounded-full ${barClass}`} style={{ width: `${value}%` }} />
-      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${barClass}`} style={{ width: `${value}%` }} /></div>
     </div>
   );
 }
 
 function FeaturePill({ text }: { text: string }) {
-  return (
-    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold tracking-[0.12em] text-emerald-200">
-      {text}
-    </span>
-  );
+  return <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold tracking-[0.12em] text-emerald-200">{text}</span>;
 }
 
-function FunnelCard({
-  title,
-  desc,
-  href,
-  cta,
-  featured = false,
-}: {
-  title: string;
-  desc: string;
-  href: string;
-  cta: string;
-  featured?: boolean;
-}) {
+function FunnelCard({ title, desc, href, cta, featured = false }: { title: string; desc: string; href: string; cta: string; featured?: boolean }) {
   return (
-    <Link
-      href={href}
-      className={`block rounded-2xl border p-4 transition ${
-        featured
-          ? "border-emerald-500/30 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]"
-          : "border-white/10 bg-black/40 hover:border-emerald-500/30 hover:bg-black/50"
-      }`}
-    >
+    <Link href={href} className={`block rounded-2xl border p-4 transition ${featured ? "border-emerald-500/30 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.12]" : "border-white/10 bg-black/40 hover:border-emerald-500/30 hover:bg-black/50"}`}>
       <div className="text-sm font-bold text-white">{title}</div>
       <div className="mt-1 text-sm text-white/60">{desc}</div>
-      <div className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-emerald-400">
-        {cta} →
-      </div>
+      <div className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-emerald-400">{cta} →</div>
     </Link>
   );
 }
@@ -587,12 +394,8 @@ function FunnelCard({
 function PathwayCard({ title, desc }: { title: string; desc: string }) {
   return (
     <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.07] sm:p-6">
-      <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">
-        SIXFL BENEFIT
-      </div>
-      <div className="mt-2 text-2xl font-black tracking-tight text-white">
-        {title}
-      </div>
+      <div className="text-[11px] font-bold tracking-[0.24em] text-white/55">SIXFL BENEFIT</div>
+      <div className="mt-2 text-2xl font-black tracking-tight text-white">{title}</div>
       <div className="mt-3 text-sm leading-7 text-white/60">{desc}</div>
       <div className="mt-6 h-px w-full bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
     </div>
