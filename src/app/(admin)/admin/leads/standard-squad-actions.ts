@@ -36,6 +36,28 @@ function splitLeadName(fullName: string | null | undefined) {
   };
 }
 
+function buildLeadRedirect(input: {
+  leadId: string;
+  error?: string;
+  standardTeamId?: string;
+  existingMember?: boolean;
+  memberId?: string;
+}) {
+  const params = new URLSearchParams();
+
+  if (input.error) {
+    params.set("standardSquadError", input.error);
+  } else if (input.standardTeamId && input.memberId) {
+    params.set("standardSquadAdded", "1");
+    params.set("standardTeamId", input.standardTeamId);
+    params.set("existingMember", input.existingMember ? "1" : "0");
+    params.set("member", input.memberId);
+  }
+
+  const query = params.toString();
+  return `/admin/leads/${input.leadId}${query ? `?${query}` : ""}`;
+}
+
 export async function convertLeadToStandardSquadPlayerAction(formData: FormData) {
   await requireAdmin();
 
@@ -43,133 +65,155 @@ export async function convertLeadToStandardSquadPlayerAction(formData: FormData)
   const teamId = String(formData.get("teamId") ?? "").trim();
 
   if (!leadId) {
-    throw new Error("Lead ID is required.");
+    redirect("/admin/leads");
   }
 
   if (!teamId) {
-    throw new Error("Standard team is required.");
+    redirect(buildLeadRedirect({ leadId, error: "Please choose a standard squad." }));
   }
 
-  const lead = await prisma.interestLead.findUnique({
-    where: { id: leadId },
-    select: {
-      id: true,
-      interestType: true,
-      status: true,
-      contactName: true,
-      email: true,
-      phone: true,
-      area: true,
-      teamName: true,
-      convertedAt: true,
-      convertedTeamId: true,
-    },
-  });
+  let result: {
+    teamId: string;
+    memberId: string;
+    existingMember: boolean;
+  };
 
-  if (!lead) {
-    throw new Error("Lead not found.");
-  }
+  try {
+    const lead = await prisma.interestLead.findUnique({
+      where: { id: leadId },
+      select: {
+        id: true,
+        interestType: true,
+        status: true,
+        contactName: true,
+        email: true,
+        convertedAt: true,
+      },
+    });
 
-  if (lead.interestType !== "PLAYER") {
-    throw new Error("Only PLAYER leads can be added to a standard squad.");
-  }
+    if (!lead) {
+      redirect("/admin/leads");
+    }
 
-  const email = lead.email?.trim().toLowerCase();
+    if (lead.interestType !== "PLAYER") {
+      throw new Error("Only player leads can be added to a standard squad.");
+    }
 
-  if (!email) {
-    throw new Error("This player lead needs an email address before they can be added to a standard squad.");
-  }
+    const email = lead.email?.trim().toLowerCase();
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: {
-      id: true,
-      name: true,
-      teamMode: true,
-    },
-  });
+    if (!email) {
+      throw new Error("This player lead needs an email address before they can be added to a standard squad.");
+    }
 
-  if (!team) {
-    throw new Error("Standard team not found.");
-  }
-
-  if (team.teamMode !== "STANDARD") {
-    throw new Error("Only standard teams can receive players through this action.");
-  }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const existingUser = await tx.user.findUnique({
-      where: { email },
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
       select: {
         id: true,
         name: true,
-        role: true,
+        teamMode: true,
       },
     });
 
-    const nameParts = splitLeadName(lead.contactName);
-    const playerName = lead.contactName?.trim() || [nameParts.firstName, nameParts.lastName].filter(Boolean).join(" ") || email;
+    if (!team) {
+      throw new Error("Standard team not found.");
+    }
 
-    const user = existingUser
-      ? await tx.user.update({
-          where: { id: existingUser.id },
-          data: existingUser.name?.trim() ? {} : { name: playerName },
-          select: { id: true },
-        })
-      : await tx.user.create({
-          data: {
-            email,
-            name: playerName,
-            role: UserRole.USER,
-          },
-          select: { id: true },
-        });
+    if (team.teamMode !== "STANDARD") {
+      throw new Error("Only standard teams can receive players through this action.");
+    }
 
-    const existingMember = await tx.teamMember.findUnique({
-      where: {
-        userId_teamId: {
-          userId: user.id,
-          teamId: team.id,
+    result = await prisma.$transaction(async (tx) => {
+      const existingUser = await tx.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          name: true,
         },
-      },
-      select: { id: true },
-    });
+      });
 
-    const member = existingMember
-      ? existingMember
-      : await tx.teamMember.create({
-          data: {
+      const nameParts = splitLeadName(lead.contactName);
+      const playerName =
+        lead.contactName?.trim() ||
+        [nameParts.firstName, nameParts.lastName].filter(Boolean).join(" ") ||
+        email;
+
+      const user = existingUser
+        ? existingUser.name?.trim()
+          ? { id: existingUser.id }
+          : await tx.user.update({
+              where: { id: existingUser.id },
+              data: { name: playerName },
+              select: { id: true },
+            })
+        : await tx.user.create({
+            data: {
+              email,
+              name: playerName,
+              role: UserRole.USER,
+            },
+            select: { id: true },
+          });
+
+      const existingMember = await tx.teamMember.findUnique({
+        where: {
+          userId_teamId: {
             userId: user.id,
             teamId: team.id,
-            role: TeamRole.PLAYER,
           },
-          select: { id: true },
-        });
+        },
+        select: { id: true },
+      });
 
-    await tx.interestLead.update({
-      where: { id: lead.id },
-      data: {
-        status: "CLOSED",
-        contactedAt: lead.status === "NEW" ? new Date() : undefined,
-        convertedAt: lead.convertedAt ?? new Date(),
-        closedAt: new Date(),
-        convertedTeamId: team.id,
-      },
+      const member = existingMember
+        ? existingMember
+        : await tx.teamMember.create({
+            data: {
+              userId: user.id,
+              teamId: team.id,
+              role: TeamRole.PLAYER,
+            },
+            select: { id: true },
+          });
+
+      await tx.interestLead.update({
+        where: { id: lead.id },
+        data: {
+          status: "CLOSED",
+          contactedAt: lead.status === "NEW" ? new Date() : undefined,
+          convertedAt: lead.convertedAt ?? new Date(),
+          closedAt: new Date(),
+          // Do not set convertedTeamId here. That field is unique and belongs
+          // to the original team-lead-to-team conversion relationship.
+        },
+      });
+
+      return {
+        teamId: team.id,
+        memberId: member.id,
+        existingMember: Boolean(existingMember),
+      };
     });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to add player to standard squad.";
 
-    return {
-      memberId: member.id,
-      existingMember: Boolean(existingMember),
-    };
-  });
+    redirect(buildLeadRedirect({ leadId, error: message }));
+  }
 
   revalidatePath("/admin/leads");
-  revalidatePath(`/admin/leads/${lead.id}`);
+  revalidatePath(`/admin/leads/${leadId}`);
   revalidatePath("/admin/teams");
-  revalidatePath(`/admin/teams/${team.id}`);
-  revalidatePath(`/captain/team/${team.id}`);
+  revalidatePath(`/admin/teams/${result.teamId}`);
+  revalidatePath(`/captain/team/${result.teamId}`);
 
   redirect(
-    `/admin/leads/${lead.id}?standardSquadAdded=1&standardTeamId=${team.id}&existingMember=${result.existingMember ? "1" : "0"}&member=${result.memberId}`,
+    buildLeadRedirect({
+      leadId,
+      standardTeamId: result.teamId,
+      existingMember: result.existingMember,
+      memberId: result.memberId,
+    }),
   );
 }
