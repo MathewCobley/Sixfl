@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { InterestType, LeadStatus } from "@prisma/client";
 
 import FormListboxField from "@/components/ui/FormListboxField";
+import { formatProspectiveLeagueLabel } from "@/lib/leads/prospectiveLeague";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
@@ -84,6 +85,7 @@ async function updateLeadDetailsAction(formData: FormData) {
   const phone = cleanNullable(formData.get("phone"));
   const status = getLeadStatus(formData.get("status"));
   const interestType = getInterestType(formData.get("interestType"));
+  const prospectiveLeagueId = cleanNullable(formData.get("leagueId"));
 
   if (!leadId) {
     redirect("/admin/leads?error=missing_lead");
@@ -91,6 +93,17 @@ async function updateLeadDetailsAction(formData: FormData) {
 
   if (!contactName) {
     redirect(`/admin/leads/${leadId}/edit?error=${encodeURIComponent("Contact name is required.")}`);
+  }
+
+  if (prospectiveLeagueId) {
+    const league = await prisma.league.findUnique({
+      where: { id: prospectiveLeagueId },
+      select: { id: true },
+    });
+
+    if (!league) {
+      redirect(`/admin/leads/${leadId}/edit?error=${encodeURIComponent("Selected prospective league was not found.")}`);
+    }
   }
 
   const normalizedPhone = phone ? normalizeUkMobileNumber(phone) : null;
@@ -106,6 +119,7 @@ async function updateLeadDetailsAction(formData: FormData) {
       phoneNormalized: normalizedPhone,
       area: cleanNullable(formData.get("area")),
       teamName: cleanNullable(formData.get("teamName")),
+      leagueId: prospectiveLeagueId,
       message: cleanNullable(formData.get("message")),
       contactedAt: status === "CONTACTED" ? new Date() : undefined,
       closedAt: status === "CLOSED" ? new Date() : undefined,
@@ -148,26 +162,48 @@ export default async function EditLeadPage({
   const { id } = await params;
   const sp = (await searchParams) ?? {};
 
-  const lead = await prisma.interestLead.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      contactName: true,
-      email: true,
-      phone: true,
-      area: true,
-      teamName: true,
-      message: true,
-      status: true,
-      interestType: true,
-    },
-  });
+  const [lead, leagues] = await Promise.all([
+    prisma.interestLead.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        contactName: true,
+        email: true,
+        phone: true,
+        area: true,
+        teamName: true,
+        message: true,
+        status: true,
+        interestType: true,
+        leagueId: true,
+      },
+    }),
+    prisma.league.findMany({
+      where: { isActive: true },
+      orderBy: [{ area: "asc" }, { name: "asc" }, { season: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        season: true,
+        area: true,
+        dayOfWeek: true,
+        venueName: true,
+      },
+    }),
+  ]);
 
   if (!lead) {
     notFound();
   }
 
   const errorMessage = sp.error ? decodeURIComponent(sp.error) : null;
+  const prospectiveLeagueOptions = [
+    { value: "", label: "No prospective league" },
+    ...leagues.map((league) => ({
+      value: league.id,
+      label: formatProspectiveLeagueLabel(league),
+    })),
+  ];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -213,6 +249,18 @@ export default async function EditLeadPage({
           <Field label="Mobile number" name="phone" defaultValue={lead.phone} />
           <Field label="Area" name="area" defaultValue={lead.area} />
           <Field label="Team name" name="teamName" defaultValue={lead.teamName} />
+          <div className="md:col-span-2">
+            <FormListboxField
+              name="leagueId"
+              label="Prospective league"
+              value={lead.leagueId ?? ""}
+              options={prospectiveLeagueOptions}
+              placeholder="No prospective league"
+            />
+            <p className="mt-2 text-xs leading-5 text-white/45">
+              This links the lead to the likely league for emails and planning only. It does not create a team, add them to fixtures, or make them part of the league.
+            </p>
+          </div>
         </div>
 
         <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100/80">
