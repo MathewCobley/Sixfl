@@ -11,9 +11,11 @@ import { sendTeamPlaceConfirmationSystemEmailAction } from "@/app/(admin)/admin/
 export default function LeadConfirmationQuickSendButton({
   leadId,
   canSend,
+  alreadySent = false,
 }: {
   leadId: string;
   canSend: boolean;
+  alreadySent?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -45,7 +47,7 @@ export default function LeadConfirmationQuickSendButton({
       title={canSend ? "Send team place confirmation email" : "Set an email and prospective league before sending"}
       className="inline-flex h-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 text-xs font-bold tracking-[0.12em] text-sky-200 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/30"
     >
-      {pending ? "Sending" : "Send link"}
+      {pending ? "Sending" : alreadySent ? "Resend link" : "Send link"}
     </button>
   );
 }
