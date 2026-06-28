@@ -168,10 +168,16 @@ async function isTeamPlaceConfirmationEmail(formData: FormData) {
   const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
   const templateKey = String(formData.get("templateKey") ?? "").trim();
   const templateId = String(formData.get("templateId") ?? "").trim();
+  const ctaLabel = String(formData.get("ctaLabel") ?? "").trim().toLowerCase();
+  const body = String(formData.get("body") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const templateText = `${subject}\n${body}`;
 
   if (
     ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY ||
-    templateKey === TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY
+    templateKey === TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY ||
+    ctaLabel.includes("confirm our team place") ||
+    /\{\{\s*league(Name|DetailsBlock|StartLine)\s*\}\}/i.test(templateText)
   ) {
     return true;
   }
@@ -185,12 +191,23 @@ async function isTeamPlaceConfirmationEmail(formData: FormData) {
     select: {
       key: true,
       ctaUrlKey: true,
+      ctaLabel: true,
+      subject: true,
+      body: true,
     },
   });
 
+  if (!template) {
+    return false;
+  }
+
   return (
-    template?.key === TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY ||
-    template?.ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY
+    template.key === TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY ||
+    template.ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY ||
+    Boolean(template.ctaLabel?.toLowerCase().includes("confirm our team place")) ||
+    /\{\{\s*league(Name|DetailsBlock|StartLine)\s*\}\}/i.test(
+      `${template.subject ?? ""}\n${template.body}`,
+    )
   );
 }
 
