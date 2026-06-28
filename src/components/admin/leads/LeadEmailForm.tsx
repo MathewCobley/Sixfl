@@ -11,7 +11,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
-import { sendLeadEmailWithResponseLinksAction } from "@/app/(admin)/admin/leads/[id]/response-email-actions";
+import {
+  sendLeadEmailWithResponseLinksAction,
+  sendTeamPlaceConfirmationSystemEmailAction,
+} from "@/app/(admin)/admin/leads/[id]/response-email-actions";
 import {
   buildBaseEmailTemplateContext,
   mergeEmailTemplateContext,
@@ -49,6 +52,7 @@ type Props = {
   signupUrl?: string | null;
   templates: LeadEmailTemplateOption[];
   managedTeamOptions: ManagedTeamOption[];
+  showTeamConfirmationShortcut?: boolean;
 };
 
 const RESPONSE_TOKEN_PLACEHOLDERS = {
@@ -69,8 +73,6 @@ const SERVER_TOKEN_PLACEHOLDERS: Record<string, string> = {
   targetTeamCount: "__SIXFL_TARGET_TEAM_COUNT__",
   targetTeamCountLine: "__SIXFL_TARGET_TEAM_COUNT_LINE__",
 };
-
-const TEAM_CONFIRMATION_TEMPLATE_KEY = "team-place-confirmation-email";
 
 function protectLeadResponseTokens(value: string) {
   return value
@@ -113,6 +115,7 @@ export default function LeadEmailForm({
   signupUrl,
   templates,
   managedTeamOptions,
+  showTeamConfirmationShortcut = false,
 }: Props) {
   const router = useRouter();
 
@@ -134,11 +137,6 @@ export default function LeadEmailForm({
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) ?? null,
     [templates, selectedTemplateId],
-  );
-
-  const teamConfirmationTemplate = useMemo(
-    () => templates.find((template) => template.key === TEAM_CONFIRMATION_TEMPLATE_KEY) ?? null,
-    [templates],
   );
 
   const requiresManagedTeam = selectedTemplate?.ctaUrlKey === "teamJoinUrl";
@@ -193,38 +191,14 @@ export default function LeadEmailForm({
     setBody(resolveTemplateForLead(template.body));
   }
 
-  async function sendTemplate(template: LeadEmailTemplateOption, options?: { resolveForEditor?: boolean }) {
-    const formData = new FormData();
-    const shouldResolveForEditor = options?.resolveForEditor ?? false;
-
-    formData.append("leadId", leadId);
-    formData.append("templateId", template.id);
-    formData.append(
-      "subject",
-      shouldResolveForEditor ? resolveTemplateForLead(template.subject) : template.subject,
-    );
-    formData.append(
-      "body",
-      shouldResolveForEditor ? resolveTemplateForLead(template.body) : template.body,
-    );
-    formData.append("signupUrl", signupUrl ?? "");
-    formData.append("ctaLabel", template.ctaLabel?.trim() || "");
-    formData.append("ctaUrlKey", template.ctaUrlKey?.trim() || "");
-    formData.append("targetTeamId", "");
-
-    return sendLeadEmailWithResponseLinksAction(formData);
-  }
-
   async function handleQuickConfirmationSend() {
-    if (!teamConfirmationTemplate) {
-      alert("The team place confirmation email template is not available for this lead.");
-      return;
-    }
-
     setSending(true);
 
     try {
-      const result = await sendTemplate(teamConfirmationTemplate);
+      const formData = new FormData();
+      formData.append("leadId", leadId);
+
+      const result = await sendTeamPlaceConfirmationSystemEmailAction(formData);
 
       if (!result?.ok) {
         alert(result?.error || "Failed to send confirmation email.");
@@ -284,13 +258,13 @@ export default function LeadEmailForm({
 
   return (
     <div className="space-y-4">
-      {teamConfirmationTemplate ? (
+      {showTeamConfirmationShortcut ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
           <div className="text-sm font-semibold text-emerald-50">
             Team place confirmation
           </div>
           <p className="mt-1 text-sm leading-6 text-emerald-100/75">
-            Send the league-specific confirmation email with the Yes, confirm our team place button.
+            Send the system confirmation email with the Yes, confirm our team place button.
           </p>
           <button
             type="button"
