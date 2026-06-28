@@ -9,10 +9,6 @@ import { NotificationRecipientSourceType, UserRole } from "@prisma/client";
 import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import {
-  sendCentralRefereeEmailAction,
-  sendCentralRefereeSmsAction,
-} from "./actions";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -230,7 +226,7 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
               Referee comms: {displayName}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-              Send email or SMS through the shared SIXFL Communications system. The history below uses the same message-thread timeline as the main admin inbox.
+              This page uses the same message-thread timeline as the main Communications inbox. New replies should be sent from the thread panel, not from a separate referee-only send form.
             </p>
           </div>
 
@@ -244,41 +240,15 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
       {notice ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{notice}</div> : null}
       {error ? <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">{error}</div> : null}
 
-      <section className="grid gap-6 xl:grid-cols-2">
-        <form action={sendCentralRefereeEmailAction} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
-          <input type="hidden" name="refereeId" value={referee.id} />
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Email</div>
-          <h2 className="mt-2 text-xl font-semibold text-white">Send referee email</h2>
-          <p className="mt-2 text-sm leading-6 text-white/55">Queued through the shared notification and inbox system.</p>
-
-          <label className="mt-5 block text-sm font-semibold text-white/75">
-            Subject
-            <input name="subject" required placeholder="Subject" className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none placeholder:text-white/35" />
-          </label>
-          <label className="mt-4 block text-sm font-semibold text-white/75">
-            Body
-            <textarea name="body" required rows={8} placeholder="Write your email..." className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35" />
-          </label>
-          <button type="submit" className="mt-4 inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-bold text-black transition hover:bg-emerald-300">
-            Queue email
-          </button>
-        </form>
-
-        <form action={sendCentralRefereeSmsAction} className="rounded-3xl border border-sky-400/20 bg-sky-400/10 p-5 sm:p-6">
-          <input type="hidden" name="refereeId" value={referee.id} />
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">SMS</div>
-          <h2 className="mt-2 text-xl font-semibold text-white">Send referee SMS</h2>
-          <p className="mt-2 text-sm leading-6 text-sky-50/65">Queued through the shared notification and inbox system.</p>
-
-          <label className="mt-5 block text-sm font-semibold text-white/75">
-            Message
-            <textarea name="body" required rows={8} placeholder="Write your SMS..." className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35" />
-          </label>
-          <button type="submit" className="mt-4 inline-flex h-12 items-center justify-center rounded-2xl bg-sky-300 px-5 text-sm font-bold text-black transition hover:bg-sky-200">
-            Queue SMS
-          </button>
-        </form>
-      </section>
+      {messageThreads.length === 0 ? (
+        <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 sm:p-6">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">No thread yet</div>
+          <h2 className="mt-2 text-xl font-semibold text-white">Start with the referee welcome email</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/75">
+            Send the welcome email from the referee profile. That creates the normal Communications thread, then all later email/SMS replies can be handled from the proper timeline here.
+          </p>
+        </section>
+      ) : null}
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
