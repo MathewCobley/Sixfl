@@ -70,6 +70,8 @@ const SERVER_TOKEN_PLACEHOLDERS: Record<string, string> = {
   targetTeamCountLine: "__SIXFL_TARGET_TEAM_COUNT_LINE__",
 };
 
+const TEAM_CONFIRMATION_TEMPLATE_KEY = "team-place-confirmation-email";
+
 function protectLeadResponseTokens(value: string) {
   return value
     .replaceAll("{{yesResponseUrl}}", RESPONSE_TOKEN_PLACEHOLDERS.yes)
@@ -134,6 +136,11 @@ export default function LeadEmailForm({
     [templates, selectedTemplateId],
   );
 
+  const teamConfirmationTemplate = useMemo(
+    () => templates.find((template) => template.key === TEAM_CONFIRMATION_TEMPLATE_KEY) ?? null,
+    [templates],
+  );
+
   const requiresManagedTeam = selectedTemplate?.ctaUrlKey === "teamJoinUrl";
 
   const templateContext = useMemo(() => {
@@ -186,6 +193,53 @@ export default function LeadEmailForm({
     setBody(resolveTemplateForLead(template.body));
   }
 
+  async function sendTemplate(template: LeadEmailTemplateOption, options?: { resolveForEditor?: boolean }) {
+    const formData = new FormData();
+    const shouldResolveForEditor = options?.resolveForEditor ?? false;
+
+    formData.append("leadId", leadId);
+    formData.append("templateId", template.id);
+    formData.append(
+      "subject",
+      shouldResolveForEditor ? resolveTemplateForLead(template.subject) : template.subject,
+    );
+    formData.append(
+      "body",
+      shouldResolveForEditor ? resolveTemplateForLead(template.body) : template.body,
+    );
+    formData.append("signupUrl", signupUrl ?? "");
+    formData.append("ctaLabel", template.ctaLabel?.trim() || "");
+    formData.append("ctaUrlKey", template.ctaUrlKey?.trim() || "");
+    formData.append("targetTeamId", "");
+
+    return sendLeadEmailWithResponseLinksAction(formData);
+  }
+
+  async function handleQuickConfirmationSend() {
+    if (!teamConfirmationTemplate) {
+      alert("The team place confirmation email template is not available for this lead.");
+      return;
+    }
+
+    setSending(true);
+
+    try {
+      const result = await sendTemplate(teamConfirmationTemplate);
+
+      if (!result?.ok) {
+        alert(result?.error || "Failed to send confirmation email.");
+        return;
+      }
+
+      alert("Team place confirmation email sent successfully.");
+      router.refresh();
+    } catch {
+      alert("Something went wrong while sending the confirmation email.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSending(true);
@@ -229,116 +283,137 @@ export default function LeadEmailForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-6"
-    >
-      <div>
-        <label className="mb-1 block text-sm text-white/70">Email template</label>
-
-        <TemplateSelect
-          label=""
-          value={selectedTemplateId}
-          options={templateOptions}
-          onChange={handleTemplateChange}
-          disabled={sending}
-          placeholder={
-            templates.length > 0
-              ? "Select email template"
-              : "No matching templates available"
-          }
-        />
-
-        {selectedTemplate?.description ? (
-          <p className="mt-2 text-xs text-white/45">
-            {selectedTemplate.description}
+    <div className="space-y-4">
+      {teamConfirmationTemplate ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+          <div className="text-sm font-semibold text-emerald-50">
+            Team place confirmation
+          </div>
+          <p className="mt-1 text-sm leading-6 text-emerald-100/75">
+            Send the league-specific confirmation email with the Yes, confirm our team place button.
           </p>
-        ) : null}
-      </div>
-
-      {requiresManagedTeam ? (
-        <div>
-          <label className="mb-1 block text-sm text-white/70">
-            Managed team link
-          </label>
-
-          <TemplateSelect
-            label=""
-            value={targetTeamId}
-            options={managedTeamOptions}
-            onChange={(value) => setTargetTeamId(value)}
-            disabled={sending}
-            placeholder={
-              managedTeamOptions.length > 0
-                ? "Choose managed team"
-                : "No managed recruiting teams available"
-            }
-          />
+          <button
+            type="button"
+            onClick={handleQuickConfirmationSend}
+            disabled={sending || !email}
+            className="mt-3 inline-flex rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {sending ? "Sending..." : "Send confirmation email"}
+          </button>
         </div>
       ) : null}
 
-      <div>
-        <label className="mb-1 block text-sm text-white/70">To</label>
-        <input
-          type="email"
-          value={email ?? ""}
-          disabled
-          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
-        />
-      </div>
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-6"
+      >
+        <div>
+          <label className="mb-1 block text-sm text-white/70">Email template</label>
 
-      <div>
-        <label className="mb-1 block text-sm text-white/70">Subject</label>
-        <input
-          type="text"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          disabled={sending}
-          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-          placeholder="SIXFL launch update"
-        />
-      </div>
+          <TemplateSelect
+            label=""
+            value={selectedTemplateId}
+            options={templateOptions}
+            onChange={handleTemplateChange}
+            disabled={sending}
+            placeholder={
+              templates.length > 0
+                ? "Select email template"
+                : "No matching templates available"
+            }
+          />
 
-      <div>
-        <div className="flex items-center justify-between">
-          <label className="block text-sm text-white/70">Message</label>
-          <span className="text-xs text-white/40">Plain text email</span>
+          {selectedTemplate?.description ? (
+            <p className="mt-2 text-xs text-white/45">
+              {selectedTemplate.description}
+            </p>
+          ) : null}
         </div>
 
-        <div className="mt-2 rounded-xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400">
-          <textarea
-            rows={14}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            disabled={sending}
-            className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder={`Hi ${firstName || "there"},\n\nThanks for your interest in SIXFL...\n\nWe’ll be in touch shortly.`}
+        {requiresManagedTeam ? (
+          <div>
+            <label className="mb-1 block text-sm text-white/70">
+              Managed team link
+            </label>
+
+            <TemplateSelect
+              label=""
+              value={targetTeamId}
+              options={managedTeamOptions}
+              onChange={(value) => setTargetTeamId(value)}
+              disabled={sending}
+              placeholder={
+                managedTeamOptions.length > 0
+                  ? "Choose managed team"
+                  : "No managed recruiting teams available"
+              }
+            />
+          </div>
+        ) : null}
+
+        <div>
+          <label className="mb-1 block text-sm text-white/70">To</label>
+          <input
+            type="email"
+            value={email ?? ""}
+            disabled
+            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white/50"
           />
         </div>
 
-        <div className="mt-2 text-xs text-white/40">
-          This email will be sent directly to the lead.
+        <div>
+          <label className="mb-1 block text-sm text-white/70">Subject</label>
+          <input
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            disabled={sending}
+            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder="SIXFL launch update"
+          />
         </div>
-      </div>
 
-      <div className="flex gap-3">
-        <button
-          type="submit"
-          disabled={sending || !email || (requiresManagedTeam && !targetTeamId)}
-          className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {sending ? "Sending..." : "Send email"}
-        </button>
+        <div>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm text-white/70">Message</label>
+            <span className="text-xs text-white/40">Plain text email</span>
+          </div>
 
-        <button
-          type="button"
-          onClick={resetTemplate}
-          disabled={sending || !selectedTemplate}
-          className="rounded-xl border border-white/10 px-4 py-2 text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Reset template
-        </button>
-      </div>
-    </form>
+          <div className="mt-2 rounded-xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400">
+            <textarea
+              rows={14}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              disabled={sending}
+              className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder={`Hi ${firstName || "there"},\n\nThanks for your interest in SIXFL...\n\nWe’ll be in touch shortly.`}
+            />
+          </div>
+
+          <div className="mt-2 text-xs text-white/40">
+            This email will be sent directly to the lead.
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={sending || !email || (requiresManagedTeam && !targetTeamId)}
+            className="rounded-xl bg-emerald-500 px-4 py-2 font-medium text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {sending ? "Sending..." : "Send email"}
+          </button>
+
+          <button
+            type="button"
+            onClick={resetTemplate}
+            disabled={sending || !selectedTemplate}
+            className="rounded-xl border border-white/10 px-4 py-2 text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Reset template
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
