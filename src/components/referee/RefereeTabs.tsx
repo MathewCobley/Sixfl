@@ -8,6 +8,7 @@ type RefereeTabKey = "overview" | "availability" | "match-rules";
 
 type Props = {
   active: RefereeTabKey;
+  previewRefereeId?: string | null;
 };
 
 const tabs: Array<{
@@ -36,7 +37,14 @@ const tabs: Array<{
   },
 ];
 
-export default function RefereeTabs({ active }: Props) {
+function withPreviewParam(href: string, previewRefereeId?: string | null) {
+  if (!previewRefereeId) return href;
+
+  const separator = href.includes("?") ? "&" : "?";
+  return `${href}${separator}previewRefereeId=${encodeURIComponent(previewRefereeId)}`;
+}
+
+export default function RefereeTabs({ active, previewRefereeId }: Props) {
   return (
     <nav className="grid gap-3 sm:grid-cols-3">
       {tabs.map((tab) => {
@@ -45,7 +53,7 @@ export default function RefereeTabs({ active }: Props) {
         return (
           <Link
             key={tab.key}
-            href={tab.href}
+            href={withPreviewParam(tab.href, previewRefereeId)}
             className={[
               "rounded-3xl border p-4 transition",
               isActive
