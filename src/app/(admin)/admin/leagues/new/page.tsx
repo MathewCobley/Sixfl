@@ -2,18 +2,10 @@
 // File: src/app/admin/leagues/new/page.tsx
 // ========================================
 
-// ========================================
-// Imports
-// ========================================
-
 import Link from "next/link";
 import { requireAdmin } from "@/lib/requireAdmin";
 import LeagueForm from "@/components/admin/leagues/LeagueForm";
 import { createLeagueAction } from "@/app/(admin)/admin/leagues/actions";
-
-// ========================================
-// Page
-// ========================================
 
 export default async function NewLeaguePage() {
   await requireAdmin();
@@ -31,7 +23,7 @@ export default async function NewLeaguePage() {
         <h1 className="text-3xl font-semibold text-white">Create league</h1>
 
         <p className="text-sm text-white/60">
-          Set up the first live league and give it a proper public landing page.
+          Set up a league and give it a proper public landing page.
         </p>
       </div>
 
@@ -43,6 +35,9 @@ export default async function NewLeaguePage() {
             isActive: true,
             ctaText: "Register your team",
             format: "6-a-side",
+            minutesPerGame: "40",
+            costPerTeamPerMatch: "40",
+            targetTeamCount: "12",
           }}
         />
       </div>

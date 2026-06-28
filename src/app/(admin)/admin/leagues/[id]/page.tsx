@@ -56,9 +56,47 @@ function formatLeagueType(leagueType: string | null) {
   }
 }
 
+function formatDateForInput(value: Date | null) {
+  if (!value) return "";
+  return value.toISOString().slice(0, 10);
+}
+
+function formatDisplayDate(value: Date | null) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(value);
+}
+
+function formatPoundsFromPence(value: number | null) {
+  if (value === null) return "";
+  return (value / 100).toFixed(value % 100 === 0 ? 0 : 2);
+}
+
+function formatCurrency(value: number | null) {
+  if (value === null) return "—";
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: value % 100 === 0 ? 0 : 2,
+  }).format(value / 100);
+}
+
 type Props = {
   params: Promise<{ id: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+type LeagueSettingsRow = {
+  requiredRefereesPerNight: number;
+  proposedStartDate: Date | null;
+  minutesPerGame: number | null;
+  costPerTeamPerMatchPence: number | null;
+  targetTeamCount: number | null;
 };
 
 export default async function EditLeaguePage({
@@ -70,7 +108,7 @@ export default async function EditLeaguePage({
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
 
-  const [league, requirementRows] = await Promise.all([
+  const [league, settingsRows] = await Promise.all([
     prisma.league.findUnique({
       where: { id },
       include: {
@@ -98,8 +136,13 @@ export default async function EditLeaguePage({
         },
       },
     }),
-    prisma.$queryRaw<Array<{ requiredRefereesPerNight: number }>>(Prisma.sql`
-      SELECT COALESCE("requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
+    prisma.$queryRaw<Array<LeagueSettingsRow>>(Prisma.sql`
+      SELECT
+        COALESCE("requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight",
+        "proposedStartDate" AS "proposedStartDate",
+        "minutesPerGame"::int AS "minutesPerGame",
+        "costPerTeamPerMatchPence"::int AS "costPerTeamPerMatchPence",
+        "targetTeamCount"::int AS "targetTeamCount"
       FROM "League"
       WHERE id = ${id}
       LIMIT 1
@@ -110,7 +153,13 @@ export default async function EditLeaguePage({
     notFound();
   }
 
-  const requiredRefereesPerNight = requirementRows[0]?.requiredRefereesPerNight ?? 1;
+  const settings = settingsRows[0] ?? {
+    requiredRefereesPerNight: 1,
+    proposedStartDate: null,
+    minutesPerGame: null,
+    costPerTeamPerMatchPence: null,
+    targetTeamCount: null,
+  };
 
   const teamContacts = await Promise.all(
     league.teams.map((team) => getTeamContactSnapshot(team.id)),
@@ -188,7 +237,11 @@ export default async function EditLeaguePage({
                 dayOfWeek: league.dayOfWeek ?? "",
                 leagueType: league.leagueType ?? "",
                 venueName: league.venueName ?? "",
-                requiredRefereesPerNight: String(requiredRefereesPerNight),
+                proposedStartDate: formatDateForInput(settings.proposedStartDate),
+                minutesPerGame: settings.minutesPerGame ? String(settings.minutesPerGame) : "",
+                costPerTeamPerMatch: formatPoundsFromPence(settings.costPerTeamPerMatchPence),
+                targetTeamCount: settings.targetTeamCount ? String(settings.targetTeamCount) : "",
+                requiredRefereesPerNight: String(settings.requiredRefereesPerNight),
                 kickoffInfo: league.kickoffInfo ?? "",
                 format: league.format ?? "",
                 surface: league.surface ?? "",
@@ -306,9 +359,33 @@ export default async function EditLeaguePage({
                 </dd>
               </div>
               <div>
+                <dt className="text-white/45">Proposed start date</dt>
+                <dd className="mt-1 font-medium text-white">
+                  {formatDisplayDate(settings.proposedStartDate)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-white/45">Minutes per game</dt>
+                <dd className="mt-1 font-medium text-white">
+                  {settings.minutesPerGame ? `${settings.minutesPerGame} minutes` : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-white/45">Cost per team per match</dt>
+                <dd className="mt-1 font-medium text-white">
+                  {formatCurrency(settings.costPerTeamPerMatchPence)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-white/45">Target teams</dt>
+                <dd className="mt-1 font-medium text-white">
+                  {settings.targetTeamCount ?? "—"}
+                </dd>
+              </div>
+              <div>
                 <dt className="text-white/45">Refs needed per night</dt>
                 <dd className="mt-1 font-medium text-white">
-                  {requiredRefereesPerNight}
+                  {settings.requiredRefereesPerNight}
                 </dd>
               </div>
               <div>
