@@ -6,7 +6,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { InterestType, LeagueType, PreferredNight } from "@prisma/client";
+import { InterestType, LeagueType } from "@prisma/client";
 import { queueLeadWelcomeNotifications } from "@/lib/notifications/transactional";
 
 export async function createLeagueInterestLeadAction(formData: FormData) {
@@ -32,6 +32,20 @@ export async function createLeagueInterestLeadAction(formData: FormData) {
     throw new Error("League is required.");
   }
 
+  const leagueForLead = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      id: true,
+      area: true,
+      dayOfWeek: true,
+      leagueType: true,
+    },
+  });
+
+  if (!leagueForLead) {
+    throw new Error("League is required.");
+  }
+
   const lead = await prisma.interestLead.create({
     data: {
       interestType: InterestType.TEAM,
@@ -40,18 +54,20 @@ export async function createLeagueInterestLeadAction(formData: FormData) {
       email,
       phone: phone || null,
       teamName: teamName || null,
-      area: area || null,
-      leagueType: LeagueType.MENS,
+      area: leagueForLead.area || area || null,
+      leagueType: leagueForLead.leagueType ?? LeagueType.MENS,
       message: message || null,
       source: source || "league-page",
-      leagueId,
-      preferredNights: {
-        create: [
-          {
-            night: PreferredNight.WEDNESDAY,
-          },
-        ],
-      },
+      leagueId: leagueForLead.id,
+      preferredNights: leagueForLead.dayOfWeek
+        ? {
+            create: [
+              {
+                night: leagueForLead.dayOfWeek,
+              },
+            ],
+          }
+        : undefined,
     },
     select: {
       id: true,
