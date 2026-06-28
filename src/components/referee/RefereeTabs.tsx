@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -58,6 +58,10 @@ function getPreviewIdFromBanner() {
   return href.match(/\/admin\/referees\/([^/]+)\/referee-preview\/exit/)?.[1] ?? null;
 }
 
+function isRefereeAppHref(href: string) {
+  return href === "/referee" || href.startsWith("/referee/");
+}
+
 export default function RefereeTabs({ active, previewRefereeId }: Props) {
   const searchParams = useSearchParams();
   const previewFromQuery = searchParams.get("previewRefereeId");
@@ -68,15 +72,56 @@ export default function RefereeTabs({ active, previewRefereeId }: Props) {
     setPreviewFromBanner(getPreviewIdFromBanner());
   }, []);
 
+  useEffect(() => {
+    if (!effectivePreviewRefereeId) return;
+
+    const rewriteRefereeLinks = () => {
+      const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href^='/referee']"));
+
+      for (const link of links) {
+        const href = link.getAttribute("href") ?? "";
+        if (!isRefereeAppHref(href)) continue;
+        link.setAttribute("href", withPreviewRoute(href, effectivePreviewRefereeId));
+      }
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest("a") : null;
+      if (!(target instanceof HTMLAnchorElement)) return;
+
+      const href = target.getAttribute("href") ?? "";
+      if (!isRefereeAppHref(href)) return;
+
+      event.preventDefault();
+      window.location.href = withPreviewRoute(href, effectivePreviewRefereeId);
+    };
+
+    rewriteRefereeLinks();
+    document.addEventListener("click", handleClick, true);
+
+    return () => {
+      document.removeEventListener("click", handleClick, true);
+    };
+  }, [effectivePreviewRefereeId]);
+
+  const renderedTabs = useMemo(
+    () =>
+      tabs.map((tab) => ({
+        ...tab,
+        href: withPreviewRoute(tab.href, effectivePreviewRefereeId),
+      })),
+    [effectivePreviewRefereeId],
+  );
+
   return (
     <nav className="grid gap-3 sm:grid-cols-3">
-      {tabs.map((tab) => {
+      {renderedTabs.map((tab) => {
         const isActive = active === tab.key;
 
         return (
           <Link
             key={tab.key}
-            href={withPreviewRoute(tab.href, effectivePreviewRefereeId)}
+            href={tab.href}
             className={[
               "rounded-3xl border p-4 transition",
               isActive
