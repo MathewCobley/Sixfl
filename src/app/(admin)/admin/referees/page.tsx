@@ -3,7 +3,7 @@
 // ========================================
 
 import Link from "next/link";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -18,11 +18,33 @@ type SearchParams = Promise<{
   userId?: string;
 }>;
 
+type RefereeWelcomeRow = {
+  refereeId: string;
+  status: string;
+  at: Date | null;
+};
+
+type RefereeAccessRow = {
+  userId: string;
+  lastLoginAt: Date | null;
+  activeSessionCount: number;
+};
+
 function formatDate(value: Date | null | undefined) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
+  }).format(value);
+}
+
+function formatShortDate(value: Date | null | undefined) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(value);
 }
 
@@ -54,6 +76,46 @@ function getErrorMessage(error?: string) {
     default:
       return null;
   }
+}
+
+function dispatchStatusClasses(status?: string | null) {
+  if (status === "SENT") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  if (status === "QUEUED" || status === "PROCESSING") return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+  if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") return "border-red-400/20 bg-red-500/10 text-red-100";
+  return "border-white/10 bg-white/[0.03] text-white/55";
+}
+
+function formatWelcomeLabel(row?: RefereeWelcomeRow | null) {
+  if (!row) return "Welcome not sent";
+  const when = formatShortDate(row.at);
+
+  switch (row.status) {
+    case "SENT":
+      return `Welcome sent ${when}`;
+    case "QUEUED":
+      return `Welcome queued ${when}`;
+    case "PROCESSING":
+      return `Welcome processing ${when}`;
+    case "FAILED":
+      return `Welcome failed ${when}`;
+    case "SKIPPED":
+      return `Welcome skipped ${when}`;
+    case "CANCELLED":
+      return `Welcome cancelled ${when}`;
+    default:
+      return `Welcome recorded ${when}`;
+  }
+}
+
+function getDashboardLabel(access?: RefereeAccessRow | null) {
+  if (!access?.lastLoginAt) return "Dashboard not opened yet";
+  const activeText = access.activeSessionCount > 0 ? " · active session" : "";
+  return `Dashboard signed in ${formatShortDate(access.lastLoginAt)}${activeText}`;
+}
+
+function dashboardClasses(access?: RefereeAccessRow | null) {
+  if (access?.lastLoginAt) return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  return "border-white/10 bg-white/[0.03] text-white/55";
 }
 
 export default async function AdminRefereesPage({ searchParams }: { searchParams?: SearchParams }) {
@@ -107,8 +169,10 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
     },
   });
 
-  const [profileMap, leads] = await Promise.all([
-    getRefereeProfilesByUserIds(referees.map((referee) => referee.id)),
+  const refereeIds = referees.map((referee) => referee.id);
+
+  const [profileMap, leads, welcomeRows, accessRows] = await Promise.all([
+    getRefereeProfilesByUserIds(refereeIds),
     (() => {
       const convertedLeadIds = referees
         .map((referee) => referee.createdFromLeadId)
@@ -129,9 +193,42 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
           })
         : [];
     })(),
+    refereeIds.length
+      ? prisma.$queryRaw<RefereeWelcomeRow[]>(Prisma.sql`
+          SELECT DISTINCT ON (d."sourceId")
+            d."sourceId" AS "refereeId",
+            d."status"::text AS "status",
+            COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "at"
+          FROM "NotificationDispatch" d
+          LEFT JOIN "NotificationTemplate" template ON template."id" = d."templateId"
+          WHERE d."sourceId" IN (${Prisma.join(refereeIds)})
+            AND d."channel" = 'EMAIL'
+            AND (
+              d."sourceType" = 'REFEREE_INVITE'
+              OR template."key" = 'referee-welcome-login-email'
+              OR d."metadata"::text ILIKE '%referee-welcome-login-email%'
+              OR d."metadata"::text ILIKE '%central_referee_welcome_invite%'
+            )
+          ORDER BY d."sourceId", COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") DESC
+        `)
+      : [],
+    refereeIds.length
+      ? prisma.$queryRaw<RefereeAccessRow[]>(Prisma.sql`
+          SELECT
+            u."id" AS "userId",
+            u."lastLoginAt" AS "lastLoginAt",
+            COUNT(s."id")::int AS "activeSessionCount"
+          FROM "User" u
+          LEFT JOIN "Session" s ON s."userId" = u."id" AND s."expires" > NOW()
+          WHERE u."id" IN (${Prisma.join(refereeIds)})
+          GROUP BY u."id", u."lastLoginAt"
+        `)
+      : [],
   ]);
 
   const leadMap = new Map(leads.map((lead) => [lead.id, lead]));
+  const welcomeMap = new Map(welcomeRows.map((row) => [row.refereeId, row]));
+  const accessMap = new Map(accessRows.map((row) => [row.userId, row]));
   const totalReferees = referees.length;
   const activeReferees = referees.filter((referee) => profileMap.get(referee.id)?.isActive !== false).length;
   const withFeeCount = referees.filter((referee) => (profileMap.get(referee.id)?.standardNightFeePence ?? 0) > 0).length;
@@ -231,6 +328,8 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
             const contactEmail = referee.email || sourceLead?.email || null;
             const contactPhone = profile?.phone || sourceLead?.phone || null;
             const isActive = profile?.isActive !== false;
+            const welcome = welcomeMap.get(referee.id) ?? null;
+            const access = accessMap.get(referee.id) ?? null;
 
             return (
               <div key={referee.id} className="overflow-hidden rounded-3xl border border-white/10 bg-black/25 shadow-[0_18px_70px_rgba(0,0,0,0.28)]">
@@ -259,7 +358,19 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
                         {sourceLead ? <Link href={`/admin/leads/${sourceLead.id}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Open lead</Link> : null}
                       </div>
                     </div>
-                    <div className="mt-5 grid gap-3 md:grid-cols-4">
+
+                    <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className={`rounded-2xl border p-4 ${dispatchStatusClasses(welcome?.status)}`}>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Welcome email</div>
+                        <div className="mt-2 text-sm font-semibold text-white">{formatWelcomeLabel(welcome)}</div>
+                      </div>
+                      <div className={`rounded-2xl border p-4 ${dashboardClasses(access)}`}>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Dashboard sign-in</div>
+                        <div className="mt-2 text-sm font-semibold text-white">{getDashboardLabel(access)}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-4">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Published fixtures</div><div className="mt-2 text-2xl font-black text-white">{publishedFixtures.length}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Standard night fee</div><div className="mt-2 text-sm font-semibold text-white">{formatMoney(profile?.standardNightFeePence)}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Source area</div><div className="mt-2 text-sm font-semibold text-white">{sourceLead?.area || "—"}</div></div>
