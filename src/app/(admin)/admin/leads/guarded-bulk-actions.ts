@@ -11,12 +11,14 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import { TEAM_PLACE_CONFIRMATION_CTA_KEY } from "@/lib/leads/teamPlaceConfirmation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   sendBulkLeadEmailAction as rawSendBulkLeadEmailAction,
   sendBulkLeadSmsAction as rawSendBulkLeadSmsAction,
 } from "./actions";
+import { sendBulkTeamPlaceConfirmationEmailAction } from "./team-confirmation-bulk-action";
 
 const BULK_CONFIRMATION_LIMIT = 20;
 
@@ -121,6 +123,16 @@ function getLeadFilterWhere(formData: FormData, contactField: "email" | "phone")
   return where;
 }
 
+function getTeamConfirmationLeadWhere(formData: FormData) {
+  return {
+    ...getLeadFilterWhere(formData, "email"),
+    interestType: InterestType.TEAM,
+    leagueId: {
+      not: null,
+    },
+  } satisfies Prisma.InterestLeadWhereInput;
+}
+
 function getConfirmationText(formData: FormData) {
   return String(formData.get("bulkSendConfirmation") ?? "")
     .trim()
@@ -157,8 +169,13 @@ export async function sendBulkLeadEmailAction(
 ): Promise<BulkEmailActionState> {
   await requireAdmin();
 
+  const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
+  const isTeamConfirmationEmail = ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY;
+
   const recipientCount = await prisma.interestLead.count({
-    where: getLeadFilterWhere(formData, "email"),
+    where: isTeamConfirmationEmail
+      ? getTeamConfirmationLeadWhere(formData)
+      : getLeadFilterWhere(formData, "email"),
   });
 
   const confirmationError = validateBulkConfirmation({
@@ -172,6 +189,10 @@ export async function sendBulkLeadEmailAction(
       ok: false,
       error: confirmationError,
     };
+  }
+
+  if (isTeamConfirmationEmail) {
+    return sendBulkTeamPlaceConfirmationEmailAction(prevState, formData);
   }
 
   return rawSendBulkLeadEmailAction(prevState, formData);
