@@ -152,6 +152,12 @@ export default async function ReplaceTeamInFixturesPage({ searchParams }: PagePr
         </section>
       ) : null}
 
+      {fromTeam ? (
+        <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          Preselected dropped-out team: <span className="font-semibold text-white">{fromTeam.name}</span>. Now choose the replacement team.
+        </section>
+      ) : null}
+
       <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm leading-6 text-amber-50/80">
         <div className="font-semibold text-white">What this does</div>
         <p className="mt-2">
@@ -168,12 +174,14 @@ export default async function ReplaceTeamInFixturesPage({ searchParams }: PagePr
             <FormListboxField
               name="fromTeamId"
               label="Team being replaced"
+              value={sp.fromTeamId ?? ""}
               options={sourceTeamOptions}
               placeholder="Choose dropped-out team"
             />
             <FormListboxField
               name="toTeamId"
               label="Replacement team"
+              value={sp.toTeamId ?? ""}
               options={replacementTeamOptions}
               placeholder="Choose new team"
             />
