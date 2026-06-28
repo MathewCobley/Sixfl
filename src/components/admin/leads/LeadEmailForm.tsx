@@ -56,6 +56,20 @@ const RESPONSE_TOKEN_PLACEHOLDERS = {
   no: "__SIXFL_NO_RESPONSE_URL__",
 } as const;
 
+const SERVER_TOKEN_PLACEHOLDERS: Record<string, string> = {
+  leagueName: "__SIXFL_LEAGUE_NAME__",
+  leagueStartLine: "__SIXFL_LEAGUE_START_LINE__",
+  leagueDetailsBlock: "__SIXFL_LEAGUE_DETAILS_BLOCK__",
+  proposedStartDate: "__SIXFL_PROPOSED_START_DATE__",
+  venueName: "__SIXFL_VENUE_NAME__",
+  kickoffInfo: "__SIXFL_KICKOFF_INFO__",
+  format: "__SIXFL_FORMAT__",
+  minutesPerGame: "__SIXFL_MINUTES_PER_GAME__",
+  costPerTeamPerMatch: "__SIXFL_COST_PER_TEAM_PER_MATCH__",
+  targetTeamCount: "__SIXFL_TARGET_TEAM_COUNT__",
+  targetTeamCountLine: "__SIXFL_TARGET_TEAM_COUNT_LINE__",
+};
+
 function protectLeadResponseTokens(value: string) {
   return value
     .replaceAll("{{yesResponseUrl}}", RESPONSE_TOKEN_PLACEHOLDERS.yes)
@@ -66,6 +80,22 @@ function restoreLeadResponseTokens(value: string) {
   return value
     .replaceAll(RESPONSE_TOKEN_PLACEHOLDERS.yes, "{{yesResponseUrl}}")
     .replaceAll(RESPONSE_TOKEN_PLACEHOLDERS.no, "{{noResponseUrl}}");
+}
+
+function protectServerResolvedTokens(value: string) {
+  return Object.entries(SERVER_TOKEN_PLACEHOLDERS).reduce(
+    (current, [key, placeholder]) =>
+      current.replace(new RegExp(`{{\\s*${key}\\s*}}`, "gi"), placeholder),
+    value,
+  );
+}
+
+function restoreServerResolvedTokens(value: string) {
+  return Object.entries(SERVER_TOKEN_PLACEHOLDERS).reduce(
+    (current, [key, placeholder]) =>
+      current.replaceAll(placeholder, `{{${key}}}`),
+    value,
+  );
 }
 
 // ========================================
@@ -131,8 +161,13 @@ export default function LeadEmailForm({
   }, [managedTeamOptions, requiresManagedTeam, targetTeamId]);
 
   function resolveTemplateForLead(value: string) {
-    return restoreLeadResponseTokens(
-      resolveTemplateText(protectLeadResponseTokens(value), templateContext),
+    return restoreServerResolvedTokens(
+      restoreLeadResponseTokens(
+        resolveTemplateText(
+          protectServerResolvedTokens(protectLeadResponseTokens(value)),
+          templateContext,
+        ),
+      ),
     );
   }
 
