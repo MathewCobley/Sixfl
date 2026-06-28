@@ -58,6 +58,26 @@ function getPublicOrigin(request: Request) {
   return requestUrl.origin;
 }
 
+function getSafePreviewTarget(request: Request) {
+  const requestUrl = new URL(request.url);
+  const target = requestUrl.searchParams.get("to")?.trim();
+
+  if (!target) return "/referee";
+
+  try {
+    const parsed = new URL(target, requestUrl.origin);
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+
+    if (path === "/referee" || path.startsWith("/referee/")) {
+      return path;
+    }
+  } catch {
+    // Ignore invalid target and use the referee dashboard.
+  }
+
+  return "/referee";
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -66,6 +86,7 @@ export async function GET(
 
   const { id } = await params;
   const origin = getPublicOrigin(request);
+  const previewTarget = getSafePreviewTarget(request);
 
   const referee = await prisma.user.findUnique({
     where: { id },
@@ -76,7 +97,7 @@ export async function GET(
     return NextResponse.redirect(new URL("/admin/referees", origin));
   }
 
-  const response = NextResponse.redirect(new URL("/referee", origin));
+  const response = NextResponse.redirect(new URL(previewTarget, origin));
 
   response.cookies.set(REFEREE_PREVIEW_COOKIE, referee.id, {
     httpOnly: true,
