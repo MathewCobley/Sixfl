@@ -371,12 +371,21 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
           </div>
         </div>
 
-        <Link
-          href="/admin/leads"
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
-        >
-          Back to leads
-        </Link>
+        <div className="flex flex-wrap gap-3 lg:justify-end">
+          <Link
+            href={`/admin/leads/${lead.id}/edit#edit-lead-details`}
+            data-admin-edit-lead-link={lead.id}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25"
+          >
+            Edit lead
+          </Link>
+          <Link
+            href="/admin/leads"
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
+          >
+            Back to leads
+          </Link>
+        </div>
       </div>
 
       {managedSquadNotice ? (
