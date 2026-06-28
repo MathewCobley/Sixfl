@@ -14,6 +14,7 @@ import {
   LeadStatus,
   NotificationAudience,
   NotificationChannel,
+  Prisma,
   TeamRole,
 } from "@prisma/client";
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
@@ -42,6 +43,13 @@ import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const CTA_PLACEHOLDER_TOKEN = "__SIXFL_CTA__";
+
+type LeagueConfirmationEmailDetails = {
+  proposedStartDate: Date | null;
+  minutesPerGame: number | null;
+  costPerTeamPerMatchPence: number | null;
+  targetTeamCount: number | null;
+};
 
 // ========================================
 // Helpers
@@ -95,6 +103,92 @@ function buildTeamNameFromLead(lead: {
   return "New Team";
 }
 
+function formatLongDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(value);
+}
+
+function isDateInPast(value: Date) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const proposed = new Date(value);
+  proposed.setHours(0, 0, 0, 0);
+
+  return proposed.getTime() < today.getTime();
+}
+
+function formatCurrencyPence(value: number | null) {
+  if (value === null) return "TBC";
+
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: value % 100 === 0 ? 0 : 2,
+  }).format(value / 100);
+}
+
+function buildLeagueStartLine(startDate: Date | null) {
+  if (!startDate) {
+    return "We’re confirming places now and will finalise the start date once the remaining teams are confirmed.";
+  }
+
+  const formattedDate = formatLongDate(startDate);
+
+  if (isDateInPast(startDate)) {
+    return `The original proposed start date was ${formattedDate}. We’re now confirming the remaining teams before fixtures are finalised.`;
+  }
+
+  return `Proposed start date: ${formattedDate}.`;
+}
+
+function buildLeagueDetailsBlock(input: {
+  leagueName: string;
+  venueName?: string | null;
+  kickoffInfo?: string | null;
+  format?: string | null;
+  details: LeagueConfirmationEmailDetails | null;
+}) {
+  const rows = [
+    `League: ${input.leagueName}`,
+    input.venueName?.trim() ? `Venue: ${input.venueName.trim()}` : null,
+    input.details?.proposedStartDate
+      ? `${isDateInPast(input.details.proposedStartDate) ? "Original proposed start date" : "Proposed start date"}: ${formatLongDate(input.details.proposedStartDate)}`
+      : null,
+    input.kickoffInfo?.trim() ? `Kick-off: ${input.kickoffInfo.trim()}` : null,
+    input.details?.minutesPerGame
+      ? `Match length: ${input.details.minutesPerGame} minutes`
+      : null,
+    `Cost: ${formatCurrencyPence(input.details?.costPerTeamPerMatchPence ?? null)} per team per match`,
+    input.details?.targetTeamCount
+      ? `Number of teams: ${input.details.targetTeamCount}`
+      : null,
+    input.format?.trim() ? `Format: ${input.format.trim()}` : "Format: Weekly 6-a-side fixtures",
+  ];
+
+  return rows.filter(Boolean).join("\n");
+}
+
+async function getLeagueConfirmationEmailDetails(leagueId: string | null) {
+  if (!leagueId) return null;
+
+  const rows = await prisma.$queryRaw<Array<LeagueConfirmationEmailDetails>>(Prisma.sql`
+    SELECT
+      "proposedStartDate" AS "proposedStartDate",
+      "minutesPerGame"::int AS "minutesPerGame",
+      "costPerTeamPerMatchPence"::int AS "costPerTeamPerMatchPence",
+      "targetTeamCount"::int AS "targetTeamCount"
+    FROM "League"
+    WHERE id = ${leagueId}
+    LIMIT 1
+  `);
+
+  return rows[0] ?? null;
+}
+
 function buildLeadEmailContext(input: {
   contactName?: string | null;
   area?: string | null;
@@ -104,9 +198,13 @@ function buildLeadEmailContext(input: {
   venueName?: string | null;
   kickoffInfo?: string | null;
   leagueFormat?: string | null;
+  leagueConfirmationDetails?: LeagueConfirmationEmailDetails | null;
 }) {
   const fullName = input.contactName?.trim() || "";
   const firstName = fullName.split(/\s+/)[0] || "there";
+  const leagueName = input.leagueName?.trim() || "your SIXFL league";
+  const venueName = input.venueName?.trim() || "TBC";
+  const details = input.leagueConfirmationDetails ?? null;
 
   return mergeEmailTemplateContext(
     buildBaseEmailTemplateContext({
@@ -117,10 +215,23 @@ function buildLeadEmailContext(input: {
       teamName: input.teamName,
     }),
     {
-      leagueName: input.leagueName?.trim() || "",
-      venueName: input.venueName?.trim() || "",
+      leagueName,
+      venueName,
       kickoffInfo: input.kickoffInfo?.trim() || "",
-      format: input.leagueFormat?.trim() || "",
+      format: input.leagueFormat?.trim() || "Weekly 6-a-side fixtures",
+      proposedStartDate: details?.proposedStartDate ? formatLongDate(details.proposedStartDate) : "",
+      leagueStartLine: buildLeagueStartLine(details?.proposedStartDate ?? null),
+      minutesPerGame: details?.minutesPerGame ? String(details.minutesPerGame) : "TBC",
+      costPerTeamPerMatch: formatCurrencyPence(details?.costPerTeamPerMatchPence ?? null),
+      targetTeamCount: details?.targetTeamCount ? String(details.targetTeamCount) : "",
+      targetTeamCountLine: details?.targetTeamCount ? `Number of teams: ${details.targetTeamCount}` : "",
+      leagueDetailsBlock: buildLeagueDetailsBlock({
+        leagueName,
+        venueName,
+        kickoffInfo: input.kickoffInfo,
+        format: input.leagueFormat,
+        details,
+      }),
     },
   );
 }
@@ -411,6 +522,10 @@ export async function sendLeadEmailAction(formData: FormData) {
     teamConfirmationUrl = confirmation.url;
   }
 
+  const leagueConfirmationDetails = await getLeagueConfirmationEmailDetails(
+    lead.leagueId ?? null,
+  );
+
   const leagueLabel = lead.league
     ? `${lead.league.name}${lead.league.season ? ` · ${lead.league.season}` : ""}`
     : null;
@@ -424,6 +539,7 @@ export async function sendLeadEmailAction(formData: FormData) {
     venueName: lead.league?.venueName ?? null,
     kickoffInfo: lead.league?.kickoffInfo ?? null,
     leagueFormat: lead.league?.format ?? null,
+    leagueConfirmationDetails,
   });
 
   const resolvedSubject = resolveTemplateText(subjectInput, context);
