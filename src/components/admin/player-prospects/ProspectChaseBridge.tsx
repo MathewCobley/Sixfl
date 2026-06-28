@@ -191,9 +191,10 @@ function getProspectCards() {
     ),
   );
 
-  return commsLinks
-    .map((link) => link.closest("article"))
-    .filter((card): card is Element => Boolean(card));
+  return commsLinks.flatMap((link) => {
+    const card = link.closest("article");
+    return card ? [card] : [];
+  });
 }
 
 function addChaseControlsToPage() {
