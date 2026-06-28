@@ -7,7 +7,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { queueManagedSquadJoinConfirmationEmail } from "@/lib/managed-squad/prospectJoinConfirmation";
+import {
+  queueManagedSquadJoinChaseEmail,
+  queueManagedSquadJoinConfirmationEmail,
+} from "@/lib/managed-squad/prospectJoinConfirmation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -24,6 +27,19 @@ function buildRedirectWithParams(params: Record<string, string | null | undefine
 
   const query = search.toString();
   return `/admin/player-prospects${query ? `?${query}` : ""}`;
+}
+
+async function revalidateProspectSurfaces(input: { prospectId: string; teamId: string | null }) {
+  revalidatePath("/admin/player-prospects");
+  revalidatePath(`/admin/player-prospects/${input.prospectId}/communications`);
+  revalidatePath("/admin/messaging");
+
+  if (input.teamId) {
+    revalidatePath(`/admin/teams/${input.teamId}`);
+    revalidatePath(`/admin/teams/${input.teamId}/squad`);
+    revalidatePath(`/admin/teams/${input.teamId}/prospects`);
+    revalidatePath(`/admin/teams/${input.teamId}/communications`);
+  }
 }
 
 export async function assignPlayerProspectToTeamAction(formData: FormData) {
@@ -105,12 +121,7 @@ export async function sendPlayerProspectSquadInviteAction(formData: FormData) {
     createdByUserId: user?.id ?? null,
   });
 
-  revalidatePath("/admin/player-prospects");
-  revalidatePath(`/admin/player-prospects/${prospect.id}/communications`);
-  revalidatePath(`/admin/teams/${prospect.teamId}`);
-  revalidatePath(`/admin/teams/${prospect.teamId}/squad`);
-  revalidatePath(`/admin/teams/${prospect.teamId}/prospects`);
-  revalidatePath("/admin/messaging");
+  await revalidateProspectSurfaces({ prospectId: prospect.id, teamId: prospect.teamId });
 
   redirect(
     buildRedirectWithParams({
@@ -118,4 +129,68 @@ export async function sendPlayerProspectSquadInviteAction(formData: FormData) {
       leagueId,
     }),
   );
+}
+
+async function sendSquadInviteChase(input: {
+  formData: FormData;
+  chaseType: "CHASE" | "FINAL";
+}) {
+  const { user } = await requireAdmin();
+
+  const prospectId = String(input.formData.get("prospectId") ?? "").trim();
+  const leagueId = String(input.formData.get("leagueId") ?? "").trim();
+
+  if (!prospectId) {
+    redirect(buildRedirectWithParams({ error: "Prospect not found.", leagueId }));
+  }
+
+  const prospect = await prisma.teamPlayerProspect.findUnique({
+    where: { id: prospectId },
+    select: {
+      id: true,
+      email: true,
+      teamId: true,
+      status: true,
+    },
+  });
+
+  if (!prospect) {
+    redirect(buildRedirectWithParams({ error: "Prospect not found.", leagueId }));
+  }
+
+  if (prospect.status === "DECLINED" || prospect.status === "DUPLICATE") {
+    redirect(buildRedirectWithParams({ error: "This prospect is closed and cannot be chased.", leagueId }));
+  }
+
+  if (!prospect.teamId) {
+    redirect(buildRedirectWithParams({ error: "Assign the prospect to a team before sending a chase.", leagueId }));
+  }
+
+  if (!prospect.email?.trim()) {
+    redirect(buildRedirectWithParams({ error: "This prospect needs an email address before you can chase them.", leagueId }));
+  }
+
+  const result = await queueManagedSquadJoinChaseEmail({
+    prospectId: prospect.id,
+    chaseType: input.chaseType,
+    createdByUserId: user?.id ?? null,
+  });
+
+  await revalidateProspectSurfaces({ prospectId: prospect.id, teamId: prospect.teamId });
+
+  redirect(
+    buildRedirectWithParams({
+      saved: input.chaseType === "FINAL" ? "squad-final-chase-queued" : "squad-chase-queued",
+      error: result.ok ? null : "The chase email could not be queued.",
+      leagueId,
+    }),
+  );
+}
+
+export async function sendPlayerProspectSquadInviteChaseAction(formData: FormData) {
+  await sendSquadInviteChase({ formData, chaseType: "CHASE" });
+}
+
+export async function sendPlayerProspectSquadInviteFinalChaseAction(formData: FormData) {
+  await sendSquadInviteChase({ formData, chaseType: "FINAL" });
 }
