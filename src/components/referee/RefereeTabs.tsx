@@ -41,11 +41,10 @@ const tabs: Array<{
   },
 ];
 
-function withPreviewParam(href: string, previewRefereeId?: string | null) {
+function withPreviewRoute(href: string, previewRefereeId?: string | null) {
   if (!previewRefereeId) return href;
 
-  const separator = href.includes("?") ? "&" : "?";
-  return `${href}${separator}previewRefereeId=${encodeURIComponent(previewRefereeId)}`;
+  return `/admin/referees/${encodeURIComponent(previewRefereeId)}/referee-preview?to=${encodeURIComponent(href)}`;
 }
 
 function getPreviewIdFromBanner() {
@@ -77,7 +76,7 @@ export default function RefereeTabs({ active, previewRefereeId }: Props) {
         return (
           <Link
             key={tab.key}
-            href={withPreviewParam(tab.href, effectivePreviewRefereeId)}
+            href={withPreviewRoute(tab.href, effectivePreviewRefereeId)}
             className={[
               "rounded-3xl border p-4 transition",
               isActive
