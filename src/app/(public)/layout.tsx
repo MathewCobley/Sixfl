@@ -2,7 +2,7 @@
 // File: src/app/(public)/layout.tsx
 // ========================================
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import AppHeader from "@/components/layout/AppHeader";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
@@ -19,7 +19,9 @@ export default function PublicLayout({
       <AppHeader variant="public" />
       <PublicLeagueLandingSpacingBridge />
       <PublicFixtureWinChanceBridge />
-      <RegisterInterestClarityBridge />
+      <Suspense fallback={null}>
+        <RegisterInterestClarityBridge />
+      </Suspense>
       <main className="bg-black">{children}</main>
       <SiteFooter />
     </div>
