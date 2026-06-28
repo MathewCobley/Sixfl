@@ -21,6 +21,7 @@ import {
 import { sendBulkTeamPlaceConfirmationEmailAction } from "./team-confirmation-bulk-action";
 
 const BULK_CONFIRMATION_LIMIT = 20;
+const TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY = "team-place-confirmation-email";
 
 type BulkEmailActionState = {
   ok?: boolean;
@@ -163,14 +164,23 @@ function validateBulkConfirmation(input: {
   return `This bulk action would queue ${input.count} ${input.label.toLowerCase()}. Type ${requiredPhrase} to confirm.`;
 }
 
+function isTeamPlaceConfirmationEmail(formData: FormData) {
+  const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
+  const templateKey = String(formData.get("templateKey") ?? "").trim();
+
+  return (
+    ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY ||
+    templateKey === TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY
+  );
+}
+
 export async function sendBulkLeadEmailAction(
   prevState: BulkEmailActionState,
   formData: FormData,
 ): Promise<BulkEmailActionState> {
   await requireAdmin();
 
-  const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
-  const isTeamConfirmationEmail = ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY;
+  const isTeamConfirmationEmail = isTeamPlaceConfirmationEmail(formData);
 
   const recipientCount = await prisma.interestLead.count({
     where: isTeamConfirmationEmail
