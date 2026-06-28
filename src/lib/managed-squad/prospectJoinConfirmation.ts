@@ -18,9 +18,16 @@ import { createSquadActivationToken } from "@/lib/squad/activationToken";
 
 export const MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY =
   "managed-squad-join-confirmation-email";
+export const MANAGED_SQUAD_JOIN_CHASE_TEMPLATE_KEY =
+  "managed-squad-join-chase-email";
+export const MANAGED_SQUAD_JOIN_FINAL_CHASE_TEMPLATE_KEY =
+  "managed-squad-join-final-chase-email";
 
 const MANAGED_SQUAD_JOIN_CONFIRMATION_SOURCE_TYPE =
   "MANAGED_SQUAD_JOIN_CONFIRMATION";
+const MANAGED_SQUAD_JOIN_CHASE_SOURCE_TYPE = "MANAGED_SQUAD_JOIN_CHASE";
+const MANAGED_SQUAD_JOIN_FINAL_CHASE_SOURCE_TYPE =
+  "MANAGED_SQUAD_JOIN_FINAL_CHASE";
 
 const SQUAD_INVITE_TEMPLATE_NAME = "Squad invite email";
 const SQUAD_INVITE_ORIGIN_LABEL = "Squad invite email";
@@ -101,6 +108,40 @@ function getSquadInviteBody() {
   ].join("\n");
 }
 
+function getSquadInviteChaseBody() {
+  return [
+    "Hi {{firstName}},",
+    "",
+    "Just checking you saw the SIXFL squad invite for {{teamName}}.",
+    "",
+    "{{teamContextLine}}",
+    "",
+    "We’re pulling squads together now, so please tap below if you’d still like to be included:",
+    "",
+    "{{cta}}",
+    "",
+    "Thanks,",
+    "SIXFL",
+  ].join("\n");
+}
+
+function getSquadInviteFinalChaseBody() {
+  return [
+    "Hi {{firstName}},",
+    "",
+    "Quick final check before we offer the space to another player.",
+    "",
+    "If you still want to join {{teamName}}, please tap below to confirm your place:",
+    "",
+    "{{cta}}",
+    "",
+    "If you’re no longer looking to join, no problem — you can ignore this or reply NO and we’ll remove you from the active list.",
+    "",
+    "Thanks,",
+    "SIXFL",
+  ].join("\n");
+}
+
 export async function ensureManagedSquadJoinConfirmationTemplate() {
   return prisma.notificationTemplate.upsert({
     where: { key: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY },
@@ -132,6 +173,66 @@ export async function ensureManagedSquadJoinConfirmationTemplate() {
   });
 }
 
+export async function ensureManagedSquadJoinChaseTemplates() {
+  await prisma.notificationTemplate.upsert({
+    where: { key: MANAGED_SQUAD_JOIN_CHASE_TEMPLATE_KEY },
+    update: {
+      name: "Squad invite chase email",
+      description: "Gentle chase after a managed squad invite has been sent but not confirmed.",
+      kind: NotificationTemplateKind.TRANSACTIONAL,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.PLAYER,
+      subject: "Quick check — {{teamName}} squad invite",
+      body: getSquadInviteChaseBody(),
+      ctaLabel: "Yes, I want to join",
+      ctaUrlKey: "joinConfirmationUrl",
+      isActive: true,
+    },
+    create: {
+      key: MANAGED_SQUAD_JOIN_CHASE_TEMPLATE_KEY,
+      name: "Squad invite chase email",
+      description: "Gentle chase after a managed squad invite has been sent but not confirmed.",
+      kind: NotificationTemplateKind.TRANSACTIONAL,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.PLAYER,
+      subject: "Quick check — {{teamName}} squad invite",
+      body: getSquadInviteChaseBody(),
+      ctaLabel: "Yes, I want to join",
+      ctaUrlKey: "joinConfirmationUrl",
+      isActive: true,
+    },
+  });
+
+  await prisma.notificationTemplate.upsert({
+    where: { key: MANAGED_SQUAD_JOIN_FINAL_CHASE_TEMPLATE_KEY },
+    update: {
+      name: "Final squad invite chase email",
+      description: "Final check before removing a managed squad prospect from the active pipeline.",
+      kind: NotificationTemplateKind.TRANSACTIONAL,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.PLAYER,
+      subject: "Final check — {{teamName}} squad place",
+      body: getSquadInviteFinalChaseBody(),
+      ctaLabel: "Yes, I want to join",
+      ctaUrlKey: "joinConfirmationUrl",
+      isActive: true,
+    },
+    create: {
+      key: MANAGED_SQUAD_JOIN_FINAL_CHASE_TEMPLATE_KEY,
+      name: "Final squad invite chase email",
+      description: "Final check before removing a managed squad prospect from the active pipeline.",
+      kind: NotificationTemplateKind.TRANSACTIONAL,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.PLAYER,
+      subject: "Final check — {{teamName}} squad place",
+      body: getSquadInviteFinalChaseBody(),
+      ctaLabel: "Yes, I want to join",
+      ctaUrlKey: "joinConfirmationUrl",
+      isActive: true,
+    },
+  });
+}
+
 async function alreadyQueuedOrSent(prospectId: string) {
   return prisma.notificationDispatch.findFirst({
     where: {
@@ -154,19 +255,10 @@ async function alreadyQueuedOrSent(prospectId: string) {
   });
 }
 
-export async function queueManagedSquadJoinConfirmationEmail(input: {
-  prospectId: string;
-  createdByUserId?: string | null;
-}) {
-  const prospectId = input.prospectId.trim();
+type LoadedProspect = NonNullable<Awaited<ReturnType<typeof loadProspectForSquadEmail>>>;
 
-  if (!prospectId) {
-    return { ok: false as const, status: "missing_prospect" as const };
-  }
-
-  await ensureManagedSquadJoinConfirmationTemplate();
-
-  const prospect = await prisma.teamPlayerProspect.findUnique({
+async function loadProspectForSquadEmail(prospectId: string) {
+  return prisma.teamPlayerProspect.findUnique({
     where: { id: prospectId },
     select: {
       id: true,
@@ -193,6 +285,54 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
       },
     },
   });
+}
+
+function buildProspectEmailContext(prospect: LoadedProspect) {
+  if (!prospect.teamId || !prospect.team) return null;
+
+  const email = prospect.email?.trim().toLowerCase() || null;
+  if (!email) return null;
+
+  const displayName = getDisplayName(prospect) || email;
+  const joinConfirmationUrl = getManagedSquadJoinConfirmationUrl(prospect.id);
+  const leagueName = prospect.team.league
+    ? `${prospect.team.league.name}${
+        prospect.team.league.season ? ` · ${prospect.team.league.season}` : ""
+      }`
+    : "";
+
+  return {
+    email,
+    displayName,
+    joinConfirmationUrl,
+    leagueName,
+    variables: {
+      firstName: getFirstName(displayName) || "there",
+      fullName: displayName,
+      teamName: prospect.team.name,
+      leagueName,
+      venueName: prospect.team.league?.venueName ?? "",
+      preferredNight: formatPreferredNight(prospect.team.league?.dayOfWeek) ?? "",
+      teamContextLine: getTeamContextLine(prospect.team),
+      joinConfirmationUrl,
+      teamJoinUrl: joinConfirmationUrl,
+    },
+  };
+}
+
+export async function queueManagedSquadJoinConfirmationEmail(input: {
+  prospectId: string;
+  createdByUserId?: string | null;
+}) {
+  const prospectId = input.prospectId.trim();
+
+  if (!prospectId) {
+    return { ok: false as const, status: "missing_prospect" as const };
+  }
+
+  await ensureManagedSquadJoinConfirmationTemplate();
+
+  const prospect = await loadProspectForSquadEmail(prospectId);
 
   if (!prospect) {
     return { ok: false as const, status: "prospect_not_found" as const };
@@ -202,9 +342,9 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
     return { ok: false as const, status: "prospect_not_found" as const };
   }
 
-  const email = prospect.email?.trim().toLowerCase() || null;
+  const context = buildProspectEmailContext(prospect);
 
-  if (!email) {
+  if (!context) {
     return { ok: false as const, status: "no_email" as const };
   }
 
@@ -219,20 +359,12 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
     };
   }
 
-  const displayName = getDisplayName(prospect) || email;
-  const joinConfirmationUrl = getManagedSquadJoinConfirmationUrl(prospect.id);
-  const leagueName = prospect.team.league
-    ? `${prospect.team.league.name}${
-        prospect.team.league.season ? ` · ${prospect.team.league.season}` : ""
-      }`
-    : "";
-
   const recipient = await upsertNotificationRecipient({
     sourceType: NotificationRecipientSourceType.GENERAL,
     sourceId: getProspectRecipientSourceId(prospect.id),
     audience: NotificationAudience.PLAYER,
-    displayName,
-    email,
+    displayName: context.displayName,
+    email: context.email,
     phone: prospect.phone,
     transactionalEmailOptIn: true,
     transactionalSmsOptIn: true,
@@ -242,7 +374,7 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
       teamId: prospect.teamId,
       teamName: prospect.team.name,
       prospectId: prospect.id,
-      contactName: displayName,
+      contactName: context.displayName,
       entityType: "TEAM_PLAYER_PROSPECT",
     },
   });
@@ -250,17 +382,7 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
   const dispatch = await queueNotificationFromTemplate({
     templateKey: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY,
     recipientId: recipient.id,
-    variables: {
-      firstName: getFirstName(displayName) || "there",
-      fullName: displayName,
-      teamName: prospect.team.name,
-      leagueName,
-      venueName: prospect.team.league?.venueName ?? "",
-      preferredNight: formatPreferredNight(prospect.team.league?.dayOfWeek) ?? "",
-      teamContextLine: getTeamContextLine(prospect.team),
-      joinConfirmationUrl,
-      teamJoinUrl: joinConfirmationUrl,
-    },
+    variables: context.variables,
     sourceType: MANAGED_SQUAD_JOIN_CONFIRMATION_SOURCE_TYPE,
     sourceId: prospect.id,
     metadata: {
@@ -268,14 +390,119 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
       originLabel: SQUAD_INVITE_ORIGIN_LABEL,
       teamId: prospect.teamId,
       prospectId: prospect.id,
-      contactName: displayName,
+      contactName: context.displayName,
       templateKey: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY,
-      joinConfirmationUrl,
+      joinConfirmationUrl: context.joinConfirmationUrl,
     },
     emailBranding: {
       teamName: prospect.team.name,
       teamLogoUrl: prospect.team.logoUrl,
-      leagueName,
+      leagueName: context.leagueName,
+    },
+    createdByUserId: input.createdByUserId ?? null,
+  });
+
+  await logNotificationDispatchToThread({
+    dispatch,
+    recipient,
+  });
+
+  await prisma.teamPlayerProspect.update({
+    where: { id: prospect.id },
+    data: {
+      lastContactedAt: new Date(),
+      status: prospect.status === "NEW" ? "CONTACTED" : undefined,
+    },
+  });
+
+  return {
+    ok: true as const,
+    status:
+      dispatch.status === NotificationDispatchStatus.QUEUED
+        ? ("queued" as const)
+        : ("skipped" as const),
+    dispatchId: dispatch.id,
+    prospectId: prospect.id,
+  };
+}
+
+export async function queueManagedSquadJoinChaseEmail(input: {
+  prospectId: string;
+  chaseType: "CHASE" | "FINAL";
+  createdByUserId?: string | null;
+}) {
+  const prospectId = input.prospectId.trim();
+
+  if (!prospectId) {
+    return { ok: false as const, status: "missing_prospect" as const };
+  }
+
+  await ensureManagedSquadJoinChaseTemplates();
+
+  const prospect = await loadProspectForSquadEmail(prospectId);
+
+  if (!prospect) {
+    return { ok: false as const, status: "prospect_not_found" as const };
+  }
+
+  if (!prospect.teamId || !prospect.team) {
+    return { ok: false as const, status: "prospect_not_found" as const };
+  }
+
+  const context = buildProspectEmailContext(prospect);
+
+  if (!context) {
+    return { ok: false as const, status: "no_email" as const };
+  }
+
+  const recipient = await upsertNotificationRecipient({
+    sourceType: NotificationRecipientSourceType.GENERAL,
+    sourceId: getProspectRecipientSourceId(prospect.id),
+    audience: NotificationAudience.PLAYER,
+    displayName: context.displayName,
+    email: context.email,
+    phone: prospect.phone,
+    transactionalEmailOptIn: true,
+    transactionalSmsOptIn: true,
+    marketingEmailOptIn: true,
+    marketingSmsOptIn: true,
+    metadata: {
+      teamId: prospect.teamId,
+      teamName: prospect.team.name,
+      prospectId: prospect.id,
+      contactName: context.displayName,
+      entityType: "TEAM_PLAYER_PROSPECT",
+    },
+  });
+
+  const isFinal = input.chaseType === "FINAL";
+  const templateKey = isFinal
+    ? MANAGED_SQUAD_JOIN_FINAL_CHASE_TEMPLATE_KEY
+    : MANAGED_SQUAD_JOIN_CHASE_TEMPLATE_KEY;
+  const sourceType = isFinal
+    ? MANAGED_SQUAD_JOIN_FINAL_CHASE_SOURCE_TYPE
+    : MANAGED_SQUAD_JOIN_CHASE_SOURCE_TYPE;
+
+  const dispatch = await queueNotificationFromTemplate({
+    templateKey,
+    recipientId: recipient.id,
+    variables: context.variables,
+    sourceType,
+    sourceId: prospect.id,
+    metadata: {
+      origin: isFinal ? "squad_invite_final_chase" : "squad_invite_chase",
+      originLabel: isFinal ? "Final squad invite chase" : "Squad invite chase",
+      teamId: prospect.teamId,
+      prospectId: prospect.id,
+      contactName: context.displayName,
+      templateKey,
+      joinConfirmationUrl: context.joinConfirmationUrl,
+      chaseType: input.chaseType,
+    },
+    emailBranding: {
+      teamName: prospect.team.name,
+      teamLogoUrl: prospect.team.logoUrl,
+      leagueName: context.leagueName,
     },
     createdByUserId: input.createdByUserId ?? null,
   });
