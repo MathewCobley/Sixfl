@@ -152,12 +152,13 @@ export default function AdminRefereeCommsHistoryBridge() {
     const refereeId = getRefereeIdFromPath(pathname);
     if (!refereeId) return;
 
+    const safeRefereeId: string = refereeId;
     let cancelled = false;
 
-    routeProfileButtonsToCentralComms(refereeId);
+    routeProfileButtonsToCentralComms(safeRefereeId);
 
     async function load() {
-      const response = await fetch(`/api/admin/referees/${encodeURIComponent(refereeId)}/communications`, {
+      const response = await fetch(`/api/admin/referees/${encodeURIComponent(safeRefereeId)}/communications`, {
         cache: "no-store",
       });
       if (!response.ok) return;
@@ -165,7 +166,7 @@ export default function AdminRefereeCommsHistoryBridge() {
       const payload = (await response.json().catch(() => null)) as RefereeCommsPayload | null;
       if (cancelled) return;
 
-      renderCommsPanel(payload?.items ?? [], refereeId);
+      renderCommsPanel(payload?.items ?? [], safeRefereeId);
     }
 
     void load();
