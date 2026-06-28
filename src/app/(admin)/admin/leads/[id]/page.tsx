@@ -33,6 +33,8 @@ type PageProps = {
   }>;
 };
 
+const TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY = "team-place-confirmation-email";
+
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
@@ -225,6 +227,9 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
     prisma.emailTemplate.findMany({
       where: {
         isActive: true,
+        key: {
+          not: TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY,
+        },
         audience: {
           in: emailTemplateAudiences,
         },
@@ -389,133 +394,91 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
       </div>
 
       {managedSquadNotice ? (
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           {managedSquadNotice}
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
-            <h2 className="text-lg font-bold text-white">Lead details</h2>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <DetailRow
-                label="Type"
-                value={formatInterestType(lead.interestType)}
-              />
-              <DetailRow
-                label="Status"
-                value={formatLeadStatus(lead.status)}
-              />
-              <DetailRow label="Area" value={lead.area ?? "—"} />
-              <DetailRow
-                label="League type"
-                value={formatLeagueType(lead.leagueType)}
-              />
-              <DetailRow
-                label="Preferred nights"
-                value={formatPreferredNights(lead.preferredNights)}
-              />
-              <DetailRow label="Phone" value={lead.phone ?? "—"} />
-              <DetailRow label="Email" value={lead.email ?? "—"} />
-              <DetailRow label="Team name" value={lead.teamName ?? "—"} />
-              <DetailRow
-                label="Free kit interest"
-                value={formatYesNo(lead.wantsFreeKit)}
-              />
-              <DetailRow
-                label="Marketing consent"
-                value={formatYesNo(lead.marketingConsent)}
-              />
-              <DetailRow label="Source" value={lead.source ?? "—"} />
-              <DetailRow label="Created" value={formatDate(lead.createdAt)} />
-              <DetailRow
-                label="Converted"
-                value={lead.convertedAt ? formatDate(lead.convertedAt) : "—"}
-              />
-              <DetailRow
-                label="Converted team"
-                value={lead.convertedTeam?.name ?? "—"}
-              />
-            </div>
-
-            <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
-                Message
-              </p>
-
-              <div className="mt-2 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white/80">
-                {lead.message ?? "—"}
+            <div className="mb-5 flex flex-col gap-3 border-b border-white/10 pb-5">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">
+                Lead details
               </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h2 className="text-lg font-bold text-white">Email history</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  Full audit trail of emails sent to this lead.
+                <h2 className="text-2xl font-bold tracking-tight text-white">
+                  Contact and enquiry
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-white/60">
+                  Keep the lead record as the source of truth until it is converted
+                  or closed.
                 </p>
               </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
-                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
-                  Total emails
-                </div>
-                <div className="mt-1 text-lg font-black text-white">
-                  {emailCount}
-                </div>
-              </div>
             </div>
 
-            {latestEmail ? (
-              <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
-                  Latest email
-                </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailRow label="Contact" value={lead.contactName} />
+              <DetailRow label="Email" value={lead.email || "—"} />
+              <DetailRow label="Phone" value={lead.phone || "—"} />
+              <DetailRow label="Area" value={lead.area || "—"} />
+              <DetailRow label="Team name" value={lead.teamName || "—"} />
+              <DetailRow label="League type" value={formatLeagueType(lead.leagueType)} />
+              <DetailRow label="Preferred nights" value={formatPreferredNights(lead.preferredNights)} />
+              <DetailRow label="Free kit" value={formatYesNo(lead.wantsFreeKit)} />
+              <DetailRow label="Marketing consent" value={formatYesNo(lead.marketingConsent)} />
+              <DetailRow label="Source" value={lead.source || "—"} />
+            </div>
 
-                <div className="mt-2 text-sm font-semibold text-white">
-                  {latestEmail.subject}
+            {lead.message ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">
+                  Message / notes
                 </div>
-
-                <div className="mt-1 text-xs text-white/55">
-                  Sent {formatDate(latestEmail.sentAt)}
-                  {latestEmail.sentTo ? ` • ${latestEmail.sentTo}` : ""}
+                <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/85">
+                  {lead.message}
                 </div>
               </div>
             ) : null}
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-6">
+            <div className="mb-5 flex flex-col gap-3 border-b border-white/10 pb-5">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">
+                Email history
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-white">
+                  Sent emails
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-white/60">
+                  {emailCount} email{emailCount === 1 ? "" : "s"} stored on this lead.
+                  {latestEmail ? ` Latest: ${formatDate(latestEmail.sentAt)}.` : ""}
+                </p>
+              </div>
+            </div>
 
             {lead.emails.length === 0 ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-sm text-white/60">No emails sent yet.</p>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
+                No emails have been recorded for this lead yet.
               </div>
             ) : (
-              <div className="mt-4 space-y-4">
-                {lead.emails.map((email, index) => (
+              <div className="space-y-4">
+                {lead.emails.map((email) => (
                   <div
                     key={email.id}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
+                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/60">
-                            #{emailCount - index}
-                          </span>
-
-                          <span className="text-sm font-semibold text-white">
-                            {email.subject}
-                          </span>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="text-sm font-bold text-white">
+                          {email.subject}
                         </div>
-
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
-                          <span>Sent {formatDate(email.sentAt)}</span>
-
+                        <div className="mt-1 text-xs text-white/45">
+                          {formatDate(email.sentAt)}
                           {email.sentTo ? (
                             <span>
-                              To:{" "}
+                              {" "}• Sent to{" "}
                               <a
                                 href={`mailto:${email.sentTo}`}
                                 className="text-emerald-300 hover:text-emerald-200"
@@ -622,7 +585,7 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
                 title="Send email"
                 description={
                   hasEmail
-                    ? "Use a saved template or write a direct reply to this lead from the admin console."
+                    ? "Use a saved template, send the system confirmation email, or write a direct reply to this lead."
                     : "This lead does not currently have an email address, so email sending is unavailable."
                 }
               >
@@ -636,6 +599,7 @@ export default async function LeadPage({ params, searchParams }: PageProps) {
                     signupUrl={signupUrl}
                     templates={emailTemplates}
                     managedTeamOptions={managedTeamEmailOptions}
+                    showTeamConfirmationShortcut={canConvertToTeam}
                   />
                 ) : (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
