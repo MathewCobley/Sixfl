@@ -164,13 +164,33 @@ function validateBulkConfirmation(input: {
   return `This bulk action would queue ${input.count} ${input.label.toLowerCase()}. Type ${requiredPhrase} to confirm.`;
 }
 
-function isTeamPlaceConfirmationEmail(formData: FormData) {
+async function isTeamPlaceConfirmationEmail(formData: FormData) {
   const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
   const templateKey = String(formData.get("templateKey") ?? "").trim();
+  const templateId = String(formData.get("templateId") ?? "").trim();
 
-  return (
+  if (
     ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY ||
     templateKey === TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY
+  ) {
+    return true;
+  }
+
+  if (!templateId) {
+    return false;
+  }
+
+  const template = await prisma.emailTemplate.findUnique({
+    where: { id: templateId },
+    select: {
+      key: true,
+      ctaUrlKey: true,
+    },
+  });
+
+  return (
+    template?.key === TEAM_PLACE_CONFIRMATION_TEMPLATE_KEY ||
+    template?.ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY
   );
 }
 
@@ -180,7 +200,7 @@ export async function sendBulkLeadEmailAction(
 ): Promise<BulkEmailActionState> {
   await requireAdmin();
 
-  const isTeamConfirmationEmail = isTeamPlaceConfirmationEmail(formData);
+  const isTeamConfirmationEmail = await isTeamPlaceConfirmationEmail(formData);
 
   const recipientCount = await prisma.interestLead.count({
     where: isTeamConfirmationEmail
