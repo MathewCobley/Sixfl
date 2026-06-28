@@ -28,6 +28,10 @@ import {
   mergeEmailTemplateContext,
   resolveTemplateText,
 } from "@/lib/email/template-context";
+import {
+  ensureTeamPlaceConfirmationRecord,
+  TEAM_PLACE_CONFIRMATION_CTA_KEY,
+} from "@/lib/leads/teamPlaceConfirmation";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
@@ -96,6 +100,10 @@ function buildLeadEmailContext(input: {
   area?: string | null;
   signupUrl?: string | null;
   teamName?: string | null;
+  leagueName?: string | null;
+  venueName?: string | null;
+  kickoffInfo?: string | null;
+  leagueFormat?: string | null;
 }) {
   const fullName = input.contactName?.trim() || "";
   const firstName = fullName.split(/\s+/)[0] || "there";
@@ -107,6 +115,10 @@ function buildLeadEmailContext(input: {
       area: input.area,
       signupUrl: input.signupUrl,
       teamName: input.teamName,
+      leagueName: input.leagueName,
+      venueName: input.venueName,
+      kickoffInfo: input.kickoffInfo,
+      format: input.leagueFormat,
     }),
   );
 }
@@ -149,6 +161,7 @@ async function resolveLeadEmailCta(input: {
   ctaUrlKey?: string | null;
   signupUrl?: string | null;
   targetTeamId?: string | null;
+  teamConfirmationUrl?: string | null;
 }) {
   const label = input.ctaLabel?.trim() || "";
   const urlKey = input.ctaUrlKey?.trim() || "";
@@ -172,6 +185,19 @@ async function resolveLeadEmailCta(input: {
 
   if (urlKey === "teamJoinUrl") {
     const url = await resolveTeamJoinUrl(input.targetTeamId?.trim() || "");
+
+    if (!url) {
+      return undefined;
+    }
+
+    return {
+      label,
+      url,
+    };
+  }
+
+  if (urlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY) {
+    const url = input.teamConfirmationUrl?.trim() || "";
 
     if (!url) {
       return undefined;
@@ -331,6 +357,17 @@ export async function sendLeadEmailAction(formData: FormData) {
 
   const lead = await prisma.interestLead.findUnique({
     where: { id: leadId },
+    include: {
+      league: {
+        select: {
+          name: true,
+          season: true,
+          venueName: true,
+          kickoffInfo: true,
+          format: true,
+        },
+      },
+    },
   });
 
   if (!lead) {
@@ -358,12 +395,33 @@ export async function sendLeadEmailAction(formData: FormData) {
 
   const ctaLabel = ctaLabelInput || selectedTemplate?.ctaLabel?.trim() || "";
   const ctaUrlKey = ctaUrlKeyInput || selectedTemplate?.ctaUrlKey?.trim() || "";
+  let teamConfirmationUrl = "";
+
+  if (ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY) {
+    if (lead.interestType !== "TEAM") {
+      return {
+        ok: false,
+        error: "Team confirmation links can only be sent to team leads.",
+      };
+    }
+
+    const confirmation = await ensureTeamPlaceConfirmationRecord(lead.id);
+    teamConfirmationUrl = confirmation.url;
+  }
+
+  const leagueLabel = lead.league
+    ? `${lead.league.name}${lead.league.season ? ` · ${lead.league.season}` : ""}`
+    : null;
 
   const context = buildLeadEmailContext({
     contactName: lead.contactName,
     area: lead.area ?? null,
     signupUrl,
     teamName: lead.teamName ?? null,
+    leagueName: leagueLabel,
+    venueName: lead.league?.venueName ?? null,
+    kickoffInfo: lead.league?.kickoffInfo ?? null,
+    leagueFormat: lead.league?.format ?? null,
   });
 
   const resolvedSubject = resolveTemplateText(subjectInput, context);
@@ -378,12 +436,20 @@ export async function sendLeadEmailAction(formData: FormData) {
     ctaUrlKey,
     signupUrl,
     targetTeamId,
+    teamConfirmationUrl,
   });
 
   if (ctaUrlKey === "teamJoinUrl" && !resolvedCta) {
     return {
       ok: false,
       error: "The selected managed team does not have an active join link.",
+    };
+  }
+
+  if (ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY && !resolvedCta) {
+    return {
+      ok: false,
+      error: "The team confirmation button could not be built. Please try again.",
     };
   }
 
@@ -603,7 +669,7 @@ export async function deleteLeadAction(formData: FormData) {
 
   try {
     await prisma.interestLead.delete({
-      where: { id: leadId },
+      where: { leadId },
     });
 
     revalidatePath("/admin/leads");
