@@ -7,7 +7,10 @@ import { UserRole } from "@prisma/client";
 
 import RefereeTabs from "@/components/referee/RefereeTabs";
 import { requireReferee } from "@/lib/admin";
-import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import {
+  formatDateTimeInLondon,
+  toLondonDateInputValue,
+} from "@/lib/datetime/london";
 import {
   formatMoney,
   formatNightDate,
@@ -45,6 +48,29 @@ function sortNightSoonestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
 
 function sortNightNewestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
   return b.nightDate.localeCompare(a.nightDate);
+}
+
+function isNightPayable(night: RefereeNightSummary, todayLondonDate: string) {
+  if (night.status === "CANCELLED") return false;
+  if (["SUBMITTED", "APPROVED", "SETTLED", "REOPENED"].includes(night.status)) {
+    return true;
+  }
+
+  return night.nightDate < todayLondonDate;
+}
+
+function getPayableDueToRefereePence(
+  night: RefereeNightSummary,
+  todayLondonDate: string,
+) {
+  return isNightPayable(night, todayLondonDate) ? night.dueToRefereePence : 0;
+}
+
+function getPayableDueToSixflPence(
+  night: RefereeNightSummary,
+  todayLondonDate: string,
+) {
+  return isNightPayable(night, todayLondonDate) ? night.dueToSixflPence : 0;
 }
 
 function formatLedgerDate(value: Date | null) {
@@ -180,8 +206,17 @@ function ActionCard({
   );
 }
 
-function NightCard({ night, isNext }: { night: RefereeNightSummary; isNext: boolean }) {
+function NightCard({
+  night,
+  isNext,
+  todayLondonDate,
+}: {
+  night: RefereeNightSummary;
+  isNext: boolean;
+  todayLondonDate: string;
+}) {
   const canOpen = night.status !== "SETTLED" && night.status !== "CANCELLED";
+  const isPayable = isNightPayable(night, todayLondonDate);
 
   return (
     <article className="rounded-3xl border border-white/10 bg-black/20 p-5">
@@ -215,8 +250,10 @@ function NightCard({ night, isNext }: { night: RefereeNightSummary; isNext: bool
             <span className="font-semibold text-white">{formatMoney(night.feePence)}</span>
           </div>
           <div className="rounded-2xl border border-amber-400/15 bg-amber-500/10 px-4 py-3 text-sm">
-            <span className="text-amber-100/45">Due </span>
-            <span className="font-semibold text-amber-100">{formatMoney(night.dueToRefereePence)}</span>
+            <span className="text-amber-100/45">{isPayable ? "Due " : "After night "}</span>
+            <span className="font-semibold text-amber-100">
+              {formatMoney(getPayableDueToRefereePence(night, todayLondonDate))}
+            </span>
           </div>
           <Link
             href={`/referee/night/${night.id}`}
@@ -230,7 +267,9 @@ function NightCard({ night, isNext }: { night: RefereeNightSummary; isNext: bool
   );
 }
 
-function getLedgerBalanceLabel(night: RefereeNightSummary) {
+function getLedgerBalanceLabel(night: RefereeNightSummary, todayLondonDate: string) {
+  if (!isNightPayable(night, todayLondonDate)) return "Not due yet";
+
   if (night.dueToRefereePence > 0) {
     return night.status === "SETTLED" ? "Paid to you" : "Owed to you";
   }
@@ -242,13 +281,16 @@ function getLedgerBalanceLabel(night: RefereeNightSummary) {
   return "Balanced";
 }
 
-function getLedgerBalanceAmount(night: RefereeNightSummary) {
+function getLedgerBalanceAmount(night: RefereeNightSummary, todayLondonDate: string) {
+  if (!isNightPayable(night, todayLondonDate)) return 0;
   if (night.dueToRefereePence > 0) return night.dueToRefereePence;
   if (night.dueToSixflPence > 0) return night.dueToSixflPence;
   return 0;
 }
 
-function getLedgerSettlementLabel(night: RefereeNightSummary) {
+function getLedgerSettlementLabel(night: RefereeNightSummary, todayLondonDate: string) {
+  if (!isNightPayable(night, todayLondonDate)) return "Due after the night";
+
   if (night.status === "SETTLED") {
     return night.settledAt ? `Settled ${formatLedgerDate(night.settledAt)}` : "Settled";
   }
@@ -260,9 +302,16 @@ function getLedgerSettlementLabel(night: RefereeNightSummary) {
   return "No balance due";
 }
 
-function RefereeLedger({ nights }: { nights: RefereeNightSummary[] }) {
+function RefereeLedger({
+  nights,
+  todayLondonDate,
+}: {
+  nights: RefereeNightSummary[];
+  todayLondonDate: string;
+}) {
   const ledgerNights = nights
     .filter((night) => night.status !== "CANCELLED")
+    .filter((night) => isNightPayable(night, todayLondonDate))
     .sort(sortNightNewestFirst);
 
   return (
@@ -281,7 +330,7 @@ function RefereeLedger({ nights }: { nights: RefereeNightSummary[] }) {
 
       {ledgerNights.length === 0 ? (
         <div className="border-t border-white/10 px-6 py-8 text-sm text-white/55">
-          No ledger entries yet.
+          No ledger entries are due yet.
         </div>
       ) : (
         <div className="divide-y divide-white/10 border-t border-white/10">
@@ -298,12 +347,12 @@ function RefereeLedger({ nights }: { nights: RefereeNightSummary[] }) {
                   {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
                 </div>
                 <div className="mt-1 text-xs text-white/45">
-                  Fee {formatMoney(night.feePence)} · Cash collected {formatMoney(night.cashCollectedPence)} · {getLedgerSettlementLabel(night)}
+                  Fee {formatMoney(night.feePence)} · Cash collected {formatMoney(night.cashCollectedPence)} · {getLedgerSettlementLabel(night, todayLondonDate)}
                 </div>
               </div>
               <div className="text-left md:text-right">
-                <div className="text-lg font-semibold text-white">{formatMoney(getLedgerBalanceAmount(night))}</div>
-                <div className="text-xs text-white/45">{getLedgerBalanceLabel(night)}</div>
+                <div className="text-lg font-semibold text-white">{formatMoney(getLedgerBalanceAmount(night, todayLondonDate))}</div>
+                <div className="text-xs text-white/45">{getLedgerBalanceLabel(night, todayLondonDate)}</div>
               </div>
             </div>
           ))}
@@ -313,7 +362,15 @@ function RefereeLedger({ nights }: { nights: RefereeNightSummary[] }) {
   );
 }
 
-function NightSchedule({ nights, nextNight }: { nights: RefereeNightSummary[]; nextNight: RefereeNightSummary | null }) {
+function NightSchedule({
+  nights,
+  nextNight,
+  todayLondonDate,
+}: {
+  nights: RefereeNightSummary[];
+  nextNight: RefereeNightSummary | null;
+  todayLondonDate: string;
+}) {
   return (
     <details id="referee-nights" className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
       <summary className="flex cursor-pointer list-none flex-col gap-2 px-6 py-5 transition hover:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden">
@@ -335,7 +392,12 @@ function NightSchedule({ nights, nextNight }: { nights: RefereeNightSummary[]; n
       ) : (
         <div className="space-y-4 border-t border-white/10 p-5">
           {nights.map((night) => (
-            <NightCard key={night.id} night={night} isNext={nextNight?.id === night.id} />
+            <NightCard
+              key={night.id}
+              night={night}
+              isNext={nextNight?.id === night.id}
+              todayLondonDate={todayLondonDate}
+            />
           ))}
         </div>
       )}
@@ -346,6 +408,7 @@ function NightSchedule({ nights, nextNight }: { nights: RefereeNightSummary[]; n
 export default async function RefereePage() {
   const { user, authenticatedUser, isAdminPreview } = await requireReferee();
   const isAdminOverview = authenticatedUser.role === UserRole.ADMIN && !isAdminPreview;
+  const todayLondonDate = toLondonDateInputValue(new Date());
 
   const nights = await getRefereeNightSummaries(
     isAdminOverview ? undefined : { refereeId: user.id },
@@ -357,12 +420,17 @@ export default async function RefereePage() {
   );
   const submittedNights = nights.filter((night) => night.status === "SUBMITTED");
   const settledNights = nights.filter((night) => night.status === "SETTLED");
-  const outstandingDueToSixfl = activeNights
-    .filter((night) => night.status !== "SETTLED")
-    .reduce((sum, night) => sum + night.dueToSixflPence, 0);
-  const outstandingDueToReferee = activeNights
-    .filter((night) => night.status !== "SETTLED")
-    .reduce((sum, night) => sum + night.dueToRefereePence, 0);
+  const payableActiveNights = activeNights.filter((night) =>
+    isNightPayable(night, todayLondonDate),
+  );
+  const outstandingDueToSixfl = payableActiveNights.reduce(
+    (sum, night) => sum + night.dueToSixflPence,
+    0,
+  );
+  const outstandingDueToReferee = payableActiveNights.reduce(
+    (sum, night) => sum + night.dueToRefereePence,
+    0,
+  );
   const totalFixtures = nights.reduce((sum, night) => sum + night.fixtureCount, 0);
   const nextNight = [...openNights].sort(sortNightSoonestFirst)[0] ?? null;
   const refereeName = user.name || user.email || "this referee";
@@ -418,9 +486,9 @@ export default async function RefereePage() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <SummaryTile label="Open nights" value={openNights.length} text="Need action or cashup." tone="emerald" />
-              <SummaryTile label="Due to you" value={formatMoney(outstandingDueToReferee)} text="Outstanding referee balance." tone="amber" />
+              <SummaryTile label="Due to you" value={formatMoney(outstandingDueToReferee)} text="Due after completed or submitted nights." tone="amber" />
               <SummaryTile label="Submitted" value={submittedNights.length} text="Waiting for SIXFL review." tone="neutral" />
-              <SummaryTile label="Due SIXFL" value={formatMoney(outstandingDueToSixfl)} text="Cash to pass back." tone="sky" />
+              <SummaryTile label="Due SIXFL" value={formatMoney(outstandingDueToSixfl)} text="Cash due after completed nights." tone="sky" />
             </div>
           </div>
         </section>
@@ -453,8 +521,12 @@ export default async function RefereePage() {
           <SummaryTile label="Total nights" value={nights.length} text="All active and historic assignments." />
         </section>
 
-        <RefereeLedger nights={nights} />
-        <NightSchedule nights={nights} nextNight={nextNight} />
+        <RefereeLedger nights={nights} todayLondonDate={todayLondonDate} />
+        <NightSchedule
+          nights={nights}
+          nextNight={nextNight}
+          todayLondonDate={todayLondonDate}
+        />
       </div>
     </main>
   );
