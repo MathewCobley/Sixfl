@@ -42,6 +42,33 @@ async function revalidateProspectSurfaces(input: { prospectId: string; teamId: s
   }
 }
 
+async function getOpenProspectForSquadEmail(prospectId: string) {
+  if (!prospectId) return { ok: false as const, error: "Prospect not found." };
+
+  const prospect = await prisma.teamPlayerProspect.findUnique({
+    where: { id: prospectId },
+    select: {
+      id: true,
+      email: true,
+      teamId: true,
+      status: true,
+    },
+  });
+
+  if (!prospect) return { ok: false as const, error: "Prospect not found." };
+  if (prospect.status === "DECLINED" || prospect.status === "DUPLICATE") {
+    return { ok: false as const, error: "This prospect is closed and cannot be messaged from the open pipeline." };
+  }
+  if (!prospect.teamId) {
+    return { ok: false as const, error: "Assign the prospect to a team first." };
+  }
+  if (!prospect.email?.trim()) {
+    return { ok: false as const, error: "This prospect needs an email address first." };
+  }
+
+  return { ok: true as const, prospect };
+}
+
 export async function assignPlayerProspectToTeamAction(formData: FormData) {
   await requireAdmin();
 
@@ -91,37 +118,18 @@ export async function sendPlayerProspectSquadInviteAction(formData: FormData) {
   const prospectId = String(formData.get("prospectId") ?? "").trim();
   const leagueId = String(formData.get("leagueId") ?? "").trim();
 
-  if (!prospectId) {
-    redirect(buildRedirectWithParams({ error: "Prospect not found.", leagueId }));
-  }
+  const validation = await getOpenProspectForSquadEmail(prospectId);
 
-  const prospect = await prisma.teamPlayerProspect.findUnique({
-    where: { id: prospectId },
-    select: {
-      id: true,
-      email: true,
-      teamId: true,
-    },
-  });
-
-  if (!prospect) {
-    redirect(buildRedirectWithParams({ error: "Prospect not found.", leagueId }));
-  }
-
-  if (!prospect.teamId) {
-    redirect(buildRedirectWithParams({ error: "Assign the prospect to a team before sending a squad invite.", leagueId }));
-  }
-
-  if (!prospect.email?.trim()) {
-    redirect(buildRedirectWithParams({ error: "This prospect needs an email address before you can send a squad invite.", leagueId }));
+  if (!validation.ok) {
+    redirect(buildRedirectWithParams({ error: validation.error, leagueId }));
   }
 
   const result = await queueManagedSquadJoinConfirmationEmail({
-    prospectId: prospect.id,
+    prospectId: validation.prospect.id,
     createdByUserId: user?.id ?? null,
   });
 
-  await revalidateProspectSurfaces({ prospectId: prospect.id, teamId: prospect.teamId });
+  await revalidateProspectSurfaces({ prospectId: validation.prospect.id, teamId: validation.prospect.teamId });
 
   redirect(
     buildRedirectWithParams({
@@ -129,6 +137,35 @@ export async function sendPlayerProspectSquadInviteAction(formData: FormData) {
       leagueId,
     }),
   );
+}
+
+async function queueSquadInviteChase(input: {
+  prospectId: string;
+  chaseType: "CHASE" | "FINAL";
+  createdByUserId?: string | null;
+}) {
+  const validation = await getOpenProspectForSquadEmail(input.prospectId);
+
+  if (!validation.ok) {
+    return { ok: false as const, error: validation.error };
+  }
+
+  const result = await queueManagedSquadJoinChaseEmail({
+    prospectId: validation.prospect.id,
+    chaseType: input.chaseType,
+    createdByUserId: input.createdByUserId ?? null,
+  });
+
+  await revalidateProspectSurfaces({
+    prospectId: validation.prospect.id,
+    teamId: validation.prospect.teamId,
+  });
+
+  if (!result.ok) {
+    return { ok: false as const, error: "The chase email could not be queued." };
+  }
+
+  return { ok: true as const, prospectId: validation.prospect.id, status: result.status };
 }
 
 async function sendSquadInviteChase(input: {
@@ -140,48 +177,20 @@ async function sendSquadInviteChase(input: {
   const prospectId = String(input.formData.get("prospectId") ?? "").trim();
   const leagueId = String(input.formData.get("leagueId") ?? "").trim();
 
-  if (!prospectId) {
-    redirect(buildRedirectWithParams({ error: "Prospect not found.", leagueId }));
-  }
-
-  const prospect = await prisma.teamPlayerProspect.findUnique({
-    where: { id: prospectId },
-    select: {
-      id: true,
-      email: true,
-      teamId: true,
-      status: true,
-    },
-  });
-
-  if (!prospect) {
-    redirect(buildRedirectWithParams({ error: "Prospect not found.", leagueId }));
-  }
-
-  if (prospect.status === "DECLINED" || prospect.status === "DUPLICATE") {
-    redirect(buildRedirectWithParams({ error: "This prospect is closed and cannot be chased.", leagueId }));
-  }
-
-  if (!prospect.teamId) {
-    redirect(buildRedirectWithParams({ error: "Assign the prospect to a team before sending a chase.", leagueId }));
-  }
-
-  if (!prospect.email?.trim()) {
-    redirect(buildRedirectWithParams({ error: "This prospect needs an email address before you can chase them.", leagueId }));
-  }
-
-  const result = await queueManagedSquadJoinChaseEmail({
-    prospectId: prospect.id,
+  const result = await queueSquadInviteChase({
+    prospectId,
     chaseType: input.chaseType,
     createdByUserId: user?.id ?? null,
   });
 
-  await revalidateProspectSurfaces({ prospectId: prospect.id, teamId: prospect.teamId });
-
   redirect(
     buildRedirectWithParams({
-      saved: input.chaseType === "FINAL" ? "squad-final-chase-queued" : "squad-chase-queued",
-      error: result.ok ? null : "The chase email could not be queued.",
+      saved: result.ok
+        ? input.chaseType === "FINAL"
+          ? "squad-final-chase-queued"
+          : "squad-chase-queued"
+        : null,
+      error: result.ok ? null : result.error,
       leagueId,
     }),
   );
@@ -193,4 +202,26 @@ export async function sendPlayerProspectSquadInviteChaseAction(formData: FormDat
 
 export async function sendPlayerProspectSquadInviteFinalChaseAction(formData: FormData) {
   await sendSquadInviteChase({ formData, chaseType: "FINAL" });
+}
+
+export async function queuePlayerProspectSquadInviteChaseAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+
+  return queueSquadInviteChase({
+    prospectId,
+    chaseType: "CHASE",
+    createdByUserId: user?.id ?? null,
+  });
+}
+
+export async function queuePlayerProspectSquadInviteFinalChaseAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+
+  return queueSquadInviteChase({
+    prospectId,
+    chaseType: "FINAL",
+    createdByUserId: user?.id ?? null,
+  });
 }
