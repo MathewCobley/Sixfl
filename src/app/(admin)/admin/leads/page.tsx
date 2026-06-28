@@ -29,6 +29,14 @@ type SearchParams = Promise<{
   night?: string;
 }>;
 
+type TeamConfirmationRow = {
+  leadId: string;
+  status: string;
+  sentAt: Date | null;
+  confirmedAt: Date | null;
+  declinedAt: Date | null;
+};
+
 function isInterestType(value?: string): value is InterestType {
   return value === "TEAM" || value === "PLAYER" || value === "REFEREE";
 }
@@ -109,6 +117,46 @@ function formatDate(value: Date) {
     month: "short",
     year: "numeric",
   }).format(value);
+}
+
+function formatDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(value);
+}
+
+function getConfirmationMeta(row: TeamConfirmationRow | null | undefined) {
+  if (!row) return null;
+
+  if (row.status === "CONFIRMED") {
+    return {
+      label: row.confirmedAt ? `Confirmed ${formatDateTime(row.confirmedAt)}` : "Confirmed",
+      className: "text-emerald-200/80",
+    };
+  }
+
+  if (row.status === "DECLINED") {
+    return {
+      label: row.declinedAt ? `Declined ${formatDateTime(row.declinedAt)}` : "Declined",
+      className: "text-red-200/80",
+    };
+  }
+
+  if (row.sentAt) {
+    return {
+      label: `Sent ${formatDateTime(row.sentAt)}`,
+      className: "text-sky-200/75",
+    };
+  }
+
+  return {
+    label: "Link pending",
+    className: "text-white/40",
+  };
 }
 
 function statusClasses(status: LeadStatus) {
@@ -265,6 +313,23 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
     }),
   ]);
 
+  const confirmationRows = leads.length
+    ? await prisma.$queryRaw<Array<TeamConfirmationRow>>(Prisma.sql`
+        SELECT
+          "leadId",
+          "status"::text AS "status",
+          "sentAt",
+          "confirmedAt",
+          "declinedAt"
+        FROM "LeadTeamConfirmation"
+        WHERE "leadId" IN (${Prisma.join(leads.map((lead) => lead.id))})
+      `)
+    : [];
+
+  const confirmationByLeadId = new Map(
+    confirmationRows.map((row) => [row.leadId, row]),
+  );
+
   void stats;
 
   const templates = emailTemplatesRaw.map((template) => ({
@@ -398,6 +463,8 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                   const leadTitle = lead.teamName || lead.contactName || "Unnamed lead";
                   const contactLine = [lead.email, lead.phone].filter(Boolean).join(" · ");
                   const prospectiveLeague = formatProspectiveLeague(lead.league);
+                  const confirmation = confirmationByLeadId.get(lead.id) ?? null;
+                  const confirmationMeta = getConfirmationMeta(confirmation);
                   const canSendConfirmation = lead.interestType === "TEAM" && Boolean(lead.email?.trim()) && Boolean(lead.league);
 
                   return (
@@ -436,10 +503,18 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end gap-2">
                           {lead.interestType === "TEAM" ? (
-                            <LeadConfirmationQuickSendButton
-                              leadId={lead.id}
-                              canSend={canSendConfirmation}
-                            />
+                            <>
+                              <LeadConfirmationQuickSendButton
+                                leadId={lead.id}
+                                canSend={canSendConfirmation}
+                                alreadySent={Boolean(confirmation?.sentAt)}
+                              />
+                              {confirmationMeta ? (
+                                <div className={`max-w-[150px] text-right text-[11px] leading-4 ${confirmationMeta.className}`}>
+                                  {confirmationMeta.label}
+                                </div>
+                              ) : null}
+                            </>
                           ) : null}
                           <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
                             Open
