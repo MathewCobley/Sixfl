@@ -83,6 +83,25 @@ function formatPreferredNights(values: Array<{ night: PreferredNight }>) {
   return uniqueNights.map(formatPreferredNight).join(", ");
 }
 
+function formatProspectiveLeague(value: {
+  name: string;
+  season: string | null;
+  area: string | null;
+  dayOfWeek: PreferredNight | null;
+  venueName: string | null;
+} | null) {
+  if (!value) return "Not set";
+
+  const detailParts = [
+    value.season,
+    value.area,
+    value.dayOfWeek ? formatPreferredNight(value.dayOfWeek) : null,
+    value.venueName,
+  ].filter(Boolean);
+
+  return detailParts.length ? `${value.name} · ${detailParts.join(" · ")}` : value.name;
+}
+
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
@@ -185,7 +204,18 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
     prisma.interestLead.findMany({
       where: leadWhere,
       orderBy: { createdAt: "desc" },
-      include: { preferredNights: true },
+      include: {
+        preferredNights: true,
+        league: {
+          select: {
+            name: true,
+            season: true,
+            area: true,
+            dayOfWeek: true,
+            venueName: true,
+          },
+        },
+      },
     }),
     prisma.interestLead.groupBy({
       by: ["interestType", "status"],
@@ -262,6 +292,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
   const teamLeads = leads.filter((lead) => lead.interestType === "TEAM").length;
   const playerLeads = leads.filter((lead) => lead.interestType === "PLAYER").length;
   const refereeLeads = leads.filter((lead) => lead.interestType === "REFEREE").length;
+  const prospectiveLeagueLeads = leads.filter((lead) => Boolean(lead.league)).length;
 
   const topArea = Object.entries(
     leads.reduce<Record<string, number>>((acc, lead) => {
@@ -310,7 +341,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
         <StatCard label="Total" value={totalLeads} subtext="Matching leads" />
         <StatCard label="New" value={newLeads} subtext="Awaiting contact" />
         <StatCard label="Teams" value={teamLeads} subtext="Team enquiries" />
-        <StatCard label="Players" value={playerLeads} subtext="Individual players" />
+        <StatCard label="Prospective" value={prospectiveLeagueLeads} subtext="Linked to a likely league" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -339,14 +370,14 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/40">Lead list</p>
             <div className="mt-1 text-sm text-white/55">Showing <span className="font-semibold text-white">{leads.length}</span> lead{leads.length === 1 ? "" : "s"}</div>
           </div>
-          <p className="text-xs text-white/35">Compact view for fast scanning</p>
+          <p className="text-xs text-white/35">Prospective league is for planning and email context only.</p>
         </div>
 
         {leads.length === 0 ? (
           <div className="px-6 py-10 text-center text-white/55">No leads match the current filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[1380px] border-collapse text-left text-sm">
               <thead className="border-b border-white/10 bg-black/25 text-[11px] uppercase tracking-[0.16em] text-white/35">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Lead</th>
@@ -354,8 +385,9 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Contact</th>
                   <th className="px-4 py-3 font-semibold">Area</th>
-                  <th className="px-4 py-3 font-semibold">League</th>
+                  <th className="px-4 py-3 font-semibold">League type</th>
                   <th className="px-4 py-3 font-semibold">Nights</th>
+                  <th className="px-4 py-3 font-semibold">Prospective league</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
                   <th className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
@@ -364,6 +396,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                 {leads.map((lead) => {
                   const leadTitle = lead.teamName || lead.contactName || "Unnamed lead";
                   const contactLine = [lead.email, lead.phone].filter(Boolean).join(" · ");
+                  const prospectiveLeague = formatProspectiveLeague(lead.league);
 
                   return (
                     <tr key={lead.id} className="align-top transition hover:bg-white/[0.035]">
@@ -389,6 +422,14 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                       <td className="px-4 py-3 text-white/70">{lead.area || "—"}</td>
                       <td className="px-4 py-3 text-white/70">{formatLeagueType(lead.leagueType)}</td>
                       <td className="px-4 py-3 text-white/70">{formatPreferredNights(lead.preferredNights)}</td>
+                      <td className="max-w-[300px] px-4 py-3">
+                        <div className={lead.league ? "truncate font-medium text-emerald-100" : "truncate text-amber-200/80"}>
+                          {prospectiveLeague}
+                        </div>
+                        {!lead.league ? (
+                          <div className="mt-1 text-xs text-white/35">Set on edit lead</div>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3 text-white/55">{formatDate(lead.createdAt)}</td>
                       <td className="px-4 py-3 text-right">
                         <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
