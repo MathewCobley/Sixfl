@@ -14,6 +14,7 @@ import {
 import AdminCard from "@/components/admin/AdminCard";
 import BulkLeadEmailForm from "@/components/admin/leads/BulkLeadEmailForm";
 import BulkLeadSmsForm from "@/components/admin/leads/BulkLeadSmsForm";
+import LeadConfirmationQuickSendButton from "@/components/admin/leads/LeadConfirmationQuickSendButton";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -377,7 +378,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
           <div className="px-6 py-10 text-center text-white/55">No leads match the current filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1380px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[1460px] border-collapse text-left text-sm">
               <thead className="border-b border-white/10 bg-black/25 text-[11px] uppercase tracking-[0.16em] text-white/35">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Lead</th>
@@ -397,6 +398,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                   const leadTitle = lead.teamName || lead.contactName || "Unnamed lead";
                   const contactLine = [lead.email, lead.phone].filter(Boolean).join(" · ");
                   const prospectiveLeague = formatProspectiveLeague(lead.league);
+                  const canSendConfirmation = lead.interestType === "TEAM" && Boolean(lead.email?.trim()) && Boolean(lead.league);
 
                   return (
                     <tr key={lead.id} className="align-top transition hover:bg-white/[0.035]">
@@ -432,9 +434,17 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                       </td>
                       <td className="px-4 py-3 text-white/55">{formatDate(lead.createdAt)}</td>
                       <td className="px-4 py-3 text-right">
-                        <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
-                          Open
-                        </Link>
+                        <div className="flex flex-col items-end gap-2">
+                          {lead.interestType === "TEAM" ? (
+                            <LeadConfirmationQuickSendButton
+                              leadId={lead.id}
+                              canSend={canSendConfirmation}
+                            />
+                          ) : null}
+                          <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
+                            Open
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );
