@@ -13,6 +13,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { resolveProspectiveLeagueId } from "@/lib/leads/prospectiveLeague";
 import { queueLeadWelcomeNotifications } from "@/lib/notifications/transactional";
 
 function isInterestType(value: string): value is InterestType {
@@ -134,6 +135,15 @@ export async function submitRegisterInterest(formData: FormData) {
     );
   }
 
+  const leagueType = requiresLeagueType ? (leagueTypeRaw as LeagueType) : null;
+
+  const prospectiveLeagueId = await resolveProspectiveLeagueId({
+    interestType,
+    leagueType,
+    area,
+    preferredNights: normalizedPreferredNights,
+  });
+
   const combinedMessage = [
     experienceLevel ? `Experience: ${experienceLevel}` : "",
     message,
@@ -150,7 +160,8 @@ export async function submitRegisterInterest(formData: FormData) {
       phone: phone || null,
       teamName: interestType === "TEAM" ? teamName || null : null,
       area,
-      leagueType: requiresLeagueType ? (leagueTypeRaw as LeagueType) : null,
+      leagueType,
+      leagueId: prospectiveLeagueId,
       message: combinedMessage || null,
       source: source || "register-interest-page",
       wantsFreeKit: interestType === "TEAM" ? wantsFreeKit : false,
@@ -167,11 +178,20 @@ export async function submitRegisterInterest(formData: FormData) {
       preferredNights: {
         orderBy: { createdAt: "asc" },
       },
+      league: {
+        select: {
+          name: true,
+          season: true,
+        },
+      },
     },
   });
 
   const logoUrl = "https://sixfl.co.uk/sixfl-email.png";
   const preferredNightsText = formatPreferredNights(createdLead.preferredNights);
+  const prospectiveLeagueText = createdLead.league
+    ? `${createdLead.league.name}${createdLead.league.season ? ` · ${createdLead.league.season}` : ""}`
+    : "—";
 
   try {
     await queueLeadWelcomeNotifications({
@@ -206,6 +226,7 @@ export async function submitRegisterInterest(formData: FormData) {
         `Area: ${createdLead.area ?? "—"}`,
         `League type: ${formatLeagueType(createdLead.leagueType)}`,
         `Preferred nights: ${preferredNightsText}`,
+        `Prospective league: ${prospectiveLeagueText}`,
         `Source: ${createdLead.source ?? "—"}`,
         `Free kit interest: ${formatYesNo(createdLead.wantsFreeKit)}`,
         `Marketing consent: ${formatYesNo(createdLead.marketingConsent)}`,
@@ -240,6 +261,7 @@ export async function submitRegisterInterest(formData: FormData) {
                 createdLead.leagueType
               )}</p>
               <p style="margin:0 0 8px;"><strong>Preferred nights:</strong> ${preferredNightsText}</p>
+              <p style="margin:0 0 8px;"><strong>Prospective league:</strong> ${prospectiveLeagueText}</p>
               <p style="margin:0 0 8px;"><strong>Source:</strong> ${createdLead.source ?? "—"}</p>
               <p style="margin:0 0 8px;"><strong>Free kit interest:</strong> ${formatYesNo(
                 createdLead.wantsFreeKit
