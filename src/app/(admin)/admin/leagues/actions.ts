@@ -44,6 +44,13 @@ type ParsedLeagueInput = {
   ctaText: string | null;
 };
 
+type LeagueConfirmationDetailsInput = {
+  proposedStartDate: Date | null;
+  minutesPerGame: number | null;
+  costPerTeamPerMatchPence: number | null;
+  targetTeamCount: number | null;
+};
+
 const DAY_OPTIONS = new Set<PreferredNight>([
   "MONDAY",
   "TUESDAY",
@@ -84,6 +91,24 @@ function isValidImagePath(value: string) {
   return /^https?:\/\//i.test(value) || value.startsWith("/");
 }
 
+function parseOptionalWholeNumber(input: {
+  value: FormDataEntryValue | null;
+  min: number;
+  max: number;
+}) {
+  const raw = String(input.value ?? "").trim();
+
+  if (!raw) return undefined;
+
+  const parsed = Number(raw);
+
+  if (!Number.isInteger(parsed) || parsed < input.min || parsed > input.max) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function parseRequiredRefereesPerNight(value: FormDataEntryValue | null) {
   const raw = String(value ?? "").trim();
 
@@ -98,6 +123,38 @@ function parseRequiredRefereesPerNight(value: FormDataEntryValue | null) {
   return parsed;
 }
 
+function parseProposedStartDate(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return undefined;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return null;
+  }
+
+  const parsed = new Date(`${raw}T12:00:00.000Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function parseCostPerTeamPerMatchPence(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return undefined;
+
+  const parsed = Number(raw);
+
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1000) {
+    return null;
+  }
+
+  return Math.round(parsed * 100);
+}
+
 async function setLeagueRequiredRefereesPerNight(input: {
   leagueId: string;
   requiredRefereesPerNight: number;
@@ -106,6 +163,22 @@ async function setLeagueRequiredRefereesPerNight(input: {
     UPDATE "League"
     SET
       "requiredRefereesPerNight" = ${input.requiredRefereesPerNight},
+      "updatedAt" = NOW()
+    WHERE id = ${input.leagueId}
+  `);
+}
+
+async function setLeagueConfirmationDetails(input: {
+  leagueId: string;
+  details: LeagueConfirmationDetailsInput;
+}) {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "League"
+    SET
+      "proposedStartDate" = ${input.details.proposedStartDate},
+      "minutesPerGame" = ${input.details.minutesPerGame},
+      "costPerTeamPerMatchPence" = ${input.details.costPerTeamPerMatchPence},
+      "targetTeamCount" = ${input.details.targetTeamCount},
       "updatedAt" = NOW()
     WHERE id = ${input.leagueId}
   `);
@@ -122,6 +195,7 @@ function redirectIfEmailRepliesNotConfigured(path: string) {
 function parseLeagueInput(formData: FormData): {
   data: ParsedLeagueInput;
   requiredRefereesPerNight: number;
+  confirmationDetails: LeagueConfirmationDetailsInput;
   errors: Record<string, string[]>;
 } {
   const errors: Record<string, string[]> = {};
@@ -140,6 +214,21 @@ function parseLeagueInput(formData: FormData): {
   const heroImageUrl = normaliseText(formData.get("heroImageUrl"));
   const badgeUrl = normaliseText(formData.get("badgeUrl"));
   const ctaText = normaliseText(formData.get("ctaText"));
+
+  const proposedStartDate = parseProposedStartDate(formData.get("proposedStartDate"));
+  const minutesPerGame = parseOptionalWholeNumber({
+    value: formData.get("minutesPerGame"),
+    min: 1,
+    max: 180,
+  });
+  const costPerTeamPerMatchPence = parseCostPerTeamPerMatchPence(
+    formData.get("costPerTeamPerMatch"),
+  );
+  const targetTeamCount = parseOptionalWholeNumber({
+    value: formData.get("targetTeamCount"),
+    min: 2,
+    max: 64,
+  });
 
   const isActive = parseBoolean(formData.get("isActive"));
   const requiredRefereesPerNight = parseRequiredRefereesPerNight(
@@ -183,6 +272,22 @@ function parseLeagueInput(formData: FormData): {
     errors.leagueType = ["Please choose a valid league type."];
   }
 
+  if (proposedStartDate === null) {
+    errors.proposedStartDate = ["Please enter a valid proposed start date."];
+  }
+
+  if (minutesPerGame === null) {
+    errors.minutesPerGame = ["Minutes per game must be a whole number between 1 and 180."];
+  }
+
+  if (costPerTeamPerMatchPence === null) {
+    errors.costPerTeamPerMatch = ["Cost must be a valid amount between £0 and £1,000."];
+  }
+
+  if (targetTeamCount === null) {
+    errors.targetTeamCount = ["Target number of teams must be a whole number between 2 and 64."];
+  }
+
   if (requiredRefereesPerNight === null) {
     errors.requiredRefereesPerNight = [
       "Referees needed per night must be a whole number between 0 and 20.",
@@ -224,6 +329,12 @@ function parseLeagueInput(formData: FormData): {
       ctaText,
     },
     requiredRefereesPerNight: requiredRefereesPerNight ?? 1,
+    confirmationDetails: {
+      proposedStartDate: proposedStartDate ?? null,
+      minutesPerGame: minutesPerGame ?? null,
+      costPerTeamPerMatchPence: costPerTeamPerMatchPence ?? null,
+      targetTeamCount: targetTeamCount ?? null,
+    },
     errors,
   };
 }
@@ -234,7 +345,7 @@ export async function createLeagueAction(
 ): Promise<LeagueFormState> {
   await requireAdmin();
 
-  const { data, requiredRefereesPerNight, errors } = parseLeagueInput(formData);
+  const { data, requiredRefereesPerNight, confirmationDetails, errors } = parseLeagueInput(formData);
 
   if (Object.keys(errors).length > 0) {
     return {
@@ -287,6 +398,11 @@ export async function createLeagueAction(
     requiredRefereesPerNight,
   });
 
+  await setLeagueConfirmationDetails({
+    leagueId: league.id,
+    details: confirmationDetails,
+  });
+
   revalidatePath("/admin/leagues");
   revalidatePath("/admin/referee-availability");
   revalidatePath("/");
@@ -314,7 +430,7 @@ export async function updateLeagueAction(
     };
   }
 
-  const { data, requiredRefereesPerNight, errors } = parseLeagueInput(formData);
+  const { data, requiredRefereesPerNight, confirmationDetails, errors } = parseLeagueInput(formData);
 
   if (Object.keys(errors).length > 0) {
     return {
@@ -370,6 +486,11 @@ export async function updateLeagueAction(
   await setLeagueRequiredRefereesPerNight({
     leagueId,
     requiredRefereesPerNight,
+  });
+
+  await setLeagueConfirmationDetails({
+    leagueId,
+    details: confirmationDetails,
   });
 
   revalidatePath("/admin/leagues");
