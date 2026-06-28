@@ -2,7 +2,11 @@
 // File: src/components/referee/RefereeTabs.tsx
 // ========================================
 
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type RefereeTabKey = "overview" | "availability" | "match-rules";
 
@@ -44,7 +48,27 @@ function withPreviewParam(href: string, previewRefereeId?: string | null) {
   return `${href}${separator}previewRefereeId=${encodeURIComponent(previewRefereeId)}`;
 }
 
+function getPreviewIdFromBanner() {
+  if (typeof document === "undefined") return null;
+
+  const exitLink = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find((link) =>
+    /\/admin\/referees\/[^/]+\/referee-preview\/exit/.test(link.getAttribute("href") ?? ""),
+  );
+
+  const href = exitLink?.getAttribute("href") ?? "";
+  return href.match(/\/admin\/referees\/([^/]+)\/referee-preview\/exit/)?.[1] ?? null;
+}
+
 export default function RefereeTabs({ active, previewRefereeId }: Props) {
+  const searchParams = useSearchParams();
+  const previewFromQuery = searchParams.get("previewRefereeId");
+  const [previewFromBanner, setPreviewFromBanner] = useState<string | null>(null);
+  const effectivePreviewRefereeId = previewRefereeId || previewFromQuery || previewFromBanner;
+
+  useEffect(() => {
+    setPreviewFromBanner(getPreviewIdFromBanner());
+  }, []);
+
   return (
     <nav className="grid gap-3 sm:grid-cols-3">
       {tabs.map((tab) => {
@@ -53,7 +77,7 @@ export default function RefereeTabs({ active, previewRefereeId }: Props) {
         return (
           <Link
             key={tab.key}
-            href={withPreviewParam(tab.href, previewRefereeId)}
+            href={withPreviewParam(tab.href, effectivePreviewRefereeId)}
             className={[
               "rounded-3xl border p-4 transition",
               isActive
