@@ -18,6 +18,10 @@ type LeagueFormValues = {
   dayOfWeek: PreferredNight | "";
   leagueType: LeagueType | "";
   venueName: string;
+  proposedStartDate: string;
+  minutesPerGame: string;
+  costPerTeamPerMatch: string;
+  targetTeamCount: string;
   requiredRefereesPerNight: string;
   kickoffInfo: string;
   format: string;
@@ -215,6 +219,10 @@ export default function LeagueForm({
       dayOfWeek: initialValues?.dayOfWeek ?? "",
       leagueType: initialValues?.leagueType ?? "",
       venueName: initialValues?.venueName ?? "",
+      proposedStartDate: initialValues?.proposedStartDate ?? "",
+      minutesPerGame: initialValues?.minutesPerGame ?? "40",
+      costPerTeamPerMatch: initialValues?.costPerTeamPerMatch ?? "40",
+      targetTeamCount: initialValues?.targetTeamCount ?? "12",
       requiredRefereesPerNight: initialValues?.requiredRefereesPerNight ?? "1",
       kickoffInfo: initialValues?.kickoffInfo ?? "",
       format: initialValues?.format ?? "",
@@ -329,6 +337,74 @@ export default function LeagueForm({
             hasError={Boolean(state.errors?.venueName)}
           />
           <FieldError errors={state.errors} name="venueName" />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="proposedStartDate" className="block text-sm font-medium text-white">
+            Proposed start date
+          </label>
+          <Input
+            id="proposedStartDate"
+            name="proposedStartDate"
+            type="date"
+            defaultValue={values.proposedStartDate}
+            hasError={Boolean(state.errors?.proposedStartDate)}
+          />
+          <p className="text-xs text-white/40">
+            Used in team confirmation emails. If it has passed, the email wording changes automatically.
+          </p>
+          <FieldError errors={state.errors} name="proposedStartDate" />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="minutesPerGame" className="block text-sm font-medium text-white">
+            Minutes per game
+          </label>
+          <Input
+            id="minutesPerGame"
+            name="minutesPerGame"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={values.minutesPerGame}
+            placeholder="40"
+            hasError={Boolean(state.errors?.minutesPerGame)}
+          />
+          <FieldError errors={state.errors} name="minutesPerGame" />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="costPerTeamPerMatch" className="block text-sm font-medium text-white">
+            Cost per team per match (£)
+          </label>
+          <Input
+            id="costPerTeamPerMatch"
+            name="costPerTeamPerMatch"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={values.costPerTeamPerMatch}
+            placeholder="40"
+            hasError={Boolean(state.errors?.costPerTeamPerMatch)}
+          />
+          <FieldError errors={state.errors} name="costPerTeamPerMatch" />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="targetTeamCount" className="block text-sm font-medium text-white">
+            Target number of teams
+          </label>
+          <Input
+            id="targetTeamCount"
+            name="targetTeamCount"
+            type="number"
+            min="2"
+            step="1"
+            defaultValue={values.targetTeamCount}
+            placeholder="12"
+            hasError={Boolean(state.errors?.targetTeamCount)}
+          />
+          <FieldError errors={state.errors} name="targetTeamCount" />
         </div>
 
         <div className="space-y-2">
