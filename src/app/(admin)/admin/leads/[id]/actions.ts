@@ -115,11 +115,13 @@ function buildLeadEmailContext(input: {
       area: input.area,
       signupUrl: input.signupUrl,
       teamName: input.teamName,
-      leagueName: input.leagueName,
-      venueName: input.venueName,
-      kickoffInfo: input.kickoffInfo,
-      format: input.leagueFormat,
     }),
+    {
+      leagueName: input.leagueName?.trim() || "",
+      venueName: input.venueName?.trim() || "",
+      kickoffInfo: input.kickoffInfo?.trim() || "",
+      format: input.leagueFormat?.trim() || "",
+    },
   );
 }
 
@@ -669,7 +671,7 @@ export async function deleteLeadAction(formData: FormData) {
 
   try {
     await prisma.interestLead.delete({
-      where: { leadId },
+      where: { id: leadId },
     });
 
     revalidatePath("/admin/leads");
