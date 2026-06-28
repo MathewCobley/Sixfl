@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NotificationRecipientSourceType, UserRole } from "@prisma/client";
 
+import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -15,7 +16,7 @@ import {
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string; error?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; thread?: string }>;
 };
 
 function formatDate(value: Date | null | undefined) {
@@ -29,14 +30,144 @@ function formatDate(value: Date | null | undefined) {
 
 function preview(value: string | null | undefined) {
   const text = (value ?? "").replace(/\s+/g, " ").trim();
-  if (!text) return "—";
-  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  if (!text) return "No preview available yet.";
+  return text.length > 130 ? `${text.slice(0, 127)}...` : text;
 }
 
 function savedMessage(saved?: string) {
   if (saved === "email") return "Email queued through central Communications.";
   if (saved === "sms") return "SMS queued through central Communications.";
   return null;
+}
+
+function threadTitle(thread: {
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  emailNormalized: string | null;
+  phoneNormalized: string | null;
+  recipient: { displayName: string | null; email: string | null; phone: string | null } | null;
+}) {
+  return (
+    thread.contactName ||
+    thread.contactEmail ||
+    thread.recipient?.displayName ||
+    thread.recipient?.email ||
+    thread.contactPhone ||
+    thread.emailNormalized ||
+    thread.phoneNormalized ||
+    "Referee conversation"
+  );
+}
+
+function serialiseThread(thread: Awaited<ReturnType<typeof getRefereeThreads>>[number] | null) {
+  if (!thread) return null;
+
+  return {
+    id: thread.id,
+    channel: thread.channel,
+    status: thread.status,
+    contactName: thread.contactName,
+    contactPhone: thread.contactPhone,
+    phoneNormalized: thread.phoneNormalized,
+    contactEmail: thread.contactEmail,
+    emailNormalized: thread.emailNormalized,
+    replyAddress: thread.replyAddress,
+    unreadForAdminCount: thread.unreadForAdminCount,
+    latestMessageAt: thread.latestMessageAt?.toISOString() ?? null,
+    latestInboundAt: thread.latestInboundAt?.toISOString() ?? null,
+    latestOutboundAt: thread.latestOutboundAt?.toISOString() ?? null,
+    team: thread.team
+      ? {
+          id: thread.team.id,
+          name: thread.team.name,
+          logoUrl: thread.team.logoUrl,
+        }
+      : null,
+    league: thread.league
+      ? {
+          id: thread.league.id,
+          name: thread.league.name,
+          season: thread.league.season,
+          slug: thread.league.slug ?? "",
+        }
+      : null,
+    recipient: thread.recipient
+      ? {
+          id: thread.recipient.id,
+          displayName: thread.recipient.displayName,
+          phone: thread.recipient.phone,
+          email: thread.recipient.email,
+          audience: thread.recipient.audience,
+          sourceType: thread.recipient.sourceType,
+        }
+      : null,
+    messages: thread.messages.map((message) => ({
+      id: message.id,
+      channel: message.channel,
+      direction: message.direction,
+      participantRole: message.participantRole,
+      body: message.body,
+      htmlBody: message.htmlBody,
+      subject: message.subject,
+      fromNumber: message.fromNumber,
+      toNumber: message.toNumber,
+      fromEmail: message.fromEmail,
+      toEmail: message.toEmail,
+      providerStatus: message.providerStatus,
+      sentAt: message.sentAt?.toISOString() ?? null,
+      receivedAt: message.receivedAt?.toISOString() ?? null,
+      readAt: message.readAt?.toISOString() ?? null,
+      createdAt: message.createdAt.toISOString(),
+      dispatch: message.dispatch
+        ? {
+            id: message.dispatch.id,
+            template: message.dispatch.template,
+            metadata: message.dispatch.metadata,
+          }
+        : null,
+    })),
+  };
+}
+
+async function getRefereeThreads(refereeId: string) {
+  return prisma.messageThread.findMany({
+    where: {
+      OR: [
+        { sourceType: "REFEREE", sourceId: refereeId },
+        {
+          recipient: {
+            sourceType: NotificationRecipientSourceType.REFEREE,
+            sourceId: refereeId,
+          },
+        },
+      ],
+    },
+    orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+    include: {
+      recipient: true,
+      team: { select: { id: true, name: true, logoUrl: true } },
+      league: { select: { id: true, name: true, season: true, slug: true } },
+      messages: {
+        orderBy: [{ createdAt: "asc" }],
+        include: {
+          dispatch: {
+            select: {
+              id: true,
+              metadata: true,
+              template: {
+                select: {
+                  id: true,
+                  name: true,
+                  key: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
 }
 
 export default async function CentralRefereeCommsPage({ params, searchParams }: PageProps) {
@@ -60,7 +191,7 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
     notFound();
   }
 
-  const [profileRows, sourceLead, dispatches, messageThreads] = await Promise.all([
+  const [profileRows, sourceLead, messageThreads] = await Promise.all([
     prisma.$queryRaw<Array<{ phone: string | null }>>`
       SELECT "phone"
       FROM "RefereeProfile"
@@ -73,52 +204,16 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
           select: { phone: true },
         })
       : null,
-    prisma.notificationDispatch.findMany({
-      where: {
-        OR: [
-          { sourceType: "REFEREE", sourceId: referee.id },
-          { sourceType: "REFEREE_INVITE", sourceId: referee.id },
-          {
-            recipient: {
-              sourceType: NotificationRecipientSourceType.REFEREE,
-              sourceId: referee.id,
-            },
-          },
-        ],
-      },
-      orderBy: [{ createdAt: "desc" }],
-      take: 12,
-      include: {
-        template: { select: { name: true, key: true } },
-      },
-    }),
-    prisma.messageThread.findMany({
-      where: {
-        OR: [
-          { sourceType: "REFEREE", sourceId: referee.id },
-          {
-            recipient: {
-              sourceType: NotificationRecipientSourceType.REFEREE,
-              sourceId: referee.id,
-            },
-          },
-        ],
-      },
-      orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
-      take: 6,
-      include: {
-        messages: {
-          orderBy: [{ createdAt: "desc" }],
-          take: 3,
-        },
-      },
-    }),
+    getRefereeThreads(referee.id),
   ]);
 
   const phone = profileRows[0]?.phone || sourceLead?.phone || null;
   const notice = savedMessage(sp.saved);
   const error = sp.error ? decodeURIComponent(sp.error) : null;
   const displayName = referee.name?.trim() || referee.email || "Referee";
+  const selectedThread =
+    messageThreads.find((thread) => thread.id === sp.thread) ?? messageThreads[0] ?? null;
+  const selectedThreadForClient = serialiseThread(selectedThread);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -135,7 +230,7 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
               Referee comms: {displayName}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-              Send email or SMS through the shared SIXFL Communications system. This keeps queue records, message threads and history in one place.
+              Send email or SMS through the shared SIXFL Communications system. The history below uses the same message-thread timeline as the main admin inbox.
             </p>
           </div>
 
@@ -189,51 +284,52 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">History</div>
-            <h2 className="mt-2 text-xl font-semibold text-white">Central comms history</h2>
+            <h2 className="mt-2 text-xl font-semibold text-white">Proper comms timeline</h2>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              This is the same message-thread view used by the main Communications inbox.
+            </p>
           </div>
           <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/55">
-            {dispatches.length} dispatch{dispatches.length === 1 ? "" : "es"} · {messageThreads.length} thread{messageThreads.length === 1 ? "" : "s"}
+            {messageThreads.length} thread{messageThreads.length === 1 ? "" : "s"}
           </div>
         </div>
 
-        <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <div className="mt-5 grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-white">Notification queue</h3>
-            {dispatches.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/55">No queued email or SMS yet.</p> : null}
-            {dispatches.map((dispatch) => (
-              <article key={dispatch.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{dispatch.channel}</span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{dispatch.status}</span>
-                </div>
-                <div className="mt-3 text-sm font-semibold text-white">{dispatch.subject || dispatch.template?.name || "Message"}</div>
-                <div className="mt-1 text-xs text-white/45">Queued {formatDate(dispatch.createdAt)}{dispatch.sentAt ? ` · Sent ${formatDate(dispatch.sentAt)}` : ""}</div>
-                <p className="mt-3 text-sm leading-6 text-white/65">{preview(dispatch.bodyText)}</p>
-                {dispatch.failureReason ? <p className="mt-2 text-xs text-red-200">{dispatch.failureReason}</p> : null}
-              </article>
-            ))}
+            <h3 className="text-sm font-semibold text-white">Threads</h3>
+            {messageThreads.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/55">
+                No message thread yet.
+              </p>
+            ) : (
+              messageThreads.map((thread) => {
+                const selected = selectedThread?.id === thread.id;
+                const latest = thread.messages[thread.messages.length - 1];
+
+                return (
+                  <Link
+                    key={thread.id}
+                    href={`/admin/messages/referees/${referee.id}?thread=${thread.id}`}
+                    className={`block rounded-2xl border p-4 transition ${
+                      selected
+                        ? "border-emerald-400/30 bg-emerald-400/10"
+                        : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{thread.channel}</span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{thread.status}</span>
+                    </div>
+                    <div className="mt-3 text-sm font-semibold text-white">{threadTitle(thread)}</div>
+                    <div className="mt-1 text-xs text-white/45">Latest {formatDate(thread.latestMessageAt ?? thread.updatedAt)}</div>
+                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/60">{preview(latest?.textBody ?? latest?.body)}</p>
+                  </Link>
+                );
+              })
+            )}
           </div>
 
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-white">Message threads</h3>
-            {messageThreads.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/55">No message thread yet.</p> : null}
-            {messageThreads.map((thread) => (
-              <article key={thread.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{thread.channel}</span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{thread.status}</span>
-                </div>
-                <div className="mt-3 text-sm font-semibold text-white">{thread.contactName || thread.contactEmail || thread.contactPhone || displayName}</div>
-                <div className="mt-1 text-xs text-white/45">Latest {formatDate(thread.latestMessageAt ?? thread.updatedAt)}</div>
-                {thread.messages.map((message) => (
-                  <div key={message.id} className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-xs uppercase tracking-[0.14em] text-white/40">{message.direction} · {formatDate(message.createdAt)}</div>
-                    <p className="mt-2 text-sm leading-6 text-white/65">{preview(message.textBody ?? message.body)}</p>
-                  </div>
-                ))}
-              </article>
-            ))}
-          </div>
+          <AdminMessageThread selectedFilter="all" thread={selectedThreadForClient as never} />
         </div>
       </section>
     </div>
