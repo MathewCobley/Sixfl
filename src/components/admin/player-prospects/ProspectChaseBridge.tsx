@@ -18,21 +18,29 @@ function getProspectIdFromCard(card: Element) {
   return href.match(/\/admin\/player-prospects\/([^/]+)\/communications/)?.[1] ?? null;
 }
 
-function findSquadInvitePanel(card: Element) {
-  return Array.from(card.querySelectorAll<HTMLElement>("div")).find((element) =>
-    element.textContent?.includes("Squad invite"),
-  )?.closest(".rounded-2xl") as HTMLElement | null;
-}
-
-function hasActivePlayerOrClosedRecord(card: Element) {
+function hasClosedOrResponded(card: Element) {
   const text = card.textContent ?? "";
   return (
     text.includes("Active player") ||
     text.includes("Closed record") ||
     text.includes("Duplicate record") ||
-    text.includes("Not interested") ||
     text.includes("YES — still wants to play") ||
     text.includes("NO — follow up")
+  );
+}
+
+function hasSquadInviteAlreadySent(card: Element) {
+  const text = card.textContent ?? "";
+  return /Squad invite\s+(sent|queued|processing|recorded)/i.test(text);
+}
+
+function findTeamPanel(card: Element) {
+  const panels = Array.from(card.querySelectorAll<HTMLElement>(".rounded-2xl"));
+
+  return (
+    panels.find((panel) => panel.textContent?.includes("Currently held under")) ??
+    panels.find((panel) => panel.textContent?.includes("Send squad invite")) ??
+    null
   );
 }
 
@@ -78,21 +86,13 @@ function attachButtonHandler(input: {
 
 function addChaseControls(card: Element) {
   if (card.querySelector("[data-prospect-chase-controls='1']")) return;
-  if (hasActivePlayerOrClosedRecord(card)) return;
+  if (hasClosedOrResponded(card)) return;
+  if (!hasSquadInviteAlreadySent(card)) return;
 
   const prospectId = getProspectIdFromCard(card);
   if (!prospectId) return;
 
-  const squadInvitePanel = findSquadInvitePanel(card);
-  const panelText = squadInvitePanel?.textContent ?? "";
-  const inviteHasBeenSent = /Squad invite\s+(sent|queued|processing|recorded)/i.test(panelText);
-
-  if (!inviteHasBeenSent) return;
-
-  const teamPanel = Array.from(card.querySelectorAll<HTMLElement>("div")).find((element) =>
-    element.textContent?.includes("Currently held under"),
-  )?.closest(".rounded-2xl") as HTMLElement | null;
-
+  const teamPanel = findTeamPanel(card);
   if (!teamPanel) return;
 
   const wrapper = document.createElement("div");
@@ -101,7 +101,7 @@ function addChaseControls(card: Element) {
 
   const helper = document.createElement("div");
   helper.className = "text-[11px] leading-4 text-white/40";
-  helper.textContent = "Invite sent but not confirmed — use chase emails to keep this moving.";
+  helper.textContent = "Invite sent but not confirmed — chase this player.";
 
   const chaseButton = makeButton("Chase invite", "chase");
   const finalChaseButton = makeButton("Final chase", "final");
@@ -116,8 +116,16 @@ function addChaseControls(card: Element) {
 }
 
 function addChaseControlsToPage() {
-  const cards = Array.from(document.querySelectorAll("article.rounded-3xl"));
-  for (const card of cards) addChaseControls(card);
+  const commsLinks = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>(
+      "a[href^='/admin/player-prospects/'][href$='/communications']",
+    ),
+  );
+
+  for (const link of commsLinks) {
+    const card = link.closest("article");
+    if (card) addChaseControls(card);
+  }
 }
 
 export default function ProspectChaseBridge() {
