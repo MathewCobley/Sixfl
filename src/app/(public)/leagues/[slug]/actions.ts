@@ -48,7 +48,7 @@ export async function createLeagueInterestLeadAction(formData: FormData) {
       preferredNights: {
         create: [
           {
-            night: PreferredNight.TUESDAY,
+            night: PreferredNight.WEDNESDAY,
           },
         ],
       },
