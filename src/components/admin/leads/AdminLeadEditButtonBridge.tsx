@@ -16,8 +16,13 @@ function addEditLeadButton(pathname: string) {
   const leadId = getLeadIdFromPathname(pathname);
   if (!leadId) return;
 
-  const existingButton = document.querySelector<HTMLAnchorElement>(
-    `a[data-admin-edit-lead-link="${leadId}"]`,
+  const editHref = `/admin/leads/${leadId}/edit`;
+  const editHrefWithHash = `${editHref}#edit-lead-details`;
+  const existingButton = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find(
+    (link) =>
+      link.dataset.adminEditLeadLink === leadId ||
+      link.getAttribute("href") === editHref ||
+      link.getAttribute("href") === editHrefWithHash,
   );
 
   if (existingButton) return;
@@ -33,7 +38,7 @@ function addEditLeadButton(pathname: string) {
   actionWrapper.className = "flex flex-wrap justify-end gap-3";
 
   const editLink = document.createElement("a");
-  editLink.href = `/admin/leads/${leadId}/edit`;
+  editLink.href = editHrefWithHash;
   editLink.textContent = "Edit lead";
   editLink.dataset.adminEditLeadLink = leadId;
   editLink.className =
