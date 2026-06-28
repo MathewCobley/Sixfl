@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 
 import RefereeTabs from "@/components/referee/RefereeTabs";
@@ -85,21 +86,14 @@ function formatLedgerDate(value: Date | null) {
 
 function CurrentViewBanner({
   isAdminPreview,
-  isAdminOverview,
   refereeName,
   refereeId,
 }: {
   isAdminPreview: boolean;
-  isAdminOverview: boolean;
   refereeName: string;
   refereeId: string;
 }) {
-  if (!isAdminPreview && !isAdminOverview) return null;
-
-  const label = isAdminPreview ? "Referee Preview" : "Full Admin Referee Overview";
-  const description = isAdminPreview
-    ? `You are seeing exactly what ${refereeName} sees on the referee dashboard.`
-    : "You are viewing the admin-wide referee dashboard. This is not a single referee's view.";
+  if (!isAdminPreview) return null;
 
   return (
     <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
@@ -110,16 +104,14 @@ function CurrentViewBanner({
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-bold text-amber-50">
-              {label}
+              Referee Preview
             </span>
-            {isAdminPreview ? (
-              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-white/70">
-                Admin preview mode
-              </span>
-            ) : null}
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-white/70">
+              Admin preview mode
+            </span>
           </div>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-amber-50/75">
-            {description}
+            You are seeing exactly what {refereeName} sees on the referee dashboard.
           </p>
         </div>
 
@@ -131,14 +123,45 @@ function CurrentViewBanner({
             Admin home
           </Link>
 
-          {isAdminPreview ? (
-            <Link
-              href={`/admin/referees/${refereeId}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${refereeId}`)}`}
-              className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
-            >
-              Switch back to Full Admin View
-            </Link>
-          ) : null}
+          <Link
+            href={`/admin/referees/${refereeId}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${refereeId}`)}`}
+            className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
+          >
+            Switch back to Full Admin View
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RefereeIdentityBanner({
+  refereeName,
+  refereeEmail,
+  isAdminPreview,
+}: {
+  refereeName: string;
+  refereeEmail: string | null;
+  isAdminPreview: boolean;
+}) {
+  return (
+    <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+            Referee account
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            {refereeName} referee dashboard
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-emerald-50/75">
+            This page only shows nights, fees and ledger entries assigned to this referee.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
+          <div className="font-semibold text-white">{isAdminPreview ? "Previewing" : "Logged in as"}</div>
+          <div className="mt-1">{refereeEmail || refereeName}</div>
         </div>
       </div>
     </section>
@@ -239,6 +262,9 @@ function NightCard({
           <h3 className="mt-3 text-lg font-semibold leading-tight text-white">
             {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
           </h3>
+          <p className="mt-1 text-sm text-white/55">
+            Referee: {night.refereeName || night.refereeEmail || "Unknown referee"}
+          </p>
           <p className="mt-1 text-sm text-white/55">
             {night.venueName || "Venue TBC"} · {night.fixtureCount} fixture{night.fixtureCount === 1 ? "" : "s"}
           </p>
@@ -347,6 +373,9 @@ function RefereeLedger({
                   {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
                 </div>
                 <div className="mt-1 text-xs text-white/45">
+                  Referee: {night.refereeName || night.refereeEmail || "Unknown referee"}
+                </div>
+                <div className="mt-1 text-xs text-white/45">
                   Fee {formatMoney(night.feePence)} · Cash collected {formatMoney(night.cashCollectedPence)} · {getLedgerSettlementLabel(night, todayLondonDate)}
                 </div>
               </div>
@@ -407,12 +436,14 @@ function NightSchedule({
 
 export default async function RefereePage() {
   const { user, authenticatedUser, isAdminPreview } = await requireReferee();
-  const isAdminOverview = authenticatedUser.role === UserRole.ADMIN && !isAdminPreview;
-  const todayLondonDate = toLondonDateInputValue(new Date());
+  const isAdminWithoutPreview = authenticatedUser.role === UserRole.ADMIN && !isAdminPreview;
 
-  const nights = await getRefereeNightSummaries(
-    isAdminOverview ? undefined : { refereeId: user.id },
-  );
+  if (isAdminWithoutPreview) {
+    redirect("/admin/referees?error=select_referee_preview");
+  }
+
+  const todayLondonDate = toLondonDateInputValue(new Date());
+  const nights = await getRefereeNightSummaries({ refereeId: user.id });
 
   const activeNights = nights.filter((night) => night.status !== "CANCELLED");
   const openNights = nights.filter(
@@ -434,18 +465,24 @@ export default async function RefereePage() {
   const totalFixtures = nights.reduce((sum, night) => sum + night.fixtureCount, 0);
   const nextNight = [...openNights].sort(sortNightSoonestFirst)[0] ?? null;
   const refereeName = user.name || user.email || "this referee";
+  const previewRefereeId = authenticatedUser.role === UserRole.ADMIN ? user.id : null;
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <CurrentViewBanner
           isAdminPreview={isAdminPreview}
-          isAdminOverview={isAdminOverview}
           refereeName={refereeName}
           refereeId={user.id}
         />
 
-        <RefereeTabs active="overview" />
+        <RefereeIdentityBanner
+          refereeName={refereeName}
+          refereeEmail={user.email}
+          isAdminPreview={isAdminPreview}
+        />
+
+        <RefereeTabs active="overview" previewRefereeId={previewRefereeId} />
 
         <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
           <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
