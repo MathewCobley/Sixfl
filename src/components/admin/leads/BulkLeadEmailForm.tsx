@@ -168,6 +168,7 @@ export default function BulkLeadEmailForm({
       </div>
 
       <input type="hidden" name="templateId" value={selectedTemplate} />
+      <input type="hidden" name="templateKey" value={selectedTemplateRecord?.key ?? ""} />
       <input
         type="hidden"
         name="ctaLabel"
