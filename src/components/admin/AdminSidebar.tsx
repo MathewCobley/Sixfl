@@ -92,6 +92,12 @@ const navigationGroups = [
         description: "Draft fixtures by pitch",
       },
       {
+        name: "Replace team",
+        href: "/admin/fixtures/replace-team",
+        icon: UserGroupIcon,
+        description: "Swap future fixtures",
+      },
+      {
         name: "Fixture backfill",
         href: "/admin/fixtures/backfill",
         icon: WrenchScrewdriverIcon,
