@@ -7,6 +7,7 @@ import AppHeader from "@/components/layout/AppHeader";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
 import RegisterInterestClarityBridge from "@/components/layout/RegisterInterestClarityBridge";
+import RefereeDashboardCopyBridge from "@/components/referee/RefereeDashboardCopyBridge";
 import SiteFooter from "@/components/layout/SiteFooter";
 
 export default function PublicLayout({
@@ -19,6 +20,7 @@ export default function PublicLayout({
       <AppHeader variant="public" />
       <PublicLeagueLandingSpacingBridge />
       <PublicFixtureWinChanceBridge />
+      <RefereeDashboardCopyBridge />
       <Suspense fallback={null}>
         <RegisterInterestClarityBridge />
       </Suspense>
