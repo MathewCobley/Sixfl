@@ -57,7 +57,27 @@ function findRightColumn() {
   return profileLabel?.closest(".space-y-6") as HTMLElement | null;
 }
 
-function renderCommsPanel(items: RefereeCommsItem[]) {
+function routeProfileButtonsToCentralComms(refereeId: string) {
+  const centralHref = `/admin/messages/referees/${encodeURIComponent(refereeId)}`;
+
+  const sendSmsLink = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find(
+    (link) => link.getAttribute("href") === "#sms" && link.textContent?.trim() === "Send SMS",
+  );
+
+  if (sendSmsLink) {
+    sendSmsLink.href = centralHref;
+    sendSmsLink.textContent = "Comms";
+    sendSmsLink.className =
+      "inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400";
+  }
+
+  const smsPanel = document.getElementById("sms");
+  if (smsPanel) {
+    smsPanel.remove();
+  }
+}
+
+function renderCommsPanel(items: RefereeCommsItem[], refereeId: string) {
   if (document.querySelector("[data-referee-comms-history='1']")) return;
 
   const column = findRightColumn();
@@ -68,14 +88,14 @@ function renderCommsPanel(items: RefereeCommsItem[]) {
   panel.className = "rounded-3xl border border-white/10 bg-black/25 p-5 sm:p-6";
 
   const header = document.createElement("div");
-  header.className = "flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between";
+  header.className = "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between";
   header.innerHTML = `
     <div>
       <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Communication history</div>
       <h2 class="mt-2 text-xl font-bold text-white">Referee comms</h2>
-      <p class="mt-2 text-sm leading-6 text-white/60">Email and SMS activity recorded through the SIXFL notification and messaging system.</p>
+      <p class="mt-2 text-sm leading-6 text-white/60">Email and SMS activity recorded through the shared SIXFL Communications system.</p>
     </div>
-    <div class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/55">${items.length} item${items.length === 1 ? "" : "s"}</div>
+    <a href="/admin/messages/referees/${encodeURIComponent(refereeId)}" class="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-black transition hover:bg-emerald-400">Open Comms</a>
   `;
 
   const body = document.createElement("div");
@@ -87,7 +107,7 @@ function renderCommsPanel(items: RefereeCommsItem[]) {
     empty.textContent = "No email or SMS communication has been recorded for this referee yet.";
     body.appendChild(empty);
   } else {
-    for (const item of items) {
+    for (const item of items.slice(0, 5)) {
       const card = document.createElement("article");
       card.className = "rounded-2xl border border-white/10 bg-white/[0.03] p-4";
 
@@ -134,6 +154,8 @@ export default function AdminRefereeCommsHistoryBridge() {
 
     let cancelled = false;
 
+    routeProfileButtonsToCentralComms(refereeId);
+
     async function load() {
       const response = await fetch(`/api/admin/referees/${encodeURIComponent(refereeId)}/communications`, {
         cache: "no-store",
@@ -143,7 +165,7 @@ export default function AdminRefereeCommsHistoryBridge() {
       const payload = (await response.json().catch(() => null)) as RefereeCommsPayload | null;
       if (cancelled) return;
 
-      renderCommsPanel(payload?.items ?? []);
+      renderCommsPanel(payload?.items ?? [], refereeId);
     }
 
     void load();
