@@ -241,7 +241,7 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   const block = document.createElement("div");
   block.dataset.publicFixtureWinChance = fixture.id;
   block.className =
-    "mt-5 w-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)] sm:p-5";
+    "mt-5 min-w-full flex-none basis-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)] sm:p-5";
 
   const header = document.createElement("div");
   header.className = "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between";
@@ -303,6 +303,14 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   return block;
 }
 
+function prepareFixtureCardForPrediction(card: HTMLElement) {
+  card.classList.add("w-full", "flex-wrap", "items-stretch");
+
+  if (card.className.includes("sm:flex-row")) {
+    card.classList.add("sm:items-start");
+  }
+}
+
 function injectWinChances(fixtures: FixtureWinChanceItem[]) {
   for (const fixture of fixtures) {
     if (document.querySelector(`[data-public-fixture-win-chance="${fixture.id}"]`)) {
@@ -312,7 +320,7 @@ function injectWinChances(fixtures: FixtureWinChanceItem[]) {
     const card = findFixtureCard(fixture);
     if (!card) continue;
 
-    card.classList.add("w-full");
+    prepareFixtureCardForPrediction(card);
     card.appendChild(createWinChanceBlock(fixture));
   }
 }
