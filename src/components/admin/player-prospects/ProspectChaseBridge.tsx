@@ -6,8 +6,8 @@
 
 import { useEffect } from "react";
 import {
-  sendPlayerProspectSquadInviteChaseAction,
-  sendPlayerProspectSquadInviteFinalChaseAction,
+  queuePlayerProspectSquadInviteChaseAction,
+  queuePlayerProspectSquadInviteFinalChaseAction,
 } from "@/app/(admin)/admin/player-prospects/actions";
 
 function getProspectIdFromCard(card: Element) {
@@ -16,10 +16,6 @@ function getProspectIdFromCard(card: Element) {
   );
   const href = commsLink?.getAttribute("href") ?? "";
   return href.match(/\/admin\/player-prospects\/([^/]+)\/communications/)?.[1] ?? null;
-}
-
-function getLeagueIdFromUrl() {
-  return new URLSearchParams(window.location.search).get("leagueId") ?? "";
 }
 
 function findSquadInvitePanel(card: Element) {
@@ -63,21 +59,20 @@ function attachButtonHandler(input: {
 
     const formData = new FormData();
     formData.append("prospectId", input.prospectId);
-    formData.append("leagueId", getLeagueIdFromUrl());
 
-    try {
-      if (input.final) {
-        await sendPlayerProspectSquadInviteFinalChaseAction(formData);
-      } else {
-        await sendPlayerProspectSquadInviteChaseAction(formData);
-      }
-    } catch (error) {
-      // A server-action redirect is expected here. Only reset the button if no redirect occurs.
-      if (String(error).includes("NEXT_REDIRECT")) return;
+    const result = input.final
+      ? await queuePlayerProspectSquadInviteFinalChaseAction(formData)
+      : await queuePlayerProspectSquadInviteChaseAction(formData);
+
+    if (!result?.ok) {
       input.button.disabled = false;
       input.button.textContent = originalText;
-      alert("The chase email could not be sent.");
+      alert(result?.error || "The chase email could not be sent.");
+      return;
     }
+
+    input.button.textContent = input.final ? "Final chase queued" : "Chase queued";
+    window.setTimeout(() => window.location.reload(), 900);
   });
 }
 
