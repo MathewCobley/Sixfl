@@ -16,8 +16,22 @@ function getTeamIdFromPathname(pathname: string) {
 }
 
 function getMembershipIdFromEditHref(href: string, teamId: string) {
-  const match = href.match(new RegExp(`^/captain/team/${teamId}/squad/([^/]+)/edit$`));
-  return match?.[1] ?? null;
+  const squadMatch = href.match(new RegExp(`^/captain/team/${teamId}/squad/([^/]+)/edit$`));
+  if (squadMatch?.[1]) return squadMatch[1];
+
+  const captainSquadMatch = href.match(new RegExp(`^/captain/team/${teamId}/captain-squad/([^/]+)/edit$`));
+  return captainSquadMatch?.[1] ?? null;
+}
+
+function containerAlreadyHasLoginControl(actionsContainer: HTMLElement, membershipId: string) {
+  const existingBridgeButton = actionsContainer.querySelector<HTMLButtonElement>(
+    `button[data-dashboard-login-email="${membershipId}"]`,
+  );
+
+  if (existingBridgeButton) return true;
+
+  const text = actionsContainer.textContent ?? "";
+  return text.includes("Send login email") || text.includes("Login email sent") || text.includes("No email saved");
 }
 
 function setButtonState(button: HTMLButtonElement, state: "idle" | "sending" | "sent" | "error") {
@@ -78,11 +92,7 @@ function addButtonToActionsContainer(input: {
   teamId: string;
   membershipId: string;
 }) {
-  const existingButton = input.actionsContainer.querySelector<HTMLButtonElement>(
-    `button[data-dashboard-login-email="${input.membershipId}"]`,
-  );
-
-  if (existingButton) return;
+  if (containerAlreadyHasLoginControl(input.actionsContainer, input.membershipId)) return;
 
   const button = document.createElement("button");
   button.type = "button";
@@ -124,7 +134,9 @@ function addButtonsToAdminSquadPage(teamId: string) {
 
 function addButtonsToCaptainSquadPage(teamId: string) {
   const editLinks = Array.from(
-    document.querySelectorAll<HTMLAnchorElement>(`a[href^="/captain/team/${teamId}/squad/"][href$="/edit"]`),
+    document.querySelectorAll<HTMLAnchorElement>(
+      `a[href^="/captain/team/${teamId}/squad/"][href$="/edit"], a[href^="/captain/team/${teamId}/captain-squad/"][href$="/edit"]`,
+    ),
   );
 
   for (const editLink of editLinks) {
