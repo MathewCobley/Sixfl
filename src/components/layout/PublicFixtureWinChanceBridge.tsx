@@ -90,6 +90,18 @@ function isLikelyFixtureCard(element: HTMLElement) {
   );
 }
 
+function isCaptainFixtureRow(element: HTMLElement) {
+  const className = getElementClassName(element);
+
+  return (
+    className.includes("sm:flex-row") &&
+    className.includes("sm:justify-between") &&
+    className.includes("px-6") &&
+    className.includes("py-5") &&
+    countVsLabels(element) === 1
+  );
+}
+
 function getFixtureCardScore(element: HTMLElement) {
   const text = normaliseText(element.textContent ?? "");
   const className = getElementClassName(element);
@@ -98,6 +110,7 @@ function getFixtureCardScore(element: HTMLElement) {
 
   let score = 0;
 
+  if (isCaptainFixtureRow(element)) score += 120;
   if (isLikelyFixtureCard(element)) score += 60;
   if (vsCount === 1) score += 45;
   if (width >= 560) score += 35;
@@ -106,6 +119,7 @@ function getFixtureCardScore(element: HTMLElement) {
   if (text.length < 420) score += 25;
   if (text.length > 900) score -= 80;
   if (text.includes("upcoming fixtures")) score -= 60;
+  if (text.includes("recent results")) score -= 60;
   if (text.includes("results")) score -= 35;
 
   return score;
@@ -133,7 +147,7 @@ function findFixtureCard(fixture: FixtureWinChanceItem) {
     while (current && depth < 8) {
       if (!hasFixtureText(current, fixture)) break;
 
-      if (isLikelyFixtureCard(current) || countVsLabels(current) === 1) {
+      if (isCaptainFixtureRow(current) || isLikelyFixtureCard(current) || countVsLabels(current) === 1) {
         candidates.add(current);
       }
 
@@ -241,7 +255,7 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   const block = document.createElement("div");
   block.dataset.publicFixtureWinChance = fixture.id;
   block.className =
-    "mt-5 min-w-full flex-none basis-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)] sm:p-5";
+    "mt-5 w-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)] sm:p-5";
 
   const header = document.createElement("div");
   header.className = "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between";
@@ -303,12 +317,33 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   return block;
 }
 
-function prepareFixtureCardForPrediction(card: HTMLElement) {
-  card.classList.add("w-full", "flex-wrap", "items-stretch");
+function wrapExistingFixtureRowContent(card: HTMLElement) {
+  if (card.dataset.publicFixtureLayoutFixed === "1") return;
+  card.dataset.publicFixtureLayoutFixed = "1";
 
-  if (card.className.includes("sm:flex-row")) {
-    card.classList.add("sm:items-start");
+  const existingChildren = Array.from(card.children);
+  if (existingChildren.length === 0) return;
+
+  const topRow = document.createElement("div");
+  topRow.className = "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between";
+
+  for (const child of existingChildren) {
+    topRow.appendChild(child);
   }
+
+  card.appendChild(topRow);
+  card.style.display = "block";
+  card.style.width = "100%";
+}
+
+function prepareFixtureCardForPrediction(card: HTMLElement) {
+  if (isCaptainFixtureRow(card)) {
+    wrapExistingFixtureRowContent(card);
+    return;
+  }
+
+  card.style.width = "100%";
+  card.style.display = "block";
 }
 
 function injectWinChances(fixtures: FixtureWinChanceItem[]) {
