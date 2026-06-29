@@ -9,11 +9,13 @@ import { chaseFixtureConfirmationSmsAction } from "@/app/(admin)/admin/fixtures/
 type FixtureConfirmationChaseButtonProps = {
   fixtureId: string;
   teamId: string;
+  leagueId?: string | null;
 };
 
 export function FixtureConfirmationChaseButton({
   fixtureId,
   teamId,
+  leagueId,
 }: FixtureConfirmationChaseButtonProps) {
   const returnTo = `fixture-chase-${fixtureId}-${teamId}`;
 
@@ -21,6 +23,7 @@ export function FixtureConfirmationChaseButton({
     <form id={returnTo} action={chaseFixtureConfirmationSmsAction}>
       <input type="hidden" name="fixtureId" value={fixtureId} />
       <input type="hidden" name="teamId" value={teamId} />
+      <input type="hidden" name="leagueId" value={leagueId ?? ""} />
       <input type="hidden" name="returnTo" value={returnTo} />
       <button
         type="submit"
