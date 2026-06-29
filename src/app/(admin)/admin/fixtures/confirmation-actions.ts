@@ -91,12 +91,14 @@ function buildAdminFixturesHref(input?: {
 function getRedirectFromResult(
   result: QueueFixtureConfirmationSmsResult,
   returnTo?: string,
+  leagueId?: string | null,
 ) {
   if (result.ok) {
     return buildAdminFixturesHref({
       notice: "sms_queued",
       teamName: result.teamName,
       returnTo,
+      leagueId,
     });
   }
 
@@ -108,6 +110,7 @@ function getRedirectFromResult(
       notice: "sms_skipped",
       teamName: result.teamName,
       returnTo,
+      leagueId,
     });
   }
 
@@ -120,6 +123,7 @@ function getRedirectFromResult(
       notice: "sms_not_available",
       teamName: result.teamName,
       returnTo,
+      leagueId,
     });
   }
 
@@ -127,6 +131,7 @@ function getRedirectFromResult(
     notice: "sms_error",
     teamName: result.teamName,
     returnTo,
+    leagueId,
   });
 }
 
@@ -144,6 +149,7 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
   const fixtureId = parseRequiredString(formData.get("fixtureId"), "Fixture");
   const teamId = parseRequiredString(formData.get("teamId"), "Team");
   const returnTo = String(formData.get("returnTo") ?? "").trim();
+  let leagueId = getOptionalString(formData.get("leagueId"));
 
   const result = await queueFixtureConfirmationSmsReminder({
     fixtureId,
@@ -167,6 +173,8 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
     },
   });
 
+  leagueId = fixture?.leagueId ?? leagueId;
+
   revalidatePath("/admin/fixtures");
 
   if (fixture?.leagueId) {
@@ -182,7 +190,7 @@ export async function chaseFixtureConfirmationSmsAction(formData: FormData) {
     revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
   }
 
-  redirect(getRedirectFromResult(result, returnTo));
+  redirect(getRedirectFromResult(result, returnTo, leagueId));
 }
 
 export async function replyFixtureConfirmationIssueSmsAction(formData: FormData) {
