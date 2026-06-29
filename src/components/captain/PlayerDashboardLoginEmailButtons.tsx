@@ -10,6 +10,14 @@ import { usePathname } from "next/navigation";
 const buttonBaseClassName =
   "inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-center text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto";
 
+const AUTO_LOGIN_STORAGE_PREFIX = "sixfl:auto-player-login-email:";
+
+type PendingLoginEmail = {
+  teamId: string;
+  email: string;
+  createdAt: number;
+};
+
 function getTeamIdFromPathname(pathname: string) {
   const match = pathname.match(/\/captain\/team\/([^/]+)\/(?:squad|captain-squad)(?:\/)?$/);
   return match?.[1] ?? null;
@@ -21,6 +29,44 @@ function getMembershipIdFromEditHref(href: string, teamId: string) {
 
   const captainSquadMatch = href.match(new RegExp(`^/captain/team/${teamId}/captain-squad/([^/]+)/edit$`));
   return captainSquadMatch?.[1] ?? null;
+}
+
+function getAutoLoginStorageKey(teamId: string) {
+  return `${AUTO_LOGIN_STORAGE_PREFIX}${teamId}`;
+}
+
+function normaliseEmail(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function savePendingLoginEmail(teamId: string, email: string) {
+  window.sessionStorage.setItem(
+    getAutoLoginStorageKey(teamId),
+    JSON.stringify({ teamId, email: normaliseEmail(email), createdAt: Date.now() } satisfies PendingLoginEmail),
+  );
+}
+
+function readPendingLoginEmail(teamId: string) {
+  const rawValue = window.sessionStorage.getItem(getAutoLoginStorageKey(teamId));
+  if (!rawValue) return null;
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<PendingLoginEmail>;
+    if (parsed.teamId !== teamId || !parsed.email || !parsed.createdAt) return null;
+    if (Date.now() - parsed.createdAt > 5 * 60 * 1000) return null;
+
+    return {
+      teamId: parsed.teamId,
+      email: normaliseEmail(parsed.email),
+      createdAt: parsed.createdAt,
+    } satisfies PendingLoginEmail;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingLoginEmail(teamId: string) {
+  window.sessionStorage.removeItem(getAutoLoginStorageKey(teamId));
 }
 
 function containerAlreadyHasLoginControl(actionsContainer: HTMLElement, membershipId: string) {
@@ -150,12 +196,106 @@ function addButtonsToCaptainSquadPage(teamId: string) {
   }
 }
 
+function findAddPlayerForm(teamId: string) {
+  return Array.from(document.querySelectorAll<HTMLFormElement>("form")).find((form) => {
+    const teamInput = form.querySelector<HTMLInputElement>('input[name="teamid"]');
+    return (
+      teamInput?.value === teamId &&
+      Boolean(form.querySelector<HTMLInputElement>('input[name="displayName"]')) &&
+      Boolean(form.querySelector<HTMLInputElement>('input[name="email"]'))
+    );
+  }) ?? null;
+}
+
+function addAutoLoginCheckboxToAddForm(teamId: string) {
+  const form = findAddPlayerForm(teamId);
+  if (!form || form.querySelector('[data-auto-login-email-control="1"]')) return;
+
+  const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (!submitButton) return;
+
+  const label = document.createElement("label");
+  label.dataset.autoLoginEmailControl = "1";
+  label.className =
+    "flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.08] px-4 py-3 transition hover:border-emerald-400/35 hover:bg-emerald-500/[0.12]";
+
+  label.innerHTML = `
+    <span class="text-sm leading-5 text-white/75">
+      <span class="block font-semibold text-white">Send player login email automatically</span>
+      <span class="mt-1 block text-xs text-white/50">If an email address is entered, the player will be sent their dashboard login link after they are added.</span>
+    </span>
+    <input type="checkbox" name="sendLoginEmailNow" checked class="mt-1 h-4 w-4 shrink-0 accent-emerald-400" />
+  `;
+
+  submitButton.insertAdjacentElement("beforebegin", label);
+
+  form.addEventListener("submit", () => {
+    const email = normaliseEmail(form.querySelector<HTMLInputElement>('input[name="email"]')?.value);
+    const shouldSend = form.querySelector<HTMLInputElement>('input[name="sendLoginEmailNow"]')?.checked === true;
+
+    if (email && shouldSend) {
+      savePendingLoginEmail(teamId, email);
+    } else {
+      clearPendingLoginEmail(teamId);
+    }
+  });
+}
+
+function findMemberActionsForEmail(teamId: string, email: string) {
+  const editLinks = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>(
+      `a[href^="/captain/team/${teamId}/squad/"][href$="/edit"], a[href^="/captain/team/${teamId}/captain-squad/"][href$="/edit"]`,
+    ),
+  );
+
+  for (const editLink of editLinks) {
+    const actionsContainer = editLink.parentElement;
+    if (!(actionsContainer instanceof HTMLElement)) continue;
+
+    const memberRow = actionsContainer.closest("div.flex.flex-col.gap-4.px-6.py-5");
+    const text = normaliseEmail(memberRow?.textContent ?? "");
+
+    if (text.includes(email)) {
+      return actionsContainer;
+    }
+  }
+
+  return null;
+}
+
+function triggerLoginEmailForAddedPlayer(teamId: string) {
+  const searchParams = new URLSearchParams(window.location.search);
+  if (searchParams.get("saved") !== "player-added") return;
+
+  const pending = readPendingLoginEmail(teamId);
+  if (!pending) return;
+
+  const actionsContainer = findMemberActionsForEmail(teamId, pending.email);
+  if (!actionsContainer) return;
+
+  clearPendingLoginEmail(teamId);
+
+  const loginForm = Array.from(actionsContainer.querySelectorAll<HTMLFormElement>("form")).find((form) =>
+    Boolean(form.querySelector<HTMLInputElement>('input[name="membershipId"]')),
+  );
+
+  if (loginForm) {
+    loginForm.requestSubmit();
+    return;
+  }
+
+  const loginButton = actionsContainer.querySelector<HTMLButtonElement>('button[data-dashboard-login-email]');
+  loginButton?.click();
+}
+
 function addDashboardLoginButtons(pathname: string) {
   const teamId = getTeamIdFromPathname(pathname);
   if (!teamId) return;
 
   addButtonsToAdminSquadPage(teamId);
   addButtonsToCaptainSquadPage(teamId);
+  addAutoLoginCheckboxToAddForm(teamId);
+  triggerLoginEmailForAddedPlayer(teamId);
 }
 
 export default function PlayerDashboardLoginEmailButtons() {
