@@ -173,14 +173,13 @@ export async function syncPublishedFixtureRefereeNightAssignment(input: {
   `);
   const affectedNightIds = new Set(previousRows.map((row) => row.refereeNightId));
 
-  const shouldDetach =
+  if (
     !fixture ||
     !fixture.refereeId ||
     !fixture.publishedAt ||
     fixture.status === "CANCELLED" ||
-    !isFixtureInAutomaticRefereeNightWindow(fixture);
-
-  if (shouldDetach) {
+    !isFixtureInAutomaticRefereeNightWindow(fixture)
+  ) {
     await db.$executeRaw(Prisma.sql`
       DELETE FROM "RefereeNightFixture"
       WHERE "fixtureId" = ${input.fixtureId}
@@ -194,9 +193,11 @@ export async function syncPublishedFixtureRefereeNightAssignment(input: {
     return Array.from(affectedNightIds);
   }
 
+  const refereeId = fixture.refereeId;
+
   const refereeNightId = await getOrCreateRefereeNight({
     db,
-    refereeId: fixture.refereeId,
+    refereeId,
     leagueId: fixture.leagueId,
     venueId: fixture.venueId,
     nightDate: fixture.nightDate,
