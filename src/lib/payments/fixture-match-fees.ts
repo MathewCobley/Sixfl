@@ -378,7 +378,7 @@ export async function syncFixtureMatchFeeCharges(
         id: createdCharge.id,
         teamId: entry.team.id,
         teamName: entry.team.name,
-        teamLogoUrl: entry.team.logoUrl ?? null,
+        teamLogoUrl: entry.teamLogoUrl ?? null,
         paymentToken: createdCharge.paymentToken,
         amountPence: createdCharge.amountPence,
       });
@@ -414,7 +414,7 @@ export async function syncFixtureMatchFeeCharges(
         id: updatedCharge.id,
         teamId: entry.team.id,
         teamName: entry.team.name,
-        teamLogoUrl: entry.team.logoUrl ?? null,
+        teamLogoUrl: entry.teamLogoUrl ?? null,
         paymentToken: updatedCharge.paymentToken,
         amountPence: updatedCharge.amountPence,
       });
@@ -612,84 +612,4 @@ export async function queueFixtureMatchFeeEmails(
           reminderIntro:
             reminder.hoursAfterKickoff === 24
               ? "Your match fee is still unpaid."
-              : "Your match fee is still unpaid after our earlier reminder.",
-        },
-      });
-
-      if (reminderSmsDispatch.status === NotificationDispatchStatus.QUEUED) {
-        reminderQueued += 1;
-      } else {
-        reminderSkipped += 1;
-      }
-    }
-  }
-
-  return {
-    queued: requestQueued + reminderQueued,
-    skipped: requestSkipped + reminderSkipped,
-    requestQueued,
-    requestSkipped,
-    reminderQueued,
-    reminderSkipped,
-  };
-}
-
-export async function voidFixtureMatchFeeChargesOrThrow(
-  fixtureIds: string[],
-  db: PaymentChargeDbClient = prisma,
-) {
-  if (fixtureIds.length === 0) {
-    return;
-  }
-
-  const charges = await db.paymentCharge.findMany({
-    where: {
-      fixtureId: {
-        in: fixtureIds,
-      },
-    },
-    include: {
-      transactions: {
-        select: {
-          amountPence: true,
-        },
-      },
-      team: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
-
-  for (const charge of charges) {
-    const paidTotalPence = getChargePaidTotal(charge.transactions);
-
-    if (paidTotalPence > 0) {
-      throw new Error(
-        `Cannot delete this fixture because ${charge.team.name} already has a recorded match fee payment.`,
-      );
-    }
-  }
-
-  if (charges.length > 0) {
-    await db.paymentCharge.updateMany({
-      where: {
-        id: {
-          in: charges.map((charge) => charge.id),
-        },
-      },
-      data: {
-        status: PaymentChargeStatus.VOID,
-      },
-    });
-
-    await cancelQueuedMatchFeeNotificationDispatches(
-      charges.map((charge) => charge.id),
-      db,
-      {
-        reason: "Fixture was deleted before queued match fee emails were sent.",
-      },
-    );
-  }
-}
+            ... (truncated)
