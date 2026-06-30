@@ -16,6 +16,8 @@ import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
+const ZERO_FEE_WAIVER_NOTE = "Zero-fee player share waived by SIXFL";
+
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
@@ -113,7 +115,7 @@ function getCollectionNote(input: {
   zeroFeePlayer?: boolean;
 }) {
   if (input.zeroFeePlayer) {
-    return `Zero-fee player share waived by SIXFL: ${formatMoney(input.amountPence)}. Player fee override is £0.00, so this share reduces the team balance but is not counted as money collected.`;
+    return `${ZERO_FEE_WAIVER_NOTE}: ${formatMoney(input.amountPence)}. Player fee override is £0.00, so this share reduces the team balance but is not counted as money collected.`;
   }
 
   if (input.method === "captain_paid") {
@@ -141,6 +143,66 @@ async function assertFixtureBelongsToTeam(input: { fixtureId: string; teamId: st
   });
 
   return Boolean(fixture);
+}
+
+async function syncTeamChargeForZeroFeeWaivers(input: {
+  teamId: string;
+  fixtureId: string;
+}) {
+  const [fixture, charge, waivedTotal] = await Promise.all([
+    prisma.fixture.findUnique({
+      where: { id: input.fixtureId },
+      select: { matchFeePence: true },
+    }),
+    prisma.paymentCharge.findFirst({
+      where: {
+        teamId: input.teamId,
+        fixtureId: input.fixtureId,
+        status: { not: "VOID" },
+      },
+      select: {
+        id: true,
+        amountPence: true,
+        description: true,
+      },
+    }),
+    prisma.playerMatchFee.aggregate({
+      where: {
+        teamId: input.teamId,
+        fixtureId: input.fixtureId,
+        status: "WAIVED",
+        note: { contains: ZERO_FEE_WAIVER_NOTE },
+      },
+      _sum: { amountPence: true },
+    }),
+  ]);
+
+  if (!charge) return;
+
+  const baseTeamChargePence = fixture?.matchFeePence ?? charge.amountPence;
+  const zeroFeeWaivedPence = waivedTotal._sum.amountPence ?? 0;
+  const adjustedAmountPence = Math.max(baseTeamChargePence - zeroFeeWaivedPence, 0);
+  const adjustmentNote = zeroFeeWaivedPence > 0
+    ? `Zero-fee player waiver adjustment: ${formatMoney(zeroFeeWaivedPence)} removed from team balance.`
+    : "Zero-fee player waiver adjustment removed.";
+
+  if (
+    charge.amountPence === adjustedAmountPence &&
+    (zeroFeeWaivedPence === 0 || charge.description?.includes(adjustmentNote))
+  ) {
+    return;
+  }
+
+  await prisma.paymentCharge.update({
+    where: { id: charge.id },
+    data: {
+      amountPence: adjustedAmountPence,
+      description: appendNote({
+        existingNote: charge.description,
+        note: adjustmentNote,
+      }),
+    },
+  });
 }
 
 async function emailPlayerPaymentLinks(feeIds: string[]) {
@@ -250,44 +312,36 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         select: { id: true, status: true, note: true },
       });
 
-      if (existing && isLockedPlayerFee(existing.status)) {
-        continue;
-      }
+      if (existing && isLockedPlayerFee(existing.status)) continue;
 
-      if (existing) {
-        const fee = await prisma.playerMatchFee.update({
-          where: { id: existing.id },
-          data: {
-            amountPence: playerAmountPence,
-            teamId,
-            status: nextStatus,
-            paidAt: null,
-            waivedAt: nextStatus === "WAIVED" ? now : null,
-            cancelledAt: null,
-            paymentUrl: clearPaymentLink ? null : undefined,
-            paymentToken: clearPaymentLink ? null : undefined,
-            note: appendNote({ existingNote: existing.note, note }),
-          },
-          select: { id: true, status: true },
-        });
+      const data = {
+        amountPence: playerAmountPence,
+        teamId,
+        status: nextStatus,
+        paidAt: null,
+        waivedAt: nextStatus === "WAIVED" ? now : null,
+        cancelledAt: null,
+        paymentUrl: clearPaymentLink ? null : undefined,
+        paymentToken: clearPaymentLink ? null : undefined,
+        note: existing ? appendNote({ existingNote: existing.note, note }) : note,
+      };
 
-        if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
-      } else {
-        const fee = await prisma.playerMatchFee.create({
-          data: {
-            fixtureId,
-            teamId,
-            teamMemberId: player.id,
-            amountPence: playerAmountPence,
-            status: nextStatus,
-            waivedAt: nextStatus === "WAIVED" ? now : null,
-            note,
-          },
-          select: { id: true, status: true },
-        });
+      const fee = existing
+        ? await prisma.playerMatchFee.update({
+            where: { id: existing.id },
+            data,
+            select: { id: true, status: true },
+          })
+        : await prisma.playerMatchFee.create({
+            data: {
+              fixtureId,
+              teamMemberId: player.id,
+              ...data,
+            },
+            select: { id: true, status: true },
+          });
 
-        if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
-      }
+      if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
     }
 
     if (player.type === "prospect") {
@@ -303,44 +357,36 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         select: { id: true, status: true, note: true },
       });
 
-      if (existing && isLockedPlayerFee(existing.status)) {
-        continue;
-      }
+      if (existing && isLockedPlayerFee(existing.status)) continue;
 
-      if (existing) {
-        const fee = await prisma.playerMatchFee.update({
-          where: { id: existing.id },
-          data: {
-            amountPence: playerAmountPence,
-            teamId,
-            status: nextStatus,
-            paidAt: null,
-            waivedAt: nextStatus === "WAIVED" ? now : null,
-            cancelledAt: null,
-            paymentUrl: clearPaymentLink ? null : undefined,
-            paymentToken: clearPaymentLink ? null : undefined,
-            note: appendNote({ existingNote: existing.note, note }),
-          },
-          select: { id: true, status: true },
-        });
+      const data = {
+        amountPence: playerAmountPence,
+        teamId,
+        status: nextStatus,
+        paidAt: null,
+        waivedAt: nextStatus === "WAIVED" ? now : null,
+        cancelledAt: null,
+        paymentUrl: clearPaymentLink ? null : undefined,
+        paymentToken: clearPaymentLink ? null : undefined,
+        note: existing ? appendNote({ existingNote: existing.note, note }) : note,
+      };
 
-        if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
-      } else {
-        const fee = await prisma.playerMatchFee.create({
-          data: {
-            fixtureId,
-            teamId,
-            prospectId: player.id,
-            amountPence: playerAmountPence,
-            status: nextStatus,
-            waivedAt: nextStatus === "WAIVED" ? now : null,
-            note,
-          },
-          select: { id: true, status: true },
-        });
+      const fee = existing
+        ? await prisma.playerMatchFee.update({
+            where: { id: existing.id },
+            data,
+            select: { id: true, status: true },
+          })
+        : await prisma.playerMatchFee.create({
+            data: {
+              fixtureId,
+              prospectId: player.id,
+              ...data,
+            },
+            select: { id: true, status: true },
+          });
 
-        if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
-      }
+      if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
     }
   }
 
@@ -386,6 +432,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
     });
   }
 
+  await syncTeamChargeForZeroFeeWaivers({ teamId, fixtureId });
   await ensurePlayerMatchFeePaymentDetailsForFees(createdOrUpdatedFeeIds);
   await emailPlayerPaymentLinks(createdOrUpdatedFeeIds);
 
