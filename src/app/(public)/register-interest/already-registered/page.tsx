@@ -50,7 +50,7 @@ export default async function AlreadyRegisteredPlayerPage({ searchParams }: Page
               You do not need to complete the player interest form again if you have already been added to a squad or have received a SIXFL squad invite.
             </p>
             <p>
-              Please use the squad invite link you were sent, or sign in with the same email address to open your SIXFL player area.
+              Please use the squad invite link you were sent, or sign in with the same email address to open your SIXFL dashboard.
             </p>
           </div>
 
@@ -60,7 +60,7 @@ export default async function AlreadyRegisteredPlayerPage({ searchParams }: Page
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/login?callbackUrl=/player"
+              href="/login?callbackUrl=/dashboard"
               className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400"
             >
               SIGN IN WITH THIS EMAIL
