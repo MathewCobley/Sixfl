@@ -12,12 +12,18 @@ import { prisma } from "@/lib/prisma";
 
 type RefereeNightAssignmentDbClient = Pick<typeof prisma, "$queryRaw" | "$executeRaw">;
 
+const AUTO_REFEREE_NIGHT_NOTE =
+  "Auto-created by SIXFL because this referee was assigned to a published fixture.";
+
+const AUTO_REFEREE_NIGHT_RECENT_PAST_DAYS = 14;
+
 type FixtureAssignmentRow = {
   id: string;
   refereeId: string | null;
   leagueId: string;
   venueId: string | null;
   nightDate: string;
+  kickoffAt: Date;
   publishedAt: Date | null;
   status: string;
 };
@@ -34,6 +40,14 @@ async function getStandardNightFeePence(input: {
   `);
 
   return Number(rows[0]?.feePence ?? 0);
+}
+
+function isFixtureInAutomaticRefereeNightWindow(fixture: FixtureAssignmentRow) {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - AUTO_REFEREE_NIGHT_RECENT_PAST_DAYS);
+
+  return fixture.kickoffAt.getTime() >= cutoff.getTime();
 }
 
 async function getExistingNightId(input: {
@@ -77,9 +91,9 @@ async function createRefereeNight(input: {
 
   await input.db.$executeRaw(Prisma.sql`
     INSERT INTO "RefereeNight" (
-      "id", "refereeId", "leagueId", "venueId", "nightDate", "feePence", "status", "createdByUserId", "updatedAt"
+      "id", "refereeId", "leagueId", "venueId", "nightDate", "feePence", "status", "adminNotes", "createdByUserId", "updatedAt"
     ) VALUES (
-      ${id}, ${input.refereeId}, ${input.leagueId}, ${input.venueId}, ${input.nightDate}::date, ${feePence}, 'DRAFT', ${input.createdByUserId ?? null}, NOW()
+      ${id}, ${input.refereeId}, ${input.leagueId}, ${input.venueId}, ${input.nightDate}::date, ${feePence}, 'DRAFT', ${AUTO_REFEREE_NIGHT_NOTE}, ${input.createdByUserId ?? null}, NOW()
     )
   `);
 
@@ -100,6 +114,34 @@ async function getOrCreateRefereeNight(input: {
   return createRefereeNight(input);
 }
 
+async function cleanupEmptyHistoricDraftNights(input: {
+  db: RefereeNightAssignmentDbClient;
+  refereeNightIds: string[];
+}) {
+  if (input.refereeNightIds.length === 0) return;
+
+  await input.db.$executeRaw(Prisma.sql`
+    DELETE FROM "RefereeNight" rn
+    WHERE rn.id IN (${Prisma.join(input.refereeNightIds)})
+      AND rn.status = 'DRAFT'
+      AND rn."nightDate" < (CURRENT_DATE - (${AUTO_REFEREE_NIGHT_RECENT_PAST_DAYS}::int * INTERVAL '1 day'))
+      AND COALESCE(rn."cashCollectedPence", 0) = 0
+      AND rn."submittedAt" IS NULL
+      AND rn."approvedAt" IS NULL
+      AND rn."settledAt" IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "RefereeNightFixture" rnf
+        WHERE rnf."refereeNightId" = rn.id
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "PaymentTransaction" pt
+        WHERE pt."refereeNightId" = rn.id
+      )
+  `);
+}
+
 export async function syncPublishedFixtureRefereeNightAssignment(input: {
   fixtureId: string;
   createdByUserId?: string | null;
@@ -113,6 +155,7 @@ export async function syncPublishedFixtureRefereeNightAssignment(input: {
       "refereeId",
       "leagueId",
       "venueId",
+      "kickoffAt",
       ("kickoffAt" AT TIME ZONE 'Europe/London')::date::text AS "nightDate",
       "publishedAt",
       status::text AS status
@@ -130,11 +173,23 @@ export async function syncPublishedFixtureRefereeNightAssignment(input: {
   `);
   const affectedNightIds = new Set(previousRows.map((row) => row.refereeNightId));
 
-  if (!fixture || !fixture.refereeId || !fixture.publishedAt || fixture.status === "CANCELLED") {
+  const shouldDetach =
+    !fixture ||
+    !fixture.refereeId ||
+    !fixture.publishedAt ||
+    fixture.status === "CANCELLED" ||
+    !isFixtureInAutomaticRefereeNightWindow(fixture);
+
+  if (shouldDetach) {
     await db.$executeRaw(Prisma.sql`
       DELETE FROM "RefereeNightFixture"
       WHERE "fixtureId" = ${input.fixtureId}
     `);
+
+    await cleanupEmptyHistoricDraftNights({
+      db,
+      refereeNightIds: Array.from(affectedNightIds),
+    });
 
     return Array.from(affectedNightIds);
   }
@@ -183,6 +238,11 @@ export async function syncPublishedFixtureRefereeNightAssignmentsAndRecalculate(
 
     syncedNightIds.forEach((nightId) => affectedNightIds.add(nightId));
   }
+
+  await cleanupEmptyHistoricDraftNights({
+    db: prisma,
+    refereeNightIds: Array.from(affectedNightIds),
+  });
 
   await Promise.all(Array.from(affectedNightIds).map((nightId) => recalculateRefereeNightCashup(nightId)));
   return Array.from(affectedNightIds);
