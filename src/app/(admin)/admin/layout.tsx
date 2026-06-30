@@ -17,6 +17,7 @@ import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHin
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
 import PlayerProspectsNotInterestedBridge from "@/components/admin/player-prospects/PlayerProspectsNotInterestedBridge";
+import RefereeNightFixtureSyncBridge from "@/components/admin/referee-nights/RefereeNightFixtureSyncBridge";
 import AdminRefereeCommsHistoryBridge from "@/components/admin/referees/AdminRefereeCommsHistoryBridge";
 import RefereeWelcomeInviteBridge from "@/components/admin/referees/RefereeWelcomeInviteBridge";
 import AdminSocialResultsGeneratorLinksBridge from "@/components/admin/social/AdminSocialResultsGeneratorLinksBridge";
@@ -51,6 +52,7 @@ export default async function AdminLayout({
       <GenerateNextWeekFixturesBridge />
       <AdminSidebarDesktopColumnsBridge />
       <TeamReplaceFixturesButtonBridge />
+      <RefereeNightFixtureSyncBridge />
       <AdminRefereeCommsHistoryBridge />
       <RefereeWelcomeInviteBridge />
       <AppHeader variant="admin" />
