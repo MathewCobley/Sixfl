@@ -32,6 +32,11 @@ export type RefereeNightSummary = {
   retainedByRefereePence: number;
   dueToSixflPence: number;
   dueToRefereePence: number;
+  cashPaidToRefereePence: number;
+  cashReceivedFromRefereePence: number;
+  cashDistributionNotes: string | null;
+  cashDistributedAt: Date | null;
+  cashDistributedByUserId: string | null;
   refereeNotes: string | null;
   adminNotes: string | null;
   submittedAt: Date | null;
@@ -89,6 +94,14 @@ export function formatMoney(pence: number | null | undefined) {
   }).format((pence ?? 0) / 100);
 }
 
+export function getRefereeRemainingDueToRefereePence(night: Pick<RefereeNightSummary, "dueToRefereePence" | "cashPaidToRefereePence">) {
+  return Math.max(0, night.dueToRefereePence - night.cashPaidToRefereePence);
+}
+
+export function getRefereeRemainingDueToSixflPence(night: Pick<RefereeNightSummary, "dueToSixflPence" | "cashReceivedFromRefereePence">) {
+  return Math.max(0, night.dueToSixflPence - night.cashReceivedFromRefereePence);
+}
+
 export function formatNightDate(value: string | Date) {
   if (value instanceof Date) {
     return formatDateTimeInLondon(value, {
@@ -135,6 +148,11 @@ function normaliseRawNight(row: Record<string, unknown>): RefereeNightSummary {
     retainedByRefereePence: Number(row.retainedByRefereePence ?? 0),
     dueToSixflPence: Number(row.dueToSixflPence ?? 0),
     dueToRefereePence: Number(row.dueToRefereePence ?? 0),
+    cashPaidToRefereePence: Number(row.cashPaidToRefereePence ?? 0),
+    cashReceivedFromRefereePence: Number(row.cashReceivedFromRefereePence ?? 0),
+    cashDistributionNotes: row.cashDistributionNotes ? String(row.cashDistributionNotes) : null,
+    cashDistributedAt: row.cashDistributedAt ? new Date(String(row.cashDistributedAt)) : null,
+    cashDistributedByUserId: row.cashDistributedByUserId ? String(row.cashDistributedByUserId) : null,
     refereeNotes: row.refereeNotes ? String(row.refereeNotes) : null,
     adminNotes: row.adminNotes ? String(row.adminNotes) : null,
     submittedAt: row.submittedAt ? new Date(String(row.submittedAt)) : null,
@@ -167,6 +185,11 @@ export async function getRefereeNightById(id: string) {
   const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
     SELECT
       rn.*,
+      COALESCE(rn."cashPaidToRefereePence", 0)::int AS "cashPaidToRefereePence",
+      COALESCE(rn."cashReceivedFromRefereePence", 0)::int AS "cashReceivedFromRefereePence",
+      rn."cashDistributionNotes" AS "cashDistributionNotes",
+      rn."cashDistributedAt" AS "cashDistributedAt",
+      rn."cashDistributedByUserId" AS "cashDistributedByUserId",
       u.name AS "refereeName",
       u.email AS "refereeEmail",
       l.name AS "leagueName",
@@ -196,6 +219,11 @@ export async function getRefereeNightSummaries(input?: { refereeId?: string }) {
   const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
     SELECT
       rn.*,
+      COALESCE(rn."cashPaidToRefereePence", 0)::int AS "cashPaidToRefereePence",
+      COALESCE(rn."cashReceivedFromRefereePence", 0)::int AS "cashReceivedFromRefereePence",
+      rn."cashDistributionNotes" AS "cashDistributionNotes",
+      rn."cashDistributedAt" AS "cashDistributedAt",
+      rn."cashDistributedByUserId" AS "cashDistributedByUserId",
       u.name AS "refereeName",
       u.email AS "refereeEmail",
       l.name AS "leagueName",
