@@ -326,6 +326,36 @@ export async function updateRefereeNightAction(formData: FormData) {
   redirect(`/admin/referee-nights/${refereeNightId}?saved=1`);
 }
 
+export async function updateRefereeNightCashDistributionAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const refereeNightId = readRequired(formData, "refereeNightId", "Referee night");
+  const cashPaidToRefereePence = parseMoneyToPence(formData.get("cashPaidToRefereePounds")) ?? 0;
+  const cashReceivedFromRefereePence = parseMoneyToPence(formData.get("cashReceivedFromRefereePounds")) ?? 0;
+  const cashDistributionNotes = normaliseOptional(readString(formData, "cashDistributionNotes"));
+  const hasDistribution = cashPaidToRefereePence > 0 || cashReceivedFromRefereePence > 0 || Boolean(cashDistributionNotes);
+
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "RefereeNight"
+    SET
+      "cashPaidToRefereePence" = ${cashPaidToRefereePence},
+      "cashReceivedFromRefereePence" = ${cashReceivedFromRefereePence},
+      "cashDistributionNotes" = ${cashDistributionNotes},
+      "cashDistributedAt" = ${hasDistribution ? new Date() : null},
+      "cashDistributedByUserId" = ${hasDistribution ? user?.id ?? null : null},
+      "updatedAt" = NOW()
+    WHERE id = ${refereeNightId}
+  `);
+
+  await recalculateRefereeNightCashup(refereeNightId);
+
+  revalidatePath("/admin/referee-nights");
+  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
+  revalidatePath("/referee");
+
+  redirect(`/admin/referee-nights/${refereeNightId}?cash=distributed`);
+}
+
 async function setRefereeNightStatus(input: {
   formData: FormData;
   status: RefereeNightStatus;
