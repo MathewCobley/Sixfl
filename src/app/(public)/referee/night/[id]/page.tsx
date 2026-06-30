@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma, UserRole } from "@prisma/client";
 import DisciplinaryNoteForm from "@/components/referee/DisciplinaryNoteForm";
+import RefereeCashupSubmitFeedback from "@/components/referee/RefereeCashupSubmitFeedback";
 import { requireReferee } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import {
@@ -64,6 +65,25 @@ function formatStatus(status: RefereeNightStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
+function isNightLocked(status: RefereeNightStatus) {
+  return ["SUBMITTED", "APPROVED", "SETTLED", "CANCELLED"].includes(status);
+}
+
+function getLockedMessage(status: RefereeNightStatus) {
+  switch (status) {
+    case "SUBMITTED":
+      return "This night has been submitted to SIXFL admin. Scores, cash and notes are now locked unless admin reopens it.";
+    case "APPROVED":
+      return "This night has been approved by SIXFL admin. The referee view is locked.";
+    case "SETTLED":
+      return "This night has been settled. The referee view is locked.";
+    case "CANCELLED":
+      return "This referee night has been cancelled.";
+    default:
+      return null;
+  }
+}
+
 function formatDisciplinaryIncident(value: string) {
   switch (value) {
     case "DISSENT":
@@ -108,7 +128,7 @@ function severityClasses(value: string) {
 }
 
 function getSavedMessage(saved?: string, submitted?: string) {
-  if (submitted === "1") return "Cashup submitted.";
+  if (submitted === "1") return "Cashup submitted and locked. SIXFL admin will now review it.";
 
   switch (saved) {
     case "result":
@@ -215,9 +235,12 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
   const disciplinaryNotesByFixture = groupDisciplinaryNotesByFixture(disciplinaryNotes);
   const allFixturesHaveResults = fixtures.length > 0 && fixtures.every((fixture) => fixture.result);
   const savedMessage = getSavedMessage(sp.saved, sp.submitted);
+  const locked = isNightLocked(night.status);
+  const lockedMessage = getLockedMessage(night.status);
 
   return (
     <div className="min-h-screen bg-black px-4 pb-28 pt-4 text-white sm:px-6 sm:py-6 lg:px-8">
+      <RefereeCashupSubmitFeedback />
       <div className="mx-auto max-w-6xl space-y-5 sm:space-y-8">
         {isAdminPreview ? (
           <section className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-5 text-sm text-amber-100">
@@ -252,6 +275,12 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
           </section>
         ) : null}
 
+        {lockedMessage ? (
+          <section className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+            {lockedMessage}
+          </section>
+        ) : null}
+
         <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:p-6 md:p-8">
           <Link href="/referee" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">← Referee dashboard</Link>
           <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
@@ -262,7 +291,7 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
             {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}. Save scores first, then record cash or notes only where needed.
+            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}. {locked ? "This cashup has been submitted and is locked." : "Save scores first, then record cash or notes only where needed."}
           </p>
 
           <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
@@ -312,50 +341,80 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
                   </div>
 
                   <div className="space-y-3 px-4 py-4 sm:px-6 sm:py-5">
-                    <form action={submitNightFixtureResultAction} className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-                      <input type="hidden" name="refereeNightId" value={night.id} />
-                      <input type="hidden" name="fixtureId" value={fixture.id} />
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-100/70">1. Score</h3>
-                      <div className="mt-4 grid grid-cols-2 gap-3">
-                        <label className="text-sm text-white/70">
-                          <span className="block truncate">{fixture.homeTeam.name}</span>
-                          <input name="homeScore" type="number" min="0" step="1" defaultValue={fixture.result?.homeScore ?? 0} className="mt-2 h-14 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-center text-xl font-semibold text-white outline-none sm:h-11 sm:text-base" />
-                        </label>
-                        <label className="text-sm text-white/70">
-                          <span className="block truncate">{fixture.awayTeam.name}</span>
-                          <input name="awayScore" type="number" min="0" step="1" defaultValue={fixture.result?.awayScore ?? 0} className="mt-2 h-14 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-center text-xl font-semibold text-white outline-none sm:h-11 sm:text-base" />
-                        </label>
+                    {locked ? (
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/45">1. Score locked</h3>
+                        <p className="mt-3 text-sm text-white/65">
+                          {fixture.result ? `Final score recorded: ${fixture.result.homeScore}-${fixture.result.awayScore}.` : "No score was recorded before submission."}
+                        </p>
                       </div>
-                      <button type="submit" className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:w-auto">
-                        {fixture.result ? "Update score" : "Save score"}
-                      </button>
-                    </form>
+                    ) : (
+                      <form action={submitNightFixtureResultAction} className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+                        <input type="hidden" name="refereeNightId" value={night.id} />
+                        <input type="hidden" name="fixtureId" value={fixture.id} />
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-100/70">1. Score</h3>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                          <label className="text-sm text-white/70">
+                            <span className="block truncate">{fixture.homeTeam.name}</span>
+                            <input name="homeScore" type="number" min="0" step="1" defaultValue={fixture.result?.homeScore ?? 0} className="mt-2 h-14 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-center text-xl font-semibold text-white outline-none sm:h-11 sm:text-base" />
+                          </label>
+                          <label className="text-sm text-white/70">
+                            <span className="block truncate">{fixture.awayTeam.name}</span>
+                            <input name="awayScore" type="number" min="0" step="1" defaultValue={fixture.result?.awayScore ?? 0} className="mt-2 h-14 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-center text-xl font-semibold text-white outline-none sm:h-11 sm:text-base" />
+                          </label>
+                        </div>
+                        <button type="submit" className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:w-auto">
+                          {fixture.result ? "Update score" : "Save score"}
+                        </button>
+                      </form>
+                    )}
 
                     <details className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
                         <span>2. Cash collection</span>
-                        <span className="text-xs font-normal text-white/45">Open if cash paid</span>
+                        <span className="text-xs font-normal text-white/45">{locked ? "Locked" : "Open if cash paid"}</span>
                       </summary>
-                      <div className="grid gap-3 border-t border-white/10 p-4 md:grid-cols-2">
-                        <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.homeTeam.id} teamName={fixture.homeTeam.name} />
-                        <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.awayTeam.id} teamName={fixture.awayTeam.name} />
+                      <div className="border-t border-white/10 p-4">
+                        {locked ? (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm">
+                              <div className="font-semibold text-white">{fixture.homeTeam.name}</div>
+                              <div className="mt-2 text-emerald-200">Recorded cash: {formatMoney(homeCollected)}</div>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm">
+                              <div className="font-semibold text-white">{fixture.awayTeam.name}</div>
+                              <div className="mt-2 text-emerald-200">Recorded cash: {formatMoney(awayCollected)}</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.homeTeam.id} teamName={fixture.homeTeam.name} />
+                            <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.awayTeam.id} teamName={fixture.awayTeam.name} />
+                          </div>
+                        )}
                       </div>
                     </details>
 
                     <details open={fixtureDisciplinaryNotes.length > 0 || undefined} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
                         <span>3. Notes / discipline</span>
-                        <span className="text-xs font-normal text-white/45">{fixtureDisciplinaryNotes.length} recorded</span>
+                        <span className="text-xs font-normal text-white/45">{fixtureDisciplinaryNotes.length} recorded{locked ? " · locked" : ""}</span>
                       </summary>
                       <div className="grid gap-4 border-t border-white/10 p-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                        <DisciplinaryNoteForm
-                          refereeNightId={night.id}
-                          fixtureId={fixture.id}
-                          teams={[
-                            { id: fixture.homeTeam.id, name: fixture.homeTeam.name },
-                            { id: fixture.awayTeam.id, name: fixture.awayTeam.name },
-                          ]}
-                        />
+                        {locked ? (
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
+                            Notes are locked because the night has been submitted.
+                          </div>
+                        ) : (
+                          <DisciplinaryNoteForm
+                            refereeNightId={night.id}
+                            fixtureId={fixture.id}
+                            teams={[
+                              { id: fixture.homeTeam.id, name: fixture.homeTeam.name },
+                              { id: fixture.awayTeam.id, name: fixture.awayTeam.name },
+                            ]}
+                          />
+                        )}
 
                         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-white/45">Recorded notes</h3>
@@ -392,34 +451,51 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
           </section>
         )}
 
-        <section id="submit-cashup" className="scroll-mt-24 overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-500/10">
-          <div className="border-b border-emerald-400/15 px-5 py-5 sm:px-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">End of night</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Submit cashup</h2>
-            <p className="mt-2 text-sm leading-6 text-emerald-50/70">
-              Submit once scores and money collected are recorded. Admin will approve and settle the balance.
+        <section id="submit-cashup" className={`scroll-mt-24 overflow-hidden rounded-3xl border ${locked ? "border-amber-400/20 bg-amber-400/10" : "border-emerald-400/20 bg-emerald-500/10"}`}>
+          <div className={`border-b px-5 py-5 sm:px-6 ${locked ? "border-amber-400/15" : "border-emerald-400/15"}`}>
+            <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${locked ? "text-amber-100/70" : "text-emerald-300/80"}`}>End of night</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">{locked ? "Cashup submitted" : "Submit cashup"}</h2>
+            <p className={`mt-2 text-sm leading-6 ${locked ? "text-amber-50/70" : "text-emerald-50/70"}`}>
+              {locked ? "This night has been submitted and locked. Admin will approve and settle the balance." : "Submit once scores and money collected are recorded. Admin will approve and settle the balance."}
             </p>
           </div>
-          <form action={submitRefereeNightCashupAction} className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
-            <input type="hidden" name="refereeNightId" value={night.id} />
-            <textarea name="refereeNotes" rows={4} defaultValue={night.refereeNotes ?? ""} placeholder="Any notes about cash, teams, incidents or fixture issues" className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white outline-none placeholder:text-white/35 sm:text-sm" />
-            {!allFixturesHaveResults ? (
-              <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-                Some fixtures do not have scores yet. You can still submit if needed, but it is better to complete the scores first.
+
+          {locked ? (
+            <div className="space-y-4 px-5 py-5 text-sm text-amber-50/75 sm:px-6 sm:py-6">
+              <div className="rounded-2xl border border-amber-400/20 bg-black/20 px-4 py-3">
+                Status: <span className="font-semibold text-white">{formatStatus(night.status)}</span>
               </div>
-            ) : null}
-            <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:w-auto">
-              Submit night cashup
-            </button>
-          </form>
+              {night.refereeNotes ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">Submitted note</div>
+                  <p className="mt-2 whitespace-pre-line text-white/70">{night.refereeNotes}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <form action={submitRefereeNightCashupAction} data-referee-cashup-submit="1" className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+              <input type="hidden" name="refereeNightId" value={night.id} />
+              <textarea name="refereeNotes" rows={4} defaultValue={night.refereeNotes ?? ""} placeholder="Any notes about cash, teams, incidents or fixture issues" className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white outline-none placeholder:text-white/35 sm:text-sm" />
+              {!allFixturesHaveResults ? (
+                <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                  Some fixtures do not have scores yet. You can still submit if needed, but it is better to complete the scores first.
+                </div>
+              ) : null}
+              <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:w-auto">
+                Submit night cashup
+              </button>
+            </form>
+          )}
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/85 p-3 backdrop-blur sm:hidden">
-        <a href="#submit-cashup" className="flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-4 text-sm font-semibold text-black shadow-[0_10px_30px_rgba(16,185,129,0.25)]">
-          Finish night / submit cashup
-        </a>
-      </div>
+      {!locked ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/85 p-3 backdrop-blur sm:hidden">
+          <a href="#submit-cashup" className="flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-4 text-sm font-semibold text-black shadow-[0_10px_30px_rgba(16,185,129,0.25)]">
+            Finish night / submit cashup
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }
