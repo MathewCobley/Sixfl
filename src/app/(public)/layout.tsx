@@ -8,6 +8,7 @@ import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinCh
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
 import RegisterInterestClarityBridge from "@/components/layout/RegisterInterestClarityBridge";
 import RefereeDashboardCopyBridge from "@/components/referee/RefereeDashboardCopyBridge";
+import RefereeNightFixtureDateBridge from "@/components/referee/RefereeNightFixtureDateBridge";
 import RefereeNightPickerBridge from "@/components/referee/RefereeNightPickerBridge";
 import RefereeOnsiteColleaguesBridge from "@/components/referee/RefereeOnsiteColleaguesBridge";
 import SiteFooter from "@/components/layout/SiteFooter";
@@ -24,6 +25,7 @@ export default function PublicLayout({
       <PublicFixtureWinChanceBridge />
       <RefereeDashboardCopyBridge />
       <RefereeNightPickerBridge />
+      <RefereeNightFixtureDateBridge />
       <RefereeOnsiteColleaguesBridge />
       <Suspense fallback={null}>
         <RegisterInterestClarityBridge />
