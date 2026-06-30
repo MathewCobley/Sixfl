@@ -144,6 +144,25 @@ function normaliseRawNight(row: Record<string, unknown>): RefereeNightSummary {
   };
 }
 
+const visibleFixtureUnionSql = Prisma.sql`
+  SELECT rnf."fixtureId" AS "fixtureId"
+  FROM "RefereeNightFixture" rnf
+  JOIN "Fixture" f ON f.id = rnf."fixtureId"
+  WHERE rnf."refereeNightId" = rn.id
+    AND f.status <> 'CANCELLED'
+    AND (f."refereeId" IS NULL OR f."refereeId" = rn."refereeId")
+
+  UNION
+
+  SELECT f.id AS "fixtureId"
+  FROM "Fixture" f
+  WHERE f."refereeId" = rn."refereeId"
+    AND f."leagueId" = rn."leagueId"
+    AND f.status <> 'CANCELLED'
+    AND (rn."venueId" IS NULL OR f."venueId" = rn."venueId")
+    AND (f."kickoffAt" AT TIME ZONE 'Europe/London')::date = rn."nightDate"
+`;
+
 export async function getRefereeNightById(id: string) {
   const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
     SELECT
@@ -153,13 +172,14 @@ export async function getRefereeNightById(id: string) {
       l.name AS "leagueName",
       l.season AS "leagueSeason",
       v.name AS "venueName",
-      COUNT(f.id)::int AS "fixtureCount"
+      COUNT(rf."fixtureId")::int AS "fixtureCount"
     FROM "RefereeNight" rn
     JOIN "User" u ON u.id = rn."refereeId"
     JOIN "League" l ON l.id = rn."leagueId"
     LEFT JOIN "Venue" v ON v.id = rn."venueId"
-    LEFT JOIN "RefereeNightFixture" rnf ON rnf."refereeNightId" = rn.id
-    LEFT JOIN "Fixture" f ON f.id = rnf."fixtureId" AND f.status <> 'CANCELLED'
+    LEFT JOIN LATERAL (
+      ${visibleFixtureUnionSql}
+    ) rf ON TRUE
     WHERE rn.id = ${id}
     GROUP BY rn.id, u.id, l.id, v.id
     LIMIT 1
@@ -181,13 +201,14 @@ export async function getRefereeNightSummaries(input?: { refereeId?: string }) {
       l.name AS "leagueName",
       l.season AS "leagueSeason",
       v.name AS "venueName",
-      COUNT(f.id)::int AS "fixtureCount"
+      COUNT(rf."fixtureId")::int AS "fixtureCount"
     FROM "RefereeNight" rn
     JOIN "User" u ON u.id = rn."refereeId"
     JOIN "League" l ON l.id = rn."leagueId"
     LEFT JOIN "Venue" v ON v.id = rn."venueId"
-    LEFT JOIN "RefereeNightFixture" rnf ON rnf."refereeNightId" = rn.id
-    LEFT JOIN "Fixture" f ON f.id = rnf."fixtureId" AND f.status <> 'CANCELLED'
+    LEFT JOIN LATERAL (
+      ${visibleFixtureUnionSql}
+    ) rf ON TRUE
     ${refereeFilter}
     GROUP BY rn.id, u.id, l.id, v.id
     ORDER BY rn."nightDate" DESC, l.name ASC, v.name ASC
@@ -198,10 +219,12 @@ export async function getRefereeNightSummaries(input?: { refereeId?: string }) {
 
 export async function getRefereeNightFixtureIds(refereeNightId: string) {
   const rows = await prisma.$queryRaw<Array<{ fixtureId: string }>>(Prisma.sql`
-    SELECT "fixtureId"
-    FROM "RefereeNightFixture"
-    WHERE "refereeNightId" = ${refereeNightId}
-    ORDER BY "createdAt" ASC
+    SELECT DISTINCT rf."fixtureId"
+    FROM "RefereeNight" rn
+    JOIN LATERAL (
+      ${visibleFixtureUnionSql}
+    ) rf ON TRUE
+    WHERE rn.id = ${refereeNightId}
   `);
 
   return rows.map((row) => row.fixtureId);
