@@ -40,13 +40,11 @@ type WinChancePayload = {
   fixtures?: FixtureWinChanceItem[];
 };
 
+const PREDICTION_SECTION_SELECTOR = "[data-public-fixture-win-chance-section='1']";
+
 function getLeagueSlugFromPathname(pathname: string) {
   const match = pathname.match(/^\/leagues\/([^/]+)\/?$/);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
-}
-
-function normaliseText(value: string) {
-  return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function getBarClass(type: "home" | "draw" | "away") {
@@ -60,114 +58,17 @@ function getBarClass(type: "home" | "draw" | "away") {
   }
 }
 
-function hasFixtureText(
-  element: HTMLElement,
-  fixture: FixtureWinChanceItem,
-) {
-  const text = normaliseText(element.textContent ?? "");
-  return (
-    text.includes(normaliseText(fixture.homeTeamName)) &&
-    text.includes(normaliseText(fixture.awayTeamName))
-  );
-}
+function formatKickoff(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
 
-function countVsLabels(element: HTMLElement) {
-  const text = normaliseText(element.textContent ?? "");
-  return text.match(/\bvs\b/g)?.length ?? 0;
-}
-
-function getElementClassName(element: HTMLElement) {
-  return element.getAttribute("class") ?? "";
-}
-
-function isLikelyFixtureCard(element: HTMLElement) {
-  const className = getElementClassName(element);
-
-  return (
-    className.includes("rounded-") &&
-    className.includes("border") &&
-    !className.includes("grid-cols")
-  );
-}
-
-function isCaptainFixtureRow(element: HTMLElement) {
-  const className = getElementClassName(element);
-
-  return (
-    className.includes("sm:flex-row") &&
-    className.includes("sm:justify-between") &&
-    className.includes("px-6") &&
-    className.includes("py-5") &&
-    countVsLabels(element) === 1
-  );
-}
-
-function getFixtureCardScore(element: HTMLElement) {
-  const text = normaliseText(element.textContent ?? "");
-  const className = getElementClassName(element);
-  const width = element.getBoundingClientRect().width;
-  const vsCount = countVsLabels(element);
-
-  let score = 0;
-
-  if (isCaptainFixtureRow(element)) score += 120;
-  if (isLikelyFixtureCard(element)) score += 60;
-  if (vsCount === 1) score += 45;
-  if (width >= 560) score += 35;
-  if (width >= 420) score += 20;
-  if (className.includes("p-4") || className.includes("p-5")) score += 10;
-  if (text.length < 420) score += 25;
-  if (text.length > 900) score -= 80;
-  if (text.includes("upcoming fixtures")) score -= 60;
-  if (text.includes("recent results")) score -= 60;
-  if (text.includes("results")) score -= 35;
-
-  return score;
-}
-
-function findFixtureCard(fixture: FixtureWinChanceItem) {
-  const matchingElements = Array.from(
-    document.querySelectorAll<HTMLElement>("article, div"),
-  ).filter((element) => {
-    if (!hasFixtureText(element, fixture)) return false;
-    if (normaliseText(element.textContent ?? "").includes("sixfl ai predictor")) return false;
-    if (element.querySelector(`[data-public-fixture-win-chance="${fixture.id}"]`)) {
-      return false;
-    }
-
-    return true;
-  });
-
-  const candidates = new Set<HTMLElement>();
-
-  for (const element of matchingElements) {
-    let current: HTMLElement | null = element;
-    let depth = 0;
-
-    while (current && depth < 8) {
-      if (!hasFixtureText(current, fixture)) break;
-
-      if (isCaptainFixtureRow(current) || isLikelyFixtureCard(current) || countVsLabels(current) === 1) {
-        candidates.add(current);
-      }
-
-      current = current.parentElement;
-      depth += 1;
-    }
-  }
-
-  return (
-    Array.from(candidates)
-      .sort((a, b) => {
-        const scoreDifference = getFixtureCardScore(b) - getFixtureCardScore(a);
-        if (scoreDifference !== 0) return scoreDifference;
-
-        const widthDifference = b.getBoundingClientRect().width - a.getBoundingClientRect().width;
-        if (widthDifference !== 0) return widthDifference;
-
-        return (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0);
-      })[0] ?? null
-  );
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function createChanceCard(input: {
@@ -227,9 +128,7 @@ function createPredictedResultCard(fixture: FixtureWinChanceItem) {
 }
 
 function createAiPreviewBlock(aiPreview?: FixtureAiPreview) {
-  if (!aiPreview?.headline?.trim() && !aiPreview?.summary?.trim()) {
-    return null;
-  }
+  if (!aiPreview?.headline?.trim() && !aiPreview?.summary?.trim()) return null;
 
   const block = document.createElement("div");
   block.className = "mt-4 rounded-2xl border border-white/10 bg-black/20 p-4";
@@ -252,10 +151,23 @@ function createAiPreviewBlock(aiPreview?: FixtureAiPreview) {
 }
 
 function createWinChanceBlock(fixture: FixtureWinChanceItem) {
-  const block = document.createElement("div");
+  const block = document.createElement("article");
   block.dataset.publicFixtureWinChance = fixture.id;
   block.className =
-    "mt-5 w-full rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)] sm:p-5";
+    "rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.07] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.22)] sm:p-5";
+
+  const matchup = document.createElement("div");
+  matchup.className = "mb-4 flex flex-wrap items-center gap-2 text-sm font-semibold text-white";
+  matchup.textContent = `${fixture.homeTeamName} v ${fixture.awayTeamName}`;
+
+  const kickoff = formatKickoff(fixture.kickoffAt);
+  if (kickoff) {
+    const kickoffPill = document.createElement("span");
+    kickoffPill.className =
+      "rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/55";
+    kickoffPill.textContent = kickoff;
+    matchup.appendChild(kickoffPill);
+  }
 
   const header = document.createElement("div");
   header.className = "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between";
@@ -307,57 +219,69 @@ function createWinChanceBlock(fixture: FixtureWinChanceItem) {
   explanation.className = "mt-3 text-xs leading-5 text-white/45";
   explanation.textContent = fixture.winChance.explanation;
 
+  block.appendChild(matchup);
   block.appendChild(header);
-  if (aiPreview) {
-    block.appendChild(aiPreview);
-  }
+  if (aiPreview) block.appendChild(aiPreview);
   block.appendChild(grid);
   block.appendChild(explanation);
 
   return block;
 }
 
-function wrapExistingFixtureRowContent(card: HTMLElement) {
-  if (card.dataset.publicFixtureLayoutFixed === "1") return;
-  card.dataset.publicFixtureLayoutFixed = "1";
+function findUpcomingFixturesSection() {
+  const heading = Array.from(document.querySelectorAll<HTMLHeadingElement>("h2")).find((item) => {
+    const text = item.textContent?.toLowerCase() ?? "";
+    return text.includes("upcoming") && text.includes("fixture");
+  });
 
-  const existingChildren = Array.from(card.children);
-  if (existingChildren.length === 0) return;
-
-  const topRow = document.createElement("div");
-  topRow.className = "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between";
-
-  for (const child of existingChildren) {
-    topRow.appendChild(child);
-  }
-
-  card.appendChild(topRow);
-  card.style.display = "block";
-  card.style.width = "100%";
+  return heading?.closest(".rounded-3xl") as HTMLElement | null;
 }
 
-function prepareFixtureCardForPrediction(card: HTMLElement) {
-  if (isCaptainFixtureRow(card)) {
-    wrapExistingFixtureRowContent(card);
-    return;
-  }
+function createPredictionSection(fixtures: FixtureWinChanceItem[]) {
+  const section = document.createElement("section");
+  section.dataset.publicFixtureWinChanceSection = "1";
+  section.className =
+    "rounded-3xl border border-emerald-400/15 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-8";
 
-  card.style.width = "100%";
-  card.style.display = "block";
+  const header = document.createElement("div");
+  header.className = "flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between";
+  header.innerHTML = `
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">SIXFL AI Predictor</p>
+      <h2 class="mt-3 text-2xl font-bold sm:text-3xl">Match predictions</h2>
+      <p class="mt-3 max-w-2xl text-sm leading-6 text-white/60">All AI match previews are grouped here so the fixture list and results stay separate.</p>
+    </div>
+    <div class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/55">${fixtures.length} prediction${fixtures.length === 1 ? "" : "s"}</div>
+  `;
+
+  const list = document.createElement("div");
+  list.className = "mt-8 space-y-4";
+  fixtures.forEach((fixture) => list.appendChild(createWinChanceBlock(fixture)));
+
+  section.appendChild(header);
+  section.appendChild(list);
+
+  return section;
+}
+
+function removeOldPredictionBlocks() {
+  document
+    .querySelectorAll<HTMLElement>("[data-public-fixture-win-chance]")
+    .forEach((node) => node.remove());
+  document
+    .querySelectorAll<HTMLElement>(PREDICTION_SECTION_SELECTOR)
+    .forEach((node) => node.remove());
 }
 
 function injectWinChances(fixtures: FixtureWinChanceItem[]) {
-  for (const fixture of fixtures) {
-    if (document.querySelector(`[data-public-fixture-win-chance="${fixture.id}"]`)) {
-      continue;
-    }
+  if (fixtures.length === 0) return;
+  if (document.querySelector(PREDICTION_SECTION_SELECTOR)) return;
 
-    const card = findFixtureCard(fixture);
-    if (!card) continue;
+  const fixturesSection = findUpcomingFixturesSection();
+  if (!fixturesSection?.parentElement) return;
 
-    prepareFixtureCardForPrediction(card);
-    card.appendChild(createWinChanceBlock(fixture));
-  }
+  removeOldPredictionBlocks();
+  fixturesSection.insertAdjacentElement("beforebegin", createPredictionSection(fixtures));
 }
 
 async function loadWinChances(slug: string) {
@@ -381,6 +305,8 @@ export default function PublicFixtureWinChanceBridge() {
     let cancelled = false;
     let fixtures: FixtureWinChanceItem[] = [];
 
+    removeOldPredictionBlocks();
+
     void loadWinChances(slug).then((loadedFixtures) => {
       if (cancelled) return;
       fixtures = loadedFixtures;
@@ -388,9 +314,7 @@ export default function PublicFixtureWinChanceBridge() {
     });
 
     const observer = new MutationObserver(() => {
-      if (fixtures.length > 0) {
-        injectWinChances(fixtures);
-      }
+      if (fixtures.length > 0) injectWinChances(fixtures);
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
