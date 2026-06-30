@@ -16,6 +16,13 @@ import { sendEmail } from "@/lib/email";
 import { resolveProspectiveLeagueId } from "@/lib/leads/prospectiveLeague";
 import { queueLeadWelcomeNotifications } from "@/lib/notifications/transactional";
 
+const CLOSED_PLAYER_PROSPECT_STATUSES = [
+  "DECLINED",
+  "DUPLICATE",
+  "NOT_INTERESTED",
+  "REMOVED",
+];
+
 function isInterestType(value: string): value is InterestType {
   return value === "TEAM" || value === "PLAYER" || value === "REFEREE";
 }
@@ -81,6 +88,82 @@ function formatYesNo(value: boolean) {
   return value ? "Yes" : "No";
 }
 
+function buildRegisterInterestPath(input: {
+  type: InterestType;
+  error?: string;
+  area?: string;
+  night?: string | null;
+}) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("type", input.type.toLowerCase());
+
+  if (input.error) searchParams.set("error", input.error);
+  if (input.area?.trim()) searchParams.set("area", input.area.trim());
+  if (input.night?.trim() && input.night !== "ANY") {
+    searchParams.set("night", formatPreferredNight(input.night as PreferredNight));
+  }
+
+  return `/register-interest?${searchParams.toString()}`;
+}
+
+function buildAlreadyRegisteredPath(input: {
+  area?: string;
+  night?: string | null;
+}) {
+  const searchParams = new URLSearchParams();
+
+  if (input.area?.trim()) searchParams.set("area", input.area.trim());
+  if (input.night?.trim() && input.night !== "ANY") {
+    searchParams.set("night", formatPreferredNight(input.night as PreferredNight));
+  }
+
+  const query = searchParams.toString();
+  return query
+    ? `/register-interest/already-registered?${query}`
+    : "/register-interest/already-registered";
+}
+
+async function isEmailAlreadyLinkedToPlayerRecord(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) return false;
+
+  const [linkedTeamMember, linkedProspect] = await Promise.all([
+    prisma.teamMember.findFirst({
+      where: {
+        user: {
+          email: {
+            equals: normalizedEmail,
+            mode: "insensitive",
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    }),
+    prisma.teamPlayerProspect.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: "insensitive",
+        },
+        teamId: {
+          not: null,
+        },
+        status: {
+          notIn: CLOSED_PLAYER_PROSPECT_STATUSES,
+        },
+      },
+      select: {
+        id: true,
+      },
+    }),
+  ]);
+
+  return Boolean(linkedTeamMember || linkedProspect);
+}
+
 export async function submitRegisterInterest(formData: FormData) {
   const interestTypeRaw = String(formData.get("interestType") ?? "")
     .trim()
@@ -122,16 +205,39 @@ export async function submitRegisterInterest(formData: FormData) {
 
   const requiresLeagueType =
     interestType === "TEAM" || interestType === "PLAYER";
+  const primaryNight = normalizedPreferredNights[0] ?? null;
 
   if (!contactName || !email || !area) {
     redirect(
-      `/register-interest?type=${interestType.toLowerCase()}&error=missing`
+      buildRegisterInterestPath({
+        type: interestType,
+        error: "missing",
+        area,
+        night: primaryNight,
+      })
     );
   }
 
   if (requiresLeagueType && !isLeagueType(leagueTypeRaw)) {
     redirect(
-      `/register-interest?type=${interestType.toLowerCase()}&error=missing`
+      buildRegisterInterestPath({
+        type: interestType,
+        error: "missing",
+        area,
+        night: primaryNight,
+      })
+    );
+  }
+
+  if (
+    interestType === "PLAYER" &&
+    (await isEmailAlreadyLinkedToPlayerRecord(email))
+  ) {
+    redirect(
+      buildAlreadyRegisteredPath({
+        area,
+        night: primaryNight,
+      })
     );
   }
 
