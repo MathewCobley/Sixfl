@@ -192,9 +192,10 @@ export default function RefereeNightCashDistributionBridge() {
   const router = useRouter();
 
   useEffect(() => {
-    const refereeNightId = getRefereeNightIdFromPath(pathname);
-    if (!refereeNightId) return;
+    const refereeNightIdFromPath = getRefereeNightIdFromPath(pathname);
+    if (!refereeNightIdFromPath) return;
 
+    const refereeNightId = refereeNightIdFromPath;
     let cancelled = false;
 
     async function load() {
