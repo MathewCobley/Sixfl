@@ -22,11 +22,11 @@ export async function POST() {
     SELECT DISTINCT f.id
     FROM "Fixture" f
     LEFT JOIN "RefereeNightFixture" rnf ON rnf."fixtureId" = f.id
-    WHERE f."publishedAt" IS NOT NULL
-      AND (
-        f."refereeId" IS NOT NULL
-        OR rnf."fixtureId" IS NOT NULL
+    WHERE (
+        f."publishedAt" IS NOT NULL
+        AND f."refereeId" IS NOT NULL
       )
+      OR rnf."fixtureId" IS NOT NULL
   `);
 
   const fixtureIds = rows.map((row) => row.id);
