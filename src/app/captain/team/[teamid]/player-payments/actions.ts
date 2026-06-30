@@ -14,6 +14,7 @@ import {
 } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -82,7 +83,10 @@ function getCollectionMethod(input: {
   type: string;
   id: string;
   amountPence: number;
+  forceWaived?: boolean;
 }): CaptainCollectionMethod {
+  if (input.forceWaived) return "waived";
+
   const rawValue = getString(input.formData, `collection_${input.type}_${input.id}`);
 
   if (rawValue === "captain_paid") return "captain_paid";
@@ -106,7 +110,12 @@ function isLockedPlayerFee(status: PlayerMatchFeeStatus) {
 function getCollectionNote(input: {
   amountPence: number;
   method: CaptainCollectionMethod;
+  zeroFeePlayer?: boolean;
 }) {
+  if (input.zeroFeePlayer) {
+    return `Zero-fee player share waived by SIXFL: ${formatMoney(input.amountPence)}. Player fee override is £0.00, so this share reduces the team balance but is not counted as money collected.`;
+  }
+
   if (input.method === "captain_paid") {
     return `Paid captain directly: captain collected ${formatMoney(input.amountPence)} outside SIXFL link and remains responsible for settling with SIXFL.`;
   }
@@ -185,6 +194,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
   const selectedProspectIds = players
     .filter((player) => player.type === "prospect")
     .map((player) => player.id);
+  const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(selectedMemberIds);
   const createdOrUpdatedFeeIds: string[] = [];
 
   for (const player of players) {
@@ -199,16 +209,28 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
       redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=invalid_player_amount"));
     }
 
+    const zeroFeePlayer =
+      player.type === "member" &&
+      profileByMemberId.get(player.id)?.playerMatchFeePenceOverride === 0;
     const method = getCollectionMethod({
       formData,
       type: player.type,
       id: player.id,
       amountPence: enteredAmountPence,
+      forceWaived: zeroFeePlayer,
     });
-    const playerAmountPence = method === "waived" ? 0 : enteredAmountPence;
+    const playerAmountPence = zeroFeePlayer
+      ? enteredAmountPence
+      : method === "waived"
+        ? 0
+        : enteredAmountPence;
     const nextStatus = getNextStatus(method);
     const now = new Date();
-    const note = getCollectionNote({ amountPence: playerAmountPence, method });
+    const note = getCollectionNote({
+      amountPence: playerAmountPence,
+      method,
+      zeroFeePlayer,
+    });
     const clearPaymentLink = nextStatus !== "OPEN";
 
     if (method === "link" && playerAmountPence <= 0) {
