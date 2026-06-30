@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { NotificationRecipientSourceType, UserRole } from "@prisma/client";
 
 import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
+import LinkedRoleLinks from "@/components/admin/people/LinkedRoleLinks";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -239,6 +240,8 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
 
       {notice ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{notice}</div> : null}
       {error ? <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">{error}</div> : null}
+
+      <LinkedRoleLinks userId={referee.id} current="referee" />
 
       {messageThreads.length === 0 ? (
         <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 sm:p-6">
