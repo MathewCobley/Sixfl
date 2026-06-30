@@ -51,6 +51,9 @@ export async function POST(req: Request) {
       exists: false,
       pendingCaptain: false,
       pendingSquadActivation: false,
+      hasTeamAccess: false,
+      hasPlayerOrCaptainAccess: false,
+      canChooseLoginArea: false,
       canLogin: false,
       claimCode: null,
       teamName: null,
@@ -62,17 +65,32 @@ export async function POST(req: Request) {
   const [user, pendingCaptain, captainLoginContext, pendingSquadActivation] = await Promise.all([
     prisma.user.findUnique({
       where: { email: normalizedEmail },
-      select: { id: true, role: true },
+      select: {
+        id: true,
+        role: true,
+        _count: {
+          select: {
+            teamMembers: true,
+          },
+        },
+      },
     }),
     getPendingCaptainContext(normalizedEmail),
     getCaptainLoginContext(normalizedEmail),
     getPendingSquadActivationContext(normalizedEmail),
   ]);
 
+  const hasTeamAccess = (user?._count.teamMembers ?? 0) > 0;
+  const hasPlayerOrCaptainAccess = hasTeamAccess || Boolean(captainLoginContext || pendingCaptain || pendingSquadActivation);
+  const isReferee = user?.role === "REFEREE";
+
   return NextResponse.json({
     exists: !!user,
     pendingCaptain: !!pendingCaptain,
     pendingSquadActivation: !!pendingSquadActivation,
+    hasTeamAccess,
+    hasPlayerOrCaptainAccess,
+    canChooseLoginArea: isReferee && hasPlayerOrCaptainAccess,
     canLogin: !!user || !!pendingCaptain || !!captainLoginContext || !!pendingSquadActivation,
     claimCode: pendingCaptain?.claimCode ?? null,
     teamName:
@@ -81,6 +99,6 @@ export async function POST(req: Request) {
       pendingSquadActivation?.teamName ??
       null,
     userRole: user?.role ?? null,
-    isReferee: user?.role === "REFEREE",
+    isReferee,
   });
 }
