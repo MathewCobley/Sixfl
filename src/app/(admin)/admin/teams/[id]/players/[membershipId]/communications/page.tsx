@@ -11,6 +11,7 @@ import CommunicationStatusBadge, {
   CommunicationStatusExplanation,
 } from "@/components/admin/communications/CommunicationStatusBadge";
 import TeamCommunicationsComposer from "@/components/admin/communications/TeamCommunicationsComposer";
+import LinkedRoleLinks from "@/components/admin/people/LinkedRoleLinks";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -533,6 +534,8 @@ export default async function AdminPlayerCommunicationsPage({
       {errorMessage ? (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</div>
       ) : null}
+
+      <LinkedRoleLinks userId={member.user.id} current="player" />
 
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-8">
