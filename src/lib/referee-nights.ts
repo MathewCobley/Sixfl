@@ -153,12 +153,13 @@ export async function getRefereeNightById(id: string) {
       l.name AS "leagueName",
       l.season AS "leagueSeason",
       v.name AS "venueName",
-      COUNT(rnf.id)::int AS "fixtureCount"
+      COUNT(f.id)::int AS "fixtureCount"
     FROM "RefereeNight" rn
     JOIN "User" u ON u.id = rn."refereeId"
     JOIN "League" l ON l.id = rn."leagueId"
     LEFT JOIN "Venue" v ON v.id = rn."venueId"
     LEFT JOIN "RefereeNightFixture" rnf ON rnf."refereeNightId" = rn.id
+    LEFT JOIN "Fixture" f ON f.id = rnf."fixtureId" AND f.status <> 'CANCELLED'
     WHERE rn.id = ${id}
     GROUP BY rn.id, u.id, l.id, v.id
     LIMIT 1
@@ -180,12 +181,13 @@ export async function getRefereeNightSummaries(input?: { refereeId?: string }) {
       l.name AS "leagueName",
       l.season AS "leagueSeason",
       v.name AS "venueName",
-      COUNT(rnf.id)::int AS "fixtureCount"
+      COUNT(f.id)::int AS "fixtureCount"
     FROM "RefereeNight" rn
     JOIN "User" u ON u.id = rn."refereeId"
     JOIN "League" l ON l.id = rn."leagueId"
     LEFT JOIN "Venue" v ON v.id = rn."venueId"
     LEFT JOIN "RefereeNightFixture" rnf ON rnf."refereeNightId" = rn.id
+    LEFT JOIN "Fixture" f ON f.id = rnf."fixtureId" AND f.status <> 'CANCELLED'
     ${refereeFilter}
     GROUP BY rn.id, u.id, l.id, v.id
     ORDER BY rn."nightDate" DESC, l.name ASC, v.name ASC
@@ -212,6 +214,9 @@ async function getFixturesByIds(fixtureIds: string[]) {
     where: {
       id: {
         in: fixtureIds,
+      },
+      status: {
+        not: "CANCELLED",
       },
     },
     orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
@@ -361,6 +366,9 @@ export async function findFixturesForNight(input: {
     where: {
       leagueId: input.leagueId,
       ...(input.venueId ? { venueId: input.venueId } : {}),
+      status: {
+        not: "CANCELLED",
+      },
     },
     orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
     select: {
