@@ -291,6 +291,18 @@ function injectPlayerVoidButtons(input: { onVoided: () => void }) {
   }
 }
 
+async function autoVoidCancelledFixtureCharges() {
+  const response = await fetch("/api/admin/payments/void-cancelled-fixture-charges", {
+    method: "POST",
+    cache: "no-store",
+  });
+
+  if (!response.ok) return 0;
+
+  const payload = (await response.json().catch(() => null)) as { voided?: number } | null;
+  return payload?.voided ?? 0;
+}
+
 export default function AdminVoidPaymentChargesBridge() {
   const pathname = usePathname();
   const router = useRouter();
@@ -311,6 +323,17 @@ export default function AdminVoidPaymentChargesBridge() {
         injectPlayerVoidButtons({ onVoided: refreshPage });
       }, 350);
     };
+
+    async function cleanCancelledCharges() {
+      try {
+        const voided = await autoVoidCancelledFixtureCharges();
+        if (!cancelled && voided > 0) {
+          refreshPage();
+        }
+      } catch {
+        // Do not block the payments page if this cleanup cannot run.
+      }
+    }
 
     async function loadTeamCharges() {
       try {
@@ -335,10 +358,12 @@ export default function AdminVoidPaymentChargesBridge() {
       injectPlayerVoidButtons({ onVoided: refreshPage });
     }
 
+    void cleanCancelledCharges();
     loadTeamCharges();
     injectAllButtons();
 
     const timer = window.setTimeout(() => {
+      void cleanCancelledCharges();
       loadTeamCharges();
       injectAllButtons();
     }, 600);
