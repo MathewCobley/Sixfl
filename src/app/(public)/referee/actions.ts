@@ -5,7 +5,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { FixtureStatus, Prisma, UserRole } from "@prisma/client";
+import { FixtureStatus, PaymentChargeStatus, Prisma, UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -28,6 +28,21 @@ const DISCIPLINARY_SEVERITIES = ["NOTE", "WARNING", "SERIOUS", "URGENT"] as cons
 
 type DisciplinaryIncidentType = (typeof DISCIPLINARY_INCIDENT_TYPES)[number];
 type DisciplinarySeverity = (typeof DISCIPLINARY_SEVERITIES)[number];
+
+type OutstandingChargeForAllocation = {
+  id: string;
+  amountPence: number;
+  fixtureId: string | null;
+  dueDate: Date | null;
+  createdAt: Date;
+  transactions: Array<{ amountPence: number }>;
+};
+
+type CashAllocation = {
+  chargeId: string;
+  amountPence: number;
+  isCurrentFixtureCharge: boolean;
+};
 
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
   const str = String(value ?? "").trim();
@@ -73,6 +88,27 @@ function parseDisciplinarySeverity(value: FormDataEntryValue | null): Disciplina
     : "NOTE";
 }
 
+function getChargePaidTotal(transactions: Array<{ amountPence: number }>) {
+  return transactions.reduce((sum, transaction) => sum + transaction.amountPence, 0);
+}
+
+function getChargeOutstandingPence(charge: OutstandingChargeForAllocation) {
+  return Math.max(0, charge.amountPence - getChargePaidTotal(charge.transactions));
+}
+
+function buildCashAllocationNote(input: {
+  notes: string | null;
+  homeTeamName: string;
+  awayTeamName: string;
+  isCurrentFixtureCharge: boolean;
+}) {
+  const allocationNote = input.isCurrentFixtureCharge
+    ? null
+    : `Allocated to oldest outstanding team charge from cash collected at ${input.homeTeamName} vs ${input.awayTeamName}.`;
+
+  return [input.notes, allocationNote].filter(Boolean).join(" ") || null;
+}
+
 async function assertNightAccess(input: {
   refereeNightId: string;
   fixtureId?: string;
@@ -113,10 +149,10 @@ async function updateChargeStatus(chargeId: string) {
 
   const paidPence = total._sum.amountPence ?? 0;
   const status = paidPence >= charge.amountPence
-    ? "PAID"
+    ? PaymentChargeStatus.PAID
     : paidPence > 0
-      ? "PART_PAID"
-      : "OPEN";
+      ? PaymentChargeStatus.PART_PAID
+      : PaymentChargeStatus.OPEN;
 
   await prisma.paymentCharge.update({
     where: { id: chargeId },
@@ -258,7 +294,7 @@ export async function recordRefereeNightCashAction(formData: FormData) {
 
   const teamName = fixture.homeTeamId === teamId ? fixture.homeTeam.name : fixture.awayTeam.name;
 
-  const charge = await prisma.paymentCharge.upsert({
+  const currentCharge = await prisma.paymentCharge.upsert({
     where: {
       fixtureId_teamId: {
         fixtureId,
@@ -274,23 +310,79 @@ export async function recordRefereeNightCashAction(formData: FormData) {
       description: "Created from referee night cash collection.",
       amountPence,
       dueDate: fixture.kickoffAt,
-      status: "OPEN",
+      status: PaymentChargeStatus.OPEN,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  const openCharges = await prisma.paymentCharge.findMany({
+    where: {
+      teamId,
+      status: {
+        in: [PaymentChargeStatus.OPEN, PaymentChargeStatus.PART_PAID],
+      },
     },
     select: {
       id: true,
       amountPence: true,
+      fixtureId: true,
+      dueDate: true,
+      createdAt: true,
+      transactions: {
+        select: {
+          amountPence: true,
+        },
+      },
     },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
   });
 
-  await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "PaymentTransaction" (
-      "id", "teamId", "chargeId", "amountPence", "method", "reference", "notes", "paidAt", "collectedByUserId", "refereeNightId", "createdAt", "updatedAt"
-    ) VALUES (
-      ${randomUUID()}, ${teamId}, ${charge.id}, ${amountPence}, ${method}::"PaymentMethod", 'Referee night cash', ${notes}, NOW(), ${user.id}, ${refereeNightId}, NOW(), NOW()
-    )
-  `);
+  let remainingPence = amountPence;
+  const allocations: CashAllocation[] = [];
 
-  await updateChargeStatus(charge.id);
+  for (const charge of openCharges) {
+    const outstandingPence = getChargeOutstandingPence(charge);
+    if (outstandingPence <= 0) continue;
+
+    const allocationAmountPence = Math.min(remainingPence, outstandingPence);
+    if (allocationAmountPence <= 0) continue;
+
+    allocations.push({
+      chargeId: charge.id,
+      amountPence: allocationAmountPence,
+      isCurrentFixtureCharge: charge.id === currentCharge.id,
+    });
+
+    remainingPence -= allocationAmountPence;
+    if (remainingPence <= 0) break;
+  }
+
+  if (remainingPence > 0 || allocations.length === 0) {
+    throw new Error("The cash entered is higher than this team's open outstanding balance.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const allocation of allocations) {
+      const allocationNotes = buildCashAllocationNote({
+        notes,
+        homeTeamName: fixture.homeTeam.name,
+        awayTeamName: fixture.awayTeam.name,
+        isCurrentFixtureCharge: allocation.isCurrentFixtureCharge,
+      });
+
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "PaymentTransaction" (
+          "id", "teamId", "chargeId", "amountPence", "method", "reference", "notes", "paidAt", "collectedByUserId", "refereeNightId", "createdAt", "updatedAt"
+        ) VALUES (
+          ${randomUUID()}, ${teamId}, ${allocation.chargeId}, ${allocation.amountPence}, ${method}::"PaymentMethod", 'Referee night cash', ${allocationNotes}, NOW(), ${user.id}, ${refereeNightId}, NOW(), NOW()
+        )
+      `);
+    }
+  });
+
+  await Promise.all(Array.from(new Set(allocations.map((allocation) => allocation.chargeId))).map(updateChargeStatus));
   await recalculateRefereeNightCashup(refereeNightId);
 
   revalidatePath("/referee");
