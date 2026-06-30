@@ -116,17 +116,18 @@ function getFixtureMatchFeeReminderSchedules(kickoffAt: Date) {
 
 function getSkippedMessageCount(input: QueueFixtureMatchFeeEmailsInput) {
   const initialMessagesPerCharge = input.mode === "reminders_only" ? 0 : 2;
-  const reminderMessagesPerCharge = getFixtureMatchFeeReminderSchedules(input.kickoffAt).length * 2;
+  const reminderMessagesPerCharge =
+    getFixtureMatchFeeReminderSchedules(input.kickoffAt).length * 2;
   return input.charges.length * (initialMessagesPerCharge + reminderMessagesPerCharge);
 }
 
 async function isFixturePublishedForPaymentMessages(fixtureId: string) {
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },
-    select: { publishedAt: true },
+    select: { publishedAt: true, status: true },
   });
 
-  return Boolean(fixture?.publishedAt);
+  return Boolean(fixture?.publishedAt) && fixture?.status !== "CANCELLED";
 }
 
 export function buildChargePaymentPath(paymentToken: string) {
@@ -149,9 +150,7 @@ export async function cancelQueuedMatchFeeNotificationDispatches(
     reason?: string;
   },
 ) {
-  if (chargeIds.length === 0) {
-    return;
-  }
+  if (chargeIds.length === 0) return;
 
   const includeInitialRequest = options?.includeInitialRequest ?? true;
   const includeReminders = options?.includeReminders ?? true;
@@ -161,18 +160,12 @@ export async function cancelQueuedMatchFeeNotificationDispatches(
     ...(includeReminders ? ["FIXTURE_MATCH_FEE_REMINDER"] : []),
   ];
 
-  if (sourceTypes.length === 0) {
-    return;
-  }
+  if (sourceTypes.length === 0) return;
 
   await db.notificationDispatch.updateMany({
     where: {
-      sourceType: {
-        in: sourceTypes,
-      },
-      sourceId: {
-        in: chargeIds,
-      },
+      sourceType: { in: sourceTypes },
+      sourceId: { in: chargeIds },
       status: NotificationDispatchStatus.QUEUED,
     },
     data: {
@@ -185,6 +178,53 @@ export async function cancelQueuedMatchFeeNotificationDispatches(
   });
 }
 
+async function getFixturePaymentCharges(input: {
+  fixtureIds: string[];
+  db: PaymentChargeDbClient;
+}) {
+  return input.db.paymentCharge.findMany({
+    where: { fixtureId: { in: input.fixtureIds } },
+    include: {
+      transactions: { select: { amountPence: true } },
+      team: { select: { id: true, name: true } },
+    },
+  });
+}
+
+async function voidFixtureChargesOrThrow(input: {
+  fixtureIds: string[];
+  db: PaymentChargeDbClient;
+  paidErrorPrefix: string;
+  reason: string;
+}) {
+  if (input.fixtureIds.length === 0) return;
+
+  const charges = await getFixturePaymentCharges({
+    fixtureIds: input.fixtureIds,
+    db: input.db,
+  });
+
+  for (const charge of charges) {
+    const paidTotalPence = getChargePaidTotal(charge.transactions);
+
+    if (paidTotalPence > 0) {
+      throw new Error(`${input.paidErrorPrefix} ${charge.team.name} already has a recorded match fee payment.`);
+    }
+  }
+
+  const chargeIds = charges.map((charge) => charge.id);
+  if (chargeIds.length === 0) return;
+
+  await input.db.paymentCharge.updateMany({
+    where: { id: { in: chargeIds } },
+    data: { status: PaymentChargeStatus.VOID },
+  });
+
+  await cancelQueuedMatchFeeNotificationDispatches(chargeIds, input.db, {
+    reason: input.reason,
+  });
+}
+
 export async function syncFixtureMatchFeeCharges(
   input: SyncFixtureMatchFeeChargesInput,
 ) {
@@ -193,30 +233,19 @@ export async function syncFixtureMatchFeeCharges(
   const [fixture, existingCharges] = await Promise.all([
     db.fixture.findUnique({
       where: { id: input.fixtureId },
-      select: { publishedAt: true },
+      select: { publishedAt: true, status: true },
     }),
     db.paymentCharge.findMany({
-      where: {
-        fixtureId: input.fixtureId,
-      },
+      where: { fixtureId: input.fixtureId },
       include: {
-        transactions: {
-          select: {
-            amountPence: true,
-          },
-        },
-        team: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        transactions: { select: { amountPence: true } },
+        team: { select: { id: true, name: true } },
       },
       orderBy: [{ createdAt: "asc" }],
     }),
   ]);
 
-  if (!fixture?.publishedAt) {
+  if (!fixture?.publishedAt || fixture.status === "CANCELLED") {
     const voidedChargeIds: string[] = [];
 
     for (const charge of existingCharges) {
@@ -228,9 +257,7 @@ export async function syncFixtureMatchFeeCharges(
 
       await db.paymentCharge.update({
         where: { id: charge.id },
-        data: {
-          status: PaymentChargeStatus.VOID,
-        },
+        data: { status: PaymentChargeStatus.VOID },
       });
 
       voidedChargeIds.push(charge.id);
@@ -238,32 +265,20 @@ export async function syncFixtureMatchFeeCharges(
 
     await cancelQueuedMatchFeeNotificationDispatches(voidedChargeIds, db, {
       reason:
-        "Blocked because the fixture is not published. SIXFL does not create or send payment requests for unpublished fixtures.",
+        fixture?.status === "CANCELLED"
+          ? "Fixture was cancelled before queued match fee emails were sent."
+          : "Blocked because the fixture is not published. SIXFL does not create or send payment requests for unpublished fixtures.",
     });
 
-    return {
-      activeCharges: [],
-    };
+    return { activeCharges: [] };
   }
 
   const desiredTeams = [
     ...(input.homeMatchFeePence && input.homeMatchFeePence > 0
-      ? [
-          {
-            team: input.homeTeam,
-            opponent: input.awayTeam,
-            amountPence: input.homeMatchFeePence,
-          },
-        ]
+      ? [{ team: input.homeTeam, opponent: input.awayTeam, amountPence: input.homeMatchFeePence }]
       : []),
     ...(input.awayMatchFeePence && input.awayMatchFeePence > 0
-      ? [
-          {
-            team: input.awayTeam,
-            opponent: input.homeTeam,
-            amountPence: input.awayMatchFeePence,
-          },
-        ]
+      ? [{ team: input.awayTeam, opponent: input.homeTeam, amountPence: input.awayMatchFeePence }]
       : []),
   ];
 
@@ -271,9 +286,7 @@ export async function syncFixtureMatchFeeCharges(
   const voidedChargeIds: string[] = [];
 
   for (const charge of existingCharges) {
-    if (desiredTeamIds.has(charge.teamId)) {
-      continue;
-    }
+    if (desiredTeamIds.has(charge.teamId)) continue;
 
     const paidTotalPence = getChargePaidTotal(charge.transactions);
 
@@ -285,9 +298,7 @@ export async function syncFixtureMatchFeeCharges(
 
     await db.paymentCharge.update({
       where: { id: charge.id },
-      data: {
-        status: PaymentChargeStatus.VOID,
-      },
+      data: { status: PaymentChargeStatus.VOID },
     });
 
     voidedChargeIds.push(charge.id);
@@ -301,37 +312,14 @@ export async function syncFixtureMatchFeeCharges(
   }
 
   if (desiredTeams.length === 0) {
-    for (const charge of existingCharges) {
-      const paidTotalPence = getChargePaidTotal(charge.transactions);
+    await voidFixtureChargesOrThrow({
+      fixtureIds: [input.fixtureId],
+      db,
+      paidErrorPrefix: "Cannot remove the match fee because",
+      reason: "Match fee was removed before queued payment emails were sent.",
+    });
 
-      if (paidTotalPence > 0) {
-        throw new Error(
-          `Cannot remove the match fee because ${charge.team.name} already has a recorded payment.`,
-        );
-      }
-
-      await db.paymentCharge.update({
-        where: { id: charge.id },
-        data: {
-          status: PaymentChargeStatus.VOID,
-        },
-      });
-    }
-
-    if (existingCharges.length > 0) {
-      await cancelQueuedMatchFeeNotificationDispatches(
-        existingCharges.map((charge) => charge.id),
-        db,
-        {
-          reason:
-            "Match fee was removed before queued payment emails were sent.",
-        },
-      );
-    }
-
-    return {
-      activeCharges: [],
-    };
+    return { activeCharges: [] };
   }
 
   const activeCharges: Array<{
@@ -378,7 +366,7 @@ export async function syncFixtureMatchFeeCharges(
         id: createdCharge.id,
         teamId: entry.team.id,
         teamName: entry.team.name,
-        teamLogoUrl: entry.teamLogoUrl ?? null,
+        teamLogoUrl: entry.team.logoUrl ?? null,
         paymentToken: createdCharge.paymentToken,
         amountPence: createdCharge.amountPence,
       });
@@ -414,16 +402,14 @@ export async function syncFixtureMatchFeeCharges(
         id: updatedCharge.id,
         teamId: entry.team.id,
         teamName: entry.team.name,
-        teamLogoUrl: entry.teamLogoUrl ?? null,
+        teamLogoUrl: entry.team.logoUrl ?? null,
         paymentToken: updatedCharge.paymentToken,
         amountPence: updatedCharge.amountPence,
       });
     }
   }
 
-  return {
-    activeCharges,
-  };
+  return { activeCharges };
 }
 
 export async function queueFixtureMatchFeeEmails(
@@ -438,7 +424,7 @@ export async function queueFixtureMatchFeeEmails(
       prisma,
       {
         reason:
-          "Blocked because the fixture is not published. SIXFL does not send payment messages for unpublished fixtures.",
+          "Blocked because the fixture is not published or has been cancelled. SIXFL does not send payment messages for it.",
       },
     );
 
@@ -467,15 +453,11 @@ export async function queueFixtureMatchFeeEmails(
 
   for (const charge of input.charges) {
     if (!charge.paymentToken) {
-      if (shouldQueueInitialRequest) {
-        requestSkipped += 1;
-      }
+      if (shouldQueueInitialRequest) requestSkipped += 1;
       continue;
     }
 
-    const { recipient, snapshot } = await upsertTeamNotificationRecipient(
-      charge.teamId,
-    );
+    const { recipient, snapshot } = await upsertTeamNotificationRecipient(charge.teamId);
 
     if (shouldQueueInitialRequest) {
       if (canQueueEmail) {
@@ -546,9 +528,7 @@ export async function queueFixtureMatchFeeEmails(
       }
     }
 
-    const reminderSchedules = getFixtureMatchFeeReminderSchedules(input.kickoffAt);
-
-    for (const reminder of reminderSchedules) {
+    for (const reminder of getFixtureMatchFeeReminderSchedules(input.kickoffAt)) {
       if (canQueueEmail) {
         const reminderDispatch = await queueNotificationFromTemplate({
           templateKey: "match-fee-reminder-email",
@@ -612,4 +592,48 @@ export async function queueFixtureMatchFeeEmails(
           reminderIntro:
             reminder.hoursAfterKickoff === 24
               ? "Your match fee is still unpaid."
-            ... (truncated)
+              : "Your match fee is still unpaid after our earlier reminder.",
+        },
+      });
+
+      if (reminderSmsDispatch.status === NotificationDispatchStatus.QUEUED) {
+        reminderQueued += 1;
+      } else {
+        reminderSkipped += 1;
+      }
+    }
+  }
+
+  return {
+    queued: requestQueued + reminderQueued,
+    skipped: requestSkipped + reminderSkipped,
+    requestQueued,
+    requestSkipped,
+    reminderQueued,
+    reminderSkipped,
+  };
+}
+
+export async function voidFixtureMatchFeeChargesOrThrow(
+  fixtureIds: string[],
+  db: PaymentChargeDbClient = prisma,
+) {
+  await voidFixtureChargesOrThrow({
+    fixtureIds,
+    db,
+    paidErrorPrefix: "Cannot delete this fixture because",
+    reason: "Fixture was deleted before queued match fee emails were sent.",
+  });
+}
+
+export async function voidCancelledFixtureMatchFeeChargesOrThrow(
+  fixtureIds: string[],
+  db: PaymentChargeDbClient = prisma,
+) {
+  await voidFixtureChargesOrThrow({
+    fixtureIds,
+    db,
+    paidErrorPrefix: "Cannot cancel this fixture because",
+    reason: "Fixture was cancelled before queued match fee emails were sent.",
+  });
+}
