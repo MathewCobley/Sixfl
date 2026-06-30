@@ -277,11 +277,11 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
       {successMessage ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{successMessage}</div> : null}
       {errorMessage ? <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">{errorMessage}</div> : null}
 
-      <details className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-400/10 shadow-[0_20px_70px_rgba(0,0,0,0.3)]">
-        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/10 sm:px-6">
+      <details className="group">
+        <summary className="ml-auto flex h-11 w-fit cursor-pointer list-none items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 [&::-webkit-details-marker]:hidden">
           + Add referee
         </summary>
-        <form action={createRefereeAction} className="grid gap-4 border-t border-emerald-400/15 bg-black/20 px-5 py-5 sm:grid-cols-2 sm:px-6 xl:grid-cols-[1fr_1fr_0.75fr_0.7fr_0.65fr_auto]">
+        <form action={createRefereeAction} className="mt-4 grid gap-4 rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.12),transparent_38%),rgba(255,255,255,0.03)] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.35)] sm:grid-cols-2 sm:p-5 xl:grid-cols-[1fr_1fr_0.75fr_0.7fr_0.65fr_auto]">
           <input name="name" required placeholder="Referee name" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
           <input name="email" type="email" required placeholder="Email address" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
           <input name="phone" placeholder="Mobile for SMS" className="h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/35" />
