@@ -72,9 +72,11 @@ function LoginForm() {
         ? data.claimCode
           ? `/claim?code=${encodeURIComponent(data.claimCode)}`
           : "/claim"
-        : data.isReferee
-          ? "/referee"
-          : "/dashboard";
+        : data.canChooseLoginArea
+          ? "/dashboard"
+          : data.isReferee
+            ? "/referee"
+            : "/dashboard";
 
     const result = await signIn("email", {
       email,
@@ -105,6 +107,10 @@ function LoginForm() {
       if (data.teamName) {
         nextUrl.searchParams.set("teamName", data.teamName);
       }
+    }
+
+    if (data.canChooseLoginArea) {
+      nextUrl.searchParams.set("choose", "1");
     }
 
     window.location.href = nextUrl.toString();
