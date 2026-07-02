@@ -84,6 +84,7 @@ async function getFixtureTeam(input: { fixtureId: string; teamId: string }) {
       id: true,
       kickoffAt: true,
       status: true,
+      publishedAt: true,
       homeTeamId: true,
       awayTeamId: true,
       homeTeam: { select: { id: true, name: true } },
@@ -152,6 +153,10 @@ export async function setLateConfirmationFeeDecisionAction(formData: FormData) {
     }
 
     teamName = getTeamName({ fixture, teamId });
+
+    if (fixture.publishedAt === null) {
+      throw new Error("Late confirmation fees can only be managed for published fixtures.");
+    }
 
     if (fixture.status !== "SCHEDULED") {
       throw new Error("Late confirmation fees can only be managed for scheduled fixtures.");
@@ -432,6 +437,10 @@ export async function getPaymentLateFeeRows() {
       LEFT JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
       LEFT JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
       WHERE charge."status" NOT IN ('PAID', 'VOID')
+        AND (
+          charge."fixtureId" IS NULL
+          OR fixture."publishedAt" IS NOT NULL
+        )
       GROUP BY charge."id", team."name", fixture."id", home_team."name", away_team."name"
     )
     SELECT *
@@ -554,13 +563,16 @@ export async function getLateConfirmationFeeRows() {
         COUNT(*) FILTER (WHERE fee."status" = 'APPLIED') AS "applied",
         COUNT(*) FILTER (WHERE fee."status" = 'WAIVED') AS "waived"
       FROM "FixtureConfirmationLateFee" fee
+      INNER JOIN "Fixture" fee_fixture ON fee_fixture."id" = fee."fixtureId"
       WHERE fee."teamId" = fixture."homeTeamId"
+        AND fee_fixture."publishedAt" IS NOT NULL
     ) home_history ON true
     LEFT JOIN LATERAL (
       SELECT COUNT(*) AS "lateConfirms"
       FROM "FixtureCaptainConfirmation" confirmation
       INNER JOIN "Fixture" confirmation_fixture ON confirmation_fixture."id" = confirmation."fixtureId"
       WHERE confirmation."teamId" = fixture."homeTeamId"
+        AND confirmation_fixture."publishedAt" IS NOT NULL
         AND confirmation."status" = 'CONFIRMED'
         AND confirmation."confirmedAt" > confirmation_fixture."kickoffAt" - INTERVAL '72 hours'
     ) home_late_confirmations ON true
@@ -570,17 +582,21 @@ export async function getLateConfirmationFeeRows() {
         COUNT(*) FILTER (WHERE fee."status" = 'APPLIED') AS "applied",
         COUNT(*) FILTER (WHERE fee."status" = 'WAIVED') AS "waived"
       FROM "FixtureConfirmationLateFee" fee
+      INNER JOIN "Fixture" fee_fixture ON fee_fixture."id" = fee."fixtureId"
       WHERE fee."teamId" = fixture."awayTeamId"
+        AND fee_fixture."publishedAt" IS NOT NULL
     ) away_history ON true
     LEFT JOIN LATERAL (
       SELECT COUNT(*) AS "lateConfirms"
       FROM "FixtureCaptainConfirmation" confirmation
       INNER JOIN "Fixture" confirmation_fixture ON confirmation_fixture."id" = confirmation."fixtureId"
       WHERE confirmation."teamId" = fixture."awayTeamId"
+        AND confirmation_fixture."publishedAt" IS NOT NULL
         AND confirmation."status" = 'CONFIRMED'
         AND confirmation."confirmedAt" > confirmation_fixture."kickoffAt" - INTERVAL '72 hours'
     ) away_late_confirmations ON true
     WHERE fixture."status" = 'SCHEDULED'
+      AND fixture."publishedAt" IS NOT NULL
       AND fixture."kickoffAt" >= NOW() - INTERVAL '2 days'
       AND fixture."kickoffAt" <= NOW() + INTERVAL '45 days'
     ORDER BY fixture."kickoffAt" ASC, league."name" ASC, home_team."name" ASC
