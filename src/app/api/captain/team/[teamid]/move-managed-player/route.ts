@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { Prisma, TeamRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { requireCaptain } from "@/lib/requireCaptain";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -118,7 +118,7 @@ export async function GET(
   const teamId = teamid;
 
   try {
-    await requireCaptain(teamId);
+    await requireAdmin();
 
     const url = new URL(request.url);
     const type = getMoveType(url.searchParams.get("type"));
@@ -158,7 +158,7 @@ export async function POST(
   const teamId = teamid;
 
   try {
-    await requireCaptain(teamId);
+    await requireAdmin();
 
     const body = (await request.json().catch(() => null)) as MoveBody | null;
     const type = getMoveType(body?.type);
