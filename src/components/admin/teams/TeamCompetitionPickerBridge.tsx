@@ -71,7 +71,9 @@ function renderPicker(input: {
 
   const status = document.createElement("div");
   status.className = "mt-2 text-xs text-white/45";
-  status.textContent = "The team belongs to the competition. Seasons and divisions are managed from the season page.";
+  status.textContent = input.teamId
+    ? "The team belongs to the competition. Season entries and divisions are managed from the season page."
+    : "Choose the parent competition. The team will be added to the current season for that competition.";
 
   function setActive(buttons: HTMLButtonElement[], activeId: string | null) {
     for (const button of buttons) {
@@ -93,10 +95,10 @@ function renderPicker(input: {
 
     button.addEventListener("click", async () => {
       setActive(buttons, competition.id);
-      input.leagueSelect.value = competition.currentLeagueId ?? "";
-      input.leagueSelect.dispatchEvent(new Event("change", { bubbles: true }));
 
       if (!input.teamId) {
+        input.leagueSelect.value = competition.currentLeagueId ?? "";
+        input.leagueSelect.dispatchEvent(new Event("change", { bubbles: true }));
         status.className = "mt-2 text-xs text-emerald-200";
         status.textContent = "Competition selected for this new team.";
         return;
@@ -113,7 +115,6 @@ function renderPicker(input: {
       });
       const payload = (await response.json().catch(() => null)) as {
         error?: string;
-        team?: { currentLeagueId: string | null };
       } | null;
 
       if (!response.ok) {
@@ -123,7 +124,6 @@ function renderPicker(input: {
         return;
       }
 
-      input.leagueSelect.value = payload?.team?.currentLeagueId ?? competition.currentLeagueId ?? "";
       status.textContent = "Competition saved.";
       window.location.reload();
     });
@@ -132,13 +132,6 @@ function renderPicker(input: {
   }
 
   setActive(buttons, input.selectedCompetitionId);
-
-  const selectedCompetition = input.competitions.find(
-    (competition) => competition.id === input.selectedCompetitionId,
-  );
-  if (selectedCompetition?.currentLeagueId) {
-    input.leagueSelect.value = selectedCompetition.currentLeagueId;
-  }
 
   if (input.competitions.length === 0) {
     const empty = document.createElement("div");
@@ -152,10 +145,10 @@ function renderPicker(input: {
   return wrapper;
 }
 
-async function loadCompetitionsForNewTeam(): Promise<TeamCompetitionPayload> {
+async function loadCompetitionsForNewTeam() {
   const response = await fetch("/api/admin/competitions", { cache: "no-store" });
-  if (!response.ok) return { competitions: [] };
-  return (await response.json()) as TeamCompetitionPayload;
+  if (!response.ok) return { competitions: [] as CompetitionOption[] };
+  return (await response.json()) as { competitions?: CompetitionOption[] };
 }
 
 async function injectPicker(pathname: string | null) {
@@ -174,17 +167,9 @@ async function injectPicker(pathname: string | null) {
 
   try {
     const teamId = getTeamIdFromPathname(pathname);
-    let payload: TeamCompetitionPayload;
-
-    if (teamId) {
-      const response = await fetch(`/api/admin/teams/${teamId}/competition`, {
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error("Could not load team competition.");
-      payload = (await response.json()) as TeamCompetitionPayload;
-    } else {
-      payload = await loadCompetitionsForNewTeam();
-    }
+    const payload = teamId
+      ? ((await (await fetch(`/api/admin/teams/${teamId}/competition`, { cache: "no-store" })).json()) as TeamCompetitionPayload)
+      : await loadCompetitionsForNewTeam();
 
     removeExistingPicker();
     const picker = renderPicker({
