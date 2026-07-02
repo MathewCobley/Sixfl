@@ -9,6 +9,7 @@
 import Image from "next/image";
 import { LeagueType, PreferredNight } from "@prisma/client";
 import TrackedLink from "@/components/analytics/TrackedLink";
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 
 // ========================================
@@ -161,27 +162,33 @@ function sortLeagues(a: LeagueCard, b: LeagueCard) {
 // ========================================
 
 export default async function LeaguesPage() {
-  const leaguesFromDb = await prisma.league.findMany({
-    where: {
-      isActive: true,
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      area: true,
-      dayOfWeek: true,
-      leagueType: true,
-      venueName: true,
-      heroImageUrl: true,
-      badgeUrl: true,
-      _count: {
-        select: {
-          teams: true,
+  const currentLeagueIds = await getCurrentLeagueIds();
+
+  const leaguesFromDb = currentLeagueIds.length
+    ? await prisma.league.findMany({
+        where: {
+          id: {
+            in: currentLeagueIds,
+          },
         },
-      },
-    },
-  });
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          area: true,
+          dayOfWeek: true,
+          leagueType: true,
+          venueName: true,
+          heroImageUrl: true,
+          badgeUrl: true,
+          _count: {
+            select: {
+              teams: true,
+            },
+          },
+        },
+      })
+    : [];
 
   const leagues: LeagueCard[] = leaguesFromDb
     .map((league) => {
@@ -246,7 +253,7 @@ export default async function LeaguesPage() {
             <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">
-                  Active leagues
+                  Current leagues
                 </div>
                 <div className="mt-2 text-3xl font-black text-white">
                   {leagues.length}
@@ -258,31 +265,21 @@ export default async function LeaguesPage() {
 
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">
-                  Teams entered
+                  Weekly football
                 </div>
-                <div className="mt-2 text-3xl font-black text-white">
-                  {leagues.reduce((sum, league) => sum + league.teams, 0)}
-                </div>
+                <div className="mt-2 text-3xl font-black text-white">6v6</div>
                 <div className="mt-1 text-sm text-white/55">
-                  across all leagues
+                  small-sided football
                 </div>
               </div>
 
               <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">
-                  Match nights
+                  Format
                 </div>
-                <div className="mt-2 text-3xl font-black text-white">
-                  {
-                    new Set(
-                      leagues
-                        .map((league) => league.night)
-                        .filter((night) => night && night !== "TBC"),
-                    ).size
-                  }
-                </div>
+                <div className="mt-2 text-3xl font-black text-white">Live</div>
                 <div className="mt-1 text-sm text-white/55">
-                  weekly options
+                  tables &amp; results
                 </div>
               </div>
             </div>
@@ -290,121 +287,80 @@ export default async function LeaguesPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-400">
+              Current seasons
+            </p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+              Leagues open now
+            </h2>
+          </div>
+          <p className="max-w-xl text-sm leading-6 text-white/60">
+            Previous seasons are kept in each league’s season archive so old tables and results can still be viewed.
+          </p>
+        </div>
+
         {leagues.length === 0 ? (
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-10 text-center">
-            <p className="text-lg font-semibold text-white">
-              No active leagues are live yet.
-            </p>
-            <p className="mt-2 text-sm text-white/60">
-              Check back soon for new SIXFL league launches.
-            </p>
+          <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-white/65">
+            No current leagues are listed yet.
           </div>
         ) : (
-          <div className="grid justify-items-center gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {leagues.map((league) => {
-              const spacesLeft =
-                league.capacity !== null
-                  ? Math.max(league.capacity - league.teams, 0)
-                  : null;
-
-              return (
-                <div
-                  key={league.id}
-                  className={`group relative flex h-full w-full max-w-[380px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black transition duration-300 ${league.border} hover:-translate-y-1 hover:bg-white/[0.02] hover:shadow-[0_18px_60px_rgba(0,0,0,0.55)]`}
-                >
-                  <div className="absolute inset-0">
-                    {league.hero ? (
-                      <Image
-                        src={league.hero}
-                        alt={league.name}
-                        fill
-                        className="object-cover opacity-40 transition duration-500 group-hover:scale-105"
-                      />
-                    ) : null}
-
-                    <div className="absolute inset-0 bg-black/72" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/75 to-black/20" />
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),transparent_40%)]" />
-                  </div>
-
-                  <div className="relative flex h-full flex-col gap-6 p-6">
-                    <div className="flex items-start gap-5">
-                      <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur">
-                        <Image
-                          src={league.badge || DEFAULT_BADGE}
-                          alt={`${league.location} ${league.night} ${league.type} badge`}
-                          width={84}
-                          height={84}
-                          className="h-[72px] w-[72px] object-contain"
-                          priority={league.location === "Harrogate"}
-                        />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <h2 className="text-2xl font-extrabold tracking-tight text-white">
-                          {league.location}
-                        </h2>
-
-                        <p className="mt-1 text-sm text-white/60">
-                          {league.venue}
-                        </p>
-
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                          <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-white/85">
-                            {league.night}
-                          </span>
-                          <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-white/85">
-                            {league.type}
-                          </span>
-                        </div>
-                      </div>
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {leagues.map((league) => (
+              <TrackedLink
+                key={league.id}
+                href={league.href}
+                eventName="league_card_click"
+                eventData={{ league: league.slug }}
+                className={`group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] transition hover:bg-white/[0.07] ${league.border}`}
+              >
+                <div className="relative h-44 overflow-hidden bg-white/[0.04]">
+                  {league.hero ? (
+                    <Image
+                      src={league.hero}
+                      alt=""
+                      fill
+                      sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                      className="object-cover opacity-75 transition duration-500 group-hover:scale-105 group-hover:opacity-90"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.20),transparent_38%)]" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                  <div className="absolute bottom-4 left-4 flex items-center gap-3">
+                    <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-black/50 p-2">
+                      {league.badge ? (
+                        <Image src={league.badge} alt="" fill className="object-contain p-2" />
+                      ) : null}
                     </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur">
-                      <p
-                        className={`text-xs font-semibold uppercase tracking-[0.18em] ${league.accent}`}
-                      >
-                        League
-                      </p>
-
-                      <p className="mt-2 text-lg font-bold text-white">
-                        {league.name}
-                      </p>
-
-                      <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                        <span className="text-white/70">
-                          {league.teams} teams entered
-                        </span>
-
-                        <span className={`font-semibold ${league.accent}`}>
-                          {spacesLeft !== null
-                            ? `${spacesLeft} spaces left`
-                            : "Now forming"}
-                        </span>
+                    <div>
+                      <div className={`text-xs font-bold uppercase tracking-[0.18em] ${league.accent}`}>
+                        {league.location}
                       </div>
+                      <div className="text-sm font-semibold text-white/80">{league.night}</div>
                     </div>
-
-                    <TrackedLink
-                      href={league.href}
-                      eventName="register_team_click"
-                      eventProps={{
-                        leagueId: league.id,
-                        leagueName: league.name,
-                        slug: league.slug,
-                        location: league.location,
-                        night: league.night,
-                        leagueType: league.type,
-                        venue: league.venue,
-                      }}
-                      className={`mt-auto inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-extrabold uppercase tracking-wide text-black shadow-lg transition duration-200 hover:scale-[1.02] ${league.button}`}
-                    >
-                      View league
-                    </TrackedLink>
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="p-6">
+                  <div className={`text-xs font-bold uppercase tracking-[0.18em] ${league.accent}`}>
+                    {league.type}
+                  </div>
+                  <h3 className="mt-2 text-2xl font-black tracking-tight text-white">
+                    {league.name}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-white/65">
+                    {league.venue} · {league.teams} team{league.teams === 1 ? "" : "s"}
+                  </p>
+
+                  <div className={`mt-5 inline-flex rounded-full px-5 py-3 text-sm font-black text-black transition ${league.button}`}>
+                    View league
+                  </div>
+                </div>
+              </TrackedLink>
+            ))}
           </div>
         )}
       </section>
