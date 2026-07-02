@@ -273,7 +273,6 @@ export async function updateTeamCompetition(input: {
     UPDATE "Team"
     SET
       "competitionId" = ${competition.id},
-      "leagueId" = COALESCE(${competition.currentLeagueId}, "leagueId"),
       "updatedAt" = NOW()
     WHERE "id" = ${input.teamId}
   `);
