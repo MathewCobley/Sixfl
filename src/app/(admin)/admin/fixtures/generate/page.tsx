@@ -7,6 +7,7 @@ import { FixtureStatus } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
 import { getAllLeagueDivisionOptions } from "@/lib/league-divisions";
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { backfillFixtureMatchFeeChargesAction } from "./actions";
@@ -51,10 +52,16 @@ export default async function ImprovedFixtureGeneratorPage({
 }) {
   await requireAdmin();
   const sp = (await searchParams) ?? {};
+  const currentLeagueIds = await getCurrentLeagueIds();
 
-  const [leagues, venues, referees, divisionOptions] = await Promise.all([
+  const [leagues, venues, referees, allDivisionOptions] = await Promise.all([
     prisma.league.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      where: {
+        id: {
+          in: currentLeagueIds,
+        },
+      },
+      orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: { id: true, name: true, season: true },
     }),
     prisma.venue.findMany({
@@ -69,6 +76,11 @@ export default async function ImprovedFixtureGeneratorPage({
     getAllLeagueDivisionOptions(),
   ]);
 
+  const currentLeagueIdSet = new Set(leagues.map((league) => league.id));
+  const divisionOptions = allDivisionOptions.filter((division) =>
+    currentLeagueIdSet.has(division.leagueId),
+  );
+
   const backfilledCount = Number(sp.backfilled ?? "");
   const paymentRequestCount = Number(sp.paymentRequests ?? "");
   const hasBackfillNotice = Number.isFinite(backfilledCount) && sp.backfilled !== undefined;
@@ -77,6 +89,7 @@ export default async function ImprovedFixtureGeneratorPage({
   const refereeAssignedCount = Number(sp.refAssigned ?? "");
   const refereeEmailCount = Number(sp.refEmails ?? "");
   const hasRefereeBackfillNotice = Number.isFinite(refereeBackfilledCount) && sp.refBackfilled !== undefined;
+  const noCurrentLeagues = leagues.length === 0;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
@@ -88,9 +101,15 @@ export default async function ImprovedFixtureGeneratorPage({
           Bulk Fixture Generator
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Generate a full draft schedule with pitch-specific referees. Fixtures stay draft until they are published. For divided leagues, choose the division so each division gets its own fixture pool and table.
+          Generate a full draft schedule with pitch-specific referees. Only current competition seasons are available here, so archived seasons cannot accidentally receive new fixtures.
         </p>
       </div>
+
+      {noCurrentLeagues ? (
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+          No current league seasons are available for fixture generation. Open a league and create or select the current season first.
+        </div>
+      ) : null}
 
       {hasBackfillNotice ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
@@ -116,8 +135,8 @@ export default async function ImprovedFixtureGeneratorPage({
 
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
             <div>
-              <label className={labelClass}>League</label>
-              <select name="leagueId" required className={inputClass}>
+              <label className={labelClass}>Current season</label>
+              <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
                 ))}
@@ -142,7 +161,7 @@ export default async function ImprovedFixtureGeneratorPage({
             </span>
           </label>
 
-          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/15 px-6 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20">
+          <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/15 px-6 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40">
             Backfill published fixture charges
           </button>
         </form>
@@ -160,8 +179,8 @@ export default async function ImprovedFixtureGeneratorPage({
 
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
             <div>
-              <label className={labelClass}>League</label>
-              <select name="leagueId" required className={inputClass}>
+              <label className={labelClass}>Current season</label>
+              <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
                 ))}
@@ -202,7 +221,7 @@ export default async function ImprovedFixtureGeneratorPage({
             </span>
           </label>
 
-          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/15 px-6 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/20">
+          <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/15 px-6 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40">
             Backfill referee assignments
           </button>
         </form>
@@ -212,8 +231,8 @@ export default async function ImprovedFixtureGeneratorPage({
         <form action={generateDraftFixturesWithDivisionsAction} className="space-y-8">
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <label className={labelClass}>League</label>
-              <select name="leagueId" required className={inputClass}>
+              <label className={labelClass}>Current season</label>
+              <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
                 ))}
@@ -221,7 +240,7 @@ export default async function ImprovedFixtureGeneratorPage({
             </div>
             <div>
               <label className={labelClass}>Division</label>
-              <select name="divisionId" className={inputClass}>
+              <select name="divisionId" className={inputClass} disabled={noCurrentLeagues}>
                 <option value="">Whole league / no division</option>
                 {divisionOptions.map((division) => (
                   <option key={division.id} value={division.id}>{divisionLabel(division)}</option>
@@ -235,8 +254,8 @@ export default async function ImprovedFixtureGeneratorPage({
             <div><label className={labelClass}>Start time</label><input type="time" name="startTime" defaultValue="19:00" required className={inputClass} /><p className="mt-2 text-xs leading-5 text-white/45">First kick-off time. 19:00 means 7pm UK time.</p></div>
             <div><label className={labelClass}>Last game start time</label><input type="time" name="lastGameStartTime" defaultValue="20:20" required className={inputClass} /><p className="mt-2 text-xs leading-5 text-white/45">Example: 19:00 start, 20:20 last game, 40 min slots = 19:00, 19:40 and 20:20.</p></div>
             <div><label className={labelClass}>Venue</label><select name="venueId" className={inputClass}><option value="">No venue</option>{venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.name}</option>)}</select></div>
-            <div><label className={labelClass}>Fixture status</label><select name="status" defaultValue={FixtureStatus.SCHEDULED} className={inputClass}><option value={FixtureStatus.SCHEDULED}>Scheduled</option><option value={FixtureStatus.POSTPONED}>Postponed</option><option value={FixtureStatus.CANCELLED}>Cancelled</option></select><p className="mt-2 text-xs leading-5 text-white/45">Generated fixtures stay draft until you publish a selected week.</p></div>
-            <div><label className={labelClass}>Pitches</label><input type="number" name="pitches" min={1} max={6} defaultValue={2} className={inputClass} /><p className="mt-2 text-xs leading-5 text-white/45">The generator fills Pitch 1, Pitch 2, etc. before moving to the next slot.</p></div>
+            <div><label className={labelClass}>Fixture status</label><select name="status" defaultValue={FixtureStatus.SCHEDULED} className={inputClass}><option value={FixtureStatus.SCHEDULED}>Scheduled</option><option value={FixtureStatus.POSTPONED}>Postponed</option><option value={FixtureStatus.CANCELLED}>Cancelled</option></select></div>
+            <div><label className={labelClass}>Pitches</label><input type="number" name="pitches" min={1} defaultValue={2} className={inputClass} /></div>
             <div><label className={labelClass}>Slot minutes</label><input type="number" name="slotMinutes" min={10} defaultValue={40} className={inputClass} /></div>
             <div><label className={labelClass}>Week gap days</label><input type="number" name="weekGapDays" min={1} defaultValue={7} className={inputClass} /></div>
             <div><label className={labelClass}>Start week</label><input type="number" name="startRound" min={1} defaultValue={1} className={inputClass} /></div>
@@ -268,7 +287,7 @@ export default async function ImprovedFixtureGeneratorPage({
           </div>
 
           <div className="flex flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
-            <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">Generate draft fixtures</button>
+            <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">Generate draft fixtures</button>
             <p className="text-sm leading-6 text-white/45">Draft fixtures do not create payment charges or payment messages.</p>
           </div>
         </form>
