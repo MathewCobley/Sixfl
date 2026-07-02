@@ -106,6 +106,23 @@ function buildTable(teams: TeamRow[], fixtures: FixtureRow[]): TableRow[] {
     });
 }
 
+function shouldShowDivisionTables(fixtures: FixtureRow[]) {
+  if (fixtures.length === 0) {
+    return true;
+  }
+
+  const hasAnyDivisionFixture = fixtures.some((fixture) => Boolean(fixture.divisionId));
+  const hasCompletedLegacyResults = fixtures.some(
+    (fixture) =>
+      fixture.status === "COMPLETED" &&
+      !fixture.divisionId &&
+      fixture.homeScore !== null &&
+      fixture.awayScore !== null,
+  );
+
+  return hasAnyDivisionFixture || !hasCompletedLegacyResults;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ slug: string }> },
@@ -167,6 +184,14 @@ export async function GET(
         ORDER BY f."kickoffAt" ASC, f."position" ASC
       `),
     ]);
+
+    if (!shouldShowDivisionTables(fixtures)) {
+      return NextResponse.json({
+        league: { id: league.id, name: league.name },
+        divisions: [],
+        reason: "legacy_combined_table",
+      });
+    }
 
     const payload = divisions.map((division) => {
       const divisionTeams = teams.filter((team) => team.divisionId === division.id);
