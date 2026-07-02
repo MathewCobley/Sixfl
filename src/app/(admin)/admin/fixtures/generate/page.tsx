@@ -6,16 +6,23 @@ import Link from "next/link";
 import { FixtureStatus } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
+import { getAllLeagueDivisionOptions } from "@/lib/league-divisions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import {
-  backfillFixtureMatchFeeChargesAction,
-  generateDraftFixturesWithPitchRefereesAction,
-} from "./actions";
+import { backfillFixtureMatchFeeChargesAction } from "./actions";
+import { generateDraftFixturesWithDivisionsAction } from "./division-actions";
 import { backfillRefereeAssignmentsAction } from "./referee-backfill-actions";
 
 function leagueLabel(league: { name: string; season: string | null }) {
   return league.season ? `${league.name} • ${league.season}` : league.name;
+}
+
+function divisionLabel(division: {
+  leagueName: string;
+  leagueSeason: string | null;
+  name: string;
+}) {
+  return `${leagueLabel({ name: division.leagueName, season: division.leagueSeason })} — ${division.name}`;
 }
 
 function refereeLabel(referee: { name: string | null; email: string | null }) {
@@ -45,7 +52,7 @@ export default async function ImprovedFixtureGeneratorPage({
   await requireAdmin();
   const sp = (await searchParams) ?? {};
 
-  const [leagues, venues, referees] = await Promise.all([
+  const [leagues, venues, referees, divisionOptions] = await Promise.all([
     prisma.league.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
       select: { id: true, name: true, season: true },
@@ -59,6 +66,7 @@ export default async function ImprovedFixtureGeneratorPage({
       orderBy: [{ name: "asc" }, { email: "asc" }],
       select: { id: true, name: true, email: true },
     }),
+    getAllLeagueDivisionOptions(),
   ]);
 
   const backfilledCount = Number(sp.backfilled ?? "");
@@ -80,7 +88,7 @@ export default async function ImprovedFixtureGeneratorPage({
           Bulk Fixture Generator
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Generate a full draft schedule with pitch-specific referees. Fixtures stay draft until they are published. Payment charges and payment messages must only be created for published fixtures.
+          Generate a full draft schedule with pitch-specific referees. Fixtures stay draft until they are published. For divided leagues, choose the division so each division gets its own fixture pool and table.
         </p>
       </div>
 
@@ -201,11 +209,27 @@ export default async function ImprovedFixtureGeneratorPage({
       </AdminCard>
 
       <AdminCard className="rounded-3xl border border-emerald-400/15 bg-white/[0.03] p-6 md:p-8">
-        <form action={generateDraftFixturesWithPitchRefereesAction} className="space-y-8">
+        <form action={generateDraftFixturesWithDivisionsAction} className="space-y-8">
           <div className="grid gap-6 md:grid-cols-2">
-            <div className="md:col-span-2">
+            <div>
               <label className={labelClass}>League</label>
-              <select name="leagueId" required className={inputClass}>{leagues.map((league) => <option key={league.id} value={league.id}>{leagueLabel(league)}</option>)}</select>
+              <select name="leagueId" required className={inputClass}>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Division</label>
+              <select name="divisionId" className={inputClass}>
+                <option value="">Whole league / no division</option>
+                {divisionOptions.map((division) => (
+                  <option key={division.id} value={division.id}>{divisionLabel(division)}</option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs leading-5 text-white/45">
+                For Harrogate, choose Premiership or Championship. Leave blank only for leagues without divisions.
+              </p>
             </div>
             <div><label className={labelClass}>Start date</label><input type="date" name="startDate" required className={inputClass} /></div>
             <div><label className={labelClass}>Start time</label><input type="time" name="startTime" defaultValue="19:00" required className={inputClass} /><p className="mt-2 text-xs leading-5 text-white/45">First kick-off time. 19:00 means 7pm UK time.</p></div>
@@ -240,7 +264,7 @@ export default async function ImprovedFixtureGeneratorPage({
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4"><input type="checkbox" name="doubleRoundRobin" className="mt-1" /><span><span className="block text-sm font-semibold text-white">Double round robin</span><span className="mt-1 block text-sm leading-6 text-white/50">Every team plays each opponent twice.</span></span></label>
-            <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4"><input type="checkbox" name="clearExisting" className="mt-1" /><span><span className="block text-sm font-semibold text-red-100">Clear existing fixtures first</span><span className="mt-1 block text-sm leading-6 text-red-100/65">Only tick this when regenerating a schedule from scratch.</span></span></label>
+            <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4"><input type="checkbox" name="clearExisting" className="mt-1" /><span><span className="block text-sm font-semibold text-red-100">Clear existing fixtures first</span><span className="mt-1 block text-sm leading-6 text-red-100/65">For divisions, this only clears the selected division’s fixtures.</span></span></label>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
