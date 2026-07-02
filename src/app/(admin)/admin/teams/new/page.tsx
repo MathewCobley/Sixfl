@@ -3,22 +3,14 @@
 // ========================================
 
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { getCurrentLeagueOptions } from "@/lib/current-leagues";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createTeamAction } from "../actions";
 
 export default async function AdminNewTeamPage() {
   await requireAdmin();
 
-  const leagues = await prisma.league.findMany({
-    where: { isActive: true },
-    orderBy: [{ name: "asc" }, { season: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      season: true,
-    },
-  });
+  const leagues = await getCurrentLeagueOptions();
 
   return (
     <div className="space-y-6 p-6">
@@ -67,6 +59,9 @@ export default async function AdminNewTeamPage() {
                 </option>
               ))}
             </select>
+            <p className="text-xs text-white/50">
+              Only current competition seasons are shown here. Previous seasons remain available from the season archive.
+            </p>
           </div>
 
           <div className="space-y-2">
