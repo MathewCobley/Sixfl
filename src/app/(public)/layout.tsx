@@ -6,6 +6,7 @@ import { Suspense, type ReactNode } from "react";
 import AppHeader from "@/components/layout/AppHeader";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
+import PublicLeagueSeasonSwitcherBridge from "@/components/layout/PublicLeagueSeasonSwitcherBridge";
 import RegisterInterestClarityBridge from "@/components/layout/RegisterInterestClarityBridge";
 import RefereeDashboardCopyBridge from "@/components/referee/RefereeDashboardCopyBridge";
 import RefereeNightPickerBridge from "@/components/referee/RefereeNightPickerBridge";
@@ -20,6 +21,7 @@ export default function PublicLayout({
   return (
     <div className="min-h-screen bg-black text-white">
       <AppHeader variant="public" />
+      <PublicLeagueSeasonSwitcherBridge />
       <PublicLeagueLandingSpacingBridge />
       <PublicFixtureWinChanceBridge />
       <RefereeDashboardCopyBridge />
