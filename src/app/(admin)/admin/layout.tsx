@@ -14,6 +14,7 @@ import GenerateNextWeekFixturesBridge from "@/components/admin/fixtures/Generate
 import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditButtonBridge";
 import AdminDivisionSelectBridge from "@/components/admin/leagues/AdminDivisionSelectBridge";
+import AdminLeagueSeasonsBridge from "@/components/admin/leagues/AdminLeagueSeasonsBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
@@ -54,6 +55,7 @@ export default async function AdminLayout({
       <PlayerProspectsNotInterestedBridge />
       <GenerateNextWeekFixturesBridge />
       <AdminSidebarDesktopColumnsBridge />
+      <AdminLeagueSeasonsBridge />
       <AdminDivisionSelectBridge />
       <TeamDivisionPickerBridge />
       <TeamReplaceFixturesButtonBridge />
