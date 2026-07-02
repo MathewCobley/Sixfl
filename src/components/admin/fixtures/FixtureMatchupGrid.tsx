@@ -50,6 +50,64 @@ function buildGridHref(leagueId: string, divisionId?: string | null) {
   return `/admin/fixtures?${params.toString()}`;
 }
 
+function enhancePublishDivisionForms(input: {
+  leagueId: string | null;
+  selectedDivisionId: string | null;
+  divisions: DivisionOption[];
+}) {
+  if (!input.leagueId || input.divisions.length === 0) return;
+
+  const forms = Array.from(document.querySelectorAll<HTMLFormElement>('form[action]')).filter((form) => {
+    const leagueInput = form.querySelector<HTMLInputElement>('input[name="leagueId"]');
+    const isPublishForm = Boolean(form.querySelector('button')) && form.textContent?.includes("Publish");
+    return leagueInput?.value === input.leagueId && isPublishForm;
+  });
+
+  for (const form of forms) {
+    if (form.querySelector('[data-publish-division-control="true"]')) continue;
+
+    const wrapper = document.createElement("label");
+    wrapper.dataset.publishDivisionControl = "true";
+    wrapper.className = "mb-3 block space-y-2";
+
+    const label = document.createElement("span");
+    label.className = "text-xs font-semibold uppercase tracking-[0.18em] text-white/45";
+    label.textContent = "Division to publish";
+
+    const select = document.createElement("select");
+    select.name = "divisionId";
+    select.className = "h-11 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20";
+
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "All divisions";
+    select.appendChild(allOption);
+
+    for (const division of input.divisions) {
+      const option = document.createElement("option");
+      option.value = division.id;
+      option.textContent = division.name;
+      option.selected = division.id === input.selectedDivisionId;
+      select.appendChild(option);
+    }
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(select);
+    form.insertBefore(wrapper, form.firstChild?.nextSibling ?? form.firstChild);
+
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const baseButtonText = button?.textContent?.trim() || "Publish";
+    const updateButtonLabel = () => {
+      if (!button) return;
+      const selected = input.divisions.find((division) => division.id === select.value);
+      button.textContent = selected ? `${baseButtonText} — ${selected.name}` : baseButtonText.replace(/ — .+$/, "");
+    };
+
+    select.addEventListener("change", updateButtonLabel);
+    updateButtonLabel();
+  }
+}
+
 export default function FixtureMatchupGrid({
   initialLeagueId,
   initialDivisionId,
@@ -102,6 +160,14 @@ export default function FixtureMatchupGrid({
   const selectedLeague = useMemo(() => leagues.find((league) => league.id === selectedLeagueId) ?? null, [leagues, selectedLeagueId]);
   const selectedDivision = useMemo(() => divisions.find((division) => division.id === selectedDivisionId) ?? null, [divisions, selectedDivisionId]);
 
+  useEffect(() => {
+    enhancePublishDivisionForms({
+      leagueId: data?.selectedLeagueId ?? selectedLeagueId,
+      selectedDivisionId: data?.selectedDivisionId ?? selectedDivisionId,
+      divisions,
+    });
+  }, [data?.selectedLeagueId, data?.selectedDivisionId, selectedLeagueId, selectedDivisionId, divisions]);
+
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
       <div className="border-b border-white/10 px-6 py-6 md:px-8">
@@ -120,12 +186,7 @@ export default function FixtureMatchupGrid({
                 {leagues.map((league) => {
                   const isActive = selectedLeagueId === league.id;
                   return (
-                    <Link
-                      key={league.id}
-                      href={buildGridHref(league.id)}
-                      aria-current={isActive ? "page" : undefined}
-                      className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}
-                    >
+                    <Link key={league.id} href={buildGridHref(league.id)} aria-current={isActive ? "page" : undefined} className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}>
                       {formatLeagueLabel(league)}{league.isActive ? "" : " · inactive"}
                     </Link>
                   );
@@ -140,12 +201,7 @@ export default function FixtureMatchupGrid({
                   {divisions.map((division) => {
                     const isActive = selectedDivisionId === division.id;
                     return (
-                      <Link
-                        key={division.id}
-                        href={buildGridHref(selectedLeagueId, division.id)}
-                        aria-current={isActive ? "page" : undefined}
-                        className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-sky-400/30 bg-sky-500/15 text-sky-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}
-                      >
+                      <Link key={division.id} href={buildGridHref(selectedLeagueId, division.id)} aria-current={isActive ? "page" : undefined} className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-sky-400/30 bg-sky-500/15 text-sky-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}>
                         {division.name}
                       </Link>
                     );
