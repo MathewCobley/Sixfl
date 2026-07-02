@@ -67,9 +67,9 @@ export default function CaptainDashboardLeagueTable({
 
     let cancelled = false;
 
-    async function loadDivisionAwareTable() {
+    async function loadDivisionAwareTable(teamIdForRequest: string) {
       try {
-        const response = await fetch(`/api/captain/team/${encodeURIComponent(teamId)}/league-table`, { cache: "no-store" });
+        const response = await fetch(`/api/captain/team/${encodeURIComponent(teamIdForRequest)}/league-table`, { cache: "no-store" });
         if (!response.ok) return;
         const payload = (await response.json()) as CaptainLeagueTableApiResponse;
         if (!cancelled) setApiTable(payload);
@@ -78,7 +78,7 @@ export default function CaptainDashboardLeagueTable({
       }
     }
 
-    void loadDivisionAwareTable();
+    void loadDivisionAwareTable(teamId);
 
     return () => {
       cancelled = true;
@@ -138,7 +138,9 @@ export default function CaptainDashboardLeagueTable({
             </div>
           </div>
         </div>
-      ) : <div className="px-6 py-10 text-sm text-white/55 sm:px-8">{emptyMessage}</div>}
+      ) : (
+        <div className="px-6 py-10 text-sm text-white/55 sm:px-8">{emptyMessage}</div>
+      )}
     </section>
   );
 }
