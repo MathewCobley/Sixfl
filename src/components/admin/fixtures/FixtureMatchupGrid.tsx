@@ -8,13 +8,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type LeagueOption = { id: string; name: string; season: string | null; isActive: boolean };
+type DivisionOption = { id: string; name: string; slug: string; sortOrder: number };
 type TeamOption = { id: string; name: string };
 type GridCell = { opponentId: string; opponentName: string; homeCount: number; awayCount: number; totalCount: number; latestKickoffAt: string | null; label: string; isSelf: boolean };
 type GridRow = { teamId: string; teamName: string; opponents: GridCell[] };
 type MatchupGridData = {
   leagues: LeagueOption[];
+  divisions: DivisionOption[];
   selectedLeagueId: string | null;
-  selectedLeagueLabel?: string;
+  selectedDivisionId: string | null;
+  selectedLeagueLabel?: string | null;
+  selectedDivisionLabel?: string | null;
   teams: TeamOption[];
   cells: GridRow[];
   summary: { scheduledPairs: number; oneWayPairs: number; completedPairs: number; missingPairs: number };
@@ -39,14 +43,28 @@ function formatLeagueLabel(league: LeagueOption) {
   return `${league.name}${league.season ? ` · ${league.season}` : ""}`;
 }
 
-export default function FixtureMatchupGrid({ initialLeagueId }: { initialLeagueId?: string }) {
+function buildGridHref(leagueId: string, divisionId?: string | null) {
+  const params = new URLSearchParams({ leagueId });
+  if (divisionId) params.set("divisionId", divisionId);
+  return `/admin/fixtures?${params.toString()}`;
+}
+
+export default function FixtureMatchupGrid({
+  initialLeagueId,
+  initialDivisionId,
+}: {
+  initialLeagueId?: string;
+  initialDivisionId?: string;
+}) {
   const [selectedLeagueId, setSelectedLeagueId] = useState(initialLeagueId ?? "");
+  const [selectedDivisionId, setSelectedDivisionId] = useState(initialDivisionId ?? "");
   const [data, setData] = useState<MatchupGridData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     setSelectedLeagueId(initialLeagueId ?? "");
-  }, [initialLeagueId]);
+    setSelectedDivisionId(initialDivisionId ?? "");
+  }, [initialLeagueId, initialDivisionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,12 +74,16 @@ export default function FixtureMatchupGrid({ initialLeagueId }: { initialLeagueI
       try {
         const params = new URLSearchParams();
         if (selectedLeagueId) params.set("leagueId", selectedLeagueId);
+        if (selectedDivisionId) params.set("divisionId", selectedDivisionId);
         const response = await fetch(`/api/admin/fixtures/matchup-grid?${params.toString()}`, { cache: "no-store" });
         if (!response.ok) throw new Error("Could not load fixture grid.");
         const result = (await response.json()) as MatchupGridData;
         if (cancelled) return;
         setData(result);
         if (!selectedLeagueId && result.selectedLeagueId) setSelectedLeagueId(result.selectedLeagueId);
+        if (result.selectedDivisionId && result.selectedDivisionId !== selectedDivisionId) {
+          setSelectedDivisionId(result.selectedDivisionId);
+        }
       } catch {
         if (!cancelled) setData(null);
       } finally {
@@ -71,10 +93,12 @@ export default function FixtureMatchupGrid({ initialLeagueId }: { initialLeagueI
 
     loadGrid();
     return () => { cancelled = true };
-  }, [selectedLeagueId]);
+  }, [selectedLeagueId, selectedDivisionId]);
 
   const leagues = data?.leagues ?? [];
+  const divisions = data?.divisions ?? [];
   const selectedLeague = useMemo(() => leagues.find((league) => league.id === selectedLeagueId) ?? null, [leagues, selectedLeagueId]);
+  const selectedDivision = useMemo(() => divisions.find((division) => division.id === selectedDivisionId) ?? null, [divisions, selectedDivisionId]);
 
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
@@ -83,38 +107,64 @@ export default function FixtureMatchupGrid({ initialLeagueId }: { initialLeagueI
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture planning grid</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Who has played who</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick a league here to control the whole fixtures page. Rows show the team. Columns show the opponent. H means the row team has been Team 1; A means they have been Team 2.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick a league and, where needed, a division. Rows show the team. Columns show the opponent. H means the row team has been Team 1; A means they have been Team 2.</p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {leagues.length === 0 ? <span className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-white/55">No leagues found</span> : null}
-            {leagues.map((league) => {
-              const isActive = selectedLeagueId === league.id;
-              return (
-                <Link
-                  key={league.id}
-                  href={`/admin/fixtures?leagueId=${league.id}`}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}
-                >
-                  {formatLeagueLabel(league)}{league.isActive ? "" : " · inactive"}
-                </Link>
-              );
-            })}
+          <div className="space-y-3">
+            <div>
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">League</div>
+              <div className="flex flex-wrap gap-2">
+                {leagues.length === 0 ? <span className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-white/55">No current leagues found</span> : null}
+                {leagues.map((league) => {
+                  const isActive = selectedLeagueId === league.id;
+                  return (
+                    <Link
+                      key={league.id}
+                      href={buildGridHref(league.id)}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}
+                    >
+                      {formatLeagueLabel(league)}{league.isActive ? "" : " · inactive"}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {divisions.length > 0 ? (
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">Division</div>
+                <div className="flex flex-wrap gap-2">
+                  {divisions.map((division) => {
+                    const isActive = selectedDivisionId === division.id;
+                    return (
+                      <Link
+                        key={division.id}
+                        href={buildGridHref(selectedLeagueId, division.id)}
+                        aria-current={isActive ? "page" : undefined}
+                        className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-sky-400/30 bg-sky-500/15 text-sky-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}
+                      >
+                        {division.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className="px-6 py-6 md:px-8">
         <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">League</div><div className="mt-2 text-sm font-semibold text-white">{selectedLeague?.name ?? data?.selectedLeagueLabel ?? "—"}</div></div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">League</div><div className="mt-2 text-sm font-semibold text-white">{selectedLeague?.name ?? data?.selectedLeagueLabel ?? "—"}</div>{selectedDivision || data?.selectedDivisionLabel ? <div className="mt-1 text-xs text-sky-200/70">{selectedDivision?.name ?? data?.selectedDivisionLabel}</div> : null}</div>
           <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-100/60">Both ways</div><div className="mt-2 text-2xl font-semibold text-white">{data?.summary.completedPairs ?? 0}</div></div>
           <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100/60">One way only</div><div className="mt-2 text-2xl font-semibold text-white">{data?.summary.oneWayPairs ?? 0}</div></div>
           <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-red-100/60">Missing</div><div className="mt-2 text-2xl font-semibold text-white">{data?.summary.missingPairs ?? 0}</div></div>
         </div>
 
         {isLoading ? <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">Loading matchup grid...</div> : null}
-        {!isLoading && (!data || data.teams.length === 0) ? <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">No teams found for this league yet.</div> : null}
+        {!isLoading && (!data || data.teams.length === 0) ? <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">No teams found for this league/division yet.</div> : null}
 
         {!isLoading && data && data.teams.length > 0 ? (
           <div className="mt-6 overflow-x-auto rounded-3xl border border-white/10 bg-black/20">
