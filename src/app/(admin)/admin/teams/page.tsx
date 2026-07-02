@@ -3,21 +3,32 @@
 // ========================================
 
 import Link from "next/link";
-import {
-  NotificationDispatchStatus,
-  type Prisma,
-  UserRole,
-} from "@prisma/client";
-import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/requireAdmin";
-import { deleteTeamAction } from "./actions";
+import { UserRole } from "@prisma/client";
+
 import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
 import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/requireAdmin";
+import { deleteTeamAction } from "./actions";
 
 async function getAdminTeams() {
   return prisma.team.findMany({
-    include: {
+    select: {
+      id: true,
+      name: true,
+      claimCode: true,
+      logoUrl: true,
+      contactName: true,
+      contactEmail: true,
+      contactPhone: true,
+      createdAt: true,
+      captainClaimedAt: true,
+      captainInviteSentAt: true,
+      captainUserId: true,
+      teamMode: true,
+      latestKickoffTime: true,
+      leagueId: true,
       league: {
         select: {
           id: true,
@@ -25,11 +36,27 @@ async function getAdminTeams() {
           season: true,
           badgeUrl: true,
           isActive: true,
+          competition: {
+            select: {
+              id: true,
+              name: true,
+              currentLeagueId: true,
+              currentLeague: {
+                select: {
+                  id: true,
+                  name: true,
+                  season: true,
+                  badgeUrl: true,
+                  isActive: true,
+                },
+              },
+            },
+          },
         },
       },
       members: {
         where: { role: "CAPTAIN" },
-        include: {
+        select: {
           user: {
             select: {
               email: true,
@@ -47,22 +74,21 @@ async function getAdminTeams() {
         },
       },
     },
+    orderBy: [{ name: "asc" }],
   });
 }
 
 type TeamListItem = Awaited<ReturnType<typeof getAdminTeams>>[number];
+type LeagueSummary = NonNullable<TeamListItem["league"]>;
+type CompetitionSummary = NonNullable<LeagueSummary["competition"]>;
 
 type TeamGroup = {
   key: string;
-  league: TeamListItem["league"] | null;
+  label: string;
+  subtitle: string;
+  badgeUrl: string | null;
+  openLeagueId: string | null;
   teams: TeamListItem[];
-};
-
-type InviteDispatchStatusSnapshot = {
-  status: NotificationDispatchStatus;
-  failureReason: string | null;
-  sentAt: Date | null;
-  createdAt: Date;
 };
 
 function formatUkDate(value: Date) {
@@ -74,25 +100,12 @@ function formatUkDate(value: Date) {
   }).format(value);
 }
 
-function getLeagueLabel(league: TeamListItem["league"]) {
-  if (!league) return "Unassigned teams";
-  return `${league.name}${league.season ? ` • ${league.season}` : ""}`;
-}
-
-function getLeagueInitials(name: string) {
-  const parts = name
-    .split(/\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 2);
-
-  if (parts.length === 0) return "LG";
-  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "LG";
+function normaliseText(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 function normaliseLeagueBadgeUrl(value?: string | null) {
   const trimmed = value?.trim();
-
   if (!trimmed) return null;
 
   if (
@@ -104,6 +117,17 @@ function normaliseLeagueBadgeUrl(value?: string | null) {
   }
 
   return `/${trimmed}`;
+}
+
+function getInitials(name: string) {
+  const parts = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length === 0) return "LG";
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "LG";
 }
 
 function getContactName(team: TeamListItem) {
@@ -128,65 +152,7 @@ function getContactPhone(team: TeamListItem) {
   return team.contactPhone || team.convertedFromLead?.phone || "—";
 }
 
-function getMetadataRecord(metadata: Prisma.JsonValue | null) {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return null;
-  }
-
-  return metadata as Record<string, unknown>;
-}
-
-function isCaptainInviteDispatch(input: {
-  metadata: Prisma.JsonValue | null;
-  bodyText: string;
-  subject: string | null;
-}) {
-  const metadata = getMetadataRecord(input.metadata);
-
-  const templateKey =
-    typeof metadata?.templateKey === "string"
-      ? metadata.templateKey.trim().toLowerCase()
-      : "";
-
-  const ctaUrl =
-    typeof metadata?.ctaUrl === "string"
-      ? metadata.ctaUrl.trim().toLowerCase()
-      : "";
-
-  const subject = input.subject?.trim().toLowerCase() || "";
-  const body = input.bodyText.toLowerCase();
-
-  return (
-    templateKey.includes("captain") ||
-    subject.includes("captain") ||
-    subject.includes("dashboard") ||
-    body.includes("/claim?code=") ||
-    body.includes("captains dashboard") ||
-    ctaUrl.includes("/claim?code=")
-  );
-}
-
-function looksLikeBounceFailure(reason: string | null) {
-  const value = reason?.trim().toLowerCase() || "";
-
-  if (!value) return false;
-
-  return (
-    value.includes("bounce") ||
-    value.includes("bounced") ||
-    value.includes("mailbox") ||
-    value.includes("recipient rejected") ||
-    value.includes("user unknown") ||
-    value.includes("does not exist") ||
-    value.includes("invalid recipient") ||
-    value.includes("550")
-  );
-}
-
-function getCaptainAccessState(
-  team: TeamListItem,
-  latestInvite: InviteDispatchStatusSnapshot | null,
-) {
+function getCaptainAccessState(team: TeamListItem) {
   const captainUser = team.members[0]?.user;
   const hasCaptain = Boolean(captainUser?.email);
   const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
@@ -196,33 +162,6 @@ function getCaptainAccessState(
       label: "Claimed",
       className:
         "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200",
-    };
-  }
-
-  if (latestInvite?.status === "FAILED") {
-    if (looksLikeBounceFailure(latestInvite.failureReason)) {
-      return {
-        label: "Invite bounced",
-        className:
-          "rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] text-rose-200",
-      };
-    }
-
-    return {
-      label: "Invite failed",
-      className:
-        "rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-200",
-    };
-  }
-
-  if (
-    latestInvite &&
-    ["QUEUED", "PROCESSING", "SENT"].includes(latestInvite.status)
-  ) {
-    return {
-      label: "Invite sent",
-      className:
-        "rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] text-sky-200",
     };
   }
 
@@ -257,45 +196,123 @@ function getCaptainAccessState(
   };
 }
 
-function groupTeamsByLeague(teams: TeamListItem[]) {
-  const sorted = [...teams].sort((a, b) => {
-    const aHasLeague = Boolean(a.league);
-    const bHasLeague = Boolean(b.league);
+function getTeamIdentityKey(team: TeamListItem) {
+  const competitionId = team.league?.competition?.id;
+  const teamName = normaliseText(team.name);
 
-    if (aHasLeague !== bHasLeague) {
-      return aHasLeague ? -1 : 1;
-    }
+  if (competitionId) {
+    return `competition:${competitionId}:team:${teamName}`;
+  }
 
-    const aLeague = a.league ? getLeagueLabel(a.league) : "ZZZ";
-    const bLeague = b.league ? getLeagueLabel(b.league) : "ZZZ";
-    const leagueComparison = aLeague.localeCompare(bLeague);
+  if (team.leagueId) {
+    return `league:${team.leagueId}:team:${teamName}`;
+  }
 
-    if (leagueComparison !== 0) {
-      return leagueComparison;
-    }
+  return `unassigned:${teamName}:${normaliseText(getContactEmail(team))}:${normaliseText(
+    getContactPhone(team),
+  )}`;
+}
 
-    return a.name.localeCompare(b.name);
-  });
+function teamDisplayScore(team: TeamListItem) {
+  let score = 0;
 
-  const groups = new Map<string, TeamGroup>();
+  if (team.captainClaimedAt) score += 1000;
+  if (team.members[0]?.user?.email) score += 500;
+  if (team.league?.competition?.currentLeagueId === team.league?.id) score += 200;
+  if (team.contactEmail) score += 50;
+  if (team.contactPhone) score += 25;
+  if (team.captainInviteSentAt) score += 10;
 
-  for (const team of sorted) {
-    const key = team.league?.id ?? "__unassigned__";
-    const existing = groups.get(key);
+  return score;
+}
 
-    if (existing) {
-      existing.teams.push(team);
+function dedupeTeamsForDisplay(teams: TeamListItem[]) {
+  const byIdentity = new Map<string, TeamListItem>();
+
+  for (const team of teams) {
+    const key = getTeamIdentityKey(team);
+    const existing = byIdentity.get(key);
+
+    if (!existing) {
+      byIdentity.set(key, team);
       continue;
     }
 
-    groups.set(key, {
-      key,
-      league: team.league,
-      teams: [team],
-    });
+    const existingScore = teamDisplayScore(existing);
+    const newScore = teamDisplayScore(team);
+
+    if (
+      newScore > existingScore ||
+      (newScore === existingScore && team.createdAt < existing.createdAt)
+    ) {
+      byIdentity.set(key, team);
+    }
   }
 
-  return [...groups.values()];
+  return [...byIdentity.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getGroupKey(team: TeamListItem) {
+  const competitionId = team.league?.competition?.id;
+  if (competitionId) return `competition:${competitionId}`;
+  if (team.leagueId) return `league:${team.leagueId}`;
+  return "__unassigned__";
+}
+
+function buildGroupFromTeam(team: TeamListItem): TeamGroup {
+  const competition = team.league?.competition ?? null;
+  const currentLeague = competition?.currentLeague ?? null;
+
+  if (competition) {
+    return {
+      key: `competition:${competition.id}`,
+      label: competition.name,
+      subtitle: `Current season: ${currentLeague?.season || "not set"}. Season entries and divisions are managed from the league season page.`,
+      badgeUrl: normaliseLeagueBadgeUrl(currentLeague?.badgeUrl || team.league?.badgeUrl),
+      openLeagueId: competition.currentLeagueId || team.league?.id || null,
+      teams: [],
+    };
+  }
+
+  if (team.league) {
+    return {
+      key: `league:${team.league.id}`,
+      label: `${team.league.name}${team.league.season ? ` • ${team.league.season}` : ""}`,
+      subtitle: team.league.isActive
+        ? "Legacy league record not yet grouped under a parent competition."
+        : "Inactive legacy league record.",
+      badgeUrl: normaliseLeagueBadgeUrl(team.league.badgeUrl),
+      openLeagueId: team.league.id,
+      teams: [],
+    };
+  }
+
+  return {
+    key: "__unassigned__",
+    label: "Unassigned teams",
+    subtitle: "Teams waiting to be assigned to a competition.",
+    badgeUrl: null,
+    openLeagueId: null,
+    teams: [],
+  };
+}
+
+function groupTeams(teams: TeamListItem[]) {
+  const canonicalTeams = dedupeTeamsForDisplay(teams);
+  const groups = new Map<string, TeamGroup>();
+
+  for (const team of canonicalTeams) {
+    const key = getGroupKey(team);
+    const existing = groups.get(key) ?? buildGroupFromTeam(team);
+    existing.teams.push(team);
+    groups.set(key, existing);
+  }
+
+  return [...groups.values()].sort((a, b) => {
+    if (a.key === "__unassigned__") return 1;
+    if (b.key === "__unassigned__") return -1;
+    return a.label.localeCompare(b.label);
+  });
 }
 
 export default async function AdminTeamsPage({
@@ -313,60 +330,10 @@ export default async function AdminTeamsPage({
   const deleted = sp.deleted === "1";
   const regenerated = sp.regenerated === "1";
   const error = sp.error;
-
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-
-  const teams = await getAdminTeams();
-  const groups = groupTeamsByLeague(teams);
-
-  const teamIds = teams.map((team) => team.id);
-
-  const recentDispatches = teamIds.length
-    ? await prisma.notificationDispatch.findMany({
-        where: {
-          sourceType: "TEAM",
-          sourceId: {
-            in: teamIds,
-          },
-          channel: "EMAIL",
-        },
-        orderBy: [{ createdAt: "desc" }],
-        select: {
-          sourceId: true,
-          status: true,
-          failureReason: true,
-          sentAt: true,
-          createdAt: true,
-          subject: true,
-          bodyText: true,
-          metadata: true,
-        },
-      })
-    : [];
-
-  const latestCaptainInviteByTeamId = new Map<string, InviteDispatchStatusSnapshot>();
-
-  for (const dispatch of recentDispatches) {
-    if (!dispatch.sourceId) continue;
-    if (latestCaptainInviteByTeamId.has(dispatch.sourceId)) continue;
-
-    if (
-      !isCaptainInviteDispatch({
-        metadata: dispatch.metadata,
-        bodyText: dispatch.bodyText,
-        subject: dispatch.subject,
-      })
-    ) {
-      continue;
-    }
-
-    latestCaptainInviteByTeamId.set(dispatch.sourceId, {
-      status: dispatch.status,
-      failureReason: dispatch.failureReason,
-      sentAt: dispatch.sentAt,
-      createdAt: dispatch.createdAt,
-    });
-  }
+  const allTeams = await getAdminTeams();
+  const displayTeams = dedupeTeamsForDisplay(allTeams);
+  const groups = groupTeams(allTeams);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
@@ -374,8 +341,7 @@ export default async function AdminTeamsPage({
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold text-white">Teams</h1>
           <p className="text-sm text-white/60">
-            Manage teams by league, keep contact details tidy, and jump straight
-            into editing without one massive flat list.
+            Manage team identities by competition. Teams are shown once even if they appear in more than one season.
           </p>
         </div>
 
@@ -393,11 +359,9 @@ export default async function AdminTeamsPage({
           {regenerated ? (
             <div className="text-emerald-300">Claim code regenerated.</div>
           ) : null}
-
           {error === "missing_id" ? (
             <div className="text-red-300">Action failed (missing id).</div>
           ) : null}
-
           {error === "has_fixtures" ? (
             <div className="text-red-300">
               Can’t delete this team because fixtures already exist for it.
@@ -409,19 +373,19 @@ export default async function AdminTeamsPage({
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-            Total teams
+            Team identities
           </div>
           <div className="mt-3 text-3xl font-semibold text-white">
-            {teams.length}
+            {displayTeams.length}
           </div>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-            League groups
+            Competitions
           </div>
           <div className="mt-3 text-3xl font-semibold text-white">
-            {groups.length}
+            {groups.filter((group) => group.key !== "__unassigned__").length}
           </div>
         </div>
 
@@ -430,236 +394,209 @@ export default async function AdminTeamsPage({
             Claimed teams
           </div>
           <div className="mt-3 text-3xl font-semibold text-white">
-            {teams.filter((team) => Boolean(team.captainClaimedAt)).length}
+            {displayTeams.filter((team) => Boolean(team.captainClaimedAt)).length}
           </div>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-            Unassigned teams
+            Hidden season duplicates
           </div>
           <div className="mt-3 text-3xl font-semibold text-white">
-            {teams.filter((team) => !team.leagueId).length}
+            {Math.max(allTeams.length - displayTeams.length, 0)}
           </div>
         </div>
       </div>
 
       <div className="space-y-6">
-        {groups.map((group) => {
-          const leagueLabel = getLeagueLabel(group.league);
-          const subtitle = group.league
-            ? group.league.isActive
-              ? "Linked teams in this live league"
-              : "Linked teams in this inactive league"
-            : "Teams waiting to be assigned to a league";
-          const leagueBadgeUrl = normaliseLeagueBadgeUrl(group.league?.badgeUrl);
+        {groups.map((group) => (
+          <section
+            key={group.key}
+            className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+          >
+            <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 text-lg font-semibold text-emerald-200">
+                  {group.badgeUrl ? (
+                    <img
+                      src={group.badgeUrl}
+                      alt=""
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    getInitials(group.label)
+                  )}
+                </div>
 
-          return (
-            <section
-              key={group.key}
-              className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
-            >
-              <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-6 md:flex-row md:items-center md:justify-between">
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 text-lg font-semibold text-emerald-200">
-                    {leagueBadgeUrl ? (
-                      <img
-                        src={leagueBadgeUrl}
-                        alt=""
-                        className="max-h-full max-w-full object-contain"
-                      />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="truncate text-xl font-semibold text-white">
+                      {group.label}
+                    </h2>
+
+                    {group.openLeagueId ? (
+                      <Link
+                        href={`/admin/leagues/${group.openLeagueId}`}
+                        className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15"
+                      >
+                        Open current season
+                      </Link>
                     ) : (
-                      getLeagueInitials(group.league?.name ?? "No League")
+                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/60">
+                        No competition assigned
+                      </span>
                     )}
                   </div>
 
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h2 className="truncate text-xl font-semibold text-white">
-                        {leagueLabel}
-                      </h2>
-
-                      {group.league ? (
-                        <Link
-                          href={`/admin/leagues/${group.league.id}`}
-                          className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15"
-                        >
-                          Open league
-                        </Link>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/60">
-                          No league assigned
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="mt-1 text-sm text-white/55">{subtitle}</p>
-                  </div>
-                </div>
-
-                <div className="inline-flex items-center rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm font-medium text-white/75">
-                  {group.teams.length} team{group.teams.length === 1 ? "" : "s"}
+                  <p className="mt-1 text-sm text-white/55">{group.subtitle}</p>
                 </div>
               </div>
 
-              <div className="divide-y divide-white/10">
-                {group.teams.map((team) => {
-                  const captainUser = team.members[0]?.user;
-                  const latestInvite =
-                    latestCaptainInviteByTeamId.get(team.id) ?? null;
-                  const accessState = getCaptainAccessState(team, latestInvite);
-                  const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
-                    team.claimCode,
-                  )}`;
-                  const isManagedTeam = team.teamMode === "MANAGED";
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm font-medium text-white/75">
+                {group.teams.length} team{group.teams.length === 1 ? "" : "s"}
+              </div>
+            </div>
 
-                  return (
-                    <div
-                      key={team.id}
-                      className="grid gap-5 px-6 py-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto] xl:items-center"
-                    >
-                      <div className="flex min-w-0 items-start gap-4">
-                        <TeamBadge
-                          name={team.name}
-                          logoUrl={team.logoUrl}
-                          size="sm"
-                        />
+            <div className="divide-y divide-white/10">
+              {group.teams.map((team) => {
+                const captainUser = team.members[0]?.user;
+                const accessState = getCaptainAccessState(team);
+                const claimLink = `${baseUrl}/claim?code=${encodeURIComponent(
+                  team.claimCode,
+                )}`;
+                const isManagedTeam = team.teamMode === "MANAGED";
+                const currentSeason = team.league?.competition?.currentLeague?.season;
 
-                        <div className="min-w-0 space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="truncate text-base font-semibold text-white">
-                              {team.name}
-                            </div>
+                return (
+                  <div
+                    key={team.id}
+                    className="grid gap-5 px-6 py-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto] xl:items-center"
+                  >
+                    <div className="flex min-w-0 items-start gap-4">
+                      <TeamBadge
+                        name={team.name}
+                        logoUrl={team.logoUrl}
+                        size="sm"
+                      />
 
-                            <span className={accessState.className}>
-                              {accessState.label}
+                      <div className="min-w-0 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="truncate text-base font-semibold text-white">
+                            {team.name}
+                          </div>
+                          <span className={accessState.className}>{accessState.label}</span>
+                          {isManagedTeam ? (
+                            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                              Managed team
                             </span>
-
-                            {isManagedTeam ? (
-                              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
-                                Managed team
-                              </span>
-                            ) : null}
-
-                            {team.latestKickoffTime ? (
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">
-                                Latest KO {team.latestKickoffTime}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <div className="grid gap-2 text-sm text-white/70 md:grid-cols-2">
-                            <div>
-                              <span className="text-white/45">Contact:</span>{" "}
-                              {getContactName(team)}
-                            </div>
-                            <div>
-                              <span className="text-white/45">Email:</span>{" "}
-                              <span className="break-all">{getContactEmail(team)}</span>
-                            </div>
-                            <div>
-                              <span className="text-white/45">Phone:</span>{" "}
-                              {getContactPhone(team)}
-                            </div>
-                            <div>
-                              <span className="text-white/45">Created:</span>{" "}
-                              {formatUkDate(team.createdAt)}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-white/55">
-                            <span className="font-mono text-white/70">
-                              {team.claimCode}
+                          ) : null}
+                          {team.latestKickoffTime ? (
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/65">
+                              Latest KO {team.latestKickoffTime}
                             </span>
-                            <CopyToClipboardButton
-                              text={claimLink}
-                              label="Copy claim link"
-                              className="rounded-lg border border-white/10 px-3 py-1.5 text-white/80 hover:bg-white/5"
-                            />
+                          ) : null}
+                        </div>
+
+                        <div className="grid gap-2 text-sm text-white/70 md:grid-cols-2">
+                          <div>
+                            <span className="text-white/45">Contact:</span> {getContactName(team)}
                           </div>
+                          <div>
+                            <span className="text-white/45">Email:</span>{" "}
+                            <span className="break-all">{getContactEmail(team)}</span>
+                          </div>
+                          <div>
+                            <span className="text-white/45">Phone:</span> {getContactPhone(team)}
+                          </div>
+                          <div>
+                            <span className="text-white/45">Created:</span> {formatUkDate(team.createdAt)}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-white/55">
+                          <span className="font-mono text-white/70">{team.claimCode}</span>
+                          <CopyToClipboardButton
+                            text={claimLink}
+                            label="Copy claim link"
+                            className="rounded-lg border border-white/10 px-3 py-1.5 text-white/80 hover:bg-white/5"
+                          />
                         </div>
                       </div>
+                    </div>
 
-                      <div className="grid gap-2 text-sm text-white/65 xl:justify-self-start">
-                        <div>
-                          <span className="text-white/45">League:</span>{" "}
-                          {team.league
-                            ? `${team.league.name}${
-                                team.league.season ? ` • ${team.league.season}` : ""
-                              }`
-                            : "No league"}
-                        </div>
-                        <div>
-                          <span className="text-white/45">Captain email:</span>{" "}
-                          <span className="break-all">
-                            {captainUser?.email ?? "—"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-white/45">Team ID:</span>{" "}
-                          <span className="font-mono text-xs text-white/70">
-                            {team.id}
-                          </span>
-                        </div>
+                    <div className="grid gap-2 text-sm text-white/65 xl:justify-self-start">
+                      <div>
+                        <span className="text-white/45">Competition:</span> {group.label}
                       </div>
+                      <div>
+                        <span className="text-white/45">Current season:</span>{" "}
+                        {currentSeason || "—"}
+                      </div>
+                      <div>
+                        <span className="text-white/45">Captain email:</span>{" "}
+                        <span className="break-all">{captainUser?.email ?? "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-white/45">Team ID:</span>{" "}
+                        <span className="font-mono text-xs text-white/70">{team.id}</span>
+                      </div>
+                    </div>
 
-                      <div className="flex flex-wrap items-center gap-3 xl:justify-end">
-                        <Link
-                          href={`/captain/team/${team.id}`}
-                          className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
-                        >
-                          Captain view
-                        </Link>
+                    <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+                      <Link
+                        href={`/captain/team/${team.id}`}
+                        className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
+                      >
+                        Captain view
+                      </Link>
 
-                        {isManagedTeam ? (
-                          <>
-                            <Link
-                              href={`/admin/teams/${team.id}/prospects`}
-                              className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                            >
-                              Prospects
-                            </Link>
-
-                            <Link
-                              href={`/admin/teams/${team.id}/communications`}
-                              className="inline-flex min-w-[120px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                            >
-                              Squad coms
-                            </Link>
-                          </>
-                        ) : (
+                      {isManagedTeam ? (
+                        <>
+                          <Link
+                            href={`/admin/teams/${team.id}/prospects`}
+                            className="inline-flex min-w-[110px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                          >
+                            Prospects
+                          </Link>
                           <Link
                             href={`/admin/teams/${team.id}/communications`}
-                            className="inline-flex min-w-[140px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                            className="inline-flex min-w-[120px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
                           >
-                            Communications
+                            Squad coms
                           </Link>
-                        )}
-
+                        </>
+                      ) : (
                         <Link
-                          href={`/admin/teams/${team.id}`}
-                          className="inline-flex min-w-[92px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                          href={`/admin/teams/${team.id}/communications`}
+                          className="inline-flex min-w-[140px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
                         >
-                          Edit
+                          Communications
                         </Link>
+                      )}
 
-                        <form action={deleteTeamAction}>
-                          <input type="hidden" name="id" value={team.id} />
-                          <input type="hidden" name="from" value="/admin/teams" />
-                          <ConfirmDeleteButton
-                            label="Delete"
-                            confirmText={`Delete "${team.name}"? This cannot be undone.`}
-                            className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
-                          />
-                        </form>
-                      </div>
+                      <Link
+                        href={`/admin/teams/${team.id}`}
+                        className="inline-flex min-w-[92px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                      >
+                        Edit
+                      </Link>
+
+                      <form action={deleteTeamAction}>
+                        <input type="hidden" name="id" value={team.id} />
+                        <input type="hidden" name="from" value="/admin/teams" />
+                        <ConfirmDeleteButton
+                          label="Delete"
+                          confirmText={`Delete "${team.name}"? This cannot be undone.`}
+                          className="inline-flex min-w-[92px] items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
+                        />
+                      </form>
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
 
         {groups.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 p-8 text-sm text-white/55">
