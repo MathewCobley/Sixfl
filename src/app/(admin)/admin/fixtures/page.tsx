@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
+
 import AdminCard from "@/components/admin/AdminCard";
 import FixtureMatchupGrid from "@/components/admin/fixtures/FixtureMatchupGrid";
 import FixturesAdminScreen from "@/components/admin/fixtures/FixturesAdminScreen";
@@ -11,6 +12,7 @@ import {
   publishAndEmailLeagueFixtureWeekAction,
   publishAndEmailLeagueFixturesAction,
 } from "@/app/(admin)/admin/fixtures/publish-actions";
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -58,7 +60,7 @@ function buildPublishNotice(input: {
 
   const leagueId = getSearchParamValue(input.searchParams.leagueId);
   const leagueName =
-    input.leagues.find((league) => league.id === leagueId)?.name ?? "this league";
+    input.leagues.find((league) => league.id === leagueId)?.name ?? "this current season";
   const round = getSearchParamValue(input.searchParams.round);
   const scopeLabel = round ? `Week ${round} for ${leagueName}` : leagueName;
 
@@ -153,7 +155,7 @@ function buildChaseNotice(
   if (notice === "sms_error") {
     return {
       tone: "error",
-      message: `Something went wrong while trying to queue the chase SMS.`,
+      message: "Something went wrong while trying to queue the chase SMS.",
     };
   }
 
@@ -177,10 +179,13 @@ export default async function AdminFixturesPage({
   await requireAdmin();
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
+  const currentLeagueIds = await getCurrentLeagueIds();
+  const currentLeagueWhere = { id: { in: currentLeagueIds } };
 
   const [leagues, teams, venues, referees, fixtures] = await Promise.all([
     prisma.league.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      where: currentLeagueWhere,
+      orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: {
         id: true,
         name: true,
@@ -226,6 +231,11 @@ export default async function AdminFixturesPage({
     }),
 
     prisma.fixture.findMany({
+      where: {
+        leagueId: {
+          in: currentLeagueIds,
+        },
+      },
       orderBy: [{ kickoffAt: "desc" }, { round: "asc" }, { position: "asc" }],
       select: {
         id: true,
@@ -241,7 +251,6 @@ export default async function AdminFixturesPage({
         kickoffAt: true,
         publishedAt: true,
         matchFeePence: true,
-
         socialPostType: true,
         socialPostStatus: true,
         socialNeedsApproval: true,
@@ -250,7 +259,6 @@ export default async function AdminFixturesPage({
         socialQueuedAt: true,
         socialApprovedAt: true,
         socialPublishedAt: true,
-
         venue: {
           select: {
             id: true,
@@ -340,9 +348,7 @@ export default async function AdminFixturesPage({
     searchParams: resolvedSearchParams,
     leagues: leagues.map((league) => ({ id: league.id, name: league.name })),
   });
-
   const chaseNotice = buildChaseNotice(resolvedSearchParams);
-
   const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
   const screenData = {
@@ -413,7 +419,6 @@ export default async function AdminFixturesPage({
         homeScore: fixture.result?.homeScore ?? null,
         awayScore: fixture.result?.awayScore ?? null,
         resultIsDisputed: fixture.result?.isDisputed ?? false,
-
         socialPostType: fixture.socialPostType,
         socialPostStatus: fixture.socialPostStatus,
         socialNeedsApproval: fixture.socialNeedsApproval,
@@ -422,7 +427,6 @@ export default async function AdminFixturesPage({
         socialQueuedAtIso: fixture.socialQueuedAt?.toISOString() ?? null,
         socialApprovedAtIso: fixture.socialApprovedAt?.toISOString() ?? null,
         socialPublishedAtIso: fixture.socialPublishedAt?.toISOString() ?? null,
-
         homeConfirmationStatus: homeConfirmationStatus as
           | FixtureCaptainConfirmationStatus
           | "OVERDUE"
@@ -431,7 +435,6 @@ export default async function AdminFixturesPage({
         homeConfirmedAtIso: homeConfirmation?.confirmedAt?.toISOString() ?? null,
         homeIssueRaisedAtIso: homeConfirmation?.issueRaisedAt?.toISOString() ?? null,
         homeLastChasedAtIso: homeConfirmation?.lastChasedAt?.toISOString() ?? null,
-
         awayConfirmationStatus: awayConfirmationStatus as
           | FixtureCaptainConfirmationStatus
           | "OVERDUE"
@@ -456,7 +459,7 @@ export default async function AdminFixturesPage({
               Send fixtures to teams
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-white/60">
-              Draft fixtures stay private until you publish them. Publish one week at a time to keep later fixtures in draft, or use the publish-all control only when the full schedule is ready.
+              Draft fixtures stay private until you publish them. Only current competition seasons are shown here. Archive seasons stay viewable but cannot be accidentally published from this page.
             </p>
           </div>
         </div>
@@ -464,12 +467,7 @@ export default async function AdminFixturesPage({
         {!emailReplyConfigured ? (
           <div className="px-6 pt-6 md:px-8">
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              Reply-by-email is not configured yet. Add{" "}
-              <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the
-              deployed environment, for example{" "}
-              <span className="font-mono">replies.sixfl.co.uk</span>, before
-              publishing fixtures because this flow emails teams and queues reminder
-              emails.
+              Reply-by-email is not configured yet. Add <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the deployed environment, for example <span className="font-mono">replies.sixfl.co.uk</span>, before publishing fixtures because this flow emails teams and queues reminder emails.
             </div>
           </div>
         ) : null}
@@ -624,7 +622,7 @@ export default async function AdminFixturesPage({
                   <form action={publishAndEmailLeagueFixturesAction} className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
                     <input type="hidden" name="leagueId" value={item.league.id} />
                     <p className="mb-3 text-xs leading-5 text-amber-100/80">
-                      Use this only when you want every remaining draft fixture for this league to go live and email teams.
+                      Use this only when you want every remaining draft fixture for this current season to go live and email teams.
                     </p>
                     <button
                       type="submit"
@@ -645,6 +643,12 @@ export default async function AdminFixturesPage({
               </div>
             );
           })}
+
+          {publishSummary.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-white/10 bg-black/30 p-6 text-sm text-white/55 md:col-span-2 xl:col-span-3">
+              No current league seasons are available for fixture publishing.
+            </div>
+          ) : null}
         </div>
       </AdminCard>
 
