@@ -5,17 +5,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
+
+import TeamBadge from "@/components/admin/TeamBadge";
+import LeagueForm from "@/components/admin/leagues/LeagueForm";
+import {
+  getLeagueDivisions,
+  getTeamDivisionMap,
+} from "@/lib/league-divisions";
+import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
-import LeagueForm from "@/components/admin/leagues/LeagueForm";
-import TeamBadge from "@/components/admin/TeamBadge";
 import { updateLeagueAction } from "@/app/(admin)/admin/leagues/actions";
+import {
+  createDefaultDivisionsAction,
+  createLeagueDivisionAction,
+} from "./division-actions";
+import { updateTeamDivisionAction } from "./team-division-actions";
 
 function formatDay(dayOfWeek: string | null) {
-  if (!dayOfWeek) {
-    return "—";
-  }
+  if (!dayOfWeek) return "—";
 
   switch (dayOfWeek) {
     case "MONDAY":
@@ -40,9 +48,7 @@ function formatDay(dayOfWeek: string | null) {
 }
 
 function formatLeagueType(leagueType: string | null) {
-  if (!leagueType) {
-    return "—";
-  }
+  if (!leagueType) return "—";
 
   switch (leagueType) {
     case "MENS":
@@ -99,16 +105,13 @@ type LeagueSettingsRow = {
   targetTeamCount: number | null;
 };
 
-export default async function EditLeaguePage({
-  params,
-  searchParams,
-}: Props) {
+export default async function EditLeaguePage({ params, searchParams }: Props) {
   await requireAdmin();
 
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
 
-  const [league, settingsRows] = await Promise.all([
+  const [league, settingsRows, divisions, teamDivisionMap] = await Promise.all([
     prisma.league.findUnique({
       where: { id },
       include: {
@@ -123,9 +126,7 @@ export default async function EditLeaguePage({
             captainLinkedAt: true,
             captainClaimedAt: true,
           },
-          orderBy: {
-            name: "asc",
-          },
+          orderBy: { name: "asc" },
         },
         _count: {
           select: {
@@ -147,11 +148,11 @@ export default async function EditLeaguePage({
       WHERE id = ${id}
       LIMIT 1
     `),
+    getLeagueDivisions(id),
+    getTeamDivisionMap(id),
   ]);
 
-  if (!league) {
-    notFound();
-  }
+  if (!league) notFound();
 
   const settings = settingsRows[0] ?? {
     requiredRefereesPerNight: 1,
@@ -167,46 +168,35 @@ export default async function EditLeaguePage({
 
   const contactMap = new Map<string, NonNullable<(typeof teamContacts)[number]>>();
   for (const snapshot of teamContacts) {
-    if (snapshot) {
-      contactMap.set(snapshot.teamId, snapshot);
-    }
+    if (snapshot) contactMap.set(snapshot.teamId, snapshot);
   }
 
   const boundUpdateAction = updateLeagueAction.bind(null, league.id);
-
   const created = resolvedSearchParams?.created === "1";
+  const divisionsUpdated = typeof resolvedSearchParams?.divisions === "string";
+  const divisionError =
+    typeof resolvedSearchParams?.divisionError === "string"
+      ? resolvedSearchParams.divisionError
+      : null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
-          <Link
-            href="/admin/leagues"
-            className="text-sm text-emerald-300 hover:text-emerald-200"
-          >
+          <Link href="/admin/leagues" className="text-sm text-emerald-300 hover:text-emerald-200">
             ← Back to leagues
           </Link>
-
           <h1 className="text-3xl font-semibold text-white">{league.name}</h1>
-
           <p className="text-sm text-white/60">
-            Admin view for this league. Edit settings, review linked teams, and
-            manage the live setup.
+            Admin view for this league. Edit settings, manage divisions, review linked teams, and manage the live setup.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Link
-            href="/admin/teams/new"
-            className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-          >
+          <Link href="/admin/teams/new" className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500">
             Add team
           </Link>
-
-          <Link
-            href={`/leagues/${league.slug}`}
-            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
-          >
+          <Link href={`/leagues/${league.slug}`} className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
             View public page
           </Link>
         </div>
@@ -218,13 +208,22 @@ export default async function EditLeaguePage({
         </div>
       ) : null}
 
+      {divisionsUpdated ? (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          League divisions updated.
+        </div>
+      ) : null}
+
+      {divisionError ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          Division update failed. Check the division name and selected team assignment.
+        </div>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         <div className="space-y-6">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
-            <h2 className="mb-6 text-lg font-semibold text-white">
-              League settings
-            </h2>
-
+            <h2 className="mb-6 text-lg font-semibold text-white">League settings</h2>
             <LeagueForm
               mode="edit"
               action={boundUpdateAction}
@@ -253,21 +252,73 @@ export default async function EditLeaguePage({
             />
           </div>
 
+          <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6 md:p-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Divisions</h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Use divisions when one league has separate tables and fixture pools, such as Premiership and Championship.
+                </p>
+              </div>
+              <form action={createDefaultDivisionsAction}>
+                <input type="hidden" name="leagueId" value={league.id} />
+                <button type="submit" className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20">
+                  Add Premiership + Championship
+                </button>
+              </form>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {divisions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/60 md:col-span-2">
+                  No divisions yet. Add Premiership and Championship to split this league into two divisions.
+                </div>
+              ) : (
+                divisions.map((division) => (
+                  <div key={division.id} className="rounded-2xl border border-white/10 bg-black/25 p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{division.name}</h3>
+                        <p className="mt-1 text-xs text-white/45">/{division.slug}</p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70">
+                        {division.teamCount} team{division.teamCount === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <form action={createLeagueDivisionAction} className="mt-5 grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_1fr_120px_auto] md:items-end">
+              <input type="hidden" name="leagueId" value={league.id} />
+              <label className="space-y-2 text-sm text-white/60">
+                <span>Division name</span>
+                <input name="name" placeholder="Premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" />
+              </label>
+              <label className="space-y-2 text-sm text-white/60">
+                <span>Slug</span>
+                <input name="slug" placeholder="premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" />
+              </label>
+              <label className="space-y-2 text-sm text-white/60">
+                <span>Order</span>
+                <input name="sortOrder" type="number" defaultValue={divisions.length + 1} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" />
+              </label>
+              <button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400">
+                Add division
+              </button>
+            </form>
+          </div>
+
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">
-                  League communications
-                </h2>
+                <h2 className="text-lg font-semibold text-white">League communications</h2>
                 <p className="mt-1 text-sm text-white/60">
                   Whole-league email and SMS sending now lives in the dedicated communications page.
                 </p>
               </div>
-
-              <Link
-                href={`/admin/leagues/${league.id}/communications`}
-                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-              >
+              <Link href={`/admin/leagues/${league.id}/communications`} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
                 Open communications
               </Link>
             </div>
@@ -281,10 +332,7 @@ export default async function EditLeaguePage({
                   {league._count.teams} team{league._count.teams === 1 ? "" : "s"} linked to this league.
                 </p>
               </div>
-              <Link
-                href="/admin/teams/new"
-                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-              >
+              <Link href="/admin/teams/new" className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
                 Add team
               </Link>
             </div>
@@ -299,32 +347,34 @@ export default async function EditLeaguePage({
                   const contact = contactMap.get(team.id);
                   const contactEmail = contact?.primaryContact.email;
                   const contactPhone = contact?.primaryContact.phone;
+                  const selectedDivisionId = teamDivisionMap.get(team.id) ?? "";
 
                   return (
-                    <Link
-                      key={team.id}
-                      href={`/admin/teams/${team.id}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:bg-white/[0.06]"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <TeamBadge name={team.name} logoUrl={team.logoUrl} size="sm" />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">
-                            {team.name}
+                    <div key={team.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <Link href={`/admin/teams/${team.id}`} className="flex min-w-0 items-center gap-3 transition hover:text-emerald-300">
+                          <TeamBadge name={team.name} logoUrl={team.logoUrl} size="sm" />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-white">{team.name}</div>
+                            <div className="truncate text-xs text-white/45">{contactEmail || "No email"} · {contactPhone || "No phone"}</div>
                           </div>
-                          <div className="truncate text-xs text-white/45">
-                            {contactEmail || "No email"} · {contactPhone || "No phone"}
-                          </div>
-                        </div>
+                        </Link>
+
+                        <form action={updateTeamDivisionAction} className="grid w-full gap-2 sm:grid-cols-[1fr_auto] lg:w-[420px]">
+                          <input type="hidden" name="leagueId" value={league.id} />
+                          <input type="hidden" name="teamId" value={team.id} />
+                          <select name="divisionId" defaultValue={selectedDivisionId} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-400/50">
+                            <option value="">No division</option>
+                            {divisions.map((division) => (
+                              <option key={division.id} value={division.id}>{division.name}</option>
+                            ))}
+                          </select>
+                          <button type="submit" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
+                            Save division
+                          </button>
+                        </form>
                       </div>
-                      <span className="shrink-0 text-xs text-white/40">
-                        {team.captainClaimedAt
-                          ? "Claimed"
-                          : team.captainLinkedAt || team.captainUserId
-                            ? "Linked"
-                            : "Unclaimed"}
-                      </span>
-                    </Link>
+                    </div>
                   );
                 })
               )}
@@ -336,66 +386,18 @@ export default async function EditLeaguePage({
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
             <h2 className="text-lg font-semibold text-white">Overview</h2>
             <dl className="mt-5 space-y-4 text-sm">
-              <div>
-                <dt className="text-white/45">Status</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {league.isActive ? "Active" : "Inactive"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Area</dt>
-                <dd className="mt-1 font-medium text-white">{league.area || "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Day</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {formatDay(league.dayOfWeek)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Type</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {formatLeagueType(league.leagueType)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Proposed start date</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {formatDisplayDate(settings.proposedStartDate)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Minutes per game</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {settings.minutesPerGame ? `${settings.minutesPerGame} minutes` : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Cost per team per match</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {formatCurrency(settings.costPerTeamPerMatchPence)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Target teams</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {settings.targetTeamCount ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Refs needed per night</dt>
-                <dd className="mt-1 font-medium text-white">
-                  {settings.requiredRefereesPerNight}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Fixtures</dt>
-                <dd className="mt-1 font-medium text-white">{league._count.fixtures}</dd>
-              </div>
-              <div>
-                <dt className="text-white/45">Leads</dt>
-                <dd className="mt-1 font-medium text-white">{league._count.interestLeads}</dd>
-              </div>
+              <div><dt className="text-white/45">Status</dt><dd className="mt-1 font-medium text-white">{league.isActive ? "Active" : "Inactive"}</dd></div>
+              <div><dt className="text-white/45">Area</dt><dd className="mt-1 font-medium text-white">{league.area || "—"}</dd></div>
+              <div><dt className="text-white/45">Day</dt><dd className="mt-1 font-medium text-white">{formatDay(league.dayOfWeek)}</dd></div>
+              <div><dt className="text-white/45">Type</dt><dd className="mt-1 font-medium text-white">{formatLeagueType(league.leagueType)}</dd></div>
+              <div><dt className="text-white/45">Divisions</dt><dd className="mt-1 font-medium text-white">{divisions.length || "—"}</dd></div>
+              <div><dt className="text-white/45">Proposed start date</dt><dd className="mt-1 font-medium text-white">{formatDisplayDate(settings.proposedStartDate)}</dd></div>
+              <div><dt className="text-white/45">Minutes per game</dt><dd className="mt-1 font-medium text-white">{settings.minutesPerGame ? `${settings.minutesPerGame} minutes` : "—"}</dd></div>
+              <div><dt className="text-white/45">Cost per team per match</dt><dd className="mt-1 font-medium text-white">{formatCurrency(settings.costPerTeamPerMatchPence)}</dd></div>
+              <div><dt className="text-white/45">Target teams</dt><dd className="mt-1 font-medium text-white">{settings.targetTeamCount ?? "—"}</dd></div>
+              <div><dt className="text-white/45">Refs needed per night</dt><dd className="mt-1 font-medium text-white">{settings.requiredRefereesPerNight}</dd></div>
+              <div><dt className="text-white/45">Fixtures</dt><dd className="mt-1 font-medium text-white">{league._count.fixtures}</dd></div>
+              <div><dt className="text-white/45">Leads</dt><dd className="mt-1 font-medium text-white">{league._count.interestLeads}</dd></div>
             </dl>
           </div>
         </div>
