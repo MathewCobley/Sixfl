@@ -6,6 +6,7 @@ import { PaymentChargeStatus } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
+import { syncFixtureOverpaymentCredit } from "@/lib/payments/team-credit-pot";
 import { prisma } from "@/lib/prisma";
 
 function getLondonDateKey(value: Date | null | undefined) {
@@ -24,6 +25,18 @@ function appendCoveredNote(description: string | null, paidTotalPence: number) {
 
   if (!cleaned) return note;
   if (cleaned.includes("Covered by player payments")) return cleaned;
+
+  return `${cleaned}\n${note}`;
+}
+
+function appendOverpaymentNote(description: string | null, overpaymentPence: number) {
+  if (overpaymentPence <= 0) return description;
+
+  const note = `Overpayment of £${(overpaymentPence / 100).toFixed(2)} added to team pot.`;
+  const cleaned = description?.trim();
+
+  if (!cleaned) return note;
+  if (cleaned.includes("added to team pot")) return cleaned;
 
   return `${cleaned}\n${note}`;
 }
@@ -108,11 +121,31 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     charges.find((charge) => getLondonDateKey(charge.dueDate) === fixtureDateKey) ??
     null;
 
-  if (!matchingCharge || paidTotalPence < matchingCharge.amountPence) {
+  if (!matchingCharge) {
     return {
-      chargeId: matchingCharge?.id ?? null,
+      chargeId: null,
       paidTotalPence,
       covered: false,
+      overpaymentPence: 0,
+    };
+  }
+
+  const overpaymentPence = Math.max(paidTotalPence - matchingCharge.amountPence, 0);
+
+  await syncFixtureOverpaymentCredit({
+    teamId: input.teamId,
+    fixtureId: input.fixtureId,
+    chargeId: matchingCharge.id,
+    paidTotalPence,
+    chargeAmountPence: matchingCharge.amountPence,
+  });
+
+  if (paidTotalPence < matchingCharge.amountPence) {
+    return {
+      chargeId: matchingCharge.id,
+      paidTotalPence,
+      covered: false,
+      overpaymentPence,
     };
   }
 
@@ -125,7 +158,10 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     where: { id: matchingCharge.id },
     data: {
       status: "PAID",
-      description: appendCoveredNote(matchingCharge.description, paidTotalPence),
+      description: appendOverpaymentNote(
+        appendCoveredNote(matchingCharge.description, paidTotalPence),
+        overpaymentPence,
+      ),
     },
   });
 
@@ -135,5 +171,6 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     chargeId: matchingCharge.id,
     paidTotalPence,
     covered: true,
+    overpaymentPence,
   };
 }
