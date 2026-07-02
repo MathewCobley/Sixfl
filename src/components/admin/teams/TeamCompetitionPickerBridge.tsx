@@ -133,6 +133,13 @@ function renderPicker(input: {
 
   setActive(buttons, input.selectedCompetitionId);
 
+  const selectedCompetition = input.competitions.find(
+    (competition) => competition.id === input.selectedCompetitionId,
+  );
+  if (selectedCompetition?.currentLeagueId) {
+    input.leagueSelect.value = selectedCompetition.currentLeagueId;
+  }
+
   if (input.competitions.length === 0) {
     const empty = document.createElement("div");
     empty.className = "rounded-xl border border-dashed border-white/10 bg-black/20 px-4 py-3 text-sm text-white/55";
