@@ -86,6 +86,30 @@ model VerificationToken {
  * SIXFL league models
  */
 
+model LeagueCompetition {
+  id       String  @id @default(cuid())
+  name     String
+  slug     String  @unique
+  area     String?
+  dayOfWeek PreferredNight?
+  leagueType LeagueType?
+  venueName String?
+  isActive Boolean @default(true)
+
+  currentLeagueId String?
+  currentLeague   League? @relation("CurrentCompetitionLeague", fields: [currentLeagueId], references: [id], onDelete: SetNull)
+
+  leagues League[] @relation("CompetitionSeasons")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([area])
+  @@index([dayOfWeek])
+  @@index([leagueType])
+}
+
 model League {
   id       String  @id @default(cuid())
   name     String
@@ -105,6 +129,10 @@ model League {
   badgeUrl     String?
   ctaText      String?
 
+  competitionId String?
+  competition   LeagueCompetition? @relation("CompetitionSeasons", fields: [competitionId], references: [id], onDelete: SetNull)
+  currentForCompetitions LeagueCompetition[] @relation("CurrentCompetitionLeague")
+
   teams          Team[]
   divisions      LeagueDivision[]
   fixtures       Fixture[]
@@ -116,6 +144,8 @@ model League {
   updatedAt DateTime @updatedAt
 
   @@unique([name, season])
+  @@index([competitionId])
+  @@index([competitionId, season])
   @@index([isActive])
   @@index([area])
   @@index([dayOfWeek])
