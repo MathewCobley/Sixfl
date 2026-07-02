@@ -177,7 +177,11 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
 
   const [fixtures, members, prospects, allCharges] = await Promise.all([
     prisma.fixture.findMany({
-      where: { OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }], status: { in: ["SCHEDULED", "COMPLETED"] } },
+      where: {
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        publishedAt: { not: null },
+        status: { in: ["SCHEDULED", "COMPLETED"] },
+      },
       orderBy: [{ kickoffAt: "desc" }],
       take: 40,
       include: {
@@ -410,9 +414,9 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.3fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Choose fixture</h2>
-          <p className="mt-1 text-sm text-white/55">Newest fixtures are shown first. Team fee status includes player payments and adjusted charges.</p>
+          <p className="mt-1 text-sm text-white/55">Only published fixtures are shown. Team fee status includes player payments and adjusted charges.</p>
           <div className="mt-5 space-y-2">
-            {fixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No fixtures are available for this team yet.</div> : null}
+            {fixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No published fixtures are available for this team yet.</div> : null}
             {fixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               const isPast = fixture.kickoffAt < now;
@@ -445,18 +449,76 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
             <form action={createCaptainSquadPaymentCollectionAction} className="mt-5 space-y-5">
               <input type="hidden" name="teamId" value={team.id} />
               <input type="hidden" name="fixtureId" value={selectedFixture.id} />
-              <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4"><label htmlFor="amount" className="text-sm font-medium text-emerald-50">Default amount per player</label><div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center"><input id="amount" name="amount" type="text" inputMode="decimal" defaultValue={(defaultAmount / 100).toFixed(2)} className="w-full max-w-[180px] rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60" /><p className="text-sm text-emerald-100/70">This fills the standard amount. Change individual player boxes below for subs or guests.</p></div></div>
-              <div className={`grid gap-4 ${selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-white">Linked squad members</h3><div className="mt-3 space-y-2">{members.map((member) => { const existingFee = feeByMemberId.get(member.id); const isPaid = existingFee?.status === "PAID"; const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2); return <div key={member.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>{isPaid ? <input type="hidden" name="player" value={`member:${member.id}`} /> : null}<label className="flex items-start gap-3 text-white/75"><input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={selectedMemberIds.has(member.id)} disabled={isPaid} className="mt-1" /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>{existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}</span><span className="mt-1 block text-xs text-white/45">{member.user.email || "No email saved"}</span></span></label><div className="mt-3 flex items-center gap-2 pl-7"><label htmlFor={`amount_member_${member.id}`} className="text-xs font-medium text-white/50">Amount</label><input id={`amount_member_${member.id}`} name={`amount_member_${member.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />{isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}</div></div>; })}</div></div>
-                {selectableProspects.length > 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h3 className="font-semibold text-white">Extra / unlinked players</h3><div className="mt-3 space-y-2">{selectableProspects.map((prospect) => { const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim(); const existingFee = feeByProspectId.get(prospect.id); const isPaid = existingFee?.status === "PAID"; const amountValue = ((existingFee?.amountPence ?? defaultAmount) / 100).toFixed(2); return <div key={prospect.id} className={`rounded-xl border border-white/10 p-3 text-sm ${isPaid ? "bg-emerald-500/[0.06]" : "bg-white/[0.03]"}`}>{isPaid ? <input type="hidden" name="player" value={`prospect:${prospect.id}`} /> : null}<label className="flex items-start gap-3 text-white/75"><input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={selectedProspectIds.has(prospect.id)} disabled={isPaid} className="mt-1" /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed player"}</span>{existingFee ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getFeeStatusClasses(existingFee.status)}`}>{getFeeStatusLabel(existingFee.status)}</span> : null}</span><span className="block text-xs text-white/45">{[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact saved"}</span></span></label><div className="mt-3 flex items-center gap-2 pl-7"><label htmlFor={`amount_prospect_${prospect.id}`} className="text-xs font-medium text-white/50">Amount</label><input id={`amount_prospect_${prospect.id}`} name={`amount_prospect_${prospect.id}`} type="text" inputMode="decimal" defaultValue={amountValue} disabled={isPaid} className="w-24 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-45" />{isPaid ? <span className="text-xs text-emerald-100/65">Locked because already paid</span> : <span className="text-xs text-white/35">Use 0.00 to waive</span>}</div></div>; })}</div></div> : null}
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-sm font-semibold text-white">{getFixtureLabel({ homeTeamName: selectedFixture.homeTeam.name, awayTeamName: selectedFixture.awayTeam.name })}</div>
+                <div className="mt-1 text-xs text-white/50">{formatUkDateTime(selectedFixture.kickoffAt)}{selectedFixture.venue?.name ? ` · ${selectedFixture.venue.name}` : ""}</div>
               </div>
-              <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">Create / refresh payment links</button>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm text-white/60">Default amount per player</label>
+                  <div className="relative mt-2">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/45">£</span>
+                    <input type="number" name="defaultAmountPounds" min="0.01" step="0.01" defaultValue={(defaultAmount / 100).toFixed(2)} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 pl-8 text-white outline-none focus:border-emerald-400/40" />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
+                  Team fee: <span className="font-semibold text-white">{formatMoney(teamFeePence)}</span><br />
+                  Current player allocation: <span className="font-semibold text-white">{formatMoney(totals.total)}</span><br />
+                  Paid player payments count against the team ledger.
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-sm font-semibold text-white">Players</div>
+                {[...members.map((member) => ({ kind: "member" as const, id: member.id, label: member.user.name || member.user.email || "Unnamed member", contact: member.user.email, checked: selectedMemberIds.has(member.id), fee: feeByMemberId.get(member.id) })), ...selectableProspects.map((prospect) => ({ kind: "prospect" as const, id: prospect.id, label: [prospect.firstName, prospect.lastName].filter(Boolean).join(" ") || prospect.email || prospect.phone || "Unnamed prospect", contact: getPlayerContact({ prospectEmail: prospect.email, prospectPhone: prospect.phone }), checked: selectedProspectIds.has(prospect.id), fee: feeByProspectId.get(prospect.id) }))].map((player) => (
+                  <div key={`${player.kind}-${player.id}`} className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:grid-cols-[minmax(0,1fr)_150px_170px] md:items-center">
+                    <label className="flex items-start gap-3">
+                      <input type="checkbox" name={player.kind === "member" ? "teamMemberIds" : "prospectIds"} value={player.id} defaultChecked={player.checked} className="mt-1" />
+                      <span>
+                        <span className="block text-sm font-semibold text-white">{player.label}</span>
+                        <span className="mt-1 block text-xs text-white/45">{player.contact || "No contact saved"}</span>
+                      </span>
+                    </label>
+                    <div>
+                      <label className="sr-only">Player amount</label>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-white/45">£</span>
+                        <input type="number" name={`${player.kind}-${player.id}-amountPounds`} min="0" step="0.01" defaultValue={player.fee ? (player.fee.amountPence / 100).toFixed(2) : ""} placeholder="Default" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 pl-7 text-sm text-white outline-none focus:border-emerald-400/40" />
+                      </div>
+                    </div>
+                    <select name={`${player.kind}-${player.id}-collectionMethod`} defaultValue={player.fee?.status === "PAID" ? "CAPTAIN_PAID" : player.fee?.status === "WAIVED" ? "WAIVED" : "PAYMENT_LINK"} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40">
+                      <option value="PAYMENT_LINK">Send payment link</option>
+                      <option value="CAPTAIN_PAID">Captain already collected</option>
+                      <option value="WAIVED">Waive / no link</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">Save collection</button>
             </form>
-          ) : <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a fixture before collecting player payments.</div>}
+          ) : (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">Choose a published fixture first.</div>
+          )}
         </div>
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-lg font-semibold text-white">Payment tracker</h2><p className="mt-1 text-sm text-white/55">Share each player link and watch the status change to paid once Stripe confirms payment.</p></div>{selectedFixture ? <div className="text-sm text-white/55">{getFixtureLabel({ homeTeamName: selectedFixture.homeTeam.name, awayTeamName: selectedFixture.awayTeam.name })}</div> : null}</div><div className="mt-5 space-y-3">{activeFees.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">No player payment collection has been created for this fixture yet.</div> : null}{activeFees.map((fee) => { const playerName = getPlayerName(fee); const contact = getPlayerContact({ memberEmail: fee.teamMember?.user.email, prospectEmail: fee.prospect?.email, prospectPhone: fee.prospect?.phone }); const shareText = `Hi ${playerName}, please pay your ${formatMoney(fee.amountPence)} SIXFL match fee here: ${fee.paymentUrl ?? ""}`; const shareHref = fee.paymentUrl ? `https://wa.me/?text=${encodeURIComponent(shareText)}` : null; return <div key={fee.id} className="grid gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><div className="flex flex-wrap items-center gap-2"><div className="font-semibold text-white">{playerName}</div><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${getFeeStatusClasses(fee.status)}`}>{getFeeStatusLabel(fee.status)}</span><span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/60">{formatMoney(fee.amountPence)}</span></div><div className="mt-1 text-sm text-white/50">{contact}</div>{fee.paidAt ? <div className="mt-1 text-xs text-emerald-100/65">Paid {formatUkDateTime(fee.paidAt)}</div> : null}{fee.waivedAt ? <div className="mt-1 text-xs text-sky-100/65">Waived / no link {formatUkDateTime(fee.waivedAt)}</div> : null}{fee.status === "OPEN" && fee.paymentUrl ? <div className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/60">{fee.paymentUrl}</div> : null}</div><div className="flex flex-wrap gap-2 lg:justify-end">{fee.status === "OPEN" && fee.paymentUrl ? <><Link href={fee.paymentUrl} target="_blank" className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">Open link</Link>{shareHref ? <Link href={shareHref} target="_blank" className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10">Share on WhatsApp</Link> : null}</> : fee.status === "PAID" ? <span className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100">Paid</span> : fee.status === "WAIVED" ? <span className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-100">No SIXFL link</span> : <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/50">No payment link</span>}</div></div>; })}</div></section>
+      {activeFees.length > 0 ? (
+        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <h2 className="text-lg font-semibold text-white">Current collection rows</h2>
+          <div className="mt-4 divide-y divide-white/10">
+            {activeFees.map((fee) => (
+              <div key={fee.id} className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="font-semibold text-white">{getPlayerName(fee)}</div>
+                  <div className="mt-1 text-xs text-white/45">{formatMoney(fee.amountPence)}</div>
+                </div>
+                <span className={`rounded-full border px-3 py-1 text-xs font-medium ${getFeeStatusClasses(fee.status)}`}>{getFeeStatusLabel(fee.status)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
