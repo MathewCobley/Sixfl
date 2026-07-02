@@ -24,6 +24,7 @@ import RefereeNightFixtureSyncBridge from "@/components/admin/referee-nights/Ref
 import AdminRefereeCommsHistoryBridge from "@/components/admin/referees/AdminRefereeCommsHistoryBridge";
 import RefereeWelcomeInviteBridge from "@/components/admin/referees/RefereeWelcomeInviteBridge";
 import AdminSocialResultsGeneratorLinksBridge from "@/components/admin/social/AdminSocialResultsGeneratorLinksBridge";
+import AdminCurrentLeagueSelectBridge from "@/components/admin/teams/AdminCurrentLeagueSelectBridge";
 import TeamDivisionPickerBridge from "@/components/admin/teams/TeamDivisionPickerBridge";
 import TeamReplaceFixturesButtonBridge from "@/components/admin/teams/TeamReplaceFixturesButtonBridge";
 import AppHeader from "@/components/layout/AppHeader";
@@ -57,6 +58,7 @@ export default async function AdminLayout({
       <AdminSidebarDesktopColumnsBridge />
       <AdminLeagueSeasonsBridge />
       <AdminDivisionSelectBridge />
+      <AdminCurrentLeagueSelectBridge />
       <TeamDivisionPickerBridge />
       <TeamReplaceFixturesButtonBridge />
       <RefereeNightFixtureSyncBridge />
