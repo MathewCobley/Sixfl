@@ -313,7 +313,7 @@ export default async function LeaguesPage() {
                 key={league.id}
                 href={league.href}
                 eventName="league_card_click"
-                eventData={{ league: league.slug }}
+                eventProps={{ league: league.slug }}
                 className={`group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] transition hover:bg-white/[0.07] ${league.border}`}
               >
                 <div className="relative h-44 overflow-hidden bg-white/[0.04]">
