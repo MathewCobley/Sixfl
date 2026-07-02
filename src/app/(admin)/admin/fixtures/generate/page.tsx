@@ -10,9 +10,9 @@ import { getAllLeagueDivisionOptions } from "@/lib/league-divisions";
 import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { backfillFixtureMatchFeeChargesAction } from "./actions";
 import { generateDraftFixturesWithDivisionsAction } from "./division-actions";
 import { backfillRefereeAssignmentsAction } from "./referee-backfill-actions";
+import { backfillStandardFixtureFeesAction } from "./standard-fee-actions";
 
 function leagueLabel(league: { name: string; season: string | null }) {
   return league.season ? `${league.name} • ${league.season}` : league.name;
@@ -38,6 +38,8 @@ const inputClass = "h-14 w-full rounded-2xl border border-white/10 bg-black/40 p
 const labelClass = "mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-white/45";
 
 type SearchParams = {
+  standardFees?: string;
+  standardFeeCharges?: string;
   backfilled?: string;
   paymentRequests?: string;
   refBackfilled?: string;
@@ -81,9 +83,13 @@ export default async function ImprovedFixtureGeneratorPage({
     currentLeagueIdSet.has(division.leagueId),
   );
 
-  const backfilledCount = Number(sp.backfilled ?? "");
+  const standardFeeCount = Number(sp.standardFees ?? "");
+  const standardFeeChargeCount = Number(sp.standardFeeCharges ?? "");
   const paymentRequestCount = Number(sp.paymentRequests ?? "");
-  const hasBackfillNotice = Number.isFinite(backfilledCount) && sp.backfilled !== undefined;
+  const hasStandardFeeNotice = Number.isFinite(standardFeeCount) && sp.standardFees !== undefined;
+
+  const backfilledCount = Number(sp.backfilled ?? "");
+  const hasLegacyBackfillNotice = Number.isFinite(backfilledCount) && sp.backfilled !== undefined;
 
   const refereeBackfilledCount = Number(sp.refBackfilled ?? "");
   const refereeAssignedCount = Number(sp.refAssigned ?? "");
@@ -111,7 +117,13 @@ export default async function ImprovedFixtureGeneratorPage({
         </div>
       ) : null}
 
-      {hasBackfillNotice ? (
+      {hasStandardFeeNotice ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          Applied standard team fees to {standardFeeCount} fixture{standardFeeCount === 1 ? "" : "s"}. Created payment charges for {Number.isFinite(standardFeeChargeCount) ? standardFeeChargeCount : 0} published fixture{standardFeeChargeCount === 1 ? "" : "s"}. Queued {Number.isFinite(paymentRequestCount) ? paymentRequestCount : 0} payment message{paymentRequestCount === 1 ? "" : "s"}.
+        </div>
+      ) : null}
+
+      {hasLegacyBackfillNotice ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           Backfilled payment charges for {backfilledCount} published fixture{backfilledCount === 1 ? "" : "s"}. Queued {Number.isFinite(paymentRequestCount) ? paymentRequestCount : 0} payment message{paymentRequestCount === 1 ? "" : "s"}.
         </div>
@@ -124,45 +136,36 @@ export default async function ImprovedFixtureGeneratorPage({
       ) : null}
 
       <AdminCard className="rounded-3xl border border-amber-400/25 bg-amber-500/[0.06] p-6 md:p-8">
-        <form action={backfillFixtureMatchFeeChargesAction} className="space-y-5">
+        <form action={backfillStandardFixtureFeesAction} className="space-y-5">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/80">Published fixtures only</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Backfill missing match fee charges</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/80">Standard team fees</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Backfill fixture fees</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
-              Use this for published fixtures already created without fees. It only adds payment charges to upcoming scheduled fixtures that have already been published and do not already have active charges.
+              Applies each team’s standard match fee to upcoming fixtures. Draft fixtures get the fee attached ready for later. Published fixtures with no active payment charge get payment charges created from each team’s own fee.
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
-            <div>
-              <label className={labelClass}>Current season</label>
-              <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
-                {leagues.map((league) => (
-                  <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Team fee</label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-white/45">£</span>
-                <input type="number" name="matchFeePounds" min="0.01" step="0.01" defaultValue="40.00" className={`${inputClass} pl-8`} />
-              </div>
-            </div>
+          <div>
+            <label className={labelClass}>Current season</label>
+            <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
+              {leagues.map((league) => (
+                <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
+              ))}
+            </select>
           </div>
 
           <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-black/25 p-4">
             <input type="checkbox" name="sendPaymentRequests" defaultChecked className="mt-1" />
             <span>
-              <span className="block text-sm font-semibold text-white">Queue normal payment request emails/SMS</span>
+              <span className="block text-sm font-semibold text-white">Queue payment request emails/SMS for newly created charges</span>
               <span className="mt-1 block text-sm leading-6 text-white/55">
-                Only for published fixtures. Draft and unpublished fixtures are ignored.
+                Only published fixtures can have payment requests queued. Draft fixtures will just have the standard fee stored.
               </span>
             </span>
           </label>
 
           <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/15 px-6 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40">
-            Backfill published fixture charges
+            Backfill fees from team settings
           </button>
         </form>
       </AdminCard>
@@ -263,8 +266,8 @@ export default async function ImprovedFixtureGeneratorPage({
 
           <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/80">Payment safety rule</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">No payment charges for draft fixtures</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-50/70">Generated fixtures are drafts. Payment charges and payment request messages are only created after fixtures are published.</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">No payment messages for draft fixtures</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-50/70">Generated draft fixtures will now store the teams’ standard fixture fee. Payment charges and payment request messages are only created after fixtures are published or after you use the backfill fees button.</p>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-black/25 p-5">
@@ -288,7 +291,7 @@ export default async function ImprovedFixtureGeneratorPage({
 
           <div className="flex flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
             <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">Generate draft fixtures</button>
-            <p className="text-sm leading-6 text-white/45">Draft fixtures do not create payment charges or payment messages.</p>
+            <p className="text-sm leading-6 text-white/45">The generator uses each team’s standard match fee from the team settings.</p>
           </div>
         </form>
       </AdminCard>
