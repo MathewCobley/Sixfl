@@ -2,9 +2,10 @@
 // File: src/app/api/admin/fixtures/matchup-grid/route.ts
 // ========================================
 
-import { FixtureStatus } from "@prisma/client";
+import { FixtureStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+import { getCurrentLeagueOptions } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -15,6 +16,13 @@ type MatchupCell = {
   awayCount: number;
   totalCount: number;
   latestKickoffAt: string | null;
+};
+
+type DivisionOption = {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
 };
 
 const COUNTABLE_FIXTURE_STATUSES = [
@@ -32,29 +40,39 @@ function getCellLabel(cell: MatchupCell) {
   return parts.join(" · ");
 }
 
+async function getLeagueDivisions(leagueId: string) {
+  try {
+    return prisma.$queryRaw<DivisionOption[]>(Prisma.sql`
+      SELECT "id", "name", "slug", "sortOrder"
+      FROM "LeagueDivision"
+      WHERE "leagueId" = ${leagueId}
+        AND "isActive" = true
+      ORDER BY "sortOrder" ASC, "name" ASC
+    `);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(request: Request) {
   await requireAdmin();
 
   const url = new URL(request.url);
   const requestedLeagueId = url.searchParams.get("leagueId")?.trim() || null;
+  const requestedDivisionId = url.searchParams.get("divisionId")?.trim() || null;
 
-  const leagues = await prisma.league.findMany({
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      season: true,
-      isActive: true,
-    },
-  });
-
+  const leagues = await getCurrentLeagueOptions(requestedLeagueId);
   const league =
     leagues.find((item) => item.id === requestedLeagueId) ?? leagues[0] ?? null;
 
   if (!league) {
     return NextResponse.json({
       leagues: [],
+      divisions: [],
       selectedLeagueId: null,
+      selectedDivisionId: null,
+      selectedLeagueLabel: null,
+      selectedDivisionLabel: null,
       teams: [],
       cells: [],
       summary: {
@@ -66,10 +84,18 @@ export async function GET(request: Request) {
     });
   }
 
+  const divisions = await getLeagueDivisions(league.id);
+  const selectedDivision =
+    divisions.find((division) => division.id === requestedDivisionId) ??
+    divisions[0] ??
+    null;
+  const selectedDivisionId = selectedDivision?.id ?? null;
+
   const [teams, fixtures] = await Promise.all([
     prisma.team.findMany({
       where: {
         leagueId: league.id,
+        ...(selectedDivisionId ? { divisionId: selectedDivisionId } : {}),
       },
       orderBy: [{ name: "asc" }],
       select: {
@@ -80,6 +106,7 @@ export async function GET(request: Request) {
     prisma.fixture.findMany({
       where: {
         leagueId: league.id,
+        ...(selectedDivisionId ? { divisionId: selectedDivisionId } : {}),
         status: {
           in: [...COUNTABLE_FIXTURE_STATUSES],
         },
@@ -188,8 +215,11 @@ export async function GET(request: Request) {
       season: item.season,
       isActive: item.isActive,
     })),
+    divisions,
     selectedLeagueId: league.id,
+    selectedDivisionId,
     selectedLeagueLabel: `${league.name}${league.season ? ` · ${league.season}` : ""}`,
+    selectedDivisionLabel: selectedDivision?.name ?? null,
     teams,
     cells,
     summary: {
