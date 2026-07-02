@@ -13,6 +13,7 @@ import {
   getLondonMinutesSinceMidnight,
   parseLondonDateTime,
 } from "@/lib/datetime/london";
+import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -175,21 +176,28 @@ function revalidateFixturePaths(leagueId: string, leagueSlug: string | null) {
 }
 
 async function getGenerationTeams(input: { leagueId: string; divisionId: string | null }) {
+  await ensureSeasonTeamRowsForLeague(input.leagueId);
+
   if (input.divisionId) {
     return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-      SELECT "id", "name", "logoUrl", "latestKickoffTime"
-      FROM "Team"
-      WHERE "leagueId" = ${input.leagueId}
-        AND "divisionId" = ${input.divisionId}
-      ORDER BY "name" ASC
+      SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime"
+      FROM "LeagueSeasonTeam" lst
+      JOIN "Team" t ON t."id" = lst."teamId"
+      WHERE lst."leagueId" = ${input.leagueId}
+        AND lst."divisionId" = ${input.divisionId}
+        AND lst."isActive" = true
+      ORDER BY t."name" ASC
     `);
   }
 
-  return prisma.team.findMany({
-    where: { leagueId: input.leagueId },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, logoUrl: true, latestKickoffTime: true },
-  });
+  return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
+    SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime"
+    FROM "LeagueSeasonTeam" lst
+    JOIN "Team" t ON t."id" = lst."teamId"
+    WHERE lst."leagueId" = ${input.leagueId}
+      AND lst."isActive" = true
+    ORDER BY t."name" ASC
+  `);
 }
 
 export async function generateDraftFixturesWithDivisionsAction(formData: FormData) {
