@@ -141,26 +141,13 @@ function createPanel(input: { leagueId: string; summary: CompetitionSummary }) {
   inputWrap.className = "space-y-2 text-sm text-white/60";
   const inputLabel = document.createElement("span");
   inputLabel.textContent = "New season name";
-  const input = document.createElement("input");
-  input.type = "text";
-  input.placeholder = "Summer 2026";
-  input.className = "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50";
-  inputWrap.append(inputLabel, input);
+  const seasonInput = document.createElement("input");
+  seasonInput.type = "text";
+  seasonInput.placeholder = "Summer 2026";
+  seasonInput.className = "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50";
+  inputWrap.append(inputLabel, seasonInput);
 
   const create = createButton("Create season");
-  create.addEventListener("click", async () => {
-    const seasonName = input.value.trim();
-    if (!seasonName) {
-      input.focus();
-      return;
-    }
-
-    create.disabled = true;
-    create.textContent = "Creating…";
-
-    const response = await fetch(`/api/admin/leagues/${input.summary?.leagueId ?? input}/competition`);
-  });
-
   const copyTeams = document.createElement("label");
   copyTeams.className = "mt-4 flex items-start gap-3 text-sm text-white/70";
   const checkbox = document.createElement("input");
@@ -171,18 +158,17 @@ function createPanel(input: { leagueId: string; summary: CompetitionSummary }) {
   checkboxText.textContent = "Copy teams and division assignments into the new season. Fixtures and results are not copied.";
   copyTeams.append(checkbox, checkboxText);
 
-  create.replaceWith(create);
   create.addEventListener("click", async () => {
-    const seasonName = input.value.trim();
+    const seasonName = seasonInput.value.trim();
     if (!seasonName) {
-      input.focus();
+      seasonInput.focus();
       return;
     }
 
     create.disabled = true;
     create.textContent = "Creating…";
 
-    const response = await fetch(`/api/admin/leagues/${input.closest("[data-admin-league-seasons-panel]")?.getAttribute("data-league-id")}/competition`, {
+    const response = await fetch(`/api/admin/leagues/${input.leagueId}/competition`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
