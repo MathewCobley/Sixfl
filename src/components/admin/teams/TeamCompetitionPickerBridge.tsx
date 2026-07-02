@@ -145,10 +145,11 @@ function renderPicker(input: {
   return wrapper;
 }
 
-async function loadCompetitionsForNewTeam() {
+async function loadCompetitionsForNewTeam(): Promise<TeamCompetitionPayload> {
   const response = await fetch("/api/admin/competitions", { cache: "no-store" });
-  if (!response.ok) return { competitions: [] as CompetitionOption[] };
-  return (await response.json()) as { competitions?: CompetitionOption[] };
+  if (!response.ok) return { competitions: [] };
+  const payload = (await response.json()) as TeamCompetitionPayload;
+  return { competitions: payload.competitions ?? [] };
 }
 
 async function injectPicker(pathname: string | null) {
@@ -167,7 +168,7 @@ async function injectPicker(pathname: string | null) {
 
   try {
     const teamId = getTeamIdFromPathname(pathname);
-    const payload = teamId
+    const payload: TeamCompetitionPayload = teamId
       ? ((await (await fetch(`/api/admin/teams/${teamId}/competition`, { cache: "no-store" })).json()) as TeamCompetitionPayload)
       : await loadCompetitionsForNewTeam();
 
