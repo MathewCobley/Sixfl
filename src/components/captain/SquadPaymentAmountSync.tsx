@@ -60,7 +60,7 @@ function getCollectionControlName(input: HTMLInputElement) {
   return identity ? `collection_${identity.type}_${identity.id}` : null;
 }
 
-function isCaptainPaidDirectly(input: HTMLInputElement) {
+function isNoLinkPaidBySixfl(input: HTMLInputElement) {
   const amount = Number(normaliseAmount(input.value) ?? "0");
   const card = getPaymentCard(input);
   return getExistingStatusText(card) === "Waived" && amount > 0;
@@ -74,7 +74,7 @@ function updateStatusBadgeText(input: HTMLInputElement) {
   for (const span of Array.from(card.querySelectorAll("span"))) {
     const text = span.textContent?.trim();
     if (text === "Waived" && amount > 0) {
-      span.textContent = "Paid captain directly";
+      span.textContent = "Paid SIXFL via DD";
     }
   }
 }
@@ -103,7 +103,7 @@ function ensureCollectionMethodControls(input: HTMLInputElement, defaultInput: H
   const checkbox = getPlayerCheckbox(input);
   const existingStatus = getExistingStatusText(card);
   const amount = Number(normaliseAmount(input.value) ?? "0");
-  const currentMethod = isCaptainPaidDirectly(input)
+  const currentMethod = isNoLinkPaidBySixfl(input)
     ? "captain_paid"
     : existingStatus === "Waived" || amount === 0
       ? "waived"
@@ -126,8 +126,8 @@ function ensureCollectionMethodControls(input: HTMLInputElement, defaultInput: H
     },
     {
       value: "captain_paid",
-      label: "Paid captain directly",
-      help: "No player link or email. Captain settles this with SIXFL.",
+      label: "Paid SIXFL via DD",
+      help: "No player link or email. This share is treated as already covered with SIXFL.",
     },
     {
       value: "waived",
