@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+import CaptainCurrentLeagueTableBridge from "@/components/captain/CaptainCurrentLeagueTableBridge";
+
 type FixtureBadgeTeam = {
   id: string;
   name: string;
@@ -407,5 +409,5 @@ export default function CaptainFixtureBadgesBridge() {
     };
   }, [pathname]);
 
-  return null;
+  return <CaptainCurrentLeagueTableBridge />;
 }
