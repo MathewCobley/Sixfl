@@ -179,8 +179,16 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
     prisma.fixture.findMany({
       where: {
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
-        publishedAt: { not: null },
         status: { in: ["SCHEDULED", "COMPLETED"] },
+        AND: [
+          {
+            OR: [
+              { publishedAt: { not: null } },
+              { playerMatchFees: { some: { teamId: teamid, status: { not: "CANCELLED" } } } },
+              { paymentCharges: { some: { teamId: teamid, status: { not: "VOID" } } } },
+            ],
+          },
+        ],
       },
       orderBy: [{ kickoffAt: "desc" }],
       take: 40,
@@ -363,7 +371,6 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
   const selectedAdjustmentAmount = getAdjustmentAmount({ teamFeePence, teamCharge: selectedTeamCharge });
   const allocation = getAllocationStatus({ allocatedPence: totals.total, teamFeePence });
   const teamFeeStillToCoverPence = selectedTeamChargePaid || selectedTeamChargeVoided ? 0 : selectedTeamCharge?.outstandingPence ?? 0;
-  const selectedFixturePaymentSummary = selectedFixture ? paymentSummaryByFixtureId.get(selectedFixture.id) : null;
   const savedMessage = getSavedMessage(sp.saved);
   const errorMessage = getErrorMessage(sp.error);
 
@@ -414,9 +421,9 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.3fr]">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Choose fixture</h2>
-          <p className="mt-1 text-sm text-white/55">Only published fixtures are shown. Team fee status includes player payments and adjusted charges.</p>
+          <p className="mt-1 text-sm text-white/55">Published fixtures and existing payment collections are shown. New draft fixtures with no payment history stay hidden.</p>
           <div className="mt-5 space-y-2">
-            {fixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No published fixtures are available for this team yet.</div> : null}
+            {fixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No published fixtures or existing payment collections are available for this team yet.</div> : null}
             {fixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               const isPast = fixture.kickoffAt < now;
@@ -498,7 +505,7 @@ export default async function CaptainPlayerPaymentsPage({ params, searchParams }
               <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">Save collection</button>
             </form>
           ) : (
-            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">Choose a published fixture first.</div>
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">Choose a published fixture or existing payment collection first.</div>
           )}
         </div>
       </section>
