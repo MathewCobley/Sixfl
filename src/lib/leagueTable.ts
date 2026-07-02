@@ -2,6 +2,8 @@
 // File: src/lib/leagueTable.ts
 // ========================================
 
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 export type LeagueFormResult = "W" | "D" | "L";
@@ -19,6 +21,17 @@ export type LeagueTableRow = {
   goalDifference: number;
   points: number;
   recentForm: LeagueFormResult[];
+};
+
+type LeagueTableOptions = {
+  divisionId?: string | null;
+  teamIds?: string[];
+};
+
+type TableTeamRow = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
 };
 
 function createRow(input: {
@@ -65,16 +78,57 @@ function getOrCreateRow(
   return created;
 }
 
-export async function getLeagueTable(leagueId: string): Promise<LeagueTableRow[]> {
-  const [teams, fixtures] = await Promise.all([
-    prisma.team.findMany({
-      where: { leagueId },
+async function getLeagueTableTeams(leagueId: string, options: LeagueTableOptions) {
+  if (options.divisionId) {
+    return prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
+      SELECT t."id", t."name", t."logoUrl"
+      FROM "LeagueSeasonTeam" lst
+      JOIN "Team" t ON t."id" = lst."teamId"
+      WHERE lst."leagueId" = ${leagueId}
+        AND lst."divisionId" = ${options.divisionId}
+        AND lst."isActive" = true
+      ORDER BY t."name" ASC
+    `);
+  }
+
+  if (options.teamIds?.length) {
+    return prisma.team.findMany({
+      where: { id: { in: options.teamIds } },
       orderBy: { name: "asc" },
       select: { id: true, name: true, logoUrl: true },
-    }),
+    });
+  }
+
+  const seasonTeams = await prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
+    SELECT t."id", t."name", t."logoUrl"
+    FROM "LeagueSeasonTeam" lst
+    JOIN "Team" t ON t."id" = lst."teamId"
+    WHERE lst."leagueId" = ${leagueId}
+      AND lst."isActive" = true
+    ORDER BY t."name" ASC
+  `);
+
+  if (seasonTeams.length > 0) {
+    return seasonTeams;
+  }
+
+  return prisma.team.findMany({
+    where: { leagueId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, logoUrl: true },
+  });
+}
+
+export async function getLeagueTable(
+  leagueId: string,
+  options: LeagueTableOptions = {},
+): Promise<LeagueTableRow[]> {
+  const [teams, fixtures] = await Promise.all([
+    getLeagueTableTeams(leagueId, options),
     prisma.fixture.findMany({
       where: {
         leagueId,
+        ...(options.divisionId ? { divisionId: options.divisionId } : {}),
         status: "COMPLETED",
         result: { isNot: null },
       },
@@ -88,6 +142,11 @@ export async function getLeagueTable(leagueId: string): Promise<LeagueTableRow[]
   ]);
 
   const table = new Map<string, LeagueTableRow>();
+  const allowedTeamIds = teams.length
+    ? new Set(teams.map((team) => team.id))
+    : options.teamIds?.length
+      ? new Set(options.teamIds)
+      : null;
 
   for (const team of teams) {
     table.set(team.id, createRow(team));
@@ -95,6 +154,12 @@ export async function getLeagueTable(leagueId: string): Promise<LeagueTableRow[]
 
   for (const fixture of fixtures) {
     if (!fixture.result) continue;
+    if (
+      allowedTeamIds &&
+      (!allowedTeamIds.has(fixture.homeTeamId) || !allowedTeamIds.has(fixture.awayTeamId))
+    ) {
+      continue;
+    }
 
     const home = getOrCreateRow(table, fixture.homeTeam);
     const away = getOrCreateRow(table, fixture.awayTeam);
