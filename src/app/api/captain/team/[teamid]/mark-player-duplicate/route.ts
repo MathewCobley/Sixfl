@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { moveTeamMemberToProspect } from "@/lib/managed-squad/movePlayerToProspect";
-import { requireCaptain } from "@/lib/requireCaptain";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 type MoveBody = {
   membershipId?: unknown;
@@ -28,14 +28,7 @@ export async function POST(
   const teamId = teamid;
 
   try {
-    const access = await requireCaptain(teamId);
-
-    if (!access.isAdmin) {
-      return NextResponse.json(
-        { error: "Only admin can mark a squad player as a duplicate." },
-        { status: 403 },
-      );
-    }
+    await requireAdmin();
 
     const body = (await request.json().catch(() => null)) as MoveBody | null;
     const membershipId = String(body?.membershipId ?? "").trim();
