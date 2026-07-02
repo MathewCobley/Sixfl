@@ -27,6 +27,7 @@ import RefereeWelcomeInviteBridge from "@/components/admin/referees/RefereeWelco
 import AdminSocialResultsGeneratorLinksBridge from "@/components/admin/social/AdminSocialResultsGeneratorLinksBridge";
 import TeamCompetitionPickerBridge from "@/components/admin/teams/TeamCompetitionPickerBridge";
 import TeamReplaceFixturesButtonBridge from "@/components/admin/teams/TeamReplaceFixturesButtonBridge";
+import TeamStandardMatchFeeBridge from "@/components/admin/teams/TeamStandardMatchFeeBridge";
 import AppHeader from "@/components/layout/AppHeader";
 
 export default async function AdminLayout({
@@ -61,6 +62,7 @@ export default async function AdminLayout({
       <AdminDivisionSelectBridge />
       <TeamCompetitionPickerBridge />
       <TeamReplaceFixturesButtonBridge />
+      <TeamStandardMatchFeeBridge />
       <RefereeNightFixtureSyncBridge />
       <RefereeNightCashDistributionBridge />
       <AdminRefereeCommsHistoryBridge />
