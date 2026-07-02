@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
+import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 
 type DivisionRow = {
@@ -121,6 +122,8 @@ export async function GET(
       return NextResponse.json({ divisions: [] }, { status: 404 });
     }
 
+    await ensureSeasonTeamRowsForLeague(league.id);
+
     const [divisions, teams, fixtures] = await Promise.all([
       prisma.$queryRaw<DivisionRow[]>(Prisma.sql`
         SELECT "id", "name", "slug", "sortOrder"
@@ -130,10 +133,16 @@ export async function GET(
         ORDER BY "sortOrder" ASC, "name" ASC
       `),
       prisma.$queryRaw<TeamRow[]>(Prisma.sql`
-        SELECT "id", "name", "logoUrl", "divisionId"
-        FROM "Team"
-        WHERE "leagueId" = ${league.id}
-        ORDER BY "name" ASC
+        SELECT
+          t."id",
+          t."name",
+          t."logoUrl",
+          lst."divisionId"
+        FROM "LeagueSeasonTeam" lst
+        JOIN "Team" t ON t."id" = lst."teamId"
+        WHERE lst."leagueId" = ${league.id}
+          AND lst."isActive" = true
+        ORDER BY t."name" ASC
       `),
       prisma.$queryRaw<FixtureRow[]>(Prisma.sql`
         SELECT
