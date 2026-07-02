@@ -5,6 +5,7 @@
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
+import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 
 export type CompetitionSeasonRow = {
@@ -42,48 +43,73 @@ export function seasonSlugPart(value: string) {
   return slugifyCompetition(value) || "season";
 }
 
-export async function getCompetitionSummaryForLeague(leagueId: string): Promise<CompetitionSummary> {
-  try {
-    const rows = await prisma.$queryRaw<Array<{
-      competitionId: string | null;
-      competitionName: string | null;
-      competitionSlug: string | null;
-      currentLeagueId: string | null;
-    }>>(Prisma.sql`
-      SELECT
-        c."id" AS "competitionId",
-        c."name" AS "competitionName",
-        c."slug" AS "competitionSlug",
-        c."currentLeagueId" AS "currentLeagueId"
-      FROM "League" l
-      LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
-      WHERE l."id" = ${leagueId}
-      LIMIT 1
-    `);
+function normaliseSeasonRows(rows: CompetitionSeasonRow[]) {
+  return rows.map((season) => ({
+    ...season,
+    isActive: Boolean(season.isActive),
+    isCurrent: Boolean(season.isCurrent),
+    teamCount: Number(season.teamCount ?? 0),
+    fixtureCount: Number(season.fixtureCount ?? 0),
+    completedFixtureCount: Number(season.completedFixtureCount ?? 0),
+  }));
+}
 
+async function getCompetitionRowsForLeague(leagueId: string) {
+  return prisma.$queryRaw<Array<{
+    leagueId: string;
+    competitionId: string | null;
+    competitionName: string | null;
+    competitionSlug: string | null;
+    currentLeagueId: string | null;
+  }>>(Prisma.sql`
+    SELECT
+      l."id" AS "leagueId",
+      c."id" AS "competitionId",
+      c."name" AS "competitionName",
+      c."slug" AS "competitionSlug",
+      c."currentLeagueId" AS "currentLeagueId"
+    FROM "League" l
+    LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
+    WHERE l."id" = ${leagueId}
+    LIMIT 1
+  `);
+}
+
+async function getSeasonsForCompetition(competitionId: string, currentLeagueId: string | null) {
+  const seasons = await prisma.$queryRaw<CompetitionSeasonRow[]>(Prisma.sql`
+    SELECT
+      l."id",
+      l."name",
+      l."slug",
+      l."season",
+      l."isActive",
+      COUNT(DISTINCT lst."teamId")::int AS "teamCount",
+      COUNT(DISTINCT f."id")::int AS "fixtureCount",
+      COUNT(DISTINCT CASE WHEN f."status" = 'COMPLETED' THEN f."id" END)::int AS "completedFixtureCount",
+      (l."id" = ${currentLeagueId}) AS "isCurrent"
+    FROM "League" l
+    LEFT JOIN "LeagueSeasonTeam" lst ON lst."leagueId" = l."id" AND lst."isActive" = true
+    LEFT JOIN "Fixture" f ON f."leagueId" = l."id"
+    WHERE l."competitionId" = ${competitionId}
+    GROUP BY l."id", l."name", l."slug", l."season", l."isActive"
+    ORDER BY (l."id" = ${currentLeagueId}) DESC, COALESCE(l."season", '') DESC, l."createdAt" DESC
+  `);
+
+  return normaliseSeasonRows(seasons);
+}
+
+export async function getCompetitionSummaryForLeague(
+  leagueId: string,
+): Promise<CompetitionSummary> {
+  try {
+    await ensureSeasonTeamRowsForLeague(leagueId);
+
+    const rows = await getCompetitionRowsForLeague(leagueId);
     const row = rows[0];
+
     if (!row?.competitionId || !row.competitionName || !row.competitionSlug) {
       return { competition: null, seasons: [] };
     }
-
-    const seasons = await prisma.$queryRaw<CompetitionSeasonRow[]>(Prisma.sql`
-      SELECT
-        l."id",
-        l."name",
-        l."slug",
-        l."season",
-        l."isActive",
-        COUNT(DISTINCT t."id")::int AS "teamCount",
-        COUNT(DISTINCT f."id")::int AS "fixtureCount",
-        COUNT(DISTINCT CASE WHEN f."status" = 'COMPLETED' THEN f."id" END)::int AS "completedFixtureCount",
-        (l."id" = ${row.currentLeagueId}) AS "isCurrent"
-      FROM "League" l
-      LEFT JOIN "Team" t ON t."leagueId" = l."id"
-      LEFT JOIN "Fixture" f ON f."leagueId" = l."id"
-      WHERE l."competitionId" = ${row.competitionId}
-      GROUP BY l."id", l."name", l."slug", l."season", l."isActive"
-      ORDER BY COALESCE(l."season", '') DESC, l."createdAt" DESC
-    `);
 
     return {
       competition: {
@@ -92,14 +118,7 @@ export async function getCompetitionSummaryForLeague(leagueId: string): Promise<
         slug: row.competitionSlug,
         currentLeagueId: row.currentLeagueId,
       },
-      seasons: seasons.map((season) => ({
-        ...season,
-        isActive: Boolean(season.isActive),
-        isCurrent: Boolean(season.isCurrent),
-        teamCount: Number(season.teamCount ?? 0),
-        fixtureCount: Number(season.fixtureCount ?? 0),
-        completedFixtureCount: Number(season.completedFixtureCount ?? 0),
-      })),
+      seasons: await getSeasonsForCompetition(row.competitionId, row.currentLeagueId),
     };
   } catch {
     return { competition: null, seasons: [] };
@@ -128,9 +147,9 @@ export async function getPublicCompetitionSeasonsByLeagueSlug(slug: string) {
     `);
 
     const row = rows[0];
-    if (!row?.competitionId) {
-      return null;
-    }
+    if (!row?.competitionId) return null;
+
+    await ensureSeasonTeamRowsForLeague(row.leagueId);
 
     const seasons = await prisma.$queryRaw<CompetitionSeasonRow[]>(Prisma.sql`
       SELECT
@@ -139,12 +158,12 @@ export async function getPublicCompetitionSeasonsByLeagueSlug(slug: string) {
         l."slug",
         l."season",
         l."isActive",
-        COUNT(DISTINCT t."id")::int AS "teamCount",
+        COUNT(DISTINCT lst."teamId")::int AS "teamCount",
         COUNT(DISTINCT f."id")::int AS "fixtureCount",
         COUNT(DISTINCT CASE WHEN f."status" = 'COMPLETED' THEN f."id" END)::int AS "completedFixtureCount",
         (l."id" = ${row.currentLeagueId}) AS "isCurrent"
       FROM "League" l
-      LEFT JOIN "Team" t ON t."leagueId" = l."id"
+      LEFT JOIN "LeagueSeasonTeam" lst ON lst."leagueId" = l."id" AND lst."isActive" = true
       LEFT JOIN "Fixture" f ON f."leagueId" = l."id"
       WHERE l."competitionId" = ${row.competitionId}
         AND l."isActive" = true
@@ -160,38 +179,11 @@ export async function getPublicCompetitionSeasonsByLeagueSlug(slug: string) {
         slug: row.competitionSlug,
         currentLeagueId: row.currentLeagueId,
       },
-      seasons: seasons.map((season) => ({
-        ...season,
-        isActive: Boolean(season.isActive),
-        isCurrent: Boolean(season.isCurrent),
-        teamCount: Number(season.teamCount ?? 0),
-        fixtureCount: Number(season.fixtureCount ?? 0),
-        completedFixtureCount: Number(season.completedFixtureCount ?? 0),
-      })),
+      seasons: normaliseSeasonRows(seasons),
     };
   } catch {
     return null;
   }
-}
-
-async function getUniqueClaimCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    let code = "";
-    for (let i = 0; i < 8; i += 1) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-
-    const existing = await prisma.team.findUnique({
-      where: { claimCode: code },
-      select: { id: true },
-    });
-
-    if (!existing) return code;
-  }
-
-  return randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
 }
 
 export async function createCompetitionForLeague(leagueId: string) {
@@ -214,45 +206,69 @@ export async function createCompetitionForLeague(leagueId: string) {
 
   const league = leagueRows[0];
   if (!league) throw new Error("League not found.");
-  if (league.competitionId) return league.competitionId;
+
+  if (league.competitionId) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "Team"
+      SET "competitionId" = ${league.competitionId}, "updatedAt" = NOW()
+      WHERE "leagueId" = ${league.id}
+        AND "competitionId" IS NULL
+    `);
+    await ensureSeasonTeamRowsForLeague(league.id);
+    return league.competitionId;
+  }
 
   const competitionId = randomUUID();
-  const competitionSlug = slugifyCompetition(
-    league.name.replace(new RegExp(`\\s*[—-]\\s*${league.season ?? ""}\\s*$`, "i"), ""),
-  ) || league.slug;
+  const competitionSlug =
+    slugifyCompetition(
+      league.name.replace(
+        new RegExp(`\\s*[—-]\\s*${league.season ?? ""}\\s*$`, "i"),
+        "",
+      ),
+    ) || league.slug;
 
-  await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "LeagueCompetition" (
-      "id",
-      "name",
-      "slug",
-      "area",
-      "dayOfWeek",
-      "leagueType",
-      "venueName",
-      "currentLeagueId",
-      "createdAt",
-      "updatedAt"
-    )
-    VALUES (
-      ${competitionId},
-      ${league.name},
-      ${competitionSlug},
-      ${league.area},
-      ${league.dayOfWeek}::"PreferredNight",
-      ${league.leagueType}::"LeagueType",
-      ${league.venueName},
-      ${league.id},
-      NOW(),
-      NOW()
-    )
-  `);
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "LeagueCompetition" (
+        "id",
+        "name",
+        "slug",
+        "area",
+        "dayOfWeek",
+        "leagueType",
+        "venueName",
+        "currentLeagueId",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${competitionId},
+        ${league.name},
+        ${competitionSlug},
+        ${league.area},
+        ${league.dayOfWeek}::"PreferredNight",
+        ${league.leagueType}::"LeagueType",
+        ${league.venueName},
+        ${league.id},
+        NOW(),
+        NOW()
+      )
+    `);
 
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "League"
-    SET "competitionId" = ${competitionId}, "updatedAt" = NOW()
-    WHERE "id" = ${league.id}
-  `);
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "League"
+      SET "competitionId" = ${competitionId}, "updatedAt" = NOW()
+      WHERE "id" = ${league.id}
+    `);
+
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Team"
+      SET "competitionId" = ${competitionId}, "updatedAt" = NOW()
+      WHERE "leagueId" = ${league.id}
+    `);
+
+    await ensureSeasonTeamRowsForLeague(league.id, tx);
+  });
 
   return competitionId;
 }
@@ -263,6 +279,8 @@ export async function createNextLeagueSeason(input: {
   copyTeams: boolean;
 }) {
   const competitionId = await createCompetitionForLeague(input.sourceLeagueId);
+  await ensureSeasonTeamRowsForLeague(input.sourceLeagueId);
+
   const sourceRows = await prisma.$queryRaw<Array<{
     id: string;
     name: string;
@@ -279,7 +297,8 @@ export async function createNextLeagueSeason(input: {
   if (!source) throw new Error("League not found.");
 
   const newLeagueId = randomUUID();
-  const newSlug = `${source.slug.replace(/-[a-z0-9]+-20\d{2}$/i, "")}-${seasonSlugPart(input.seasonName)}`;
+  const baseSlug = source.slug.replace(/-[a-z0-9]+-20\d{2}$/i, "");
+  const newSlug = `${baseSlug}-${seasonSlugPart(input.seasonName)}`;
 
   const existingSlug = await prisma.league.findUnique({
     where: { slug: newSlug },
@@ -390,96 +409,52 @@ export async function createNextLeagueSeason(input: {
     }
 
     if (input.copyTeams) {
-      const sourceTeams = await tx.$queryRaw<Array<{
-        id: string;
-        name: string;
-        logoUrl: string | null;
-        teamMode: string;
-        isRecruiting: boolean;
-        squadTargetSize: number | null;
-        matchdayTargetSize: number | null;
-        managerNotes: string | null;
-        contactName: string | null;
-        contactEmail: string | null;
-        contactPhone: string | null;
-        secondaryContactName: string | null;
-        secondaryContactEmail: string | null;
-        secondaryContactPhone: string | null;
-        latestKickoffTime: string | null;
+      const seasonTeams = await tx.$queryRaw<Array<{
+        teamId: string;
         divisionId: string | null;
       }>>(Prisma.sql`
-        SELECT
-          "id",
-          "name",
-          "logoUrl",
-          "teamMode",
-          "isRecruiting",
-          "squadTargetSize",
-          "matchdayTargetSize",
-          "managerNotes",
-          "contactName",
-          "contactEmail",
-          "contactPhone",
-          "secondaryContactName",
-          "secondaryContactEmail",
-          "secondaryContactPhone",
-          "latestKickoffTime",
-          "divisionId"
-        FROM "Team"
+        SELECT "teamId", "divisionId"
+        FROM "LeagueSeasonTeam"
         WHERE "leagueId" = ${source.id}
-        ORDER BY "name" ASC
+          AND "isActive" = true
+        ORDER BY "createdAt" ASC
       `);
 
-      for (const team of sourceTeams) {
-        const newTeamId = randomUUID();
-        const newDivisionId = team.divisionId ? divisionIdMap.get(team.divisionId) ?? null : null;
-        const claimCode = await getUniqueClaimCode();
+      for (const seasonTeam of seasonTeams) {
+        const newDivisionId = seasonTeam.divisionId
+          ? divisionIdMap.get(seasonTeam.divisionId) ?? null
+          : null;
 
         await tx.$executeRaw(Prisma.sql`
-          INSERT INTO "Team" (
+          INSERT INTO "LeagueSeasonTeam" (
             "id",
-            "name",
-            "claimCode",
-            "logoUrl",
-            "teamMode",
-            "isRecruiting",
-            "squadTargetSize",
-            "matchdayTargetSize",
-            "managerNotes",
-            "contactName",
-            "contactEmail",
-            "contactPhone",
-            "secondaryContactName",
-            "secondaryContactEmail",
-            "secondaryContactPhone",
-            "latestKickoffTime",
             "leagueId",
+            "teamId",
             "divisionId",
+            "isActive",
             "createdAt",
             "updatedAt"
           )
           VALUES (
-            ${newTeamId},
-            ${team.name},
-            ${claimCode},
-            ${team.logoUrl},
-            ${team.teamMode}::"TeamMode",
-            ${Boolean(team.isRecruiting)},
-            ${team.squadTargetSize},
-            ${team.matchdayTargetSize},
-            ${team.managerNotes},
-            ${team.contactName},
-            ${team.contactEmail},
-            ${team.contactPhone},
-            ${team.secondaryContactName},
-            ${team.secondaryContactEmail},
-            ${team.secondaryContactPhone},
-            ${team.latestKickoffTime},
+            ${randomUUID()},
             ${newLeagueId},
+            ${seasonTeam.teamId},
             ${newDivisionId},
+            true,
             NOW(),
             NOW()
           )
+          ON CONFLICT ("leagueId", "teamId") DO UPDATE
+          SET
+            "divisionId" = EXCLUDED."divisionId",
+            "isActive" = true,
+            "updatedAt" = NOW()
+        `);
+
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE "Team"
+          SET "competitionId" = ${competitionId}, "updatedAt" = NOW()
+          WHERE "id" = ${seasonTeam.teamId}
         `);
       }
     }
