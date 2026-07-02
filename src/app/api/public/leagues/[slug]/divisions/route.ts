@@ -144,14 +144,14 @@ export async function GET(
           ht."id" AS "homeTeamId",
           ht."name" AS "homeTeamName",
           ht."logoUrl" AS "homeTeamLogoUrl",
-          at."id" AS "awayTeamId",
-          at."name" AS "awayTeamName",
-          at."logoUrl" AS "awayTeamLogoUrl",
+          awt."id" AS "awayTeamId",
+          awt."name" AS "awayTeamName",
+          awt."logoUrl" AS "awayTeamLogoUrl",
           mr."homeScore",
           mr."awayScore"
         FROM "Fixture" f
         JOIN "Team" ht ON ht."id" = f."homeTeamId"
-        JOIN "Team" at ON at."id" = f."awayTeamId"
+        JOIN "Team" awt ON awt."id" = f."awayTeamId"
         LEFT JOIN "MatchResult" mr ON mr."fixtureId" = f."id"
         WHERE f."leagueId" = ${league.id}
           AND f."publishedAt" IS NOT NULL
