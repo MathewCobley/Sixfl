@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+import CaptainOutstandingBalanceBridge from "@/components/captain/CaptainOutstandingBalanceBridge";
+
 type LeagueTableRow = {
   teamId: string;
   teamName: string;
@@ -206,5 +208,5 @@ export default function CaptainCurrentLeagueTableBridge() {
     };
   }, [pathname]);
 
-  return null;
+  return <CaptainOutstandingBalanceBridge />;
 }
