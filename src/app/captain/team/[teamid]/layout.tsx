@@ -231,6 +231,20 @@ export default async function CaptainTeamLayout({
           name: true,
           season: true,
           isActive: true,
+          competition: {
+            select: {
+              id: true,
+              name: true,
+              currentLeague: {
+                select: {
+                  id: true,
+                  name: true,
+                  season: true,
+                  isActive: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -239,6 +253,12 @@ export default async function CaptainTeamLayout({
   if (!team) {
     notFound();
   }
+
+  const displayCompetition = team.league?.competition ?? null;
+  const displayLeague = displayCompetition?.currentLeague ?? team.league;
+  const displayLeagueName = displayCompetition?.name ?? displayLeague?.name ?? "No competition assigned";
+  const displaySeason = displayLeague?.season ?? null;
+  const displayIsLive = displayLeague?.isActive ?? false;
 
   const captainTeamMemberships = access.user?.id
     ? await prisma.teamMember.findMany({
@@ -255,6 +275,16 @@ export default async function CaptainTeamLayout({
                 select: {
                   name: true,
                   season: true,
+                  competition: {
+                    select: {
+                      name: true,
+                      currentLeague: {
+                        select: {
+                          season: true,
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -338,9 +368,9 @@ export default async function CaptainTeamLayout({
                   </h1>
 
                   <p className="captain-team-meta mt-3 text-sm text-white/55">
-                    {team.league?.name ?? "No league assigned"}
-                    {team.league?.season ? ` · ${team.league.season}` : ""}
-                    {team.league?.isActive ? " · Live season" : ""}
+                    {displayLeagueName}
+                    {displaySeason ? ` · ${displaySeason}` : ""}
+                    {displayIsLive ? " · Current live season" : ""}
                   </p>
                 </div>
               </div>
@@ -353,9 +383,12 @@ export default async function CaptainTeamLayout({
                   <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                     {captainTeamOptions.map((option) => {
                       const active = option.id === teamid;
-                      const leagueLabel = option.league
-                        ? `${option.league.name}${option.league.season ? ` · ${option.league.season}` : ""}`
-                        : "No league assigned";
+                      const optionCompetition = option.league?.competition;
+                      const leagueLabel = optionCompetition
+                        ? `${optionCompetition.name}${optionCompetition.currentLeague?.season ? ` · ${optionCompetition.currentLeague.season}` : ""}`
+                        : option.league
+                          ? `${option.league.name}${option.league.season ? ` · ${option.league.season}` : ""}`
+                          : "No competition assigned";
 
                       return (
                         <Link
