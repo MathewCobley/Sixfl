@@ -18,11 +18,54 @@ function formatLeagueLabel(league: CurrentLeague) {
   return `${league.name}${league.season ? ` — ${league.season}` : ""}${league.isActive ? "" : " (inactive)"}`;
 }
 
+function isTeamEditPage(pathname: string | null) {
+  return /^\/admin\/teams\/[^/]+\/?$/.test(pathname ?? "");
+}
+
 function getLeagueSelects() {
   return Array.from(document.querySelectorAll<HTMLSelectElement>('select[name="leagueId"]'));
 }
 
-function rebuildSelect(select: HTMLSelectElement, leagues: CurrentLeague[], selectedValue: string) {
+function getField(select: HTMLSelectElement) {
+  return select.closest("div.space-y-2");
+}
+
+function replaceEditPageLeagueField(select: HTMLSelectElement, leagues: CurrentLeague[], selectedValue: string) {
+  if (select.dataset.sixflCompetitionReadonly === "true") return;
+
+  const field = getField(select);
+  if (!field) return;
+
+  const selectedLeague = leagues.find((league) => league.id === selectedValue) ?? null;
+  select.dataset.sixflCompetitionReadonly = "true";
+  select.classList.add("sr-only");
+  select.tabIndex = -1;
+
+  const label = field.querySelector("label");
+  if (label) label.textContent = "Competition";
+
+  const existing = field.querySelector("[data-sixfl-competition-readonly]");
+  if (existing) return;
+
+  const card = document.createElement("div");
+  card.dataset.sixflCompetitionReadonly = "true";
+  card.className = "rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white";
+
+  const competition = document.createElement("div");
+  competition.className = "font-semibold";
+  competition.textContent = selectedLeague?.name ?? "Competition not set";
+
+  const help = document.createElement("div");
+  help.className = "mt-1 text-xs leading-5 text-white/50";
+  help.textContent = selectedLeague?.season
+    ? `Current season shown for context: ${selectedLeague.season}. Season participation and division are managed on the league season page.`
+    : "Season participation and division are managed on the league season page.";
+
+  card.append(competition, help);
+  field.appendChild(card);
+}
+
+function rebuildSelect(select: HTMLSelectElement, leagues: CurrentLeague[], selectedValue: string, pathname: string | null) {
   if (select.dataset.sixflCurrentLeagueFiltered === "true") return;
 
   const noLeagueOption = document.createElement("option");
@@ -42,18 +85,23 @@ function rebuildSelect(select: HTMLSelectElement, leagues: CurrentLeague[], sele
   select.value = selectedValue;
   select.dataset.sixflCurrentLeagueFiltered = "true";
 
+  if (isTeamEditPage(pathname)) {
+    replaceEditPageLeagueField(select, leagues, selectedValue);
+    return;
+  }
+
   const help = document.createElement("div");
   help.dataset.sixflCurrentLeagueHelp = "true";
   help.className = "text-xs text-white/50";
   help.textContent = "Only current competition seasons are shown. Previous seasons stay available in the season archive.";
 
-  const field = select.closest("div.space-y-2");
+  const field = getField(select);
   if (field && !field.querySelector("[data-sixfl-current-league-help]")) {
     field.appendChild(help);
   }
 }
 
-async function filterLeagueSelects() {
+async function filterLeagueSelects(pathname: string | null) {
   const selects = getLeagueSelects();
   if (selects.length === 0) return;
 
@@ -69,7 +117,7 @@ async function filterLeagueSelects() {
     if (!response.ok) continue;
 
     const payload = (await response.json()) as { leagues?: CurrentLeague[] };
-    rebuildSelect(select, payload.leagues ?? [], selectedValue);
+    rebuildSelect(select, payload.leagues ?? [], selectedValue, pathname);
   }
 }
 
@@ -81,7 +129,7 @@ export default function AdminCurrentLeagueSelectBridge() {
 
     let cancelled = false;
     const run = () => {
-      if (!cancelled) void filterLeagueSelects();
+      if (!cancelled) void filterLeagueSelects(pathname);
     };
 
     const frame = window.requestAnimationFrame(run);
