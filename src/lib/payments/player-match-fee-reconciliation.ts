@@ -95,12 +95,14 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
   if (paidTotalPence <= 0) return null;
 
   const fixtureDateKey = getLondonDateKey(fixture.kickoffAt);
-  const openStatuses: PaymentChargeStatus[] = ["OPEN", "PART_PAID"];
+  const chargeStatuses = Object.values(PaymentChargeStatus).filter(
+    (status) => status !== PaymentChargeStatus.VOID,
+  );
 
   const charges = await prisma.paymentCharge.findMany({
     where: {
       teamId: input.teamId,
-      status: { in: openStatuses },
+      status: { in: chargeStatuses },
       OR: [
         { fixtureId: input.fixtureId },
         ...(fixtureDateKey ? [{ dueDate: { not: null } }] : []),
