@@ -20,6 +20,14 @@ export type LeagueSeasonTeamRow = {
   divisionName: string | null;
 };
 
+export type CompetitionOption = {
+  id: string;
+  name: string;
+  slug: string;
+  currentLeagueId: string | null;
+  currentSeason: string | null;
+};
+
 export async function ensureSeasonTeamRowsForLeague(
   leagueId: string,
   client: PrismaClientLike = prisma,
@@ -35,7 +43,7 @@ export async function ensureSeasonTeamRowsForLeague(
       "updatedAt"
     )
     SELECT
-      ${"lst_"} || md5(random()::text || clock_timestamp()::text || t."id"),
+      ${"lst_"} || md5(t."id" || ':' || t."leagueId"),
       t."leagueId",
       t."id",
       t."divisionId",
@@ -181,4 +189,119 @@ export async function setTeamCompetitionFromLeague(input: {
       AND l."id" = ${input.leagueId}
       AND l."competitionId" IS NOT NULL
   `);
+}
+
+export async function getCompetitionOptions() {
+  try {
+    return prisma.$queryRaw<CompetitionOption[]>(Prisma.sql`
+      SELECT
+        c."id",
+        c."name",
+        c."slug",
+        c."currentLeagueId",
+        l."season" AS "currentSeason"
+      FROM "LeagueCompetition" c
+      LEFT JOIN "League" l ON l."id" = c."currentLeagueId"
+      WHERE c."isActive" = true
+      ORDER BY c."name" ASC
+    `);
+  } catch {
+    return [];
+  }
+}
+
+export async function getTeamCompetitionData(teamId: string) {
+  const rows = await prisma.$queryRaw<Array<{
+    id: string;
+    name: string;
+    leagueId: string | null;
+    divisionId: string | null;
+    competitionId: string | null;
+    competitionName: string | null;
+    currentLeagueId: string | null;
+    currentSeason: string | null;
+  }>>(Prisma.sql`
+    SELECT
+      t."id",
+      t."name",
+      t."leagueId",
+      t."divisionId",
+      COALESCE(t."competitionId", l."competitionId") AS "competitionId",
+      c."name" AS "competitionName",
+      c."currentLeagueId" AS "currentLeagueId",
+      current_l."season" AS "currentSeason"
+    FROM "Team" t
+    LEFT JOIN "League" l ON l."id" = t."leagueId"
+    LEFT JOIN "LeagueCompetition" c ON c."id" = COALESCE(t."competitionId", l."competitionId")
+    LEFT JOIN "League" current_l ON current_l."id" = c."currentLeagueId"
+    WHERE t."id" = ${teamId}
+    LIMIT 1
+  `);
+
+  return rows[0] ?? null;
+}
+
+export async function updateTeamCompetition(input: {
+  teamId: string;
+  competitionId: string | null;
+}) {
+  if (!input.competitionId) {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "Team"
+      SET "competitionId" = NULL, "updatedAt" = NOW()
+      WHERE "id" = ${input.teamId}
+    `);
+    return;
+  }
+
+  const competitions = await prisma.$queryRaw<Array<{
+    id: string;
+    currentLeagueId: string | null;
+  }>>(Prisma.sql`
+    SELECT "id", "currentLeagueId"
+    FROM "LeagueCompetition"
+    WHERE "id" = ${input.competitionId}
+    LIMIT 1
+  `);
+
+  const competition = competitions[0];
+  if (!competition) {
+    throw new Error("Competition not found.");
+  }
+
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "Team"
+    SET
+      "competitionId" = ${competition.id},
+      "leagueId" = COALESCE(${competition.currentLeagueId}, "leagueId"),
+      "updatedAt" = NOW()
+    WHERE "id" = ${input.teamId}
+  `);
+
+  if (competition.currentLeagueId) {
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "LeagueSeasonTeam" (
+        "id",
+        "leagueId",
+        "teamId",
+        "divisionId",
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${"lst_"} || md5(${competition.currentLeagueId} || ':' || ${input.teamId}),
+        ${competition.currentLeagueId},
+        ${input.teamId},
+        NULL,
+        true,
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT ("leagueId", "teamId") DO UPDATE
+      SET
+        "isActive" = true,
+        "updatedAt" = NOW()
+    `);
+  }
 }
