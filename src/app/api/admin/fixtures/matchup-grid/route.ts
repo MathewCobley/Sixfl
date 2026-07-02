@@ -6,6 +6,7 @@ import { FixtureStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { getCurrentLeagueOptions } from "@/lib/current-leagues";
+import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -23,6 +24,11 @@ type DivisionOption = {
   name: string;
   slug: string;
   sortOrder: number;
+};
+
+type TeamOption = {
+  id: string;
+  name: string;
 };
 
 const COUNTABLE_FIXTURE_STATUSES = [
@@ -52,6 +58,34 @@ async function getLeagueDivisions(leagueId: string) {
   } catch {
     return [];
   }
+}
+
+async function getSeasonTeams(input: {
+  leagueId: string;
+  divisionId: string | null;
+}) {
+  await ensureSeasonTeamRowsForLeague(input.leagueId);
+
+  if (input.divisionId) {
+    return prisma.$queryRaw<TeamOption[]>(Prisma.sql`
+      SELECT t."id", t."name"
+      FROM "LeagueSeasonTeam" lst
+      JOIN "Team" t ON t."id" = lst."teamId"
+      WHERE lst."leagueId" = ${input.leagueId}
+        AND lst."divisionId" = ${input.divisionId}
+        AND lst."isActive" = true
+      ORDER BY t."name" ASC
+    `);
+  }
+
+  return prisma.$queryRaw<TeamOption[]>(Prisma.sql`
+    SELECT t."id", t."name"
+    FROM "LeagueSeasonTeam" lst
+    JOIN "Team" t ON t."id" = lst."teamId"
+    WHERE lst."leagueId" = ${input.leagueId}
+      AND lst."isActive" = true
+    ORDER BY t."name" ASC
+  `);
 }
 
 export async function GET(request: Request) {
@@ -92,17 +126,7 @@ export async function GET(request: Request) {
   const selectedDivisionId = selectedDivision?.id ?? null;
 
   const [teams, fixtures] = await Promise.all([
-    prisma.team.findMany({
-      where: {
-        leagueId: league.id,
-        ...(selectedDivisionId ? { divisionId: selectedDivisionId } : {}),
-      },
-      orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-      },
-    }),
+    getSeasonTeams({ leagueId: league.id, divisionId: selectedDivisionId }),
     prisma.fixture.findMany({
       where: {
         leagueId: league.id,
