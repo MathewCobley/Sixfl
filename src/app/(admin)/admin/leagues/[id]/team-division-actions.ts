@@ -7,7 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { updateTeamDivision } from "@/lib/league-divisions";
+import { setSeasonTeamDivision } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -36,7 +36,7 @@ export async function updateTeamDivisionAction(formData: FormData) {
   }
 
   try {
-    await updateTeamDivision({
+    await setSeasonTeamDivision({
       teamId,
       leagueId: league.id,
       divisionId,
