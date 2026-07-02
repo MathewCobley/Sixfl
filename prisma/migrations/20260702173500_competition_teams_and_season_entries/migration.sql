@@ -56,7 +56,7 @@ INSERT INTO "LeagueSeasonTeam" (
   "updatedAt"
 )
 SELECT
-  gen_random_uuid()::text,
+  'lst_' || md5(t."id" || ':' || t."leagueId"),
   t."leagueId",
   t."id",
   t."divisionId",
