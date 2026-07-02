@@ -48,3 +48,29 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
     });
   }
 }
+
+export async function getCurrentLeagueIds() {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT l."id"
+      FROM "League" l
+      LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
+      WHERE l."isActive" = true
+        AND (
+          l."competitionId" IS NULL
+          OR c."currentLeagueId" = l."id"
+        )
+      ORDER BY l."name" ASC, l."season" ASC
+    `);
+
+    return rows.map((row) => row.id);
+  } catch {
+    const rows = await prisma.league.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: "asc" }, { season: "asc" }],
+      select: { id: true },
+    });
+
+    return rows.map((row) => row.id);
+  }
+}
