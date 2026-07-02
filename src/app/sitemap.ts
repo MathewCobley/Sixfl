@@ -4,6 +4,7 @@
 
 import type { MetadataRoute } from "next";
 
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -18,19 +19,24 @@ function absoluteUrl(path: string) {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
+  const currentLeagueIds = await getCurrentLeagueIds();
 
-  const leagues = await prisma.league.findMany({
-    where: {
-      isActive: true,
-    },
-    select: {
-      slug: true,
-      updatedAt: true,
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-  });
+  const leagues = currentLeagueIds.length
+    ? await prisma.league.findMany({
+        where: {
+          id: {
+            in: currentLeagueIds,
+          },
+        },
+        select: {
+          slug: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+      })
+    : [];
 
   const staticRoutes: MetadataRoute.Sitemap = [
     {
