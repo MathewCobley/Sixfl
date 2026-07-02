@@ -1,31 +1,64 @@
 // ========================================
-// File: src/app/league-rules/page.tsx
+// File: src/app/(public)/league-rules/page.tsx
 // ========================================
 
 import Link from "next/link";
+
+const documentDetails = [
+  { label: "Document", value: "League Rules" },
+  { label: "Version", value: "1.0" },
+  { label: "Status", value: "Active" },
+  { label: "Last updated", value: "2 July 2026" },
+  { label: "Next review", value: "2 July 2027" },
+  { label: "Owner", value: "SIXFL League Operations" },
+  { label: "Applies to", value: "All SIXFL teams, players and league fixtures" },
+];
 
 export default function LeagueRulesPage() {
   return (
     <div className="space-y-10">
       <section className="rounded-3xl border border-white/10 bg-white/5 px-6 py-10 md:px-10">
-        <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
-            SIXFL RULES
-          </p>
+        <div className="grid gap-8 lg:grid-cols-[1fr_360px] lg:items-start">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">
+              SIXFL RULES
+            </p>
 
-          <h1 className="mt-3 text-4xl font-black tracking-tight text-white md:text-5xl">
-            League Rules
-          </h1>
+            <h1 className="mt-3 text-4xl font-black tracking-tight text-white md:text-5xl">
+              League Rules
+            </h1>
 
-          <p className="mt-2 text-sm text-white/50">
-            Version 1.0 — March 2026
-          </p>
+            <p className="mt-4 text-white/70 md:text-lg">
+              These rules outline the basic structure and expectations for teams
+              participating in SIXFL competitions. Our aim is to provide a fair,
+              well-organised and enjoyable football experience for all players.
+            </p>
 
-          <p className="mt-4 text-white/70 md:text-lg">
-            These rules outline the basic structure and expectations for teams
-            participating in SIXFL competitions. Our aim is to provide a fair,
-            well-organised and enjoyable football experience for all players.
-          </p>
+            <div className="mt-6 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
+                Rules statement
+              </p>
+              <p className="mt-3 text-sm leading-6 text-white/75">
+                These rules apply to all SIXFL leagues unless a league, venue or
+                competition format confirms a specific local rule.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-black/20 p-6">
+            <h2 className="text-xl font-bold text-white">Document control</h2>
+            <dl className="mt-5 divide-y divide-white/10">
+              {documentDetails.map((detail) => (
+                <div
+                  key={detail.label}
+                  className="grid grid-cols-[120px_1fr] gap-4 py-3 text-sm"
+                >
+                  <dt className="font-semibold text-white/55">{detail.label}</dt>
+                  <dd className="font-semibold text-white/90">{detail.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </div>
       </section>
 
