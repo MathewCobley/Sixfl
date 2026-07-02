@@ -106,6 +106,7 @@ model League {
   ctaText      String?
 
   teams          Team[]
+  divisions      LeagueDivision[]
   fixtures       Fixture[]
   interestLeads  InterestLead[]
   paymentCharges PaymentCharge[]
@@ -119,6 +120,26 @@ model League {
   @@index([area])
   @@index([dayOfWeek])
   @@index([leagueType])
+}
+
+model LeagueDivision {
+  id        String  @id @default(cuid())
+  leagueId  String
+  name      String
+  slug      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  league   League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  teams    Team[]
+  fixtures Fixture[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leagueId, slug])
+  @@index([leagueId])
+  @@index([leagueId, isActive, sortOrder])
 }
 
 model Venue {
@@ -174,6 +195,9 @@ model Team {
   leagueId String?
   league   League? @relation(fields: [leagueId], references: [id], onDelete: SetNull)
 
+  divisionId String?
+  division   LeagueDivision? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+
   captainUserId       String?
   captainLinkedAt     DateTime?
   captainLinkedSource String?
@@ -201,6 +225,7 @@ model Team {
 
   @@unique([name, leagueId])
   @@index([leagueId])
+  @@index([divisionId])
   @@index([createdByUserId])
   @@index([contactEmail])
   @@index([contactPhone])
@@ -280,6 +305,7 @@ enum TeamRole {
 model Fixture {
   id            String    @id @default(cuid())
   leagueId      String
+  divisionId    String?
   homeTeamId    String
   awayTeamId    String
   venueId       String?
@@ -306,6 +332,7 @@ model Fixture {
   socialPublishedAt     DateTime?
 
   league               League                       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  division             LeagueDivision?              @relation(fields: [divisionId], references: [id], onDelete: SetNull)
   homeTeam             Team                         @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
   awayTeam             Team                         @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
   venue                Venue?                       @relation(fields: [venueId], references: [id], onDelete: SetNull)
@@ -321,6 +348,8 @@ model Fixture {
   updatedAt DateTime @updatedAt
 
   @@index([leagueId, kickoffAt])
+  @@index([divisionId, kickoffAt])
+  @@index([leagueId, divisionId, kickoffAt])
   @@index([leagueId, publishedAt, kickoffAt])
   @@index([leagueId, round])
   @@index([homeTeamId])
