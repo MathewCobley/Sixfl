@@ -31,6 +31,8 @@ type TeamOption = {
   name: string;
 };
 
+type FixtureVisibilityFilter = "all" | "published" | "draft";
+
 const COUNTABLE_FIXTURE_STATUSES = [
   FixtureStatus.SCHEDULED,
   FixtureStatus.COMPLETED,
@@ -44,6 +46,17 @@ function getCellLabel(cell: MatchupCell) {
   if (cell.awayCount > 0) parts.push(`A${cell.awayCount}`);
 
   return parts.join(" · ");
+}
+
+function parseVisibility(value: string | null): FixtureVisibilityFilter {
+  if (value === "published" || value === "draft") return value;
+  return "all";
+}
+
+function getPublishedWhere(visibility: FixtureVisibilityFilter) {
+  if (visibility === "published") return { publishedAt: { not: null } };
+  if (visibility === "draft") return { publishedAt: null };
+  return {};
 }
 
 async function getLeagueDivisions(leagueId: string) {
@@ -94,6 +107,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const requestedLeagueId = url.searchParams.get("leagueId")?.trim() || null;
   const requestedDivisionId = url.searchParams.get("divisionId")?.trim() || null;
+  const visibility = parseVisibility(url.searchParams.get("visibility"));
 
   const leagues = await getCurrentLeagueOptions(requestedLeagueId);
   const league =
@@ -105,6 +119,7 @@ export async function GET(request: Request) {
       divisions: [],
       selectedLeagueId: null,
       selectedDivisionId: null,
+      selectedVisibility: visibility,
       selectedLeagueLabel: null,
       selectedDivisionLabel: null,
       teams: [],
@@ -131,6 +146,7 @@ export async function GET(request: Request) {
       where: {
         leagueId: league.id,
         ...(selectedDivisionId ? { divisionId: selectedDivisionId } : {}),
+        ...getPublishedWhere(visibility),
         status: {
           in: [...COUNTABLE_FIXTURE_STATUSES],
         },
@@ -142,6 +158,7 @@ export async function GET(request: Request) {
         awayTeamId: true,
         kickoffAt: true,
         status: true,
+        publishedAt: true,
       },
     }),
   ]);
@@ -242,6 +259,7 @@ export async function GET(request: Request) {
     divisions,
     selectedLeagueId: league.id,
     selectedDivisionId,
+    selectedVisibility: visibility,
     selectedLeagueLabel: `${league.name}${league.season ? ` · ${league.season}` : ""}`,
     selectedDivisionLabel: selectedDivision?.name ?? null,
     teams,
