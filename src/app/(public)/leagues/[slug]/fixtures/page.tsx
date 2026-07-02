@@ -11,9 +11,7 @@ import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
 function formatKickoffTime(value: Date | null) {
-  if (!value) {
-    return "TBC";
-  }
+  if (!value) return "TBC";
 
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -51,9 +49,7 @@ function normaliseLogoUrl(value?: string | null) {
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-
   if (!parts.length) return "?";
-
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
@@ -71,6 +67,21 @@ function getWinChanceBarClasses(type: "home" | "draw" | "away") {
 type WinChanceWithAi = ReturnType<typeof calculateFixtureWinChance> & {
   aiPreview?: FixtureAiPreview;
 };
+
+type FixtureForPrediction = {
+  divisionId: string | null;
+};
+
+function getPredictionFixturePool<TFixture extends FixtureForPrediction>(
+  fixture: TFixture,
+  fixtures: TFixture[],
+) {
+  if (!fixture.divisionId) {
+    return fixtures;
+  }
+
+  return fixtures.filter((candidate) => candidate.divisionId === fixture.divisionId);
+}
 
 function TeamBadge({
   name,
@@ -126,24 +137,9 @@ function WinChanceBlock({
   chance: WinChanceWithAi;
 }) {
   const rows = [
-    {
-      key: "home" as const,
-      label: homeTeamName,
-      shortLabel: "Home",
-      value: chance.home,
-    },
-    {
-      key: "draw" as const,
-      label: "Draw",
-      shortLabel: "Draw",
-      value: chance.draw,
-    },
-    {
-      key: "away" as const,
-      label: awayTeamName,
-      shortLabel: "Away",
-      value: chance.away,
-    },
+    { key: "home" as const, label: homeTeamName, shortLabel: "Home", value: chance.home },
+    { key: "draw" as const, label: "Draw", shortLabel: "Draw", value: chance.draw },
+    { key: "away" as const, label: awayTeamName, shortLabel: "Away", value: chance.away },
   ];
 
   return (
@@ -252,10 +248,11 @@ export default async function LeagueFixturesPublic({
   );
 
   const winChanceEntries = scheduledFixtures.map((fixture) => {
+    const predictionFixtures = getPredictionFixturePool(fixture, league.fixtures);
     const winChance = calculateFixtureWinChance({
       homeTeamId: fixture.homeTeam.id,
       awayTeamId: fixture.awayTeam.id,
-      fixtures: league.fixtures,
+      fixtures: predictionFixtures,
     });
     const aiPreview =
       storedPreviews.get(fixture.id) ??
@@ -272,11 +269,7 @@ export default async function LeagueFixturesPublic({
   const rounds = league.fixtures.reduce(
     (acc, fixture) => {
       const roundKey = fixture.round ?? 0;
-
-      if (!acc[roundKey]) {
-        acc[roundKey] = [];
-      }
-
+      if (!acc[roundKey]) acc[roundKey] = [];
       acc[roundKey].push(fixture);
       return acc;
     },
@@ -369,10 +362,7 @@ export default async function LeagueFixturesPublic({
                     className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] shadow-[0_18px_48px_rgba(0,0,0,0.28)]"
                   >
                     <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center lg:p-7">
-                      <TeamBadge
-                        name={fixture.homeTeam.name}
-                        logoUrl={homeLogoUrl}
-                      />
+                      <TeamBadge name={fixture.homeTeam.name} logoUrl={homeLogoUrl} />
 
                       <div className="flex flex-col items-center justify-center gap-3 text-center">
                         {fixture.result ? (
@@ -398,11 +388,7 @@ export default async function LeagueFixturesPublic({
                         </div>
                       </div>
 
-                      <TeamBadge
-                        name={fixture.awayTeam.name}
-                        logoUrl={awayLogoUrl}
-                        align="right"
-                      />
+                      <TeamBadge name={fixture.awayTeam.name} logoUrl={awayLogoUrl} align="right" />
                     </div>
 
                     {winChance ? (
