@@ -94,14 +94,27 @@ function formatGoalDifference(value: number) {
 
 function clearDivisionPanels() {
   document.querySelector("[data-sixfl-public-division-panels]")?.remove();
+  const table = document.getElementById("table");
+  if (table instanceof HTMLElement && table.dataset.sixflHiddenForDivisions === "true") {
+    table.style.display = "";
+    delete table.dataset.sixflHiddenForDivisions;
+  }
+}
+
+function hideCombinedLeagueTable(table: HTMLElement) {
+  table.dataset.sixflHiddenForDivisions = "true";
+  table.style.display = "none";
 }
 
 function renderDivisionPanels(payload: PublicDivisionPayload, slug: string) {
   const table = document.getElementById("table");
-  if (!table || !payload.divisions?.length) return;
+  if (!(table instanceof HTMLElement) || !payload.divisions?.length) return;
 
   const existing = document.querySelector("[data-sixfl-public-division-panels]");
-  if (existing?.getAttribute("data-slug") === slug) return;
+  if (existing?.getAttribute("data-slug") === slug) {
+    hideCombinedLeagueTable(table);
+    return;
+  }
   existing?.remove();
 
   const panel = document.createElement("section");
@@ -196,6 +209,7 @@ function renderDivisionPanels(payload: PublicDivisionPayload, slug: string) {
 
   panel.appendChild(divisionGrid);
   table.parentElement?.insertBefore(panel, table);
+  hideCombinedLeagueTable(table);
 }
 
 async function ensureDivisionPanels(pathname: string | null) {
@@ -296,6 +310,7 @@ export default function PublicLeagueLandingSpacingBridge() {
       document.removeEventListener("click", handleClick);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.classList.remove("sixfl-register-modal-open");
+      clearDivisionPanels();
     };
   }, [pathname]);
 
