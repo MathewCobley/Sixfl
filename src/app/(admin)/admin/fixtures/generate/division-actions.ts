@@ -24,6 +24,7 @@ type TeamSchedulingRule = {
   name: string;
   logoUrl: string | null;
   latestKickoffTime: string | null;
+  standardMatchFeePence: number | null;
 };
 
 function addDays(date: Date, days: number) {
@@ -107,6 +108,13 @@ function isKickoffAllowed(kickoffAt: Date, homeTeam: TeamSchedulingRule, awayTea
   return { allowed: true, reason: null };
 }
 
+function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {
+  const homeFee = homeTeam.standardMatchFeePence ?? 0;
+  const awayFee = awayTeam.standardMatchFeePence ?? 0;
+  const highestFee = Math.max(homeFee, awayFee);
+  return highestFee > 0 ? highestFee : null;
+}
+
 function generateRounds(teamIds: string[]): Pair[][] {
   const ids: (string | null)[] = [...teamIds];
   if (ids.length < 2) return [];
@@ -180,7 +188,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
 
   if (input.divisionId) {
     return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime"
+      SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime", t."standardMatchFeePence"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${input.leagueId}
@@ -191,7 +199,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
   }
 
   return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-    SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime"
+    SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime", t."standardMatchFeePence"
     FROM "LeagueSeasonTeam" lst
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
@@ -272,6 +280,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
     position: number;
     pitch: string;
     status: FixtureStatus;
+    matchFeePence: number | null;
   }> = [];
 
   let nightOffset = 0;
@@ -309,6 +318,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           position: chunkStart + nightlyIndex + 1,
           pitch: `Pitch ${pitchNumber}`,
           status,
+          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),
         });
       });
 
@@ -344,6 +354,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           position: fixtureData.position,
           pitch: fixtureData.pitch,
           status: fixtureData.status,
+          matchFeePence: fixtureData.matchFeePence,
         },
         select: { id: true },
       });
