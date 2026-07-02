@@ -5,6 +5,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type LeagueOption = { id: string; name: string; season: string | null; isActive: boolean };
@@ -56,15 +57,18 @@ export default function FixtureMatchupGrid({
   initialLeagueId?: string;
   initialDivisionId?: string;
 }) {
-  const [selectedLeagueId, setSelectedLeagueId] = useState(initialLeagueId ?? "");
-  const [selectedDivisionId, setSelectedDivisionId] = useState(initialDivisionId ?? "");
+  const searchParams = useSearchParams();
+  const leagueIdFromUrl = searchParams.get("leagueId") ?? "";
+  const divisionIdFromUrl = searchParams.get("divisionId") ?? "";
+  const [selectedLeagueId, setSelectedLeagueId] = useState(initialLeagueId ?? leagueIdFromUrl);
+  const [selectedDivisionId, setSelectedDivisionId] = useState(initialDivisionId ?? divisionIdFromUrl);
   const [data, setData] = useState<MatchupGridData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setSelectedLeagueId(initialLeagueId ?? "");
-    setSelectedDivisionId(initialDivisionId ?? "");
-  }, [initialLeagueId, initialDivisionId]);
+    setSelectedLeagueId(initialLeagueId ?? leagueIdFromUrl);
+    setSelectedDivisionId(initialDivisionId ?? divisionIdFromUrl);
+  }, [initialLeagueId, initialDivisionId, leagueIdFromUrl, divisionIdFromUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,9 +85,7 @@ export default function FixtureMatchupGrid({
         if (cancelled) return;
         setData(result);
         if (!selectedLeagueId && result.selectedLeagueId) setSelectedLeagueId(result.selectedLeagueId);
-        if (result.selectedDivisionId && result.selectedDivisionId !== selectedDivisionId) {
-          setSelectedDivisionId(result.selectedDivisionId);
-        }
+        if (!selectedDivisionId && result.selectedDivisionId) setSelectedDivisionId(result.selectedDivisionId);
       } catch {
         if (!cancelled) setData(null);
       } finally {
