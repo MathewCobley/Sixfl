@@ -101,6 +101,16 @@ async function getSeasonTeams(input: {
   `);
 }
 
+function getFallbackConfirmationStatus(input: {
+  fixtureStatus: FixtureStatus;
+  kickoffAt: Date;
+}) {
+  if (input.fixtureStatus !== FixtureStatus.SCHEDULED) return null;
+  const diffMs = input.kickoffAt.getTime() - Date.now();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  return diffHours <= 24 ? "OVERDUE" : "PENDING";
+}
+
 export async function GET(request: Request) {
   await requireAdmin();
 
@@ -154,6 +164,7 @@ export async function GET(request: Request) {
       orderBy: [{ kickoffAt: "asc" }, { round: "asc" }, { position: "asc" }],
       select: {
         id: true,
+        leagueId: true,
         homeTeamId: true,
         awayTeamId: true,
         kickoffAt: true,
@@ -172,6 +183,16 @@ export async function GET(request: Request) {
             teamId: true,
             amountPence: true,
             status: true,
+          },
+        },
+        captainConfirmations: {
+          select: {
+            teamId: true,
+            status: true,
+            note: true,
+            confirmedAt: true,
+            issueRaisedAt: true,
+            lastChasedAt: true,
           },
         },
       },
@@ -285,9 +306,14 @@ export async function GET(request: Request) {
       const legacyFee = fixture.matchFeePence ?? null;
       const homeMatchFeePence = homeCharge?.amountPence ?? (legacyFee && !awayCharge ? legacyFee : null);
       const awayMatchFeePence = awayCharge?.amountPence ?? (legacyFee && !homeCharge ? legacyFee : null);
+      const homeConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.homeTeamId) ?? null;
+      const awayConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.awayTeamId) ?? null;
 
       return {
         id: fixture.id,
+        leagueId: fixture.leagueId,
+        homeTeamId: fixture.homeTeamId,
+        awayTeamId: fixture.awayTeamId,
         homeTeamName: fixture.homeTeam.name,
         awayTeamName: fixture.awayTeam.name,
         kickoffAt: fixture.kickoffAt.toISOString(),
@@ -299,6 +325,16 @@ export async function GET(request: Request) {
         publishedAt: fixture.publishedAt?.toISOString() ?? null,
         homeMatchFeePence,
         awayMatchFeePence,
+        homeConfirmationStatus: homeConfirmation?.status ?? getFallbackConfirmationStatus({ fixtureStatus: fixture.status, kickoffAt: fixture.kickoffAt }),
+        homeConfirmationNote: homeConfirmation?.note ?? null,
+        homeConfirmedAt: homeConfirmation?.confirmedAt?.toISOString() ?? null,
+        homeIssueRaisedAt: homeConfirmation?.issueRaisedAt?.toISOString() ?? null,
+        homeLastChasedAt: homeConfirmation?.lastChasedAt?.toISOString() ?? null,
+        awayConfirmationStatus: awayConfirmation?.status ?? getFallbackConfirmationStatus({ fixtureStatus: fixture.status, kickoffAt: fixture.kickoffAt }),
+        awayConfirmationNote: awayConfirmation?.note ?? null,
+        awayConfirmedAt: awayConfirmation?.confirmedAt?.toISOString() ?? null,
+        awayIssueRaisedAt: awayConfirmation?.issueRaisedAt?.toISOString() ?? null,
+        awayLastChasedAt: awayConfirmation?.lastChasedAt?.toISOString() ?? null,
       };
     }),
     summary: {
