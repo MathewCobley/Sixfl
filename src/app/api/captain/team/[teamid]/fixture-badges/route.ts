@@ -67,54 +67,65 @@ export async function GET(
 
     const relatedTeamIdSet = new Set(context.relatedTeamIds);
 
-    const [fixtures, leagueFixtures] = await Promise.all([
-      prisma.fixture.findMany({
-        where: {
-          ...(context.currentLeagueId ? { leagueId: context.currentLeagueId } : {}),
-          OR: [
-            { homeTeamId: { in: context.relatedTeamIds } },
-            { awayTeamId: { in: context.relatedTeamIds } },
-          ],
-          publishedAt: { not: null },
-        },
-        orderBy: [{ kickoffAt: "desc" }],
-        take: 100,
-        select: {
-          id: true,
-          kickoffAt: true,
-          status: true,
-          homeTeamId: true,
-          awayTeamId: true,
-          homeTeam: {
-            select: {
-              id: true,
-              name: true,
-              logoUrl: true,
-            },
-          },
-          awayTeam: {
-            select: {
-              id: true,
-              name: true,
-              logoUrl: true,
-            },
+    const fixtures = await prisma.fixture.findMany({
+      where: {
+        ...(context.currentLeagueId ? { leagueId: context.currentLeagueId } : {}),
+        OR: [
+          { homeTeamId: { in: context.relatedTeamIds } },
+          { awayTeamId: { in: context.relatedTeamIds } },
+        ],
+        publishedAt: { not: null },
+      },
+      orderBy: [{ kickoffAt: "desc" }],
+      take: 100,
+      select: {
+        id: true,
+        kickoffAt: true,
+        status: true,
+        homeTeamId: true,
+        awayTeamId: true,
+        homeTeam: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
           },
         },
-      }),
-      context.currentLeagueId
-        ? prisma.fixture.findMany({
-            where: { leagueId: context.currentLeagueId },
-            select: {
-              id: true,
-              kickoffAt: true,
-              status: true,
-              homeTeam: { select: { id: true } },
-              awayTeam: { select: { id: true } },
-              result: { select: { homeScore: true, awayScore: true } },
-            },
-          })
-        : Promise.resolve([]),
-    ]);
+        awayTeam: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
+          },
+        },
+      },
+    });
+
+    const predictorTeamIds = Array.from(
+      new Set(fixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId])),
+    );
+    const predictionHistory = predictorTeamIds.length
+      ? await prisma.fixture.findMany({
+          where: {
+            status: "COMPLETED",
+            result: { isNot: null },
+            OR: [
+              { homeTeamId: { in: predictorTeamIds } },
+              { awayTeamId: { in: predictorTeamIds } },
+            ],
+          },
+          orderBy: [{ kickoffAt: "asc" }],
+          take: 500,
+          select: {
+            id: true,
+            kickoffAt: true,
+            status: true,
+            homeTeam: { select: { id: true } },
+            awayTeam: { select: { id: true } },
+            result: { select: { homeScore: true, awayScore: true } },
+          },
+        })
+      : [];
 
     const storedPreviews = await getStoredAiPreviewsByFixtureIds(
       fixtures.map((fixture) => fixture.id),
@@ -149,7 +160,7 @@ export async function GET(
         const winChance = calculateFixtureWinChance({
           homeTeamId: fixture.homeTeamId,
           awayTeamId: fixture.awayTeamId,
-          fixtures: leagueFixtures,
+          fixtures: predictionHistory,
         });
 
         return {
