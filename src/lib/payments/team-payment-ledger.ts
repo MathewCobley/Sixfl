@@ -12,11 +12,6 @@ import {
 } from "@/lib/payments/charge-summary";
 import { prisma } from "@/lib/prisma";
 
-type TeamIdentityRow = {
-  id: string;
-  name: string;
-};
-
 type RelatedTeamRow = {
   id: string;
 };
@@ -33,6 +28,8 @@ export type TeamPaymentLedgerEntry = {
   teamName: string;
   fixtureId: string | null;
   title: string;
+  description: string | null;
+  paymentToken: string | null;
   fixtureLabel: string;
   leagueName: string | null;
   leagueSeason: string | null;
@@ -40,6 +37,7 @@ export type TeamPaymentLedgerEntry = {
   dueDate: Date | null;
   kickoffAt: Date | null;
   venueName: string | null;
+  createdAt: Date;
   amountPence: number;
   directPaidPence: number;
   playerPaidPence: number;
@@ -191,6 +189,8 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       teamName: charge.team.name,
       fixtureId: charge.fixtureId,
       title: charge.title,
+      description: charge.description,
+      paymentToken: charge.paymentToken,
       fixtureLabel,
       leagueName: charge.fixture?.league?.name ?? null,
       leagueSeason: charge.fixture?.league?.season ?? null,
@@ -198,6 +198,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       dueDate: charge.dueDate,
       kickoffAt: charge.fixture?.kickoffAt ?? null,
       venueName: charge.fixture?.venue?.name ?? null,
+      createdAt: charge.createdAt,
       amountPence: charge.amountPence,
       directPaidPence,
       playerPaidPence,
