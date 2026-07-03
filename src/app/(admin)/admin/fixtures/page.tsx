@@ -51,6 +51,12 @@ function formatCount(value: number, singular: string, plural = `${singular}s`) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
+function getFixtureDisplayRank(fixture: { status: string; kickoffAt: Date }) {
+  if (fixture.status === "COMPLETED") return 2;
+  if (fixture.kickoffAt.getTime() < Date.now()) return 1;
+  return 0;
+}
+
 function buildPublishNotice(input: {
   searchParams: Record<string, string | string[] | undefined>;
   leagues: Array<{ id: string; name: string }>;
@@ -76,24 +82,13 @@ function buildPublishNotice(input: {
       `${formatCount(reminderQueued, "reminder email")} queued`,
     ];
     const skipped = digestSkipped + reminderSkipped;
-    if (skipped > 0) {
-      summaryParts.push(`${formatCount(skipped, "notification")} skipped because team email details were missing or disabled`);
-    }
+    if (skipped > 0) summaryParts.push(`${formatCount(skipped, "notification")} skipped because team email details were missing or disabled`);
     return { tone: "success", message: `${summaryParts.join(". ")}.` };
   }
 
-  if (publish === "none") {
-    return { tone: "info", message: `No draft fixtures were waiting to be published for ${scopeLabel}.` };
-  }
-
-  if (publish === "error" && publishError === "reply_not_configured") {
-    return { tone: "error", message: `Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the deployed environment before publishing fixtures for ${scopeLabel}.` };
-  }
-
-  if (publish === "error") {
-    return { tone: "error", message: `Publishing fixtures for ${scopeLabel} could not be completed.` };
-  }
-
+  if (publish === "none") return { tone: "info", message: `No draft fixtures were waiting to be published for ${scopeLabel}.` };
+  if (publish === "error" && publishError === "reply_not_configured") return { tone: "error", message: `Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the deployed environment before publishing fixtures for ${scopeLabel}.` };
+  if (publish === "error") return { tone: "error", message: `Publishing fixtures for ${scopeLabel} could not be completed.` };
   return null;
 }
 
@@ -131,22 +126,13 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
     }),
     prisma.team.findMany({
       orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        leagueId: true,
-        league: { select: { id: true, name: true, season: true } },
-      },
+      select: { id: true, name: true, leagueId: true, league: { select: { id: true, name: true, season: true } } },
     }),
     prisma.venue.findMany({ orderBy: [{ name: "asc" }], select: { id: true, name: true } }),
-    prisma.user.findMany({
-      where: { role: "REFEREE" },
-      orderBy: [{ name: "asc" }, { email: "asc" }],
-      select: { id: true, name: true, email: true },
-    }),
+    prisma.user.findMany({ where: { role: "REFEREE" }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true } }),
     prisma.fixture.findMany({
       where: { leagueId: { in: currentLeagueIds } },
-      orderBy: [{ kickoffAt: "desc" }, { round: "asc" }, { position: "asc" }],
+      orderBy: [{ kickoffAt: "asc" }, { round: "asc" }, { position: "asc" }],
       select: {
         id: true,
         leagueId: true,
@@ -175,12 +161,18 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
         awayTeam: { select: { id: true, name: true } },
         paymentCharges: { select: { teamId: true, amountPence: true, status: true } },
         result: { select: { homeScore: true, awayScore: true, isDisputed: true } },
-        captainConfirmations: {
-          select: { teamId: true, status: true, note: true, confirmedAt: true, issueRaisedAt: true, lastChasedAt: true },
-        },
+        captainConfirmations: { select: { teamId: true, status: true, note: true, confirmedAt: true, issueRaisedAt: true, lastChasedAt: true } },
       },
     }),
   ]);
+
+  const sortedFixtures = [...fixtures].sort((a, b) => {
+    const rankDifference = getFixtureDisplayRank(a) - getFixtureDisplayRank(b);
+    if (rankDifference !== 0) return rankDifference;
+    const dateDifference = a.kickoffAt.getTime() - b.kickoffAt.getTime();
+    if (dateDifference !== 0) return dateDifference;
+    return (a.position ?? 0) - (b.position ?? 0);
+  });
 
   const activeLeagueParam = getSearchParamValue(resolvedSearchParams.leagueId);
   const activeLeagueId = leagues.some((league) => league.id === activeLeagueParam) ? activeLeagueParam ?? "" : leagues[0]?.id ?? "";
@@ -205,7 +197,7 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
     venues,
     referees,
     initialLeagueId: activeLeagueId,
-    fixtures: fixtures.map((fixture) => {
+    fixtures: sortedFixtures.map((fixture) => {
       const homeConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.homeTeamId) ?? null;
       const awayConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.awayTeamId) ?? null;
       const activeCharges = fixture.paymentCharges.filter((charge) => charge.status !== "VOID");
@@ -276,25 +268,9 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
           </div>
         </div>
 
-        {!emailReplyConfigured ? (
-          <div className="px-6 pt-6 md:px-8">
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              Reply-by-email is not configured yet. Add <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the deployed environment, for example <span className="font-mono">replies.sixfl.co.uk</span>, before publishing fixtures because this flow emails teams and queues reminder emails.
-            </div>
-          </div>
-        ) : null}
-
-        {publishNotice ? (
-          <div className="px-6 pt-6 md:px-8">
-            <div className={["rounded-2xl border px-4 py-3 text-sm", publishNotice.tone === "success" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : publishNotice.tone === "error" ? "border-red-500/30 bg-red-500/10 text-red-100" : "border-white/10 bg-white/[0.05] text-white/75"].join(" ")}>{publishNotice.message}</div>
-          </div>
-        ) : null}
-
-        {chaseNotice ? (
-          <div className="px-6 pt-6 md:px-8">
-            <div className={["rounded-2xl border px-4 py-3 text-sm", chaseNotice.tone === "success" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : chaseNotice.tone === "error" ? "border-red-500/30 bg-red-500/10 text-red-100" : "border-white/10 bg-white/[0.05] text-white/75"].join(" ")}>{chaseNotice.message}</div>
-          </div>
-        ) : null}
+        {!emailReplyConfigured ? <div className="px-6 pt-6 md:px-8"><div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">Reply-by-email is not configured yet. Add <span className="font-mono">EMAIL_REPLY_DOMAIN</span> in the deployed environment, for example <span className="font-mono">replies.sixfl.co.uk</span>, before publishing fixtures because this flow emails teams and queues reminder emails.</div></div> : null}
+        {publishNotice ? <div className="px-6 pt-6 md:px-8"><div className={["rounded-2xl border px-4 py-3 text-sm", publishNotice.tone === "success" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : publishNotice.tone === "error" ? "border-red-500/30 bg-red-500/10 text-red-100" : "border-white/10 bg-white/[0.05] text-white/75"].join(" ")}>{publishNotice.message}</div></div> : null}
+        {chaseNotice ? <div className="px-6 pt-6 md:px-8"><div className={["rounded-2xl border px-4 py-3 text-sm", chaseNotice.tone === "success" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : chaseNotice.tone === "error" ? "border-red-500/30 bg-red-500/10 text-red-100" : "border-white/10 bg-white/[0.05] text-white/75"].join(" ")}>{chaseNotice.message}</div></div> : null}
 
         <div className="grid gap-4 px-6 py-6 md:grid-cols-2 md:px-8 xl:grid-cols-3">
           {publishSummary.map((item) => {
@@ -303,41 +279,8 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
             const defaultRound = item.draftRounds[0] ?? 1;
             const publishLabel = item.drafts === 0 ? "No draft fixtures to publish" : !emailReplyConfigured ? "Configure reply email before publishing" : `Publish all ${formatCount(item.drafts, "draft fixture")}`;
             const weekLabel = item.draftRounds.length > 0 ? `Draft weeks: ${item.draftRounds.join(", ")}` : "No draft weeks detected";
-
-            return (
-              <div key={item.league.id} className={["rounded-3xl border bg-black/30 p-5 transition", item.isActive ? "border-emerald-400/30 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]" : "border-white/10"].join(" ")}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0"><div className="truncate text-lg font-semibold text-white">{item.league.name}</div><div className="mt-1 text-sm text-white/45">{item.league.season || "No season set"}</div></div>
-                  <div className="flex shrink-0 items-center gap-2">{item.isActive ? <span className="inline-flex rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">Active</span> : null}<Link href={`/leagues/${item.league.slug}`} target="_blank" className="inline-flex rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]">Public</Link></div>
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Total</div><div className="mt-1 text-lg font-semibold text-white">{item.total}</div></div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Draft</div><div className="mt-1 text-lg font-semibold text-amber-300">{item.drafts}</div></div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Published</div><div className="mt-1 text-lg font-semibold text-emerald-300">{item.published}</div></div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Scheduled</div><div className="mt-1 text-lg font-semibold text-white">{item.scheduled}</div></div>
-                </div>
-
-                <div className="mt-5 space-y-4">
-                  <form action={publishAndEmailLeagueFixtureWeekAction} className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
-                    <input type="hidden" name="leagueId" value={item.league.id} />
-                    <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Publish one week only</label>
-                    <div className="flex gap-3"><input type="number" name="round" min={1} defaultValue={defaultRound} disabled={weekPublishDisabled} className="h-12 w-28 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40" /><button type="submit" disabled={weekPublishDisabled} className="inline-flex h-12 flex-1 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">Publish week</button></div>
-                    <p className="mt-2 text-xs leading-5 text-emerald-50/70">{weekLabel}. Only fixtures from the chosen week are made live and emailed.</p>
-                  </form>
-
-                  <form action={publishAndEmailLeagueFixturesAction} className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
-                    <input type="hidden" name="leagueId" value={item.league.id} />
-                    <p className="mb-3 text-xs leading-5 text-amber-100/80">Use this only when you want every remaining draft fixture for this current season to go live and email teams.</p>
-                    <button type="submit" disabled={publishDisabled} className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-amber-300/30 bg-amber-300 px-5 text-sm font-semibold text-black transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{publishLabel}</button>
-                  </form>
-
-                  <Link href={`/admin/fixtures?leagueId=${item.league.id}`} className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]">View in fixtures table</Link>
-                </div>
-              </div>
-            );
+            return <div key={item.league.id} className={["rounded-3xl border bg-black/30 p-5 transition", item.isActive ? "border-emerald-400/30 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]" : "border-white/10"].join(" ")}><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="truncate text-lg font-semibold text-white">{item.league.name}</div><div className="mt-1 text-sm text-white/45">{item.league.season || "No season set"}</div></div><div className="flex shrink-0 items-center gap-2">{item.isActive ? <span className="inline-flex rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">Active</span> : null}<Link href={`/leagues/${item.league.slug}`} target="_blank" className="inline-flex rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]">Public</Link></div></div><div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4"><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Total</div><div className="mt-1 text-lg font-semibold text-white">{item.total}</div></div><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Draft</div><div className="mt-1 text-lg font-semibold text-amber-300">{item.drafts}</div></div><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Published</div><div className="mt-1 text-lg font-semibold text-emerald-300">{item.published}</div></div><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Scheduled</div><div className="mt-1 text-lg font-semibold text-white">{item.scheduled}</div></div></div><div className="mt-5 space-y-4"><form action={publishAndEmailLeagueFixtureWeekAction} className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><input type="hidden" name="leagueId" value={item.league.id} /><label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Publish one week only</label><div className="flex gap-3"><input type="number" name="round" min={1} defaultValue={defaultRound} disabled={weekPublishDisabled} className="h-12 w-28 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40" /><button type="submit" disabled={weekPublishDisabled} className="inline-flex h-12 flex-1 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">Publish week</button></div><p className="mt-2 text-xs leading-5 text-emerald-50/70">{weekLabel}. Only fixtures from the chosen week are made live and emailed.</p></form><form action={publishAndEmailLeagueFixturesAction} className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4"><input type="hidden" name="leagueId" value={item.league.id} /><p className="mb-3 text-xs leading-5 text-amber-100/80">Use this only when you want every remaining draft fixture for this current season to go live and email teams.</p><button type="submit" disabled={publishDisabled} className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-amber-300/30 bg-amber-300 px-5 text-sm font-semibold text-black transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40">{publishLabel}</button></form><Link href={`/admin/fixtures?leagueId=${item.league.id}`} className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]">View in fixtures table</Link></div></div>;
           })}
-
           {publishSummary.length === 0 ? <div className="rounded-3xl border border-dashed border-white/10 bg-black/30 p-6 text-sm text-white/55 md:col-span-2 xl:col-span-3">No current league seasons are available for fixture publishing.</div> : null}
         </div>
       </AdminCard>
