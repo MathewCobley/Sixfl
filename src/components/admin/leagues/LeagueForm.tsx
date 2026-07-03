@@ -23,6 +23,10 @@ type LeagueFormValues = {
   costPerTeamPerMatch: string;
   targetTeamCount: string;
   requiredRefereesPerNight: string;
+  bookedPitchCount: string;
+  bookingStartTime: string;
+  bookingEndTime: string;
+  pitchCostPerHourOverride: string;
   kickoffInfo: string;
   format: string;
   surface: string;
@@ -224,6 +228,10 @@ export default function LeagueForm({
       costPerTeamPerMatch: initialValues?.costPerTeamPerMatch ?? "40",
       targetTeamCount: initialValues?.targetTeamCount ?? "12",
       requiredRefereesPerNight: initialValues?.requiredRefereesPerNight ?? "1",
+      bookedPitchCount: initialValues?.bookedPitchCount ?? "",
+      bookingStartTime: initialValues?.bookingStartTime ?? "",
+      bookingEndTime: initialValues?.bookingEndTime ?? "",
+      pitchCostPerHourOverride: initialValues?.pitchCostPerHourOverride ?? "",
       kickoffInfo: initialValues?.kickoffInfo ?? "",
       format: initialValues?.format ?? "",
       surface: initialValues?.surface ?? "",
@@ -301,286 +309,108 @@ export default function LeagueForm({
           <label htmlFor="season" className="block text-sm font-medium text-white">
             Season
           </label>
-          <Input
-            id="season"
-            name="season"
-            defaultValue={values.season}
-            placeholder="Spring 2026"
-            hasError={Boolean(state.errors?.season)}
-          />
+          <Input id="season" name="season" defaultValue={values.season} placeholder="Spring 2026" hasError={Boolean(state.errors?.season)} />
           <FieldError errors={state.errors} name="season" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="area" className="block text-sm font-medium text-white">
-            Area
-          </label>
-          <Input
-            id="area"
-            name="area"
-            defaultValue={values.area}
-            placeholder="Harrogate"
-            hasError={Boolean(state.errors?.area)}
-          />
+          <label htmlFor="area" className="block text-sm font-medium text-white">Area</label>
+          <Input id="area" name="area" defaultValue={values.area} placeholder="Harrogate" hasError={Boolean(state.errors?.area)} />
           <FieldError errors={state.errors} name="area" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="venueName" className="block text-sm font-medium text-white">
-            Venue name
-          </label>
-          <Input
-            id="venueName"
-            name="venueName"
-            defaultValue={values.venueName}
-            placeholder="Rossett Sports Centre"
-            hasError={Boolean(state.errors?.venueName)}
-          />
+          <label htmlFor="venueName" className="block text-sm font-medium text-white">Venue name</label>
+          <Input id="venueName" name="venueName" defaultValue={values.venueName} placeholder="Rossett Sports Centre" hasError={Boolean(state.errors?.venueName)} />
           <FieldError errors={state.errors} name="venueName" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="proposedStartDate" className="block text-sm font-medium text-white">
-            Proposed start date
-          </label>
-          <Input
-            id="proposedStartDate"
-            name="proposedStartDate"
-            type="date"
-            defaultValue={values.proposedStartDate}
-            hasError={Boolean(state.errors?.proposedStartDate)}
-          />
-          <p className="text-xs text-white/40">
-            Used in team confirmation emails. If it has passed, the email wording changes automatically.
-          </p>
+          <label htmlFor="proposedStartDate" className="block text-sm font-medium text-white">Proposed start date</label>
+          <Input id="proposedStartDate" name="proposedStartDate" type="date" defaultValue={values.proposedStartDate} hasError={Boolean(state.errors?.proposedStartDate)} />
+          <p className="text-xs text-white/40">Used in team confirmation emails.</p>
           <FieldError errors={state.errors} name="proposedStartDate" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="minutesPerGame" className="block text-sm font-medium text-white">
-            Minutes per game
-          </label>
-          <Input
-            id="minutesPerGame"
-            name="minutesPerGame"
-            type="number"
-            min="1"
-            step="1"
-            defaultValue={values.minutesPerGame}
-            placeholder="40"
-            hasError={Boolean(state.errors?.minutesPerGame)}
-          />
+          <label htmlFor="minutesPerGame" className="block text-sm font-medium text-white">Minutes per game</label>
+          <Input id="minutesPerGame" name="minutesPerGame" type="number" min="1" step="1" defaultValue={values.minutesPerGame} placeholder="40" hasError={Boolean(state.errors?.minutesPerGame)} />
           <FieldError errors={state.errors} name="minutesPerGame" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="costPerTeamPerMatch" className="block text-sm font-medium text-white">
-            Cost per team per match (£)
-          </label>
-          <Input
-            id="costPerTeamPerMatch"
-            name="costPerTeamPerMatch"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={values.costPerTeamPerMatch}
-            placeholder="40"
-            hasError={Boolean(state.errors?.costPerTeamPerMatch)}
-          />
+          <label htmlFor="costPerTeamPerMatch" className="block text-sm font-medium text-white">Cost per team per match (£)</label>
+          <Input id="costPerTeamPerMatch" name="costPerTeamPerMatch" type="number" min="0" step="0.01" defaultValue={values.costPerTeamPerMatch} placeholder="40" hasError={Boolean(state.errors?.costPerTeamPerMatch)} />
           <FieldError errors={state.errors} name="costPerTeamPerMatch" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="targetTeamCount" className="block text-sm font-medium text-white">
-            Target number of teams
-          </label>
-          <Input
-            id="targetTeamCount"
-            name="targetTeamCount"
-            type="number"
-            min="2"
-            step="1"
-            defaultValue={values.targetTeamCount}
-            placeholder="12"
-            hasError={Boolean(state.errors?.targetTeamCount)}
-          />
+          <label htmlFor="targetTeamCount" className="block text-sm font-medium text-white">Target number of teams</label>
+          <Input id="targetTeamCount" name="targetTeamCount" type="number" min="2" step="1" defaultValue={values.targetTeamCount} placeholder="12" hasError={Boolean(state.errors?.targetTeamCount)} />
           <FieldError errors={state.errors} name="targetTeamCount" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="dayOfWeek" className="block text-sm font-medium text-white">
-            Day of week
-          </label>
-          <Select
-            id="dayOfWeek"
-            name="dayOfWeek"
-            defaultValue={values.dayOfWeek}
-            options={dayOptions}
-            hasError={Boolean(state.errors?.dayOfWeek)}
-          />
+          <label htmlFor="dayOfWeek" className="block text-sm font-medium text-white">Day of week</label>
+          <Select id="dayOfWeek" name="dayOfWeek" defaultValue={values.dayOfWeek} options={dayOptions} hasError={Boolean(state.errors?.dayOfWeek)} />
           <FieldError errors={state.errors} name="dayOfWeek" />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="leagueType" className="block text-sm font-medium text-white">
-            League type
-          </label>
-          <Select
-            id="leagueType"
-            name="leagueType"
-            defaultValue={values.leagueType}
-            options={leagueTypeOptions}
-            hasError={Boolean(state.errors?.leagueType)}
-          />
+          <label htmlFor="leagueType" className="block text-sm font-medium text-white">League type</label>
+          <Select id="leagueType" name="leagueType" defaultValue={values.leagueType} options={leagueTypeOptions} hasError={Boolean(state.errors?.leagueType)} />
           <FieldError errors={state.errors} name="leagueType" />
         </div>
 
+        <div className="space-y-2 md:col-span-2">
+          <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.04] p-4">
+            <div className="text-sm font-semibold text-white">Night booking / pitch cost</div>
+            <p className="mt-1 text-xs leading-5 text-white/45">Used by the Night Board to calculate pitch hire. Leave the override blank to use the venue default hourly cost.</p>
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
+              <label className="space-y-2">
+                <span className="block text-sm font-medium text-white">Pitches booked</span>
+                <Input id="bookedPitchCount" name="bookedPitchCount" type="number" min="0" step="1" defaultValue={values.bookedPitchCount} placeholder="2" hasError={Boolean(state.errors?.bookedPitchCount)} />
+                <FieldError errors={state.errors} name="bookedPitchCount" />
+              </label>
+              <label className="space-y-2">
+                <span className="block text-sm font-medium text-white">Booking start</span>
+                <Input id="bookingStartTime" name="bookingStartTime" type="time" defaultValue={values.bookingStartTime} placeholder="19:00" hasError={Boolean(state.errors?.bookingStartTime)} />
+                <FieldError errors={state.errors} name="bookingStartTime" />
+              </label>
+              <label className="space-y-2">
+                <span className="block text-sm font-medium text-white">Booking end</span>
+                <Input id="bookingEndTime" name="bookingEndTime" type="time" defaultValue={values.bookingEndTime} placeholder="21:00" hasError={Boolean(state.errors?.bookingEndTime)} />
+                <FieldError errors={state.errors} name="bookingEndTime" />
+              </label>
+              <label className="space-y-2">
+                <span className="block text-sm font-medium text-white">Hourly cost override (£)</span>
+                <Input id="pitchCostPerHourOverride" name="pitchCostPerHourOverride" type="number" min="0" step="0.01" defaultValue={values.pitchCostPerHourOverride} placeholder="blank = venue" hasError={Boolean(state.errors?.pitchCostPerHourOverride)} />
+                <FieldError errors={state.errors} name="pitchCostPerHourOverride" />
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-2">
-          <label htmlFor="requiredRefereesPerNight" className="block text-sm font-medium text-white">
-            Referees needed per night
-          </label>
-          <Input
-            id="requiredRefereesPerNight"
-            name="requiredRefereesPerNight"
-            type="number"
-            min="0"
-            step="1"
-            defaultValue={values.requiredRefereesPerNight}
-            placeholder="1"
-            hasError={Boolean(state.errors?.requiredRefereesPerNight)}
-          />
-          <p className="text-xs text-white/40">
-            Used by referee availability to flag if a league night is under-covered.
-          </p>
+          <label htmlFor="requiredRefereesPerNight" className="block text-sm font-medium text-white">Referees needed per night</label>
+          <Input id="requiredRefereesPerNight" name="requiredRefereesPerNight" type="number" min="0" step="1" defaultValue={values.requiredRefereesPerNight} placeholder="1" hasError={Boolean(state.errors?.requiredRefereesPerNight)} />
           <FieldError errors={state.errors} name="requiredRefereesPerNight" />
         </div>
 
-        <div className="space-y-2">
-          <label htmlFor="kickoffInfo" className="block text-sm font-medium text-white">
-            Kickoff info
-          </label>
-          <Input
-            id="kickoffInfo"
-            name="kickoffInfo"
-            defaultValue={values.kickoffInfo}
-            placeholder="From 7pm"
-            hasError={Boolean(state.errors?.kickoffInfo)}
-          />
-          <FieldError errors={state.errors} name="kickoffInfo" />
-        </div>
+        <div className="space-y-2"><label htmlFor="kickoffInfo" className="block text-sm font-medium text-white">Kickoff info</label><Input id="kickoffInfo" name="kickoffInfo" defaultValue={values.kickoffInfo} placeholder="From 7pm" hasError={Boolean(state.errors?.kickoffInfo)} /><FieldError errors={state.errors} name="kickoffInfo" /></div>
+        <div className="space-y-2"><label htmlFor="format" className="block text-sm font-medium text-white">Format</label><Input id="format" name="format" defaultValue={values.format} placeholder="6-a-side" hasError={Boolean(state.errors?.format)} /><FieldError errors={state.errors} name="format" /></div>
+        <div className="space-y-2"><label htmlFor="surface" className="block text-sm font-medium text-white">Surface</label><Input id="surface" name="surface" defaultValue={values.surface} placeholder="3G" hasError={Boolean(state.errors?.surface)} /><FieldError errors={state.errors} name="surface" /></div>
+        <div className="space-y-2"><label htmlFor="heroImageUrl" className="block text-sm font-medium text-white">Hero image URL</label><Input id="heroImageUrl" name="heroImageUrl" defaultValue={values.heroImageUrl} placeholder="/venues/rossett_dark_trendy.jpg" hasError={Boolean(state.errors?.heroImageUrl)} /><FieldError errors={state.errors} name="heroImageUrl" /></div>
+        <div className="space-y-2"><label htmlFor="badgeUrl" className="block text-sm font-medium text-white">League badge URL</label><Input id="badgeUrl" name="badgeUrl" defaultValue={values.badgeUrl} placeholder="/leagues/harrogate-tuesday-mens-rossett-sports.png" hasError={Boolean(state.errors?.badgeUrl)} /><FieldError errors={state.errors} name="badgeUrl" /></div>
 
-        <div className="space-y-2">
-          <label htmlFor="format" className="block text-sm font-medium text-white">
-            Format
-          </label>
-          <Input
-            id="format"
-            name="format"
-            defaultValue={values.format}
-            placeholder="6-a-side"
-            hasError={Boolean(state.errors?.format)}
-          />
-          <FieldError errors={state.errors} name="format" />
-        </div>
+        <div className="space-y-2 md:col-span-2"><label htmlFor="ctaText" className="block text-sm font-medium text-white">CTA text</label><Input id="ctaText" name="ctaText" defaultValue={values.ctaText} placeholder="Register your team" hasError={Boolean(state.errors?.ctaText)} /><FieldError errors={state.errors} name="ctaText" /></div>
+        <div className="space-y-2 md:col-span-2"><label htmlFor="description" className="block text-sm font-medium text-white">Description</label><TextArea id="description" name="description" defaultValue={values.description} placeholder="Premium weekly 6-a-side football..." rows={6} hasError={Boolean(state.errors?.description)} /><FieldError errors={state.errors} name="description" /></div>
 
-        <div className="space-y-2">
-          <label htmlFor="surface" className="block text-sm font-medium text-white">
-            Surface
-          </label>
-          <Input
-            id="surface"
-            name="surface"
-            defaultValue={values.surface}
-            placeholder="3G"
-            hasError={Boolean(state.errors?.surface)}
-          />
-          <FieldError errors={state.errors} name="surface" />
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="heroImageUrl" className="block text-sm font-medium text-white">
-            Hero image URL
-          </label>
-          <Input
-            id="heroImageUrl"
-            name="heroImageUrl"
-            defaultValue={values.heroImageUrl}
-            placeholder="/venues/rossett_dark_trendy.jpg"
-            hasError={Boolean(state.errors?.heroImageUrl)}
-          />
-          <FieldError errors={state.errors} name="heroImageUrl" />
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="badgeUrl" className="block text-sm font-medium text-white">
-            League badge URL
-          </label>
-          <Input
-            id="badgeUrl"
-            name="badgeUrl"
-            defaultValue={values.badgeUrl}
-            placeholder="/leagues/harrogate-tuesday-mens-rossett-sports.png"
-            hasError={Boolean(state.errors?.badgeUrl)}
-          />
-          <p className="text-xs text-white/40">
-            Use a full URL or a site-relative path beginning with /.
-          </p>
-          <FieldError errors={state.errors} name="badgeUrl" />
-        </div>
-
-        <div className="space-y-2 md:col-span-2">
-          <label htmlFor="ctaText" className="block text-sm font-medium text-white">
-            CTA text
-          </label>
-          <Input
-            id="ctaText"
-            name="ctaText"
-            defaultValue={values.ctaText}
-            placeholder="Register your team"
-            hasError={Boolean(state.errors?.ctaText)}
-          />
-          <FieldError errors={state.errors} name="ctaText" />
-        </div>
-
-        <div className="space-y-2 md:col-span-2">
-          <label htmlFor="description" className="block text-sm font-medium text-white">
-            Description
-          </label>
-          <TextArea
-            id="description"
-            name="description"
-            defaultValue={values.description}
-            placeholder="Premium weekly 6-a-side football in Harrogate with proper fixtures, proper refs, and a properly run league."
-            rows={6}
-            hasError={Boolean(state.errors?.description)}
-          />
-          <FieldError errors={state.errors} name="description" />
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="isActive" className="block text-sm font-medium text-white">
-            Status
-          </label>
-          <Select
-            id="isActive"
-            name="isActive"
-            defaultValue={values.isActive ? "true" : "false"}
-            options={[
-              { value: "true", label: "Active" },
-              { value: "false", label: "Inactive" },
-            ]}
-          />
-        </div>
+        <div className="space-y-2"><label htmlFor="isActive" className="block text-sm font-medium text-white">Status</label><Select id="isActive" name="isActive" defaultValue={values.isActive ? "true" : "false"} options={[{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }]} /></div>
       </div>
 
       {state.error || state.message ? (
-        <div
-          className={`rounded-2xl border px-4 py-3 text-sm ${
-            state.error
-              ? "border-red-500/30 bg-red-500/10 text-red-200"
-              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-          }`}
-        >
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${state.error ? "border-red-500/30 bg-red-500/10 text-red-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
           {state.error || state.message}
         </div>
       ) : null}
