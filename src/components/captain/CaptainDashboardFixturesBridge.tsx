@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+import CaptainDashboardAiPredictorBridge from "@/components/captain/CaptainDashboardAiPredictorBridge";
+
 type DashboardFixturesPayload = {
   count: number;
   nextFixture: {
@@ -153,5 +155,5 @@ export default function CaptainDashboardFixturesBridge() {
     };
   }, [pathname]);
 
-  return null;
+  return <CaptainDashboardAiPredictorBridge />;
 }
