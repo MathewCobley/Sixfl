@@ -5,11 +5,13 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
+import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { getLeagueTable, type LeagueTableRow } from "@/lib/leagueTable";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
 type SeasonTeamRow = {
+  teamId: string;
   divisionId: string | null;
   divisionName: string | null;
 };
@@ -62,18 +64,22 @@ function getPublicLeagueTableDescription(title: string) {
 
 async function getCurrentSeasonTeamDivision(input: {
   leagueId: string;
-  teamId: string;
+  relatedTeamIds: string[];
   legacyDivisionId: string | null;
 }) {
-  const seasonTeamRows = await prisma.$queryRaw<SeasonTeamRow[]>(Prisma.sql`
-    SELECT lst."divisionId", d."name" AS "divisionName"
-    FROM "LeagueSeasonTeam" lst
-    LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
-    WHERE lst."leagueId" = ${input.leagueId}
-      AND lst."teamId" = ${input.teamId}
-      AND lst."isActive" = true
-    LIMIT 1
-  `);
+  const seasonTeamRows = input.relatedTeamIds.length
+    ? await prisma.$queryRaw<SeasonTeamRow[]>(Prisma.sql`
+        SELECT lst."teamId", lst."divisionId", d."name" AS "divisionName"
+        FROM "LeagueSeasonTeam" lst
+        LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
+        WHERE lst."leagueId" = ${input.leagueId}
+          AND lst."teamId" IN (${Prisma.join(input.relatedTeamIds)})
+          AND lst."isActive" = true
+          AND lst."divisionId" IS NOT NULL
+        ORDER BY CASE WHEN lst."teamId" = ${input.relatedTeamIds[0]} THEN 0 ELSE 1 END ASC
+        LIMIT 1
+      `)
+    : [];
 
   const seasonTeam = seasonTeamRows[0] ?? null;
 
@@ -86,7 +92,7 @@ async function getCurrentSeasonTeamDivision(input: {
   }
 
   const legacyDivisionRows = await prisma.$queryRaw<SeasonTeamRow[]>(Prisma.sql`
-    SELECT d."id" AS "divisionId", d."name" AS "divisionName"
+    SELECT ${input.relatedTeamIds[0] ?? ""} AS "teamId", d."id" AS "divisionId", d."name" AS "divisionName"
     FROM "LeagueDivision" d
     WHERE d."id" = ${input.legacyDivisionId}
       AND d."leagueId" = ${input.leagueId}
@@ -104,42 +110,15 @@ export async function GET(
   const { teamid } = await params;
   await requireCaptain(teamid);
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamid },
-    select: {
-      id: true,
-      leagueId: true,
-      divisionId: true,
-      league: {
-        select: {
-          id: true,
-          name: true,
-          season: true,
-          competition: {
-            select: {
-              id: true,
-              name: true,
-              currentLeague: {
-                select: {
-                  id: true,
-                  name: true,
-                  season: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
+  const context = await getCaptainRelatedTeamContext(teamid);
 
-  if (!team) {
+  if (!context) {
     return NextResponse.json({ error: "Team not found." }, { status: 404 });
   }
 
-  const currentLeague = team.league?.competition?.currentLeague ?? team.league ?? null;
+  const { team, currentLeague, currentLeagueId, relatedTeamIds } = context;
 
-  if (!currentLeague) {
+  if (!currentLeague || !currentLeagueId) {
     return NextResponse.json({
       title: "Current league table",
       description: "Your team is not assigned to a competition yet, so there is no table to show here.",
@@ -154,14 +133,14 @@ export async function GET(
 
   const [seasonTeam, divisionRows] = await Promise.all([
     getCurrentSeasonTeamDivision({
-      leagueId: currentLeague.id,
-      teamId: team.id,
+      leagueId: currentLeagueId,
+      relatedTeamIds,
       legacyDivisionId: team.divisionId,
     }),
     prisma.$queryRaw<DivisionRow[]>(Prisma.sql`
       SELECT "id", "name", "slug", "sortOrder"
       FROM "LeagueDivision"
-      WHERE "leagueId" = ${currentLeague.id}
+      WHERE "leagueId" = ${currentLeagueId}
         AND "isActive" = true
       ORDER BY "sortOrder" ASC, "name" ASC
     `),
@@ -170,13 +149,13 @@ export async function GET(
   const divisionTables: DivisionPayload[] = await Promise.all(
     divisionRows.map(async (division) => ({
       ...division,
-      table: await getLeagueTable(currentLeague.id, { divisionId: division.id }),
+      table: await getLeagueTable(currentLeagueId, { divisionId: division.id }),
       isTeamDivision: division.id === seasonTeam?.divisionId,
     })),
   );
 
   const fallbackDivision =
-    divisionTables.find((division) => division.table.some((row) => row.teamId === team.id)) ?? null;
+    divisionTables.find((division) => division.table.some((row) => relatedTeamIds.includes(row.teamId))) ?? null;
   const activeDivisionId = seasonTeam?.divisionId ?? fallbackDivision?.id ?? null;
   const activeDivisionName =
     seasonTeam?.divisionName ??
@@ -187,7 +166,7 @@ export async function GET(
     : null;
   const rows = activeDivision
     ? activeDivision.table
-    : await getLeagueTable(currentLeague.id);
+    : await getLeagueTable(currentLeagueId);
   const title = getPublicLeagueTableTitle({
     leagueName: currentLeague.name,
     divisionName: activeDivisionName,
@@ -197,8 +176,9 @@ export async function GET(
     title,
     description: getPublicLeagueTableDescription(title),
     rows,
-    currentTeamId: team.id,
-    leagueId: currentLeague.id,
+    currentTeamId: activeDivision?.table.find((row) => relatedTeamIds.includes(row.teamId))?.teamId ?? team.id,
+    relatedTeamIds,
+    leagueId: currentLeagueId,
     leagueName: currentLeague.name,
     leagueSeason: currentLeague.season,
     divisionId: activeDivisionId,
