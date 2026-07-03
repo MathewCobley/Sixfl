@@ -3,15 +3,11 @@
 // ========================================
 
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 
+import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-
-type RelatedTeamRow = {
-  id: string;
-};
 
 function formatKickoff(value: Date) {
   return formatDateTimeInLondon(value, {
@@ -30,33 +26,6 @@ function getFixtureLabel(input: {
   return `${input.homeTeamName} vs ${input.awayTeamName}`;
 }
 
-async function getRelatedTeamIds(input: {
-  teamId: string;
-  teamName: string;
-  currentLeagueId: string | null;
-}) {
-  const ids = new Set<string>([input.teamId]);
-
-  if (!input.currentLeagueId) {
-    return [...ids];
-  }
-
-  const relatedRows = await prisma.$queryRaw<RelatedTeamRow[]>(Prisma.sql`
-    SELECT DISTINCT t."id"
-    FROM "LeagueSeasonTeam" lst
-    JOIN "Team" t ON t."id" = lst."teamId"
-    WHERE lst."leagueId" = ${input.currentLeagueId}
-      AND lst."isActive" = true
-      AND LOWER(TRIM(t."name")) = LOWER(TRIM(${input.teamName}))
-  `);
-
-  for (const row of relatedRows) {
-    ids.add(row.id);
-  }
-
-  return [...ids];
-}
-
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ teamid: string }> },
@@ -64,49 +33,20 @@ export async function GET(
   const { teamid } = await params;
   await requireCaptain(teamid);
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamid },
-    select: {
-      id: true,
-      name: true,
-      league: {
-        select: {
-          id: true,
-          name: true,
-          venueName: true,
-          competition: {
-            select: {
-              currentLeague: {
-                select: {
-                  id: true,
-                  venueName: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
+  const context = await getCaptainRelatedTeamContext(teamid);
 
-  if (!team) {
+  if (!context) {
     return NextResponse.json({ error: "Team not found." }, { status: 404 });
   }
 
-  const currentLeagueId = team.league?.competition?.currentLeague?.id ?? team.league?.id ?? null;
-  const currentVenueName = team.league?.competition?.currentLeague?.venueName ?? team.league?.venueName ?? null;
-  const relatedTeamIds = await getRelatedTeamIds({
-    teamId: team.id,
-    teamName: team.name,
-    currentLeagueId,
-  });
+  const currentVenueName = context.currentLeague?.venueName ?? context.team.league?.venueName ?? null;
 
   const upcomingFixtures = await prisma.fixture.findMany({
     where: {
-      ...(currentLeagueId ? { leagueId: currentLeagueId } : {}),
+      ...(context.currentLeagueId ? { leagueId: context.currentLeagueId } : {}),
       OR: [
-        { homeTeamId: { in: relatedTeamIds } },
-        { awayTeamId: { in: relatedTeamIds } },
+        { homeTeamId: { in: context.relatedTeamIds } },
+        { awayTeamId: { in: context.relatedTeamIds } },
       ],
       publishedAt: { not: null },
       kickoffAt: { gte: new Date() },
@@ -125,9 +65,9 @@ export async function GET(
   const nextFixture = upcomingFixtures[0] ?? null;
 
   return NextResponse.json({
-    teamId: team.id,
-    relatedTeamIds,
-    currentLeagueId,
+    teamId: context.team.id,
+    relatedTeamIds: context.relatedTeamIds,
+    currentLeagueId: context.currentLeagueId,
     count: upcomingFixtures.length,
     nextFixture: nextFixture
       ? {
@@ -138,7 +78,7 @@ export async function GET(
           }),
           kickoffLabel: formatKickoff(nextFixture.kickoffAt),
           venueName: nextFixture.venue?.name ?? currentVenueName ?? "Venue TBC",
-          fixturesHref: `/captain/team/${team.id}/fixtures`,
+          fixturesHref: `/captain/team/${context.team.id}/fixtures`,
         }
       : null,
     fixtures: upcomingFixtures.map((fixture) => ({
