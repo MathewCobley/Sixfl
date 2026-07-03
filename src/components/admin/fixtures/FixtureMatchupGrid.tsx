@@ -116,6 +116,42 @@ function enhancePublishDivisionForms(input: {
   }
 }
 
+function getFixturesTableRows() {
+  const fixturesHeading = Array.from(document.querySelectorAll<HTMLHeadingElement>("h2"))
+    .find((heading) => heading.textContent?.trim() === "Fixtures");
+  const card = fixturesHeading?.closest("div.rounded-3xl");
+  const table = card?.querySelector("table.min-w-full");
+  return Array.from(table?.querySelectorAll<HTMLTableRowElement>("tbody tr") ?? []);
+}
+
+function getFixtureMatchText(row: HTMLTableRowElement) {
+  const firstCell = row.querySelector<HTMLTableCellElement>("td");
+  return firstCell?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function applyActualFixtureFilters(input: {
+  teams: TeamOption[];
+  visibility: VisibilityFilter;
+}) {
+  const rows = getFixturesTableRows();
+  if (rows.length === 0) return;
+
+  const allowedNames = new Set(input.teams.map((team) => team.name.trim()).filter(Boolean));
+
+  for (const row of rows) {
+    const rowText = row.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    const matchText = getFixtureMatchText(row);
+    const matchedTeamCount = Array.from(allowedNames).filter((teamName) => matchText.includes(teamName)).length;
+    const matchesDivision = allowedNames.size === 0 || matchedTeamCount >= 2;
+    const matchesVisibility =
+      input.visibility === "all" ||
+      (input.visibility === "published" && rowText.includes("Live on site")) ||
+      (input.visibility === "draft" && rowText.includes("Draft only"));
+
+    row.style.display = matchesDivision && matchesVisibility ? "" : "none";
+  }
+}
+
 export default function FixtureMatchupGrid({ initialLeagueId, initialDivisionId }: { initialLeagueId?: string; initialDivisionId?: string }) {
   const searchParams = useSearchParams();
   const leagueIdFromUrl = searchParams.get("leagueId") ?? "";
@@ -173,6 +209,14 @@ export default function FixtureMatchupGrid({ initialLeagueId, initialDivisionId 
     });
   }, [data?.selectedLeagueId, data?.selectedDivisionId, selectedLeagueId, selectedDivisionId, divisions]);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      applyActualFixtureFilters({ teams: data?.teams ?? [], visibility: selectedVisibility });
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [data?.teams, selectedVisibility, selectedDivisionId]);
+
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
       <div className="border-b border-white/10 px-6 py-6 md:px-8">
@@ -180,7 +224,7 @@ export default function FixtureMatchupGrid({ initialLeagueId, initialDivisionId 
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture planning grid</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Who has played who</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick a league, division and whether you want to check published, draft or all fixtures.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick a league, division and whether you want to check published, draft or all fixtures. The fixtures table below uses the same filter.</p>
           </div>
           <div className="space-y-3">
             <div>
