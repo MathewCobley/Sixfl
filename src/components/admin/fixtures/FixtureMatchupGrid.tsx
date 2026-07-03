@@ -8,10 +8,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { FixtureConfirmationChaseButton } from "@/components/admin/fixtures/FixtureConfirmationChaseButton";
+
 type LeagueOption = { id: string; name: string; season: string | null; isActive: boolean };
 type DivisionOption = { id: string; name: string; slug: string; sortOrder: number };
 type TeamOption = { id: string; name: string };
 type VisibilityFilter = "all" | "published" | "draft";
+type ConfirmationStatus = "PENDING" | "CONFIRMED" | "ISSUE_RAISED" | "OVERDUE" | null;
 type GridCell = {
   opponentId: string;
   opponentName: string;
@@ -25,6 +28,9 @@ type GridCell = {
 type GridRow = { teamId: string; teamName: string; opponents: GridCell[] };
 type GridFixture = {
   id: string;
+  leagueId: string;
+  homeTeamId: string;
+  awayTeamId: string;
   homeTeamName: string;
   awayTeamName: string;
   kickoffAt: string;
@@ -36,6 +42,16 @@ type GridFixture = {
   publishedAt: string | null;
   homeMatchFeePence: number | null;
   awayMatchFeePence: number | null;
+  homeConfirmationStatus: ConfirmationStatus;
+  homeConfirmationNote: string | null;
+  homeConfirmedAt: string | null;
+  homeIssueRaisedAt: string | null;
+  homeLastChasedAt: string | null;
+  awayConfirmationStatus: ConfirmationStatus;
+  awayConfirmationNote: string | null;
+  awayConfirmedAt: string | null;
+  awayIssueRaisedAt: string | null;
+  awayLastChasedAt: string | null;
 };
 type MatchupGridData = {
   leagues: LeagueOption[];
@@ -117,6 +133,18 @@ function formatFixtureDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatShortDateTime(value: string | null) {
+  if (!value) return null;
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/London",
+  }).format(new Date(value));
+}
+
 function formatMoney(amountPence: number | null) {
   if (amountPence === null) return "Not set";
   return new Intl.NumberFormat("en-GB", {
@@ -132,8 +160,81 @@ function fixtureStatusTone(status: string) {
   return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
 }
 
+function confirmationLabel(status: ConfirmationStatus) {
+  if (status === "CONFIRMED") return "Confirmed";
+  if (status === "ISSUE_RAISED") return "Issue raised";
+  if (status === "OVERDUE") return "Not confirmed · overdue";
+  if (status === "PENDING") return "Not confirmed";
+  return "No confirmation record";
+}
+
+function confirmationTone(status: ConfirmationStatus) {
+  if (status === "CONFIRMED") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+  if (status === "ISSUE_RAISED") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+  if (status === "OVERDUE") return "border-red-400/20 bg-red-500/10 text-red-200";
+  return "border-white/10 bg-white/[0.045] text-white/75";
+}
+
+function canChase(status: ConfirmationStatus) {
+  return status !== "CONFIRMED" && status !== "ISSUE_RAISED";
+}
+
 function getWeekLabel(round: number | null) {
   return round === null ? "Unassigned week" : `Week ${round}`;
+}
+
+function ConfirmationPanel({
+  fixtureId,
+  leagueId,
+  teamId,
+  teamName,
+  status,
+  confirmedAt,
+  issueRaisedAt,
+  lastChasedAt,
+  note,
+}: {
+  fixtureId: string;
+  leagueId: string;
+  teamId: string;
+  teamName: string;
+  status: ConfirmationStatus;
+  confirmedAt: string | null;
+  issueRaisedAt: string | null;
+  lastChasedAt: string | null;
+  note: string | null;
+}) {
+  const confirmedLabel = formatShortDateTime(confirmedAt);
+  const issueLabel = formatShortDateTime(issueRaisedAt);
+  const chasedLabel = formatShortDateTime(lastChasedAt);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-white" title={teamName}>
+            {teamName}
+          </div>
+          <div className="mt-1 text-[11px] text-white/40">
+            {chasedLabel ? `Last chased ${chasedLabel}` : "Not chased yet"}
+          </div>
+        </div>
+        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${confirmationTone(status)}`}>
+          {confirmationLabel(status)}
+        </span>
+      </div>
+
+      {confirmedLabel ? <div className="mt-2 text-xs text-emerald-100/70">Confirmed {confirmedLabel}</div> : null}
+      {issueLabel ? <div className="mt-2 text-xs text-amber-100/80">Issue raised {issueLabel}</div> : null}
+      {note ? <div className="mt-2 rounded-xl border border-amber-400/15 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-100/85">{note}</div> : null}
+
+      {canChase(status) ? (
+        <div className="mt-3">
+          <FixtureConfirmationChaseButton fixtureId={fixtureId} teamId={teamId} leagueId={leagueId} />
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function FixtureMatchupGrid({
@@ -435,6 +536,31 @@ export default function FixtureMatchupGrid({
                                 <div className="mt-1 font-semibold text-sky-50">{formatMoney(fixture.awayMatchFeePence)}</div>
                                 <div className="mt-0.5 truncate text-[11px] text-sky-100/45" title={fixture.awayTeamName}>{fixture.awayTeamName}</div>
                               </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-2 lg:grid-cols-2">
+                              <ConfirmationPanel
+                                fixtureId={fixture.id}
+                                leagueId={fixture.leagueId}
+                                teamId={fixture.homeTeamId}
+                                teamName={fixture.homeTeamName}
+                                status={fixture.homeConfirmationStatus}
+                                confirmedAt={fixture.homeConfirmedAt}
+                                issueRaisedAt={fixture.homeIssueRaisedAt}
+                                lastChasedAt={fixture.homeLastChasedAt}
+                                note={fixture.homeConfirmationNote}
+                              />
+                              <ConfirmationPanel
+                                fixtureId={fixture.id}
+                                leagueId={fixture.leagueId}
+                                teamId={fixture.awayTeamId}
+                                teamName={fixture.awayTeamName}
+                                status={fixture.awayConfirmationStatus}
+                                confirmedAt={fixture.awayConfirmedAt}
+                                issueRaisedAt={fixture.awayIssueRaisedAt}
+                                lastChasedAt={fixture.awayLastChasedAt}
+                                note={fixture.awayConfirmationNote}
+                              />
                             </div>
 
                             <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
