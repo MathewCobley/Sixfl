@@ -22,6 +22,7 @@ export async function getCaptainRelatedTeamContext(teamId: string) {
         select: {
           id: true,
           name: true,
+          season: true,
           venueName: true,
           competition: {
             select: {
@@ -29,6 +30,7 @@ export async function getCaptainRelatedTeamContext(teamId: string) {
                 select: {
                   id: true,
                   name: true,
+                  season: true,
                   venueName: true,
                 },
               },
