@@ -162,9 +162,18 @@ export async function GET(request: Request) {
         pitch: true,
         status: true,
         publishedAt: true,
+        matchFeePence: true,
         venue: { select: { name: true } },
         homeTeam: { select: { name: true } },
         awayTeam: { select: { name: true } },
+        paymentCharges: {
+          where: { status: { not: "VOID" } },
+          select: {
+            teamId: true,
+            amountPence: true,
+            status: true,
+          },
+        },
       },
     }),
   ]);
@@ -270,18 +279,28 @@ export async function GET(request: Request) {
     selectedDivisionLabel: selectedDivision?.name ?? null,
     teams,
     cells,
-    fixtures: fixtures.map((fixture) => ({
-      id: fixture.id,
-      homeTeamName: fixture.homeTeam.name,
-      awayTeamName: fixture.awayTeam.name,
-      kickoffAt: fixture.kickoffAt.toISOString(),
-      round: fixture.round,
-      position: fixture.position,
-      pitch: fixture.pitch,
-      venueName: fixture.venue?.name ?? null,
-      status: fixture.status,
-      publishedAt: fixture.publishedAt?.toISOString() ?? null,
-    })),
+    fixtures: fixtures.map((fixture) => {
+      const homeCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.homeTeamId);
+      const awayCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.awayTeamId);
+      const legacyFee = fixture.matchFeePence ?? null;
+      const homeMatchFeePence = homeCharge?.amountPence ?? (legacyFee && !awayCharge ? legacyFee : null);
+      const awayMatchFeePence = awayCharge?.amountPence ?? (legacyFee && !homeCharge ? legacyFee : null);
+
+      return {
+        id: fixture.id,
+        homeTeamName: fixture.homeTeam.name,
+        awayTeamName: fixture.awayTeam.name,
+        kickoffAt: fixture.kickoffAt.toISOString(),
+        round: fixture.round,
+        position: fixture.position,
+        pitch: fixture.pitch,
+        venueName: fixture.venue?.name ?? null,
+        status: fixture.status,
+        publishedAt: fixture.publishedAt?.toISOString() ?? null,
+        homeMatchFeePence,
+        awayMatchFeePence,
+      };
+    }),
     summary: {
       scheduledPairs,
       oneWayPairs,
