@@ -64,55 +64,70 @@ function visibilityLabel(value: VisibilityFilter) {
   return "Published + draft";
 }
 
-function enhancePublishDivisionForms(input: {
+function findPublishCard(form: HTMLFormElement) {
+  let current: HTMLElement | null = form;
+  while (current) {
+    const text = current.textContent ?? "";
+    if (current.className.includes("rounded-3xl") && text.includes("Publish one week only")) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function getSelectedDivisionLabel(input: { selectedDivisionId: string | null; divisions: DivisionOption[] }) {
+  if (!input.selectedDivisionId) return "All divisions";
+  return input.divisions.find((division) => division.id === input.selectedDivisionId)?.name ?? "Selected division";
+}
+
+function lockPublishFormToSelection(form: HTMLFormElement, input: { selectedDivisionId: string | null; selectedDivisionLabel: string }) {
+  form.querySelector<HTMLSelectElement>('select[name="divisionId"]')?.remove();
+  form.querySelector<HTMLElement>('[data-publish-division-control="true"]')?.remove();
+
+  let hidden = form.querySelector<HTMLInputElement>('input[name="divisionId"]');
+  if (!hidden) {
+    hidden = document.createElement("input");
+    hidden.type = "hidden";
+    hidden.name = "divisionId";
+    form.insertBefore(hidden, form.firstChild);
+  }
+  hidden.value = input.selectedDivisionId ?? "";
+
+  let label = form.querySelector<HTMLElement>('[data-locked-publish-division="true"]');
+  if (!label) {
+    label = document.createElement("div");
+    label.dataset.lockedPublishDivision = "true";
+    label.className = "mb-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white";
+    form.insertBefore(label, hidden.nextSibling);
+  }
+  label.textContent = `Publishing: ${input.selectedDivisionLabel}`;
+}
+
+function enhancePublishForms(input: {
   leagueId: string | null;
   selectedDivisionId: string | null;
   divisions: DivisionOption[];
 }) {
-  if (!input.leagueId || input.divisions.length === 0) return;
-
-  const forms = Array.from(document.querySelectorAll<HTMLFormElement>('form[action]')).filter((form) => {
-    const leagueInput = form.querySelector<HTMLInputElement>('input[name="leagueId"]');
-    const isPublishForm = Boolean(form.querySelector('button')) && form.textContent?.includes("Publish");
-    return leagueInput?.value === input.leagueId && isPublishForm;
+  const publishForms = Array.from(document.querySelectorAll<HTMLFormElement>('form[action]')).filter((form) => {
+    const hasLeague = Boolean(form.querySelector<HTMLInputElement>('input[name="leagueId"]'));
+    return hasLeague && Boolean(form.querySelector("button")) && form.textContent?.includes("Publish");
   });
 
-  for (const form of forms) {
-    const existing = form.querySelector<HTMLSelectElement>('select[name="divisionId"]');
-    if (existing) {
-      existing.value = input.selectedDivisionId ?? "";
-      existing.dispatchEvent(new Event("change", { bubbles: true }));
-      continue;
-    }
+  for (const form of publishForms) {
+    const leagueInput = form.querySelector<HTMLInputElement>('input[name="leagueId"]');
+    const card = findPublishCard(form);
+    const shouldShow = !input.leagueId || !leagueInput || leagueInput.value === input.leagueId;
+    if (card) card.hidden = !shouldShow;
+    if (!shouldShow) continue;
 
-    const wrapper = document.createElement("label");
-    wrapper.dataset.publishDivisionControl = "true";
-    wrapper.className = "mb-3 block space-y-2";
-
-    const label = document.createElement("span");
-    label.className = "text-xs font-semibold uppercase tracking-[0.18em] text-white/45";
-    label.textContent = "Division to publish";
-
-    const select = document.createElement("select");
-    select.name = "divisionId";
-    select.className = "h-11 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20";
-
-    const allOption = document.createElement("option");
-    allOption.value = "";
-    allOption.textContent = "All divisions";
-    select.appendChild(allOption);
-
-    for (const division of input.divisions) {
-      const option = document.createElement("option");
-      option.value = division.id;
-      option.textContent = division.name;
-      select.appendChild(option);
-    }
-
-    select.value = input.selectedDivisionId ?? "";
-    wrapper.appendChild(label);
-    wrapper.appendChild(select);
-    form.insertBefore(wrapper, form.firstChild?.nextSibling ?? form.firstChild);
+    lockPublishFormToSelection(form, {
+      selectedDivisionId: input.selectedDivisionId,
+      selectedDivisionLabel: getSelectedDivisionLabel({
+        selectedDivisionId: input.selectedDivisionId,
+        divisions: input.divisions,
+      }),
+    });
   }
 }
 
@@ -129,10 +144,7 @@ function getFixtureMatchText(row: HTMLTableRowElement) {
   return firstCell?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
-function applyActualFixtureFilters(input: {
-  teams: TeamOption[];
-  visibility: VisibilityFilter;
-}) {
+function applyActualFixtureFilters(input: { teams: TeamOption[]; visibility: VisibilityFilter }) {
   const rows = getFixturesTableRows();
   if (rows.length === 0) return;
 
@@ -202,11 +214,21 @@ export default function FixtureMatchupGrid({ initialLeagueId, initialDivisionId 
   const selectedDivision = useMemo(() => divisions.find((division) => division.id === selectedDivisionId) ?? null, [divisions, selectedDivisionId]);
 
   useEffect(() => {
-    enhancePublishDivisionForms({
-      leagueId: data?.selectedLeagueId ?? selectedLeagueId,
-      selectedDivisionId: data?.selectedDivisionId ?? selectedDivisionId,
-      divisions,
-    });
+    const apply = () => {
+      enhancePublishForms({
+        leagueId: data?.selectedLeagueId ?? selectedLeagueId,
+        selectedDivisionId: data?.selectedDivisionId ?? selectedDivisionId,
+        divisions,
+      });
+    };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.body, { childList: true, subtree: true });
+    const timeout = window.setTimeout(apply, 250);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timeout);
+    };
   }, [data?.selectedLeagueId, data?.selectedDivisionId, selectedLeagueId, selectedDivisionId, divisions]);
 
   useEffect(() => {
@@ -222,9 +244,9 @@ export default function FixtureMatchupGrid({ initialLeagueId, initialDivisionId 
       <div className="border-b border-white/10 px-6 py-6 md:px-8">
         <div className="space-y-5">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture planning grid</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Who has played who</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick a league, division and whether you want to check published, draft or all fixtures. The fixtures table below uses the same filter.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture selector</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Choose league and division</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick the league, division and fixture visibility first. The publish cards, planning grid and fixtures table below use this same selection.</p>
           </div>
           <div className="space-y-3">
             <div>
