@@ -4,6 +4,7 @@
 
 import { NextResponse } from "next/server";
 
+import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
 import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
@@ -58,15 +59,23 @@ export async function GET(
   try {
     await requireCaptain(teamId);
 
-    const team = await prisma.team.findUnique({
-      where: { id: teamId },
-      select: { leagueId: true },
-    });
+    const context = await getCaptainRelatedTeamContext(teamId);
+
+    if (!context) {
+      return NextResponse.json({ error: "Team not found." }, { status: 404 });
+    }
+
+    const relatedTeamIdSet = new Set(context.relatedTeamIds);
 
     const [fixtures, leagueFixtures] = await Promise.all([
       prisma.fixture.findMany({
         where: {
-          OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+          ...(context.currentLeagueId ? { leagueId: context.currentLeagueId } : {}),
+          OR: [
+            { homeTeamId: { in: context.relatedTeamIds } },
+            { awayTeamId: { in: context.relatedTeamIds } },
+          ],
+          publishedAt: { not: null },
         },
         orderBy: [{ kickoffAt: "desc" }],
         take: 100,
@@ -92,9 +101,9 @@ export async function GET(
           },
         },
       }),
-      team?.leagueId
+      context.currentLeagueId
         ? prisma.fixture.findMany({
-            where: { leagueId: team.leagueId },
+            where: { leagueId: context.currentLeagueId },
             select: {
               id: true,
               kickoffAt: true,
@@ -113,7 +122,9 @@ export async function GET(
 
     return NextResponse.json({
       teamId,
+      relatedTeamIds: context.relatedTeamIds,
       fixtures: fixtures.map((fixture) => {
+        const isHomeTeam = relatedTeamIdSet.has(fixture.homeTeamId);
         const base = {
           id: fixture.id,
           kickoffAt: fixture.kickoffAt.toISOString(),
@@ -123,10 +134,9 @@ export async function GET(
           homeTeam: toTeamBadge(fixture.homeTeam),
           awayTeam: toTeamBadge(fixture.awayTeam),
           fullLabel: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`,
-          captainLabel:
-            fixture.homeTeamId === teamId
-              ? `vs ${fixture.awayTeam.name}`
-              : `vs ${fixture.homeTeam.name}`,
+          captainLabel: isHomeTeam
+            ? `vs ${fixture.awayTeam.name}`
+            : `vs ${fixture.homeTeam.name}`,
         };
 
         if (fixture.status !== "SCHEDULED") {
