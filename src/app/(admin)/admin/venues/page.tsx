@@ -4,6 +4,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import VenueForm from "@/components/admin/venues/VenueForm";
@@ -67,12 +68,18 @@ function EditField({
   defaultValue,
   placeholder,
   className,
+  type = "text",
+  min,
+  step,
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   placeholder: string;
   className?: string;
+  type?: string;
+  min?: string;
+  step?: string;
 }) {
   return (
     <label className={className}>
@@ -80,7 +87,9 @@ function EditField({
         {label}
       </span>
       <input
-        type="text"
+        type={type}
+        min={min}
+        step={step}
         name={name}
         defaultValue={defaultValue ?? ""}
         placeholder={placeholder}
@@ -88,6 +97,20 @@ function EditField({
       />
     </label>
   );
+}
+
+function formatPoundsFromPence(value: number | null | undefined) {
+  if (value === null || typeof value === "undefined") return "";
+  return (value / 100).toFixed(value % 100 === 0 ? 0 : 2);
+}
+
+function formatCurrency(value: number | null | undefined) {
+  if (value === null || typeof value === "undefined") return null;
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: value % 100 === 0 ? 0 : 2,
+  }).format(value / 100);
 }
 
 export default async function AdminVenuesPage({
@@ -103,16 +126,27 @@ export default async function AdminVenuesPage({
 
   const sp = (await searchParams) ?? {};
 
-  const venues = await prisma.venue.findMany({
-    orderBy: [{ name: "asc" }],
-    include: {
-      _count: {
-        select: {
-          fixtures: true,
+  const [venues, costRows] = await Promise.all([
+    prisma.venue.findMany({
+      orderBy: [{ name: "asc" }],
+      include: {
+        _count: {
+          select: {
+            fixtures: true,
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.$queryRaw<Array<{ id: string; defaultPitchCostPerHourPence: number | null }>>(Prisma.sql`
+      SELECT id, "defaultPitchCostPerHourPence"::int AS "defaultPitchCostPerHourPence"
+      FROM "Venue"
+      ORDER BY name ASC
+    `),
+  ]);
+
+  const venueCostMap = new Map(
+    costRows.map((row) => [row.id, row.defaultPitchCostPerHourPence]),
+  );
 
   const totalFixturesUsingVenues = venues.reduce(
     (sum, venue) => sum + venue._count.fixtures,
@@ -121,6 +155,7 @@ export default async function AdminVenuesPage({
 
   const venuesWithImages = venues.filter((venue) => venue.imageUrl).length;
   const venuesWithDirections = venues.filter((venue) => venue.googleMapsUrl).length;
+  const venuesWithPitchCosts = costRows.filter((row) => row.defaultPitchCostPerHourPence !== null).length;
 
   const errorMessage =
     sp.error === "in-use"
@@ -129,7 +164,9 @@ export default async function AdminVenuesPage({
         ? "No venue ID was provided."
         : sp.error === "missing-name"
           ? "Venue name is required before a venue can be updated."
-          : null;
+          : sp.error === "invalid-cost"
+            ? "Pitch cost must be a valid amount."
+            : null;
 
   const deleted = sp.deleted === "1";
   const updated = sp.updated === "1";
@@ -149,17 +186,17 @@ export default async function AdminVenuesPage({
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
                   Add match locations once, then reuse them across league setup,
-                  manual fixture creation, fixture generation, and public launch
-                  pages.
+                  fixture generation, night board costs and public launch pages.
                 </p>
               </div>
             </div>
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[680px] lg:grid-cols-4">
+            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[760px] lg:grid-cols-5">
               <MetricCard label="Venues" value={venues.length} />
               <MetricCard label="Linked fixtures" value={totalFixturesUsingVenues} />
               <MetricCard label="Images added" value={venuesWithImages} />
               <MetricCard label="Map links" value={venuesWithDirections} />
+              <MetricCard label="Pitch costs" value={venuesWithPitchCosts} />
             </div>
           </div>
         </div>
@@ -193,8 +230,7 @@ export default async function AdminVenuesPage({
                   Create venue
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                  Add the core details, public image, directions and facilities so
-                  each venue can support league recruitment as well as fixtures.
+                  Add the core details, pitch hourly cost, directions and facilities.
                 </p>
               </div>
             </div>
@@ -214,8 +250,7 @@ export default async function AdminVenuesPage({
                   Existing venues
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-white/60">
-                  Review venue usage, public images, directions and captain-facing
-                  details before using a venue for a new league launch.
+                  Review venue usage, rates, directions and captain-facing details.
                 </p>
               </div>
             </div>
@@ -223,226 +258,128 @@ export default async function AdminVenuesPage({
             {venues.length === 0 ? (
               <div className="px-6 py-10 md:px-8">
                 <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/60">
-                    📍
-                  </div>
                   <h3 className="text-lg font-semibold text-white">
                     No venues yet
                   </h3>
                   <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-white/50">
-                    Create your first venue to make fixture setup cleaner and more
-                    reusable.
+                    Create your first venue to make fixture setup cleaner and more reusable.
                   </p>
                 </div>
               </div>
             ) : (
               <div className="divide-y divide-white/5">
-                {venues.map((venue) => (
-                  <div key={venue.id} className="px-6 py-5 md:px-8">
-                    <div className="grid gap-5 xl:grid-cols-[180px_minmax(0,1fr)]">
-                      {venue.imageUrl ? (
-                        <div
-                          className="min-h-36 overflow-hidden rounded-3xl border border-white/10 bg-cover bg-center bg-no-repeat shadow-[inset_0_-50px_90px_rgba(0,0,0,0.55)] xl:min-h-32"
-                          style={{
-                            backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.48), rgba(0,0,0,0.05)), url(${JSON.stringify(
-                              venue.imageUrl
-                            )})`,
-                          }}
-                          aria-label={`${venue.name} image preview`}
-                        />
-                      ) : (
-                        <div className="flex min-h-36 items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/25 text-sm font-semibold text-white/35 xl:min-h-32">
-                          No image
-                        </div>
-                      )}
+                {venues.map((venue) => {
+                  const defaultPitchCostPerHourPence = venueCostMap.get(venue.id) ?? null;
+                  const defaultPitchCostLabel = formatCurrency(defaultPitchCostPerHourPence);
 
-                      <div className="min-w-0 space-y-4">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="min-w-0 space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-lg font-semibold text-white">
-                                {venue.name}
-                              </h3>
-                              <span className="inline-flex rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-semibold text-white/70">
-                                {venue._count.fixtures} fixture
-                                {venue._count.fixtures === 1 ? "" : "s"}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1 text-sm leading-6 text-white/55">
-                              <DetailLine label="Address" value={venue.address} />
-                              <DetailLine label="Postcode" value={venue.postcode} />
-                              <DetailLine label="Notes" value={venue.notes} />
-                              <DetailLine label="Parking" value={venue.parkingNotes} />
-                              <DetailLine label="Pitch" value={venue.pitchNotes} />
-                              <DetailLine label="Facilities" value={venue.facilities} />
-
-                              {!venue.address &&
-                              !venue.postcode &&
-                              !venue.notes &&
-                              !venue.parkingNotes &&
-                              !venue.pitchNotes &&
-                              !venue.facilities ? (
-                                <p className="text-white/35">
-                                  No extra venue details added.
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 flex-wrap items-center gap-3 lg:justify-end">
-                            <VenueLinkButton href={venue.googleMapsUrl}>
-                              Map
-                            </VenueLinkButton>
-                            <VenueLinkButton href={venue.websiteUrl}>
-                              Website
-                            </VenueLinkButton>
-
-                            <Link
-                              href="/admin/fixtures"
-                              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
-                            >
-                              Use in fixtures
-                            </Link>
-
-                            <form action={deleteVenueAction}>
-                              <input type="hidden" name="id" value={venue.id} />
-                              <button
-                                type="submit"
-                                disabled={venue._count.fixtures > 0}
-                                className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                Delete
-                              </button>
-                            </form>
-                          </div>
-                        </div>
-
-                        {(venue.imageUrl || venue.websiteUrl || venue.googleMapsUrl) && (
-                          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-white/40">
-                            {venue.imageUrl ? (
-                              <p className="truncate">
-                                <span className="font-semibold text-white/55">Image:</span>{" "}
-                                {venue.imageUrl}
-                              </p>
-                            ) : null}
-                            {venue.googleMapsUrl ? (
-                              <p className="truncate">
-                                <span className="font-semibold text-white/55">Map:</span>{" "}
-                                {venue.googleMapsUrl}
-                              </p>
-                            ) : null}
-                            {venue.websiteUrl ? (
-                              <p className="truncate">
-                                <span className="font-semibold text-white/55">Website:</span>{" "}
-                                {venue.websiteUrl}
-                              </p>
-                            ) : null}
+                  return (
+                    <div key={venue.id} className="px-6 py-5 md:px-8">
+                      <div className="grid gap-5 xl:grid-cols-[180px_minmax(0,1fr)]">
+                        {venue.imageUrl ? (
+                          <div
+                            className="min-h-36 overflow-hidden rounded-3xl border border-white/10 bg-cover bg-center bg-no-repeat shadow-[inset_0_-50px_90px_rgba(0,0,0,0.55)] xl:min-h-32"
+                            style={{
+                              backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.48), rgba(0,0,0,0.05)), url(${JSON.stringify(
+                                venue.imageUrl
+                              )})`,
+                            }}
+                            aria-label={`${venue.name} image preview`}
+                          />
+                        ) : (
+                          <div className="flex min-h-36 items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/25 text-sm font-semibold text-white/35 xl:min-h-32">
+                            No image
                           </div>
                         )}
 
-                        <details className="group rounded-2xl border border-white/10 bg-black/20">
-                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white marker:hidden">
-                            <span>Edit venue details</span>
-                            <span className="text-xs uppercase tracking-[0.16em] text-emerald-300/80 group-open:hidden">
-                              Open
-                            </span>
-                            <span className="hidden text-xs uppercase tracking-[0.16em] text-emerald-300/80 group-open:inline">
-                              Close
-                            </span>
-                          </summary>
+                        <div className="min-w-0 space-y-4">
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-lg font-semibold text-white">
+                                  {venue.name}
+                                </h3>
+                                <span className="inline-flex rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-semibold text-white/70">
+                                  {venue._count.fixtures} fixture
+                                  {venue._count.fixtures === 1 ? "" : "s"}
+                                </span>
+                                {defaultPitchCostLabel ? (
+                                  <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+                                    {defaultPitchCostLabel}/hr
+                                  </span>
+                                ) : null}
+                              </div>
 
-                          <form
-                            action={updateVenueAction}
-                            className="border-t border-white/10 p-4"
-                          >
-                            <input type="hidden" name="id" value={venue.id} />
-
-                            <div className="grid gap-4 lg:grid-cols-2">
-                              <EditField
-                                label="Venue name"
-                                name="name"
-                                defaultValue={venue.name}
-                                placeholder="e.g. Northallerton Leisure Centre"
-                                className="lg:col-span-2"
-                              />
-                              <EditField
-                                label="Address"
-                                name="address"
-                                defaultValue={venue.address}
-                                placeholder="e.g. Rotary Way, Brompton, Northallerton"
-                                className="lg:col-span-2"
-                              />
-                              <EditField
-                                label="Postcode"
-                                name="postcode"
-                                defaultValue={venue.postcode}
-                                placeholder="e.g. DL6 2UZ"
-                              />
-                              <EditField
-                                label="Notes"
-                                name="notes"
-                                defaultValue={venue.notes}
-                                placeholder="e.g. Wednesday league venue"
-                              />
-                              <EditField
-                                label="Image URL"
-                                name="imageUrl"
-                                defaultValue={venue.imageUrl}
-                                placeholder="https://www.sixfl.co.uk/venues/northallerton-leisure-centre.jpg"
-                                className="lg:col-span-2"
-                              />
-                              <EditField
-                                label="Website URL"
-                                name="websiteUrl"
-                                defaultValue={venue.websiteUrl}
-                                placeholder="https://..."
-                              />
-                              <EditField
-                                label="Google Maps URL"
-                                name="googleMapsUrl"
-                                defaultValue={venue.googleMapsUrl}
-                                placeholder="https://maps.google.com/..."
-                              />
-                              <EditField
-                                label="Parking notes"
-                                name="parkingNotes"
-                                defaultValue={venue.parkingNotes}
-                                placeholder="e.g. Free parking available on site"
-                                className="lg:col-span-2"
-                              />
-                              <EditField
-                                label="Pitch notes"
-                                name="pitchNotes"
-                                defaultValue={venue.pitchNotes}
-                                placeholder="e.g. 3G pitch, moulded boots recommended"
-                              />
-                              <EditField
-                                label="Facilities"
-                                name="facilities"
-                                defaultValue={venue.facilities}
-                                placeholder="e.g. Changing rooms, toilets, floodlights"
-                              />
+                              <div className="space-y-1 text-sm leading-6 text-white/55">
+                                <DetailLine label="Address" value={venue.address} />
+                                <DetailLine label="Postcode" value={venue.postcode} />
+                                <DetailLine label="Default pitch cost" value={defaultPitchCostLabel ? `${defaultPitchCostLabel} per hour` : null} />
+                                <DetailLine label="Notes" value={venue.notes} />
+                                <DetailLine label="Parking" value={venue.parkingNotes} />
+                                <DetailLine label="Pitch" value={venue.pitchNotes} />
+                                <DetailLine label="Facilities" value={venue.facilities} />
+                              </div>
                             </div>
 
-                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
-                              <p className="text-xs leading-5 text-white/40">
-                                Updating these details affects admin venue previews and
-                                future public league venue sections.
-                              </p>
-                              <button
-                                type="submit"
-                                className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300"
+                            <div className="flex shrink-0 flex-wrap items-center gap-3 lg:justify-end">
+                              <VenueLinkButton href={venue.googleMapsUrl}>Map</VenueLinkButton>
+                              <VenueLinkButton href={venue.websiteUrl}>Website</VenueLinkButton>
+                              <Link
+                                href="/admin/fixtures"
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
                               >
-                                Save venue
-                              </button>
+                                Use in fixtures
+                              </Link>
+                              <form action={deleteVenueAction}>
+                                <input type="hidden" name="id" value={venue.id} />
+                                <button
+                                  type="submit"
+                                  disabled={venue._count.fixtures > 0}
+                                  className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 text-sm font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  Delete
+                                </button>
+                              </form>
                             </div>
-                          </form>
-                        </details>
+                          </div>
+
+                          <details className="group rounded-2xl border border-white/10 bg-black/20">
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white marker:hidden">
+                              <span>Edit venue details</span>
+                              <span className="text-xs uppercase tracking-[0.16em] text-emerald-300/80 group-open:hidden">Open</span>
+                              <span className="hidden text-xs uppercase tracking-[0.16em] text-emerald-300/80 group-open:inline">Close</span>
+                            </summary>
+
+                            <form action={updateVenueAction} className="border-t border-white/10 p-4">
+                              <input type="hidden" name="id" value={venue.id} />
+                              <div className="grid gap-4 lg:grid-cols-2">
+                                <EditField label="Venue name" name="name" defaultValue={venue.name} placeholder="e.g. Northallerton Leisure Centre" className="lg:col-span-2" />
+                                <EditField label="Address" name="address" defaultValue={venue.address} placeholder="e.g. Rotary Way, Brompton, Northallerton" className="lg:col-span-2" />
+                                <EditField label="Postcode" name="postcode" defaultValue={venue.postcode} placeholder="e.g. DL6 2UZ" />
+                                <EditField label="Default pitch cost per hour (£)" name="defaultPitchCostPerHour" type="number" min="0" step="0.01" defaultValue={formatPoundsFromPence(defaultPitchCostPerHourPence)} placeholder="e.g. 60" />
+                                <EditField label="Notes" name="notes" defaultValue={venue.notes} placeholder="e.g. Wednesday league venue" className="lg:col-span-2" />
+                                <EditField label="Image URL" name="imageUrl" defaultValue={venue.imageUrl} placeholder="https://www.sixfl.co.uk/venues/northallerton-leisure-centre.jpg" className="lg:col-span-2" />
+                                <EditField label="Website URL" name="websiteUrl" defaultValue={venue.websiteUrl} placeholder="https://..." />
+                                <EditField label="Google Maps URL" name="googleMapsUrl" defaultValue={venue.googleMapsUrl} placeholder="https://maps.google.com/..." />
+                                <EditField label="Parking notes" name="parkingNotes" defaultValue={venue.parkingNotes} placeholder="e.g. Free parking available on site" className="lg:col-span-2" />
+                                <EditField label="Pitch notes" name="pitchNotes" defaultValue={venue.pitchNotes} placeholder="e.g. 3G pitch, moulded boots recommended" />
+                                <EditField label="Facilities" name="facilities" defaultValue={venue.facilities} placeholder="e.g. Changing rooms, toilets, floodlights" />
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                                <p className="text-xs leading-5 text-white/40">
+                                  Default pitch cost is used by the Night Board unless a league overrides it.
+                                </p>
+                                <button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300">
+                                  Save venue
+                                </button>
+                              </div>
+                            </form>
+                          </details>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
