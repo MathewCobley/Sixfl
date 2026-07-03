@@ -4,6 +4,7 @@
 
 import { NextResponse } from "next/server";
 
+import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -22,11 +23,19 @@ export async function GET(
   const { teamid } = await params;
   await requireCaptain(teamid);
 
+  const context = await getCaptainRelatedTeamContext(teamid);
+
+  if (!context) {
+    return NextResponse.json({ error: "Team not found." }, { status: 404 });
+  }
+
+  const teamIds = context.relatedTeamIds;
+
   const [paymentCharges, paidPlayerMatchFees, openPlayerMatchFees, activeChargeFixtureIds] =
     await Promise.all([
       prisma.paymentCharge.findMany({
         where: {
-          teamId: teamid,
+          teamId: { in: teamIds },
           status: {
             notIn: ["PAID", "VOID"],
           },
@@ -42,7 +51,7 @@ export async function GET(
       }),
       prisma.playerMatchFee.findMany({
         where: {
-          teamId: teamid,
+          teamId: { in: teamIds },
           status: "PAID",
         },
         select: {
@@ -52,7 +61,7 @@ export async function GET(
       }),
       prisma.playerMatchFee.findMany({
         where: {
-          teamId: teamid,
+          teamId: { in: teamIds },
           status: "OPEN",
         },
         select: {
@@ -62,7 +71,7 @@ export async function GET(
       }),
       prisma.paymentCharge.findMany({
         where: {
-          teamId: teamid,
+          teamId: { in: teamIds },
           status: {
             not: "VOID",
           },
@@ -129,6 +138,7 @@ export async function GET(
     itemCount,
     openChargeCount: openChargeSummaries.length,
     unlinkedCollectionFixtureCount,
+    relatedTeamCount: teamIds.length,
     helper:
       helperParts.length > 0
         ? `${helperParts.join(" and ")}.`
