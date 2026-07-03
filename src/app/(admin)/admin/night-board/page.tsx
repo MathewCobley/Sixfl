@@ -369,48 +369,65 @@ function getRefereeRows(fixtures: FixtureForBoard[], refFeePence: number) {
 }
 
 function getFinance(fixtures: FixtureForBoard[], refFeePence: number, pitchHirePence: number) {
-  const uniqueTeamIds = new Set<string>();
+  const expectedTeamIds = new Set<string>();
+  const chargedTeamIds = new Set<string>();
   const uniqueRefedFixtures = fixtures.filter((fixture) => fixture.referee?.id).length;
-  let actualChargesPence = 0;
+  let chargesCreatedPence = 0;
   let paidPence = 0;
   let openCharges = 0;
+  let chargeCount = 0;
   let defaultFeePence = 4000;
 
   for (const fixture of fixtures) {
-    uniqueTeamIds.add(fixture.homeTeam.id);
-    uniqueTeamIds.add(fixture.awayTeam.id);
+    expectedTeamIds.add(fixture.homeTeam.id);
+    expectedTeamIds.add(fixture.awayTeam.id);
     if (fixture.matchFeePence && fixture.matchFeePence > 0) defaultFeePence = fixture.matchFeePence;
 
     for (const charge of fixture.paymentCharges) {
-      if (charge.status !== PaymentChargeStatus.VOID) {
-        actualChargesPence += charge.amountPence;
-      }
+      if (charge.status === PaymentChargeStatus.VOID) continue;
+
+      chargeCount += 1;
+      chargedTeamIds.add(charge.teamId);
+      chargesCreatedPence += charge.amountPence;
+
       if (charge.status === PaymentChargeStatus.OPEN || charge.status === PaymentChargeStatus.PART_PAID) {
         openCharges += 1;
       }
+
       paidPence += charge.transactions.reduce((total, transaction) => total + transaction.amountPence, 0);
     }
   }
 
-  const expectedIncomePence = uniqueTeamIds.size * defaultFeePence;
-  const incomePence = actualChargesPence > 0 ? actualChargesPence : expectedIncomePence;
+  const expectedChargeCount = expectedTeamIds.size;
+  const chargesCreatedCount = chargedTeamIds.size;
+  const missingChargeCount = Math.max(0, expectedChargeCount - chargesCreatedCount);
+  const expectedIncomePence = expectedChargeCount * defaultFeePence;
+  const missingChargesPence = Math.max(0, expectedIncomePence - chargesCreatedPence);
+  const outstandingAgainstChargesPence = Math.max(0, chargesCreatedPence - paidPence);
+  const expectedOutstandingPence = Math.max(0, expectedIncomePence - paidPence);
   const refCostPence = uniqueRefedFixtures * refFeePence;
   const totalCostPence = refCostPence + pitchHirePence;
-  const profitPence = incomePence - totalCostPence;
+  const expectedProfitPence = expectedIncomePence - totalCostPence;
+  const chargedProfitPence = chargesCreatedPence - totalCostPence;
 
   return {
-    uniqueTeams: uniqueTeamIds.size,
+    expectedTeams: expectedChargeCount,
     defaultFeePence,
     expectedIncomePence,
-    actualChargesPence,
+    chargeCount,
+    chargesCreatedCount,
+    chargesCreatedPence,
+    missingChargeCount,
+    missingChargesPence,
     paidPence,
-    outstandingPence: Math.max(0, incomePence - paidPence),
+    outstandingAgainstChargesPence,
+    expectedOutstandingPence,
     openCharges,
     refCostPence,
     pitchHirePence,
     totalCostPence,
-    profitPence,
-    incomePence,
+    expectedProfitPence,
+    chargedProfitPence,
   };
 }
 
@@ -483,6 +500,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const confirmedCaptains = fixtures.reduce((total, fixture) => total + fixture.captainConfirmations.filter((confirmation) => confirmation.status === "CONFIRMED").length, 0);
   const expectedCaptainConfirmations = fixtures.length * 2;
   const isSorted = fixtures.length > 0 && warnings.filter((warning) => warning.level === "red").length === 0 && missingPitchCount === 0;
+  const hasMissingCharges = finance.missingChargeCount > 0;
 
   return (
     <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
@@ -601,17 +619,29 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
         </AdminCard>
 
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-          <h2 className="text-xl font-semibold text-white">Income / cost</h2>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Income / cost</h2>
+              <p className="mt-1 text-sm text-white/45">Based on published fixtures on this night.</p>
+            </div>
+            {hasMissingCharges ? (
+              <div className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">
+                Missing charges
+              </div>
+            ) : null}
+          </div>
           <div className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Teams charged / expected</span><span className="font-semibold text-white">{finance.uniqueTeams} × {formatMoney(finance.defaultFeePence)}</span></div>
-            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Income due</span><span className="font-semibold text-white">{formatMoney(finance.incomePence)}</span></div>
-            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Paid against fixture charges</span><span className="font-semibold text-emerald-100">{formatMoney(finance.paidPence)}</span></div>
-            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Outstanding</span><span className="font-semibold text-amber-100">{formatMoney(finance.outstandingPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Expected income</span><span className="font-semibold text-white">{finance.expectedTeams} teams × {formatMoney(finance.defaultFeePence)} = {formatMoney(finance.expectedIncomePence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Charges created</span><span className="font-semibold text-white">{finance.chargesCreatedCount}/{finance.expectedTeams} teams = {formatMoney(finance.chargesCreatedPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Missing charges</span><span className={`font-semibold ${hasMissingCharges ? "text-amber-100" : "text-emerald-100"}`}>{finance.missingChargeCount} teams = {formatMoney(finance.missingChargesPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Paid</span><span className="font-semibold text-emerald-100">{formatMoney(finance.paidPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Outstanding against created charges</span><span className="font-semibold text-amber-100">{formatMoney(finance.outstandingAgainstChargesPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">True expected outstanding</span><span className="font-semibold text-amber-100">{formatMoney(finance.expectedOutstandingPence)}</span></div>
             <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Referee cost</span><span className="font-semibold text-white">{formatMoney(finance.refCostPence)}</span></div>
             <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Pitch hire</span><span className="font-semibold text-white">{formatMoney(finance.pitchHirePence)}</span></div>
-            <div className="flex justify-between pt-2 text-base"><span className="text-white/70">Estimated profit</span><span className={`font-semibold ${finance.profitPence >= 0 ? "text-emerald-100" : "text-red-100"}`}>{formatMoney(finance.profitPence)}</span></div>
+            <div className="flex justify-between pt-2 text-base"><span className="text-white/70">Expected profit</span><span className={`font-semibold ${finance.expectedProfitPence >= 0 ? "text-emerald-100" : "text-red-100"}`}>{formatMoney(finance.expectedProfitPence)}</span></div>
           </div>
-          {finance.actualChargesPence === 0 ? <p className="mt-4 text-xs leading-5 text-white/40">No fixture payment charges found, so income is estimated from unique teams × match fee.</p> : null}
+          {hasMissingCharges ? <p className="mt-4 text-xs leading-5 text-amber-100/80">Some teams do not yet have fixture charges. The expected figures show what should be due; the charges-created line shows what currently exists in payments.</p> : null}
         </AdminCard>
       </div>
 
