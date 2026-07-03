@@ -106,6 +106,10 @@ function fixtureStatusTone(status: string) {
   return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
 }
 
+function getWeekLabel(round: number | null) {
+  return round === null ? "Unassigned week" : `Week ${round}`;
+}
+
 export default function FixtureMatchupGrid({
   initialLeagueId,
   initialDivisionId,
@@ -176,6 +180,22 @@ export default function FixtureMatchupGrid({
     [divisions, selectedDivisionId],
   );
 
+  const fixturesByRound = useMemo(() => {
+    const grouped = new Map<string, GridFixture[]>();
+
+    for (const fixture of fixtures) {
+      const key = getWeekLabel(fixture.round);
+      grouped.set(key, [...(grouped.get(key) ?? []), fixture]);
+    }
+
+    return Array.from(grouped.entries()).sort(([a], [b]) => {
+      const aNumber = Number(a.replace("Week ", ""));
+      const bNumber = Number(b.replace("Week ", ""));
+      if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+      return a.localeCompare(b);
+    });
+  }, [fixtures]);
+
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
       <div className="border-b border-white/10 px-6 py-6 md:px-8">
@@ -184,7 +204,7 @@ export default function FixtureMatchupGrid({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture selector</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Choose league and division</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-              Pick the league, division and fixture visibility. The grid and fixture rows below now come from the same API data.
+              Pick the league, division and fixture visibility. The grid and fixture cards below come from the same selection.
             </p>
           </div>
 
@@ -321,47 +341,70 @@ export default function FixtureMatchupGrid({
               <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-red-100">— = teams have not met</span>
             </div>
 
-            <div className="mt-8 overflow-hidden rounded-3xl border border-white/10 bg-black/25">
-              <div className="border-b border-white/10 px-5 py-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Fixtures for selected league</p>
-                <h3 className="mt-1 text-xl font-semibold text-white">Actual fixture list</h3>
-                <p className="mt-1 text-sm text-white/55">Showing {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"} from the same selection as the grid above.</p>
+            <div className="mt-8 rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_32%),rgba(255,255,255,0.03)] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)] md:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Fixtures for selected league</p>
+                  <h3 className="mt-1 text-2xl font-semibold tracking-tight text-white">Fixture cards</h3>
+                  <p className="mt-2 text-sm text-white/55">Showing {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"} from the same selection as the grid above.</p>
+                </div>
+                <Link
+                  href={`/admin/fixtures/all?q=${encodeURIComponent(selectedLeague?.name ?? data?.selectedLeagueLabel ?? "")}`}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white/75 transition hover:border-white/20 hover:bg-white/[0.08]"
+                >
+                  Open full search view
+                </Link>
               </div>
 
               {fixtures.length === 0 ? (
-                <div className="px-5 py-8 text-sm text-white/55">No fixture rows found for this league/division/visibility selection.</div>
+                <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-black/25 px-5 py-8 text-sm text-white/55">No fixture rows found for this league/division/visibility selection.</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.035] text-[11px] uppercase tracking-[0.14em] text-white/40">
-                        <th className="px-5 py-3 font-semibold">Match</th>
-                        <th className="px-5 py-3 font-semibold">Kickoff</th>
-                        <th className="px-5 py-3 font-semibold">Venue</th>
-                        <th className="px-5 py-3 font-semibold">Week</th>
-                        <th className="px-5 py-3 font-semibold">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fixtures.map((fixture) => (
-                        <tr key={fixture.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.025]">
-                          <td className="px-5 py-4">
-                            <div className="font-semibold text-white">{fixture.homeTeamName} vs {fixture.awayTeamName}</div>
-                            <div className="mt-1 text-xs text-white/45">{fixture.pitch || "Pitch not set"}{fixture.position !== null ? ` · Game ${fixture.position}` : ""}</div>
-                          </td>
-                          <td className="px-5 py-4 text-white/70">{formatFixtureDate(fixture.kickoffAt)}</td>
-                          <td className="px-5 py-4 text-white/70">{fixture.venueName || "No venue"}</td>
-                          <td className="px-5 py-4 text-white/70">{fixture.round ?? "—"}</td>
-                          <td className="px-5 py-4">
-                            <div className="flex flex-col gap-2">
-                              <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${fixtureStatusTone(fixture.status)}`}>{fixture.status}</span>
-                              <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${fixture.publishedAt ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>{fixture.publishedAt ? "Live on site" : "Draft only"}</span>
+                <div className="mt-6 space-y-6">
+                  {fixturesByRound.map(([roundLabel, roundFixtures]) => (
+                    <div key={roundLabel} className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 text-sm font-black text-emerald-100">
+                          {roundLabel.replace("Week ", "")}
+                        </div>
+                        <div>
+                          <div className="text-base font-semibold text-white">{roundLabel}</div>
+                          <div className="text-xs text-white/40">{roundFixtures.length} fixture{roundFixtures.length === 1 ? "" : "s"}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                        {roundFixtures.map((fixture) => (
+                          <article key={fixture.id} className="rounded-3xl border border-white/10 bg-black/25 p-4 transition hover:border-white/20 hover:bg-white/[0.04]">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold leading-6 text-white">
+                                  {fixture.homeTeamName} <span className="text-white/35">vs</span> {fixture.awayTeamName}
+                                </div>
+                                <div className="mt-1 text-xs text-white/45">
+                                  {fixture.pitch || "Pitch not set"}{fixture.position !== null ? ` · Game ${fixture.position}` : ""}
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 flex-wrap gap-2">
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fixtureStatusTone(fixture.status)}`}>{fixture.status}</span>
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fixture.publishedAt ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>{fixture.publishedAt ? "Live" : "Draft"}</span>
+                              </div>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                            <div className="mt-4 grid gap-2 text-sm text-white/65 sm:grid-cols-2">
+                              <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Kickoff</div>
+                                <div className="mt-1 font-medium text-white/80">{formatFixtureDate(fixture.kickoffAt)}</div>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Venue</div>
+                                <div className="mt-1 font-medium text-white/80">{fixture.venueName || "No venue"}</div>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
