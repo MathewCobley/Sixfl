@@ -23,6 +23,18 @@ type GridCell = {
   isSelf: boolean;
 };
 type GridRow = { teamId: string; teamName: string; opponents: GridCell[] };
+type GridFixture = {
+  id: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  kickoffAt: string;
+  round: number | null;
+  position: number | null;
+  pitch: string | null;
+  venueName: string | null;
+  status: string;
+  publishedAt: string | null;
+};
 type MatchupGridData = {
   leagues: LeagueOption[];
   divisions: DivisionOption[];
@@ -33,6 +45,7 @@ type MatchupGridData = {
   selectedDivisionLabel?: string | null;
   teams: TeamOption[];
   cells: GridRow[];
+  fixtures: GridFixture[];
   summary: { scheduledPairs: number; oneWayPairs: number; completedPairs: number; missingPairs: number };
 };
 
@@ -73,6 +86,24 @@ function visibilityLabel(value: VisibilityFilter) {
   if (value === "published") return "Published only";
   if (value === "draft") return "Draft only";
   return "Published + draft";
+}
+
+function formatFixtureDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/London",
+  }).format(new Date(value));
+}
+
+function fixtureStatusTone(status: string) {
+  if (status === "COMPLETED") return "border-sky-400/20 bg-sky-500/10 text-sky-100";
+  if (status === "POSTPONED") return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+  if (status === "CANCELLED") return "border-red-400/20 bg-red-500/10 text-red-100";
+  return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
 }
 
 export default function FixtureMatchupGrid({
@@ -135,6 +166,7 @@ export default function FixtureMatchupGrid({
 
   const leagues = data?.leagues ?? [];
   const divisions = data?.divisions ?? [];
+  const fixtures = data?.fixtures ?? [];
   const selectedLeague = useMemo(
     () => leagues.find((league) => league.id === selectedLeagueId) ?? null,
     [leagues, selectedLeagueId],
@@ -152,7 +184,7 @@ export default function FixtureMatchupGrid({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture selector</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Choose league and division</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-              Pick the league, division and fixture visibility first. The planning grid and fixtures table below use the same server-side selection.
+              Pick the league, division and fixture visibility. The grid and fixture rows below now come from the same API data.
             </p>
           </div>
 
@@ -245,47 +277,96 @@ export default function FixtureMatchupGrid({
 
         {isLoading ? <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">Loading matchup grid...</div> : null}
         {!isLoading && (!data || data.teams.length === 0) ? <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">No teams found for this league/division/filter yet.</div> : null}
+
         {!isLoading && data && data.teams.length > 0 ? (
-          <div className="mt-6 overflow-x-auto rounded-3xl border border-white/10 bg-black/20">
-            <table className="min-w-max border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/[0.04]">
-                  <th className="sticky left-0 z-20 min-w-[180px] border-r border-white/10 bg-[#07120f] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">Team</th>
-                  {data.teams.map((team) => (
-                    <th key={team.id} className="min-w-[120px] max-w-[150px] border-r border-white/10 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
-                      <span className="block truncate" title={team.name}>{team.name}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.cells.map((row) => (
-                  <tr key={row.teamId} className="border-b border-white/10 last:border-b-0">
-                    <th className="sticky left-0 z-10 min-w-[180px] border-r border-white/10 bg-[#07120f] px-4 py-3 text-sm font-semibold text-white">{row.teamName}</th>
-                    {row.opponents.map((cell) => (
-                      <td key={cell.opponentId} className="border-r border-white/10 p-2 align-top">
-                        <div className={`min-h-[72px] rounded-2xl border px-3 py-2 ${getCellTone(cell)}`}>
-                          <div className="text-sm font-semibold">{cell.label}</div>
-                          {!cell.isSelf ? (
-                            <>
-                              <div className="mt-1 text-[11px] opacity-75">{getCellHelper(cell)}</div>
-                              {cell.totalCount > 1 ? <div className="mt-1 text-[11px] opacity-70">{cell.totalCount} fixtures</div> : null}
-                            </>
-                          ) : null}
-                        </div>
-                      </td>
+          <>
+            <div className="mt-6 overflow-x-auto rounded-3xl border border-white/10 bg-black/20">
+              <table className="min-w-max border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.04]">
+                    <th className="sticky left-0 z-20 min-w-[180px] border-r border-white/10 bg-[#07120f] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">Team</th>
+                    {data.teams.map((team) => (
+                      <th key={team.id} className="min-w-[120px] max-w-[150px] border-r border-white/10 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+                        <span className="block truncate" title={team.name}>{team.name}</span>
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {data.cells.map((row) => (
+                    <tr key={row.teamId} className="border-b border-white/10 last:border-b-0">
+                      <th className="sticky left-0 z-10 min-w-[180px] border-r border-white/10 bg-[#07120f] px-4 py-3 text-sm font-semibold text-white">{row.teamName}</th>
+                      {row.opponents.map((cell) => (
+                        <td key={cell.opponentId} className="border-r border-white/10 p-2 align-top">
+                          <div className={`min-h-[72px] rounded-2xl border px-3 py-2 ${getCellTone(cell)}`}>
+                            <div className="text-sm font-semibold">{cell.label}</div>
+                            {!cell.isSelf ? (
+                              <>
+                                <div className="mt-1 text-[11px] opacity-75">{getCellHelper(cell)}</div>
+                                {cell.totalCount > 1 ? <div className="mt-1 text-[11px] opacity-70">{cell.totalCount} fixtures</div> : null}
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/55">
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-emerald-100">H + A = both directions covered</span>
+              <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-amber-100">Only H or only A = reverse fixture missing</span>
+              <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-red-100">— = teams have not met</span>
+            </div>
+
+            <div className="mt-8 overflow-hidden rounded-3xl border border-white/10 bg-black/25">
+              <div className="border-b border-white/10 px-5 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Fixtures for selected league</p>
+                <h3 className="mt-1 text-xl font-semibold text-white">Actual fixture list</h3>
+                <p className="mt-1 text-sm text-white/55">Showing {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"} from the same selection as the grid above.</p>
+              </div>
+
+              {fixtures.length === 0 ? (
+                <div className="px-5 py-8 text-sm text-white/55">No fixture rows found for this league/division/visibility selection.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.035] text-[11px] uppercase tracking-[0.14em] text-white/40">
+                        <th className="px-5 py-3 font-semibold">Match</th>
+                        <th className="px-5 py-3 font-semibold">Kickoff</th>
+                        <th className="px-5 py-3 font-semibold">Venue</th>
+                        <th className="px-5 py-3 font-semibold">Week</th>
+                        <th className="px-5 py-3 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fixtures.map((fixture) => (
+                        <tr key={fixture.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.025]">
+                          <td className="px-5 py-4">
+                            <div className="font-semibold text-white">{fixture.homeTeamName} vs {fixture.awayTeamName}</div>
+                            <div className="mt-1 text-xs text-white/45">{fixture.pitch || "Pitch not set"}{fixture.position !== null ? ` · Game ${fixture.position}` : ""}</div>
+                          </td>
+                          <td className="px-5 py-4 text-white/70">{formatFixtureDate(fixture.kickoffAt)}</td>
+                          <td className="px-5 py-4 text-white/70">{fixture.venueName || "No venue"}</td>
+                          <td className="px-5 py-4 text-white/70">{fixture.round ?? "—"}</td>
+                          <td className="px-5 py-4">
+                            <div className="flex flex-col gap-2">
+                              <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${fixtureStatusTone(fixture.status)}`}>{fixture.status}</span>
+                              <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${fixture.publishedAt ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>{fixture.publishedAt ? "Live on site" : "Draft only"}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         ) : null}
-        <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/55">
-          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-emerald-100">H + A = both directions covered</span>
-          <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-amber-100">Only H or only A = reverse fixture missing</span>
-          <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-red-100">— = teams have not met</span>
-        </div>
       </div>
     </section>
   );
