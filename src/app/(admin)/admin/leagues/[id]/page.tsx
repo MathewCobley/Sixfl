@@ -24,41 +24,26 @@ import { updateTeamDivisionAction } from "./team-division-actions";
 
 function formatDay(dayOfWeek: string | null) {
   if (!dayOfWeek) return "—";
-
   switch (dayOfWeek) {
-    case "MONDAY":
-      return "Monday";
-    case "TUESDAY":
-      return "Tuesday";
-    case "WEDNESDAY":
-      return "Wednesday";
-    case "THURSDAY":
-      return "Thursday";
-    case "FRIDAY":
-      return "Friday";
-    case "SATURDAY":
-      return "Saturday";
-    case "SUNDAY":
-      return "Sunday";
-    case "ANY":
-      return "Any";
-    default:
-      return dayOfWeek;
+    case "MONDAY": return "Monday";
+    case "TUESDAY": return "Tuesday";
+    case "WEDNESDAY": return "Wednesday";
+    case "THURSDAY": return "Thursday";
+    case "FRIDAY": return "Friday";
+    case "SATURDAY": return "Saturday";
+    case "SUNDAY": return "Sunday";
+    case "ANY": return "Any";
+    default: return dayOfWeek;
   }
 }
 
 function formatLeagueType(leagueType: string | null) {
   if (!leagueType) return "—";
-
   switch (leagueType) {
-    case "MENS":
-      return "Mens";
-    case "WOMENS":
-      return "Womens";
-    case "YOUTH":
-      return "Youth";
-    default:
-      return leagueType;
+    case "MENS": return "Mens";
+    case "WOMENS": return "Womens";
+    case "YOUTH": return "Youth";
+    default: return leagueType;
   }
 }
 
@@ -69,13 +54,7 @@ function formatDateForInput(value: Date | null) {
 
 function formatDisplayDate(value: Date | null) {
   if (!value) return "—";
-
-  return new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(value);
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(value);
 }
 
 function formatPoundsFromPence(value: number | null) {
@@ -85,11 +64,7 @@ function formatPoundsFromPence(value: number | null) {
 
 function formatCurrency(value: number | null) {
   if (value === null) return "—";
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    maximumFractionDigits: value % 100 === 0 ? 0 : 2,
-  }).format(value / 100);
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: value % 100 === 0 ? 0 : 2 }).format(value / 100);
 }
 
 type Props = {
@@ -103,6 +78,10 @@ type LeagueSettingsRow = {
   minutesPerGame: number | null;
   costPerTeamPerMatchPence: number | null;
   targetTeamCount: number | null;
+  bookedPitchCount: number | null;
+  bookingStartTime: string | null;
+  bookingEndTime: string | null;
+  pitchCostPerHourOverridePence: number | null;
 };
 
 export default async function EditLeaguePage({ params, searchParams }: Props) {
@@ -116,25 +95,10 @@ export default async function EditLeaguePage({ params, searchParams }: Props) {
       where: { id },
       include: {
         teams: {
-          select: {
-            id: true,
-            name: true,
-            logoUrl: true,
-            claimCode: true,
-            createdAt: true,
-            captainUserId: true,
-            captainLinkedAt: true,
-            captainClaimedAt: true,
-          },
+          select: { id: true, name: true, logoUrl: true, claimCode: true, createdAt: true, captainUserId: true, captainLinkedAt: true, captainClaimedAt: true },
           orderBy: { name: "asc" },
         },
-        _count: {
-          select: {
-            teams: true,
-            fixtures: true,
-            interestLeads: true,
-          },
-        },
+        _count: { select: { teams: true, fixtures: true, interestLeads: true } },
       },
     }),
     prisma.$queryRaw<Array<LeagueSettingsRow>>(Prisma.sql`
@@ -143,7 +107,11 @@ export default async function EditLeaguePage({ params, searchParams }: Props) {
         "proposedStartDate" AS "proposedStartDate",
         "minutesPerGame"::int AS "minutesPerGame",
         "costPerTeamPerMatchPence"::int AS "costPerTeamPerMatchPence",
-        "targetTeamCount"::int AS "targetTeamCount"
+        "targetTeamCount"::int AS "targetTeamCount",
+        "bookedPitchCount"::int AS "bookedPitchCount",
+        "bookingStartTime" AS "bookingStartTime",
+        "bookingEndTime" AS "bookingEndTime",
+        "pitchCostPerHourOverridePence"::int AS "pitchCostPerHourOverridePence"
       FROM "League"
       WHERE id = ${id}
       LIMIT 1
@@ -154,253 +122,42 @@ export default async function EditLeaguePage({ params, searchParams }: Props) {
 
   if (!league) notFound();
 
-  const settings = settingsRows[0] ?? {
-    requiredRefereesPerNight: 1,
-    proposedStartDate: null,
-    minutesPerGame: null,
-    costPerTeamPerMatchPence: null,
-    targetTeamCount: null,
-  };
-
-  const teamContacts = await Promise.all(
-    league.teams.map((team) => getTeamContactSnapshot(team.id)),
-  );
-
+  const settings = settingsRows[0] ?? { requiredRefereesPerNight: 1, proposedStartDate: null, minutesPerGame: null, costPerTeamPerMatchPence: null, targetTeamCount: null, bookedPitchCount: null, bookingStartTime: null, bookingEndTime: null, pitchCostPerHourOverridePence: null };
+  const teamContacts = await Promise.all(league.teams.map((team) => getTeamContactSnapshot(team.id)));
   const contactMap = new Map<string, NonNullable<(typeof teamContacts)[number]>>();
-  for (const snapshot of teamContacts) {
-    if (snapshot) contactMap.set(snapshot.teamId, snapshot);
-  }
+  for (const snapshot of teamContacts) if (snapshot) contactMap.set(snapshot.teamId, snapshot);
 
   const boundUpdateAction = updateLeagueAction.bind(null, league.id);
   const created = resolvedSearchParams?.created === "1";
   const divisionsUpdated = typeof resolvedSearchParams?.divisions === "string";
-  const divisionError =
-    typeof resolvedSearchParams?.divisionError === "string"
-      ? resolvedSearchParams.divisionError
-      : null;
+  const divisionError = typeof resolvedSearchParams?.divisionError === "string" ? resolvedSearchParams.divisionError : null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
-          <Link href="/admin/leagues" className="text-sm text-emerald-300 hover:text-emerald-200">
-            ← Back to leagues
-          </Link>
+          <Link href="/admin/leagues" className="text-sm text-emerald-300 hover:text-emerald-200">← Back to leagues</Link>
           <h1 className="text-3xl font-semibold text-white">{league.name}</h1>
-          <p className="text-sm text-white/60">
-            Admin view for this league. Edit settings, manage divisions, review linked teams, and manage the live setup.
-          </p>
+          <p className="text-sm text-white/60">Admin view for this league. Edit settings, manage divisions, review linked teams, and manage the live setup.</p>
         </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Link href="/admin/teams/new" className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500">
-            Add team
-          </Link>
-          <Link href={`/leagues/${league.slug}`} className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">
-            View public page
-          </Link>
-        </div>
+        <div className="flex flex-wrap gap-3"><Link href="/admin/teams/new" className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500">Add team</Link><Link href={`/leagues/${league.slug}`} className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10">View public page</Link></div>
       </div>
-
-      {created ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          League created successfully.
-        </div>
-      ) : null}
-
-      {divisionsUpdated ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          League divisions updated.
-        </div>
-      ) : null}
-
-      {divisionError ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-          Division update failed. Check the division name and selected team assignment.
-        </div>
-      ) : null}
-
+      {created ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">League created successfully.</div> : null}
+      {divisionsUpdated ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">League divisions updated.</div> : null}
+      {divisionError ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">Division update failed. Check the division name and selected team assignment.</div> : null}
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         <div className="space-y-6">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
             <h2 className="mb-6 text-lg font-semibold text-white">League settings</h2>
-            <LeagueForm
-              mode="edit"
-              action={boundUpdateAction}
-              initialValues={{
-                name: league.name,
-                slug: league.slug,
-                season: league.season ?? "",
-                isActive: league.isActive,
-                area: league.area ?? "",
-                dayOfWeek: league.dayOfWeek ?? "",
-                leagueType: league.leagueType ?? "",
-                venueName: league.venueName ?? "",
-                proposedStartDate: formatDateForInput(settings.proposedStartDate),
-                minutesPerGame: settings.minutesPerGame ? String(settings.minutesPerGame) : "",
-                costPerTeamPerMatch: formatPoundsFromPence(settings.costPerTeamPerMatchPence),
-                targetTeamCount: settings.targetTeamCount ? String(settings.targetTeamCount) : "",
-                requiredRefereesPerNight: String(settings.requiredRefereesPerNight),
-                kickoffInfo: league.kickoffInfo ?? "",
-                format: league.format ?? "",
-                surface: league.surface ?? "",
-                description: league.description ?? "",
-                heroImageUrl: league.heroImageUrl ?? "",
-                badgeUrl: league.badgeUrl ?? "",
-                ctaText: league.ctaText ?? "",
-              }}
-            />
+            <LeagueForm mode="edit" action={boundUpdateAction} initialValues={{ name: league.name, slug: league.slug, season: league.season ?? "", isActive: league.isActive, area: league.area ?? "", dayOfWeek: league.dayOfWeek ?? "", leagueType: league.leagueType ?? "", venueName: league.venueName ?? "", proposedStartDate: formatDateForInput(settings.proposedStartDate), minutesPerGame: settings.minutesPerGame ? String(settings.minutesPerGame) : "", costPerTeamPerMatch: formatPoundsFromPence(settings.costPerTeamPerMatchPence), targetTeamCount: settings.targetTeamCount ? String(settings.targetTeamCount) : "", requiredRefereesPerNight: String(settings.requiredRefereesPerNight), bookedPitchCount: settings.bookedPitchCount ? String(settings.bookedPitchCount) : "", bookingStartTime: settings.bookingStartTime ?? "", bookingEndTime: settings.bookingEndTime ?? "", pitchCostPerHourOverride: formatPoundsFromPence(settings.pitchCostPerHourOverridePence), kickoffInfo: league.kickoffInfo ?? "", format: league.format ?? "", surface: league.surface ?? "", description: league.description ?? "", heroImageUrl: league.heroImageUrl ?? "", badgeUrl: league.badgeUrl ?? "", ctaText: league.ctaText ?? "" }} />
           </div>
-
           <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6 md:p-8">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Divisions</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  Use divisions when one league has separate tables and fixture pools, such as Premiership and Championship.
-                </p>
-              </div>
-              <form action={createDefaultDivisionsAction}>
-                <input type="hidden" name="leagueId" value={league.id} />
-                <button type="submit" className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20">
-                  Add Premiership + Championship
-                </button>
-              </form>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {divisions.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/60 md:col-span-2">
-                  No divisions yet. Add Premiership and Championship to split this league into two divisions.
-                </div>
-              ) : (
-                divisions.map((division) => (
-                  <div key={division.id} className="rounded-2xl border border-white/10 bg-black/25 p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">{division.name}</h3>
-                        <p className="mt-1 text-xs text-white/45">/{division.slug}</p>
-                      </div>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70">
-                        {division.teamCount} team{division.teamCount === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <form action={createLeagueDivisionAction} className="mt-5 grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_1fr_120px_auto] md:items-end">
-              <input type="hidden" name="leagueId" value={league.id} />
-              <label className="space-y-2 text-sm text-white/60">
-                <span>Division name</span>
-                <input name="name" placeholder="Premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" />
-              </label>
-              <label className="space-y-2 text-sm text-white/60">
-                <span>Slug</span>
-                <input name="slug" placeholder="premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" />
-              </label>
-              <label className="space-y-2 text-sm text-white/60">
-                <span>Order</span>
-                <input name="sortOrder" type="number" defaultValue={divisions.length + 1} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" />
-              </label>
-              <button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400">
-                Add division
-              </button>
-            </form>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">League communications</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  Whole-league email and SMS sending now lives in the dedicated communications page.
-                </p>
-              </div>
-              <Link href={`/admin/leagues/${league.id}/communications`} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
-                Open communications
-              </Link>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Teams</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  {league._count.teams} team{league._count.teams === 1 ? "" : "s"} linked to this league.
-                </p>
-              </div>
-              <Link href="/admin/teams/new" className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
-                Add team
-              </Link>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {league.teams.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
-                  No teams are linked yet.
-                </div>
-              ) : (
-                league.teams.map((team) => {
-                  const contact = contactMap.get(team.id);
-                  const contactEmail = contact?.primaryContact.email;
-                  const contactPhone = contact?.primaryContact.phone;
-                  const selectedDivisionId = teamDivisionMap.get(team.id) ?? "";
-
-                  return (
-                    <div key={team.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <Link href={`/admin/teams/${team.id}`} className="flex min-w-0 items-center gap-3 transition hover:text-emerald-300">
-                          <TeamBadge name={team.name} logoUrl={team.logoUrl} size="sm" />
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-white">{team.name}</div>
-                            <div className="truncate text-xs text-white/45">{contactEmail || "No email"} · {contactPhone || "No phone"}</div>
-                          </div>
-                        </Link>
-
-                        <form action={updateTeamDivisionAction} className="grid w-full gap-2 sm:grid-cols-[1fr_auto] lg:w-[420px]">
-                          <input type="hidden" name="leagueId" value={league.id} />
-                          <input type="hidden" name="teamId" value={team.id} />
-                          <select name="divisionId" defaultValue={selectedDivisionId} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-400/50">
-                            <option value="">No division</option>
-                            {divisions.map((division) => (
-                              <option key={division.id} value={division.id}>{division.name}</option>
-                            ))}
-                          </select>
-                          <button type="submit" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">
-                            Save division
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"><div><h2 className="text-lg font-semibold text-white">Divisions</h2><p className="mt-1 text-sm text-white/60">Use divisions when one league has separate tables and fixture pools, such as Premiership and Championship.</p></div><form action={createDefaultDivisionsAction}><input type="hidden" name="leagueId" value={league.id} /><button type="submit" className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20">Add Premiership + Championship</button></form></div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">{divisions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/60 md:col-span-2">No divisions yet. Add Premiership and Championship to split this league into two divisions.</div> : divisions.map((division) => <div key={division.id} className="rounded-2xl border border-white/10 bg-black/25 p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-semibold text-white">{division.name}</h3><p className="mt-1 text-xs text-white/45">/{division.slug}</p></div><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70">{division.teamCount} team{division.teamCount === 1 ? "" : "s"}</span></div></div>)}</div>
+            <form action={createLeagueDivisionAction} className="mt-5 grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_1fr_120px_auto] md:items-end"><input type="hidden" name="leagueId" value={league.id} /><label className="space-y-2 text-sm text-white/60"><span>Division name</span><input name="name" placeholder="Premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" /></label><label className="space-y-2 text-sm text-white/60"><span>Slug</span><input name="slug" placeholder="premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" /></label><label className="space-y-2 text-sm text-white/60"><span>Order</span><input name="sortOrder" type="number" defaultValue={divisions.length + 1} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" /></label><button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400">Add division</button></form>
           </div>
         </div>
-
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <h2 className="text-lg font-semibold text-white">Overview</h2>
-            <dl className="mt-5 space-y-4 text-sm">
-              <div><dt className="text-white/45">Status</dt><dd className="mt-1 font-medium text-white">{league.isActive ? "Active" : "Inactive"}</dd></div>
-              <div><dt className="text-white/45">Area</dt><dd className="mt-1 font-medium text-white">{league.area || "—"}</dd></div>
-              <div><dt className="text-white/45">Day</dt><dd className="mt-1 font-medium text-white">{formatDay(league.dayOfWeek)}</dd></div>
-              <div><dt className="text-white/45">Type</dt><dd className="mt-1 font-medium text-white">{formatLeagueType(league.leagueType)}</dd></div>
-              <div><dt className="text-white/45">Divisions</dt><dd className="mt-1 font-medium text-white">{divisions.length || "—"}</dd></div>
-              <div><dt className="text-white/45">Proposed start date</dt><dd className="mt-1 font-medium text-white">{formatDisplayDate(settings.proposedStartDate)}</dd></div>
-              <div><dt className="text-white/45">Minutes per game</dt><dd className="mt-1 font-medium text-white">{settings.minutesPerGame ? `${settings.minutesPerGame} minutes` : "—"}</dd></div>
-              <div><dt className="text-white/45">Cost per team per match</dt><dd className="mt-1 font-medium text-white">{formatCurrency(settings.costPerTeamPerMatchPence)}</dd></div>
-              <div><dt className="text-white/45">Target teams</dt><dd className="mt-1 font-medium text-white">{settings.targetTeamCount ?? "—"}</dd></div>
-              <div><dt className="text-white/45">Refs needed per night</dt><dd className="mt-1 font-medium text-white">{settings.requiredRefereesPerNight}</dd></div>
-              <div><dt className="text-white/45">Fixtures</dt><dd className="mt-1 font-medium text-white">{league._count.fixtures}</dd></div>
-              <div><dt className="text-white/45">Leads</dt><dd className="mt-1 font-medium text-white">{league._count.interestLeads}</dd></div>
-            </dl>
-          </div>
-        </div>
+        <aside className="space-y-6"><div className="rounded-3xl border border-white/10 bg-white/5 p-6"><h2 className="text-lg font-semibold text-white">League summary</h2><div className="mt-4 space-y-3 text-sm text-white/60"><p><span className="font-semibold text-white/70">Season:</span> {league.season ?? "—"}</p><p><span className="font-semibold text-white/70">Night:</span> {formatDay(league.dayOfWeek ?? null)}</p><p><span className="font-semibold text-white/70">Type:</span> {formatLeagueType(league.leagueType ?? null)}</p><p><span className="font-semibold text-white/70">Start:</span> {formatDisplayDate(settings.proposedStartDate)}</p><p><span className="font-semibold text-white/70">Team fee:</span> {formatCurrency(settings.costPerTeamPerMatchPence)}</p><p><span className="font-semibold text-white/70">Pitches booked:</span> {settings.bookedPitchCount ?? "—"}</p><p><span className="font-semibold text-white/70">Booking:</span> {settings.bookingStartTime && settings.bookingEndTime ? `${settings.bookingStartTime}–${settings.bookingEndTime}` : "—"}</p><p><span className="font-semibold text-white/70">Pitch override:</span> {formatCurrency(settings.pitchCostPerHourOverridePence)}</p><p><span className="font-semibold text-white/70">Teams:</span> {league._count.teams}</p><p><span className="font-semibold text-white/70">Fixtures:</span> {league._count.fixtures}</p></div></div><div className="rounded-3xl border border-white/10 bg-white/5 p-6"><h2 className="text-lg font-semibold text-white">Teams</h2><div className="mt-4 space-y-3">{league.teams.map((team) => { const contact = contactMap.get(team.id); return <div key={team.id} className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="flex items-center gap-3"><TeamBadge name={team.name} logoUrl={team.logoUrl} size="sm" /><div className="min-w-0"><p className="truncate text-sm font-semibold text-white">{team.name}</p><p className="truncate text-xs text-white/45">{contact?.primaryContact.email ?? "No contact email"}</p></div></div></div>; })}</div></div></aside>
       </div>
     </div>
   );
