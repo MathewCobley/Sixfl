@@ -123,6 +123,9 @@ async function getUpcomingFixtureNightOptions({
 }) {
   const fixtures = await prisma.fixture.findMany({
     where: {
+      publishedAt: {
+        not: null,
+      },
       kickoffAt: {
         gte: new Date(),
       },
@@ -183,6 +186,9 @@ async function getFixturesForBoard({
 }) {
   return prisma.fixture.findMany({
     where: {
+      publishedAt: {
+        not: null,
+      },
       kickoffAt: {
         gte: start,
         lt: end,
@@ -410,7 +416,7 @@ function getFinance(fixtures: FixtureForBoard[], refFeePence: number, pitchHireP
 
 function buildDateOptions(options: SelectOption[], selectedDate: string) {
   if (options.length === 0) {
-    return [{ value: selectedDate, label: formatDate(new Date(`${selectedDate}T00:00:00.000Z`)), description: "No upcoming fixture nights found" }];
+    return [{ value: selectedDate, label: formatDate(new Date(`${selectedDate}T00:00:00.000Z`)), description: "No upcoming published fixture nights found" }];
   }
 
   if (!options.some((option) => option.value === selectedDate)) {
@@ -486,7 +492,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Operations</div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Night board</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              One page to check who is playing on which pitch, at what time, and which referee is covering each match.
+              One page to check who is playing on which pitch, at what time, and which referee is covering each published match.
             </p>
           </div>
           <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isSorted ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>
@@ -507,7 +513,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
       </AdminCard>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Fixtures</div><div className="mt-2 text-3xl font-semibold text-white">{fixtures.length}</div><div className="mt-1 text-sm text-white/45">{completedCount} completed</div></AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Published fixtures</div><div className="mt-2 text-3xl font-semibold text-white">{fixtures.length}</div><div className="mt-1 text-sm text-white/45">{completedCount} completed</div></AdminCard>
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Pitches</div><div className="mt-2 text-3xl font-semibold text-white">{pitchNames.filter((name) => name !== "No pitch").length}</div><div className="mt-1 text-sm text-white/45">{missingPitchCount} missing pitch</div></AdminCard>
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Referees</div><div className="mt-2 text-3xl font-semibold text-white">{refereeRows.length}</div><div className="mt-1 text-sm text-white/45">{missingRefCount} matches missing ref</div></AdminCard>
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Captain confirms</div><div className="mt-2 text-3xl font-semibold text-white">{confirmedCaptains}/{expectedCaptainConfirmations}</div><div className="mt-1 text-sm text-white/45">home + away confirmations</div></AdminCard>
@@ -519,7 +525,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
           <p className="mt-1 text-sm text-white/45">{formatDate(start)}</p>
         </div>
         {fixtures.length === 0 ? (
-          <div className="p-6 text-sm text-white/55">No fixtures found for these filters.</div>
+          <div className="p-6 text-sm text-white/55">No published fixtures found for these filters.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[1100px] text-left text-sm">
