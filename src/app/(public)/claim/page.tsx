@@ -9,6 +9,22 @@ import { TeamRole } from "@prisma/client";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
+function normaliseEmail(value: string | null | undefined) {
+  return value?.trim().toLowerCase() || null;
+}
+
+function getAllowedClaimEmails(team: {
+  contactEmail: string | null;
+  secondaryContactEmail: string | null;
+  captainInviteSentTo: string | null;
+}) {
+  return [
+    normaliseEmail(team.contactEmail),
+    normaliseEmail(team.secondaryContactEmail),
+    normaliseEmail(team.captainInviteSentTo),
+  ].filter((email): email is string => Boolean(email));
+}
+
 export default async function ClaimTeamPage({
   searchParams,
 }: {
@@ -49,11 +65,23 @@ export default async function ClaimTeamPage({
           mode: "insensitive",
         },
       },
-      select: { id: true, name: true, contactName: true },
+      select: {
+        id: true,
+        name: true,
+        contactName: true,
+        contactEmail: true,
+        secondaryContactEmail: true,
+        captainInviteSentTo: true,
+      },
     });
 
     if (!team) {
       redirect(`/claim?error=invalid&code=${encodeURIComponent(code)}`);
+    }
+
+    const allowedEmails = getAllowedClaimEmails(team);
+    if (allowedEmails.length > 0 && !allowedEmails.includes(email)) {
+      redirect(`/claim?error=wrong_email&code=${encodeURIComponent(code)}`);
     }
 
     const captainName = team.contactName?.trim() || null;
@@ -111,6 +139,11 @@ export default async function ClaimTeamPage({
           )}
           {error === "invalid" && (
             <div className="text-red-300">That claim code isn’t valid.</div>
+          )}
+          {error === "wrong_email" && (
+            <div className="text-red-300">
+              This claim link is for a different contact email. Please log in with the email address the team invite was sent to, or ask SIXFL to resend the captain invite.
+            </div>
           )}
         </div>
       )}
