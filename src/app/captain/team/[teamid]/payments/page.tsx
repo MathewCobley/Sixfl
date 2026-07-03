@@ -6,7 +6,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
-import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
+import {
+  formatPaymentFixtureDate,
+  formatPaymentMoney,
+  getTeamPaymentLedger,
+} from "@/lib/payments/team-payment-ledger";
 import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -18,10 +22,7 @@ export const metadata = {
 };
 
 function formatMoney(amountPence: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(amountPence / 100);
+  return formatPaymentMoney(amountPence);
 }
 
 function formatChargeStatus(status: string) {
@@ -112,32 +113,6 @@ function formatUkDateTime(value: Date) {
   });
 }
 
-function getFixtureLabel(
-  fixture:
-    | {
-        kickoffAt: Date;
-        homeTeam: { name: string };
-        awayTeam: { name: string };
-      }
-    | null
-    | undefined,
-) {
-  if (!fixture) {
-    return null;
-  }
-
-  return `${fixture.homeTeam.name} vs ${fixture.awayTeam.name} • ${formatDateTimeInLondon(
-    fixture.kickoffAt,
-    {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  )}`;
-}
-
 function getSubscriptionMessage(state?: string) {
   switch (state) {
     case "success":
@@ -155,13 +130,13 @@ function getSubscriptionMessage(state?: string) {
   }
 }
 
-function getPaymentTransactionWhere(teamId: string, teamMode: string) {
+function getPaymentTransactionWhere(teamIds: string[], teamMode: string) {
   if (teamMode === "MANAGED") {
-    return { teamId };
+    return { teamId: { in: teamIds } };
   }
 
   return {
-    teamId,
+    teamId: { in: teamIds },
     NOT: {
       AND: [
         { chargeId: null },
@@ -186,61 +161,21 @@ export default async function CaptainPaymentsPage({
   const sp = (await searchParams) ?? {};
   await requireCaptain(teamid);
 
-  const [team, subscription] = await Promise.all([
+  const [team, subscription, ledger] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
-      select: {
-        id: true,
-        name: true,
-        teamMode: true,
-        paymentCharges: {
-          orderBy: [{ createdAt: "desc" }],
-          include: {
-            transactions: {
-              select: {
-                id: true,
-                amountPence: true,
-                notes: true,
-              },
-            },
-            fixture: {
-              select: {
-                id: true,
-                kickoffAt: true,
-                homeTeam: {
-                  select: {
-                    name: true,
-                  },
-                },
-                awayTeam: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        playerMatchFees: {
-          where: {
-            status: "PAID",
-          },
-          select: {
-            fixtureId: true,
-            amountPence: true,
-          },
-        },
-      },
+      select: { id: true, name: true, teamMode: true },
     }),
     getTeamSubscriptionSnapshot(teamid),
+    getTeamPaymentLedger(teamid),
   ]);
 
-  if (!team) {
+  if (!team || !ledger) {
     notFound();
   }
 
   const paymentTransactions = await prisma.paymentTransaction.findMany({
-    where: getPaymentTransactionWhere(team.id, team.teamMode),
+    where: getPaymentTransactionWhere(ledger.relatedTeamIds, team.teamMode),
     orderBy: [{ paidAt: "desc" }],
     take: 20,
     select: {
@@ -257,23 +192,6 @@ export default async function CaptainPaymentsPage({
       },
     },
   });
-
-  const chargeSummaries = summariseChargesWithPlayerMatchFees(
-    team.paymentCharges,
-    team.playerMatchFees,
-  );
-
-  const openCharges = chargeSummaries.filter(
-    (summary) =>
-      summary.displayStatus !== "PAID" &&
-      summary.displayStatus !== "VOID" &&
-      summary.outstandingPence > 0,
-  );
-
-  const outstandingTotal = openCharges.reduce(
-    (sum, summary) => sum + summary.outstandingPence,
-    0,
-  );
 
   const subscriptionMessage = getSubscriptionMessage(sp.subscription);
   const canOpenPortal = Boolean(subscription?.stripeCustomerId);
@@ -293,10 +211,10 @@ export default async function CaptainPaymentsPage({
             Outstanding balance
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
-            {formatMoney(outstandingTotal)}
+            {formatMoney(ledger.outstandingPence)}
           </p>
           <p className="mt-2 text-sm text-amber-100/75">
-            Current unpaid balance across open team charges.
+            Current unpaid balance across fixture-linked team charges.
           </p>
         </div>
 
@@ -305,7 +223,7 @@ export default async function CaptainPaymentsPage({
             Open charges
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
-            {openCharges.length}
+            {ledger.openChargeCount}
           </p>
           <p className="mt-2 text-sm text-white/60">
             Team charges still awaiting payment or part payment.
@@ -403,29 +321,31 @@ export default async function CaptainPaymentsPage({
         </div>
 
         <div className="divide-y divide-white/10">
-          {team.paymentCharges.length === 0 ? (
+          {ledger.entries.length === 0 ? (
             <div className="px-6 py-10 text-sm text-white/55">
               No charges recorded yet.
             </div>
           ) : (
-            chargeSummaries.map(({ charge, paidPence, outstandingPence, displayStatus }) => {
-              const fixtureLabel = getFixtureLabel(charge.fixture);
+            ledger.entries.map((entry) => {
               const canPayOnline =
-                Boolean(charge.paymentToken) &&
-                displayStatus !== "PAID" &&
-                displayStatus !== "VOID" &&
-                outstandingPence > 0;
+                Boolean(entry.paymentToken) &&
+                entry.displayStatus !== "PAID" &&
+                entry.displayStatus !== "VOID" &&
+                entry.outstandingPence > 0;
+              const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]
+                .filter(Boolean)
+                .join(" · ");
 
               return (
-                <div key={charge.id} className="px-6 py-5">
+                <div key={entry.chargeId} className="px-6 py-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="text-base font-semibold text-white">
-                          {charge.title}
+                          {entry.title}
                         </div>
 
-                        {fixtureLabel ? (
+                        {entry.fixtureId ? (
                           <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-100/75">
                             Fixture charge
                           </span>
@@ -433,53 +353,67 @@ export default async function CaptainPaymentsPage({
                       </div>
 
                       <div className="mt-1 text-sm text-white/55">
-                        {charge.description || "No description"}
+                        {entry.description || "No description"}
                       </div>
 
-                      {fixtureLabel ? (
-                        <div className="mt-2 text-sm text-emerald-100/75">
-                          {fixtureLabel}
-                        </div>
+                      <div className="mt-2 text-sm text-emerald-100/75">
+                        {entry.fixtureLabel}
+                      </div>
+
+                      {context ? (
+                        <div className="mt-1 text-sm text-white/45">{context}</div>
                       ) : null}
 
                       <div className="mt-1 text-sm text-white/45">
-                        {charge.dueDate
-                          ? `Due ${formatUkDate(charge.dueDate)}`
-                          : "No due date set"}
+                        {entry.dueDate
+                          ? `Due ${formatPaymentFixtureDate(entry.dueDate)}`
+                          : entry.kickoffAt
+                            ? `Fixture ${formatPaymentFixtureDate(entry.kickoffAt)}`
+                            : "No due date set"}
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-3 lg:items-end">
                       <div className="text-right">
                         <div className="text-base font-semibold text-white">
-                          {formatMoney(charge.amountPence)}
+                          {formatMoney(entry.amountPence)}
                         </div>
                         <div className="mt-1 text-sm text-white/55">
-                          Paid {formatMoney(paidPence)} · Outstanding {" "}
-                          {formatMoney(outstandingPence)}
+                          Paid {formatMoney(entry.paidPence)} · Outstanding {" "}
+                          {formatMoney(entry.outstandingPence)}
                         </div>
+                        {entry.playerPaidPence > 0 || entry.playerOpenPence > 0 ? (
+                          <div className="mt-1 text-xs text-white/45">
+                            Squad paid {formatMoney(entry.playerPaidPence)} · player links open {formatMoney(entry.playerOpenPence)}
+                          </div>
+                        ) : null}
+                        {entry.overpaidPence > 0 ? (
+                          <div className="mt-1 text-xs text-emerald-200">
+                            Team credit generated: {formatMoney(entry.overpaidPence)}
+                          </div>
+                        ) : null}
                         <div className="mt-2">
                           <span
                             className={[
                               "inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]",
-                              getChargeStatusTone(displayStatus),
+                              getChargeStatusTone(entry.displayStatus),
                             ].join(" ")}
                           >
-                            {formatChargeStatus(displayStatus)}
+                            {formatChargeStatus(entry.displayStatus)}
                           </span>
                         </div>
                       </div>
 
                       {canPayOnline ? (
                         <Link
-                          href={`/pay/charge/${charge.paymentToken}`}
+                          href={`/pay/charge/${entry.paymentToken}`}
                           className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-500/15"
                         >
                           Pay now
                         </Link>
-                      ) : displayStatus !== "PAID" &&
-                        displayStatus !== "VOID" &&
-                        outstandingPence > 0 ? (
+                      ) : entry.displayStatus !== "PAID" &&
+                        entry.displayStatus !== "VOID" &&
+                        entry.outstandingPence > 0 ? (
                         <div className="text-xs text-white/45">
                           Online payment link not ready yet.
                         </div>
