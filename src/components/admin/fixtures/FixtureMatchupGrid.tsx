@@ -34,6 +34,8 @@ type GridFixture = {
   venueName: string | null;
   status: string;
   publishedAt: string | null;
+  homeMatchFeePence: number | null;
+  awayMatchFeePence: number | null;
 };
 type MatchupGridData = {
   leagues: LeagueOption[];
@@ -113,6 +115,14 @@ function formatFixtureDate(value: string) {
     minute: "2-digit",
     timeZone: "Europe/London",
   }).format(new Date(value));
+}
+
+function formatMoney(amountPence: number | null) {
+  if (amountPence === null) return "Not set";
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
 }
 
 function fixtureStatusTone(status: string) {
@@ -414,6 +424,16 @@ export default function FixtureMatchupGrid({
                               <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2">
                                 <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Venue</div>
                                 <div className="mt-1 font-medium text-white/80">{fixture.venueName || "No venue"}</div>
+                              </div>
+                              <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200/60">Team 1 fee</div>
+                                <div className="mt-1 font-semibold text-emerald-50">{formatMoney(fixture.homeMatchFeePence)}</div>
+                                <div className="mt-0.5 truncate text-[11px] text-emerald-100/45" title={fixture.homeTeamName}>{fixture.homeTeamName}</div>
+                              </div>
+                              <div className="rounded-2xl border border-sky-400/15 bg-sky-500/[0.06] px-3 py-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200/60">Team 2 fee</div>
+                                <div className="mt-1 font-semibold text-sky-50">{formatMoney(fixture.awayMatchFeePence)}</div>
+                                <div className="mt-0.5 truncate text-[11px] text-sky-100/45" title={fixture.awayTeamName}>{fixture.awayTeamName}</div>
                               </div>
                             </div>
 
