@@ -5,13 +5,25 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
-import { getLeagueTable } from "@/lib/leagueTable";
+import { getLeagueTable, type LeagueTableRow } from "@/lib/leagueTable";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
 type SeasonTeamRow = {
   divisionId: string | null;
   divisionName: string | null;
+};
+
+type DivisionRow = {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+};
+
+type DivisionPayload = DivisionRow & {
+  table: LeagueTableRow[];
+  isTeamDivision: boolean;
 };
 
 function getPublicLeagueTableTitle(input: {
@@ -48,6 +60,43 @@ function getPublicLeagueTableDescription(title: string) {
   return `Follow the latest standings, points, goal difference and recent form in this ${location} 6 a side football league.`;
 }
 
+async function getCurrentSeasonTeamDivision(input: {
+  leagueId: string;
+  teamId: string;
+  legacyDivisionId: string | null;
+}) {
+  const seasonTeamRows = await prisma.$queryRaw<SeasonTeamRow[]>(Prisma.sql`
+    SELECT lst."divisionId", d."name" AS "divisionName"
+    FROM "LeagueSeasonTeam" lst
+    LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
+    WHERE lst."leagueId" = ${input.leagueId}
+      AND lst."teamId" = ${input.teamId}
+      AND lst."isActive" = true
+    LIMIT 1
+  `);
+
+  const seasonTeam = seasonTeamRows[0] ?? null;
+
+  if (seasonTeam?.divisionId) {
+    return seasonTeam;
+  }
+
+  if (!input.legacyDivisionId) {
+    return seasonTeam;
+  }
+
+  const legacyDivisionRows = await prisma.$queryRaw<SeasonTeamRow[]>(Prisma.sql`
+    SELECT d."id" AS "divisionId", d."name" AS "divisionName"
+    FROM "LeagueDivision" d
+    WHERE d."id" = ${input.legacyDivisionId}
+      AND d."leagueId" = ${input.leagueId}
+      AND d."isActive" = true
+    LIMIT 1
+  `);
+
+  return legacyDivisionRows[0] ?? seasonTeam;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ teamid: string }> },
@@ -60,6 +109,7 @@ export async function GET(
     select: {
       id: true,
       leagueId: true,
+      divisionId: true,
       league: {
         select: {
           id: true,
@@ -98,26 +148,49 @@ export async function GET(
       leagueId: null,
       divisionId: null,
       divisionName: null,
+      divisions: [],
     });
   }
 
-  const seasonTeamRows = await prisma.$queryRaw<SeasonTeamRow[]>(Prisma.sql`
-    SELECT lst."divisionId", d."name" AS "divisionName"
-    FROM "LeagueSeasonTeam" lst
-    LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
-    WHERE lst."leagueId" = ${currentLeague.id}
-      AND lst."teamId" = ${team.id}
-      AND lst."isActive" = true
-    LIMIT 1
-  `);
+  const [seasonTeam, divisionRows] = await Promise.all([
+    getCurrentSeasonTeamDivision({
+      leagueId: currentLeague.id,
+      teamId: team.id,
+      legacyDivisionId: team.divisionId,
+    }),
+    prisma.$queryRaw<DivisionRow[]>(Prisma.sql`
+      SELECT "id", "name", "slug", "sortOrder"
+      FROM "LeagueDivision"
+      WHERE "leagueId" = ${currentLeague.id}
+        AND "isActive" = true
+      ORDER BY "sortOrder" ASC, "name" ASC
+    `),
+  ]);
 
-  const seasonTeam = seasonTeamRows[0] ?? null;
-  const rows = await getLeagueTable(currentLeague.id, {
-    divisionId: seasonTeam?.divisionId ?? null,
-  });
+  const divisionTables: DivisionPayload[] = await Promise.all(
+    divisionRows.map(async (division) => ({
+      ...division,
+      table: await getLeagueTable(currentLeague.id, { divisionId: division.id }),
+      isTeamDivision: division.id === seasonTeam?.divisionId,
+    })),
+  );
+
+  const fallbackDivision =
+    divisionTables.find((division) => division.table.some((row) => row.teamId === team.id)) ?? null;
+  const activeDivisionId = seasonTeam?.divisionId ?? fallbackDivision?.id ?? null;
+  const activeDivisionName =
+    seasonTeam?.divisionName ??
+    fallbackDivision?.name ??
+    null;
+  const activeDivision = activeDivisionId
+    ? divisionTables.find((division) => division.id === activeDivisionId) ?? null
+    : null;
+  const rows = activeDivision
+    ? activeDivision.table
+    : await getLeagueTable(currentLeague.id);
   const title = getPublicLeagueTableTitle({
     leagueName: currentLeague.name,
-    divisionName: seasonTeam?.divisionName ?? null,
+    divisionName: activeDivisionName,
   });
 
   return NextResponse.json({
@@ -128,7 +201,8 @@ export async function GET(
     leagueId: currentLeague.id,
     leagueName: currentLeague.name,
     leagueSeason: currentLeague.season,
-    divisionId: seasonTeam?.divisionId ?? null,
-    divisionName: seasonTeam?.divisionName ?? null,
+    divisionId: activeDivisionId,
+    divisionName: activeDivisionName,
+    divisions: divisionTables,
   });
 }
