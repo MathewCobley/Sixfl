@@ -82,6 +82,16 @@ function buildGridHref(leagueId: string, divisionId?: string | null, visibility:
   return query ? `/admin/fixtures?${query}` : "/admin/fixtures";
 }
 
+function buildFixtureEditHref(input: {
+  fixtureId: string;
+  leagueId: string;
+  divisionId: string;
+  visibility: VisibilityFilter;
+}) {
+  const returnTo = buildGridHref(input.leagueId, input.divisionId || null, input.visibility);
+  return `/admin/fixtures/${input.fixtureId}/edit?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 function visibilityLabel(value: VisibilityFilter) {
   if (value === "published") return "Published only";
   if (value === "draft") return "Draft only";
@@ -399,6 +409,20 @@ export default function FixtureMatchupGrid({
                                 <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Venue</div>
                                 <div className="mt-1 font-medium text-white/80">{fixture.venueName || "No venue"}</div>
                               </div>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                              <Link
+                                href={buildFixtureEditHref({
+                                  fixtureId: fixture.id,
+                                  leagueId: selectedLeagueId,
+                                  divisionId: selectedDivisionId,
+                                  visibility: selectedVisibility,
+                                })}
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15"
+                              >
+                                Edit fixture
+                              </Link>
                             </div>
                           </article>
                         ))}
