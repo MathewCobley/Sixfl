@@ -24,6 +24,15 @@ type LeagueTableRow = {
   recentForm: Array<"W" | "D" | "L">;
 };
 
+type DivisionPayload = {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  table: LeagueTableRow[];
+  isTeamDivision: boolean;
+};
+
 type LeagueTablePayload = {
   title: string;
   description: string;
@@ -34,6 +43,7 @@ type LeagueTablePayload = {
   leagueSeason?: string | null;
   divisionId: string | null;
   divisionName: string | null;
+  divisions?: DivisionPayload[];
 };
 
 function getTeamIdFromPathname(pathname: string | null) {
@@ -95,8 +105,57 @@ function renderLogo(row: LeagueTableRow) {
   return `<span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-xs font-black text-white/60">${escapeHtml(getInitials(row.teamName))}</span>`;
 }
 
-function renderTable(payload: LeagueTablePayload) {
-  const rows = payload.rows
+function getClientTitle(payload: LeagueTablePayload, divisionName: string | null) {
+  const compactLeagueText = (payload.leagueName ?? "").replace(/·/g, " ").replace(/\s+/g, " ").trim();
+  const suffix = divisionName ? ` ${divisionName}` : "";
+
+  if (/Harrogate\s+West/i.test(compactLeagueText)) {
+    return `Current Harrogate West${suffix} 6 a side table`;
+  }
+
+  if (divisionName) {
+    return `Current ${divisionName} table`;
+  }
+
+  return payload.title;
+}
+
+function getClientDescription(title: string) {
+  const location = title.replace(/^Current\s+/i, "").replace(/\s+6 a side table$/i, "");
+  return `Follow the latest standings, points, goal difference and recent form in this ${location} 6 a side football league.`;
+}
+
+function getSelectedDivision(payload: LeagueTablePayload, selectedDivisionId: string | null) {
+  return payload.divisions?.find((division) => division.id === selectedDivisionId) ?? null;
+}
+
+function getRows(payload: LeagueTablePayload, selectedDivisionId: string | null) {
+  const selectedDivision = getSelectedDivision(payload, selectedDivisionId);
+  return selectedDivision?.table ?? payload.rows;
+}
+
+function renderDivisionButtons(payload: LeagueTablePayload, selectedDivisionId: string | null) {
+  const divisions = payload.divisions ?? [];
+  if (divisions.length === 0) return "";
+
+  const buttons = divisions
+    .map((division) => {
+      const active = division.id === selectedDivisionId;
+      const label = division.isTeamDivision ? `${division.name} · Your division` : division.name;
+
+      return `<button type="button" data-captain-table-division="${escapeHtml(division.id)}" class="rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-50" : "border-white/10 bg-white/[0.04] text-white/65 hover:border-white/20 hover:bg-white/[0.07] hover:text-white"}">${escapeHtml(label)}</button>`;
+    })
+    .join("");
+
+  const wholeActive = selectedDivisionId === null;
+  const wholeButton = `<button type="button" data-captain-table-division="" class="rounded-full border px-3 py-1.5 text-xs font-semibold transition ${wholeActive ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-50" : "border-white/10 bg-white/[0.04] text-white/65 hover:border-white/20 hover:bg-white/[0.07] hover:text-white"}">Whole season</button>`;
+
+  return `<div class="mt-5 flex flex-wrap gap-2" data-captain-table-tabs="true">${buttons}${wholeButton}</div>`;
+}
+
+function renderTable(payload: LeagueTablePayload, selectedDivisionId: string | null = payload.divisionId) {
+  const selectedDivision = getSelectedDivision(payload, selectedDivisionId);
+  const rows = getRows(payload, selectedDivisionId)
     .map((row, index) => {
       const isCurrentTeam = row.teamId === payload.currentTeamId;
       return `
@@ -125,8 +184,11 @@ function renderTable(payload: LeagueTablePayload) {
     })
     .join("");
 
-  const divisionBadge = payload.divisionName
-    ? `<span class="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">${escapeHtml(payload.divisionName)}</span>`
+  const activeDivisionName = selectedDivision?.name ?? (selectedDivisionId ? payload.divisionName : null);
+  const title = getClientTitle(payload, activeDivisionName);
+  const description = getClientDescription(title);
+  const divisionBadge = activeDivisionName
+    ? `<span class="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">${escapeHtml(activeDivisionName)}</span>`
     : "";
   const seasonBadge = payload.leagueSeason
     ? `<span class="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">${escapeHtml(payload.leagueSeason)}</span>`
@@ -138,8 +200,9 @@ function renderTable(payload: LeagueTablePayload) {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Standings</p>
-            <h2 class="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">${escapeHtml(payload.title)}</h2>
-            <p class="mt-3 max-w-3xl text-sm leading-6 text-white/60">${escapeHtml(payload.description)}</p>
+            <h2 class="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">${escapeHtml(title)}</h2>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-white/60">${escapeHtml(description)}</p>
+            ${renderDivisionButtons(payload, selectedDivisionId)}
           </div>
           <div class="flex flex-wrap gap-2">${seasonBadge}${divisionBadge}</div>
         </div>
@@ -168,11 +231,24 @@ function renderTable(payload: LeagueTablePayload) {
   `;
 }
 
+function renderIntoTarget(target: HTMLElement, payload: LeagueTablePayload, selectedDivisionId: string | null) {
+  target.innerHTML = renderTable(payload, selectedDivisionId);
+  target.dataset.currentSeasonTableLoaded = `${payload.currentTeamId}:${selectedDivisionId ?? "whole"}`;
+
+  const buttons = Array.from(target.querySelectorAll<HTMLButtonElement>("[data-captain-table-division]"));
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      const nextDivisionId = button.dataset.captainTableDivision || null;
+      renderIntoTarget(target, payload, nextDivisionId);
+    });
+  }
+}
+
 async function refreshCaptainTable(pathname: string | null) {
   const teamId = getTeamIdFromPathname(pathname);
   const target = document.getElementById("captain-league-table");
 
-  if (!teamId || !target || target.dataset.currentSeasonTableLoaded === teamId) return;
+  if (!teamId || !target || target.dataset.currentSeasonTableLoaded?.startsWith(`${teamId}:`)) return;
 
   try {
     const response = await fetch(`/api/captain/team/${encodeURIComponent(teamId)}/league-table`, {
@@ -182,8 +258,7 @@ async function refreshCaptainTable(pathname: string | null) {
     if (!response.ok) return;
 
     const payload = (await response.json()) as LeagueTablePayload;
-    target.innerHTML = renderTable(payload);
-    target.dataset.currentSeasonTableLoaded = teamId;
+    renderIntoTarget(target, payload, payload.divisionId);
   } catch {
     // Keep the server-rendered table if this enhancement fails.
   }
