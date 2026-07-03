@@ -338,6 +338,7 @@ export async function updateLeagueAction(leagueId: string, _prevState: LeagueFor
 
 export async function sendLeagueTeamsMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
+  const adminUserId = user?.id ?? null;
   const leagueId = String(formData.get("leagueId") ?? "").trim();
   const channel = String(formData.get("channel") ?? "EMAIL").trim().toUpperCase() === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
   const subject = String(formData.get("subject") ?? "").trim();
@@ -351,7 +352,7 @@ export async function sendLeagueTeamsMessageAction(formData: FormData) {
   let queued = 0;
   for (const team of league.teams) {
     const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
-    const dispatch = await queueDirectNotification({ recipientId: recipient.id, audience: NotificationAudience.TEAM, channel, subject: channel === NotificationChannel.EMAIL ? subject : null, body, sourceType: "LEAGUE_TEAM_MESSAGE", sourceId: `${league.id}:${team.id}:${Date.now()}`, metadata: { leagueId: league.id, leagueName: league.name, teamId: team.id, teamName: team.name, sentFromAdmin: user.id }, variables: { firstName: snapshot?.primaryContact.name ?? team.name, teamName: team.name, leagueName: league.name }, emailBranding: { teamName: team.name, teamLogoUrl: team.logoUrl, leagueName: league.season ? `${league.name} — ${league.season}` : league.name }, createdByUserId: user.id });
+    const dispatch = await queueDirectNotification({ recipientId: recipient.id, audience: NotificationAudience.TEAM, channel, subject: channel === NotificationChannel.EMAIL ? subject : null, body, sourceType: "LEAGUE_TEAM_MESSAGE", sourceId: `${league.id}:${team.id}:${Date.now()}`, metadata: { leagueId: league.id, leagueName: league.name, teamId: team.id, teamName: team.name, sentFromAdmin: adminUserId }, variables: { firstName: snapshot?.primaryContact.name ?? team.name, teamName: team.name, leagueName: league.name }, emailBranding: { teamName: team.name, teamLogoUrl: team.logoUrl, leagueName: league.season ? `${league.name} — ${league.season}` : league.name }, createdByUserId: adminUserId });
     if (dispatch.status === "QUEUED") queued += 1;
   }
   revalidatePath("/admin/messaging");
