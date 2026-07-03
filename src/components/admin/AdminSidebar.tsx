@@ -80,6 +80,12 @@ const navigationGroups = [
     title: "Fixtures",
     items: [
       {
+        name: "Night board",
+        href: "/admin/night-board",
+        icon: CalendarDaysIcon,
+        description: "Pitch, refs and cashup",
+      },
+      {
         name: "Fixtures",
         href: "/admin/fixtures",
         icon: CalendarDaysIcon,
@@ -258,68 +264,56 @@ export default function AdminSidebar({
           </div>
         </div>
 
-        <nav className="max-h-[calc(100dvh-18rem)] space-y-3 overflow-y-auto p-3 sixfl-mobile-scroll xl:max-h-none xl:space-y-2 xl:overflow-visible xl:p-2 2xl:space-y-2.5 2xl:p-3">
+        <nav className="h-[calc(100%-8.8rem)] space-y-6 overflow-y-auto px-4 py-5 xl:h-[calc(100%-7.2rem)] xl:space-y-4 xl:px-3 xl:py-3 2xl:h-[calc(100%-8rem)] 2xl:space-y-5 2xl:px-4 2xl:py-4">
           {navigationGroups.map((group) => (
-            <section key={group.title} className="space-y-1.5">
-              <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/28 2xl:text-[11px]">
+            <div key={group.title}>
+              <div className="mb-3 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30 xl:mb-2 xl:text-[9px]">
                 {group.title}
               </div>
-
-              <div className="grid grid-cols-2 gap-2 xl:gap-1.5 2xl:gap-2">
+              <div className="grid gap-2 xl:gap-1.5">
                 {group.items.map((item) => {
-                  const active = activeHref === item.href;
+                  const isActive = activeHref === item.href;
                   const Icon = item.icon;
-                  const unreadCount =
-                    item.name === "Communications" ? unreadMessagingCount : 0;
-                  const description =
-                    item.name === "Communications" && unreadCount > 0
-                      ? `${unreadCount} unread thread${unreadCount === 1 ? "" : "s"}`
-                      : item.description;
+                  const showUnreadBadge = item.href === "/admin/messaging" && unreadMessagingCount > 0;
 
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={[
-                        "group flex min-h-12 min-w-0 items-center gap-3 rounded-2xl border px-3 py-3 transition xl:min-h-0 xl:gap-2 xl:rounded-xl xl:px-2.5 xl:py-2 2xl:gap-3 2xl:rounded-2xl 2xl:px-3 2xl:py-2.5",
-                        active
-                          ? "border-emerald-400/25 bg-emerald-400/12 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                          : "border-white/8 bg-white/[0.02] text-white/75 hover:border-white/15 hover:bg-white/[0.05] hover:text-white",
-                      ].join(" ")}
+                      className={`group flex items-center gap-3 rounded-2xl border px-3 py-3 transition xl:rounded-xl xl:px-2.5 xl:py-2 2xl:px-3 2xl:py-2.5 ${
+                        isActive
+                          ? "border-emerald-400/25 bg-emerald-400/10 text-white shadow-[0_0_30px_rgba(16,185,129,0.08)]"
+                          : "border-white/10 bg-white/[0.02] text-white/65 hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
+                      }`}
                     >
-                      <div
-                        className={[
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition xl:h-7 xl:w-7 xl:rounded-lg 2xl:h-8 2xl:w-8 2xl:rounded-xl",
-                          active
-                            ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-                            : "border-white/10 bg-black/30 text-white/55 group-hover:text-white/80",
-                        ].join(" ")}
+                      <span
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition xl:h-8 xl:w-8 xl:rounded-xl ${
+                          isActive
+                            ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+                            : "border-white/10 bg-black/20 text-white/45 group-hover:text-white/75"
+                        }`}
                       >
-                        <Icon className="h-4.5 w-4.5 xl:h-4 xl:w-4" />
-                      </div>
+                        <Icon className="h-5 w-5 xl:h-4 xl:w-4" />
+                      </span>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="truncate text-sm font-semibold xl:text-[13px] 2xl:text-sm">
-                            {item.name}
-                          </div>
-
-                          {unreadCount > 0 ? (
-                            <span className="inline-flex min-w-[1.35rem] shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-200">
-                              {unreadCount > 99 ? "99+" : unreadCount}
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2 truncate text-sm font-semibold xl:text-[13px]">
+                          {item.name}
+                          {showUnreadBadge ? (
+                            <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-bold text-black">
+                              {unreadMessagingCount}
                             </span>
                           ) : null}
-                        </div>
-
-                        <div className="mt-0.5 truncate text-[11px] text-white/35 xl:text-[10px] 2xl:text-[11px]">
-                          {description}
-                        </div>
-                      </div>
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-white/40 xl:text-[11px]">
+                          {item.description}
+                        </span>
+                      </span>
                     </Link>
                   );
                 })}
               </div>
-            </section>
+            </div>
           ))}
         </nav>
       </div>
