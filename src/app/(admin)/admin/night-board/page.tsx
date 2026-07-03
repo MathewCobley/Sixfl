@@ -9,6 +9,8 @@ import AdminCard from "@/components/admin/AdminCard";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
+import NightBoardFilters from "./NightBoardFilters";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -23,16 +25,41 @@ type BoardWarning = {
   message: string;
 };
 
+type SelectOption = {
+  value: string;
+  label: string;
+  description?: string;
+};
+
 function getSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
 function todayInputValue() {
-  return new Date().toISOString().slice(0, 10);
+  return toLondonDateInput(new Date());
+}
+
+function isDateInput(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function toLondonDateInput(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+
+  const year = parts.find((part) => part.type === "year")?.value ?? "1970";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+
+  return `${year}-${month}-${day}`;
 }
 
 function dateRangeFromInput(dateInput: string) {
-  const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(dateInput) ? dateInput : todayInputValue();
+  const safeDate = isDateInput(dateInput) ? dateInput : todayInputValue();
   const start = new Date(`${safeDate}T00:00:00.000Z`);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
@@ -85,6 +112,62 @@ function warningClass(level: BoardWarning["level"]) {
   return level === "red"
     ? "border-red-400/25 bg-red-500/10 text-red-100"
     : "border-amber-400/25 bg-amber-500/10 text-amber-100";
+}
+
+async function getUpcomingFixtureNightOptions({
+  leagueId,
+  venueId,
+}: {
+  leagueId: string;
+  venueId: string;
+}) {
+  const fixtures = await prisma.fixture.findMany({
+    where: {
+      kickoffAt: {
+        gte: new Date(),
+      },
+      ...(leagueId ? { leagueId } : {}),
+      ...(venueId ? { venueId } : {}),
+    },
+    orderBy: [{ kickoffAt: "asc" }],
+    take: 160,
+    select: {
+      kickoffAt: true,
+      league: {
+        select: {
+          name: true,
+        },
+      },
+      venue: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  const grouped = new Map<string, { date: Date; count: number; leagues: Set<string>; venues: Set<string> }>();
+
+  for (const fixture of fixtures) {
+    const dateKey = toLondonDateInput(fixture.kickoffAt);
+    const existing = grouped.get(dateKey) ?? {
+      date: fixture.kickoffAt,
+      count: 0,
+      leagues: new Set<string>(),
+      venues: new Set<string>(),
+    };
+
+    existing.count += 1;
+    existing.leagues.add(fixture.league.name);
+    if (fixture.venue?.name) existing.venues.add(fixture.venue.name);
+    grouped.set(dateKey, existing);
+  }
+
+  return Array.from(grouped.entries()).slice(0, 24).map(([value, group], index) => ({
+    value,
+    label: `${index === 0 ? "Next: " : ""}${formatDate(group.date)}`,
+    description: `${group.count} fixture${group.count === 1 ? "" : "s"}${group.venues.size ? ` · ${Array.from(group.venues).slice(0, 2).join(", ")}` : ""}`,
+  }));
 }
 
 async function getFixturesForBoard({
@@ -325,6 +408,21 @@ function getFinance(fixtures: FixtureForBoard[], refFeePence: number, pitchHireP
   };
 }
 
+function buildDateOptions(options: SelectOption[], selectedDate: string) {
+  if (options.length === 0) {
+    return [{ value: selectedDate, label: formatDate(new Date(`${selectedDate}T00:00:00.000Z`)), description: "No upcoming fixture nights found" }];
+  }
+
+  if (!options.some((option) => option.value === selectedDate)) {
+    return [
+      { value: selectedDate, label: formatDate(new Date(`${selectedDate}T00:00:00.000Z`)), description: "Selected date" },
+      ...options,
+    ];
+  }
+
+  return options;
+}
+
 export default async function NightBoardPage({ searchParams }: NightBoardPageProps) {
   await requireAdmin();
 
@@ -332,11 +430,12 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const requestedDate = getSearchParam(params.date);
   const leagueId = getSearchParam(params.leagueId);
   const venueId = getSearchParam(params.venueId);
-  const refFeePence = parsePence(getSearchParam(params.refFee), 0);
-  const pitchHirePence = parsePence(getSearchParam(params.pitchHire), 0);
-  const { safeDate, start, end } = dateRangeFromInput(requestedDate);
+  const refFeeValue = getSearchParam(params.refFee);
+  const pitchHireValue = getSearchParam(params.pitchHire);
+  const refFeePence = parsePence(refFeeValue, 0);
+  const pitchHirePence = parsePence(pitchHireValue, 0);
 
-  const [leagues, venues, fixtures] = await Promise.all([
+  const [leagues, venues, upcomingNightOptions] = await Promise.all([
     prisma.league.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: { id: true, name: true, season: true, isActive: true },
@@ -345,8 +444,28 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
-    getFixturesForBoard({ start, end, leagueId, venueId }),
+    getUpcomingFixtureNightOptions({ leagueId, venueId }),
   ]);
+
+  const selectedDate = isDateInput(requestedDate)
+    ? requestedDate
+    : upcomingNightOptions[0]?.value ?? todayInputValue();
+  const { start, end } = dateRangeFromInput(selectedDate);
+  const fixtures = await getFixturesForBoard({ start, end, leagueId, venueId });
+
+  const dateOptions = buildDateOptions(upcomingNightOptions, selectedDate);
+  const leagueOptions = [
+    { value: "", label: "All leagues", description: "Show every fixture night" },
+    ...leagues.map((league) => ({
+      value: league.id,
+      label: league.name,
+      description: `${league.season ?? "No season"}${league.isActive ? "" : " · inactive"}`,
+    })),
+  ];
+  const venueOptions = [
+    { value: "", label: "All venues", description: "Show every venue" },
+    ...venues.map((venue) => ({ value: venue.id, label: venue.name })),
+  ];
 
   const warnings = buildWarnings(fixtures);
   const { pitchNames, timeLabels, fixtureByTimePitch } = getBoardGroups(fixtures);
@@ -375,39 +494,16 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
           </div>
         </div>
 
-        <form className="mt-6 grid gap-3 md:grid-cols-3 xl:grid-cols-5" action="/admin/night-board">
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-            Date
-            <input type="date" name="date" defaultValue={safeDate} className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20" />
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-            League
-            <select name="leagueId" defaultValue={leagueId} className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20">
-              <option value="">All leagues</option>
-              {leagues.map((league) => (
-                <option key={league.id} value={league.id}>{league.name}{league.season ? ` — ${league.season}` : ""}{league.isActive ? "" : " (inactive)"}</option>
-              ))}
-            </select>
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-            Venue
-            <select name="venueId" defaultValue={venueId} className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20">
-              <option value="">All venues</option>
-              {venues.map((venue) => (
-                <option key={venue.id} value={venue.id}>{venue.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-            Ref fee / match
-            <input name="refFee" inputMode="decimal" defaultValue={refFeePence ? String(refFeePence / 100) : ""} placeholder="e.g. 15" className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20" />
-          </label>
-          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-            Pitch hire total
-            <input name="pitchHire" inputMode="decimal" defaultValue={pitchHirePence ? String(pitchHirePence / 100) : ""} placeholder="e.g. 120" className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20" />
-          </label>
-          <button className="h-12 rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 md:col-span-3 xl:col-span-5">Update board</button>
-        </form>
+        <NightBoardFilters
+          dateOptions={dateOptions}
+          leagueOptions={leagueOptions}
+          venueOptions={venueOptions}
+          selectedDate={selectedDate}
+          selectedLeagueId={leagueId}
+          selectedVenueId={venueId}
+          refFee={refFeeValue}
+          pitchHire={pitchHireValue}
+        />
       </AdminCard>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
