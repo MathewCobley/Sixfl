@@ -69,6 +69,31 @@ export async function GET(
     const scheduledFixtures = league.fixtures.filter(
       (fixture) => fixture.status === "SCHEDULED",
     );
+    const predictorTeamIds = Array.from(
+      new Set(scheduledFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id])),
+    );
+    const predictionHistory = predictorTeamIds.length
+      ? await prisma.fixture.findMany({
+          where: {
+            status: "COMPLETED",
+            result: { isNot: null },
+            OR: [
+              { homeTeamId: { in: predictorTeamIds } },
+              { awayTeamId: { in: predictorTeamIds } },
+            ],
+          },
+          orderBy: [{ kickoffAt: "asc" }],
+          take: 500,
+          select: {
+            id: true,
+            kickoffAt: true,
+            status: true,
+            homeTeam: { select: { id: true } },
+            awayTeam: { select: { id: true } },
+            result: { select: { homeScore: true, awayScore: true } },
+          },
+        })
+      : [];
 
     const storedPreviews = await getStoredAiPreviewsByFixtureIds(
       scheduledFixtures.map((fixture) => fixture.id),
@@ -79,7 +104,7 @@ export async function GET(
         const winChance = calculateFixtureWinChance({
           homeTeamId: fixture.homeTeam.id,
           awayTeamId: fixture.awayTeam.id,
-          fixtures: league.fixtures,
+          fixtures: predictionHistory,
         });
 
         return {
