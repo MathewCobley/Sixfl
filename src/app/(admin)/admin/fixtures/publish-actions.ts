@@ -11,6 +11,10 @@ import { redirect } from "next/navigation";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import {
+  queueFixtureMatchFeeEmails,
+  syncFixtureMatchFeeCharges,
+} from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getEmailReplyDomain } from "@/lib/resend/client";
@@ -19,6 +23,7 @@ type PublishFixtureRecord = {
   id: string;
   kickoffAt: Date;
   pitch: string | null;
+  matchFeePence: number | null;
   homeTeam: { id: string; name: string; logoUrl: string | null };
   awayTeam: { id: string; name: string; logoUrl: string | null };
   venue: { name: string } | null;
@@ -32,6 +37,7 @@ type PublishScope = {
 
 const SERIALIZABLE_RETRY_LIMIT = 3;
 const PUBLISH_RETRY_ERROR = "fixture_publish_retry_conflict";
+const DEFAULT_MATCH_FEE_PENCE = 4000;
 
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
   const str = String(value ?? "").trim();
@@ -76,6 +82,9 @@ function buildAdminFixturesHref(input: {
   digestSkipped?: number;
   reminderQueued?: number;
   reminderSkipped?: number;
+  paymentChargesCreated?: number;
+  paymentMessagesQueued?: number;
+  paymentMessagesSkipped?: number;
   publishError?: string;
 }) {
   const searchParams = new URLSearchParams();
@@ -88,6 +97,9 @@ function buildAdminFixturesHref(input: {
   if (typeof input.digestSkipped === "number") searchParams.set("digestSkipped", String(input.digestSkipped));
   if (typeof input.reminderQueued === "number") searchParams.set("reminderQueued", String(input.reminderQueued));
   if (typeof input.reminderSkipped === "number") searchParams.set("reminderSkipped", String(input.reminderSkipped));
+  if (typeof input.paymentChargesCreated === "number") searchParams.set("paymentChargesCreated", String(input.paymentChargesCreated));
+  if (typeof input.paymentMessagesQueued === "number") searchParams.set("paymentMessagesQueued", String(input.paymentMessagesQueued));
+  if (typeof input.paymentMessagesSkipped === "number") searchParams.set("paymentMessagesSkipped", String(input.paymentMessagesSkipped));
   if (input.publishError?.trim()) searchParams.set("publishError", input.publishError.trim());
   return `/admin/fixtures?${searchParams.toString()}`;
 }
@@ -177,6 +189,7 @@ async function claimUnpublishedLeagueFixtures(input: PublishScope): Promise<Publ
             id: true,
             kickoffAt: true,
             pitch: true,
+            matchFeePence: true,
             homeTeam: { select: { id: true, name: true, logoUrl: true } },
             awayTeam: { select: { id: true, name: true, logoUrl: true } },
             venue: { select: { name: true } },
@@ -281,6 +294,42 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   let digestSkipped = 0;
   let reminderQueued = 0;
   let reminderSkipped = 0;
+  let paymentChargesCreated = 0;
+  let paymentMessagesQueued = 0;
+  let paymentMessagesSkipped = 0;
+
+  for (const fixture of unpublishedFixtures) {
+    const matchFeePence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;
+    const chargeResult = await syncFixtureMatchFeeCharges({
+      fixtureId: fixture.id,
+      leagueId: league.id,
+      leagueName: league.name,
+      leagueSeason: league.season,
+      kickoffAt: fixture.kickoffAt,
+      homeTeam: fixture.homeTeam,
+      awayTeam: fixture.awayTeam,
+      homeMatchFeePence: matchFeePence,
+      awayMatchFeePence: matchFeePence,
+    });
+
+    paymentChargesCreated += chargeResult.activeCharges.length;
+
+    const messageResult = await queueFixtureMatchFeeEmails({
+      fixtureId: fixture.id,
+      leagueId: league.id,
+      leagueName: league.name,
+      leagueSeason: league.season,
+      kickoffAt: fixture.kickoffAt,
+      homeTeam: fixture.homeTeam,
+      awayTeam: fixture.awayTeam,
+      homeMatchFeePence: matchFeePence,
+      awayMatchFeePence: matchFeePence,
+      charges: chargeResult.activeCharges,
+    });
+
+    paymentMessagesQueued += messageResult.queued;
+    paymentMessagesSkipped += messageResult.skipped;
+  }
 
   for (const teamId of teamIds) {
     const { snapshot, recipient } = await upsertTeamNotificationRecipient(teamId);
@@ -359,6 +408,8 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   }
 
   revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/night-board");
   revalidatePath(`/admin/leagues/${input.leagueId}`);
   revalidatePath(`/admin/leagues/${input.leagueId}/fixtures`);
   if (league.slug) {
@@ -376,6 +427,9 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
     digestSkipped,
     reminderQueued,
     reminderSkipped,
+    paymentChargesCreated,
+    paymentMessagesQueued,
+    paymentMessagesSkipped,
   }));
 }
 
