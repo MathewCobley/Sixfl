@@ -51,6 +51,13 @@ type LeagueConfirmationDetailsInput = {
   targetTeamCount: number | null;
 };
 
+type LeagueBookingDetailsInput = {
+  bookedPitchCount: number | null;
+  bookingStartTime: string | null;
+  bookingEndTime: string | null;
+  pitchCostPerHourOverridePence: number | null;
+};
+
 const DAY_OPTIONS = new Set<PreferredNight>([
   "MONDAY",
   "TUESDAY",
@@ -155,6 +162,23 @@ function parseCostPerTeamPerMatchPence(value: FormDataEntryValue | null) {
   return Math.round(parsed * 100);
 }
 
+function parseOptionalMoneyPence(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10000) return null;
+
+  return Math.round(parsed * 100);
+}
+
+function parseOptionalTime(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+  if (!/^\d{2}:\d{2}$/.test(raw)) return null;
+  return raw;
+}
+
 async function setLeagueRequiredRefereesPerNight(input: {
   leagueId: string;
   requiredRefereesPerNight: number;
@@ -184,6 +208,22 @@ async function setLeagueConfirmationDetails(input: {
   `);
 }
 
+async function setLeagueBookingDetails(input: {
+  leagueId: string;
+  details: LeagueBookingDetailsInput;
+}) {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "League"
+    SET
+      "bookedPitchCount" = ${input.details.bookedPitchCount},
+      "bookingStartTime" = ${input.details.bookingStartTime},
+      "bookingEndTime" = ${input.details.bookingEndTime},
+      "pitchCostPerHourOverridePence" = ${input.details.pitchCostPerHourOverridePence},
+      "updatedAt" = NOW()
+    WHERE id = ${input.leagueId}
+  `);
+}
+
 function redirectIfEmailRepliesNotConfigured(path: string) {
   try {
     getEmailReplyDomain();
@@ -196,6 +236,7 @@ function parseLeagueInput(formData: FormData): {
   data: ParsedLeagueInput;
   requiredRefereesPerNight: number;
   confirmationDetails: LeagueConfirmationDetailsInput;
+  bookingDetails: LeagueBookingDetailsInput;
   errors: Record<string, string[]>;
 } {
   const errors: Record<string, string[]> = {};
@@ -216,397 +257,104 @@ function parseLeagueInput(formData: FormData): {
   const ctaText = normaliseText(formData.get("ctaText"));
 
   const proposedStartDate = parseProposedStartDate(formData.get("proposedStartDate"));
-  const minutesPerGame = parseOptionalWholeNumber({
-    value: formData.get("minutesPerGame"),
-    min: 1,
-    max: 180,
-  });
-  const costPerTeamPerMatchPence = parseCostPerTeamPerMatchPence(
-    formData.get("costPerTeamPerMatch"),
-  );
-  const targetTeamCount = parseOptionalWholeNumber({
-    value: formData.get("targetTeamCount"),
-    min: 2,
-    max: 64,
-  });
+  const minutesPerGame = parseOptionalWholeNumber({ value: formData.get("minutesPerGame"), min: 1, max: 180 });
+  const costPerTeamPerMatchPence = parseCostPerTeamPerMatchPence(formData.get("costPerTeamPerMatch"));
+  const targetTeamCount = parseOptionalWholeNumber({ value: formData.get("targetTeamCount"), min: 2, max: 64 });
+  const bookedPitchCount = parseOptionalWholeNumber({ value: formData.get("bookedPitchCount"), min: 0, max: 50 });
+  const bookingStartTime = parseOptionalTime(formData.get("bookingStartTime"));
+  const bookingEndTime = parseOptionalTime(formData.get("bookingEndTime"));
+  const pitchCostPerHourOverridePence = parseOptionalMoneyPence(formData.get("pitchCostPerHourOverride"));
 
   const isActive = parseBoolean(formData.get("isActive"));
-  const requiredRefereesPerNight = parseRequiredRefereesPerNight(
-    formData.get("requiredRefereesPerNight"),
-  );
+  const requiredRefereesPerNight = parseRequiredRefereesPerNight(formData.get("requiredRefereesPerNight"));
 
   const rawDayOfWeek = String(formData.get("dayOfWeek") ?? "").trim();
   const rawLeagueType = String(formData.get("leagueType") ?? "").trim();
 
-  const dayOfWeek = rawDayOfWeek
-    ? DAY_OPTIONS.has(rawDayOfWeek as PreferredNight)
-      ? (rawDayOfWeek as PreferredNight)
-      : null
-    : null;
+  const dayOfWeek = rawDayOfWeek ? DAY_OPTIONS.has(rawDayOfWeek as PreferredNight) ? (rawDayOfWeek as PreferredNight) : null : null;
+  const leagueType = rawLeagueType ? LEAGUE_TYPE_OPTIONS.has(rawLeagueType as LeagueType) ? (rawLeagueType as LeagueType) : null : null;
 
-  const leagueType = rawLeagueType
-    ? LEAGUE_TYPE_OPTIONS.has(rawLeagueType as LeagueType)
-      ? (rawLeagueType as LeagueType)
-      : null
-    : null;
-
-  if (!name) {
-    errors.name = ["League name is required."];
-  }
-
-  if (!slug) {
-    errors.slug = ["Slug is required."];
-  }
-
-  if (slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    errors.slug = [
-      "Slug must contain only lowercase letters, numbers, and hyphens.",
-    ];
-  }
-
-  if (rawDayOfWeek && !dayOfWeek) {
-    errors.dayOfWeek = ["Please choose a valid day."];
-  }
-
-  if (rawLeagueType && !leagueType) {
-    errors.leagueType = ["Please choose a valid league type."];
-  }
-
-  if (proposedStartDate === null) {
-    errors.proposedStartDate = ["Please enter a valid proposed start date."];
-  }
-
-  if (minutesPerGame === null) {
-    errors.minutesPerGame = ["Minutes per game must be a whole number between 1 and 180."];
-  }
-
-  if (costPerTeamPerMatchPence === null) {
-    errors.costPerTeamPerMatch = ["Cost must be a valid amount between £0 and £1,000."];
-  }
-
-  if (targetTeamCount === null) {
-    errors.targetTeamCount = ["Target number of teams must be a whole number between 2 and 64."];
-  }
-
-  if (requiredRefereesPerNight === null) {
-    errors.requiredRefereesPerNight = [
-      "Referees needed per night must be a whole number between 0 and 20.",
-    ];
-  }
-
-  if (heroImageUrl && !isValidImagePath(heroImageUrl)) {
-    errors.heroImageUrl = [
-      "Hero image must be a full URL or a site-relative path starting with /.",
-    ];
-  }
-
-  if (badgeUrl && !isValidImagePath(badgeUrl)) {
-    errors.badgeUrl = [
-      "League badge must be a full URL or a site-relative path starting with /.",
-    ];
-  }
-
-  if (ctaText && ctaText.length > 80) {
-    errors.ctaText = ["CTA text must be 80 characters or fewer."];
-  }
+  if (!name) errors.name = ["League name is required."];
+  if (!slug) errors.slug = ["Slug is required."];
+  if (slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) errors.slug = ["Slug must contain only lowercase letters, numbers, and hyphens."];
+  if (rawDayOfWeek && !dayOfWeek) errors.dayOfWeek = ["Please choose a valid day."];
+  if (rawLeagueType && !leagueType) errors.leagueType = ["Please choose a valid league type."];
+  if (proposedStartDate === null) errors.proposedStartDate = ["Please enter a valid proposed start date."];
+  if (minutesPerGame === null) errors.minutesPerGame = ["Minutes per game must be a whole number between 1 and 180."];
+  if (costPerTeamPerMatchPence === null) errors.costPerTeamPerMatch = ["Cost must be a valid amount between £0 and £1,000."];
+  if (targetTeamCount === null) errors.targetTeamCount = ["Target number of teams must be a whole number between 2 and 64."];
+  if (requiredRefereesPerNight === null) errors.requiredRefereesPerNight = ["Referees needed per night must be a whole number between 0 and 20."];
+  if (bookedPitchCount === null) errors.bookedPitchCount = ["Pitches booked must be a whole number between 0 and 50."];
+  if (bookingStartTime === null) errors.bookingStartTime = ["Booking start must be a valid time."];
+  if (bookingEndTime === null) errors.bookingEndTime = ["Booking end must be a valid time."];
+  if (pitchCostPerHourOverridePence === null) errors.pitchCostPerHourOverride = ["Hourly cost override must be a valid amount."];
+  if (heroImageUrl && !isValidImagePath(heroImageUrl)) errors.heroImageUrl = ["Hero image must be a full URL or a site-relative path starting with /." ];
+  if (badgeUrl && !isValidImagePath(badgeUrl)) errors.badgeUrl = ["League badge must be a full URL or a site-relative path starting with /." ];
+  if (ctaText && ctaText.length > 80) errors.ctaText = ["CTA text must be 80 characters or fewer."];
 
   return {
-    data: {
-      name,
-      slug,
-      season,
-      isActive,
-      area,
-      dayOfWeek,
-      leagueType,
-      venueName,
-      kickoffInfo,
-      format,
-      surface,
-      description,
-      heroImageUrl,
-      badgeUrl,
-      ctaText,
-    },
+    data: { name, slug, season, isActive, area, dayOfWeek, leagueType, venueName, kickoffInfo, format, surface, description, heroImageUrl, badgeUrl, ctaText },
     requiredRefereesPerNight: requiredRefereesPerNight ?? 1,
-    confirmationDetails: {
-      proposedStartDate: proposedStartDate ?? null,
-      minutesPerGame: minutesPerGame ?? null,
-      costPerTeamPerMatchPence: costPerTeamPerMatchPence ?? null,
-      targetTeamCount: targetTeamCount ?? null,
-    },
+    confirmationDetails: { proposedStartDate: proposedStartDate ?? null, minutesPerGame: minutesPerGame ?? null, costPerTeamPerMatchPence: costPerTeamPerMatchPence ?? null, targetTeamCount: targetTeamCount ?? null },
+    bookingDetails: { bookedPitchCount: bookedPitchCount ?? null, bookingStartTime: bookingStartTime ?? null, bookingEndTime: bookingEndTime ?? null, pitchCostPerHourOverridePence: pitchCostPerHourOverridePence ?? null },
     errors,
   };
 }
 
-export async function createLeagueAction(
-  _prevState: LeagueFormState,
-  formData: FormData,
-): Promise<LeagueFormState> {
+export async function createLeagueAction(_prevState: LeagueFormState, formData: FormData): Promise<LeagueFormState> {
   await requireAdmin();
-
-  const { data, requiredRefereesPerNight, confirmationDetails, errors } = parseLeagueInput(formData);
-
-  if (Object.keys(errors).length > 0) {
-    return {
-      error: "Please fix the highlighted fields.",
-      errors,
-    };
-  }
-
-  const existingSlug = await prisma.league.findUnique({
-    where: { slug: data.slug },
-    select: { id: true },
-  });
-
-  if (existingSlug) {
-    return {
-      error: "That slug is already in use.",
-      errors: {
-        slug: ["That slug is already in use."],
-      },
-    };
-  }
-
-  const existingNameSeason = await prisma.league.findFirst({
-    where: {
-      name: data.name,
-      season: data.season,
-    },
-    select: { id: true },
-  });
-
-  if (existingNameSeason) {
-    return {
-      error: "A league with that name and season already exists.",
-      errors: {
-        name: ["A league with that name and season already exists."],
-      },
-    };
-  }
-
-  const league = await prisma.league.create({
-    data,
-    select: {
-      id: true,
-      slug: true,
-    },
-  });
-
-  await setLeagueRequiredRefereesPerNight({
-    leagueId: league.id,
-    requiredRefereesPerNight,
-  });
-
-  await setLeagueConfirmationDetails({
-    leagueId: league.id,
-    details: confirmationDetails,
-  });
-
-  revalidatePath("/admin/leagues");
-  revalidatePath("/admin/referee-availability");
-  revalidatePath("/");
-  revalidatePath("/leagues");
-  revalidatePath(`/leagues/${league.slug}`);
-
+  const { data, requiredRefereesPerNight, confirmationDetails, bookingDetails, errors } = parseLeagueInput(formData);
+  if (Object.keys(errors).length > 0) return { error: "Please fix the highlighted fields.", errors };
+  const existingSlug = await prisma.league.findUnique({ where: { slug: data.slug }, select: { id: true } });
+  if (existingSlug) return { error: "That slug is already in use.", errors: { slug: ["That slug is already in use."] } };
+  const existingNameSeason = await prisma.league.findFirst({ where: { name: data.name, season: data.season }, select: { id: true } });
+  if (existingNameSeason) return { error: "A league with that name and season already exists.", errors: { name: ["A league with that name and season already exists."] } };
+  const league = await prisma.league.create({ data, select: { id: true, slug: true } });
+  await setLeagueRequiredRefereesPerNight({ leagueId: league.id, requiredRefereesPerNight });
+  await setLeagueConfirmationDetails({ leagueId: league.id, details: confirmationDetails });
+  await setLeagueBookingDetails({ leagueId: league.id, details: bookingDetails });
+  revalidatePath("/admin/leagues"); revalidatePath("/admin/referee-availability"); revalidatePath("/admin/night-board"); revalidatePath("/"); revalidatePath("/leagues"); revalidatePath(`/leagues/${league.slug}`);
   redirect(`/admin/leagues/${league.id}?created=1`);
 }
 
-export async function updateLeagueAction(
-  leagueId: string,
-  _prevState: LeagueFormState,
-  formData: FormData,
-): Promise<LeagueFormState> {
+export async function updateLeagueAction(leagueId: string, _prevState: LeagueFormState, formData: FormData): Promise<LeagueFormState> {
   await requireAdmin();
-
-  const existingLeague = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true, slug: true },
-  });
-
-  if (!existingLeague) {
-    return {
-      error: "League not found.",
-    };
-  }
-
-  const { data, requiredRefereesPerNight, confirmationDetails, errors } = parseLeagueInput(formData);
-
-  if (Object.keys(errors).length > 0) {
-    return {
-      error: "Please fix the highlighted fields.",
-      errors,
-    };
-  }
-
-  const existingSlug = await prisma.league.findFirst({
-    where: {
-      slug: data.slug,
-      NOT: {
-        id: leagueId,
-      },
-    },
-    select: { id: true },
-  });
-
-  if (existingSlug) {
-    return {
-      error: "That slug is already in use.",
-      errors: {
-        slug: ["That slug is already in use."],
-      },
-    };
-  }
-
-  const existingNameSeason = await prisma.league.findFirst({
-    where: {
-      name: data.name,
-      season: data.season,
-      NOT: {
-        id: leagueId,
-      },
-    },
-    select: { id: true },
-  });
-
-  if (existingNameSeason) {
-    return {
-      error: "A league with that name and season already exists.",
-      errors: {
-        name: ["A league with that name and season already exists."],
-      },
-    };
-  }
-
-  await prisma.league.update({
-    where: { id: leagueId },
-    data,
-  });
-
-  await setLeagueRequiredRefereesPerNight({
-    leagueId,
-    requiredRefereesPerNight,
-  });
-
-  await setLeagueConfirmationDetails({
-    leagueId,
-    details: confirmationDetails,
-  });
-
-  revalidatePath("/admin/leagues");
-  revalidatePath(`/admin/leagues/${leagueId}`);
-  revalidatePath("/admin/referee-availability");
-  revalidatePath("/");
-  revalidatePath("/leagues");
-  revalidatePath(`/leagues/${data.slug}`);
-
-  if (existingLeague.slug !== data.slug) {
-    revalidatePath(`/leagues/${existingLeague.slug}`);
-  }
-
-  return {
-    success: true,
-    message: "League updated successfully.",
-  };
+  const existingLeague = await prisma.league.findUnique({ where: { id: leagueId }, select: { id: true, slug: true } });
+  if (!existingLeague) return { error: "League not found." };
+  const { data, requiredRefereesPerNight, confirmationDetails, bookingDetails, errors } = parseLeagueInput(formData);
+  if (Object.keys(errors).length > 0) return { error: "Please fix the highlighted fields.", errors };
+  const existingSlug = await prisma.league.findFirst({ where: { slug: data.slug, NOT: { id: leagueId } }, select: { id: true } });
+  if (existingSlug) return { error: "That slug is already in use.", errors: { slug: ["That slug is already in use."] } };
+  const existingNameSeason = await prisma.league.findFirst({ where: { name: data.name, season: data.season, NOT: { id: leagueId } }, select: { id: true } });
+  if (existingNameSeason) return { error: "A league with that name and season already exists.", errors: { name: ["A league with that name and season already exists."] } };
+  await prisma.league.update({ where: { id: leagueId }, data });
+  await setLeagueRequiredRefereesPerNight({ leagueId, requiredRefereesPerNight });
+  await setLeagueConfirmationDetails({ leagueId, details: confirmationDetails });
+  await setLeagueBookingDetails({ leagueId, details: bookingDetails });
+  revalidatePath("/admin/leagues"); revalidatePath(`/admin/leagues/${leagueId}`); revalidatePath("/admin/referee-availability"); revalidatePath("/admin/night-board"); revalidatePath("/"); revalidatePath("/leagues"); revalidatePath(`/leagues/${data.slug}`);
+  if (existingLeague.slug !== data.slug) revalidatePath(`/leagues/${existingLeague.slug}`);
+  return { success: true, message: "League updated successfully." };
 }
 
 export async function sendLeagueTeamsMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
-
   const leagueId = String(formData.get("leagueId") ?? "").trim();
-  const channel =
-    String(formData.get("channel") ?? "EMAIL").trim().toUpperCase() === "SMS"
-      ? NotificationChannel.SMS
-      : NotificationChannel.EMAIL;
+  const channel = String(formData.get("channel") ?? "EMAIL").trim().toUpperCase() === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-
-  if (!leagueId) {
-    redirect("/admin/leagues");
-  }
-
-  if (!body) {
-    redirect(`/admin/leagues/${leagueId}?messageError=missing_body`);
-  }
-
-  if (channel === NotificationChannel.EMAIL && !subject) {
-    redirect(`/admin/leagues/${leagueId}?messageError=missing_subject`);
-  }
-
-  if (channel === NotificationChannel.EMAIL) {
-    redirectIfEmailRepliesNotConfigured(
-      `/admin/leagues/${leagueId}?messageError=reply_not_configured`,
-    );
-  }
-
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: {
-      id: true,
-      name: true,
-      season: true,
-      teams: {
-        select: {
-          id: true,
-          name: true,
-          logoUrl: true,
-        },
-        orderBy: { name: "asc" },
-      },
-    },
-  });
-
-  if (!league) {
-    redirect("/admin/leagues");
-  }
-
-  let sentCount = 0;
-
+  if (!leagueId) redirect("/admin/leagues");
+  if (!body) redirect(`/admin/leagues/${leagueId}?messageError=missing_body`);
+  if (channel === NotificationChannel.EMAIL && !subject) redirect(`/admin/leagues/${leagueId}?messageError=missing_subject`);
+  if (channel === NotificationChannel.EMAIL) redirectIfEmailRepliesNotConfigured(`/admin/leagues/${leagueId}?messageError=reply_not_configured`);
+  const league = await prisma.league.findUnique({ where: { id: leagueId }, select: { id: true, name: true, season: true, teams: { select: { id: true, name: true, logoUrl: true }, orderBy: { name: "asc" } } } });
+  if (!league) redirect("/admin/leagues");
+  let queued = 0;
   for (const team of league.teams) {
-    const { recipient } = await upsertTeamNotificationRecipient(team.id);
-
-    if (channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
-      continue;
-    }
-
-    if (channel === NotificationChannel.SMS && !recipient.phone?.trim()) {
-      continue;
-    }
-
-    await queueDirectNotification({
-      recipientId: recipient.id,
-      channel,
-      audience: NotificationAudience.TEAM,
-      subject: channel === NotificationChannel.EMAIL ? subject : null,
-      body,
-      isTransactional: true,
-      sourceType: "LEAGUE_TEAM_MESSAGE",
-      sourceId: league.id,
-      emailBranding:
-        channel === NotificationChannel.EMAIL
-          ? {
-              teamName: team.name,
-              teamLogoUrl: team.logoUrl,
-              leagueName: `${league.name}${league.season ? ` — ${league.season}` : ""}`,
-            }
-          : undefined,
-      metadata: {
-        origin: "league_admin",
-        originLabel: "Sent from league page",
-        leagueId: league.id,
-        leagueName: league.name,
-        teamId: team.id,
-        teamName: team.name,
-      },
-      createdByUserId: user?.id ?? null,
-    });
-
-    sentCount += 1;
+    const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
+    const dispatch = await queueDirectNotification({ recipientId: recipient.id, audience: NotificationAudience.TEAM, channel, subject: channel === NotificationChannel.EMAIL ? subject : null, body, sourceType: "LEAGUE_TEAM_MESSAGE", sourceId: `${league.id}:${team.id}:${Date.now()}`, metadata: { leagueId: league.id, leagueName: league.name, teamId: team.id, teamName: team.name, sentFromAdmin: user.id }, variables: { firstName: snapshot?.primaryContact.name ?? team.name, teamName: team.name, leagueName: league.name }, emailBranding: { teamName: team.name, teamLogoUrl: team.logoUrl, leagueName: league.season ? `${league.name} — ${league.season}` : league.name }, createdByUserId: user.id });
+    if (dispatch.status === "QUEUED") queued += 1;
   }
-
-  revalidatePath(`/admin/leagues/${leagueId}`);
   revalidatePath("/admin/messaging");
-  revalidatePath("/admin/queue");
-
-  redirect(`/admin/leagues/${leagueId}?messageQueued=${sentCount}&channel=${channel.toLowerCase()}`);
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  redirect(`/admin/leagues/${leagueId}?messageSent=${queued}`);
 }
