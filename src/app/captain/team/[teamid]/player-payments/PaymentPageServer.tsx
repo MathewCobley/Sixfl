@@ -99,10 +99,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
   await requireCaptain(teamid);
   const sp = (await searchParams) ?? {};
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamid },
-    select: { id: true, name: true },
-  });
+  const team = await prisma.team.findUnique({ where: { id: teamid }, select: { id: true, name: true } });
   if (!team) notFound();
 
   const ledger = await getTeamPaymentLedger(teamid);
@@ -115,12 +112,16 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
   const [fixtures, members, prospects] = await Promise.all([
     prisma.fixture.findMany({
       where: {
-        OR: [{ homeTeamId: { in: relatedTeamIds } }, { awayTeamId: { in: relatedTeamIds } }],
         status: { in: ["SCHEDULED", "COMPLETED"] },
-        OR: [
-          { publishedAt: { not: null } },
-          { playerMatchFees: { some: { teamId: { in: relatedTeamIds }, status: { not: "CANCELLED" } } } },
-          { paymentCharges: { some: { teamId: { in: relatedTeamIds }, status: { not: "VOID" } } } },
+        AND: [
+          { OR: [{ homeTeamId: { in: relatedTeamIds } }, { awayTeamId: { in: relatedTeamIds } }] },
+          {
+            OR: [
+              { publishedAt: { not: null } },
+              { playerMatchFees: { some: { teamId: { in: relatedTeamIds }, status: { not: "CANCELLED" } } } },
+              { paymentCharges: { some: { teamId: { in: relatedTeamIds }, status: { not: "VOID" } } } },
+            ],
+          },
         ],
       },
       orderBy: [{ kickoffAt: "desc" }],
