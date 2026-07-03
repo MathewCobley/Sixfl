@@ -37,7 +37,11 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
     `);
   } catch {
     return prisma.league.findMany({
-      where: { isActive: true },
+      where: includeId
+        ? {
+            OR: [{ isActive: true }, { id: includeId }],
+          }
+        : { isActive: true },
       orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: {
         id: true,
@@ -49,24 +53,33 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
   }
 }
 
-export async function getCurrentLeagueIds() {
+export async function getCurrentLeagueIds(includeLeagueId?: string | null) {
+  const includeId = includeLeagueId?.trim() || null;
+
   try {
     const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT l."id"
       FROM "League" l
       LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
-      WHERE l."isActive" = true
+      WHERE (
+        l."isActive" = true
         AND (
           l."competitionId" IS NULL
           OR c."currentLeagueId" = l."id"
         )
+      )
+      OR (${includeId}::text IS NOT NULL AND l."id" = ${includeId})
       ORDER BY l."name" ASC, l."season" ASC
     `);
 
     return rows.map((row) => row.id);
   } catch {
     const rows = await prisma.league.findMany({
-      where: { isActive: true },
+      where: includeId
+        ? {
+            OR: [{ isActive: true }, { id: includeId }],
+          }
+        : { isActive: true },
       orderBy: [{ name: "asc" }, { season: "asc" }],
       select: { id: true },
     });
