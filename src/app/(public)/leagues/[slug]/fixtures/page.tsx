@@ -73,14 +73,10 @@ type FixtureForPrediction = {
 };
 
 function getPredictionFixturePool<TFixture extends FixtureForPrediction>(
-  fixture: TFixture,
+  _fixture: TFixture,
   fixtures: TFixture[],
 ) {
-  if (!fixture.divisionId) {
-    return fixtures;
-  }
-
-  return fixtures.filter((candidate) => candidate.divisionId === fixture.divisionId);
+  return fixtures;
 }
 
 function TeamBadge({
