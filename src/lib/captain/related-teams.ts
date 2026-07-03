@@ -24,8 +24,10 @@ export async function getCaptainRelatedTeamContext(teamId: string) {
           name: true,
           season: true,
           venueName: true,
+          competitionId: true,
           competition: {
             select: {
+              id: true,
               currentLeague: {
                 select: {
                   id: true,
@@ -49,8 +51,18 @@ export async function getCaptainRelatedTeamContext(teamId: string) {
   const currentLeagueId = currentLeague?.id ?? null;
   const relatedTeamIds = new Set<string>([team.id]);
 
+  const sameNameRows = await prisma.$queryRaw<RelatedTeamRow[]>(Prisma.sql`
+    SELECT DISTINCT t."id"
+    FROM "Team" t
+    WHERE LOWER(TRIM(t."name")) = LOWER(TRIM(${team.name}))
+  `);
+
+  for (const row of sameNameRows) {
+    relatedTeamIds.add(row.id);
+  }
+
   if (currentLeagueId) {
-    const rows = await prisma.$queryRaw<RelatedTeamRow[]>(Prisma.sql`
+    const currentSeasonRows = await prisma.$queryRaw<RelatedTeamRow[]>(Prisma.sql`
       SELECT DISTINCT t."id"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
@@ -59,7 +71,7 @@ export async function getCaptainRelatedTeamContext(teamId: string) {
         AND LOWER(TRIM(t."name")) = LOWER(TRIM(${team.name}))
     `);
 
-    for (const row of rows) {
+    for (const row of currentSeasonRows) {
       relatedTeamIds.add(row.id);
     }
   }
