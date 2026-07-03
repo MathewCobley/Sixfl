@@ -339,12 +339,12 @@ export function calculateFixtureWinChance(input: {
       draw: 30,
       away: 35,
       predictedResult: {
-        homeScore: 2,
-        awayScore: 2,
-        label: "2-2",
+        homeScore: 0,
+        awayScore: 0,
+        label: "Too early",
       },
       confidence: "Low",
-      explanation: "No completed league results yet, so this starts as an even prediction.",
+      explanation: "No completed results were found for these teams yet, so a score prediction will appear once there is usable match data.",
     };
   }
 
@@ -378,6 +378,6 @@ export function calculateFixtureWinChance(input: {
     predictedResult,
     confidence: getConfidence(completedGames),
     explanation:
-      "Based on completed league results, points per game, goal difference, recent form, scoring record and head-to-head record.",
+      "Based on completed results for these teams, points per game, goal difference, recent form, scoring record and head-to-head record.",
   };
 }
