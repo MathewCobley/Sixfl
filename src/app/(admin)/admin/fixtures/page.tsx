@@ -167,7 +167,8 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
   await requireAdmin();
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const currentLeagueIds = await getCurrentLeagueIds();
+  const activeLeagueParam = getSearchParamValue(resolvedSearchParams.leagueId);
+  const currentLeagueIds = await getCurrentLeagueIds(activeLeagueParam);
   const currentLeagueWhere = { id: { in: currentLeagueIds } };
 
   const [leagues, divisions, teams, venues, referees, fixtures] = await Promise.all([
@@ -242,7 +243,6 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
     }),
   ]);
 
-  const activeLeagueParam = getSearchParamValue(resolvedSearchParams.leagueId);
   const activeLeagueId = leagues.some((league) => league.id === activeLeagueParam)
     ? activeLeagueParam ?? ""
     : leagues[0]?.id ?? "";
