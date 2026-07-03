@@ -89,7 +89,13 @@ function buildFixtureEditHref(input: {
   visibility: VisibilityFilter;
 }) {
   const returnTo = buildGridHref(input.leagueId, input.divisionId || null, input.visibility);
-  return `/admin/fixtures/${input.fixtureId}/edit?returnTo=${encodeURIComponent(returnTo)}`;
+  const params = new URLSearchParams({ returnTo });
+
+  if (input.divisionId) {
+    params.set("divisionId", input.divisionId);
+  }
+
+  return `/admin/fixtures/${input.fixtureId}/edit?${params.toString()}`;
 }
 
 function visibilityLabel(value: VisibilityFilter) {
