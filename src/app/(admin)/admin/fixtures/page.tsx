@@ -249,9 +249,10 @@ export default async function AdminFixturesPage({ searchParams }: AdminFixturesP
 
   const leagueDivisions = divisions.filter((division) => division.leagueId === activeLeagueId);
   const divisionParam = getSearchParamValue(resolvedSearchParams.divisionId);
-  const activeDivisionId = leagueDivisions.some((division) => division.id === divisionParam)
-    ? divisionParam ?? null
-    : leagueDivisions[0]?.id ?? null;
+  const activeDivisionId =
+    divisionParam && leagueDivisions.some((division) => division.id === divisionParam)
+      ? divisionParam
+      : null;
   const activeDivisionLabel =
     leagueDivisions.find((division) => division.id === activeDivisionId)?.name ?? "All divisions";
   const activeVisibility = parseFixtureVisibility(getSearchParamValue(resolvedSearchParams.visibility));
