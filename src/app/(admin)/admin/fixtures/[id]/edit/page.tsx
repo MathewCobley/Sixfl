@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FixtureStatus } from "@prisma/client";
+import { FixtureStatus, Prisma } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
 import { updateFixtureAction } from "@/app/(admin)/admin/fixtures/actions";
@@ -18,6 +18,11 @@ import { requireAdmin } from "@/lib/requireAdmin";
 type PageProps = {
   params: Promise<{ id: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+type TeamOption = {
+  id: string;
+  name: string;
 };
 
 function getSearchParamValue(value: string | string[] | undefined) {
@@ -43,6 +48,38 @@ const inputClass =
 const labelClass =
   "mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45";
 
+async function getFixtureLeagueTeams(input: {
+  leagueId: string;
+  currentTeamIds: string[];
+}) {
+  const seasonTeams = await prisma.$queryRaw<TeamOption[]>(Prisma.sql`
+    SELECT DISTINCT t."id", t."name"
+    FROM "LeagueSeasonTeam" lst
+    JOIN "Team" t ON t."id" = lst."teamId"
+    WHERE lst."leagueId" = ${input.leagueId}
+      AND lst."isActive" = true
+    ORDER BY t."name" ASC
+  `);
+
+  const fallbackTeams = await prisma.team.findMany({
+    where: {
+      OR: [
+        { leagueId: input.leagueId },
+        { id: { in: input.currentTeamIds } },
+      ],
+    },
+    orderBy: [{ name: "asc" }],
+    select: { id: true, name: true },
+  });
+
+  const byId = new Map<string, TeamOption>();
+
+  for (const team of seasonTeams) byId.set(team.id, team);
+  for (const team of fallbackTeams) byId.set(team.id, team);
+
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export default async function EditFixturePage({ params, searchParams }: PageProps) {
   await requireAdmin();
 
@@ -67,14 +104,14 @@ export default async function EditFixturePage({ params, searchParams }: PageProp
 
   if (!fixture) notFound();
 
-  const [leagues, teams, venues, referees] = await Promise.all([
+  const [leagues, leagueTeams, venues, referees] = await Promise.all([
     prisma.league.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: { id: true, name: true, season: true },
     }),
-    prisma.team.findMany({
-      orderBy: [{ name: "asc" }],
-      select: { id: true, name: true, leagueId: true },
+    getFixtureLeagueTeams({
+      leagueId: fixture.leagueId,
+      currentTeamIds: [fixture.homeTeamId, fixture.awayTeamId],
     }),
     prisma.venue.findMany({
       orderBy: [{ name: "asc" }],
@@ -87,7 +124,6 @@ export default async function EditFixturePage({ params, searchParams }: PageProp
     }),
   ]);
 
-  const leagueTeams = teams.filter((team) => team.leagueId === fixture.leagueId);
   const activeCharges = fixture.paymentCharges.filter((charge) => charge.status !== "VOID");
   const homeCharge = activeCharges.find((charge) => charge.teamId === fixture.homeTeamId);
   const awayCharge = activeCharges.find((charge) => charge.teamId === fixture.awayTeamId);
@@ -127,7 +163,7 @@ export default async function EditFixturePage({ params, searchParams }: PageProp
                 ))}
               </select>
               <p className="mt-2 text-xs text-white/40">
-                Team dropdowns below show teams from the fixture's current league. Move teams carefully if changing the league.
+                Team dropdowns use the selected season's LeagueSeasonTeam records, with the current fixture teams included as a fallback.
               </p>
             </div>
 
