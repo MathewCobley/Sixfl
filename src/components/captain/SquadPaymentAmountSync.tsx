@@ -180,6 +180,132 @@ function ensureCollectionMethodControls(input: HTMLInputElement, defaultInput: H
   updateStatusBadgeText(input);
 }
 
+type LedgerEntry = {
+  id: string;
+  label: string;
+  leagueSeason: string | null;
+  fixtureDateLabel: string;
+  venueName: string | null;
+  amountLabel: string;
+  paidLabel: string;
+  outstandingPence: number;
+  outstandingLabel: string;
+  squadPaidLabel: string;
+  squadOpenLabel: string;
+};
+
+type LedgerPayload = {
+  selected: LedgerEntry | null;
+  cards: {
+    teamFeeLabel: string;
+    ledgerChargeLabel: string;
+    collectedLabel: string;
+    playerOutstandingLabel: string;
+    ledgerStillToCoverLabel: string;
+    allocationText: string;
+  };
+  entries: LedgerEntry[];
+};
+
+function getCaptainTeamIdFromPathname() {
+  const match = window.location.pathname.match(/^\/captain\/team\/([^/]+)\/player-payments/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function escapeHtml(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function findDashboardCard(label: string) {
+  const cards = Array.from(document.querySelectorAll<HTMLElement>("div.rounded-3xl"));
+  return cards.find((card) => card.textContent?.toLowerCase().includes(label.toLowerCase())) ?? null;
+}
+
+function setDashboardCard(label: string, value: string, helper: string) {
+  const card = findDashboardCard(label);
+  if (!card) return;
+
+  const paragraphs = Array.from(card.querySelectorAll<HTMLParagraphElement>("p"));
+  const valueParagraph = paragraphs.find((paragraph) => paragraph.className.includes("text-3xl"));
+  const helperParagraph = paragraphs.at(-1) ?? null;
+
+  if (valueParagraph) valueParagraph.textContent = value;
+  if (helperParagraph) helperParagraph.textContent = helper;
+}
+
+function findPanelByHeading(headingText: string) {
+  const headings = Array.from(document.querySelectorAll<HTMLHeadingElement>("h2"));
+  const heading = headings.find((item) => item.textContent?.trim().toLowerCase() === headingText.toLowerCase());
+  return heading?.closest("div.rounded-3xl") ?? null;
+}
+
+function renderLedgerEntry(entry: LedgerEntry, index: number) {
+  const isOutstanding = entry.outstandingPence > 0;
+  const meta = [entry.fixtureDateLabel, entry.venueName, entry.leagueSeason].filter(Boolean).join(" · ");
+
+  return `
+    <div class="block rounded-2xl border p-4 ${index === 0 ? "border-emerald-400/30 bg-emerald-500/10 text-white" : "border-white/10 bg-black/20 text-white/70"}">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="text-sm font-semibold">${escapeHtml(entry.label)}</div>
+        <span class="rounded-full border px-2 py-0.5 text-[10px] font-medium ${isOutstanding ? "border-amber-400/25 bg-amber-500/10 text-amber-100" : "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"}">${isOutstanding ? "Outstanding" : "Covered"}</span>
+      </div>
+      <div class="mt-1 text-xs text-white/50">${escapeHtml(meta)}</div>
+      <div class="mt-3 grid gap-1 text-xs text-white/55">
+        <div>Team ledger: ${escapeHtml(entry.paidLabel)} paid / ${escapeHtml(entry.amountLabel)} charge</div>
+        <div>Player payments: ${escapeHtml(entry.squadPaidLabel)} collected · ${escapeHtml(entry.squadOpenLabel)} outstanding</div>
+        <div>Ledger still to cover: ${escapeHtml(entry.outstandingLabel)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function updateLedgerFixtureList(payload: LedgerPayload) {
+  const panel = findPanelByHeading("Choose fixture");
+  const list = panel?.querySelector<HTMLElement>(".mt-5.space-y-2");
+  if (!list || payload.entries.length === 0) return;
+
+  list.innerHTML = payload.entries.map((entry, index) => renderLedgerEntry(entry, index)).join("");
+}
+
+function updateLedgerCreatePanel(payload: LedgerPayload) {
+  const panel = findPanelByHeading("Create / update collection");
+  const placeholder = Array.from(panel?.querySelectorAll<HTMLElement>("div.rounded-2xl") ?? [])
+    .find((item) => item.textContent?.toLowerCase().includes("choose a published fixture"));
+  if (!placeholder || !payload.selected) return;
+
+  placeholder.textContent = `Existing ledger charge found: ${payload.selected.label}. ${payload.selected.outstandingLabel} still to cover. Use Team payments to record or chase the team charge.`;
+}
+
+async function refreshLedgerFromServer() {
+  const teamId = getCaptainTeamIdFromPathname();
+  if (!teamId) return;
+  if (document.documentElement.dataset.squadPaymentsLedgerLoaded === teamId) return;
+
+  const response = await fetch(`/api/captain/team/${encodeURIComponent(teamId)}/squad-payment-ledger`, { cache: "no-store" });
+  if (!response.ok) return;
+
+  const payload = (await response.json()) as LedgerPayload;
+  setDashboardCard("Your team fee", payload.cards.teamFeeLabel, payload.selected ? "Open team charge in ledger." : "No open charge in ledger.");
+  setDashboardCard("Ledger charge", payload.cards.ledgerChargeLabel, payload.selected ? "From the team payment ledger." : "No ledger charge found.");
+  setDashboardCard("Collected", payload.cards.collectedLabel, payload.selected ? `Squad paid ${payload.selected.squadPaidLabel}` : "0 player payments");
+  setDashboardCard("Player payments outstanding", payload.cards.playerOutstandingLabel, payload.selected ? `Player links outstanding ${payload.selected.squadOpenLabel}` : "0 unpaid players");
+  setDashboardCard("Ledger still to cover", payload.cards.ledgerStillToCoverLabel, payload.selected ? "Team charge minus counted payments." : "No action needed.");
+
+  const allocation = Array.from(document.querySelectorAll<HTMLElement>("section.rounded-3xl"))
+    .find((section) => section.textContent?.includes("Allocation and payment check"));
+  const allocationParagraph = allocation?.querySelectorAll("p")[0] ?? null;
+  if (allocationParagraph) allocationParagraph.textContent = payload.cards.allocationText;
+
+  updateLedgerFixtureList(payload);
+  updateLedgerCreatePanel(payload);
+  document.documentElement.dataset.squadPaymentsLedgerLoaded = teamId;
+}
+
 export default function SquadPaymentAmountSync() {
   useEffect(() => {
     const defaultInput = getDefaultInput();
@@ -250,6 +376,18 @@ export default function SquadPaymentAmountSync() {
       for (const input of getAmountInputs()) {
         input.removeEventListener("input", handlePlayerAmountInput);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!window.location.pathname.includes("/player-payments")) return;
+
+    const frame = window.requestAnimationFrame(() => void refreshLedgerFromServer().catch(() => undefined));
+    const timer = window.setTimeout(() => void refreshLedgerFromServer().catch(() => undefined), 700);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
     };
   }, []);
 
