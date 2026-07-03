@@ -54,6 +54,9 @@ function TextField({
   placeholder,
   className,
   uppercase = false,
+  type = "text",
+  min,
+  step,
   error,
 }: {
   label: string;
@@ -61,6 +64,9 @@ function TextField({
   placeholder: string;
   className?: string;
   uppercase?: boolean;
+  type?: string;
+  min?: string;
+  step?: string;
   error?: string;
 }) {
   return (
@@ -69,7 +75,9 @@ function TextField({
         {label}
       </label>
       <input
-        type="text"
+        type={type}
+        min={min}
+        step={step}
         name={name}
         placeholder={placeholder}
         className={[inputClassName, uppercase ? "uppercase" : ""].join(" ")}
@@ -115,6 +123,22 @@ export default function VenueForm() {
           name="notes"
           placeholder="e.g. Wednesday league venue"
         />
+      </FormSection>
+
+      <FormSection eyebrow="Pitch costs" title="Default venue rate">
+        <TextField
+          label="Default pitch cost per hour (£)"
+          name="defaultPitchCostPerHour"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="e.g. 60"
+          className="lg:col-span-2"
+          error={state.errors?.defaultPitchCostPerHour?.[0]}
+        />
+        <p className="text-sm leading-6 text-white/45 lg:col-span-2">
+          This is the venue’s usual hourly pitch rate. Individual leagues can override it if a specific booking is different.
+        </p>
       </FormSection>
 
       <FormSection eyebrow="Public links" title="Images, website and directions">
