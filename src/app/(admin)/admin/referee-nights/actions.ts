@@ -45,6 +45,17 @@ function readStringArray(formData: FormData, key: string) {
   );
 }
 
+function revalidateRefereeNightPaths(refereeNightId?: string) {
+  revalidatePath("/admin/referee-nights");
+  revalidatePath("/admin/night-board");
+  revalidatePath("/admin/fixtures");
+  revalidatePath("/referee");
+
+  if (refereeNightId) {
+    revalidatePath(`/admin/referee-nights/${refereeNightId}`);
+  }
+}
+
 async function getNightFeePence(formData: FormData, refereeId: string) {
   const enteredFee = parseMoneyToPence(formData.get("feePounds"));
 
@@ -125,9 +136,7 @@ async function attachMatchingFixtures(input: {
     nightDate: input.nightDate,
   });
 
-  if (fixtures.length === 0) {
-    return 0;
-  }
+  if (fixtures.length === 0) return 0;
 
   await prisma.$transaction(async (tx) => {
     for (const fixture of fixtures) {
@@ -164,9 +173,7 @@ export async function createRefereeNightAction(formData: FormData) {
   const referee = await prisma.user.findFirst({
     where: {
       id: refereeId,
-      role: {
-        in: ["REFEREE", "ADMIN"],
-      },
+      role: { in: ["REFEREE", "ADMIN"] },
     },
     select: { id: true },
   });
@@ -181,22 +188,24 @@ export async function createRefereeNightAction(formData: FormData) {
     )
   `);
 
+  const attachedCount = await attachMatchingFixtures({
+    refereeNightId: id,
+    refereeId,
+    leagueId,
+    venueId,
+    nightDate,
+  });
+
   await recalculateRefereeNightCashup(id);
 
   try {
-    await queueRefereeNightBookedEmail({
-      refereeNightId: id,
-      createdByUserId: user?.id ?? null,
-    });
+    await queueRefereeNightBookedEmail({ refereeNightId: id, createdByUserId: user?.id ?? null });
   } catch (error) {
     console.warn("Could not queue referee booking email", error);
   }
 
-  revalidatePath("/admin/referee-nights");
-  revalidatePath(`/admin/referee-nights/${id}`);
-  revalidatePath("/referee");
-
-  redirect(`/admin/referee-nights/${id}?created=1`);
+  revalidateRefereeNightPaths(id);
+  redirect(`/admin/referee-nights/${id}?created=1&fixtures=${attachedCount}`);
 }
 
 export async function refreshRefereeNightFixturesAction(formData: FormData) {
@@ -209,7 +218,7 @@ export async function refreshRefereeNightFixturesAction(formData: FormData) {
 
   const nightDate = toLondonDateInputValue(new Date(String(night.nightDate)));
 
-  await attachMatchingFixtures({
+  const attachedCount = await attachMatchingFixtures({
     refereeNightId,
     refereeId: night.refereeId,
     leagueId: night.leagueId,
@@ -218,12 +227,8 @@ export async function refreshRefereeNightFixturesAction(formData: FormData) {
   });
 
   await recalculateRefereeNightCashup(refereeNightId);
-
-  revalidatePath("/admin/referee-nights");
-  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
-  revalidatePath("/referee");
-
-  redirect(`/admin/referee-nights/${refereeNightId}?fixtures=refreshed`);
+  revalidateRefereeNightPaths(refereeNightId);
+  redirect(`/admin/referee-nights/${refereeNightId}?fixtures=refreshed&attached=${attachedCount}`);
 }
 
 export async function updateRefereeNightFixturesAction(formData: FormData) {
@@ -235,26 +240,18 @@ export async function updateRefereeNightFixturesAction(formData: FormData) {
   if (!night) throw new Error("Referee night not found.");
 
   const [allowedFixtureIds, currentFixtureIds] = await Promise.all([
-    getAllowedFixtureIdsForNight({
-      leagueId: night.leagueId,
-      venueId: night.venueId,
-      nightDate: night.nightDate,
-    }),
+    getAllowedFixtureIdsForNight({ leagueId: night.leagueId, venueId: night.venueId, nightDate: night.nightDate }),
     getCurrentFixtureIds(refereeNightId),
   ]);
 
   const allowedSet = new Set(allowedFixtureIds);
-  const selectedFixtureIds = readStringArray(formData, "fixtureIds").filter((fixtureId) =>
-    allowedSet.has(fixtureId),
-  );
+  const selectedFixtureIds = readStringArray(formData, "fixtureIds").filter((fixtureId) => allowedSet.has(fixtureId));
   const selectedSet = new Set(selectedFixtureIds);
   const removedFixtureIds = currentFixtureIds.filter((fixtureId) => !selectedSet.has(fixtureId));
   const existingSelectedAssignments = await getExistingAssignments(selectedFixtureIds);
   const affectedNightIds = new Set<string>([refereeNightId]);
 
-  for (const assignment of existingSelectedAssignments) {
-    affectedNightIds.add(assignment.refereeNightId);
-  }
+  for (const assignment of existingSelectedAssignments) affectedNightIds.add(assignment.refereeNightId);
 
   await prisma.$transaction(async (tx) => {
     if (removedFixtureIds.length > 0) {
@@ -264,13 +261,7 @@ export async function updateRefereeNightFixturesAction(formData: FormData) {
           AND "fixtureId" IN (${Prisma.join(removedFixtureIds)})
       `);
 
-      await tx.fixture.updateMany({
-        where: {
-          id: { in: removedFixtureIds },
-          refereeId: night.refereeId,
-        },
-        data: { refereeId: null },
-      });
+      await tx.fixture.updateMany({ where: { id: { in: removedFixtureIds }, refereeId: night.refereeId }, data: { refereeId: null } });
     }
 
     for (const fixtureId of selectedFixtureIds) {
@@ -283,21 +274,12 @@ export async function updateRefereeNightFixturesAction(formData: FormData) {
     }
 
     if (selectedFixtureIds.length > 0) {
-      await tx.fixture.updateMany({
-        where: {
-          id: { in: selectedFixtureIds },
-        },
-        data: { refereeId: night.refereeId },
-      });
+      await tx.fixture.updateMany({ where: { id: { in: selectedFixtureIds } }, data: { refereeId: night.refereeId } });
     }
   });
 
   await Promise.all(Array.from(affectedNightIds).map((nightId) => recalculateRefereeNightCashup(nightId)));
-
-  revalidatePath("/admin/referee-nights");
-  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
-  revalidatePath("/referee");
-
+  revalidateRefereeNightPaths(refereeNightId);
   redirect(`/admin/referee-nights/${refereeNightId}?fixtures=saved`);
 }
 
@@ -310,19 +292,12 @@ export async function updateRefereeNightAction(formData: FormData) {
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "RefereeNight"
-    SET
-      "feePence" = ${feePence},
-      "adminNotes" = ${adminNotes},
-      "updatedAt" = NOW()
+    SET "feePence" = ${feePence}, "adminNotes" = ${adminNotes}, "updatedAt" = NOW()
     WHERE id = ${refereeNightId}
   `);
 
   await recalculateRefereeNightCashup(refereeNightId);
-
-  revalidatePath("/admin/referee-nights");
-  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
-  revalidatePath("/referee");
-
+  revalidateRefereeNightPaths(refereeNightId);
   redirect(`/admin/referee-nights/${refereeNightId}?saved=1`);
 }
 
@@ -348,18 +323,11 @@ export async function updateRefereeNightCashDistributionAction(formData: FormDat
   `);
 
   await recalculateRefereeNightCashup(refereeNightId);
-
-  revalidatePath("/admin/referee-nights");
-  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
-  revalidatePath("/referee");
-
+  revalidateRefereeNightPaths(refereeNightId);
   redirect(`/admin/referee-nights/${refereeNightId}?cash=distributed`);
 }
 
-async function setRefereeNightStatus(input: {
-  formData: FormData;
-  status: RefereeNightStatus;
-}) {
+async function setRefereeNightStatus(input: { formData: FormData; status: RefereeNightStatus }) {
   const { user } = await requireAdmin();
   const refereeNightId = readRequired(input.formData, "refereeNightId", "Referee night");
 
@@ -377,11 +345,7 @@ async function setRefereeNightStatus(input: {
   `);
 
   await recalculateRefereeNightCashup(refereeNightId);
-
-  revalidatePath("/admin/referee-nights");
-  revalidatePath(`/admin/referee-nights/${refereeNightId}`);
-  revalidatePath("/referee");
-
+  revalidateRefereeNightPaths(refereeNightId);
   redirect(`/admin/referee-nights/${refereeNightId}?status=${input.status.toLowerCase()}`);
 }
 
