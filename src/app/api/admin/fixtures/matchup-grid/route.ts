@@ -134,10 +134,9 @@ export async function GET(request: Request) {
   }
 
   const divisions = await getLeagueDivisions(league.id);
-  const selectedDivision =
-    divisions.find((division) => division.id === requestedDivisionId) ??
-    divisions[0] ??
-    null;
+  const selectedDivision = requestedDivisionId
+    ? divisions.find((division) => division.id === requestedDivisionId) ?? null
+    : null;
   const selectedDivisionId = selectedDivision?.id ?? null;
 
   const [teams, fixtures] = await Promise.all([
