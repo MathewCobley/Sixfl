@@ -31,6 +31,15 @@ type SelectOption = {
   description?: string;
 };
 
+type NightBoardLeagueOption = {
+  id: string;
+  name: string;
+  season: string | null;
+  isActive: boolean;
+  nextKickoffAt: Date | null;
+  fixtureCount: number;
+};
+
 function getSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
@@ -112,6 +121,56 @@ function warningClass(level: BoardWarning["level"]) {
   return level === "red"
     ? "border-red-400/25 bg-red-500/10 text-red-100"
     : "border-amber-400/25 bg-amber-500/10 text-amber-100";
+}
+
+async function getUpcomingLeagueOptions(venueId: string): Promise<NightBoardLeagueOption[]> {
+  const fixtures = await prisma.fixture.findMany({
+    where: {
+      publishedAt: { not: null },
+      kickoffAt: { gte: new Date() },
+      ...(venueId ? { venueId } : {}),
+    },
+    orderBy: [{ kickoffAt: "asc" }],
+    select: {
+      kickoffAt: true,
+      league: {
+        select: {
+          id: true,
+          name: true,
+          season: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  const byLeague = new Map<string, NightBoardLeagueOption>();
+
+  for (const fixture of fixtures) {
+    const existing = byLeague.get(fixture.league.id);
+    if (existing) {
+      existing.fixtureCount += 1;
+      if (!existing.nextKickoffAt || fixture.kickoffAt < existing.nextKickoffAt) {
+        existing.nextKickoffAt = fixture.kickoffAt;
+      }
+      continue;
+    }
+
+    byLeague.set(fixture.league.id, {
+      id: fixture.league.id,
+      name: fixture.league.name,
+      season: fixture.league.season,
+      isActive: fixture.league.isActive,
+      nextKickoffAt: fixture.kickoffAt,
+      fixtureCount: 1,
+    });
+  }
+
+  return Array.from(byLeague.values()).sort((a, b) => {
+    const aTime = a.nextKickoffAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const bTime = b.nextKickoffAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    return aTime - bTime || a.name.localeCompare(b.name);
+  });
 }
 
 async function getUpcomingFixtureNightOptions({
@@ -459,10 +518,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const pitchHirePence = parsePence(pitchHireValue, 0);
 
   const [leagues, venues, upcomingNightOptions] = await Promise.all([
-    prisma.league.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
-      select: { id: true, name: true, season: true, isActive: true },
-    }),
+    getUpcomingLeagueOptions(venueId),
     prisma.venue.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
@@ -470,19 +526,25 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
     getUpcomingFixtureNightOptions({ leagueId, venueId }),
   ]);
 
+  const leagueStillAvailable = !leagueId || leagues.some((league) => league.id === leagueId);
+  const activeLeagueId = leagueStillAvailable ? leagueId : "";
+  const activeUpcomingNightOptions = leagueStillAvailable
+    ? upcomingNightOptions
+    : await getUpcomingFixtureNightOptions({ leagueId: "", venueId });
+
   const selectedDate = isDateInput(requestedDate)
     ? requestedDate
-    : upcomingNightOptions[0]?.value ?? todayInputValue();
+    : activeUpcomingNightOptions[0]?.value ?? todayInputValue();
   const { start, end } = dateRangeFromInput(selectedDate);
-  const fixtures = await getFixturesForBoard({ start, end, leagueId, venueId });
+  const fixtures = await getFixturesForBoard({ start, end, leagueId: activeLeagueId, venueId });
 
-  const dateOptions = buildDateOptions(upcomingNightOptions, selectedDate);
+  const dateOptions = buildDateOptions(activeUpcomingNightOptions, selectedDate);
   const leagueOptions = [
-    { value: "", label: "All leagues", description: "Show every fixture night" },
+    { value: "", label: "All leagues", description: "Upcoming published fixtures only" },
     ...leagues.map((league) => ({
       value: league.id,
       label: league.name,
-      description: `${league.season ?? "No season"}${league.isActive ? "" : " · inactive"}`,
+      description: `${league.season ?? "No season"} · ${league.fixtureCount} upcoming fixture${league.fixtureCount === 1 ? "" : "s"}${league.nextKickoffAt ? ` · next ${formatDate(league.nextKickoffAt)}` : ""}${league.isActive ? "" : " · inactive"}`,
     })),
   ];
   const venueOptions = [
@@ -523,7 +585,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
           leagueOptions={leagueOptions}
           venueOptions={venueOptions}
           selectedDate={selectedDate}
-          selectedLeagueId={leagueId}
+          selectedLeagueId={activeLeagueId}
           selectedVenueId={venueId}
           refFee={refFeeValue}
           pitchHire={pitchHireValue}
