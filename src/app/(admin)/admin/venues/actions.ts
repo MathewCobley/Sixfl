@@ -4,6 +4,7 @@
 
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -19,6 +20,16 @@ type VenueFormState = {
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
+}
+
+function parseMoneyPence(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10000) return null;
+
+  return Math.round(parsed * 100);
 }
 
 function buildVenuePayload(formData: FormData) {
@@ -47,9 +58,23 @@ function buildVenuePayload(formData: FormData) {
   };
 }
 
+async function setVenueOperationalCosts(input: {
+  venueId: string;
+  defaultPitchCostPerHourPence: number | null;
+}) {
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "Venue"
+    SET
+      "defaultPitchCostPerHourPence" = ${input.defaultPitchCostPerHourPence},
+      "updatedAt" = NOW()
+    WHERE id = ${input.venueId}
+  `);
+}
+
 function revalidateVenuePages() {
   revalidatePath("/admin/venues");
   revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/night-board");
   revalidatePath("/venues");
 }
 
@@ -60,10 +85,17 @@ export async function createVenueAction(
   await requireAdmin();
 
   const data = buildVenuePayload(formData);
+  const defaultPitchCostPerHourPence = parseMoneyPence(
+    formData.get("defaultPitchCostPerHour"),
+  );
   const errors: Record<string, string[]> = {};
 
   if (!data.name) {
     errors.name = ["Venue name is required."];
+  }
+
+  if (defaultPitchCostPerHourPence === null) {
+    errors.defaultPitchCostPerHour = ["Pitch cost must be a valid amount."];
   }
 
   if (Object.keys(errors).length > 0) {
@@ -73,7 +105,15 @@ export async function createVenueAction(
     };
   }
 
-  await prisma.venue.create({ data });
+  const venue = await prisma.venue.create({
+    data,
+    select: { id: true },
+  });
+
+  await setVenueOperationalCosts({
+    venueId: venue.id,
+    defaultPitchCostPerHourPence: defaultPitchCostPerHourPence ?? null,
+  });
 
   revalidateVenuePages();
 
@@ -88,6 +128,9 @@ export async function updateVenueAction(formData: FormData) {
 
   const id = getString(formData, "id");
   const data = buildVenuePayload(formData);
+  const defaultPitchCostPerHourPence = parseMoneyPence(
+    formData.get("defaultPitchCostPerHour"),
+  );
 
   if (!id) {
     redirect("/admin/venues?error=missing-id");
@@ -97,9 +140,18 @@ export async function updateVenueAction(formData: FormData) {
     redirect("/admin/venues?error=missing-name");
   }
 
+  if (defaultPitchCostPerHourPence === null) {
+    redirect("/admin/venues?error=invalid-cost");
+  }
+
   await prisma.venue.update({
     where: { id },
     data,
+  });
+
+  await setVenueOperationalCosts({
+    venueId: id,
+    defaultPitchCostPerHourPence: defaultPitchCostPerHourPence ?? null,
   });
 
   revalidateVenuePages();
