@@ -45,8 +45,18 @@ type CleanupRow = {
   blockerCount: number;
 };
 
+type CleanupCheck = {
+  id: string;
+  canonicalId: string | null;
+  duplicateNameCount: number;
+  hardBlockerCount: number;
+  notificationDispatchCount: number;
+  captainLinkCount: number;
+};
+
 type SearchParams = {
   deleted?: string;
+  merged?: string;
   error?: string;
 };
 
@@ -64,6 +74,27 @@ function formatDate(value: Date | null) {
   }).format(value);
 }
 
+function hardBlockerCount(row: CleanupRow) {
+  return (
+    row.teamMemberCount +
+    row.prospectCount +
+    row.fixtureCount +
+    row.paymentChargeCount +
+    row.paymentTransactionCount +
+    row.playerMatchFeeCount +
+    row.fixtureCaptainConfirmationCount +
+    row.messageThreadCount +
+    row.resultMetaCount +
+    row.resultDisputeCount +
+    row.leagueSeasonTeamCount +
+    row.convertedLeadCount
+  );
+}
+
+function canMergeCommsAndRemove(row: CleanupRow) {
+  return hardBlockerCount(row) === 0 && row.blockerCount > 0;
+}
+
 function countPill(label: string, value: number) {
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] ${value > 0 ? "border-amber-400/25 bg-amber-500/10 text-amber-100" : "border-white/10 bg-white/[0.04] text-white/50"}`}>
@@ -76,10 +107,12 @@ function getErrorMessage(error?: string) {
   switch (error) {
     case "missing_id":
       return "No team was selected.";
+    case "missing_canonical":
+      return "No canonical team was selected.";
     case "not_duplicate":
       return "That team is not in a duplicate-name group, so it was not removed.";
     case "not_safe":
-      return "That team still has linked data, so it was not removed.";
+      return "That team still has real linked data, so it was not removed.";
     case "not_found":
       return "That team could not be found.";
     default:
@@ -187,8 +220,8 @@ async function getCleanupRows() {
   `);
 }
 
-async function getSafeDeleteCheck(teamId: string) {
-  const rows = await prisma.$queryRaw<Array<{ id: string; duplicateNameCount: number; blockerCount: number }>>(Prisma.sql`
+async function getCleanupCheck(teamId: string, canonicalId?: string | null) {
+  const rows = await prisma.$queryRaw<CleanupCheck[]>(Prisma.sql`
     WITH target AS (
       SELECT
         t."id",
@@ -197,9 +230,15 @@ async function getSafeDeleteCheck(teamId: string) {
       FROM "Team" t
       WHERE t."id" = ${teamId}
       LIMIT 1
+    ), canonical AS (
+      SELECT c."id", lower(regexp_replace(trim(c."name"), '\s+', ' ', 'g')) AS "duplicateKey"
+      FROM "Team" c
+      WHERE c."id" = ${canonicalId ?? ""}
+      LIMIT 1
     )
     SELECT
       target."id",
+      canonical."id" AS "canonicalId",
       (SELECT COUNT(*)::int FROM "Team" t WHERE lower(regexp_replace(trim(t."name"), '\s+', ' ', 'g')) = target."duplicateKey") AS "duplicateNameCount",
       (
         (SELECT COUNT(*)::int FROM "TeamMember" tm WHERE tm."teamId" = target."id") +
@@ -213,17 +252,18 @@ async function getSafeDeleteCheck(teamId: string) {
         (SELECT COUNT(*)::int FROM "MatchResultTeamMeta" meta WHERE meta."teamId" = target."id") +
         (SELECT COUNT(*)::int FROM "ResultDispute" rd WHERE rd."teamId" = target."id") +
         (SELECT COUNT(*)::int FROM "LeagueSeasonTeam" lst WHERE lst."teamId" = target."id") +
-        (SELECT COUNT(*)::int FROM "InterestLead" lead WHERE lead."convertedTeamId" = target."id") +
-        (
-          SELECT COUNT(*)::int
-          FROM "NotificationRecipient" nr
-          JOIN "NotificationDispatch" nd ON nd."recipientId" = nr."id"
-          WHERE nr."sourceType" = 'TEAM'
-            AND nr."sourceId" = target."id"
-        ) +
-        CASE WHEN target."captainUserId" IS NOT NULL THEN 1 ELSE 0 END
-      )::int AS "blockerCount"
+        (SELECT COUNT(*)::int FROM "InterestLead" lead WHERE lead."convertedTeamId" = target."id")
+      )::int AS "hardBlockerCount",
+      (
+        SELECT COUNT(*)::int
+        FROM "NotificationRecipient" nr
+        JOIN "NotificationDispatch" nd ON nd."recipientId" = nr."id"
+        WHERE nr."sourceType" = 'TEAM'
+          AND nr."sourceId" = target."id"
+      ) AS "notificationDispatchCount",
+      CASE WHEN target."captainUserId" IS NOT NULL THEN 1 ELSE 0 END AS "captainLinkCount"
     FROM target
+    LEFT JOIN canonical ON canonical."duplicateKey" = target."duplicateKey" AND canonical."id" <> target."id"
   `);
 
   return rows[0] ?? null;
@@ -237,27 +277,86 @@ async function safeDeleteDuplicateTeamAction(formData: FormData) {
 
   if (!teamId) redirect("/admin/teams/safe-cleanup?error=missing_id");
 
-  const check = await getSafeDeleteCheck(teamId);
+  const check = await getCleanupCheck(teamId, null);
   if (!check) redirect("/admin/teams/safe-cleanup?error=not_found");
   if (check.duplicateNameCount < 2) redirect("/admin/teams/safe-cleanup?error=not_duplicate");
-  if (check.blockerCount > 0) redirect("/admin/teams/safe-cleanup?error=not_safe");
+  if (check.hardBlockerCount + check.notificationDispatchCount + check.captainLinkCount > 0) redirect("/admin/teams/safe-cleanup?error=not_safe");
 
   await prisma.$transaction(async (tx) => {
-    await tx.notificationRecipient.deleteMany({
-      where: {
-        sourceType: NotificationRecipientSourceType.TEAM,
-        sourceId: teamId,
-      },
-    });
-
-    await tx.team.delete({
-      where: { id: teamId },
-    });
+    await tx.notificationRecipient.deleteMany({ where: { sourceType: NotificationRecipientSourceType.TEAM, sourceId: teamId } });
+    await tx.team.delete({ where: { id: teamId } });
   });
 
   revalidatePath("/admin/teams");
   revalidatePath("/admin/teams/safe-cleanup");
   redirect(`/admin/teams/safe-cleanup?deleted=${encodeURIComponent(teamId)}`);
+}
+
+async function mergeCommsAndRemoveDuplicateTeamAction(formData: FormData) {
+  "use server";
+
+  await requireAdmin();
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const canonicalId = String(formData.get("canonicalTeamId") ?? "").trim();
+
+  if (!teamId) redirect("/admin/teams/safe-cleanup?error=missing_id");
+  if (!canonicalId) redirect("/admin/teams/safe-cleanup?error=missing_canonical");
+
+  const check = await getCleanupCheck(teamId, canonicalId);
+  if (!check) redirect("/admin/teams/safe-cleanup?error=not_found");
+  if (!check.canonicalId) redirect("/admin/teams/safe-cleanup?error=missing_canonical");
+  if (check.duplicateNameCount < 2) redirect("/admin/teams/safe-cleanup?error=not_duplicate");
+  if (check.hardBlockerCount > 0) redirect("/admin/teams/safe-cleanup?error=not_safe");
+
+  await prisma.$transaction(async (tx) => {
+    const duplicateRecipients = await tx.notificationRecipient.findMany({
+      where: { sourceType: NotificationRecipientSourceType.TEAM, sourceId: teamId },
+      select: { id: true },
+    });
+    const duplicateRecipientIds = duplicateRecipients.map((recipient) => recipient.id);
+
+    if (duplicateRecipientIds.length > 0) {
+      const canonicalRecipient = await tx.notificationRecipient.findUnique({
+        where: {
+          sourceType_sourceId: {
+            sourceType: NotificationRecipientSourceType.TEAM,
+            sourceId: canonicalId,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (canonicalRecipient) {
+        await tx.notificationDispatch.updateMany({
+          where: { recipientId: { in: duplicateRecipientIds } },
+          data: { recipientId: canonicalRecipient.id },
+        });
+        await tx.messageThread.updateMany({
+          where: { recipientId: { in: duplicateRecipientIds } },
+          data: { recipientId: canonicalRecipient.id, teamId: canonicalId },
+        });
+        await tx.notificationRecipient.deleteMany({ where: { id: { in: duplicateRecipientIds } } });
+      } else if (duplicateRecipientIds.length === 1) {
+        await tx.notificationRecipient.update({
+          where: { id: duplicateRecipientIds[0] },
+          data: { sourceId: canonicalId },
+        });
+        await tx.messageThread.updateMany({
+          where: { recipientId: duplicateRecipientIds[0] },
+          data: { teamId: canonicalId },
+        });
+      }
+    }
+
+    await tx.notificationDispatch.updateMany({ where: { sourceId: teamId }, data: { sourceId: canonicalId } });
+    await tx.messageThread.updateMany({ where: { sourceId: teamId }, data: { sourceId: canonicalId, teamId: canonicalId } });
+    await tx.team.delete({ where: { id: teamId } });
+  });
+
+  revalidatePath("/admin/teams");
+  revalidatePath("/admin/teams/safe-cleanup");
+  revalidatePath("/admin/messaging");
+  redirect(`/admin/teams/safe-cleanup?merged=${encodeURIComponent(teamId)}`);
 }
 
 export default async function SafeTeamCleanupPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
@@ -266,7 +365,8 @@ export default async function SafeTeamCleanupPage({ searchParams }: { searchPara
   const sp = (await searchParams) ?? {};
   const rows = await getCleanupRows();
   const safeRows = rows.filter((row) => row.blockerCount === 0);
-  const blockedRows = rows.filter((row) => row.blockerCount > 0);
+  const mergeableRows = rows.filter(canMergeCommsAndRemove);
+  const blockedRows = rows.filter((row) => row.blockerCount > 0 && !canMergeCommsAndRemove(row));
   const errorMessage = getErrorMessage(sp.error);
 
   return (
@@ -277,64 +377,37 @@ export default async function SafeTeamCleanupPage({ searchParams }: { searchPara
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Safe cleanup</div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Duplicate team cleanup</h1>
             <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">
-              This only offers removal for duplicate-name team rows that have no linked squad, prospects, fixtures, payments, messages, results, captain link, season entries or notification dispatches. Anything with data stays blocked.
+              Rows with only captain-link or notification-dispatch leftovers can now be merged into the canonical team and removed. Anything with real squad, fixture, payment, result, season or thread data stays blocked.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link href="/admin/teams" className="rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-semibold text-white/75 hover:bg-white/[0.05]">Back to teams</Link>
               <Link href="/admin/audits/team-duplicates" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/15">Open full audit</Link>
             </div>
           </div>
-          <div className="grid min-w-[260px] gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100/70">Safe to remove</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{safeRows.length}</div>
-            </div>
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-5 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100/70">Blocked</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{blockedRows.length}</div>
-            </div>
+          <div className="grid min-w-[260px] gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4"><div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100/70">Safe remove</div><div className="mt-2 text-3xl font-semibold text-white">{safeRows.length}</div></div>
+            <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-5 py-4"><div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-100/70">Merge cleanup</div><div className="mt-2 text-3xl font-semibold text-white">{mergeableRows.length}</div></div>
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-5 py-4"><div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100/70">Blocked</div><div className="mt-2 text-3xl font-semibold text-white">{blockedRows.length}</div></div>
           </div>
         </div>
       </AdminCard>
 
-      {sp.deleted ? (
-        <AdminCard className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-          Removed drained duplicate team row <span className="font-mono">{sp.deleted}</span>.
-        </AdminCard>
-      ) : null}
+      {sp.deleted ? <AdminCard className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">Removed drained duplicate team row <span className="font-mono">{sp.deleted}</span>.</AdminCard> : null}
+      {sp.merged ? <AdminCard className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">Merged notification history into the canonical team and removed duplicate row <span className="font-mono">{sp.merged}</span>.</AdminCard> : null}
+      {errorMessage ? <AdminCard className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</AdminCard> : null}
 
-      {errorMessage ? (
-        <AdminCard className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
-          {errorMessage}
-        </AdminCard>
-      ) : null}
-
-      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-0">
-        <div className="border-b border-white/10 px-6 py-5">
-          <h2 className="text-xl font-semibold text-white">Safe candidates</h2>
-          <p className="mt-1 text-sm text-white/50">These rows have zero blockers and a higher-scoring canonical team with the same name.</p>
-        </div>
+      <AdminCard className="rounded-3xl border border-sky-400/15 bg-sky-500/[0.04] p-0">
+        <div className="border-b border-white/10 px-6 py-5"><h2 className="text-xl font-semibold text-white">Merge cleanup candidates</h2><p className="mt-1 text-sm text-white/50">These rows only have captain-link or notification-dispatch leftovers. The action moves dispatches to the canonical team recipient, then deletes the duplicate team row.</p></div>
         <div className="divide-y divide-white/10">
-          {safeRows.length === 0 ? <div className="px-6 py-8 text-sm text-white/55">No drained duplicate rows are currently safe to remove.</div> : null}
-          {safeRows.map((row) => (
-            <div key={row.id} className="grid gap-5 px-6 py-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto] xl:items-center">
-              <div>
-                <div className="text-lg font-semibold text-white">{row.name}</div>
-                <div className="mt-1 font-mono text-xs text-white/45">{row.id}</div>
-                <div className="mt-2 text-sm text-white/55">Created {formatDate(row.createdAt)} · {row.contactEmail ?? "No email"} · {row.contactPhone ?? "No phone"}</div>
-              </div>
-              <div className="text-sm text-white/60">
-                <div>Canonical: <span className="font-mono text-emerald-200">{row.suggestedCanonicalId}</span></div>
-                <div className="mt-1">{row.suggestedCanonicalName} · score {row.suggestedCanonicalScore}</div>
-                <div className="mt-1">League: {row.leagueName ?? "—"} / {row.leagueSeason ?? "—"} / {row.divisionName ?? "—"}</div>
-              </div>
-              <form action={safeDeleteDuplicateTeamAction} className="xl:justify-self-end">
+          {mergeableRows.length === 0 ? <div className="px-6 py-8 text-sm text-white/55">No comms-only duplicate rows need merging.</div> : null}
+          {mergeableRows.map((row) => (
+            <div key={row.id} className="grid gap-5 px-6 py-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_auto] xl:items-center">
+              <div><div className="text-lg font-semibold text-white">{row.name}</div><div className="mt-1 font-mono text-xs text-white/45">{row.id}</div><div className="mt-2 text-sm text-white/55">Created {formatDate(row.createdAt)} · dispatches {row.notificationDispatchCount} · captain link {row.captainUserId ? "yes" : "no"}</div></div>
+              <div className="text-sm text-white/60"><div>Merge into: <span className="font-mono text-emerald-200">{row.suggestedCanonicalId}</span></div><div className="mt-1">{row.suggestedCanonicalName} · score {row.suggestedCanonicalScore}</div><div className="mt-1">No squad, fixtures, payments, results or season entries on duplicate.</div></div>
+              <form action={mergeCommsAndRemoveDuplicateTeamAction} className="xl:justify-self-end">
                 <input type="hidden" name="teamId" value={row.id} />
-                <ConfirmDeleteButton
-                  label="Remove safely"
-                  confirmText={`Remove drained duplicate row for ${row.name}? This will only work if it still has zero linked records.`}
-                  className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/20"
-                />
+                <input type="hidden" name="canonicalTeamId" value={row.suggestedCanonicalId} />
+                <ConfirmDeleteButton label="Merge & remove" confirmText={`Move notification history for duplicate ${row.name} into the canonical team and remove the duplicate row?`} className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20" />
               </form>
             </div>
           ))}
@@ -342,40 +415,27 @@ export default async function SafeTeamCleanupPage({ searchParams }: { searchPara
       </AdminCard>
 
       <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-0">
-        <div className="border-b border-white/10 px-6 py-5">
-          <h2 className="text-xl font-semibold text-white">Blocked duplicate rows</h2>
-          <p className="mt-1 text-sm text-white/50">These are duplicate-name rows, but they still have linked data or a captain link, so they are not removable here.</p>
-        </div>
+        <div className="border-b border-white/10 px-6 py-5"><h2 className="text-xl font-semibold text-white">Safe candidates</h2><p className="mt-1 text-sm text-white/50">These rows have zero blockers and a higher-scoring canonical team with the same name.</p></div>
         <div className="divide-y divide-white/10">
-          {blockedRows.length === 0 ? <div className="px-6 py-8 text-sm text-white/55">No blocked duplicate rows.</div> : null}
+          {safeRows.length === 0 ? <div className="px-6 py-8 text-sm text-white/55">No fully empty duplicate rows are currently safe to remove.</div> : null}
+          {safeRows.map((row) => (
+            <div key={row.id} className="grid gap-5 px-6 py-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto] xl:items-center">
+              <div><div className="text-lg font-semibold text-white">{row.name}</div><div className="mt-1 font-mono text-xs text-white/45">{row.id}</div><div className="mt-2 text-sm text-white/55">Created {formatDate(row.createdAt)} · {row.contactEmail ?? "No email"} · {row.contactPhone ?? "No phone"}</div></div>
+              <div className="text-sm text-white/60"><div>Canonical: <span className="font-mono text-emerald-200">{row.suggestedCanonicalId}</span></div><div className="mt-1">{row.suggestedCanonicalName} · score {row.suggestedCanonicalScore}</div><div className="mt-1">League: {row.leagueName ?? "—"} / {row.leagueSeason ?? "—"} / {row.divisionName ?? "—"}</div></div>
+              <form action={safeDeleteDuplicateTeamAction} className="xl:justify-self-end"><input type="hidden" name="teamId" value={row.id} /><ConfirmDeleteButton label="Remove safely" confirmText={`Remove drained duplicate row for ${row.name}? This will only work if it still has zero linked records.`} className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/20" /></form>
+            </div>
+          ))}
+        </div>
+      </AdminCard>
+
+      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-0">
+        <div className="border-b border-white/10 px-6 py-5"><h2 className="text-xl font-semibold text-white">Blocked duplicate rows</h2><p className="mt-1 text-sm text-white/50">These still have real linked data, so they remain blocked and should be merged with the full audit process first.</p></div>
+        <div className="divide-y divide-white/10">
+          {blockedRows.length === 0 ? <div className="px-6 py-8 text-sm text-white/55">No hard-blocked duplicate rows.</div> : null}
           {blockedRows.map((row) => (
             <div key={row.id} className="space-y-3 px-6 py-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <div className="font-semibold text-white">{row.name}</div>
-                  <div className="mt-1 font-mono text-xs text-white/45">{row.id}</div>
-                  <div className="mt-2 text-sm text-white/55">Canonical suggestion: <span className="font-mono text-emerald-200">{row.suggestedCanonicalId}</span></div>
-                </div>
-                <div className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">
-                  {row.blockerCount} blocker{row.blockerCount === 1 ? "" : "s"}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {countPill("Members", row.teamMemberCount)}
-                {countPill("Prospects", row.prospectCount)}
-                {countPill("Fixtures", row.fixtureCount)}
-                {countPill("Charges", row.paymentChargeCount)}
-                {countPill("Transactions", row.paymentTransactionCount)}
-                {countPill("Player fees", row.playerMatchFeeCount)}
-                {countPill("Confirms", row.fixtureCaptainConfirmationCount)}
-                {countPill("Threads", row.messageThreadCount)}
-                {countPill("Result meta", row.resultMetaCount)}
-                {countPill("Disputes", row.resultDisputeCount)}
-                {countPill("Season entries", row.leagueSeasonTeamCount)}
-                {countPill("Converted leads", row.convertedLeadCount)}
-                {countPill("Notification dispatches", row.notificationDispatchCount)}
-                {row.captainUserId ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-100">Captain linked</span> : null}
-              </div>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><div className="font-semibold text-white">{row.name}</div><div className="mt-1 font-mono text-xs text-white/45">{row.id}</div><div className="mt-2 text-sm text-white/55">Canonical suggestion: <span className="font-mono text-emerald-200">{row.suggestedCanonicalId}</span></div></div><div className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">{row.blockerCount} blocker{row.blockerCount === 1 ? "" : "s"}</div></div>
+              <div className="flex flex-wrap gap-2">{countPill("Members", row.teamMemberCount)}{countPill("Prospects", row.prospectCount)}{countPill("Fixtures", row.fixtureCount)}{countPill("Charges", row.paymentChargeCount)}{countPill("Transactions", row.paymentTransactionCount)}{countPill("Player fees", row.playerMatchFeeCount)}{countPill("Confirms", row.fixtureCaptainConfirmationCount)}{countPill("Threads", row.messageThreadCount)}{countPill("Result meta", row.resultMetaCount)}{countPill("Disputes", row.resultDisputeCount)}{countPill("Season entries", row.leagueSeasonTeamCount)}{countPill("Converted leads", row.convertedLeadCount)}{countPill("Notification dispatches", row.notificationDispatchCount)}{row.captainUserId ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-100">Captain linked</span> : null}</div>
             </div>
           ))}
         </div>
