@@ -21,6 +21,10 @@ type NightBoardFiltersProps = {
   selectedVenueId: string;
   refFee: string;
   pitchHire: string;
+  nightPitchCount: string;
+  nightStartTime: string;
+  nightEndTime: string;
+  nightPitchCostPerHour: string;
 };
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -112,6 +116,31 @@ function CustomSelect({
   );
 }
 
+function MoneyInput({
+  label,
+  name,
+  defaultValue,
+  placeholder,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  placeholder: string;
+}) {
+  return (
+    <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+      {label}
+      <input
+        name={name}
+        inputMode="decimal"
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+      />
+    </label>
+  );
+}
+
 export default function NightBoardFilters({
   dateOptions,
   leagueOptions,
@@ -121,55 +150,72 @@ export default function NightBoardFilters({
   selectedVenueId,
   refFee,
   pitchHire,
+  nightPitchCount,
+  nightStartTime,
+  nightEndTime,
+  nightPitchCostPerHour,
 }: NightBoardFiltersProps) {
   const [date, setDate] = useState(selectedDate);
   const [leagueId, setLeagueId] = useState(selectedLeagueId);
   const [venueId, setVenueId] = useState(selectedVenueId);
 
   return (
-    <form className="mt-6 grid gap-3 md:grid-cols-3 xl:grid-cols-5" action="/admin/night-board">
-      <CustomSelect
-        name="date"
-        label="Fixture night"
-        options={dateOptions}
-        value={date}
-        onChange={setDate}
-      />
-      <CustomSelect
-        name="leagueId"
-        label="League"
-        options={leagueOptions}
-        value={leagueId}
-        onChange={setLeagueId}
-      />
-      <CustomSelect
-        name="venueId"
-        label="Venue"
-        options={venueOptions}
-        value={venueId}
-        onChange={setVenueId}
-      />
-      <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-        Ref fee / match
-        <input
-          name="refFee"
-          inputMode="decimal"
-          defaultValue={refFee}
-          placeholder="e.g. 15"
-          className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-        />
-      </label>
-      <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-        Pitch hire total
-        <input
-          name="pitchHire"
-          inputMode="decimal"
-          defaultValue={pitchHire}
-          placeholder="e.g. 120"
-          className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
-        />
-      </label>
-      <button className="h-12 rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 md:col-span-3 xl:col-span-5">
+    <form className="mt-6 space-y-4" action="/admin/night-board">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <CustomSelect name="date" label="Fixture night" options={dateOptions} value={date} onChange={setDate} />
+        <CustomSelect name="leagueId" label="League" options={leagueOptions} value={leagueId} onChange={setLeagueId} />
+        <CustomSelect name="venueId" label="Venue" options={venueOptions} value={venueId} onChange={setVenueId} />
+        <MoneyInput label="Ref fee / match" name="refFee" defaultValue={refFee} placeholder="e.g. 15" />
+        <MoneyInput label="Pitch hire total" name="pitchHire" defaultValue={pitchHire} placeholder="manual total" />
+      </div>
+
+      <div className="rounded-2xl border border-amber-400/15 bg-amber-500/[0.05] p-4">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+              One-night pitch cost override
+            </div>
+            <p className="mt-1 text-xs leading-5 text-white/45">
+              Use this when a night has fewer pitches, extra hours, or a different hourly rate. Leave blank to use the league booking.
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+            Pitches tonight
+            <input
+              name="nightPitchCount"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={nightPitchCount}
+              placeholder="e.g. 1"
+              className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+            />
+          </label>
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+            Start time
+            <input
+              name="nightStartTime"
+              type="time"
+              defaultValue={nightStartTime}
+              className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+            />
+          </label>
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+            End time
+            <input
+              name="nightEndTime"
+              type="time"
+              defaultValue={nightEndTime}
+              className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+            />
+          </label>
+          <MoneyInput label="Hourly cost" name="nightPitchCostPerHour" defaultValue={nightPitchCostPerHour} placeholder="e.g. 60" />
+        </div>
+      </div>
+
+      <button className="h-12 w-full rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300">
         Update board
       </button>
     </form>
