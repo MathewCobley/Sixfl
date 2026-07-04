@@ -5,11 +5,13 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { FixtureStatus, PaymentChargeStatus, Prisma } from "@prisma/client";
+import { FixtureStatus, PaymentChargeStatus, Prisma, UserRole } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { createRefereeNightId, recalculateRefereeNightCashup } from "@/lib/referee-nights";
+import { getRefereeProfileByUserId } from "@/lib/referees/profile";
 
 import NightBoardFilters from "./NightBoardFilters";
 
@@ -204,6 +206,120 @@ async function updateNightBoardFixturePitchAction(formData: FormData) {
 
   revalidatePath("/admin/night-board");
   revalidatePath("/admin/fixtures");
+
+  redirect(returnTo);
+}
+
+async function updateNightBoardFixtureRefereeAction(formData: FormData) {
+  "use server";
+
+  const { user } = await requireAdmin();
+
+  const fixtureId = String(formData.get("fixtureId") ?? "").trim();
+  const refereeId = String(formData.get("refereeId") ?? "").trim();
+  const rawReturnTo = String(formData.get("returnTo") ?? "").trim();
+  const returnTo = rawReturnTo.startsWith("/admin/night-board") ? rawReturnTo : "/admin/night-board";
+
+  if (!fixtureId) redirect(returnTo);
+
+  const fixture = await prisma.fixture.findUnique({
+    where: { id: fixtureId },
+    select: {
+      id: true,
+      leagueId: true,
+      venueId: true,
+      kickoffAt: true,
+      refereeId: true,
+    },
+  });
+
+  if (!fixture) redirect(returnTo);
+
+  const existingAssignments = await prisma.$queryRaw<Array<{ refereeNightId: string }>>(Prisma.sql`
+    SELECT "refereeNightId"
+    FROM "RefereeNightFixture"
+    WHERE "fixtureId" = ${fixture.id}
+  `);
+  const affectedNightIds = new Set(existingAssignments.map((row) => row.refereeNightId));
+
+  if (!refereeId) {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM "RefereeNightFixture"
+        WHERE "fixtureId" = ${fixture.id}
+      `);
+      await tx.fixture.update({
+        where: { id: fixture.id },
+        data: { refereeId: null },
+      });
+    });
+
+    await Promise.all(Array.from(affectedNightIds).map((nightId) => recalculateRefereeNightCashup(nightId)));
+    revalidatePath("/admin/night-board");
+    revalidatePath("/admin/fixtures");
+    revalidatePath("/admin/referee-nights");
+    redirect(returnTo);
+  }
+
+  const referee = await prisma.user.findFirst({
+    where: {
+      id: refereeId,
+      role: { in: [UserRole.REFEREE, UserRole.ADMIN] },
+    },
+    select: { id: true },
+  });
+
+  if (!referee) redirect(returnTo);
+
+  const nightDate = toLondonDateInput(fixture.kickoffAt);
+  const profile = await getRefereeProfileByUserId(referee.id);
+  const feePence = profile?.standardNightFeePence ?? 0;
+  let targetNightId: string | null = null;
+
+  await prisma.$transaction(async (tx) => {
+    const existingNightRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT id
+      FROM "RefereeNight"
+      WHERE "refereeId" = ${referee.id}
+        AND "leagueId" = ${fixture.leagueId}
+        AND "nightDate" = ${nightDate}::date
+        AND "venueId" IS NOT DISTINCT FROM ${fixture.venueId}
+      LIMIT 1
+    `);
+
+    targetNightId = existingNightRows[0]?.id ?? null;
+
+    if (!targetNightId) {
+      targetNightId = createRefereeNightId();
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "RefereeNight" (
+          "id", "refereeId", "leagueId", "venueId", "nightDate", "feePence", "status", "adminNotes", "createdByUserId", "updatedAt"
+        ) VALUES (
+          ${targetNightId}, ${referee.id}, ${fixture.leagueId}, ${fixture.venueId}, ${nightDate}::date, ${feePence}, 'DRAFT', ${"Created from Night Board referee change."}, ${user?.id ?? null}, NOW()
+        )
+      `);
+    }
+
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "RefereeNightFixture" ("id", "refereeNightId", "fixtureId")
+      VALUES (${createRefereeNightId()}, ${targetNightId}, ${fixture.id})
+      ON CONFLICT ("fixtureId") DO UPDATE
+      SET "refereeNightId" = EXCLUDED."refereeNightId"
+    `);
+
+    await tx.fixture.update({
+      where: { id: fixture.id },
+      data: { refereeId: referee.id },
+    });
+  });
+
+  if (targetNightId) affectedNightIds.add(targetNightId);
+  await Promise.all(Array.from(affectedNightIds).map((nightId) => recalculateRefereeNightCashup(nightId)));
+
+  revalidatePath("/admin/night-board");
+  revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/referee-nights");
+  if (targetNightId) revalidatePath(`/admin/referee-nights/${targetNightId}`);
 
   redirect(returnTo);
 }
@@ -453,24 +569,13 @@ async function calculateAutomaticPitchHire(fixtures: FixtureForBoard[]) {
   return { amountPence, label: calculatedLeagues > 0 ? `Auto from ${calculatedLeagues} league booking${calculatedLeagues === 1 ? "" : "s"}` : "Add league booking + venue rate", missingParts };
 }
 
-function calculateNightPitchHireOverride(input: {
-  pitchCount: string;
-  startTime: string;
-  endTime: string;
-  costPerHour: string;
-}) {
+function calculateNightPitchHireOverride(input: { pitchCount: string; startTime: string; endTime: string; costPerHour: string }) {
   const hasAny = Boolean(input.pitchCount.trim() || input.startTime.trim() || input.endTime.trim() || input.costPerHour.trim());
   const pitchCount = parseOptionalPositiveInteger(input.pitchCount);
   const hours = bookingHours(input.startTime || null, input.endTime || null);
   const costPerHourPence = parseOptionalPence(input.costPerHour);
-
   if (!hasAny || !pitchCount || !hours || !costPerHourPence) return { hasAny, amountPence: null as number | null, label: "Incomplete night override" };
-
-  return {
-    hasAny,
-    amountPence: Math.round(pitchCount * hours * costPerHourPence),
-    label: `Night override: ${pitchCount} pitch${pitchCount === 1 ? "" : "es"} × ${formatHours(hours)}h × ${formatMoney(costPerHourPence)}/hr`,
-  };
+  return { hasAny, amountPence: Math.round(pitchCount * hours * costPerHourPence), label: `Night override: ${pitchCount} pitch${pitchCount === 1 ? "" : "es"} × ${formatHours(hours)}h × ${formatMoney(costPerHourPence)}/hr` };
 }
 
 function buildDateOptions(options: SelectOption[], selectedDate: string) {
@@ -494,10 +599,15 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const nightPitchCostPerHourValue = getSearchParam(params.nightPitchCostPerHour);
   const refFeePence = parsePence(refFeeValue, 0);
 
-  const [leagues, venues, upcomingNightOptions] = await Promise.all([
+  const [leagues, venues, upcomingNightOptions, referees] = await Promise.all([
     getUpcomingLeagueOptions(venueId),
     prisma.venue.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     getUpcomingFixtureNightOptions({ leagueId, venueId }),
+    prisma.user.findMany({
+      where: { role: { in: [UserRole.REFEREE, UserRole.ADMIN] } },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      select: { id: true, name: true, email: true, role: true },
+    }),
   ]);
 
   const leagueStillAvailable = !leagueId || leagues.some((league) => league.id === leagueId);
@@ -512,11 +622,11 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const pitchHirePence = hasManualPitchHire ? parsePence(pitchHireValue, nightPitchHireOverride.amountPence ?? automaticPitchHire.amountPence) : nightPitchHireOverride.amountPence ?? automaticPitchHire.amountPence;
   const pitchHireSourceLabel = hasManualPitchHire ? "Manual total override" : nightPitchHireOverride.amountPence !== null ? nightPitchHireOverride.label : automaticPitchHire.label;
   const hasIncompleteNightOverride = nightPitchHireOverride.hasAny && nightPitchHireOverride.amountPence === null && !hasManualPitchHire;
-
   const returnTo = buildNightBoardReturnTo({ date: selectedDate, leagueId: activeLeagueId, venueId, refFee: refFeeValue, pitchHire: pitchHireValue, nightPitchCount: nightPitchCountValue, nightStartTime: nightStartTimeValue, nightEndTime: nightEndTimeValue, nightPitchCostPerHour: nightPitchCostPerHourValue });
   const dateOptions = buildDateOptions(activeUpcomingNightOptions, selectedDate);
   const leagueOptions = [{ value: "", label: "All leagues", description: "Upcoming published fixtures only" }, ...leagues.map((league) => ({ value: league.id, label: league.name, description: `${league.season ?? "No season"} · ${league.fixtureCount} upcoming fixture${league.fixtureCount === 1 ? "" : "s"}${league.nextKickoffAt ? ` · next ${formatDate(league.nextKickoffAt)}` : ""}${league.isActive ? "" : " · inactive"}` }))];
   const venueOptions = [{ value: "", label: "All venues", description: "Show every venue" }, ...venues.map((venue) => ({ value: venue.id, label: venue.name }))];
+  const refereeOptions = [{ value: "", label: "No referee" }, ...referees.map((referee) => ({ value: referee.id, label: `${referee.name || referee.email || "Unnamed referee"}${referee.role === UserRole.ADMIN ? " · admin" : ""}` }))];
 
   const warnings = buildWarnings(fixtures);
   const { pitchNames, timeLabels, fixtureByTimePitch } = getBoardGroups(fixtures);
@@ -533,29 +643,17 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   return (
     <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div><div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Operations</div><h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Night board</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">One page to check who is playing on which pitch, at what time, and which referee is covering each published match.</p></div>
-          <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isSorted ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>{isSorted ? "Night sorted" : "Needs attention"}</div>
-        </div>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Operations</div><h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Night board</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">One page to check who is playing on which pitch, at what time, and which referee is covering each published match.</p></div><div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isSorted ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>{isSorted ? "Night sorted" : "Needs attention"}</div></div>
         <NightBoardFilters dateOptions={dateOptions} leagueOptions={leagueOptions} venueOptions={venueOptions} selectedDate={selectedDate} selectedLeagueId={activeLeagueId} selectedVenueId={venueId} refFee={refFeeValue} pitchHire={pitchHireValue} nightPitchCount={nightPitchCountValue} nightStartTime={nightStartTimeValue} nightEndTime={nightEndTimeValue} nightPitchCostPerHour={nightPitchCostPerHourValue} />
         <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-white/45">Pitch hire: <span className="font-semibold text-white/70">{formatMoney(pitchHirePence)}</span> · {pitchHireSourceLabel}. Use the pitch hire total box only if you want to override the final total manually.</div>
         {hasIncompleteNightOverride ? <div className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100">One-night override is incomplete. Fill pitches, start, end and hourly cost, or clear those fields to use the league booking.</div> : null}
       </AdminCard>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Published fixtures</div><div className="mt-2 text-3xl font-semibold text-white">{fixtures.length}</div><div className="mt-1 text-sm text-white/45">{completedCount} completed</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Pitches used</div><div className="mt-2 text-3xl font-semibold text-white">{pitchNames.filter((name) => name !== "No pitch").length}</div><div className="mt-1 text-sm text-white/45">{missingPitchCount} missing pitch</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Referees</div><div className="mt-2 text-3xl font-semibold text-white">{refereeRows.length}</div><div className="mt-1 text-sm text-white/45">{missingRefCount} matches missing ref</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Captain confirms</div><div className="mt-2 text-3xl font-semibold text-white">{confirmedCaptains}/{expectedCaptainConfirmations}</div><div className="mt-1 text-sm text-white/45">home + away confirmations</div></AdminCard>
-      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Published fixtures</div><div className="mt-2 text-3xl font-semibold text-white">{fixtures.length}</div><div className="mt-1 text-sm text-white/45">{completedCount} completed</div></AdminCard><AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Pitches used</div><div className="mt-2 text-3xl font-semibold text-white">{pitchNames.filter((name) => name !== "No pitch").length}</div><div className="mt-1 text-sm text-white/45">{missingPitchCount} missing pitch</div></AdminCard><AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Referees</div><div className="mt-2 text-3xl font-semibold text-white">{refereeRows.length}</div><div className="mt-1 text-sm text-white/45">{missingRefCount} matches missing ref</div></AdminCard><AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Captain confirms</div><div className="mt-2 text-3xl font-semibold text-white">{confirmedCaptains}/{expectedCaptainConfirmations}</div><div className="mt-1 text-sm text-white/45">home + away confirmations</div></AdminCard></div>
 
-      <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0"><div className="border-b border-white/10 px-6 py-5 md:px-8"><h2 className="text-xl font-semibold text-white">Pitch board</h2><p className="mt-1 text-sm text-white/45">{formatDate(start)}</p></div>{fixtures.length === 0 ? <div className="p-6 text-sm text-white/55">No published fixtures found for these filters.</div> : <div className="overflow-x-auto"><table className="min-w-[1100px] text-left text-sm"><thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.16em] text-white/40"><tr><th className="w-28 px-4 py-3">Time</th>{pitchNames.map((pitch) => <th key={pitch} className="px-4 py-3">{pitch}</th>)}</tr></thead><tbody className="divide-y divide-white/10">{timeLabels.map((time) => <tr key={time}><td className="px-4 py-4 align-top text-lg font-semibold text-white">{time}</td>{pitchNames.map((pitch) => { const matches = fixtureByTimePitch.get(`${time}__${pitch}`) ?? []; return <td key={`${time}-${pitch}`} className="min-w-[300px] px-4 py-4 align-top">{matches.length === 0 ? <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-center text-white/25">Empty</div> : null}<div className="space-y-3">{matches.map((fixture) => <div key={fixture.id} className={`rounded-2xl border p-4 ${statusClass(fixture.status)}`}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{fixture.homeTeam.name}</div><div className="text-white/45">v</div><div className="font-semibold">{fixture.awayTeam.name}</div></div><div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/55">{fixture.status}</div></div><div className="mt-3 space-y-1 text-xs text-white/55"><div>Ref: <span className={fixture.referee ? "text-white/80" : "text-red-200"}>{fixture.referee?.name || fixture.referee?.email || "Missing"}</span></div><div>League: {fixture.league.name}{fixture.division ? ` / ${fixture.division.name}` : ""}</div><div>Venue: {fixture.venue?.name || fixture.league.venueName || "Missing"}</div>{fixture.result ? <div>Result: {fixture.result.homeScore} - {fixture.result.awayScore}</div> : null}</div><form action={updateNightBoardFixturePitchAction} className="mt-3 flex gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" /><button type="submit" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save</button></form><Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="mt-3 inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link></div>)}</div></td>; })}</tr>)}</tbody></table></div>}</AdminCard>
+      <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0"><div className="border-b border-white/10 px-6 py-5 md:px-8"><h2 className="text-xl font-semibold text-white">Pitch board</h2><p className="mt-1 text-sm text-white/45">{formatDate(start)}</p></div>{fixtures.length === 0 ? <div className="p-6 text-sm text-white/55">No published fixtures found for these filters.</div> : <div className="overflow-x-auto"><table className="min-w-[1180px] text-left text-sm"><thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.16em] text-white/40"><tr><th className="w-28 px-4 py-3">Time</th>{pitchNames.map((pitch) => <th key={pitch} className="px-4 py-3">{pitch}</th>)}</tr></thead><tbody className="divide-y divide-white/10">{timeLabels.map((time) => <tr key={time}><td className="px-4 py-4 align-top text-lg font-semibold text-white">{time}</td>{pitchNames.map((pitch) => { const matches = fixtureByTimePitch.get(`${time}__${pitch}`) ?? []; return <td key={`${time}-${pitch}`} className="min-w-[330px] px-4 py-4 align-top">{matches.length === 0 ? <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-center text-white/25">Empty</div> : null}<div className="space-y-3">{matches.map((fixture) => <div key={fixture.id} className={`rounded-2xl border p-4 ${statusClass(fixture.status)}`}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{fixture.homeTeam.name}</div><div className="text-white/45">v</div><div className="font-semibold">{fixture.awayTeam.name}</div></div><div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/55">{fixture.status}</div></div><div className="mt-3 space-y-1 text-xs text-white/55"><div>Ref: <span className={fixture.referee ? "text-white/80" : "text-red-200"}>{fixture.referee?.name || fixture.referee?.email || "Missing"}</span></div><div>League: {fixture.league.name}{fixture.division ? ` / ${fixture.division.name}` : ""}</div><div>Venue: {fixture.venue?.name || fixture.league.venueName || "Missing"}</div>{fixture.result ? <div>Result: {fixture.result.homeScore} - {fixture.result.awayScore}</div> : null}</div><form action={updateNightBoardFixtureRefereeAction} className="mt-3 flex gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><select name="refereeId" defaultValue={fixture.referee?.id ?? ""} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400/40">{refereeOptions.map((option) => <option key={`${fixture.id}-ref-${option.value || "none"}`} value={option.value}>{option.label}</option>)}</select><button type="submit" className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/15">Save ref</button></form><form action={updateNightBoardFixturePitchAction} className="mt-2 flex gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" /><button type="submit" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save pitch</button></form><Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="mt-3 inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link></div>)}</div></td>; })}</tr>)}</tbody></table></div>}</AdminCard>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-xl font-semibold text-white">Referee allocation</h2><div className="mt-4 space-y-3">{refereeRows.length === 0 ? <div className="text-sm text-white/55">No referees assigned yet.</div> : null}{refereeRows.map((row) => <div key={`${row.name}-${row.email}`} className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="flex items-start justify-between gap-4"><div><div className="font-semibold text-white">{row.name}</div><div className="text-sm text-white/45">{row.email}</div></div><div className="text-right text-sm text-white/70">{formatMoney(row.feePence)}</div></div><div className="mt-3 grid gap-2 text-sm text-white/55 sm:grid-cols-3"><div>{row.fixtures.length} match{row.fixtures.length === 1 ? "" : "es"}</div><div>{row.pitchList}</div><div>{row.firstKickoff ? formatTime(row.firstKickoff) : "—"} – {row.lastKickoff ? formatTime(row.lastKickoff) : "—"}</div></div></div>)}</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-semibold text-white">Income / cost</h2><p className="mt-1 text-sm text-white/45">Based on published fixtures on this night.</p></div>{hasMissingCharges ? <div className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Missing charges</div> : null}</div><div className="mt-4 space-y-3 text-sm"><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Expected income</span><span className="font-semibold text-white">{finance.expectedTeams} teams × {formatMoney(finance.defaultFeePence)} = {formatMoney(finance.expectedIncomePence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Charges created</span><span className="font-semibold text-white">{finance.chargesCreatedCount}/{finance.expectedTeams} teams = {formatMoney(finance.chargesCreatedPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Missing charges</span><span className={`font-semibold ${hasMissingCharges ? "text-amber-100" : "text-emerald-100"}`}>{finance.missingChargeCount} teams = {formatMoney(finance.missingChargesPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Paid</span><span className="font-semibold text-emerald-100">{formatMoney(finance.paidPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Outstanding against created charges</span><span className="font-semibold text-amber-100">{formatMoney(finance.outstandingAgainstChargesPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">True expected outstanding</span><span className="font-semibold text-amber-100">{formatMoney(finance.expectedOutstandingPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Referee cost</span><span className="font-semibold text-white">{formatMoney(finance.refCostPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Pitch hire</span><span className="font-semibold text-white">{formatMoney(finance.pitchHirePence)}</span></div><div className="flex justify-between pt-2 text-base"><span className="text-white/70">Expected profit</span><span className={`font-semibold ${finance.expectedProfitPence >= 0 ? "text-emerald-100" : "text-red-100"}`}>{formatMoney(finance.expectedProfitPence)}</span></div></div>{hasMissingCharges ? <p className="mt-4 text-xs leading-5 text-amber-100/80">Some teams do not yet have fixture charges. The expected figures show what should be due; the charges-created line shows what currently exists in payments.</p> : null}{automaticPitchHire.missingParts > 0 && !hasManualPitchHire && nightPitchHireOverride.amountPence === null ? <p className="mt-3 text-xs leading-5 text-white/40">Some pitch hire could not be calculated yet. Fill in venue hourly rate and league booking details, use the one-night override, or type a manual pitch hire total above.</p> : null}</AdminCard>
-      </div>
-
+      <div className="grid gap-6 xl:grid-cols-2"><AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-xl font-semibold text-white">Referee allocation</h2><div className="mt-4 space-y-3">{refereeRows.length === 0 ? <div className="text-sm text-white/55">No referees assigned yet.</div> : null}{refereeRows.map((row) => <div key={`${row.name}-${row.email}`} className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="flex items-start justify-between gap-4"><div><div className="font-semibold text-white">{row.name}</div><div className="text-sm text-white/45">{row.email}</div></div><div className="text-right text-sm text-white/70">{formatMoney(row.feePence)}</div></div><div className="mt-3 grid gap-2 text-sm text-white/55 sm:grid-cols-3"><div>{row.fixtures.length} match{row.fixtures.length === 1 ? "" : "es"}</div><div>{row.pitchList}</div><div>{row.firstKickoff ? formatTime(row.firstKickoff) : "—"} – {row.lastKickoff ? formatTime(row.lastKickoff) : "—"}</div></div></div>)}</div></AdminCard><AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-semibold text-white">Income / cost</h2><p className="mt-1 text-sm text-white/45">Based on published fixtures on this night.</p></div>{hasMissingCharges ? <div className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Missing charges</div> : null}</div><div className="mt-4 space-y-3 text-sm"><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Expected income</span><span className="font-semibold text-white">{finance.expectedTeams} teams × {formatMoney(finance.defaultFeePence)} = {formatMoney(finance.expectedIncomePence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Charges created</span><span className="font-semibold text-white">{finance.chargesCreatedCount}/{finance.expectedTeams} teams = {formatMoney(finance.chargesCreatedPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Missing charges</span><span className={`font-semibold ${hasMissingCharges ? "text-amber-100" : "text-emerald-100"}`}>{finance.missingChargeCount} teams = {formatMoney(finance.missingChargesPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Paid</span><span className="font-semibold text-emerald-100">{formatMoney(finance.paidPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Outstanding against created charges</span><span className="font-semibold text-amber-100">{formatMoney(finance.outstandingAgainstChargesPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">True expected outstanding</span><span className="font-semibold text-amber-100">{formatMoney(finance.expectedOutstandingPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Referee cost</span><span className="font-semibold text-white">{formatMoney(finance.refCostPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Pitch hire</span><span className="font-semibold text-white">{formatMoney(finance.pitchHirePence)}</span></div><div className="flex justify-between pt-2 text-base"><span className="text-white/70">Expected profit</span><span className={`font-semibold ${finance.expectedProfitPence >= 0 ? "text-emerald-100" : "text-red-100"}`}>{formatMoney(finance.expectedProfitPence)}</span></div></div>{hasMissingCharges ? <p className="mt-4 text-xs leading-5 text-amber-100/80">Some teams do not yet have fixture charges. The expected figures show what should be due; the charges-created line shows what currently exists in payments.</p> : null}{automaticPitchHire.missingParts > 0 && !hasManualPitchHire && nightPitchHireOverride.amountPence === null ? <p className="mt-3 text-xs leading-5 text-white/40">Some pitch hire could not be calculated yet. Fill in venue hourly rate and league booking details, use the one-night override, or type a manual pitch hire total above.</p> : null}</AdminCard></div>
       <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-xl font-semibold text-white">Warnings</h2><div className="mt-4 space-y-3">{warnings.length === 0 ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">No obvious pitch, referee, venue or clash warnings.</div> : null}{warnings.map((warning, index) => <div key={`${warning.message}-${index}`} className={`rounded-2xl border px-4 py-3 text-sm ${warningClass(warning.level)}`}>{warning.message}</div>)}</div></AdminCard>
     </div>
   );
