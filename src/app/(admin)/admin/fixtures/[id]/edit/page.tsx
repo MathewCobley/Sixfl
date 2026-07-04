@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
-import { FixtureStatus, Prisma } from "@prisma/client";
+import { FixtureStatus, NotificationDispatchStatus, Prisma } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
 import {
@@ -26,6 +26,12 @@ type TeamOption = {
   id: string;
   name: string;
 };
+
+const FIXTURE_CONFIRMATION_CHASE_SOURCE_TYPES = [
+  "FIXTURE_CONFIRMATION_CHASE_SMS",
+  "FIXTURE_CONFIRMATION_AUTO_SMS_72H",
+  "FIXTURE_CONFIRMATION_AUTO_SMS_24H",
+] as const;
 
 function getSearchParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -138,6 +144,28 @@ async function teamCanPlayInLeague(input: { teamId: string; leagueId: string }) 
   return Boolean(rows[0]);
 }
 
+async function cancelQueuedFixtureConfirmationChases(input: {
+  fixtureId: string;
+  reason: string;
+}) {
+  await prisma.notificationDispatch.updateMany({
+    where: {
+      sourceType: { in: [...FIXTURE_CONFIRMATION_CHASE_SOURCE_TYPES] },
+      sourceId: { startsWith: `${input.fixtureId}:` },
+      status: NotificationDispatchStatus.QUEUED,
+    },
+    data: {
+      status: NotificationDispatchStatus.CANCELLED,
+      cancelledAt: new Date(),
+      failureReason: input.reason,
+    },
+  });
+}
+
+function shouldPauseFixtureAdminProcesses(status: FixtureStatus) {
+  return status === FixtureStatus.POSTPONED || status === FixtureStatus.CANCELLED;
+}
+
 async function updateFixtureFromEditPageAction(formData: FormData) {
   "use server";
 
@@ -200,19 +228,6 @@ async function updateFixtureFromEditPageAction(formData: FormData) {
   if (refereeId && (!referee || referee.role !== "REFEREE")) throw new Error("Selected referee was not found.");
 
   await prisma.$transaction(async (tx) => {
-    await syncFixtureMatchFeeCharges({
-      db: tx,
-      fixtureId,
-      leagueId,
-      leagueName: league.name,
-      leagueSeason: league.season,
-      kickoffAt,
-      homeTeam,
-      awayTeam,
-      homeMatchFeePence,
-      awayMatchFeePence,
-    });
-
     await tx.fixture.update({
       where: { id: fixtureId },
       data: {
@@ -229,7 +244,30 @@ async function updateFixtureFromEditPageAction(formData: FormData) {
         matchFeePence: fixtureMatchFeePence,
       },
     });
+
+    await syncFixtureMatchFeeCharges({
+      db: tx,
+      fixtureId,
+      leagueId,
+      leagueName: league.name,
+      leagueSeason: league.season,
+      kickoffAt,
+      homeTeam,
+      awayTeam,
+      homeMatchFeePence,
+      awayMatchFeePence,
+    });
   });
+
+  if (shouldPauseFixtureAdminProcesses(status)) {
+    await cancelQueuedFixtureConfirmationChases({
+      fixtureId,
+      reason:
+        status === FixtureStatus.POSTPONED
+          ? "Fixture was postponed before queued confirmation SMS was sent."
+          : "Fixture was cancelled before queued confirmation SMS was sent.",
+    });
+  }
 
   revalidatePath("/admin/fixtures");
   revalidatePath(returnTo);
