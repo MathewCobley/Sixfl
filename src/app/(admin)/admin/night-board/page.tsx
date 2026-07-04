@@ -185,7 +185,7 @@ function buildNightBoardReturnTo(input: Record<string, string>) {
   return `/admin/night-board${query ? `?${query}` : ""}`;
 }
 
-export async function updateNightBoardFixturePitchAction(formData: FormData) {
+async function updateNightBoardFixturePitchAction(formData: FormData) {
   "use server";
 
   await requireAdmin();
@@ -464,9 +464,7 @@ function calculateNightPitchHireOverride(input: {
   const hours = bookingHours(input.startTime || null, input.endTime || null);
   const costPerHourPence = parseOptionalPence(input.costPerHour);
 
-  if (!hasAny || !pitchCount || !hours || !costPerHourPence) {
-    return { hasAny, amountPence: null as number | null, label: "Incomplete night override" };
-  }
+  if (!hasAny || !pitchCount || !hours || !costPerHourPence) return { hasAny, amountPence: null as number | null, label: "Incomplete night override" };
 
   return {
     hasAny,
@@ -511,33 +509,13 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const automaticPitchHire = await calculateAutomaticPitchHire(fixtures);
   const nightPitchHireOverride = calculateNightPitchHireOverride({ pitchCount: nightPitchCountValue, startTime: nightStartTimeValue, endTime: nightEndTimeValue, costPerHour: nightPitchCostPerHourValue });
   const hasManualPitchHire = pitchHireValue.trim().length > 0;
-  const pitchHirePence = hasManualPitchHire
-    ? parsePence(pitchHireValue, nightPitchHireOverride.amountPence ?? automaticPitchHire.amountPence)
-    : nightPitchHireOverride.amountPence ?? automaticPitchHire.amountPence;
-  const pitchHireSourceLabel = hasManualPitchHire
-    ? "Manual total override"
-    : nightPitchHireOverride.amountPence !== null
-      ? nightPitchHireOverride.label
-      : automaticPitchHire.label;
+  const pitchHirePence = hasManualPitchHire ? parsePence(pitchHireValue, nightPitchHireOverride.amountPence ?? automaticPitchHire.amountPence) : nightPitchHireOverride.amountPence ?? automaticPitchHire.amountPence;
+  const pitchHireSourceLabel = hasManualPitchHire ? "Manual total override" : nightPitchHireOverride.amountPence !== null ? nightPitchHireOverride.label : automaticPitchHire.label;
   const hasIncompleteNightOverride = nightPitchHireOverride.hasAny && nightPitchHireOverride.amountPence === null && !hasManualPitchHire;
 
-  const returnTo = buildNightBoardReturnTo({
-    date: selectedDate,
-    leagueId: activeLeagueId,
-    venueId,
-    refFee: refFeeValue,
-    pitchHire: pitchHireValue,
-    nightPitchCount: nightPitchCountValue,
-    nightStartTime: nightStartTimeValue,
-    nightEndTime: nightEndTimeValue,
-    nightPitchCostPerHour: nightPitchCostPerHourValue,
-  });
-
+  const returnTo = buildNightBoardReturnTo({ date: selectedDate, leagueId: activeLeagueId, venueId, refFee: refFeeValue, pitchHire: pitchHireValue, nightPitchCount: nightPitchCountValue, nightStartTime: nightStartTimeValue, nightEndTime: nightEndTimeValue, nightPitchCostPerHour: nightPitchCostPerHourValue });
   const dateOptions = buildDateOptions(activeUpcomingNightOptions, selectedDate);
-  const leagueOptions = [
-    { value: "", label: "All leagues", description: "Upcoming published fixtures only" },
-    ...leagues.map((league) => ({ value: league.id, label: league.name, description: `${league.season ?? "No season"} · ${league.fixtureCount} upcoming fixture${league.fixtureCount === 1 ? "" : "s"}${league.nextKickoffAt ? ` · next ${formatDate(league.nextKickoffAt)}` : ""}${league.isActive ? "" : " · inactive"}` })),
-  ];
+  const leagueOptions = [{ value: "", label: "All leagues", description: "Upcoming published fixtures only" }, ...leagues.map((league) => ({ value: league.id, label: league.name, description: `${league.season ?? "No season"} · ${league.fixtureCount} upcoming fixture${league.fixtureCount === 1 ? "" : "s"}${league.nextKickoffAt ? ` · next ${formatDate(league.nextKickoffAt)}` : ""}${league.isActive ? "" : " · inactive"}` }))];
   const venueOptions = [{ value: "", label: "All venues", description: "Show every venue" }, ...venues.map((venue) => ({ value: venue.id, label: venue.name }))];
 
   const warnings = buildWarnings(fixtures);
@@ -559,20 +537,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
           <div><div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Operations</div><h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Night board</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">One page to check who is playing on which pitch, at what time, and which referee is covering each published match.</p></div>
           <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isSorted ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>{isSorted ? "Night sorted" : "Needs attention"}</div>
         </div>
-        <NightBoardFilters
-          dateOptions={dateOptions}
-          leagueOptions={leagueOptions}
-          venueOptions={venueOptions}
-          selectedDate={selectedDate}
-          selectedLeagueId={activeLeagueId}
-          selectedVenueId={venueId}
-          refFee={refFeeValue}
-          pitchHire={pitchHireValue}
-          nightPitchCount={nightPitchCountValue}
-          nightStartTime={nightStartTimeValue}
-          nightEndTime={nightEndTimeValue}
-          nightPitchCostPerHour={nightPitchCostPerHourValue}
-        />
+        <NightBoardFilters dateOptions={dateOptions} leagueOptions={leagueOptions} venueOptions={venueOptions} selectedDate={selectedDate} selectedLeagueId={activeLeagueId} selectedVenueId={venueId} refFee={refFeeValue} pitchHire={pitchHireValue} nightPitchCount={nightPitchCountValue} nightStartTime={nightStartTimeValue} nightEndTime={nightEndTimeValue} nightPitchCostPerHour={nightPitchCostPerHourValue} />
         <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-white/45">Pitch hire: <span className="font-semibold text-white/70">{formatMoney(pitchHirePence)}</span> · {pitchHireSourceLabel}. Use the pitch hire total box only if you want to override the final total manually.</div>
         {hasIncompleteNightOverride ? <div className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100">One-night override is incomplete. Fill pitches, start, end and hourly cost, or clear those fields to use the league booking.</div> : null}
       </AdminCard>
@@ -584,12 +549,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Captain confirms</div><div className="mt-2 text-3xl font-semibold text-white">{confirmedCaptains}/{expectedCaptainConfirmations}</div><div className="mt-1 text-sm text-white/45">home + away confirmations</div></AdminCard>
       </div>
 
-      <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0">
-        <div className="border-b border-white/10 px-6 py-5 md:px-8"><h2 className="text-xl font-semibold text-white">Pitch board</h2><p className="mt-1 text-sm text-white/45">{formatDate(start)}</p></div>
-        {fixtures.length === 0 ? <div className="p-6 text-sm text-white/55">No published fixtures found for these filters.</div> : (
-          <div className="overflow-x-auto"><table className="min-w-[1100px] text-left text-sm"><thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.16em] text-white/40"><tr><th className="w-28 px-4 py-3">Time</th>{pitchNames.map((pitch) => <th key={pitch} className="px-4 py-3">{pitch}</th>)}</tr></thead><tbody className="divide-y divide-white/10">{timeLabels.map((time) => (<tr key={time}><td className="px-4 py-4 align-top text-lg font-semibold text-white">{time}</td>{pitchNames.map((pitch) => { const matches = fixtureByTimePitch.get(`${time}__${pitch}`) ?? []; return <td key={`${time}-${pitch}`} className="min-w-[300px] px-4 py-4 align-top">{matches.length === 0 ? <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-center text-white/25">Empty</div> : null}<div className="space-y-3">{matches.map((fixture) => <div key={fixture.id} className={`rounded-2xl border p-4 ${statusClass(fixture.status)}`}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{fixture.homeTeam.name}</div><div className="text-white/45">v</div><div className="font-semibold">{fixture.awayTeam.name}</div></div><div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/55">{fixture.status}</div></div><div className="mt-3 space-y-1 text-xs text-white/55"><div>Ref: <span className={fixture.referee ? "text-white/80" : "text-red-200"}>{fixture.referee?.name || fixture.referee?.email || "Missing"}</span></div><div>League: {fixture.league.name}{fixture.division ? ` / ${fixture.division.name}` : ""}</div><div>Venue: {fixture.venue?.name || fixture.league.venueName || "Missing"}</div>{fixture.result ? <div>Result: {fixture.result.homeScore} - {fixture.result.awayScore}</div> : null}</div><form action={updateNightBoardFixturePitchAction} className="mt-3 flex gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" /><button type="submit" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save</button></form><Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="mt-3 inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link></div>)}</div></td>; })}</tr>))}</tbody></table></div>
-        )}
-      </AdminCard>
+      <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0"><div className="border-b border-white/10 px-6 py-5 md:px-8"><h2 className="text-xl font-semibold text-white">Pitch board</h2><p className="mt-1 text-sm text-white/45">{formatDate(start)}</p></div>{fixtures.length === 0 ? <div className="p-6 text-sm text-white/55">No published fixtures found for these filters.</div> : <div className="overflow-x-auto"><table className="min-w-[1100px] text-left text-sm"><thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.16em] text-white/40"><tr><th className="w-28 px-4 py-3">Time</th>{pitchNames.map((pitch) => <th key={pitch} className="px-4 py-3">{pitch}</th>)}</tr></thead><tbody className="divide-y divide-white/10">{timeLabels.map((time) => <tr key={time}><td className="px-4 py-4 align-top text-lg font-semibold text-white">{time}</td>{pitchNames.map((pitch) => { const matches = fixtureByTimePitch.get(`${time}__${pitch}`) ?? []; return <td key={`${time}-${pitch}`} className="min-w-[300px] px-4 py-4 align-top">{matches.length === 0 ? <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-center text-white/25">Empty</div> : null}<div className="space-y-3">{matches.map((fixture) => <div key={fixture.id} className={`rounded-2xl border p-4 ${statusClass(fixture.status)}`}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{fixture.homeTeam.name}</div><div className="text-white/45">v</div><div className="font-semibold">{fixture.awayTeam.name}</div></div><div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/55">{fixture.status}</div></div><div className="mt-3 space-y-1 text-xs text-white/55"><div>Ref: <span className={fixture.referee ? "text-white/80" : "text-red-200"}>{fixture.referee?.name || fixture.referee?.email || "Missing"}</span></div><div>League: {fixture.league.name}{fixture.division ? ` / ${fixture.division.name}` : ""}</div><div>Venue: {fixture.venue?.name || fixture.league.venueName || "Missing"}</div>{fixture.result ? <div>Result: {fixture.result.homeScore} - {fixture.result.awayScore}</div> : null}</div><form action={updateNightBoardFixturePitchAction} className="mt-3 flex gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" /><button type="submit" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save</button></form><Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="mt-3 inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link></div>)}</div></td>; })}</tr>)}</tbody></table></div>}</AdminCard>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-xl font-semibold text-white">Referee allocation</h2><div className="mt-4 space-y-3">{refereeRows.length === 0 ? <div className="text-sm text-white/55">No referees assigned yet.</div> : null}{refereeRows.map((row) => <div key={`${row.name}-${row.email}`} className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="flex items-start justify-between gap-4"><div><div className="font-semibold text-white">{row.name}</div><div className="text-sm text-white/45">{row.email}</div></div><div className="text-right text-sm text-white/70">{formatMoney(row.feePence)}</div></div><div className="mt-3 grid gap-2 text-sm text-white/55 sm:grid-cols-3"><div>{row.fixtures.length} match{row.fixtures.length === 1 ? "" : "es"}</div><div>{row.pitchList}</div><div>{row.firstKickoff ? formatTime(row.firstKickoff) : "—"} – {row.lastKickoff ? formatTime(row.lastKickoff) : "—"}</div></div></div>)}</div></AdminCard>
