@@ -39,6 +39,24 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function hasAnyOverrideValue(input: {
+  pitchHire: string;
+  nightPitchCount: string;
+  nightStartTime: string;
+  nightEndTime: string;
+  nightPitchTotalCost?: string;
+  nightPitchCostPerHour?: string;
+}) {
+  return Boolean(
+    input.pitchHire.trim() ||
+      input.nightPitchCount.trim() ||
+      input.nightStartTime.trim() ||
+      input.nightEndTime.trim() ||
+      input.nightPitchTotalCost?.trim() ||
+      input.nightPitchCostPerHour?.trim(),
+  );
+}
+
 function CustomSelect({
   name,
   label,
@@ -167,6 +185,16 @@ export default function NightBoardFilters({
   nightPitchTotalCost,
   nightPitchCostPerHour,
 }: NightBoardFiltersProps) {
+  const initialTotalPitchCost = nightPitchTotalCost ?? nightPitchCostPerHour ?? pitchHire ?? "";
+  const initialHasOverrideValue = hasAnyOverrideValue({
+    pitchHire,
+    nightPitchCount,
+    nightStartTime,
+    nightEndTime,
+    nightPitchTotalCost,
+    nightPitchCostPerHour,
+  });
+
   const [date, setDate] = useState(selectedDate);
   const [leagueId, setLeagueId] = useState(selectedLeagueId);
   const [venueId, setVenueId] = useState(selectedVenueId);
@@ -174,15 +202,48 @@ export default function NightBoardFilters({
   const [pitchCountValue, setPitchCountValue] = useState(nightPitchCount);
   const [startTimeValue, setStartTimeValue] = useState(nightStartTime);
   const [endTimeValue, setEndTimeValue] = useState(nightEndTime);
-  const [totalPitchCostValue, setTotalPitchCostValue] = useState(
-    nightPitchTotalCost ?? nightPitchCostPerHour ?? pitchHire ?? "",
-  );
+  const [totalPitchCostValue, setTotalPitchCostValue] = useState(initialTotalPitchCost);
+  const skipNextSavedLoadRef = useRef(initialHasOverrideValue);
+
+  useEffect(() => {
+    setDate(selectedDate);
+    setLeagueId(selectedLeagueId);
+    setVenueId(selectedVenueId);
+    setPitchHireValue(pitchHire);
+    setPitchCountValue(nightPitchCount);
+    setStartTimeValue(nightStartTime);
+    setEndTimeValue(nightEndTime);
+    setTotalPitchCostValue(nightPitchTotalCost ?? nightPitchCostPerHour ?? pitchHire ?? "");
+    skipNextSavedLoadRef.current = hasAnyOverrideValue({
+      pitchHire,
+      nightPitchCount,
+      nightStartTime,
+      nightEndTime,
+      nightPitchTotalCost,
+      nightPitchCostPerHour,
+    });
+  }, [
+    selectedDate,
+    selectedLeagueId,
+    selectedVenueId,
+    pitchHire,
+    nightPitchCount,
+    nightStartTime,
+    nightEndTime,
+    nightPitchTotalCost,
+    nightPitchCostPerHour,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadSavedOverride() {
       if (!date) return;
+
+      if (skipNextSavedLoadRef.current) {
+        skipNextSavedLoadRef.current = false;
+        return;
+      }
 
       const params = new URLSearchParams();
       params.set("date", date);
@@ -202,8 +263,8 @@ export default function NightBoardFilters({
         setPitchCountValue(saved.nightPitchCount);
         setStartTimeValue(saved.nightStartTime);
         setEndTimeValue(saved.nightEndTime);
-        setTotalPitchCostValue(saved.nightPitchTotalCost || pitchHireValue);
-        setPitchHireValue(saved.nightPitchTotalCost || pitchHireValue);
+        setTotalPitchCostValue(saved.nightPitchTotalCost);
+        setPitchHireValue(saved.nightPitchTotalCost);
       } catch {
         // Keep the existing form values if the saved override cannot be loaded.
       }
@@ -216,14 +277,39 @@ export default function NightBoardFilters({
     };
   }, [date, leagueId, venueId]);
 
+  const handleDateChange = (value: string) => {
+    skipNextSavedLoadRef.current = false;
+    setDate(value);
+  };
+
+  const handleLeagueChange = (value: string) => {
+    skipNextSavedLoadRef.current = false;
+    setLeagueId(value);
+  };
+
+  const handleVenueChange = (value: string) => {
+    skipNextSavedLoadRef.current = false;
+    setVenueId(value);
+  };
+
+  const handleTotalPitchCostChange = (value: string) => {
+    setTotalPitchCostValue(value);
+    setPitchHireValue(value);
+  };
+
+  const handlePitchHireChange = (value: string) => {
+    setPitchHireValue(value);
+    setTotalPitchCostValue(value);
+  };
+
   return (
     <form className="mt-6 space-y-4" action="/admin/night-board/save">
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <CustomSelect name="date" label="Fixture night" options={dateOptions} value={date} onChange={setDate} />
-        <CustomSelect name="leagueId" label="League" options={leagueOptions} value={leagueId} onChange={setLeagueId} />
-        <CustomSelect name="venueId" label="Venue" options={venueOptions} value={venueId} onChange={setVenueId} />
+        <CustomSelect name="date" label="Fixture night" options={dateOptions} value={date} onChange={handleDateChange} />
+        <CustomSelect name="leagueId" label="League" options={leagueOptions} value={leagueId} onChange={handleLeagueChange} />
+        <CustomSelect name="venueId" label="Venue" options={venueOptions} value={venueId} onChange={handleVenueChange} />
         <MoneyInput label="Ref fee / match" name="refFee" value={refFee} placeholder="e.g. 15" />
-        <MoneyInput label="Pitch hire total" name="pitchHire" value={pitchHireValue} onChange={setPitchHireValue} placeholder="manual total" />
+        <MoneyInput label="Pitch hire total" name="pitchHire" value={pitchHireValue} onChange={handlePitchHireChange} placeholder="manual total" />
       </div>
 
       <div className="rounded-2xl border border-amber-400/15 bg-amber-500/[0.05] p-4">
@@ -271,7 +357,7 @@ export default function NightBoardFilters({
               className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
             />
           </label>
-          <MoneyInput label="Total pitch cost" name="nightPitchTotalCost" value={totalPitchCostValue} onChange={setTotalPitchCostValue} placeholder="e.g. 120" />
+          <MoneyInput label="Total pitch cost" name="nightPitchTotalCost" value={totalPitchCostValue} onChange={handleTotalPitchCostChange} placeholder="e.g. 120" />
         </div>
       </div>
 
