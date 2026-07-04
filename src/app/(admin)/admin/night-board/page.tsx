@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { FixtureStatus, PaymentChargeStatus, Prisma, UserRole } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
+import { parseLondonDateTime, toLondonTimeInputValue } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createRefereeNightId, recalculateRefereeNightCashup } from "@/lib/referee-nights";
@@ -61,14 +62,18 @@ type NightBoardOverrideRow = {
   pitchHirePence: number | null;
 };
 
+const FIXTURE_STATUS_OPTIONS: FixtureStatus[] = [
+  FixtureStatus.SCHEDULED,
+  FixtureStatus.POSTPONED,
+  FixtureStatus.CANCELLED,
+  FixtureStatus.COMPLETED,
+];
+
 function getSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-function hasSearchParam(
-  params: Record<string, string | string[] | undefined>,
-  key: string,
-) {
+function hasSearchParam(params: Record<string, string | string[] | undefined>, key: string) {
   return Object.prototype.hasOwnProperty.call(params, key);
 }
 
@@ -170,8 +175,8 @@ function bookingHours(startTime: string | null, endTime: string | null) {
 }
 
 function statusClass(status: FixtureStatus) {
-  if (status === "COMPLETED") return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-  if (status === "POSTPONED" || status === "CANCELLED") return "border-red-400/25 bg-red-500/10 text-red-100";
+  if (status === FixtureStatus.COMPLETED) return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+  if (status === FixtureStatus.POSTPONED || status === FixtureStatus.CANCELLED) return "border-red-400/25 bg-red-500/10 text-red-100";
   return "border-white/10 bg-white/[0.04] text-white";
 }
 
@@ -197,6 +202,23 @@ function buildNightBoardOverrideScopeKey(input: {
   venueId: string;
 }) {
   return `${input.boardDate}::${input.leagueId || "all-leagues"}::${input.venueId || "all-venues"}`;
+}
+
+function getSafeReturnTo(formData: FormData) {
+  const rawReturnTo = String(formData.get("returnTo") ?? "").trim();
+  return rawReturnTo.startsWith("/admin/night-board") ? rawReturnTo : "/admin/night-board";
+}
+
+function parseFixtureStatus(value: string) {
+  return FIXTURE_STATUS_OPTIONS.includes(value as FixtureStatus)
+    ? (value as FixtureStatus)
+    : FixtureStatus.SCHEDULED;
+}
+
+function parseOperationalKickoff(input: { currentKickoffAt: Date; timeInput: string }) {
+  const time = input.timeInput.trim();
+  if (!/^\d{2}:\d{2}$/.test(time)) return input.currentKickoffAt;
+  return parseLondonDateTime(toLondonDateInput(input.currentKickoffAt), time);
 }
 
 async function getSavedNightBoardPitchHireOverride(input: {
@@ -258,129 +280,109 @@ async function saveNightBoardPitchHireOverride(input: {
   }
 }
 
-async function updateNightBoardFixturePitchAction(formData: FormData) {
-  "use server";
-
-  await requireAdmin();
-
-  const fixtureId = String(formData.get("fixtureId") ?? "").trim();
-  const pitch = String(formData.get("pitch") ?? "").trim();
-  const rawReturnTo = String(formData.get("returnTo") ?? "").trim();
-  const returnTo = rawReturnTo.startsWith("/admin/night-board") ? rawReturnTo : "/admin/night-board";
-
-  if (fixtureId) {
-    await prisma.fixture.update({
-      where: { id: fixtureId },
-      data: { pitch: pitch || null },
-    });
-  }
-
-  revalidatePath("/admin/night-board");
-  revalidatePath("/admin/fixtures");
-
-  redirect(returnTo);
+async function getExistingRefereeNightAssignments(fixtureId: string) {
+  return prisma.$queryRaw<Array<{ refereeNightId: string }>>(Prisma.sql`
+    SELECT "refereeNightId"
+    FROM "RefereeNightFixture"
+    WHERE "fixtureId" = ${fixtureId}
+  `);
 }
 
-async function updateNightBoardFixtureRefereeAction(formData: FormData) {
+async function updateNightBoardFixtureMatchAction(formData: FormData) {
   "use server";
 
   const { user } = await requireAdmin();
-
+  const returnTo = getSafeReturnTo(formData);
   const fixtureId = String(formData.get("fixtureId") ?? "").trim();
-  const refereeId = String(formData.get("refereeId") ?? "").trim();
-  const rawReturnTo = String(formData.get("returnTo") ?? "").trim();
-  const returnTo = rawReturnTo.startsWith("/admin/night-board") ? rawReturnTo : "/admin/night-board";
-
   if (!fixtureId) redirect(returnTo);
+
+  const pitch = String(formData.get("pitch") ?? "").trim();
+  const refereeId = String(formData.get("refereeId") ?? "").trim();
+  const venueId = String(formData.get("venueId") ?? "").trim() || null;
+  const kickoffTime = String(formData.get("kickoffTime") ?? "").trim();
+  const status = parseFixtureStatus(String(formData.get("status") ?? "").trim());
 
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },
     select: {
       id: true,
       leagueId: true,
-      venueId: true,
       kickoffAt: true,
-      refereeId: true,
     },
   });
-
   if (!fixture) redirect(returnTo);
 
-  const existingAssignments = await prisma.$queryRaw<Array<{ refereeNightId: string }>>(Prisma.sql`
-    SELECT "refereeNightId"
-    FROM "RefereeNightFixture"
-    WHERE "fixtureId" = ${fixture.id}
-  `);
+  const kickoffAt = parseOperationalKickoff({ currentKickoffAt: fixture.kickoffAt, timeInput: kickoffTime });
+  const nightDate = toLondonDateInput(kickoffAt);
+  const existingAssignments = await getExistingRefereeNightAssignments(fixture.id);
   const affectedNightIds = new Set(existingAssignments.map((row) => row.refereeNightId));
+  let targetNightId: string | null = null;
+  let validatedRefereeId: string | null = null;
+  let refereeNightFeePence = 0;
 
-  if (!refereeId) {
-    await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`
-        DELETE FROM "RefereeNightFixture"
-        WHERE "fixtureId" = ${fixture.id}
-      `);
-      await tx.fixture.update({
-        where: { id: fixture.id },
-        data: { refereeId: null },
-      });
+  if (refereeId) {
+    const referee = await prisma.user.findFirst({
+      where: {
+        id: refereeId,
+        role: { in: [UserRole.REFEREE, UserRole.ADMIN] },
+      },
+      select: { id: true },
     });
 
-    await Promise.all(Array.from(affectedNightIds).map((nightId) => recalculateRefereeNightCashup(nightId)));
-    revalidatePath("/admin/night-board");
-    revalidatePath("/admin/fixtures");
-    revalidatePath("/admin/referee-nights");
-    redirect(returnTo);
+    if (referee) {
+      validatedRefereeId = referee.id;
+      const profile = await getRefereeProfileByUserId(referee.id);
+      refereeNightFeePence = profile?.standardNightFeePence ?? 0;
+    }
   }
 
-  const referee = await prisma.user.findFirst({
-    where: {
-      id: refereeId,
-      role: { in: [UserRole.REFEREE, UserRole.ADMIN] },
-    },
-    select: { id: true },
-  });
-
-  if (!referee) redirect(returnTo);
-
-  const nightDate = toLondonDateInput(fixture.kickoffAt);
-  const profile = await getRefereeProfileByUserId(referee.id);
-  const feePence = profile?.standardNightFeePence ?? 0;
-  let targetNightId: string | null = null;
-
   await prisma.$transaction(async (tx) => {
-    const existingNightRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT id
-      FROM "RefereeNight"
-      WHERE "refereeId" = ${referee.id}
-        AND "leagueId" = ${fixture.leagueId}
-        AND "nightDate" = ${nightDate}::date
-        AND "venueId" IS NOT DISTINCT FROM ${fixture.venueId}
-      LIMIT 1
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "RefereeNightFixture"
+      WHERE "fixtureId" = ${fixture.id}
     `);
 
-    targetNightId = existingNightRows[0]?.id ?? null;
+    if (validatedRefereeId) {
+      const existingNightRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT id
+        FROM "RefereeNight"
+        WHERE "refereeId" = ${validatedRefereeId}
+          AND "leagueId" = ${fixture.leagueId}
+          AND "nightDate" = ${nightDate}::date
+          AND "venueId" IS NOT DISTINCT FROM ${venueId}
+        LIMIT 1
+      `);
 
-    if (!targetNightId) {
-      targetNightId = createRefereeNightId();
+      targetNightId = existingNightRows[0]?.id ?? null;
+
+      if (!targetNightId) {
+        targetNightId = createRefereeNightId();
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "RefereeNight" (
+            "id", "refereeId", "leagueId", "venueId", "nightDate", "feePence", "status", "adminNotes", "createdByUserId", "updatedAt"
+          ) VALUES (
+            ${targetNightId}, ${validatedRefereeId}, ${fixture.leagueId}, ${venueId}, ${nightDate}::date, ${refereeNightFeePence}, 'DRAFT', ${"Created from Night Board match edit."}, ${user?.id ?? null}, NOW()
+          )
+        `);
+      }
+
       await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "RefereeNight" (
-          "id", "refereeId", "leagueId", "venueId", "nightDate", "feePence", "status", "adminNotes", "createdByUserId", "updatedAt"
-        ) VALUES (
-          ${targetNightId}, ${referee.id}, ${fixture.leagueId}, ${fixture.venueId}, ${nightDate}::date, ${feePence}, 'DRAFT', ${"Created from Night Board referee change."}, ${user?.id ?? null}, NOW()
-        )
+        INSERT INTO "RefereeNightFixture" ("id", "refereeNightId", "fixtureId")
+        VALUES (${createRefereeNightId()}, ${targetNightId}, ${fixture.id})
+        ON CONFLICT ("fixtureId") DO UPDATE
+        SET "refereeNightId" = EXCLUDED."refereeNightId"
       `);
     }
 
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "RefereeNightFixture" ("id", "refereeNightId", "fixtureId")
-      VALUES (${createRefereeNightId()}, ${targetNightId}, ${fixture.id})
-      ON CONFLICT ("fixtureId") DO UPDATE
-      SET "refereeNightId" = EXCLUDED."refereeNightId"
-    `);
-
     await tx.fixture.update({
       where: { id: fixture.id },
-      data: { refereeId: referee.id },
+      data: {
+        kickoffAt,
+        pitch: pitch || null,
+        venueId,
+        refereeId: validatedRefereeId,
+        status,
+      },
     });
   });
 
@@ -724,7 +726,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const { pitchNames, timeLabels, fixtureByTimePitch } = getBoardGroups(fixtures);
   const refereeRows = getRefereeRows(fixtures, refFeePence);
   const finance = getFinance(fixtures, refFeePence, pitchHirePence);
-  const completedCount = fixtures.filter((fixture) => fixture.status === "COMPLETED").length;
+  const completedCount = fixtures.filter((fixture) => fixture.status === FixtureStatus.COMPLETED).length;
   const missingRefCount = fixtures.filter((fixture) => !fixture.referee).length;
   const missingPitchCount = fixtures.filter((fixture) => !fixture.pitch?.trim()).length;
   const confirmedCaptains = fixtures.reduce((total, fixture) => total + fixture.captainConfirmations.filter((confirmation) => confirmation.status === "CONFIRMED").length, 0);
@@ -775,7 +777,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
         <div className="border-b border-white/10 px-6 py-5 md:px-8"><h2 className="text-xl font-semibold text-white">Pitch board</h2><p className="mt-1 text-sm text-white/45">{formatDate(start)}</p></div>
         {fixtures.length === 0 ? <div className="p-6 text-sm text-white/55">No published fixtures found for these filters.</div> : (
           <div className="overflow-x-auto">
-            <table className="min-w-[1180px] text-left text-sm">
+            <table className="min-w-[1280px] text-left text-sm">
               <thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.16em] text-white/40"><tr><th className="w-28 px-4 py-3">Time</th>{pitchNames.map((pitch) => <th key={pitch} className="px-4 py-3">{pitch}</th>)}</tr></thead>
               <tbody className="divide-y divide-white/10">
                 {timeLabels.map((time) => (
@@ -784,16 +786,31 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
                     {pitchNames.map((pitch) => {
                       const matches = fixtureByTimePitch.get(`${time}__${pitch}`) ?? [];
                       return (
-                        <td key={`${time}-${pitch}`} className="min-w-[330px] px-4 py-4 align-top">
+                        <td key={`${time}-${pitch}`} className="min-w-[380px] px-4 py-4 align-top">
                           {matches.length === 0 ? <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-center text-white/25">Empty</div> : null}
                           <div className="space-y-3">
                             {matches.map((fixture) => (
                               <div key={fixture.id} className={`rounded-2xl border p-4 ${statusClass(fixture.status)}`}>
                                 <div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{fixture.homeTeam.name}</div><div className="text-white/45">v</div><div className="font-semibold">{fixture.awayTeam.name}</div></div><div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/55">{fixture.status}</div></div>
                                 <div className="mt-3 space-y-1 text-xs text-white/55"><div>Ref: <span className={fixture.referee ? "text-white/80" : "text-red-200"}>{fixture.referee?.name || fixture.referee?.email || "Missing"}</span></div><div>League: {fixture.league.name}{fixture.division ? ` / ${fixture.division.name}` : ""}</div><div>Venue: {fixture.venue?.name || fixture.league.venueName || "Missing"}</div>{fixture.result ? <div>Result: {fixture.result.homeScore} - {fixture.result.awayScore}</div> : null}</div>
-                                <form action={updateNightBoardFixtureRefereeAction} className="mt-3 flex gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><select name="refereeId" defaultValue={fixture.referee?.id ?? ""} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400/40">{refereeOptions.map((option) => <option key={`${fixture.id}-ref-${option.value || "none"}`} value={option.value}>{option.label}</option>)}</select><button type="submit" className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/15">Save ref</button></form>
-                                <form action={updateNightBoardFixturePitchAction} className="mt-2 flex gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" /><button type="submit" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save pitch</button></form>
-                                <Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="mt-3 inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link>
+
+                                <form action={updateNightBoardFixtureMatchAction} className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                                  <input type="hidden" name="fixtureId" value={fixture.id} />
+                                  <input type="hidden" name="returnTo" value={returnTo} />
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">KO time<input name="kickoffTime" type="time" defaultValue={toLondonTimeInputValue(fixture.kickoffAt)} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-emerald-400/40" /></label>
+                                    <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Status<select name="status" defaultValue={fixture.status} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-emerald-400/40">{FIXTURE_STATUS_OPTIONS.map((status) => <option key={`${fixture.id}-${status}`} value={status}>{status}</option>)}</select></label>
+                                    <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Pitch<input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" /></label>
+                                    <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Venue<select name="venueId" defaultValue={fixture.venue?.id ?? ""} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-emerald-400/40"><option value="">No venue</option>{venues.map((venue) => <option key={`${fixture.id}-venue-${venue.id}`} value={venue.id}>{venue.name}</option>)}</select></label>
+                                  </div>
+                                  <label className="mt-2 block space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Referee<select name="refereeId" defaultValue={fixture.referee?.id ?? ""} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-sky-400/40">{refereeOptions.map((option) => <option key={`${fixture.id}-ref-${option.value || "none"}`} value={option.value}>{option.label}</option>)}</select></label>
+                                  <button type="submit" className="mt-3 w-full rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save match-night edit</button>
+                                </form>
+
+                                <div className="mt-3 flex flex-wrap gap-3">
+                                  <Link href={`/admin/fixtures/${fixture.id}/edit`} className="inline-flex text-xs font-semibold text-sky-200 hover:text-sky-100">Full fixture edit</Link>
+                                  <Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link>
+                                </div>
                               </div>
                             ))}
                           </div>
