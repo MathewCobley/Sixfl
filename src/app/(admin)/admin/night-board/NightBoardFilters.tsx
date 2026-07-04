@@ -24,7 +24,7 @@ type NightBoardFiltersProps = {
   nightPitchCount: string;
   nightStartTime: string;
   nightEndTime: string;
-  nightPitchCostPerHour: string;
+  nightPitchTotalCost: string;
 };
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -153,7 +153,7 @@ export default function NightBoardFilters({
   nightPitchCount,
   nightStartTime,
   nightEndTime,
-  nightPitchCostPerHour,
+  nightPitchTotalCost,
 }: NightBoardFiltersProps) {
   const [date, setDate] = useState(selectedDate);
   const [leagueId, setLeagueId] = useState(selectedLeagueId);
@@ -176,7 +176,7 @@ export default function NightBoardFilters({
               One-night pitch cost override
             </div>
             <p className="mt-1 text-xs leading-5 text-white/45">
-              Use this when a night has fewer pitches, extra hours, or a different hourly rate. Leave blank to use the league booking.
+              Use this when a night has a different final pitch hire cost. The total pitch cost below is used directly as the pitch hire fee.
             </p>
           </div>
         </div>
@@ -211,7 +211,7 @@ export default function NightBoardFilters({
               className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
             />
           </label>
-          <MoneyInput label="Hourly cost" name="nightPitchCostPerHour" defaultValue={nightPitchCostPerHour} placeholder="e.g. 60" />
+          <MoneyInput label="Total pitch cost" name="nightPitchTotalCost" defaultValue={nightPitchTotalCost} placeholder="e.g. 120" />
         </div>
       </div>
 
