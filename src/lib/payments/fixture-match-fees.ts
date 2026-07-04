@@ -4,6 +4,7 @@
 
 import { randomBytes } from "node:crypto";
 import {
+  FixtureStatus,
   NotificationDispatchStatus,
   PaymentChargeStatus,
 } from "@prisma/client";
@@ -121,13 +122,34 @@ function getSkippedMessageCount(input: QueueFixtureMatchFeeEmailsInput) {
   return input.charges.length * (initialMessagesPerCharge + reminderMessagesPerCharge);
 }
 
+function shouldBlockFixturePaymentMessages(fixture: {
+  publishedAt: Date | null;
+  status: FixtureStatus;
+}) {
+  return !fixture.publishedAt || fixture.status === FixtureStatus.CANCELLED || fixture.status === FixtureStatus.POSTPONED;
+}
+
+function blockedPaymentMessageReason(fixture?: {
+  status: FixtureStatus;
+} | null) {
+  if (fixture?.status === FixtureStatus.CANCELLED) {
+    return "Fixture was cancelled before queued match fee emails were sent.";
+  }
+
+  if (fixture?.status === FixtureStatus.POSTPONED) {
+    return "Fixture was postponed before queued match fee emails were sent.";
+  }
+
+  return "Blocked because the fixture is not published. SIXFL does not create or send payment requests for unpublished fixtures.";
+}
+
 async function isFixturePublishedForPaymentMessages(fixtureId: string) {
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },
     select: { publishedAt: true, status: true },
   });
 
-  return Boolean(fixture?.publishedAt) && fixture?.status !== "CANCELLED";
+  return Boolean(fixture) && !shouldBlockFixturePaymentMessages(fixture);
 }
 
 export function buildChargePaymentPath(paymentToken: string) {
@@ -245,7 +267,7 @@ export async function syncFixtureMatchFeeCharges(
     }),
   ]);
 
-  if (!fixture?.publishedAt || fixture.status === "CANCELLED") {
+  if (!fixture || shouldBlockFixturePaymentMessages(fixture)) {
     const voidedChargeIds: string[] = [];
 
     for (const charge of existingCharges) {
@@ -264,10 +286,7 @@ export async function syncFixtureMatchFeeCharges(
     }
 
     await cancelQueuedMatchFeeNotificationDispatches(voidedChargeIds, db, {
-      reason:
-        fixture?.status === "CANCELLED"
-          ? "Fixture was cancelled before queued match fee emails were sent."
-          : "Blocked because the fixture is not published. SIXFL does not create or send payment requests for unpublished fixtures.",
+      reason: blockedPaymentMessageReason(fixture),
     });
 
     return { activeCharges: [] };
@@ -424,7 +443,7 @@ export async function queueFixtureMatchFeeEmails(
       prisma,
       {
         reason:
-          "Blocked because the fixture is not published or has been cancelled. SIXFL does not send payment messages for it.",
+          "Blocked because the fixture is not published, has been cancelled, or has been postponed. SIXFL does not send payment messages for it.",
       },
     );
 
@@ -519,6 +538,15 @@ export async function queueFixtureMatchFeeEmails(
           amount: formatMoney(charge.amountPence),
           paymentUrl: buildChargePaymentUrl(charge.paymentToken),
         },
+        emailBranding: {
+          teamName: charge.teamName,
+          teamLogoUrl: charge.teamLogoUrl,
+          leagueName: leagueDisplayName,
+        },
+        paymentSummary: {
+          amount: formatMoney(charge.amountPence),
+          reason: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+        },
       });
 
       if (requestSmsDispatch.status === NotificationDispatchStatus.QUEUED) {
@@ -528,45 +556,46 @@ export async function queueFixtureMatchFeeEmails(
       }
     }
 
-    for (const reminder of getFixtureMatchFeeReminderSchedules(input.kickoffAt)) {
-      if (canQueueEmail) {
-        const reminderDispatch = await queueNotificationFromTemplate({
-          templateKey: "match-fee-reminder-email",
-          recipientId: recipient.id,
-          sourceType: "FIXTURE_MATCH_FEE_REMINDER",
-          sourceId: charge.id,
-          metadata: {
-            kind: "fixture_match_fee_reminder",
-            chargeId: charge.id,
-            fixtureId: input.fixtureId,
-            teamId: charge.teamId,
-            reminderOffsetHours: reminder.hoursAfterKickoff,
-          },
-          scheduledFor: reminder.scheduledFor,
-          variables: {
-            firstName: snapshot.primaryContact.name ?? charge.teamName,
-            leagueName: input.leagueName,
-            leagueDisplayName,
-            fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
-            kickoffLabel: formatKickoffLabel(input.kickoffAt),
-            paymentUrl: buildChargePaymentUrl(charge.paymentToken),
-            reminderIntro:
-              reminder.hoursAfterKickoff === 24
-                ? "Your match fee for the fixture below is still unpaid."
-                : "Your match fee for the fixture below is still unpaid after our earlier reminder.",
-          },
-          emailBranding: {
-            teamName: charge.teamName,
-            teamLogoUrl: charge.teamLogoUrl,
-            leagueName: leagueDisplayName,
-          },
-        });
+    for (const schedule of getFixtureMatchFeeReminderSchedules(input.kickoffAt)) {
+      const reminderEmailDispatch = canQueueEmail
+        ? await queueNotificationFromTemplate({
+            templateKey: "match-fee-reminder-email",
+            recipientId: recipient.id,
+            sourceType: "FIXTURE_MATCH_FEE_REMINDER",
+            sourceId: charge.id,
+            scheduledFor: schedule.scheduledFor,
+            metadata: {
+              kind: "fixture_match_fee_reminder",
+              chargeId: charge.id,
+              fixtureId: input.fixtureId,
+              teamId: charge.teamId,
+              hoursAfterKickoff: schedule.hoursAfterKickoff,
+            },
+            variables: {
+              firstName: snapshot.primaryContact.name ?? charge.teamName,
+              leagueName: input.leagueName,
+              leagueDisplayName,
+              fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+              kickoffLabel: formatKickoffLabel(input.kickoffAt),
+              amount: formatMoney(charge.amountPence),
+              paymentUrl: buildChargePaymentUrl(charge.paymentToken),
+            },
+            emailBranding: {
+              teamName: charge.teamName,
+              teamLogoUrl: charge.teamLogoUrl,
+              leagueName: leagueDisplayName,
+            },
+            paymentSummary: {
+              amount: formatMoney(charge.amountPence),
+              reason: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
+            },
+          })
+        : null;
 
-        if (reminderDispatch.status === NotificationDispatchStatus.QUEUED) {
-          reminderQueued += 1;
-        } else {
-          reminderSkipped += 1;
-        }
+      if (reminderEmailDispatch?.status === NotificationDispatchStatus.QUEUED) {
+        reminderQueued += 1;
+      } else if (canQueueEmail) {
+        reminderSkipped += 1;
       }
 
       const reminderSmsDispatch = await queueNotificationFromTemplate({
@@ -574,25 +603,31 @@ export async function queueFixtureMatchFeeEmails(
         recipientId: recipient.id,
         sourceType: "FIXTURE_MATCH_FEE_REMINDER",
         sourceId: charge.id,
+        scheduledFor: schedule.scheduledFor,
         metadata: {
           kind: "fixture_match_fee_reminder_sms",
           chargeId: charge.id,
           fixtureId: input.fixtureId,
           teamId: charge.teamId,
-          reminderOffsetHours: reminder.hoursAfterKickoff,
+          hoursAfterKickoff: schedule.hoursAfterKickoff,
         },
-        scheduledFor: reminder.scheduledFor,
         variables: {
           firstName: snapshot.primaryContact.name ?? charge.teamName,
           leagueName: input.leagueName,
           leagueDisplayName,
           fixtureName: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
           kickoffLabel: formatKickoffLabel(input.kickoffAt),
+          amount: formatMoney(charge.amountPence),
           paymentUrl: buildChargePaymentUrl(charge.paymentToken),
-          reminderIntro:
-            reminder.hoursAfterKickoff === 24
-              ? "Your match fee is still unpaid."
-              : "Your match fee is still unpaid after our earlier reminder.",
+        },
+        emailBranding: {
+          teamName: charge.teamName,
+          teamLogoUrl: charge.teamLogoUrl,
+          leagueName: leagueDisplayName,
+        },
+        paymentSummary: {
+          amount: formatMoney(charge.amountPence),
+          reason: `${input.homeTeam.name} vs ${input.awayTeam.name}`,
         },
       });
 
@@ -612,28 +647,4 @@ export async function queueFixtureMatchFeeEmails(
     reminderQueued,
     reminderSkipped,
   };
-}
-
-export async function voidFixtureMatchFeeChargesOrThrow(
-  fixtureIds: string[],
-  db: PaymentChargeDbClient = prisma,
-) {
-  await voidFixtureChargesOrThrow({
-    fixtureIds,
-    db,
-    paidErrorPrefix: "Cannot delete this fixture because",
-    reason: "Fixture was deleted before queued match fee emails were sent.",
-  });
-}
-
-export async function voidCancelledFixtureMatchFeeChargesOrThrow(
-  fixtureIds: string[],
-  db: PaymentChargeDbClient = prisma,
-) {
-  await voidFixtureChargesOrThrow({
-    fixtureIds,
-    db,
-    paidErrorPrefix: "Cannot cancel this fixture because",
-    reason: "Fixture was cancelled before queued match fee emails were sent.",
-  });
 }
