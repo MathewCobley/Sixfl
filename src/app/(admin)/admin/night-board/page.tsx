@@ -62,6 +62,15 @@ type NightBoardOverrideRow = {
   nightEndTime: string | null;
 };
 
+type TeamChargeSummary = {
+  amountPence: number;
+  paidPence: number;
+  outstandingPence: number;
+  label: string;
+  detail: string;
+  tone: "paid" | "open" | "missing";
+};
+
 function getSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
@@ -160,6 +169,71 @@ function buildNightBoardOverrideScopeKey(input: { boardDate: string; leagueId: s
   return `${input.boardDate}::${input.leagueId || "all-leagues"}::${input.venueId || "all-venues"}`;
 }
 
+function statusClass(status: FixtureStatus) {
+  if (status === FixtureStatus.COMPLETED) return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+  if (status === FixtureStatus.POSTPONED || status === FixtureStatus.CANCELLED) return "border-red-400/25 bg-red-500/10 text-red-100";
+  return "border-white/10 bg-white/[0.04] text-white";
+}
+
+function warningClass(level: BoardWarning["level"]) {
+  return level === "red"
+    ? "border-red-400/25 bg-red-500/10 text-red-100"
+    : "border-amber-400/25 bg-amber-500/10 text-amber-100";
+}
+
+function chargeClass(tone: TeamChargeSummary["tone"]) {
+  if (tone === "paid") return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
+  if (tone === "missing") return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+  return "border-red-400/25 bg-red-500/10 text-red-100";
+}
+
+function getTeamChargeSummary(fixture: FixtureForBoard, teamId: string): TeamChargeSummary {
+  const charges = fixture.paymentCharges.filter(
+    (charge) => charge.teamId === teamId && charge.status !== PaymentChargeStatus.VOID,
+  );
+
+  if (charges.length === 0) {
+    const expectedPence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;
+    return {
+      amountPence: expectedPence,
+      paidPence: 0,
+      outstandingPence: expectedPence,
+      label: "Missing charge",
+      detail: `Expected ${formatMoney(expectedPence)}`,
+      tone: "missing",
+    };
+  }
+
+  const amountPence = charges.reduce((total, charge) => total + charge.amountPence, 0);
+  const paidPence = charges.reduce(
+    (total, charge) => total + charge.transactions.reduce((sum, transaction) => sum + transaction.amountPence, 0),
+    0,
+  );
+  const outstandingPence = Math.max(0, amountPence - paidPence);
+  const isPaid = outstandingPence === 0 || charges.every((charge) => charge.status === PaymentChargeStatus.PAID);
+
+  return {
+    amountPence,
+    paidPence,
+    outstandingPence,
+    label: isPaid ? "Paid" : `Due ${formatMoney(outstandingPence)}`,
+    detail: `Charge ${formatMoney(amountPence)} · Paid ${formatMoney(paidPence)}`,
+    tone: isPaid ? "paid" : "open",
+  };
+}
+
+function TeamChargeBadge({ label, teamName, summary }: { label: string; teamName: string; summary: TeamChargeSummary }) {
+  return (
+    <div className={`rounded-xl border px-3 py-2 text-xs ${chargeClass(summary.tone)}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-semibold text-white/80">{label}: {teamName}</span>
+        <span className="shrink-0 font-semibold">{summary.label}</span>
+      </div>
+      <div className="mt-1 text-[11px] text-white/55">{summary.detail}</div>
+    </div>
+  );
+}
+
 async function getSavedNightBoardPitchHireOverride(input: { boardDate: string; leagueId: string; venueId: string }) {
   try {
     const rows = await prisma.$queryRaw<NightBoardOverrideRow[]>(Prisma.sql`
@@ -177,18 +251,6 @@ async function getSavedNightBoardPitchHireOverride(input: { boardDate: string; l
     console.error("Failed to load night board override", error);
     return null;
   }
-}
-
-function statusClass(status: FixtureStatus) {
-  if (status === FixtureStatus.COMPLETED) return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-  if (status === FixtureStatus.POSTPONED || status === FixtureStatus.CANCELLED) return "border-red-400/25 bg-red-500/10 text-red-100";
-  return "border-white/10 bg-white/[0.04] text-white";
-}
-
-function warningClass(level: BoardWarning["level"]) {
-  return level === "red"
-    ? "border-red-400/25 bg-red-500/10 text-red-100"
-    : "border-amber-400/25 bg-amber-500/10 text-amber-100";
 }
 
 async function updateNightBoardFixtureMatchAction(formData: FormData) {
@@ -573,9 +635,13 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Operations</div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Night board</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">One page to check who is playing on which pitch, at what time, and which referee is covering each published match.</p>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
+              One page to check who is playing on which pitch, at what time, referee cover, match fees and whether the night is sorted.
+            </p>
           </div>
-          <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isSorted ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>{isSorted ? "Night sorted" : "Needs attention"}</div>
+          <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isSorted ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>
+            {isSorted ? "Night sorted" : "Needs attention"}
+          </div>
         </div>
 
         <NightBoardFilters
@@ -599,18 +665,44 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
       </AdminCard>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Published fixtures</div><div className="mt-2 text-3xl font-semibold text-white">{fixtures.length}</div><div className="mt-1 text-sm text-white/45">{completedCount} completed</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Pitches used</div><div className="mt-2 text-3xl font-semibold text-white">{pitchNames.filter((name) => name !== "No pitch").length}</div><div className="mt-1 text-sm text-white/45">{missingPitchCount} missing pitch</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Referees</div><div className="mt-2 text-3xl font-semibold text-white">{refereeRows.length}</div><div className="mt-1 text-sm text-white/45">{missingRefCount} matches missing ref</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"><div className="text-xs uppercase tracking-[0.16em] text-white/35">Captain confirms</div><div className="mt-2 text-3xl font-semibold text-white">{confirmedCaptains}/{expectedCaptainConfirmations}</div><div className="mt-1 text-sm text-white/45">home + away confirmations</div></AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="text-xs uppercase tracking-[0.16em] text-white/35">Published fixtures</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{fixtures.length}</div>
+          <div className="mt-1 text-sm text-white/45">{completedCount} completed</div>
+        </AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="text-xs uppercase tracking-[0.16em] text-white/35">Pitches used</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{pitchNames.filter((name) => name !== "No pitch").length}</div>
+          <div className="mt-1 text-sm text-white/45">{missingPitchCount} missing pitch</div>
+        </AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="text-xs uppercase tracking-[0.16em] text-white/35">Referees</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{refereeRows.length}</div>
+          <div className="mt-1 text-sm text-white/45">{missingRefCount} matches missing ref</div>
+        </AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="text-xs uppercase tracking-[0.16em] text-white/35">Captain confirms</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{confirmedCaptains}/{expectedCaptainConfirmations}</div>
+          <div className="mt-1 text-sm text-white/45">home + away confirmations</div>
+        </AdminCard>
       </div>
 
       <AdminCard className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-0">
-        <div className="border-b border-white/10 px-6 py-5 md:px-8"><h2 className="text-xl font-semibold text-white">Pitch board</h2><p className="mt-1 text-sm text-white/45">{formatDate(start)}</p></div>
-        {fixtures.length === 0 ? <div className="p-6 text-sm text-white/55">No published scheduled/completed fixtures found for these filters.</div> : (
+        <div className="border-b border-white/10 px-6 py-5 md:px-8">
+          <h2 className="text-xl font-semibold text-white">Pitch board</h2>
+          <p className="mt-1 text-sm text-white/45">{formatDate(start)}</p>
+        </div>
+        {fixtures.length === 0 ? (
+          <div className="p-6 text-sm text-white/55">No published scheduled/completed fixtures found for these filters.</div>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-[1180px] text-left text-sm">
-              <thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.16em] text-white/40"><tr><th className="w-28 px-4 py-3">Time</th>{pitchNames.map((pitch) => <th key={pitch} className="px-4 py-3">{pitch}</th>)}</tr></thead>
+            <table className="min-w-[1320px] text-left text-sm">
+              <thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.16em] text-white/40">
+                <tr>
+                  <th className="w-28 px-4 py-3">Time</th>
+                  {pitchNames.map((pitch) => <th key={pitch} className="px-4 py-3">{pitch}</th>)}
+                </tr>
+              </thead>
               <tbody className="divide-y divide-white/10">
                 {timeLabels.map((time) => (
                   <tr key={time}>
@@ -618,17 +710,81 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
                     {pitchNames.map((pitch) => {
                       const matches = fixtureByTimePitch.get(`${time}__${pitch}`) ?? [];
                       return (
-                        <td key={`${time}-${pitch}`} className="min-w-[330px] px-4 py-4 align-top">
+                        <td key={`${time}-${pitch}`} className="min-w-[410px] px-4 py-4 align-top">
                           {matches.length === 0 ? <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-5 text-center text-white/25">Empty</div> : null}
                           <div className="space-y-3">
-                            {matches.map((fixture) => (
-                              <div key={fixture.id} className={`rounded-2xl border p-4 ${statusClass(fixture.status)}`}>
-                                <div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{fixture.homeTeam.name}</div><div className="text-white/45">v</div><div className="font-semibold">{fixture.awayTeam.name}</div></div><div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/55">{fixture.status}</div></div>
-                                <div className="mt-3 space-y-1 text-xs text-white/55"><div>Ref: <span className={fixture.referee ? "text-white/80" : "text-red-200"}>{fixture.referee?.name || fixture.referee?.email || "Missing"}</span></div><div>League: {fixture.league.name}{fixture.division ? ` / ${fixture.division.name}` : ""}</div><div>Venue: {fixture.venue?.name || fixture.league.venueName || "Missing"}</div>{fixture.result ? <div>Result: {fixture.result.homeScore} - {fixture.result.awayScore}</div> : null}</div>
-                                <form action={updateNightBoardFixtureMatchAction} className="mt-3 grid gap-2"><input type="hidden" name="fixtureId" value={fixture.id} /><input type="hidden" name="returnTo" value={returnTo} /><div className="grid gap-2 sm:grid-cols-2"><input name="kickoffTime" type="time" defaultValue={toLondonTimeInputValue(fixture.kickoffAt)} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-emerald-400/40" /><input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" /></div><div className="grid gap-2 sm:grid-cols-3"><select name="refereeId" defaultValue={fixture.referee?.id ?? ""} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400/40">{refereeOptions.map((option) => <option key={`${fixture.id}-ref-${option.value || "none"}`} value={option.value}>{option.label}</option>)}</select><select name="venueId" defaultValue={fixture.venue?.id ?? fixture.venueId ?? ""} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400/40"><option value="">No venue</option>{venues.map((venue) => <option key={`${fixture.id}-venue-${venue.id}`} value={venue.id}>{venue.name}</option>)}</select><select name="status" defaultValue={fixture.status} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400/40">{FIXTURE_STATUS_OPTIONS.map((status) => <option key={`${fixture.id}-status-${status}`} value={status}>{status}</option>)}</select></div><button type="submit" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save match</button></form>
-                                <Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="mt-3 inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link>
-                              </div>
-                            ))}
+                            {matches.map((fixture) => {
+                              const homeCharge = getTeamChargeSummary(fixture, fixture.homeTeam.id);
+                              const awayCharge = getTeamChargeSummary(fixture, fixture.awayTeam.id);
+                              return (
+                                <div key={fixture.id} className={`rounded-2xl border p-4 ${statusClass(fixture.status)}`}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="font-semibold">{fixture.homeTeam.name}</div>
+                                      <div className="text-white/45">v</div>
+                                      <div className="font-semibold">{fixture.awayTeam.name}</div>
+                                    </div>
+                                    <div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/55">{fixture.status}</div>
+                                  </div>
+
+                                  <div className="mt-3 grid gap-2">
+                                    <TeamChargeBadge label="Home charge" teamName={fixture.homeTeam.name} summary={homeCharge} />
+                                    <TeamChargeBadge label="Away charge" teamName={fixture.awayTeam.name} summary={awayCharge} />
+                                  </div>
+
+                                  <div className="mt-3 space-y-1 text-xs text-white/55">
+                                    <div>Ref: <span className={fixture.referee ? "text-white/80" : "text-red-200"}>{fixture.referee?.name || fixture.referee?.email || "Missing"}</span></div>
+                                    <div>League: {fixture.league.name}{fixture.division ? ` / ${fixture.division.name}` : ""}</div>
+                                    <div>Venue: {fixture.venue?.name || fixture.league.venueName || "Missing"}</div>
+                                    {fixture.result ? <div>Result: {fixture.result.homeScore} - {fixture.result.awayScore}</div> : null}
+                                  </div>
+
+                                  <form action={updateNightBoardFixtureMatchAction} className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-black/20 p-3">
+                                    <input type="hidden" name="fixtureId" value={fixture.id} />
+                                    <input type="hidden" name="returnTo" value={returnTo} />
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                        KO time
+                                        <input name="kickoffTime" type="time" defaultValue={toLondonTimeInputValue(fixture.kickoffAt)} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-emerald-400/40" />
+                                      </label>
+                                      <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                        Pitch
+                                        <input name="pitch" defaultValue={fixture.pitch ?? ""} placeholder="Pitch" className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40" />
+                                      </label>
+                                    </div>
+                                    <div className="grid gap-2 sm:grid-cols-3">
+                                      <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                        Referee
+                                        <select name="refereeId" defaultValue={fixture.referee?.id ?? ""} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-sky-400/40">
+                                          {refereeOptions.map((option) => <option key={`${fixture.id}-ref-${option.value || "none"}`} value={option.value}>{option.label}</option>)}
+                                        </select>
+                                      </label>
+                                      <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                        Venue
+                                        <select name="venueId" defaultValue={fixture.venue?.id ?? fixture.venueId ?? ""} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-sky-400/40">
+                                          <option value="">No venue</option>
+                                          {venues.map((venue) => <option key={`${fixture.id}-venue-${venue.id}`} value={venue.id}>{venue.name}</option>)}
+                                        </select>
+                                      </label>
+                                      <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                        Status
+                                        <select name="status" defaultValue={fixture.status} className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-sky-400/40">
+                                          {FIXTURE_STATUS_OPTIONS.map((status) => <option key={`${fixture.id}-status-${status}`} value={status}>{status}</option>)}
+                                        </select>
+                                      </label>
+                                    </div>
+                                    <button type="submit" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Save match</button>
+                                  </form>
+
+                                  <div className="mt-3 flex flex-wrap gap-3">
+                                    <Link href={`/admin/fixtures/${fixture.id}/edit`} className="inline-flex text-xs font-semibold text-sky-200 hover:text-sky-100">Full fixture edit</Link>
+                                    <Link href={`/admin/payments?teamId=${fixture.homeTeam.id}`} className="inline-flex text-xs font-semibold text-amber-200 hover:text-amber-100">Home payments</Link>
+                                    <Link href={`/admin/payments?teamId=${fixture.awayTeam.id}`} className="inline-flex text-xs font-semibold text-amber-200 hover:text-amber-100">Away payments</Link>
+                                    <Link href={`/admin/fixtures?leagueId=${fixture.league.id}`} className="inline-flex text-xs font-semibold text-emerald-200 hover:text-emerald-100">Open fixtures</Link>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </td>
                       );
@@ -642,11 +798,58 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
       </AdminCard>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-xl font-semibold text-white">Referee allocation</h2><div className="mt-4 space-y-3">{refereeRows.length === 0 ? <div className="text-sm text-white/55">No referees assigned yet.</div> : null}{refereeRows.map((row) => <div key={`${row.name}-${row.email}`} className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="flex items-start justify-between gap-4"><div><div className="font-semibold text-white">{row.name}</div><div className="text-sm text-white/45">{row.email}</div></div><div className="text-right text-sm text-white/70">{formatMoney(row.feePence)}</div></div><div className="mt-3 grid gap-2 text-sm text-white/55 sm:grid-cols-3"><div>{row.fixtures.length} match{row.fixtures.length === 1 ? "" : "es"}</div><div>{row.pitchList}</div><div>{row.firstKickoff ? formatTime(row.firstKickoff) : "—"} – {row.lastKickoff ? formatTime(row.lastKickoff) : "—"}</div></div></div>)}</div></AdminCard>
-        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-semibold text-white">Income / cost</h2><p className="mt-1 text-sm text-white/45">Based on published scheduled/completed fixtures on this night.</p></div>{hasMissingCharges ? <div className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Missing charges</div> : null}</div><div className="mt-4 space-y-3 text-sm"><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Expected income</span><span className="font-semibold text-white">{finance.expectedTeams} teams × {formatMoney(finance.defaultFeePence)} = {formatMoney(finance.expectedIncomePence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Charges created</span><span className="font-semibold text-white">{finance.chargesCreatedCount}/{finance.expectedTeams} teams = {formatMoney(finance.chargesCreatedPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Missing charges</span><span className={`font-semibold ${hasMissingCharges ? "text-amber-100" : "text-emerald-100"}`}>{finance.missingChargeCount} teams = {formatMoney(finance.missingChargesPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Paid</span><span className="font-semibold text-emerald-100">{formatMoney(finance.paidPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Outstanding against created charges</span><span className="font-semibold text-amber-100">{formatMoney(finance.outstandingAgainstChargesPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">True expected outstanding</span><span className="font-semibold text-amber-100">{formatMoney(finance.expectedOutstandingPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Referee cost</span><span className="font-semibold text-white">{formatMoney(finance.refCostPence)}</span></div><div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Pitch hire</span><span className="font-semibold text-white">{formatMoney(finance.pitchHirePence)}</span></div><div className="flex justify-between pt-2 text-base"><span className="text-white/70">Expected profit</span><span className={`font-semibold ${finance.expectedProfitPence >= 0 ? "text-emerald-100" : "text-red-100"}`}>{formatMoney(finance.expectedProfitPence)}</span></div></div></AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <h2 className="text-xl font-semibold text-white">Referee allocation</h2>
+          <div className="mt-4 space-y-3">
+            {refereeRows.length === 0 ? <div className="text-sm text-white/55">No referees assigned yet.</div> : null}
+            {refereeRows.map((row) => (
+              <div key={`${row.name}-${row.email}`} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-semibold text-white">{row.name}</div>
+                    <div className="text-sm text-white/45">{row.email}</div>
+                  </div>
+                  <div className="text-right text-sm text-white/70">{formatMoney(row.feePence)}</div>
+                </div>
+                <div className="mt-3 grid gap-2 text-sm text-white/55 sm:grid-cols-3">
+                  <div>{row.fixtures.length} match{row.fixtures.length === 1 ? "" : "es"}</div>
+                  <div>{row.pitchList}</div>
+                  <div>{row.firstKickoff ? formatTime(row.firstKickoff) : "—"} – {row.lastKickoff ? formatTime(row.lastKickoff) : "—"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminCard>
+
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Income / cost</h2>
+              <p className="mt-1 text-sm text-white/45">Based on published scheduled/completed fixtures on this night.</p>
+            </div>
+            {hasMissingCharges ? <div className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">Missing charges</div> : null}
+          </div>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Expected income</span><span className="font-semibold text-white">{finance.expectedTeams} teams × {formatMoney(finance.defaultFeePence)} = {formatMoney(finance.expectedIncomePence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Charges created</span><span className="font-semibold text-white">{finance.chargesCreatedCount}/{finance.expectedTeams} teams = {formatMoney(finance.chargesCreatedPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Missing charges</span><span className={`font-semibold ${hasMissingCharges ? "text-amber-100" : "text-emerald-100"}`}>{finance.missingChargeCount} teams = {formatMoney(finance.missingChargesPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Paid</span><span className="font-semibold text-emerald-100">{formatMoney(finance.paidPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Outstanding against created charges</span><span className="font-semibold text-amber-100">{formatMoney(finance.outstandingAgainstChargesPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">True expected outstanding</span><span className="font-semibold text-amber-100">{formatMoney(finance.expectedOutstandingPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Referee cost</span><span className="font-semibold text-white">{formatMoney(finance.refCostPence)}</span></div>
+            <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-white/55">Pitch hire</span><span className="font-semibold text-white">{formatMoney(finance.pitchHirePence)}</span></div>
+            <div className="flex justify-between pt-2 text-base"><span className="text-white/70">Expected profit</span><span className={`font-semibold ${finance.expectedProfitPence >= 0 ? "text-emerald-100" : "text-red-100"}`}>{formatMoney(finance.expectedProfitPence)}</span></div>
+          </div>
+        </AdminCard>
       </div>
 
-      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-xl font-semibold text-white">Warnings</h2><div className="mt-4 space-y-3">{warnings.length === 0 ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">No obvious pitch, referee, venue or clash warnings.</div> : null}{warnings.map((warning, index) => <div key={`${warning.message}-${index}`} className={`rounded-2xl border px-4 py-3 text-sm ${warningClass(warning.level)}`}>{warning.message}</div>)}</div></AdminCard>
+      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+        <h2 className="text-xl font-semibold text-white">Warnings</h2>
+        <div className="mt-4 space-y-3">
+          {warnings.length === 0 ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">No obvious pitch, referee, venue or clash warnings.</div> : null}
+          {warnings.map((warning, index) => <div key={`${warning.message}-${index}`} className={`rounded-2xl border px-4 py-3 text-sm ${warningClass(warning.level)}`}>{warning.message}</div>)}
+        </div>
+      </AdminCard>
     </div>
   );
 }
