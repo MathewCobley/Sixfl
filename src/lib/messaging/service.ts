@@ -70,6 +70,33 @@ type UpdateThreadSummaryInput = {
   threadId: string;
 };
 
+type TeamPhoneFallbackRow = {
+  id: string;
+  name: string;
+  contactName: string | null;
+  contactPhone: string | null;
+};
+
+type ThreadPhoneHydrationTarget = {
+  id: string;
+  recipientId?: string | null;
+  teamId: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  phoneNormalized: string | null;
+  recipient?: {
+    id: string;
+    phone: string | null;
+    phoneNormalized?: string | null;
+  } | null;
+  team?: {
+    id: string;
+    name: string;
+    contactName?: string | null;
+    contactPhone?: string | null;
+  } | null;
+};
+
 function buildLastMessagePreview(body: string): string {
   const trimmed = body.trim().replace(/\s+/g, " ");
   if (!trimmed) return "";
@@ -108,6 +135,97 @@ function normalizeEmailAddress(input: NullableString) {
   }
 
   return candidate;
+}
+
+async function findTeamPhoneFallback(input: {
+  teamId: string | null;
+  teamName: string | null;
+}) {
+  if (!input.teamId && !input.teamName) return null;
+
+  const rows = input.teamName
+    ? await prisma.$queryRaw<TeamPhoneFallbackRow[]>(Prisma.sql`
+        SELECT "id", "name", "contactName", "contactPhone"
+        FROM "Team"
+        WHERE ("id" = ${input.teamId} OR LOWER(TRIM("name")) = LOWER(TRIM(${input.teamName})))
+          AND "contactPhone" IS NOT NULL
+          AND TRIM("contactPhone") <> ''
+        ORDER BY CASE WHEN "id" = ${input.teamId} THEN 0 ELSE 1 END ASC, "updatedAt" DESC
+        LIMIT 1
+      `)
+    : await prisma.$queryRaw<TeamPhoneFallbackRow[]>(Prisma.sql`
+        SELECT "id", "name", "contactName", "contactPhone"
+        FROM "Team"
+        WHERE "id" = ${input.teamId}
+          AND "contactPhone" IS NOT NULL
+          AND TRIM("contactPhone") <> ''
+        ORDER BY "updatedAt" DESC
+        LIMIT 1
+      `);
+
+  return rows[0] ?? null;
+}
+
+async function hydrateThreadPhoneFromTeam<T extends ThreadPhoneHydrationTarget>(
+  thread: T | null,
+) {
+  if (!thread) return null;
+
+  const existingPhone = normalizePhoneNumber(
+    thread.phoneNormalized ||
+      thread.contactPhone ||
+      thread.recipient?.phoneNormalized ||
+      thread.recipient?.phone,
+  );
+
+  if (existingPhone) {
+    return thread;
+  }
+
+  const fallbackTeam = await findTeamPhoneFallback({
+    teamId: thread.teamId,
+    teamName: thread.team?.name ?? null,
+  });
+  const fallbackPhone = normalizePhoneNumber(fallbackTeam?.contactPhone);
+
+  if (!fallbackPhone) {
+    return thread;
+  }
+
+  await prisma.messageThread.update({
+    where: { id: thread.id },
+    data: {
+      contactName: thread.contactName ?? fallbackTeam?.contactName ?? thread.team?.name ?? null,
+      contactPhone: fallbackTeam?.contactPhone ?? fallbackPhone,
+      phoneNormalized: fallbackPhone,
+    },
+  });
+
+  if (thread.recipientId && thread.recipient && !thread.recipient.phone) {
+    await prisma.notificationRecipient.update({
+      where: { id: thread.recipientId },
+      data: {
+        phone: fallbackTeam?.contactPhone ?? fallbackPhone,
+        phoneNormalized: fallbackPhone,
+        lastSyncedAt: new Date(),
+      },
+    });
+  }
+
+  return {
+    ...thread,
+    contactName: thread.contactName ?? fallbackTeam?.contactName ?? thread.team?.name ?? null,
+    contactPhone: fallbackTeam?.contactPhone ?? fallbackPhone,
+    phoneNormalized: fallbackPhone,
+    recipient:
+      thread.recipient && !thread.recipient.phone
+        ? {
+            ...thread.recipient,
+            phone: fallbackTeam?.contactPhone ?? fallbackPhone,
+            phoneNormalized: fallbackPhone,
+          }
+        : thread.recipient,
+  };
 }
 
 async function findRecipientByPhone(phone: NullableString) {
@@ -227,7 +345,6 @@ async function createThreadFromRecipient(params: {
     params.recipient?.metadata && typeof params.recipient.metadata === "object"
       ? (params.recipient.metadata as Record<string, unknown>)
       : null;
-
   const metadataTeamId =
     metadata && typeof metadata.teamId === "string" ? metadata.teamId : null;
   const metadataLeagueId =
@@ -359,617 +476,149 @@ async function updateThreadSummary({ threadId }: UpdateThreadSummaryInput) {
 }
 
 async function createInboxAlert(messageId: string, threadId: string) {
-  const existing = await prisma.inboxAlert.findUnique({
-    where: {
-      messageId,
-    },
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  return prisma.inboxAlert.create({
-    data: {
-      messageId,
-      threadId,
-      type: "NEW_INBOUND_SMS",
-      status: "PENDING",
-    },
-  });
+  const existing = await prisma.inboxAlert.findUnique({ where: { messageId } });
+  if (existing) return existing;
+  return prisma.inboxAlert.create({ data: { messageId, threadId, type: "NEW_INBOUND_SMS", status: "PENDING" } });
 }
 
-async function applyOptStatusFromKeyword(params: {
-  recipientId: string | null;
-  body: string;
-}) {
+async function applyOptStatusFromKeyword(params: { recipientId: string | null; body: string }) {
   if (!params.recipientId) return;
-
   if (isStopKeyword(params.body)) {
     await prisma.notificationRecipient.update({
       where: { id: params.recipientId },
-      data: {
-        transactionalSmsOptIn: false,
-        marketingSmsOptIn: false,
-        isSuppressed: true,
-        suppressionReason: "STOP",
-      },
+      data: { transactionalSmsOptIn: false, marketingSmsOptIn: false, isSuppressed: true, suppressionReason: "STOP" },
     });
     return;
   }
-
   if (isStartKeyword(params.body)) {
     await prisma.notificationRecipient.update({
       where: { id: params.recipientId },
-      data: {
-        transactionalSmsOptIn: true,
-        isSuppressed: false,
-        suppressionReason: null,
-      },
+      data: { transactionalSmsOptIn: true, isSuppressed: false, suppressionReason: null },
     });
-    return;
-  }
-
-  if (isHelpKeyword(params.body)) {
-    return;
   }
 }
 
 export async function recordInboundSms(input: InboundSmsInput) {
   const normalizedFrom = normalizePhoneNumber(input.fromNumber);
   const normalizedTo = normalizePhoneNumber(input.toNumber);
-
-  if (!normalizedFrom) {
-    throw new Error("Inbound SMS missing valid from number.");
-  }
-
-  const thread = await findOrCreateThreadForInbound({
-    fromNumber: normalizedFrom,
-  });
-
+  if (!normalizedFrom) throw new Error("Inbound SMS missing valid from number.");
+  const thread = await findOrCreateThreadForInbound({ fromNumber: normalizedFrom });
   const entry = await prisma.messageEntry.create({
-    data: {
-      threadId: thread.id,
-      channel: "SMS",
-      direction: "INBOUND",
-      participantRole: "CONTACT",
-      body: input.body,
-      fromNumber: normalizedFrom,
-      toNumber: normalizedTo,
-      provider: "twilio",
-      providerMessageId: input.messageSid ?? null,
-      providerStatus: "received",
-      twilioMessageSid: input.messageSid ?? null,
-      twilioAccountSid: input.accountSid ?? null,
-      twilioPayload: input.rawPayload ?? Prisma.JsonNull,
-      receivedAt: new Date(),
-    },
+    data: { threadId: thread.id, channel: "SMS", direction: "INBOUND", participantRole: "CONTACT", body: input.body, fromNumber: normalizedFrom, toNumber: normalizedTo, provider: "twilio", providerMessageId: input.messageSid ?? null, providerStatus: "received", twilioMessageSid: input.messageSid ?? null, twilioAccountSid: input.accountSid ?? null, twilioPayload: input.rawPayload ?? Prisma.JsonNull, receivedAt: new Date() },
   });
-
-  await applyOptStatusFromKeyword({
-    recipientId: thread.recipientId,
-    body: input.body,
-  });
-
+  await applyOptStatusFromKeyword({ recipientId: thread.recipientId, body: input.body });
   await createInboxAlert(entry.id, thread.id);
   await updateThreadSummary({ threadId: thread.id });
-
-  return prisma.messageThread.findUnique({
-    where: { id: thread.id },
-    include: {
-      recipient: true,
-      team: true,
-      league: true,
-      messages: {
-        orderBy: [{ createdAt: "asc" }],
-      },
-      alerts: {
-        orderBy: [{ createdAt: "desc" }],
-      },
-    },
-  });
+  return prisma.messageThread.findUnique({ where: { id: thread.id }, include: { recipient: true, team: true, league: true, messages: { orderBy: [{ createdAt: "asc" }] }, alerts: { orderBy: [{ createdAt: "desc" }] } } });
 }
 
-export async function findOrCreateThreadForOutbound(params: {
-  recipientId?: string | null;
-  teamId?: string | null;
-  leagueId?: string | null;
-  sourceType?: string | null;
-  sourceId?: string | null;
-  contactName?: string | null;
-  phone?: string | null;
-}) {
+export async function findOrCreateThreadForOutbound(params: { recipientId?: string | null; teamId?: string | null; leagueId?: string | null; sourceType?: string | null; sourceId?: string | null; contactName?: string | null; phone?: string | null }) {
   const normalizedPhone = normalizePhoneNumber(params.phone);
-
-  const existing = await findExistingOpenThread({
-    recipientId: params.recipientId,
-    teamId: params.teamId,
-    leagueId: params.leagueId,
-    phoneNormalized: normalizedPhone,
-  });
-
+  const existing = await findExistingOpenThread({ recipientId: params.recipientId, teamId: params.teamId, leagueId: params.leagueId, phoneNormalized: normalizedPhone });
   if (existing) {
-    return prisma.messageThread.update({
-      where: { id: existing.id },
-      data: {
-        recipientId: existing.recipientId ?? params.recipientId ?? null,
-        teamId: existing.teamId ?? params.teamId ?? null,
-        leagueId: existing.leagueId ?? params.leagueId ?? null,
-        sourceType: existing.sourceType ?? params.sourceType ?? null,
-        sourceId: existing.sourceId ?? params.sourceId ?? null,
-        contactName: existing.contactName ?? params.contactName ?? null,
-        contactPhone: existing.contactPhone ?? params.phone ?? null,
-        phoneNormalized: existing.phoneNormalized ?? normalizedPhone,
-      },
-    });
+    return prisma.messageThread.update({ where: { id: existing.id }, data: { recipientId: existing.recipientId ?? params.recipientId ?? null, teamId: existing.teamId ?? params.teamId ?? null, leagueId: existing.leagueId ?? params.leagueId ?? null, sourceType: existing.sourceType ?? params.sourceType ?? null, sourceId: existing.sourceId ?? params.sourceId ?? null, contactName: existing.contactName ?? params.contactName ?? null, contactPhone: existing.contactPhone ?? params.phone ?? null, phoneNormalized: existing.phoneNormalized ?? normalizedPhone } });
   }
-
-  return prisma.messageThread.create({
-    data: {
-      recipientId: params.recipientId ?? null,
-      teamId: params.teamId ?? null,
-      leagueId: params.leagueId ?? null,
-      sourceType: params.sourceType ?? null,
-      sourceId: params.sourceId ?? null,
-      contactName: params.contactName ?? null,
-      contactPhone: params.phone ?? null,
-      phoneNormalized: normalizedPhone,
-      status: "OPEN",
-    },
-  });
+  return prisma.messageThread.create({ data: { recipientId: params.recipientId ?? null, teamId: params.teamId ?? null, leagueId: params.leagueId ?? null, sourceType: params.sourceType ?? null, sourceId: params.sourceId ?? null, contactName: params.contactName ?? null, contactPhone: params.phone ?? null, phoneNormalized: normalizedPhone, status: "OPEN" } });
 }
 
-export async function findOrCreateEmailThreadForOutbound(params: {
-  recipientId?: string | null;
-  teamId?: string | null;
-  leagueId?: string | null;
-  sourceType?: string | null;
-  sourceId?: string | null;
-  contactName?: string | null;
-  contactEmail?: string | null;
-}) {
+export async function findOrCreateEmailThreadForOutbound(params: { recipientId?: string | null; teamId?: string | null; leagueId?: string | null; sourceType?: string | null; sourceId?: string | null; contactName?: string | null; contactEmail?: string | null }) {
   const emailNormalized = normalizeEmailAddress(params.contactEmail);
-
-  const existing = await findExistingOpenEmailThread({
-    recipientId: params.recipientId,
-    teamId: params.teamId,
-    leagueId: params.leagueId,
-    emailNormalized,
-  });
-
+  const existing = await findExistingOpenEmailThread({ recipientId: params.recipientId, teamId: params.teamId, leagueId: params.leagueId, emailNormalized });
   if (existing) {
-    return prisma.messageThread.update({
-      where: { id: existing.id },
-      data: {
-        replyAddress: existing.replyAddress ?? buildThreadReplyAddress(existing.id),
-        recipientId: existing.recipientId ?? params.recipientId ?? null,
-        teamId: existing.teamId ?? params.teamId ?? null,
-        leagueId: existing.leagueId ?? params.leagueId ?? null,
-        sourceType: existing.sourceType ?? params.sourceType ?? null,
-        sourceId: existing.sourceId ?? params.sourceId ?? null,
-        contactName: existing.contactName ?? params.contactName ?? null,
-        contactEmail: existing.contactEmail ?? params.contactEmail ?? null,
-        emailNormalized: existing.emailNormalized ?? emailNormalized,
-        channel: "EMAIL",
-      },
-    });
+    return prisma.messageThread.update({ where: { id: existing.id }, data: { replyAddress: existing.replyAddress ?? buildThreadReplyAddress(existing.id), recipientId: existing.recipientId ?? params.recipientId ?? null, teamId: existing.teamId ?? params.teamId ?? null, leagueId: existing.leagueId ?? params.leagueId ?? null, sourceType: existing.sourceType ?? params.sourceType ?? null, sourceId: existing.sourceId ?? params.sourceId ?? null, contactName: existing.contactName ?? params.contactName ?? null, contactEmail: existing.contactEmail ?? params.contactEmail ?? null, emailNormalized: existing.emailNormalized ?? emailNormalized, channel: "EMAIL" } });
   }
-
-  const created = await prisma.messageThread.create({
-    data: {
-      channel: "EMAIL",
-      status: "OPEN",
-      recipientId: params.recipientId ?? null,
-      teamId: params.teamId ?? null,
-      leagueId: params.leagueId ?? null,
-      sourceType: params.sourceType ?? null,
-      sourceId: params.sourceId ?? null,
-      contactName: params.contactName ?? null,
-      contactEmail: params.contactEmail ?? null,
-      emailNormalized,
-    },
-  });
-
-  return prisma.messageThread.update({
-    where: { id: created.id },
-    data: {
-      replyAddress: buildThreadReplyAddress(created.id),
-    },
-  });
+  const created = await prisma.messageThread.create({ data: { channel: "EMAIL", status: "OPEN", recipientId: params.recipientId ?? null, teamId: params.teamId ?? null, leagueId: params.leagueId ?? null, sourceType: params.sourceType ?? null, sourceId: params.sourceId ?? null, contactName: params.contactName ?? null, contactEmail: params.contactEmail ?? null, emailNormalized } });
+  return prisma.messageThread.update({ where: { id: created.id }, data: { replyAddress: buildThreadReplyAddress(created.id) } });
 }
 
 export async function linkQueuedEmailDispatchToThread(input: QueueOutboundEmailInput) {
-  const thread = await findOrCreateEmailThreadForOutbound({
-    recipientId: input.recipientId,
-    teamId: input.teamId,
-    leagueId: input.leagueId,
-    sourceType: input.sourceType,
-    sourceId: input.sourceId,
-    contactName: input.contactName,
-    contactEmail: input.toEmail,
-  });
-
-  const existing = await prisma.messageEntry.findFirst({
-    where: {
-      notificationDispatchId: input.notificationDispatchId,
-    },
-    select: {
-      id: true,
-    },
-  });
-
+  const thread = await findOrCreateEmailThreadForOutbound({ recipientId: input.recipientId, teamId: input.teamId, leagueId: input.leagueId, sourceType: input.sourceType, sourceId: input.sourceId, contactName: input.contactName, contactEmail: input.toEmail });
+  const existing = await prisma.messageEntry.findFirst({ where: { notificationDispatchId: input.notificationDispatchId }, select: { id: true } });
   if (existing) {
-    await prisma.messageEntry.update({
-      where: { id: existing.id },
-      data: {
-        threadId: thread.id,
-        channel: "EMAIL",
-        direction: "OUTBOUND",
-        participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
-        body: input.bodyText,
-        subject: input.subject,
-        textBody: input.bodyText,
-        htmlBody: input.bodyHtml ?? null,
-        toEmail: input.toEmail?.trim() || null,
-        notificationDispatchId: input.notificationDispatchId,
-        createdByUserId: input.createdByUserId ?? null,
-        providerStatus: "queued",
-        sentAt: null,
-      },
-    });
+    await prisma.messageEntry.update({ where: { id: existing.id }, data: { threadId: thread.id, channel: "EMAIL", direction: "OUTBOUND", participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM", body: input.bodyText, subject: input.subject, textBody: input.bodyText, htmlBody: input.bodyHtml ?? null, toEmail: input.toEmail?.trim() || null, notificationDispatchId: input.notificationDispatchId, createdByUserId: input.createdByUserId ?? null, providerStatus: "queued", sentAt: null } });
   } else {
-    await prisma.messageEntry.create({
-      data: {
-        threadId: thread.id,
-        channel: "EMAIL",
-        direction: "OUTBOUND",
-        participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
-        body: input.bodyText,
-        subject: input.subject,
-        textBody: input.bodyText,
-        htmlBody: input.bodyHtml ?? null,
-        toEmail: input.toEmail?.trim() || null,
-        notificationDispatchId: input.notificationDispatchId,
-        createdByUserId: input.createdByUserId ?? null,
-        providerStatus: "queued",
-      },
-    });
+    await prisma.messageEntry.create({ data: { threadId: thread.id, channel: "EMAIL", direction: "OUTBOUND", participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM", body: input.bodyText, subject: input.subject, textBody: input.bodyText, htmlBody: input.bodyHtml ?? null, toEmail: input.toEmail?.trim() || null, notificationDispatchId: input.notificationDispatchId, createdByUserId: input.createdByUserId ?? null, providerStatus: "queued" } });
   }
-
   await updateThreadSummary({ threadId: thread.id });
-
   return thread;
 }
 
 export async function recordOutboundSms(input: RecordOutboundSmsInput) {
-  const thread = await findOrCreateThreadForOutbound({
-    recipientId: input.recipientId,
-    teamId: input.teamId,
-    leagueId: input.leagueId,
-    sourceType: input.sourceType,
-    sourceId: input.sourceId,
-    contactName: input.contactName,
-    phone: input.toNumber ?? input.phone,
-  });
-
-  const existing = input.notificationDispatchId
-    ? await prisma.messageEntry.findFirst({
-        where: {
-          notificationDispatchId: input.notificationDispatchId,
-        },
-        select: {
-          id: true,
-        },
-      })
-    : null;
-
+  const thread = await findOrCreateThreadForOutbound({ recipientId: input.recipientId, teamId: input.teamId, leagueId: input.leagueId, sourceType: input.sourceType, sourceId: input.sourceId, contactName: input.contactName, phone: input.toNumber ?? input.phone });
+  const existing = input.notificationDispatchId ? await prisma.messageEntry.findFirst({ where: { notificationDispatchId: input.notificationDispatchId }, select: { id: true } }) : null;
   if (existing) {
-    await prisma.messageEntry.update({
-      where: { id: existing.id },
-      data: {
-        threadId: thread.id,
-        channel: "SMS",
-        direction: "OUTBOUND",
-        participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
-        body: input.body,
-        fromNumber: normalizePhoneNumber(input.fromNumber),
-        toNumber: normalizePhoneNumber(input.toNumber ?? input.phone),
-        provider: input.provider ?? "twilio",
-        providerMessageId: input.providerMessageId ?? null,
-        providerStatus: input.providerStatus ?? null,
-        twilioMessageSid: input.twilioMessageSid ?? null,
-        notificationDispatchId: input.notificationDispatchId ?? null,
-        createdByUserId: input.createdByUserId ?? null,
-        sentAt: input.sentAt ?? null,
-      },
-    });
-
+    await prisma.messageEntry.update({ where: { id: existing.id }, data: { threadId: thread.id, channel: "SMS", direction: "OUTBOUND", participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM", body: input.body, fromNumber: normalizePhoneNumber(input.fromNumber), toNumber: normalizePhoneNumber(input.toNumber ?? input.phone), provider: input.provider ?? "twilio", providerMessageId: input.providerMessageId ?? null, providerStatus: input.providerStatus ?? null, twilioMessageSid: input.twilioMessageSid ?? null, notificationDispatchId: input.notificationDispatchId ?? null, createdByUserId: input.createdByUserId ?? null, sentAt: input.sentAt ?? null } });
     await updateThreadSummary({ threadId: thread.id });
-
-    return {
-      threadId: thread.id,
-      messageEntryId: existing.id,
-    };
+    return { threadId: thread.id, messageEntryId: existing.id };
   }
-
-  const entry = await prisma.messageEntry.create({
-    data: {
-      threadId: thread.id,
-      channel: "SMS",
-      direction: "OUTBOUND",
-      participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM",
-      body: input.body,
-      fromNumber: normalizePhoneNumber(input.fromNumber),
-      toNumber: normalizePhoneNumber(input.toNumber ?? input.phone),
-      provider: input.provider ?? "twilio",
-      providerMessageId: input.providerMessageId ?? null,
-      providerStatus: input.providerStatus ?? null,
-      twilioMessageSid: input.twilioMessageSid ?? null,
-      notificationDispatchId: input.notificationDispatchId ?? null,
-      createdByUserId: input.createdByUserId ?? null,
-      sentAt: input.sentAt ?? null,
-    },
-  });
-
+  const entry = await prisma.messageEntry.create({ data: { threadId: thread.id, channel: "SMS", direction: "OUTBOUND", participantRole: input.createdByUserId ? "ADMIN" : "SYSTEM", body: input.body, fromNumber: normalizePhoneNumber(input.fromNumber), toNumber: normalizePhoneNumber(input.toNumber ?? input.phone), provider: input.provider ?? "twilio", providerMessageId: input.providerMessageId ?? null, providerStatus: input.providerStatus ?? null, twilioMessageSid: input.twilioMessageSid ?? null, notificationDispatchId: input.notificationDispatchId ?? null, createdByUserId: input.createdByUserId ?? null, sentAt: input.sentAt ?? null } });
   await updateThreadSummary({ threadId: thread.id });
-
-  return {
-    threadId: thread.id,
-    messageEntryId: entry.id,
-  };
+  return { threadId: thread.id, messageEntryId: entry.id };
 }
 
 export async function markThreadAsReadForAdmin(threadId: string) {
   const now = new Date();
-
   await prisma.$transaction([
-    prisma.messageEntry.updateMany({
-      where: {
-        threadId,
-        direction: "INBOUND",
-        readAt: null,
-      },
-      data: {
-        readAt: now,
-      },
-    }),
-    prisma.inboxAlert.updateMany({
-      where: {
-        threadId,
-        status: {
-          in: ["PENDING", "SENT"] satisfies InboxAlertStatus[],
-        },
-      },
-      data: {
-        status: "READ",
-        readAt: now,
-      },
-    }),
-    prisma.messageThread.update({
-      where: { id: threadId },
-      data: {
-        unreadForAdminCount: 0,
-      },
-    }),
+    prisma.messageEntry.updateMany({ where: { threadId, direction: "INBOUND", readAt: null }, data: { readAt: now } }),
+    prisma.inboxAlert.updateMany({ where: { threadId, status: { in: ["PENDING", "SENT"] satisfies InboxAlertStatus[] } }, data: { status: "READ", readAt: now } }),
+    prisma.messageThread.update({ where: { id: threadId }, data: { unreadForAdminCount: 0 } }),
   ]);
-
   await updateThreadSummary({ threadId });
-
-  return prisma.messageThread.findUnique({
-    where: { id: threadId },
-    include: {
-      recipient: true,
-      team: true,
-      league: true,
-      messages: {
-        orderBy: [{ createdAt: "asc" }],
-      },
-      alerts: {
-        orderBy: [{ createdAt: "desc" }],
-      },
-    },
-  });
+  return prisma.messageThread.findUnique({ where: { id: threadId }, include: { recipient: true, team: true, league: true, messages: { orderBy: [{ createdAt: "asc" }] }, alerts: { orderBy: [{ createdAt: "desc" }] } } });
 }
 
 export async function archiveMessageThread(threadId: string) {
-  return prisma.messageThread.update({
-    where: { id: threadId },
-    data: {
-      status: "ARCHIVED",
-    },
-  });
+  return prisma.messageThread.update({ where: { id: threadId }, data: { status: "ARCHIVED" } });
 }
 
 export async function reopenMessageThread(threadId: string) {
-  return prisma.messageThread.update({
-    where: { id: threadId },
-    data: {
-      status: "OPEN",
-    },
-  });
+  return prisma.messageThread.update({ where: { id: threadId }, data: { status: "OPEN" } });
 }
 
 export async function getAdminInboxSummary() {
-  const [unreadThreads, openThreads, unreadMessages, latestInbound] =
-    await Promise.all([
-      prisma.messageThread.count({
-        where: {
-          unreadForAdminCount: {
-            gt: 0,
-          },
-        },
-      }),
-      prisma.messageThread.count({
-        where: {
-          status: "OPEN",
-        },
-      }),
-      prisma.messageEntry.count({
-        where: {
-          direction: "INBOUND",
-          readAt: null,
-        },
-      }),
-      prisma.messageEntry.findFirst({
-        where: {
-          direction: "INBOUND",
-        },
-        orderBy: [{ createdAt: "desc" }],
-        include: {
-          thread: {
-            include: {
-              team: true,
-              league: true,
-              recipient: true,
-            },
-          },
-        },
-      }),
-    ]);
-
-  return {
-    unreadThreads,
-    openThreads,
-    unreadMessages,
-    latestInbound,
-  };
+  const [unreadThreads, openThreads, unreadMessages, latestInbound] = await Promise.all([
+    prisma.messageThread.count({ where: { unreadForAdminCount: { gt: 0 } } }),
+    prisma.messageThread.count({ where: { status: "OPEN" } }),
+    prisma.messageEntry.count({ where: { direction: "INBOUND", readAt: null } }),
+    prisma.messageEntry.findFirst({ where: { direction: "INBOUND" }, orderBy: [{ createdAt: "desc" }], include: { thread: { include: { team: true, league: true, recipient: true } } } }),
+  ]);
+  return { unreadThreads, openThreads, unreadMessages, latestInbound };
 }
 
 export async function getAdminInboxThreads(filters: InboxThreadListFilters = {}) {
   const limit = filters.limit ?? 50;
-
   const where: Prisma.MessageThreadWhereInput = {};
-
-  if (filters.status && filters.status !== "ALL") {
-    where.status = filters.status;
-  }
-
-  if (filters.unreadOnly) {
-    where.unreadForAdminCount = {
-      gt: 0,
-    };
-  }
-
-  if (filters.teamId) {
-    where.teamId = filters.teamId;
-  }
-
-  if (filters.leagueId) {
-    where.leagueId = filters.leagueId;
-  }
-
-  if (filters.assignedToUserId) {
-    where.assignedToUserId = filters.assignedToUserId;
-  }
-
-  return prisma.messageThread.findMany({
-    where,
-    include: {
-      recipient: true,
-      team: true,
-      league: true,
-      assignedToUser: true,
-      messages: {
-        orderBy: [{ createdAt: "desc" }],
-        take: 1,
-      },
-    },
-    orderBy: [
-      { unreadForAdminCount: "desc" },
-      { latestMessageAt: "desc" },
-      { updatedAt: "desc" },
-    ],
-    take: limit,
-  });
+  if (filters.status && filters.status !== "ALL") where.status = filters.status;
+  if (filters.unreadOnly) where.unreadForAdminCount = { gt: 0 };
+  if (filters.teamId) where.teamId = filters.teamId;
+  if (filters.leagueId) where.leagueId = filters.leagueId;
+  if (filters.assignedToUserId) where.assignedToUserId = filters.assignedToUserId;
+  return prisma.messageThread.findMany({ where, include: { recipient: true, team: true, league: true, assignedToUser: true, messages: { orderBy: [{ createdAt: "desc" }], take: 1 } }, orderBy: [{ unreadForAdminCount: "desc" }, { latestMessageAt: "desc" }, { updatedAt: "desc" }], take: limit });
 }
 
 export async function getMessageThreadById(threadId: string) {
-  return prisma.messageThread.findUnique({
-    where: {
-      id: threadId,
-    },
+  const thread = await prisma.messageThread.findUnique({
+    where: { id: threadId },
     include: {
       recipient: true,
       team: true,
       league: true,
       assignedToUser: true,
-      messages: {
-        orderBy: [{ createdAt: "asc" }],
-        include: {
-          dispatch: {
-            select: {
-              id: true,
-              template: {
-                select: {
-                  id: true,
-                  name: true,
-                  key: true,
-                },
-              },
-              metadata: true,
-            },
-          },
-        },
-      },
-      alerts: {
-        orderBy: [{ createdAt: "desc" }],
-      },
+      messages: { orderBy: [{ createdAt: "asc" }], include: { dispatch: { select: { id: true, template: { select: { id: true, name: true, key: true } }, metadata: true } } } },
+      alerts: { orderBy: [{ createdAt: "desc" }] },
     },
   });
+  return hydrateThreadPhoneFromTeam(thread);
 }
 
 export async function dismissInboxAlertByMessageId(messageId: string) {
-  return prisma.inboxAlert.updateMany({
-    where: {
-      messageId,
-    },
-    data: {
-      status: "DISMISSED",
-      dismissedAt: new Date(),
-    },
-  });
+  return prisma.inboxAlert.updateMany({ where: { messageId }, data: { status: "DISMISSED", dismissedAt: new Date() } });
 }
 
 export async function sendHelpKeywordSideEffects(): Promise<void> {
   return;
 }
 
-export async function linkDispatchToThread(params: {
-  dispatchId: string;
-  recipientId?: string | null;
-  teamId?: string | null;
-  leagueId?: string | null;
-  sourceType?: string | null;
-  sourceId?: string | null;
-  contactName?: string | null;
-  phone?: string | null;
-  body: string;
-  fromNumber?: string | null;
-  toNumber?: string | null;
-  provider?: string | null;
-  providerMessageId?: string | null;
-  providerStatus?: string | null;
-  twilioMessageSid?: string | null;
-  createdByUserId?: string | null;
-  sentAt?: Date | null;
-}) {
-  return recordOutboundSms({
-    notificationDispatchId: params.dispatchId,
-    recipientId: params.recipientId,
-    teamId: params.teamId,
-    leagueId: params.leagueId,
-    sourceType: params.sourceType,
-    sourceId: params.sourceId,
-    contactName: params.contactName,
-    phone: params.phone,
-    body: params.body,
-    fromNumber: params.fromNumber,
-    toNumber: params.toNumber,
-    provider: params.provider,
-    providerMessageId: params.providerMessageId,
-    providerStatus: params.providerStatus,
-    twilioMessageSid: params.twilioMessageSid,
-    createdByUserId: params.createdByUserId,
-    sentAt: params.sentAt,
-  });
+export async function linkDispatchToThread(params: { dispatchId: string; recipientId?: string | null; teamId?: string | null; leagueId?: string | null; sourceType?: string | null; sourceId?: string | null; contactName?: string | null; phone?: string | null; body: string; fromNumber?: string | null; toNumber?: string | null; provider?: string | null; providerMessageId?: string | null; providerStatus?: string | null; twilioMessageSid?: string | null; createdByUserId?: string | null; sentAt?: Date | null }) {
+  return recordOutboundSms({ notificationDispatchId: params.dispatchId, recipientId: params.recipientId, teamId: params.teamId, leagueId: params.leagueId, sourceType: params.sourceType, sourceId: params.sourceId, contactName: params.contactName, phone: params.phone, body: params.body, fromNumber: params.fromNumber, toNumber: params.toNumber, provider: params.provider, providerMessageId: params.providerMessageId, providerStatus: params.providerStatus, twilioMessageSid: params.twilioMessageSid, createdByUserId: params.createdByUserId, sentAt: params.sentAt });
 }
