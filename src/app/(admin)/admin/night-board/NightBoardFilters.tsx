@@ -160,7 +160,7 @@ export default function NightBoardFilters({
   const [date, setDate] = useState(selectedDate);
   const [leagueId, setLeagueId] = useState(selectedLeagueId);
   const [venueId, setVenueId] = useState(selectedVenueId);
-  const totalPitchCostValue = nightPitchTotalCost ?? nightPitchCostPerHour ?? "";
+  const totalPitchCostValue = nightPitchTotalCost ?? nightPitchCostPerHour ?? pitchHire ?? "";
 
   return (
     <form className="mt-6 space-y-4" action="/admin/night-board">
@@ -173,17 +173,13 @@ export default function NightBoardFilters({
       </div>
 
       <div className="rounded-2xl border border-amber-400/15 bg-amber-500/[0.05] p-4">
-        <input type="hidden" name="nightPitchCount" value="1" />
-        <input type="hidden" name="nightStartTime" value="00:00" />
-        <input type="hidden" name="nightEndTime" value="01:00" />
-
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
               One-night pitch cost override
             </div>
             <p className="mt-1 text-xs leading-5 text-white/45">
-              Use this when a night has a different final pitch hire cost. The total pitch cost below is used directly as the pitch hire fee.
+              Use this when a night has a different final pitch hire cost. These details are saved against this fixture night.
             </p>
           </div>
         </div>
@@ -191,7 +187,7 @@ export default function NightBoardFilters({
           <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
             Pitches tonight
             <input
-              name="nightPitchCountDisplay"
+              name="nightPitchCount"
               type="number"
               min="0"
               step="1"
@@ -203,7 +199,7 @@ export default function NightBoardFilters({
           <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
             Start time
             <input
-              name="nightStartTimeDisplay"
+              name="nightStartTime"
               type="time"
               defaultValue={nightStartTime}
               className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
@@ -212,13 +208,13 @@ export default function NightBoardFilters({
           <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
             End time
             <input
-              name="nightEndTimeDisplay"
+              name="nightEndTime"
               type="time"
               defaultValue={nightEndTime}
               className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
             />
           </label>
-          <MoneyInput label="Total pitch cost" name="nightPitchCostPerHour" defaultValue={totalPitchCostValue} placeholder="e.g. 120" />
+          <MoneyInput label="Total pitch cost" name="nightPitchTotalCost" defaultValue={totalPitchCostValue} placeholder="e.g. 120" />
         </div>
       </div>
 
