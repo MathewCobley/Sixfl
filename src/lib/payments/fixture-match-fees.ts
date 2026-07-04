@@ -153,7 +153,8 @@ async function isFixturePublishedForPaymentMessages(fixtureId: string) {
     select: { publishedAt: true, status: true },
   });
 
-  return Boolean(fixture) && !shouldBlockFixturePaymentMessages(fixture);
+  if (!fixture) return false;
+  return !shouldBlockFixturePaymentMessages(fixture);
 }
 
 export function buildChargePaymentPath(paymentToken: string) {
