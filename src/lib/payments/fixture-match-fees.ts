@@ -126,7 +126,11 @@ function shouldBlockFixturePaymentMessages(fixture: {
   publishedAt: Date | null;
   status: FixtureStatus;
 }) {
-  return !fixture.publishedAt || fixture.status === FixtureStatus.CANCELLED || fixture.status === FixtureStatus.POSTPONED;
+  return (
+    !fixture.publishedAt ||
+    fixture.status === FixtureStatus.CANCELLED ||
+    fixture.status === FixtureStatus.POSTPONED
+  );
 }
 
 function blockedPaymentMessageReason(fixture?: {
@@ -230,7 +234,9 @@ async function voidFixtureChargesOrThrow(input: {
     const paidTotalPence = getChargePaidTotal(charge.transactions);
 
     if (paidTotalPence > 0) {
-      throw new Error(`${input.paidErrorPrefix} ${charge.team.name} already has a recorded match fee payment.`);
+      throw new Error(
+        `${input.paidErrorPrefix} ${charge.team.name} already has a recorded match fee payment.`,
+      );
     }
   }
 
@@ -244,6 +250,18 @@ async function voidFixtureChargesOrThrow(input: {
 
   await cancelQueuedMatchFeeNotificationDispatches(chargeIds, input.db, {
     reason: input.reason,
+  });
+}
+
+export async function voidFixtureMatchFeeChargesOrThrow(
+  fixtureIds: string[],
+  db: PaymentChargeDbClient = prisma,
+) {
+  await voidFixtureChargesOrThrow({
+    fixtureIds,
+    db,
+    paidErrorPrefix: "Cannot delete this fixture because",
+    reason: "Fixture was deleted before queued match fee emails were sent.",
   });
 }
 
