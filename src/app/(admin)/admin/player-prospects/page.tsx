@@ -11,6 +11,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import {
   assignPlayerProspectToTeamAction,
   sendPlayerProspectSquadInviteAction,
+  sendPlayerProspectYesNoChaseAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -213,10 +214,16 @@ function getSavedMessage(saved?: string) {
   switch (saved) {
     case "assigned":
       return "Prospect assigned to team.";
+    case "yes-no-chase-queued":
+      return "YES/NO chase email queued for the prospect.";
     case "squad-invite-queued":
       return "Squad invite email queued. The player will receive the activation link for their team.";
     case "squad-invite-already-sent":
       return "A squad invite email has already been queued or sent for this player.";
+    case "squad-chase-queued":
+      return "Squad invite chase email queued.";
+    case "squad-final-chase-queued":
+      return "Final squad invite chase email queued.";
     default:
       return saved ? "Saved." : null;
   }
@@ -362,7 +369,9 @@ function ProspectCard({
   const isUnassigned = !prospect.team;
   const isActivePlayer = Boolean(activeReason);
   const isClosedProspect = prospect.status === "DECLINED" || prospect.status === "DUPLICATE";
-  const canSendSquadInvite = Boolean(prospect.team && prospect.email?.trim() && !isClosedProspect && !isActivePlayer);
+  const hasEmail = Boolean(prospect.email?.trim());
+  const canSendSquadInvite = Boolean(prospect.team && hasEmail && !isClosedProspect && !isActivePlayer);
+  const canSendYesNo = Boolean(hasEmail && !isClosedProspect && !isActivePlayer);
 
   return (
     <article
@@ -429,8 +438,23 @@ function ProspectCard({
               <div className="mt-2 font-semibold text-emerald-200">{prospect.team.name}</div>
               <div className="mt-1 text-sm text-white/45">{teamLeague}</div>
               <div className="mt-2 text-xs text-white/35">Mode: {String(prospect.team.teamMode)}</div>
+
+              {canSendYesNo ? (
+                <form action={sendPlayerProspectYesNoChaseAction} className="mt-4">
+                  <input type="hidden" name="prospectId" value={prospect.id} />
+                  <input type="hidden" name="leagueId" value={selectedLeagueId} />
+                  <input type="hidden" name="responseTeamId" value={prospect.team.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/15 px-4 py-2.5 text-sm font-semibold text-violet-50 transition hover:bg-violet-500/20"
+                  >
+                    Resend YES/NO
+                  </button>
+                </form>
+              ) : null}
+
               {canSendSquadInvite ? (
-                <form action={sendPlayerProspectSquadInviteAction} className="mt-4">
+                <form action={sendPlayerProspectSquadInviteAction} className="mt-3">
                   <input type="hidden" name="prospectId" value={prospect.id} />
                   <input type="hidden" name="leagueId" value={selectedLeagueId} />
                   <button
@@ -441,9 +465,9 @@ function ProspectCard({
                   </button>
                 </form>
               ) : null}
-              {prospect.team && !prospect.email?.trim() && !isClosedProspect ? (
+              {prospect.team && !hasEmail && !isClosedProspect ? (
                 <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
-                  Add an email address before sending a squad invite.
+                  Add an email address before sending a YES/NO or squad invite email.
                 </div>
               ) : null}
             </>
@@ -455,7 +479,21 @@ function ProspectCard({
           ) : (
             <>
               <div className="mt-2 font-semibold text-sky-100">Unassigned prospect</div>
-              <div className="mt-1 text-sm text-white/45">Not currently linked to any team.</div>
+              <div className="mt-1 text-sm text-white/45">Choose a team context to chase them, or assign them permanently.</div>
+
+              <form action={sendPlayerProspectYesNoChaseAction} className="mt-4 space-y-3 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-3">
+                <input type="hidden" name="prospectId" value={prospect.id} />
+                <input type="hidden" name="leagueId" value={selectedLeagueId} />
+                <FormListboxField name="responseTeamId" options={teamOptions} placeholder="Choose team for YES/NO" disabled={teamOptions.length === 0 || !hasEmail} />
+                <button
+                  type="submit"
+                  disabled={teamOptions.length === 0 || !hasEmail}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/15 px-4 py-2.5 text-sm font-semibold text-violet-50 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Resend YES/NO
+                </button>
+              </form>
+
               <form action={assignPlayerProspectToTeamAction} className="mt-4 space-y-3">
                 <input type="hidden" name="prospectId" value={prospect.id} />
                 <FormListboxField name="teamId" options={teamOptions} placeholder="Choose team" disabled={teamOptions.length === 0} />
@@ -467,6 +505,12 @@ function ProspectCard({
                   Assign to team
                 </button>
               </form>
+
+              {!hasEmail ? (
+                <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
+                  Add an email address before sending a YES/NO chase.
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -698,7 +742,7 @@ export default async function AdminPlayerProspectsPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">SIXFL pipeline</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Player prospects</h1>
             <p className="mt-3 max-w-3xl text-sm text-white/70 sm:text-base">
-              Admin-owned view of individual players who may join a team. Assign players, send squad invites, and keep comms history in one place.
+              Admin-owned view of individual players who may join a team. Assign players, resend YES/NO chases, send squad invites, and keep comms history in one place.
             </p>
 
             <form method="get" action="/admin/player-prospects" className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4">
