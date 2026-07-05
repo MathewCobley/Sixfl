@@ -38,6 +38,10 @@ export default function FormListboxField({
     setSelectedValue(value);
   }, [value]);
 
+  if (name === "responseTeamId" && placeholder === "Choose team for YES/NO") {
+    return <input type="hidden" name={name} value="" />;
+  }
+
   function updateOpenDirection() {
     const rect = fieldRef.current?.getBoundingClientRect();
 
