@@ -29,6 +29,8 @@ type NightBoardLeagueOption = { id: string; name: string; season: string | null;
 type NightBoardOverrideRow = { pitchHirePence: number | null; nightPitchCount: number | null; nightStartTime: string | null; nightEndTime: string | null };
 type TeamChargeSummary = { amountPence: number; paidPence: number; outstandingPence: number; label: string; detail: string; tone: "paid" | "open" | "missing" };
 type TeamConfirmationSummary = { label: string; detail: string; note: string | null; tone: "confirmed" | "issue" | "pending" | "missing" };
+type LeagueBookingCostRow = { leagueId: string; bookedPitchCount: number | null; bookingStartTime: string | null; bookingEndTime: string | null; pitchCostPerHourOverridePence: number | null };
+type VenueCostRow = { venueId: string; defaultPitchCostPerHourPence: number | null };
 
 function getSearchParam(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] ?? "" : value ?? ""; }
 function isDateInput(value: string) { return /^\d{4}-\d{2}-\d{2}$/.test(value); }
@@ -55,6 +57,9 @@ function statusClass(status: FixtureStatus) { if (status === FixtureStatus.COMPL
 function warningClass(level: BoardWarning["level"]) { return level === "red" ? "border-red-400/25 bg-red-500/10 text-red-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"; }
 function chargeClass(tone: TeamChargeSummary["tone"]) { if (tone === "paid") return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"; if (tone === "missing") return "border-amber-400/25 bg-amber-500/10 text-amber-100"; return "border-red-400/25 bg-red-500/10 text-red-100"; }
 function confirmationClass(tone: TeamConfirmationSummary["tone"]) { if (tone === "confirmed") return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"; if (tone === "issue") return "border-red-400/25 bg-red-500/10 text-red-100"; if (tone === "missing") return "border-white/10 bg-white/[0.04] text-white/60"; return "border-amber-400/25 bg-amber-500/10 text-amber-100"; }
+function parseTimeToMinutes(value: string | null) { if (!value) return null; const match = /^(\d{2}):(\d{2})$/.exec(value.trim()); if (!match) return null; const hours = Number(match[1]); const minutes = Number(match[2]); if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null; return hours * 60 + minutes; }
+function bookingHours(startTime: string | null, endTime: string | null) { const start = parseTimeToMinutes(startTime); const end = parseTimeToMinutes(endTime); if (start === null || end === null) return null; let minutes = end - start; if (minutes <= 0) minutes += 24 * 60; return minutes / 60; }
+function formatHours(value: number) { return Number.isInteger(value) ? `${value}` : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, ""); }
 
 function getTeamChargeSummary(fixture: FixtureForBoard, teamId: string): TeamChargeSummary {
   const charges = fixture.paymentCharges.filter((charge) => charge.teamId === teamId && charge.status !== PaymentChargeStatus.VOID);
@@ -68,7 +73,6 @@ function getTeamChargeSummary(fixture: FixtureForBoard, teamId: string): TeamCha
   const isPaid = outstandingPence === 0 || charges.every((charge) => charge.status === PaymentChargeStatus.PAID);
   return { amountPence, paidPence, outstandingPence, label: isPaid ? "Paid" : `Due ${formatMoney(outstandingPence)}`, detail: `Charge ${formatMoney(amountPence)} · Paid ${formatMoney(paidPence)}`, tone: isPaid ? "paid" : "open" };
 }
-
 function getTeamConfirmationSummary(fixture: FixtureForBoard, teamId: string): TeamConfirmationSummary {
   const confirmation = fixture.captainConfirmations.find((item) => item.teamId === teamId);
   if (!confirmation) return { label: "No confirmation sent", detail: "No captain confirmation row yet", note: null, tone: "missing" };
@@ -77,14 +81,8 @@ function getTeamConfirmationSummary(fixture: FixtureForBoard, teamId: string): T
   if (confirmation.status === "ISSUE_RAISED") return { label: "Issue raised", detail: `Raised ${formatDateTime(confirmation.issueRaisedAt ?? confirmation.updatedAt)}`, note: confirmation.note, tone: "issue" };
   return { label: "Pending", detail: confirmation.lastChasedAt ? `Last chased ${formatDateTime(confirmation.lastChasedAt)}` : `Created ${formatDateTime(confirmation.createdAt)}`, note: confirmation.note, tone: "pending" };
 }
-
-function TeamChargeBadge({ label, teamName, summary }: { label: string; teamName: string; summary: TeamChargeSummary }) {
-  return <div className={`rounded-xl border px-3 py-2 text-xs ${chargeClass(summary.tone)}`}><div className="flex items-center justify-between gap-3"><span className="font-semibold text-white/80">{label}: {teamName}</span><span className="shrink-0 font-semibold">{summary.label}</span></div><div className="mt-1 text-[11px] text-white/55">{summary.detail}</div></div>;
-}
-
-function TeamConfirmationBadge({ label, teamName, summary }: { label: string; teamName: string; summary: TeamConfirmationSummary }) {
-  return <div className={`rounded-xl border px-3 py-2 text-xs ${confirmationClass(summary.tone)}`}><div className="flex items-center justify-between gap-3"><span className="font-semibold text-white/80">{label}: {teamName}</span><span className="shrink-0 font-semibold">{summary.label}</span></div><div className="mt-1 text-[11px] text-white/55">{summary.detail}</div>{summary.note ? <div className="mt-1 text-[11px] text-white/70">Note: {summary.note}</div> : null}</div>;
-}
+function TeamChargeBadge({ label, teamName, summary }: { label: string; teamName: string; summary: TeamChargeSummary }) { return <div className={`rounded-xl border px-3 py-2 text-xs ${chargeClass(summary.tone)}`}><div className="flex items-center justify-between gap-3"><span className="font-semibold text-white/80">{label}: {teamName}</span><span className="shrink-0 font-semibold">{summary.label}</span></div><div className="mt-1 text-[11px] text-white/55">{summary.detail}</div></div>; }
+function TeamConfirmationBadge({ label, teamName, summary }: { label: string; teamName: string; summary: TeamConfirmationSummary }) { return <div className={`rounded-xl border px-3 py-2 text-xs ${confirmationClass(summary.tone)}`}><div className="flex items-center justify-between gap-3"><span className="font-semibold text-white/80">{label}: {teamName}</span><span className="shrink-0 font-semibold">{summary.label}</span></div><div className="mt-1 text-[11px] text-white/55">{summary.detail}</div>{summary.note ? <div className="mt-1 text-[11px] text-white/70">Note: {summary.note}</div> : null}</div>; }
 
 async function getSavedNightBoardPitchHireOverride(input: { boardDate: string; leagueId: string; venueId: string }) {
   try {
@@ -95,7 +93,6 @@ async function getSavedNightBoardPitchHireOverride(input: { boardDate: string; l
     return null;
   }
 }
-
 async function updateNightBoardFixtureMatchAction(formData: FormData) {
   "use server";
   await requireAdmin();
@@ -116,44 +113,25 @@ async function updateNightBoardFixtureMatchAction(formData: FormData) {
   revalidatePath("/admin/night-board"); revalidatePath("/admin/fixtures"); revalidatePath("/admin/referee-nights");
   redirect(returnTo);
 }
-
 async function getUpcomingLeagueOptions(_venueId: string): Promise<NightBoardLeagueOption[]> {
   const fixtures = await prisma.fixture.findMany({ where: { publishedAt: { not: null }, kickoffAt: { gte: new Date() }, status: { in: [...NIGHT_BOARD_VISIBLE_STATUSES] } }, orderBy: [{ kickoffAt: "asc" }], select: { kickoffAt: true, league: { select: { id: true, name: true, season: true, isActive: true } } } });
   const byLeague = new Map<string, NightBoardLeagueOption>();
-  for (const fixture of fixtures) {
-    const existing = byLeague.get(fixture.league.id);
-    if (existing) { existing.fixtureCount += 1; if (!existing.nextKickoffAt || fixture.kickoffAt < existing.nextKickoffAt) existing.nextKickoffAt = fixture.kickoffAt; continue; }
-    byLeague.set(fixture.league.id, { id: fixture.league.id, name: fixture.league.name, season: fixture.league.season, isActive: fixture.league.isActive, nextKickoffAt: fixture.kickoffAt, fixtureCount: 1 });
-  }
+  for (const fixture of fixtures) { const existing = byLeague.get(fixture.league.id); if (existing) { existing.fixtureCount += 1; if (!existing.nextKickoffAt || fixture.kickoffAt < existing.nextKickoffAt) existing.nextKickoffAt = fixture.kickoffAt; continue; } byLeague.set(fixture.league.id, { id: fixture.league.id, name: fixture.league.name, season: fixture.league.season, isActive: fixture.league.isActive, nextKickoffAt: fixture.kickoffAt, fixtureCount: 1 }); }
   return Array.from(byLeague.values()).sort((a, b) => { const aTime = a.nextKickoffAt?.getTime() ?? Number.MAX_SAFE_INTEGER; const bTime = b.nextKickoffAt?.getTime() ?? Number.MAX_SAFE_INTEGER; return aTime - bTime || a.name.localeCompare(b.name); });
 }
-
 async function getUpcomingFixtureNightOptions({ leagueId, venueId }: { leagueId: string; venueId: string }) {
   const fixtures = await prisma.fixture.findMany({ where: { publishedAt: { not: null }, kickoffAt: { gte: new Date() }, status: { in: [...NIGHT_BOARD_VISIBLE_STATUSES] }, ...(leagueId ? { leagueId } : {}), ...(venueId ? { venueId } : {}) }, orderBy: [{ kickoffAt: "asc" }], take: 160, select: { kickoffAt: true, league: { select: { name: true } }, venue: { select: { name: true } } } });
   const grouped = new Map<string, { date: Date; count: number; leagues: Set<string>; venues: Set<string> }>();
   for (const fixture of fixtures) { const dateKey = toLondonDateInput(fixture.kickoffAt); const existing = grouped.get(dateKey) ?? { date: fixture.kickoffAt, count: 0, leagues: new Set<string>(), venues: new Set<string>() }; existing.count += 1; existing.leagues.add(fixture.league.name); if (fixture.venue?.name) existing.venues.add(fixture.venue.name); grouped.set(dateKey, existing); }
   return Array.from(grouped.entries()).slice(0, 24).map(([value, group], index) => ({ value, label: `${index === 0 ? "Next: " : ""}${formatDate(group.date)}`, description: `${group.count} fixture${group.count === 1 ? "" : "s"}${group.venues.size ? ` · ${Array.from(group.venues).slice(0, 2).join(", ")}` : ""}` }));
 }
-
 async function getFixturesForBoard({ start, end, leagueId, venueId }: { start: Date; end: Date; leagueId: string; venueId: string }) {
   return prisma.fixture.findMany({
     where: { publishedAt: { not: null }, kickoffAt: { gte: start, lt: end }, status: { in: [...NIGHT_BOARD_VISIBLE_STATUSES] }, ...(leagueId ? { leagueId } : {}), ...(venueId ? { venueId } : {}) },
     orderBy: [{ kickoffAt: "asc" }, { pitch: "asc" }, { position: "asc" }],
-    select: {
-      id: true, leagueId: true, venueId: true, kickoffAt: true, pitch: true, status: true, matchFeePence: true,
-      league: { select: { id: true, name: true, season: true, venueName: true } },
-      division: { select: { id: true, name: true } },
-      venue: { select: { id: true, name: true } },
-      homeTeam: { select: { id: true, name: true } },
-      awayTeam: { select: { id: true, name: true } },
-      referee: { select: { id: true, name: true, email: true } },
-      result: { select: { id: true, homeScore: true, awayScore: true } },
-      paymentCharges: { select: { id: true, amountPence: true, status: true, teamId: true, transactions: { select: { amountPence: true } } } },
-      captainConfirmations: { select: { id: true, status: true, teamId: true, note: true, confirmedAt: true, issueRaisedAt: true, lastChasedAt: true, createdAt: true, updatedAt: true, confirmedByUser: { select: { name: true, email: true } } } },
-    },
+    select: { id: true, leagueId: true, venueId: true, kickoffAt: true, pitch: true, status: true, matchFeePence: true, league: { select: { id: true, name: true, season: true, venueName: true } }, division: { select: { id: true, name: true } }, venue: { select: { id: true, name: true } }, homeTeam: { select: { id: true, name: true } }, awayTeam: { select: { id: true, name: true } }, referee: { select: { id: true, name: true, email: true } }, result: { select: { id: true, homeScore: true, awayScore: true } }, paymentCharges: { select: { id: true, amountPence: true, status: true, teamId: true, transactions: { select: { amountPence: true } } } }, captainConfirmations: { select: { id: true, status: true, teamId: true, note: true, confirmedAt: true, issueRaisedAt: true, lastChasedAt: true, createdAt: true, updatedAt: true, confirmedByUser: { select: { name: true, email: true } } } } },
   });
 }
-
 function buildWarnings(fixtures: FixtureForBoard[]) {
   const warnings: BoardWarning[] = []; const pitchTime = new Map<string, FixtureForBoard[]>(); const refTime = new Map<string, FixtureForBoard[]>(); const teamTime = new Map<string, FixtureForBoard[]>();
   for (const fixture of fixtures) { const time = fixture.kickoffAt.toISOString(); const pitch = fixture.pitch?.trim(); if (!pitch) warnings.push({ level: "amber", message: `${formatTime(fixture.kickoffAt)} ${fixture.homeTeam.name} v ${fixture.awayTeam.name} has no pitch.` }); if (!fixture.referee) warnings.push({ level: "red", message: `${formatTime(fixture.kickoffAt)} ${fixture.homeTeam.name} v ${fixture.awayTeam.name} has no referee.` }); if (!fixture.venue && !fixture.league.venueName) warnings.push({ level: "amber", message: `${formatTime(fixture.kickoffAt)} ${fixture.homeTeam.name} v ${fixture.awayTeam.name} has no venue.` }); if (pitch) { const key = `${time}__${pitch.toLowerCase()}`; pitchTime.set(key, [...(pitchTime.get(key) ?? []), fixture]); } if (fixture.referee?.id) { const key = `${time}__${fixture.referee.id}`; refTime.set(key, [...(refTime.get(key) ?? []), fixture]); } for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) { const key = `${time}__${teamId}`; teamTime.set(key, [...(teamTime.get(key) ?? []), fixture]); } }
@@ -162,11 +140,39 @@ function buildWarnings(fixtures: FixtureForBoard[]) {
   for (const matches of teamTime.values()) if (matches.length > 1) warnings.push({ level: "red", message: `A team is double-booked at ${formatTime(matches[0].kickoffAt)}.` });
   return warnings;
 }
-
 function getBoardGroups(fixtures: FixtureForBoard[]) { const pitchNames = Array.from(new Set(fixtures.map((fixture) => fixture.pitch?.trim() || "No pitch"))).sort((a, b) => a.localeCompare(b)); const timeLabels = Array.from(new Set(fixtures.map((fixture) => formatTime(fixture.kickoffAt)))); const fixtureByTimePitch = new Map<string, FixtureForBoard[]>(); for (const fixture of fixtures) { const key = `${formatTime(fixture.kickoffAt)}__${fixture.pitch?.trim() || "No pitch"}`; fixtureByTimePitch.set(key, [...(fixtureByTimePitch.get(key) ?? []), fixture]); } return { pitchNames, timeLabels, fixtureByTimePitch }; }
 function getRefereeRows(fixtures: FixtureForBoard[], refFeePence: number) { const rows = new Map<string, { name: string; email: string | null; pitchNames: Set<string>; fixtures: FixtureForBoard[] }>(); for (const fixture of fixtures) { if (!fixture.referee?.id) continue; const existing = rows.get(fixture.referee.id) ?? { name: fixture.referee.name || fixture.referee.email || "Unnamed referee", email: fixture.referee.email, pitchNames: new Set<string>(), fixtures: [] }; existing.fixtures.push(fixture); existing.pitchNames.add(fixture.pitch?.trim() || "No pitch"); rows.set(fixture.referee.id, existing); } return Array.from(rows.values()).map((row) => ({ ...row, pitchList: Array.from(row.pitchNames).sort().join(", "), firstKickoff: row.fixtures[0]?.kickoffAt ?? null, lastKickoff: row.fixtures[row.fixtures.length - 1]?.kickoffAt ?? null, feePence: row.fixtures.length * refFeePence })); }
 function getFinance(fixtures: FixtureForBoard[], refFeePence: number, pitchHirePence: number) { const expectedTeamIds = new Set<string>(); const chargedTeamIds = new Set<string>(); const uniqueRefedFixtures = fixtures.filter((fixture) => fixture.referee?.id).length; let chargesCreatedPence = 0; let paidPence = 0; let defaultFeePence = DEFAULT_MATCH_FEE_PENCE; for (const fixture of fixtures) { expectedTeamIds.add(fixture.homeTeam.id); expectedTeamIds.add(fixture.awayTeam.id); if (fixture.matchFeePence && fixture.matchFeePence > 0) defaultFeePence = fixture.matchFeePence; for (const charge of fixture.paymentCharges) { if (charge.status === PaymentChargeStatus.VOID) continue; chargedTeamIds.add(charge.teamId); chargesCreatedPence += charge.amountPence; paidPence += charge.transactions.reduce((total, transaction) => total + transaction.amountPence, 0); } } const expectedTeams = expectedTeamIds.size; const expectedIncomePence = expectedTeams * defaultFeePence; const missingChargeCount = Math.max(0, expectedTeams - chargedTeamIds.size); const missingChargesPence = Math.max(0, expectedIncomePence - chargesCreatedPence); const outstandingAgainstChargesPence = Math.max(0, chargesCreatedPence - paidPence); const expectedOutstandingPence = Math.max(0, expectedIncomePence - paidPence); const refCostPence = uniqueRefedFixtures * refFeePence; const totalCostPence = refCostPence + pitchHirePence; return { expectedTeams, defaultFeePence, expectedIncomePence, chargesCreatedCount: chargedTeamIds.size, chargesCreatedPence, missingChargeCount, missingChargesPence, paidPence, outstandingAgainstChargesPence, expectedOutstandingPence, refCostPence, pitchHirePence, expectedProfitPence: expectedIncomePence - totalCostPence }; }
-async function calculateAutomaticPitchHire(fixtures: FixtureForBoard[]) { if (fixtures.length === 0) return { amountPence: 0, label: "No fixtures selected", missingParts: 0 }; return { amountPence: 0, label: "No saved pitch override", missingParts: 0 }; }
+async function calculateAutomaticPitchHire(fixtures: FixtureForBoard[], nightOverride?: Pick<NightBoardOverrideRow, "nightPitchCount" | "nightStartTime" | "nightEndTime"> | null) {
+  if (fixtures.length === 0) return { amountPence: 0, label: "No fixtures selected", missingParts: 0 };
+  const leagueIds = Array.from(new Set(fixtures.map((fixture) => fixture.league.id)));
+  const venueIds = Array.from(new Set(fixtures.map((fixture) => fixture.venue?.id ?? fixture.venueId).filter((id): id is string => Boolean(id))));
+  const [leagueRows, venueRows] = await Promise.all([
+    prisma.$queryRaw<LeagueBookingCostRow[]>(Prisma.sql`SELECT id AS "leagueId", "bookedPitchCount"::int AS "bookedPitchCount", "bookingStartTime" AS "bookingStartTime", "bookingEndTime" AS "bookingEndTime", "pitchCostPerHourOverridePence"::int AS "pitchCostPerHourOverridePence" FROM "League" WHERE id IN (${Prisma.join(leagueIds)})`),
+    venueIds.length > 0 ? prisma.$queryRaw<VenueCostRow[]>(Prisma.sql`SELECT id AS "venueId", "defaultPitchCostPerHourPence"::int AS "defaultPitchCostPerHourPence" FROM "Venue" WHERE id IN (${Prisma.join(venueIds)})`) : Promise.resolve([]),
+  ]);
+  const leagueMap = new Map(leagueRows.map((row) => [row.leagueId, row]));
+  const venueCostMap = new Map(venueRows.map((row) => [row.venueId, row.defaultPitchCostPerHourPence]));
+  const firstVenueByLeague = new Map<string, string | null>();
+  for (const fixture of fixtures) if (!firstVenueByLeague.has(fixture.league.id)) firstVenueByLeague.set(fixture.league.id, fixture.venue?.id ?? fixture.venueId ?? null);
+  const overrideHours = bookingHours(nightOverride?.nightStartTime ?? null, nightOverride?.nightEndTime ?? null);
+  if (nightOverride?.nightPitchCount && nightOverride.nightPitchCount > 0 && overrideHours) {
+    const firstFixture = fixtures[0];
+    const firstLeague = leagueMap.get(firstFixture.league.id);
+    const firstVenueId = firstFixture.venue?.id ?? firstFixture.venueId ?? null;
+    const costPerHourPence = firstLeague?.pitchCostPerHourOverridePence ?? (firstVenueId ? venueCostMap.get(firstVenueId) ?? null : null);
+    if (costPerHourPence) return { amountPence: Math.round(nightOverride.nightPitchCount * overrideHours * costPerHourPence), label: `Auto from night override + venue rate: ${nightOverride.nightPitchCount} pitch${nightOverride.nightPitchCount === 1 ? "" : "es"} × ${formatHours(overrideHours)}h × ${formatMoney(costPerHourPence)}/hr`, missingParts: 0 };
+  }
+  let amountPence = 0; let calculatedLeagues = 0; let missingParts = 0; const labels: string[] = [];
+  for (const leagueId of leagueIds) {
+    const booking = leagueMap.get(leagueId); const venueId = firstVenueByLeague.get(leagueId) ?? null;
+    const pitchCount = booking?.bookedPitchCount ?? null; const hours = bookingHours(booking?.bookingStartTime ?? null, booking?.bookingEndTime ?? null); const costPerHourPence = booking?.pitchCostPerHourOverridePence ?? (venueId ? venueCostMap.get(venueId) ?? null : null);
+    if (!pitchCount || !hours || !costPerHourPence) { missingParts += 1; continue; }
+    amountPence += Math.round(pitchCount * hours * costPerHourPence); calculatedLeagues += 1; labels.push(`${pitchCount} pitch${pitchCount === 1 ? "" : "es"} × ${formatHours(hours)}h × ${formatMoney(costPerHourPence)}/hr`);
+  }
+  if (calculatedLeagues > 0) return { amountPence, label: calculatedLeagues === 1 ? `Auto from league booking + venue rate: ${labels[0]}` : `Auto from ${calculatedLeagues} league bookings + venue rates`, missingParts };
+  return { amountPence: 0, label: "Add league booking hours/pitches and venue hourly rate", missingParts: Math.max(missingParts, 1) };
+}
 function buildDateOptions(options: SelectOption[], selectedDate: string) { if (options.length === 0) return [{ value: selectedDate, label: formatDate(new Date(`${selectedDate}T00:00:00.000Z`)), description: "No upcoming published fixture nights found" }]; if (!options.some((option) => option.value === selectedDate)) return [{ value: selectedDate, label: formatDate(new Date(`${selectedDate}T00:00:00.000Z`)), description: "Selected date" }, ...options]; return options; }
 
 export default async function NightBoardPage({ searchParams }: NightBoardPageProps) {
@@ -175,8 +181,8 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const requestedDate = getSearchParam(params.date); const leagueId = getSearchParam(params.leagueId); const venueId = getSearchParam(params.venueId); const refFeeValue = getSearchParam(params.refFee); const pitchHireValue = getSearchParam(params.pitchHire); const nightPitchCountValue = getSearchParam(params.nightPitchCount); const nightStartTimeValue = getSearchParam(params.nightStartTime); const nightEndTimeValue = getSearchParam(params.nightEndTime); const nightPitchTotalCostValue = getSearchParam(params.nightPitchTotalCost) || pitchHireValue; const refFeePence = parsePence(refFeeValue, 0);
   const [leagues, venues, referees] = await Promise.all([getUpcomingLeagueOptions(""), prisma.venue.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }), prisma.user.findMany({ where: { role: { in: [UserRole.REFEREE, UserRole.ADMIN] } }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true, role: true } })]);
   const leagueStillAvailable = !leagueId || leagues.some((league) => league.id === leagueId); const activeLeagueId = leagueStillAvailable ? leagueId : ""; let activeVenueId = venueId; let activeUpcomingNightOptions = await getUpcomingFixtureNightOptions({ leagueId: activeLeagueId, venueId: activeVenueId }); if (activeVenueId && activeUpcomingNightOptions.length === 0) { activeVenueId = ""; activeUpcomingNightOptions = await getUpcomingFixtureNightOptions({ leagueId: activeLeagueId, venueId: "" }); }
-  const selectedDate = isDateInput(requestedDate) ? requestedDate : activeUpcomingNightOptions[0]?.value ?? todayInputValue(); const { start, end } = dateRangeFromInput(selectedDate); const fixtures = await getFixturesForBoard({ start, end, leagueId: activeLeagueId, venueId: activeVenueId }); const automaticPitchHire = await calculateAutomaticPitchHire(fixtures); const savedOverride = await getSavedNightBoardPitchHireOverride({ boardDate: selectedDate, leagueId: activeLeagueId, venueId: activeVenueId });
-  const displayedPitchHireValue = nightPitchTotalCostValue || formatMoneyInputValue(savedOverride?.pitchHirePence ?? null); const displayedPitchCount = nightPitchCountValue || (savedOverride?.nightPitchCount ? String(savedOverride.nightPitchCount) : ""); const displayedStartTime = nightStartTimeValue || savedOverride?.nightStartTime || ""; const displayedEndTime = nightEndTimeValue || savedOverride?.nightEndTime || ""; const pitchHirePence = displayedPitchHireValue.trim() ? parsePence(displayedPitchHireValue, automaticPitchHire.amountPence) : savedOverride?.pitchHirePence ?? automaticPitchHire.amountPence; const pitchHireSourceLabel = pitchHirePence > 0 ? "Saved/manual pitch hire total" : automaticPitchHire.label;
+  const selectedDate = isDateInput(requestedDate) ? requestedDate : activeUpcomingNightOptions[0]?.value ?? todayInputValue(); const { start, end } = dateRangeFromInput(selectedDate); const fixtures = await getFixturesForBoard({ start, end, leagueId: activeLeagueId, venueId: activeVenueId }); const savedOverride = await getSavedNightBoardPitchHireOverride({ boardDate: selectedDate, leagueId: activeLeagueId, venueId: activeVenueId }); const automaticPitchHire = await calculateAutomaticPitchHire(fixtures, savedOverride);
+  const displayedPitchHireValue = nightPitchTotalCostValue || formatMoneyInputValue(savedOverride?.pitchHirePence ?? null); const displayedPitchCount = nightPitchCountValue || (savedOverride?.nightPitchCount ? String(savedOverride.nightPitchCount) : ""); const displayedStartTime = nightStartTimeValue || savedOverride?.nightStartTime || ""; const displayedEndTime = nightEndTimeValue || savedOverride?.nightEndTime || ""; const pitchHirePence = displayedPitchHireValue.trim() ? parsePence(displayedPitchHireValue, automaticPitchHire.amountPence) : savedOverride?.pitchHirePence ?? automaticPitchHire.amountPence; const pitchHireSourceLabel = displayedPitchHireValue.trim() || savedOverride?.pitchHirePence ? "Saved/manual pitch hire total" : automaticPitchHire.label;
   const returnTo = buildNightBoardReturnTo({ date: selectedDate, leagueId: activeLeagueId, venueId: activeVenueId, refFee: refFeeValue }); const dateOptions = buildDateOptions(activeUpcomingNightOptions, selectedDate); const leagueOptions = [{ value: "", label: "All leagues", description: "Upcoming published fixtures only" }, ...leagues.map((league) => ({ value: league.id, label: league.name, description: `${league.season ?? "No season"} · ${league.fixtureCount} upcoming fixture${league.fixtureCount === 1 ? "" : "s"}${league.nextKickoffAt ? ` · next ${formatDate(league.nextKickoffAt)}` : ""}${league.isActive ? "" : " · inactive"}` }))]; const venueOptions = [{ value: "", label: "All venues", description: "Show every venue" }, ...venues.map((venue) => ({ value: venue.id, label: venue.name }))]; const refereeOptions = [{ value: "", label: "No referee" }, ...referees.map((referee) => ({ value: referee.id, label: `${referee.name || referee.email || "Unnamed referee"}${referee.role === UserRole.ADMIN ? " · admin" : ""}` }))];
   const warnings = buildWarnings(fixtures); const { pitchNames, timeLabels, fixtureByTimePitch } = getBoardGroups(fixtures); const refereeRows = getRefereeRows(fixtures, refFeePence); const finance = getFinance(fixtures, refFeePence, pitchHirePence); const completedCount = fixtures.filter((fixture) => fixture.status === FixtureStatus.COMPLETED).length; const missingRefCount = fixtures.filter((fixture) => !fixture.referee).length; const missingPitchCount = fixtures.filter((fixture) => !fixture.pitch?.trim()).length; const confirmedCaptains = fixtures.reduce((total, fixture) => total + fixture.captainConfirmations.filter((confirmation) => confirmation.status === "CONFIRMED").length, 0); const expectedCaptainConfirmations = fixtures.length * 2; const isSorted = fixtures.length > 0 && warnings.filter((warning) => warning.level === "red").length === 0 && missingPitchCount === 0; const hasMissingCharges = finance.missingChargeCount > 0;
 
