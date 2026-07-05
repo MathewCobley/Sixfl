@@ -51,11 +51,11 @@ function responseNote(input: {
     minute: "2-digit",
   }).format(input.date);
 
-  const teamSuffix = input.teamName ? ` for ${input.teamName}` : "";
+  const teamSuffix = input.teamName ? ` for ${input.teamName}` : " generally";
   const line =
     input.answer === "YES"
       ? `Player confirmed they still want to play${teamSuffix} on ${stamp}.`
-      : `Player replied NO${teamSuffix} — remove from active squad list / follow up before selecting on ${stamp}.`;
+      : `Player replied NO${teamSuffix} — remove from active player pool / follow up before selecting on ${stamp}.`;
 
   const existing = input.existingNotes?.trim();
   if (!existing) return line;
@@ -118,11 +118,12 @@ async function saveTeamMemberResponse(input: {
   return {
     name: member.user.name || member.user.email || "Player",
     teamName: member.team.name,
+    isGeneral: false,
   };
 }
 
 async function saveProspectResponse(input: {
-  teamId: string;
+  teamId: string | null;
   recipientId: string;
   answer: "YES" | "NO";
   token: string;
@@ -130,7 +131,7 @@ async function saveProspectResponse(input: {
   const prospect = await prisma.teamPlayerProspect.findFirst({
     where: {
       id: input.recipientId,
-      OR: [{ teamId: input.teamId }, { teamId: null }],
+      ...(input.teamId ? { OR: [{ teamId: input.teamId }, { teamId: null }] } : {}),
     },
     select: {
       id: true,
@@ -144,12 +145,14 @@ async function saveProspectResponse(input: {
 
   if (!prospect) return null;
 
-  const team = await prisma.team.findUnique({
-    where: { id: input.teamId },
-    select: { id: true, name: true },
-  });
+  const team = input.teamId
+    ? await prisma.team.findUnique({
+        where: { id: input.teamId },
+        select: { id: true, name: true },
+      })
+    : null;
 
-  if (!team) return null;
+  if (input.teamId && !team) return null;
 
   const now = new Date();
 
@@ -161,7 +164,7 @@ async function saveProspectResponse(input: {
         answer: input.answer,
         date: now,
         existingNotes: prospect.notes,
-        teamName: team.name,
+        teamName: team?.name ?? null,
       }),
       lastContactedAt: now,
     },
@@ -181,7 +184,7 @@ async function saveProspectResponse(input: {
     )
     VALUES (
       gen_random_uuid()::text,
-      ${team.id},
+      ${team?.id ?? null},
       NULL,
       ${prospect.id},
       ${input.answer},
@@ -198,7 +201,8 @@ async function saveProspectResponse(input: {
 
   return {
     name: [prospect.firstName, prospect.lastName].filter(Boolean).join(" ") || prospect.firstName,
-    teamName: team.name,
+    teamName: team?.name ?? "the SIXFL player pool",
+    isGeneral: !team,
   };
 }
 
@@ -215,12 +219,14 @@ export default async function PlayerInterestResponsePage({ params, searchParams 
 
   const saved =
     payload.recipientType === "teamMember"
-      ? await saveTeamMemberResponse({
-          teamId: payload.teamId,
-          recipientId: payload.recipientId,
-          answer,
-          token,
-        })
+      ? payload.teamId
+        ? await saveTeamMemberResponse({
+            teamId: payload.teamId,
+            recipientId: payload.recipientId,
+            answer,
+            token,
+          })
+        : null
       : await saveProspectResponse({
           teamId: payload.teamId,
           recipientId: payload.recipientId,
@@ -241,8 +247,8 @@ export default async function PlayerInterestResponsePage({ params, searchParams 
         </h1>
         <p className="mt-4 text-sm leading-6 text-white/70">
           {answer === "YES"
-            ? `Thanks ${saved.name}. We’ve recorded that you still want to play for ${saved.teamName}.`
-            : `Thanks ${saved.name}. We’ve recorded that you no longer want to be kept on the active playing list for ${saved.teamName}.`}
+            ? `Thanks ${saved.name}. We’ve recorded that you still want to play ${saved.isGeneral ? "with SIXFL" : `for ${saved.teamName}`}.`
+            : `Thanks ${saved.name}. We’ve recorded that you no longer want to be kept on ${saved.isGeneral ? "the SIXFL player list" : `the active playing list for ${saved.teamName}`}.`}
         </p>
         <p className="mt-3 text-sm leading-6 text-white/55">
           If this was a mistake, reply to the original email or contact SIXFL.
