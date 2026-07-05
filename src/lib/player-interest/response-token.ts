@@ -7,7 +7,7 @@ import { createHmac, createHash } from "crypto";
 export type PlayerInterestRecipientType = "teamMember" | "prospect";
 
 export type PlayerInterestResponsePayload = {
-  teamId: string;
+  teamId: string | null;
   recipientType: PlayerInterestRecipientType;
   recipientId: string;
   exp: number;
@@ -45,13 +45,13 @@ function safeEqual(a: string, b: string) {
 }
 
 export function createPlayerInterestResponseToken(input: {
-  teamId: string;
+  teamId?: string | null;
   recipientType: PlayerInterestRecipientType;
   recipientId: string;
   expiresInDays?: number;
 }) {
   const payload: PlayerInterestResponsePayload = {
-    teamId: input.teamId,
+    teamId: input.teamId?.trim() || null,
     recipientType: input.recipientType,
     recipientId: input.recipientId,
     exp: Math.floor(Date.now() / 1000) + (input.expiresInDays ?? 30) * 24 * 60 * 60,
@@ -75,7 +75,6 @@ export function verifyPlayerInterestResponseToken(token: string) {
     const payload = JSON.parse(base64UrlDecode(encodedPayload)) as Partial<PlayerInterestResponsePayload>;
 
     if (
-      !payload.teamId ||
       !payload.recipientId ||
       (payload.recipientType !== "teamMember" && payload.recipientType !== "prospect") ||
       !payload.exp ||
@@ -84,7 +83,14 @@ export function verifyPlayerInterestResponseToken(token: string) {
       return null;
     }
 
-    return payload as PlayerInterestResponsePayload;
+    if (payload.recipientType === "teamMember" && !payload.teamId) return null;
+
+    return {
+      teamId: payload.teamId?.trim() || null,
+      recipientType: payload.recipientType,
+      recipientId: payload.recipientId,
+      exp: payload.exp,
+    } as PlayerInterestResponsePayload;
   } catch {
     return null;
   }
