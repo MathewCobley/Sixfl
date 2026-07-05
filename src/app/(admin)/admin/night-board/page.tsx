@@ -303,13 +303,12 @@ async function updateNightBoardFixtureMatchAction(formData: FormData) {
   redirect(returnTo);
 }
 
-async function getUpcomingLeagueOptions(venueId: string): Promise<NightBoardLeagueOption[]> {
+async function getUpcomingLeagueOptions(_venueId: string): Promise<NightBoardLeagueOption[]> {
   const fixtures = await prisma.fixture.findMany({
     where: {
       publishedAt: { not: null },
       kickoffAt: { gte: new Date() },
       status: { in: [...NIGHT_BOARD_VISIBLE_STATUSES] },
-      ...(venueId ? { venueId } : {}),
     },
     orderBy: [{ kickoffAt: "asc" }],
     select: {
@@ -568,10 +567,9 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const nightPitchTotalCostValue = getSearchParam(params.nightPitchTotalCost) || pitchHireValue;
   const refFeePence = parsePence(refFeeValue, 0);
 
-  const [leagues, venues, upcomingNightOptions, referees] = await Promise.all([
-    getUpcomingLeagueOptions(venueId),
+  const [leagues, venues, referees] = await Promise.all([
+    getUpcomingLeagueOptions(""),
     prisma.venue.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    getUpcomingFixtureNightOptions({ leagueId, venueId }),
     prisma.user.findMany({
       where: { role: { in: [UserRole.REFEREE, UserRole.ADMIN] } },
       orderBy: [{ name: "asc" }, { email: "asc" }],
@@ -581,12 +579,19 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
 
   const leagueStillAvailable = !leagueId || leagues.some((league) => league.id === leagueId);
   const activeLeagueId = leagueStillAvailable ? leagueId : "";
-  const activeUpcomingNightOptions = leagueStillAvailable ? upcomingNightOptions : await getUpcomingFixtureNightOptions({ leagueId: "", venueId });
+  let activeVenueId = venueId;
+  let activeUpcomingNightOptions = await getUpcomingFixtureNightOptions({ leagueId: activeLeagueId, venueId: activeVenueId });
+
+  if (activeVenueId && activeUpcomingNightOptions.length === 0) {
+    activeVenueId = "";
+    activeUpcomingNightOptions = await getUpcomingFixtureNightOptions({ leagueId: activeLeagueId, venueId: "" });
+  }
+
   const selectedDate = isDateInput(requestedDate) ? requestedDate : activeUpcomingNightOptions[0]?.value ?? todayInputValue();
   const { start, end } = dateRangeFromInput(selectedDate);
-  const fixtures = await getFixturesForBoard({ start, end, leagueId: activeLeagueId, venueId });
+  const fixtures = await getFixturesForBoard({ start, end, leagueId: activeLeagueId, venueId: activeVenueId });
   const automaticPitchHire = await calculateAutomaticPitchHire(fixtures);
-  const savedOverride = await getSavedNightBoardPitchHireOverride({ boardDate: selectedDate, leagueId: activeLeagueId, venueId });
+  const savedOverride = await getSavedNightBoardPitchHireOverride({ boardDate: selectedDate, leagueId: activeLeagueId, venueId: activeVenueId });
 
   const displayedPitchHireValue = nightPitchTotalCostValue || formatMoneyInputValue(savedOverride?.pitchHirePence ?? null);
   const displayedPitchCount = nightPitchCountValue || (savedOverride?.nightPitchCount ? String(savedOverride.nightPitchCount) : "");
@@ -600,7 +605,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
   const returnTo = buildNightBoardReturnTo({
     date: selectedDate,
     leagueId: activeLeagueId,
-    venueId,
+    venueId: activeVenueId,
     refFee: refFeeValue,
   });
 
@@ -650,7 +655,7 @@ export default async function NightBoardPage({ searchParams }: NightBoardPagePro
           venueOptions={venueOptions}
           selectedDate={selectedDate}
           selectedLeagueId={activeLeagueId}
-          selectedVenueId={venueId}
+          selectedVenueId={activeVenueId}
           refFee={refFeeValue}
           pitchHire={displayedPitchHireValue}
           nightPitchCount={displayedPitchCount}
