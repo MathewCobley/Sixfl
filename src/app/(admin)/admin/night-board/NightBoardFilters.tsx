@@ -285,6 +285,7 @@ export default function NightBoardFilters({
   const handleLeagueChange = (value: string) => {
     skipNextSavedLoadRef.current = false;
     setLeagueId(value);
+    setVenueId("");
   };
 
   const handleVenueChange = (value: string) => {
