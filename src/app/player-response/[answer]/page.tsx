@@ -219,14 +219,12 @@ export default async function PlayerInterestResponsePage({ params, searchParams 
 
   const saved =
     payload.recipientType === "teamMember"
-      ? payload.teamId
-        ? await saveTeamMemberResponse({
-            teamId: payload.teamId,
-            recipientId: payload.recipientId,
-            answer,
-            token,
-          })
-        : null
+      ? await saveTeamMemberResponse({
+          teamId: payload.teamId!,
+          recipientId: payload.recipientId,
+          answer,
+          token,
+        })
       : await saveProspectResponse({
           teamId: payload.teamId,
           recipientId: payload.recipientId,
