@@ -41,6 +41,7 @@ function responseNote(input: {
   answer: "YES" | "NO";
   date: Date;
   existingNotes?: string | null;
+  teamName?: string | null;
 }) {
   const stamp = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
@@ -50,10 +51,11 @@ function responseNote(input: {
     minute: "2-digit",
   }).format(input.date);
 
+  const teamSuffix = input.teamName ? ` for ${input.teamName}` : "";
   const line =
     input.answer === "YES"
-      ? `Player confirmed they still want to play on ${stamp}.`
-      : `Player replied NO — remove from active squad list / follow up before selecting on ${stamp}.`;
+      ? `Player confirmed they still want to play${teamSuffix} on ${stamp}.`
+      : `Player replied NO${teamSuffix} — remove from active squad list / follow up before selecting on ${stamp}.`;
 
   const existing = input.existingNotes?.trim();
   if (!existing) return line;
@@ -128,18 +130,26 @@ async function saveProspectResponse(input: {
   const prospect = await prisma.teamPlayerProspect.findFirst({
     where: {
       id: input.recipientId,
-      teamId: input.teamId,
+      OR: [{ teamId: input.teamId }, { teamId: null }],
     },
     select: {
       id: true,
       firstName: true,
       lastName: true,
       notes: true,
+      teamId: true,
       team: { select: { name: true } },
     },
   });
 
-  if (!prospect?.team) return null;
+  if (!prospect) return null;
+
+  const team = await prisma.team.findUnique({
+    where: { id: input.teamId },
+    select: { id: true, name: true },
+  });
+
+  if (!team) return null;
 
   const now = new Date();
 
@@ -151,6 +161,7 @@ async function saveProspectResponse(input: {
         answer: input.answer,
         date: now,
         existingNotes: prospect.notes,
+        teamName: team.name,
       }),
       lastContactedAt: now,
     },
@@ -170,7 +181,7 @@ async function saveProspectResponse(input: {
     )
     VALUES (
       gen_random_uuid()::text,
-      ${input.teamId},
+      ${team.id},
       NULL,
       ${prospect.id},
       ${input.answer},
@@ -187,7 +198,7 @@ async function saveProspectResponse(input: {
 
   return {
     name: [prospect.firstName, prospect.lastName].filter(Boolean).join(" ") || prospect.firstName,
-    teamName: prospect.team.name,
+    teamName: team.name,
   };
 }
 
@@ -238,7 +249,7 @@ export default async function PlayerInterestResponsePage({ params, searchParams 
         </p>
         <Link
           href={getSiteUrl()}
-          className="mt-6 inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400"
+          className="mt-6 inline-flex rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300"
         >
           Back to SIXFL
         </Link>
