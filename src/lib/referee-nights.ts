@@ -3,9 +3,11 @@
 // ========================================
 
 import { randomUUID } from "crypto";
-import { Prisma } from "@prisma/client";
+import { FixtureStatus, Prisma } from "@prisma/client";
 import { formatDateTimeInLondon, toLondonDateInputValue } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
+
+const ACTIVE_REFEREE_FIXTURE_STATUSES = [FixtureStatus.SCHEDULED, FixtureStatus.COMPLETED];
 
 export type RefereeNightStatus =
   | "DRAFT"
@@ -167,7 +169,7 @@ const visibleFixtureUnionSql = Prisma.sql`
   FROM "RefereeNightFixture" rnf
   JOIN "Fixture" f ON f.id = rnf."fixtureId"
   WHERE rnf."refereeNightId" = rn.id
-    AND f.status <> 'CANCELLED'
+    AND f.status IN ('SCHEDULED', 'COMPLETED')
     AND (f."refereeId" IS NULL OR f."refereeId" = rn."refereeId")
 
   UNION
@@ -176,7 +178,7 @@ const visibleFixtureUnionSql = Prisma.sql`
   FROM "Fixture" f
   WHERE f."refereeId" = rn."refereeId"
     AND f."leagueId" = rn."leagueId"
-    AND f.status <> 'CANCELLED'
+    AND f.status IN ('SCHEDULED', 'COMPLETED')
     AND (rn."venueId" IS NULL OR f."venueId" = rn."venueId")
     AND (f."kickoffAt" AT TIME ZONE 'Europe/London')::date = rn."nightDate"
 `;
@@ -267,7 +269,7 @@ async function getFixturesByIds(fixtureIds: string[]) {
         in: fixtureIds,
       },
       status: {
-        not: "CANCELLED",
+        in: ACTIVE_REFEREE_FIXTURE_STATUSES,
       },
     },
     orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
@@ -336,9 +338,11 @@ export async function getAssignableFixturesForRefereeNight(refereeNightId: strin
         u.name AS "refereeName",
         u.email AS "refereeEmail"
       FROM "RefereeNightFixture" rnf
+      JOIN "Fixture" f ON f.id = rnf."fixtureId"
       JOIN "RefereeNight" rn ON rn.id = rnf."refereeNightId"
       JOIN "User" u ON u.id = rn."refereeId"
       WHERE rnf."fixtureId" IN (${Prisma.join(matchingFixtureIds)})
+        AND f.status IN ('SCHEDULED', 'COMPLETED')
     `),
   ]);
 
@@ -418,7 +422,7 @@ export async function findFixturesForNight(input: {
       leagueId: input.leagueId,
       ...(input.venueId ? { venueId: input.venueId } : {}),
       status: {
-        not: "CANCELLED",
+        in: ACTIVE_REFEREE_FIXTURE_STATUSES,
       },
     },
     orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
