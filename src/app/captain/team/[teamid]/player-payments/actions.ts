@@ -119,7 +119,7 @@ function getCollectionNote(input: {
   }
 
   if (input.method === "captain_paid") {
-    return `Paid captain directly: captain collected ${formatMoney(input.amountPence)} outside SIXFL link and remains responsible for settling with SIXFL.`;
+    return `No individual player payment link: captain/organiser marked this ${formatMoney(input.amountPence)} share as collected outside the player's SIXFL payment link.`;
   }
 
   if (input.method === "waived" || input.amountPence === 0) {
