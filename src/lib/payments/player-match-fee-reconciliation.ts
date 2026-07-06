@@ -134,6 +134,11 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
 
   const overpaymentPence = Math.max(paidTotalPence - matchingCharge.amountPence, 0);
 
+  await linkPlayerFeeTransactionsToCharge({
+    playerMatchFeeIds: paidFees.map((fee) => fee.id),
+    chargeId: matchingCharge.id,
+  });
+
   await syncFixtureOverpaymentCredit({
     teamId: input.teamId,
     fixtureId: input.fixtureId,
@@ -150,11 +155,6 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
       overpaymentPence,
     };
   }
-
-  await linkPlayerFeeTransactionsToCharge({
-    playerMatchFeeIds: paidFees.map((fee) => fee.id),
-    chargeId: matchingCharge.id,
-  });
 
   await prisma.paymentCharge.update({
     where: { id: matchingCharge.id },
