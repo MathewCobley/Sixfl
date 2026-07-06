@@ -22,10 +22,29 @@ type PlayerFeePaymentLabel = {
   kickoffAt: Date | null;
 };
 
+type SubscriptionPaymentLabel = {
+  transactionId: string;
+  teamName: string;
+  amountPence: number;
+  paidAt: Date;
+  method: string;
+  leagueName: string | null;
+  leagueSeason: string | null;
+};
+
+type DisplayPaymentLabel = {
+  transactionId: string;
+  teamName: string;
+  amountPence: number;
+  paidAt: Date;
+  title: string;
+  subtitle: string;
+};
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error && error.message.trim()
     ? error.message
-    : "Could not load player fee payment labels.";
+    : "Could not load payment labels.";
 }
 
 async function ensurePaymentTransactionPlayerFeeColumn() {
@@ -88,13 +107,13 @@ function formatPaymentMethod(method: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function buildTitle(row: PlayerFeePaymentLabel) {
+function buildPlayerTitle(row: PlayerFeePaymentLabel) {
   return row.playerName
     ? `${row.playerName} · Player match fee`
     : "Player match fee";
 }
 
-function buildSubtitle(row: PlayerFeePaymentLabel) {
+function buildPlayerSubtitle(row: PlayerFeePaymentLabel) {
   const parts = [
     row.fixtureName,
     row.playerContact,
@@ -106,50 +125,102 @@ function buildSubtitle(row: PlayerFeePaymentLabel) {
   return parts.join(" · ") || "Player match fee";
 }
 
+function buildSubscriptionTitle(row: SubscriptionPaymentLabel) {
+  return `${row.teamName} · Team subscription payment`;
+}
+
+function buildSubscriptionSubtitle(row: SubscriptionPaymentLabel) {
+  const league = [row.leagueName, row.leagueSeason].map(compact).filter(Boolean).join(" · ");
+  return [league || "Recurring team subscription", formatPaymentMethod(row.method)]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export async function GET() {
   try {
     await requireAdmin();
     await ensurePaymentTransactionPlayerFeeColumn();
 
-    const rows = await prisma.$queryRaw<PlayerFeePaymentLabel[]>`
-      SELECT
-        tx."id" AS "transactionId",
-        team."name" AS "teamName",
-        tx."amountPence" AS "amountPence",
-        tx."paidAt" AS "paidAt",
-        tx."method"::text AS "method",
-        COALESCE(
-          NULLIF(TRIM("user"."name"), ''),
-          NULLIF(TRIM(CONCAT(prospect."firstName", ' ', COALESCE(prospect."lastName", ''))), ''),
-          "user"."email",
-          prospect."email",
-          prospect."phone"
-        ) AS "playerName",
-        NULLIF(TRIM(CONCAT_WS(' · ', "user"."email", prospect."email", prospect."phone")), '') AS "playerContact",
-        CONCAT(homeTeam."name", ' vs ', awayTeam."name") AS "fixtureName",
-        fixture."kickoffAt" AS "kickoffAt"
-      FROM "PaymentTransaction" tx
-      INNER JOIN "PlayerMatchFee" fee ON fee."id" = tx."playerMatchFeeId"
-      INNER JOIN "Team" team ON team."id" = tx."teamId"
-      INNER JOIN "Fixture" fixture ON fixture."id" = fee."fixtureId"
-      INNER JOIN "Team" homeTeam ON homeTeam."id" = fixture."homeTeamId"
-      INNER JOIN "Team" awayTeam ON awayTeam."id" = fixture."awayTeamId"
-      LEFT JOIN "TeamMember" member ON member."id" = fee."teamMemberId"
-      LEFT JOIN "User" "user" ON "user"."id" = member."userId"
-      LEFT JOIN "TeamPlayerProspect" prospect ON prospect."id" = fee."prospectId"
-      WHERE tx."playerMatchFeeId" IS NOT NULL
-      ORDER BY tx."paidAt" DESC
-      LIMIT 50
-    `;
+    const [playerRows, subscriptionRows] = await Promise.all([
+      prisma.$queryRaw<PlayerFeePaymentLabel[]>`
+        SELECT
+          tx."id" AS "transactionId",
+          team."name" AS "teamName",
+          tx."amountPence" AS "amountPence",
+          tx."paidAt" AS "paidAt",
+          tx."method"::text AS "method",
+          COALESCE(
+            NULLIF(TRIM("user"."name"), ''),
+            NULLIF(TRIM(CONCAT(prospect."firstName", ' ', COALESCE(prospect."lastName", ''))), ''),
+            "user"."email",
+            prospect."email",
+            prospect."phone"
+          ) AS "playerName",
+          NULLIF(TRIM(CONCAT_WS(' · ', "user"."email", prospect."email", prospect."phone")), '') AS "playerContact",
+          CONCAT(homeTeam."name", ' vs ', awayTeam."name") AS "fixtureName",
+          fixture."kickoffAt" AS "kickoffAt"
+        FROM "PaymentTransaction" tx
+        INNER JOIN "PlayerMatchFee" fee ON fee."id" = tx."playerMatchFeeId"
+        INNER JOIN "Team" team ON team."id" = tx."teamId"
+        INNER JOIN "Fixture" fixture ON fixture."id" = fee."fixtureId"
+        INNER JOIN "Team" homeTeam ON homeTeam."id" = fixture."homeTeamId"
+        INNER JOIN "Team" awayTeam ON awayTeam."id" = fixture."awayTeamId"
+        LEFT JOIN "TeamMember" member ON member."id" = fee."teamMemberId"
+        LEFT JOIN "User" "user" ON "user"."id" = member."userId"
+        LEFT JOIN "TeamPlayerProspect" prospect ON prospect."id" = fee."prospectId"
+        WHERE tx."playerMatchFeeId" IS NOT NULL
+        ORDER BY tx."paidAt" DESC
+        LIMIT 50
+      `,
+      prisma.$queryRaw<SubscriptionPaymentLabel[]>`
+        SELECT
+          tx."id" AS "transactionId",
+          team."name" AS "teamName",
+          tx."amountPence" AS "amountPence",
+          tx."paidAt" AS "paidAt",
+          tx."method"::text AS "method",
+          league."name" AS "leagueName",
+          league."season" AS "leagueSeason"
+        FROM "PaymentTransaction" tx
+        INNER JOIN "Team" team ON team."id" = tx."teamId"
+        LEFT JOIN "League" league ON league."id" = team."leagueId"
+        WHERE tx."chargeId" IS NULL
+          AND (
+            tx."notes" ILIKE '%Recurring team subscription%'
+            OR tx."stripeInvoiceId" IS NOT NULL
+          )
+        ORDER BY tx."paidAt" DESC
+        LIMIT 50
+      `,
+    ]);
+
+    const labels: DisplayPaymentLabel[] = [
+      ...playerRows.map((row) => ({
+        transactionId: row.transactionId,
+        teamName: row.teamName,
+        amountPence: row.amountPence,
+        paidAt: row.paidAt,
+        title: buildPlayerTitle(row),
+        subtitle: buildPlayerSubtitle(row),
+      })),
+      ...subscriptionRows.map((row) => ({
+        transactionId: row.transactionId,
+        teamName: row.teamName,
+        amountPence: row.amountPence,
+        paidAt: row.paidAt,
+        title: buildSubscriptionTitle(row),
+        subtitle: buildSubscriptionSubtitle(row),
+      })),
+    ].sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime()).slice(0, 80);
 
     return NextResponse.json({
-      labels: rows.map((row) => ({
+      labels: labels.map((row) => ({
         transactionId: row.transactionId,
         teamName: row.teamName,
         amountPence: row.amountPence,
         paidAt: row.paidAt.toISOString(),
-        title: buildTitle(row),
-        subtitle: buildSubtitle(row),
+        title: row.title,
+        subtitle: row.subtitle,
       })),
     });
   } catch (error) {
