@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toLondonDateInputValue } from "@/lib/datetime/london";
+import { queueRefereeNightConfirmationChase } from "@/lib/referee-night-confirmations";
 import { queueRefereeNightBookedEmail } from "@/lib/referee-night-emails";
 import {
   createRefereeNightId,
@@ -32,6 +33,10 @@ function readRequired(formData: FormData, key: string, label: string) {
 
 function normaliseOptional(value: string) {
   return value.trim() || null;
+}
+
+function safeReturnTo(value: string) {
+  return value.startsWith("/admin/referee-nights") ? value : "/admin/referee-nights";
 }
 
 function readStringArray(formData: FormData, key: string) {
@@ -206,6 +211,21 @@ export async function createRefereeNightAction(formData: FormData) {
 
   revalidateRefereeNightPaths(id);
   redirect(`/admin/referee-nights/${id}?created=1&fixtures=${attachedCount}`);
+}
+
+export async function chaseRefereeNightConfirmationAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const refereeNightId = readRequired(formData, "refereeNightId", "Referee night");
+  const returnTo = safeReturnTo(readString(formData, "returnTo"));
+
+  await queueRefereeNightConfirmationChase({
+    refereeNightId,
+    mode: "manual",
+    createdByUserId: user?.id ?? null,
+  });
+
+  revalidateRefereeNightPaths(refereeNightId);
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}chased=1`);
 }
 
 export async function refreshRefereeNightFixturesAction(formData: FormData) {
