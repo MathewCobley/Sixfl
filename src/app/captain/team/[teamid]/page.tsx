@@ -11,7 +11,11 @@ import { getCaptainOnboardingStatus } from "@/lib/captain/onboarding";
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getLeagueTable } from "@/lib/leagueTable";
-import { formatPaymentMoney, getTeamPaymentLedger } from "@/lib/payments/team-payment-ledger";
+import {
+  formatPaymentMoney,
+  getTeamPaymentLedger,
+  type TeamPaymentLedgerEntry,
+} from "@/lib/payments/team-payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -102,6 +106,18 @@ function getFixtureConfirmationSummary(input: {
     return { label: "Awaiting confirmation", tone: "amber" as const, helper: "Please confirm before matchday" };
   }
   return { label: "Awaiting confirmation", tone: "neutral" as const, helper: "Confirmation window open" };
+}
+
+function getChargeDueDate(entry: TeamPaymentLedgerEntry) {
+  return entry.dueDate ?? entry.kickoffAt ?? null;
+}
+
+function getDaysLate(entry: TeamPaymentLedgerEntry) {
+  const dueDate = getChargeDueDate(entry);
+  if (!dueDate) return 0;
+  const diffMs = Date.now() - dueDate.getTime();
+  if (diffMs <= 0) return 0;
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
 function getPublicLeagueTableTitle(leagueName?: string | null) {
@@ -209,6 +225,17 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
   const nextFixtureConfirmation = nextFixture?.captainConfirmations[0] ?? null;
   const nextFixtureStatus = nextFixture ? getFixtureConfirmationSummary({ confirmation: nextFixtureConfirmation, kickoffAt: nextFixture.kickoffAt }) : null;
 
+  const overdueConfirmationFixtures = upcomingFixtures.filter((fixture) => {
+    const confirmation = fixture.captainConfirmations[0] ?? null;
+    return getFixtureConfirmationSummary({ confirmation, kickoffAt: fixture.kickoffAt }).tone === "red";
+  });
+  const veryLateCharges = ledger.openEntries
+    .map((entry) => ({ entry, daysLate: getDaysLate(entry) }))
+    .filter((item) => item.daysLate >= 7 && item.entry.outstandingPence > 0)
+    .sort((a, b) => b.daysLate - a.daysLate)
+    .slice(0, 3);
+  const hasUrgentWarnings = overdueConfirmationFixtures.length > 0 || veryLateCharges.length > 0;
+
   const needsCompletionCount = completionResults.filter((fixture) => {
     if (!fixture.result) return false;
     const isHome = relatedTeamIds.includes(fixture.homeTeamId);
@@ -221,6 +248,31 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-8">
+      {hasUrgentWarnings ? (
+        <section className="rounded-3xl border border-red-400/30 bg-red-500/12 p-5 shadow-[0_24px_80px_rgba(127,29,29,0.22)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-red-100/70">Urgent captain action</p>
+          <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">Action needed before match night</h1>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {overdueConfirmationFixtures.length > 0 ? (
+              <Link href={`/captain/team/${teamid}/fixtures`} className="rounded-2xl border border-red-300/20 bg-black/20 p-4 transition hover:bg-black/30">
+                <div className="text-lg font-semibold text-red-50">Fixture confirmation overdue</div>
+                <p className="mt-2 text-sm leading-6 text-red-100/75">
+                  {overdueConfirmationFixtures.length} upcoming fixture{overdueConfirmationFixtures.length === 1 ? "" : "s"} need confirmation urgently.
+                </p>
+              </Link>
+            ) : null}
+            {veryLateCharges.length > 0 ? (
+              <Link href={`/captain/team/${teamid}/payments`} className="rounded-2xl border border-red-300/20 bg-black/20 p-4 transition hover:bg-black/30">
+                <div className="text-lg font-semibold text-red-50">Very late fees</div>
+                <p className="mt-2 text-sm leading-6 text-red-100/75">
+                  {veryLateCharges.length} charge{veryLateCharges.length === 1 ? " is" : "s are"} more than 7 days late. Oldest: {formatMoney(veryLateCharges[0].entry.outstandingPence)} outstanding, {veryLateCharges[0].daysLate} days late.
+                </p>
+              </Link>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8 lg:py-8">
           <div>
