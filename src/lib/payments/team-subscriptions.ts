@@ -53,6 +53,12 @@ type StripeSubscriptionLike = Stripe.Subscription & {
   trial_end?: number | null;
 };
 
+type OpenChargeRow = {
+  id: string;
+  amountPence: number;
+  paidPence: number;
+};
+
 function toDateFromUnix(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value)
     ? new Date(value * 1000)
@@ -217,6 +223,57 @@ export async function findTeamIdForStripeSubscription(input: {
   return null;
 }
 
+async function findOldestOpenChargeForSubscriptionPayment(input: {
+  teamId: string;
+  amountPence: number;
+  db: TeamSubscriptionDb;
+}) {
+  const rows = await input.db.$queryRaw<OpenChargeRow[]>`
+    SELECT
+      pc."id",
+      pc."amountPence"::int AS "amountPence",
+      COALESCE(SUM(tx."amountPence"), 0)::int AS "paidPence"
+    FROM "PaymentCharge" pc
+    LEFT JOIN "PaymentTransaction" tx ON tx."chargeId" = pc."id"
+    WHERE pc."teamId" = ${input.teamId}
+      AND pc."status" <> 'VOID'
+    GROUP BY pc."id", pc."amountPence", pc."dueDate", pc."createdAt"
+    HAVING pc."amountPence" > COALESCE(SUM(tx."amountPence"), 0)
+    ORDER BY
+      CASE WHEN (pc."amountPence" - COALESCE(SUM(tx."amountPence"), 0)) = ${input.amountPence} THEN 0 ELSE 1 END,
+      COALESCE(pc."dueDate", pc."createdAt") ASC,
+      pc."createdAt" ASC
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
+}
+
+async function refreshChargeStatus(input: {
+  chargeId: string;
+  db: TeamSubscriptionDb;
+}) {
+  await input.db.$executeRaw`
+    UPDATE "PaymentCharge" pc
+    SET "status" = CASE
+      WHEN totals."paidPence" >= pc."amountPence" THEN 'PAID'::"PaymentChargeStatus"
+      WHEN totals."paidPence" > 0 THEN 'PART_PAID'::"PaymentChargeStatus"
+      ELSE 'OPEN'::"PaymentChargeStatus"
+    END
+    FROM (
+      SELECT
+        pc_inner."id" AS "chargeId",
+        COALESCE(SUM(tx."amountPence"), 0)::int AS "paidPence"
+      FROM "PaymentCharge" pc_inner
+      LEFT JOIN "PaymentTransaction" tx ON tx."chargeId" = pc_inner."id"
+      WHERE pc_inner."id" = ${input.chargeId}
+      GROUP BY pc_inner."id"
+    ) totals
+    WHERE pc."id" = totals."chargeId"
+      AND pc."status" <> 'VOID'
+  `;
+}
+
 export async function syncTeamSubscriptionFromStripe(input: {
   subscription: Stripe.Subscription;
   teamId?: string | null;
@@ -339,15 +396,22 @@ export async function recordTeamSubscriptionInvoicePaid(input: {
 
   const paymentIntentId = getStripeId(invoice.payment_intent);
   const stripeChargeId = getStripeId(invoice.charge);
+  const targetCharge = await findOldestOpenChargeForSubscriptionPayment({
+    teamId,
+    amountPence,
+    db,
+  });
 
   const transaction = await db.paymentTransaction.create({
     data: {
       teamId,
-      chargeId: null,
+      chargeId: targetCharge?.id ?? null,
       amountPence,
       method: "STRIPE",
       reference: stripeInvoiceId,
-      notes: "Recurring team subscription paid via Stripe.",
+      notes: targetCharge
+        ? "Recurring team subscription paid via Stripe and applied to the oldest open team charge."
+        : "Recurring team subscription paid via Stripe.",
       paidAt,
       stripePaymentIntentId: paymentIntentId,
       stripeChargeId,
@@ -362,6 +426,10 @@ export async function recordTeamSubscriptionInvoicePaid(input: {
     SET "stripeInvoiceId" = ${stripeInvoiceId}
     WHERE "id" = ${transaction.id}
   `;
+
+  if (targetCharge?.id) {
+    await refreshChargeStatus({ chargeId: targetCharge.id, db });
+  }
 
   await db.$executeRaw`
     UPDATE "Team"
