@@ -40,6 +40,18 @@ function removeDashboardPredictors() {
   });
 }
 
+function removeDuplicateDashboardPredictors(section: Element) {
+  const predictors = Array.from(section.querySelectorAll("[data-dashboard-ai-predictor]"));
+  predictors.slice(1).forEach((element) => element.remove());
+}
+
+function sectionAlreadyHasPredictor(section: Element) {
+  return Boolean(
+    section.querySelector("[data-dashboard-ai-predictor]") ||
+      section.textContent?.toLowerCase().includes("sixfl ai predictor"),
+  );
+}
+
 function findNextFixtureSection() {
   const headings = Array.from(document.querySelectorAll<HTMLHeadingElement>("h2"));
   const heading = headings.find((item) =>
@@ -107,6 +119,9 @@ async function refreshDashboardAi(pathname: string | null) {
     return;
   }
 
+  removeDuplicateDashboardPredictors(section);
+  if (sectionAlreadyHasPredictor(section)) return;
+
   try {
     const response = await fetch(`/api/captain/team/${encodeURIComponent(teamId)}/fixture-badges`, {
       cache: "no-store",
@@ -118,9 +133,7 @@ async function refreshDashboardAi(pathname: string | null) {
     const fixture = getMatchingFixture(payload?.fixtures ?? []);
 
     if (!fixture?.winChance) return;
-    if (section.querySelector(`[data-dashboard-ai-predictor="${fixture.id}"]`)) return;
 
-    section.querySelector("[data-dashboard-ai-predictor]")?.remove();
     const heading = findNextFixtureHeading();
     heading?.insertAdjacentHTML("afterend", renderPredictor(fixture));
   } catch {
