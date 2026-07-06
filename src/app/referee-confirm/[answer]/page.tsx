@@ -5,8 +5,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { recordRefereeNightConfirmationResponse } from "@/lib/referee-night-confirmation-response";
 import { formatNightDate } from "@/lib/referee-nights";
-import { recordRefereeNightConfirmation } from "@/lib/referee-night-confirmations";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export default async function RefereeNightConfirmationPage({ params, searchParam
 
   if (!answer || !token) notFound();
 
-  const saved = await recordRefereeNightConfirmation({ token, answer });
+  const saved = await recordRefereeNightConfirmationResponse({ token, answer });
   if (!saved) notFound();
 
   const confirmed = answer === "yes";
