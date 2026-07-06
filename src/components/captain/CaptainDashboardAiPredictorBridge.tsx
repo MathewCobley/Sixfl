@@ -26,8 +26,18 @@ type FixtureBadgesPayload = {
 };
 
 function getTeamIdFromPathname(pathname: string | null) {
-  const match = pathname?.match(/^\/captain\/team\/([^/]+)(?:\/)?$/);
+  const match = pathname?.match(/^\/captain\/team\/([^/]+)\/?$/);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function isCaptainDashboardPath(pathname: string | null) {
+  return Boolean(getTeamIdFromPathname(pathname));
+}
+
+function removeDashboardPredictors() {
+  document.querySelectorAll("[data-dashboard-ai-predictor]").forEach((element) => {
+    element.remove();
+  });
 }
 
 function findNextFixtureSection() {
@@ -92,7 +102,10 @@ async function refreshDashboardAi(pathname: string | null) {
   const teamId = getTeamIdFromPathname(pathname);
   const section = findNextFixtureSection();
 
-  if (!teamId || !section) return;
+  if (!teamId || !section) {
+    removeDashboardPredictors();
+    return;
+  }
 
   try {
     const response = await fetch(`/api/captain/team/${encodeURIComponent(teamId)}/fixture-badges`, {
@@ -120,6 +133,11 @@ export default function CaptainDashboardAiPredictorBridge() {
 
   useEffect(() => {
     if (!pathname?.startsWith("/captain/team/")) return;
+
+    if (!isCaptainDashboardPath(pathname)) {
+      removeDashboardPredictors();
+      return;
+    }
 
     const run = () => {
       void refreshDashboardAi(pathname);
