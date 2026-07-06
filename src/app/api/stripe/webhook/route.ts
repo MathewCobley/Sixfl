@@ -42,6 +42,10 @@ function getStripeId(value: unknown): string | null {
   return null;
 }
 
+function getChargeIdFromCheckoutSession(session: Stripe.Checkout.Session) {
+  return session.metadata?.chargeId?.trim() || session.client_reference_id?.trim() || null;
+}
+
 async function hasExistingTransaction(sessionId: string) {
   const existingTransaction = await prisma.paymentTransaction.findUnique({
     where: { stripeCheckoutSessionId: sessionId },
@@ -298,7 +302,7 @@ async function handleCompletedCheckoutSession(
 
   if (handledPlayerMatchFee) return;
 
-  const chargeId = session.metadata?.chargeId?.trim();
+  const chargeId = getChargeIdFromCheckoutSession(session);
 
   if (!chargeId) return;
   if (await hasExistingTransaction(session.id)) return;
