@@ -259,7 +259,7 @@ export async function queueDueRefereeNightConfirmationChasers(input?: { now?: Da
     JOIN "Fixture" f ON f.id = rnf."fixtureId"
     WHERE rn.status NOT IN ('CANCELLED', 'SETTLED')
       AND COALESCE(rn."confirmationStatus", 'PENDING') NOT IN ('CONFIRMED', 'DECLINED')
-      AND f.status <> 'CANCELLED'
+      AND f.status IN ('SCHEDULED', 'COMPLETED')
     GROUP BY rn.id
     HAVING MIN(f."kickoffAt") >= ${minStart} AND MIN(f."kickoffAt") <= ${maxEnd}
     ORDER BY MIN(f."kickoffAt") ASC
