@@ -52,7 +52,7 @@ function getExistingStatusText(card: HTMLElement | null) {
 
   return Array.from(card.querySelectorAll("span"))
     .map((span) => span.textContent?.trim() ?? "")
-    .find((text) => ["Paid", "Waived", "Unpaid", "Cancelled"].includes(text)) ?? "";
+    .find((text) => ["Paid", "Waived", "Unpaid", "Cancelled", "No player link"].includes(text)) ?? "";
 }
 
 function getCollectionControlName(input: HTMLInputElement) {
@@ -60,10 +60,10 @@ function getCollectionControlName(input: HTMLInputElement) {
   return identity ? `collection_${identity.type}_${identity.id}` : null;
 }
 
-function isNoLinkPaidBySixfl(input: HTMLInputElement) {
+function isNoLinkCovered(input: HTMLInputElement) {
   const amount = Number(normaliseAmount(input.value) ?? "0");
   const card = getPaymentCard(input);
-  return getExistingStatusText(card) === "Waived" && amount > 0;
+  return ["Waived", "No player link"].includes(getExistingStatusText(card)) && amount > 0;
 }
 
 function updateStatusBadgeText(input: HTMLInputElement) {
@@ -74,7 +74,7 @@ function updateStatusBadgeText(input: HTMLInputElement) {
   for (const span of Array.from(card.querySelectorAll("span"))) {
     const text = span.textContent?.trim();
     if (text === "Waived" && amount > 0) {
-      span.textContent = "Paid SIXFL via DD";
+      span.textContent = "No player link";
     }
   }
 }
@@ -103,7 +103,7 @@ function ensureCollectionMethodControls(input: HTMLInputElement, defaultInput: H
   const checkbox = getPlayerCheckbox(input);
   const existingStatus = getExistingStatusText(card);
   const amount = Number(normaliseAmount(input.value) ?? "0");
-  const currentMethod = isNoLinkPaidBySixfl(input)
+  const currentMethod = isNoLinkCovered(input)
     ? "captain_paid"
     : existingStatus === "Waived" || amount === 0
       ? "waived"
@@ -122,12 +122,12 @@ function ensureCollectionMethodControls(input: HTMLInputElement, defaultInput: H
     {
       value: "link",
       label: "Send SIXFL payment link/email",
-      help: "Use this when the player still needs to pay online.",
+      help: "Use this when the player should pay online through their own SIXFL payment link.",
     },
     {
       value: "captain_paid",
-      label: "Paid SIXFL via DD",
-      help: "No player link or email. This share is treated as already covered with SIXFL.",
+      label: "No player link — captain collected",
+      help: "Use this only when the player has paid the captain/organiser outside their individual SIXFL payment link.",
     },
     {
       value: "waived",
