@@ -28,10 +28,17 @@ export async function resolveProspectiveLeagueId(input: ProspectiveLeagueMatchIn
   if (explicitLeagueId) {
     const existing = await prisma.league.findUnique({
       where: { id: explicitLeagueId },
-      select: { id: true },
+      select: {
+        id: true,
+        competition: {
+          select: {
+            currentLeagueId: true,
+          },
+        },
+      },
     });
 
-    return existing?.id ?? null;
+    return existing?.competition?.currentLeagueId ?? existing?.id ?? null;
   }
 
   if (input.interestType !== "TEAM" && input.interestType !== "PLAYER") {
@@ -49,6 +56,10 @@ export async function resolveProspectiveLeagueId(input: ProspectiveLeagueMatchIn
     where: {
       isActive: true,
       leagueType: input.leagueType,
+      OR: [
+        { competitionId: null },
+        { currentForCompetitions: { some: { isActive: true } } },
+      ],
       ...(area
         ? {
             area: {
