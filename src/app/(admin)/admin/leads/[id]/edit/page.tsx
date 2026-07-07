@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { InterestType, LeadStatus } from "@prisma/client";
 
 import FormListboxField from "@/components/ui/FormListboxField";
+import { getCurrentLeagueOptions } from "@/lib/current-leagues";
 import { formatProspectiveLeagueLabel } from "@/lib/leads/prospectiveLeague";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -162,39 +163,27 @@ export default async function EditLeadPage({
   const { id } = await params;
   const sp = (await searchParams) ?? {};
 
-  const [lead, leagues] = await Promise.all([
-    prisma.interestLead.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        contactName: true,
-        email: true,
-        phone: true,
-        area: true,
-        teamName: true,
-        message: true,
-        status: true,
-        interestType: true,
-        leagueId: true,
-      },
-    }),
-    prisma.league.findMany({
-      where: { isActive: true },
-      orderBy: [{ area: "asc" }, { name: "asc" }, { season: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        season: true,
-        area: true,
-        dayOfWeek: true,
-        venueName: true,
-      },
-    }),
-  ]);
+  const lead = await prisma.interestLead.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      contactName: true,
+      email: true,
+      phone: true,
+      area: true,
+      teamName: true,
+      message: true,
+      status: true,
+      interestType: true,
+      leagueId: true,
+    },
+  });
 
   if (!lead) {
     notFound();
   }
+
+  const leagues = await getCurrentLeagueOptions(lead.leagueId);
 
   const errorMessage = sp.error ? decodeURIComponent(sp.error) : null;
   const prospectiveLeagueOptions = [
@@ -258,7 +247,7 @@ export default async function EditLeadPage({
               placeholder="No prospective league"
             />
             <p className="mt-2 text-xs leading-5 text-white/45">
-              This links the lead to the likely league for emails and planning only. It does not create a team, add them to fixtures, or make them part of the league.
+              This list now shows current league seasons first. If the lead is still attached to an old season, that existing value is included so you can change it safely.
             </p>
           </div>
         </div>
