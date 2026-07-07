@@ -246,11 +246,26 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
       leagueId: true,
       league: {
         select: {
+          id: true,
           name: true,
           season: true,
           venueName: true,
           kickoffInfo: true,
           format: true,
+          competition: {
+            select: {
+              currentLeague: {
+                select: {
+                  id: true,
+                  name: true,
+                  season: true,
+                  venueName: true,
+                  kickoffInfo: true,
+                  format: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -277,9 +292,13 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
     };
   }
 
+  const effectiveLeague = lead.league.competition?.currentLeague ?? lead.league;
+  const effectiveLeagueId = effectiveLeague.id;
+  const originalLeadLeagueId = lead.leagueId;
+
   const confirmation = await ensureTeamPlaceConfirmationRecord(lead.id);
-  const leagueDetails = await getLeagueConfirmationEmailDetails(lead.leagueId);
-  const leagueName = `${lead.league.name}${lead.league.season ? ` · ${lead.league.season}` : ""}`;
+  const leagueDetails = await getLeagueConfirmationEmailDetails(effectiveLeagueId);
+  const leagueName = `${effectiveLeague.name}${effectiveLeague.season ? ` · ${effectiveLeague.season}` : ""}`;
   const displayName = lead.contactName?.trim() || lead.teamName?.trim() || email;
 
   const recipient = await upsertNotificationRecipient({
@@ -293,7 +312,8 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
     marketingEmailOptIn: true,
     metadata: {
       leadId: lead.id,
-      leagueId: lead.leagueId,
+      leagueId: effectiveLeagueId,
+      originalLeadLeagueId,
       leagueName,
       teamName: lead.teamName,
       contactName: lead.contactName,
@@ -308,9 +328,9 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
     teamName: lead.teamName?.trim() || "",
     area: lead.area?.trim() || "",
     leagueName,
-    venueName: lead.league.venueName?.trim() || "TBC",
-    kickoffInfo: lead.league.kickoffInfo?.trim() || "",
-    format: lead.league.format?.trim() || "Weekly 6-a-side fixtures",
+    venueName: effectiveLeague.venueName?.trim() || "TBC",
+    kickoffInfo: effectiveLeague.kickoffInfo?.trim() || "",
+    format: effectiveLeague.format?.trim() || "Weekly 6-a-side fixtures",
     proposedStartDate: leagueDetails?.proposedStartDate
       ? formatLongDate(leagueDetails.proposedStartDate)
       : "",
@@ -323,9 +343,9 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
       : "",
     leagueDetailsBlock: buildLeagueDetailsBlock({
       leagueName,
-      venueName: lead.league.venueName,
-      kickoffInfo: lead.league.kickoffInfo,
-      format: lead.league.format,
+      venueName: effectiveLeague.venueName,
+      kickoffInfo: effectiveLeague.kickoffInfo,
+      format: effectiveLeague.format,
       details: leagueDetails,
     }),
     teamConfirmationUrl: confirmation.url,
@@ -342,7 +362,8 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
         origin: "lead_system_team_confirmation",
         originLabel: "Team place confirmation email",
         leadId: lead.id,
-        leagueId: lead.leagueId,
+        leagueId: effectiveLeagueId,
+        originalLeadLeagueId,
         leagueName,
         teamName: lead.teamName,
         ctaUrl: confirmation.url,
