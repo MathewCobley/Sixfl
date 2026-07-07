@@ -2,7 +2,7 @@
 // File: src/lib/current-leagues.ts
 // ========================================
 
-import { Prisma } from "@prisma/client";
+import { PreferredNight, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -11,6 +11,9 @@ export type CurrentLeagueOption = {
   name: string;
   season: string | null;
   isActive: boolean;
+  area: string | null;
+  dayOfWeek: PreferredNight | null;
+  venueName: string | null;
 };
 
 export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
@@ -22,7 +25,10 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
         l."id",
         l."name",
         l."season",
-        l."isActive"
+        l."isActive",
+        l."area",
+        l."dayOfWeek",
+        l."venueName"
       FROM "League" l
       LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
       WHERE (
@@ -48,6 +54,9 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
         name: true,
         season: true,
         isActive: true,
+        area: true,
+        dayOfWeek: true,
+        venueName: true,
       },
     });
   }
