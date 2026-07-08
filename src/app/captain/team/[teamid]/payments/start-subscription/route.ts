@@ -43,7 +43,7 @@ export async function POST(
     return NextResponse.redirect(buildReturnUrl(teamid, "missing_price"), 303);
   }
 
-  const [team, subscription, nextFixture] = await Promise.all([
+  const [team, subscription, nextCharge] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
       select: {
@@ -61,16 +61,15 @@ export async function POST(
       },
     }),
     getTeamSubscriptionSnapshot(teamid),
-    prisma.fixture.findFirst({
+    prisma.paymentCharge.findFirst({
       where: {
-        publishedAt: { not: null },
-        status: "SCHEDULED",
-        matchFeePence: { gt: 0 },
-        kickoffAt: { gte: new Date() },
-        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        teamId: teamid,
+        fixtureId: { not: null },
+        status: { not: "VOID" },
+        dueDate: { gte: new Date() },
       },
-      orderBy: { kickoffAt: "asc" },
-      select: { kickoffAt: true },
+      orderBy: { dueDate: "asc" },
+      select: { dueDate: true },
     }),
   ]);
 
@@ -82,7 +81,7 @@ export async function POST(
     return NextResponse.redirect(buildReturnUrl(teamid, "active"), 303);
   }
 
-  if (!nextFixture) {
+  if (!nextCharge?.dueDate) {
     return NextResponse.redirect(buildReturnUrl(teamid, "no_fixture"), 303);
   }
 
@@ -94,7 +93,7 @@ export async function POST(
   const description = team.league?.name
     ? `${team.name} · ${team.league.name}${team.league.season ? ` ${team.league.season}` : ""}`
     : team.name;
-  const subscriptionStartsAt = getMatchFeePaymentRequestScheduledFor(nextFixture.kickoffAt);
+  const subscriptionStartsAt = getMatchFeePaymentRequestScheduledFor(nextCharge.dueDate);
   const trialEnd =
     subscriptionStartsAt.getTime() > Date.now() + 5 * 60 * 1000
       ? Math.floor(subscriptionStartsAt.getTime() / 1000)
