@@ -5,7 +5,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 function getFixtureIdFromEditHref(href: string | null) {
   if (!href) return null;
@@ -14,9 +14,7 @@ function getFixtureIdFromEditHref(href: string | null) {
 }
 
 function getReturnTo() {
-  const path = window.location.pathname;
-  const query = window.location.search;
-  return `${path}${query}`;
+  return `${window.location.pathname}${window.location.search}`;
 }
 
 function enhanceFixtureCards() {
@@ -43,7 +41,6 @@ function enhanceFixtureCards() {
 
 export default function FixtureCardResultLinksBridge() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (pathname !== "/admin/fixtures") return;
@@ -60,7 +57,7 @@ export default function FixtureCardResultLinksBridge() {
       window.clearTimeout(timer);
       observer.disconnect();
     };
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }
