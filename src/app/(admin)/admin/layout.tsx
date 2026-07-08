@@ -10,6 +10,7 @@ import AdminSidebarDesktopColumnsBridge from "@/components/admin/AdminSidebarDes
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
 import EmailTemplateListControlsBridge from "@/components/admin/email-templates/EmailTemplateListControlsBridge";
+import FixtureCardResultLinksBridge from "@/components/admin/fixtures/FixtureCardResultLinksBridge";
 import GenerateNextWeekFixturesBridge from "@/components/admin/fixtures/GenerateNextWeekFixturesBridge";
 import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditButtonBridge";
@@ -47,6 +48,7 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-black text-white">
       <QueuedSmsReasonHints />
       <FixtureChangeNotificationSubmitBridge />
+      <FixtureCardResultLinksBridge />
       <ProspectCommunicationCtaBridge />
       <AdminTeamContactPhoneFallbackBridge />
       <AdminVoidPaymentChargesBridge />
