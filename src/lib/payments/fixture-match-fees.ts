@@ -17,6 +17,7 @@ import {
   getChargePaidTotal,
   getChargeStatusFromAmounts,
 } from "@/lib/payments/charge-status";
+import { getMatchFeePaymentRequestScheduledFor } from "@/lib/payments/match-day-billing";
 
 type FixtureMatchFeeTeam = {
   id: string;
@@ -483,6 +484,7 @@ export async function queueFixtureMatchFeeEmails(
   });
 
   const shouldQueueInitialRequest = input.mode !== "reminders_only";
+  const initialRequestScheduledFor = getMatchFeePaymentRequestScheduledFor(input.kickoffAt);
 
   let requestQueued = 0;
   let requestSkipped = 0;
@@ -504,6 +506,7 @@ export async function queueFixtureMatchFeeEmails(
           recipientId: recipient.id,
           sourceType: "FIXTURE_MATCH_FEE",
           sourceId: charge.id,
+          scheduledFor: initialRequestScheduledFor,
           metadata: {
             kind: "fixture_match_fee_request",
             chargeId: charge.id,
@@ -542,6 +545,7 @@ export async function queueFixtureMatchFeeEmails(
         recipientId: recipient.id,
         sourceType: "FIXTURE_MATCH_FEE",
         sourceId: charge.id,
+        scheduledFor: initialRequestScheduledFor,
         metadata: {
           kind: "fixture_match_fee_request_sms",
           chargeId: charge.id,
