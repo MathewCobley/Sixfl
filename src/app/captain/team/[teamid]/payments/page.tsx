@@ -126,6 +126,8 @@ function getSubscriptionMessage(state?: string) {
       return "Automatic payments are not configured yet. Ask an admin to add the Stripe subscription price ID.";
     case "missing_customer":
       return "A Stripe customer has not been created for this team yet.";
+    case "no_fixture":
+      return "Automatic payments can be set up once this team has a published upcoming match-fee fixture.";
     default:
       return null;
   }
