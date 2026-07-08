@@ -83,29 +83,67 @@ export async function updateTeamDetailsAction(formData: FormData) {
     redirect(buildTeamRedirect(id, "?error=missing_name"));
   }
 
-  const updatedTeam = await prisma.team.update({
+  const existingTeam = await prisma.team.findUnique({
     where: { id },
-    data: {
-      name,
-      leagueId,
-      logoUrl,
-      latestKickoffTime,
-      teamMode,
-      isRecruiting,
-      joinSlug,
-      squadTargetSize,
-      matchdayTargetSize,
-      managerNotes,
-      contactName,
-      contactEmail,
-      contactPhone,
-      secondaryContactName,
-      secondaryContactEmail,
-      secondaryContactPhone,
-    },
     select: {
+      leagueId: true,
       captainUserId: true,
     },
+  });
+
+  if (!existingTeam) {
+    redirect("/admin/teams");
+  }
+
+  const updatedTeam = await prisma.$transaction(async (tx) => {
+    const updated = await tx.team.update({
+      where: { id },
+      data: {
+        name,
+        leagueId,
+        logoUrl,
+        latestKickoffTime,
+        teamMode,
+        isRecruiting,
+        joinSlug,
+        squadTargetSize,
+        matchdayTargetSize,
+        managerNotes,
+        contactName,
+        contactEmail,
+        contactPhone,
+        secondaryContactName,
+        secondaryContactEmail,
+        secondaryContactPhone,
+        divisionId: leagueId ? undefined : null,
+      },
+      select: {
+        captainUserId: true,
+      },
+    });
+
+    if (leagueId) {
+      await tx.leagueSeasonTeam.updateMany({
+        where: {
+          teamId: id,
+          leagueId: {
+            not: leagueId,
+          },
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    } else {
+      await tx.leagueSeasonTeam.updateMany({
+        where: { teamId: id },
+        data: {
+          isActive: false,
+        },
+      });
+    }
+
+    return updated;
   });
 
   if (contactName && updatedTeam.captainUserId) {
@@ -124,6 +162,19 @@ export async function updateTeamDetailsAction(formData: FormData) {
   revalidatePath("/admin/teams");
   revalidatePath("/admin/users");
   revalidatePath("/admin/captains");
+  revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/fixtures/generate");
+
+  if (existingTeam.leagueId) {
+    revalidatePath(`/admin/leagues/${existingTeam.leagueId}`);
+    revalidatePath(`/admin/leagues/${existingTeam.leagueId}/fixtures`);
+  }
+
+  if (leagueId) {
+    revalidatePath(`/admin/leagues/${leagueId}`);
+    revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  }
+
   revalidatePath(`/captain/team/${id}`);
   revalidatePath(`/captain/team/${id}/squad`);
 
