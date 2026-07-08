@@ -70,10 +70,28 @@ function signedAmount(type: string, amountPence: number) {
   return type === "CREDIT_ADDED" ? amountPence : -amountPence;
 }
 
+async function getRequiredAdminUserId() {
+  const { user, session } = await requireAdmin();
+
+  if (user?.id) return user.id;
+
+  const email = session?.user?.email?.trim().toLowerCase();
+  if (!email) redirect("/admin/payments/team-credits?error=admin_user_missing");
+
+  const fallbackUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (!fallbackUser?.id) redirect("/admin/payments/team-credits?error=admin_user_missing");
+
+  return fallbackUser.id;
+}
+
 async function addTeamCreditAction(formData: FormData) {
   "use server";
 
-  const { user } = await requireAdmin();
+  const adminUserId = await getRequiredAdminUserId();
 
   const teamId = String(formData.get("teamId") ?? "").trim();
   const amountPounds = Number(formData.get("amountPounds") ?? "0");
@@ -94,7 +112,7 @@ async function addTeamCreditAction(formData: FormData) {
     teamId,
     amountPence: Math.round(amountPounds * 100),
     description: description || "Team credit added by SIXFL admin.",
-    createdByUserId: user.id,
+    createdByUserId: adminUserId,
   });
 
   revalidatePath("/admin/payments/team-credits");
@@ -183,47 +201,47 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
           Team credit ledger
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Use this when a team has already paid for an abandoned or postponed fixture and the fee should be carried forward to a future fixture.
+          Add manual team credit, review credit balances, and track credit used against match fees.
         </p>
       </div>
 
       {saved === "credit_added" ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-          Team credit added. The captain will now see it on their payments page and can use it against a future charge.
+          Team credit added.
         </div>
       ) : null}
 
       {error ? (
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
-          {error === "missing_team" ? "The selected team could not be found." : "Choose a team and enter a valid credit amount."}
+          {error === "missing_team"
+            ? "The selected team could not be found."
+            : error === "admin_user_missing"
+              ? "Could not identify the admin user adding this credit. Please sign out and back in."
+              : "Enter a team and a positive credit amount."}
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Total live credit</div>
-          <div className="mt-3 text-3xl font-semibold text-white">{formatMoney(totalCreditPence)}</div>
-          <p className="mt-2 text-sm text-emerald-100/75">Current positive credit held across teams.</p>
-        </div>
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Teams in credit</div>
-          <div className="mt-3 text-3xl font-semibold text-white">{balances.filter((row) => row.balancePence > 0).length}</div>
-        </div>
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Recent ledger rows</div>
-          <div className="mt-3 text-3xl font-semibold text-white">{recentCredits.length}</div>
-        </div>
-      </div>
+      <section className="grid gap-4 md:grid-cols-3">
+        <AdminCard className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Total active credit</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{formatMoney(totalCreditPence)}</p>
+          <p className="mt-2 text-sm text-emerald-100/75">Across teams with a positive balance.</p>
+        </AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Teams with credit</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{balances.length}</p>
+          <p className="mt-2 text-sm text-white/60">Current non-zero credit balances.</p>
+        </AdminCard>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Ledger entries</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{recentCredits.length}</p>
+          <p className="mt-2 text-sm text-white/60">Most recent credit movements shown below.</p>
+        </AdminCard>
+      </section>
 
-      <AdminCard className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.05] p-6">
-        <form action={addTeamCreditAction} className="space-y-5">
-          <div>
-            <h2 className="text-xl font-semibold text-white">Add team credit</h2>
-            <p className="mt-2 text-sm text-white/60">
-              This does not refund Stripe. It records that SIXFL owes the team credit which can then be used against another fixture charge.
-            </p>
-          </div>
-
+      <AdminCard className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.04] p-6">
+        <h2 className="text-xl font-semibold text-white">Add manual credit</h2>
+        <form action={addTeamCreditAction} className="mt-5 grid gap-4 lg:grid-cols-[1fr_10rem_1fr_auto] lg:items-end">
           <label className="space-y-2 text-sm font-semibold text-white">
             Team
             <select name="teamId" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40">
@@ -237,63 +255,64 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
           </label>
 
           <label className="space-y-2 text-sm font-semibold text-white">
-            Credit amount
-            <input name="amountPounds" inputMode="decimal" placeholder="40.00" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40" />
+            Credit £
+            <input name="amountPounds" type="number" min="0.01" step="0.01" placeholder="40.00" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40" />
           </label>
 
           <label className="space-y-2 text-sm font-semibold text-white">
             Note
-            <textarea name="description" rows={4} placeholder="Credit carried forward from postponed fixture on ..." className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+            <input name="description" placeholder="Reason for credit" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40" />
           </label>
 
-          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">
-            Add team credit
+          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300">
+            Add credit
           </button>
         </form>
       </AdminCard>
 
-      <section className="rounded-3xl border border-white/10 bg-white/[0.04]">
-        <div className="border-b border-white/10 px-6 py-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Balances</p>
-          <h2 className="mt-2 text-xl font-semibold text-white">Teams currently in credit</h2>
-        </div>
-        <div className="divide-y divide-white/10">
-          {balances.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-white/55">No team credit balances yet.</div>
-          ) : (
-            balances.map((row) => (
-              <div key={row.teamId} className="flex flex-col gap-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="font-semibold text-white">{row.teamName}</div>
-                <div className={row.balancePence >= 0 ? "text-emerald-200" : "text-red-200"}>{formatMoney(row.balancePence)}</div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+      <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+          <h2 className="text-xl font-semibold text-white">Current balances</h2>
+          <div className="mt-4 divide-y divide-white/10">
+            {balances.length === 0 ? (
+              <div className="py-8 text-sm text-white/55">No team credit balances yet.</div>
+            ) : (
+              balances.map((row) => (
+                <div key={row.teamId} className="flex items-center justify-between gap-4 py-3 text-sm">
+                  <div className="font-semibold text-white">{row.teamName}</div>
+                  <div className={row.balancePence > 0 ? "font-semibold text-emerald-200" : "font-semibold text-red-200"}>
+                    {formatMoney(row.balancePence)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </AdminCard>
 
-      <section className="rounded-3xl border border-white/10 bg-white/[0.04]">
-        <div className="border-b border-white/10 px-6 py-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Ledger</p>
-          <h2 className="mt-2 text-xl font-semibold text-white">Recent credit activity</h2>
-        </div>
-        <div className="divide-y divide-white/10">
-          {recentCredits.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-white/55">No credit activity yet.</div>
-          ) : (
-            recentCredits.map((entry) => (
-              <div key={entry.id} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="font-semibold text-white">{entry.teamName} · {formatEntryType(entry.entryType)}</div>
-                  <div className="mt-1 text-sm text-white/50">{entry.description || entry.chargeTitle || "No note"}</div>
-                  <div className="mt-1 text-xs text-white/35">{formatDate(entry.createdAt)}</div>
+        <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+          <h2 className="text-xl font-semibold text-white">Recent credit movements</h2>
+          <div className="mt-4 divide-y divide-white/10">
+            {recentCredits.length === 0 ? (
+              <div className="py-8 text-sm text-white/55">No credit movements yet.</div>
+            ) : (
+              recentCredits.map((entry) => (
+                <div key={entry.id} className="py-4 text-sm">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="font-semibold text-white">{entry.teamName}</div>
+                      <div className="mt-1 text-white/50">{formatEntryType(entry.entryType)} · {formatDate(entry.createdAt)}</div>
+                      {entry.description ? <div className="mt-1 text-white/45">{entry.description}</div> : null}
+                      {entry.chargeTitle ? <div className="mt-1 text-white/45">Charge: {entry.chargeTitle}</div> : null}
+                    </div>
+                    <div className={signedAmount(entry.entryType, entry.amountPence) >= 0 ? "font-semibold text-emerald-200" : "font-semibold text-red-200"}>
+                      {formatMoney(signedAmount(entry.entryType, entry.amountPence))}
+                    </div>
+                  </div>
                 </div>
-                <div className={signedAmount(entry.entryType, entry.amountPence) >= 0 ? "font-semibold text-emerald-200" : "font-semibold text-red-200"}>
-                  {signedAmount(entry.entryType, entry.amountPence) >= 0 ? "+" : "−"}{formatMoney(Math.abs(entry.amountPence))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+              ))
+            )}
+          </div>
+        </AdminCard>
       </section>
     </div>
   );
