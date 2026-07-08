@@ -274,6 +274,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
       WHERE lst."leagueId" = ${input.leagueId}
         AND lst."divisionId" = ${input.divisionId}
         AND lst."isActive" = true
+        AND t."leagueId" = ${input.leagueId}
       ORDER BY t."name" ASC
     `);
   }
@@ -284,6 +285,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
       AND lst."isActive" = true
+      AND t."leagueId" = ${input.leagueId}
     ORDER BY t."name" ASC
   `);
 }
@@ -366,7 +368,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
   if (!league) throw new Error("League not found.");
   if (divisionId && !divisionRows[0]) throw new Error("Selected division was not found for this league.");
   if (teams.length < 2) {
-    throw new Error(divisionId ? "This division needs at least 2 teams assigned before generating fixtures." : "This league needs at least 2 teams assigned before generating fixtures.");
+    throw new Error(divisionId ? "This division needs at least 2 active teams assigned before generating fixtures. Check the teams are still attached to this season." : "This league needs at least 2 active teams assigned before generating fixtures. Check the teams are still attached to this season.");
   }
   if (venueId && !venue) throw new Error("Selected venue was not found.");
 
