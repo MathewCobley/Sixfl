@@ -85,6 +85,7 @@ export default async function FixtureResultPage({
       <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
         <form action={submitResultAction} className="space-y-5">
           <input type="hidden" name="fixtureId" value={fixture.id} />
+          <input type="hidden" name="returnTo" value={returnTo} />
 
           <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
             <label className="space-y-2 text-sm font-semibold text-white">
