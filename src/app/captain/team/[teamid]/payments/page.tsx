@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
 import {
   formatPaymentFixtureDate,
   formatPaymentMoney,
@@ -327,11 +328,13 @@ export default async function CaptainPaymentsPage({
             </div>
           ) : (
             ledger.entries.map((entry) => {
+              const isPayableOnMatchDay = isMatchFeeChargePayable(entry.dueDate);
               const canPayOnline =
                 Boolean(entry.paymentToken) &&
                 entry.displayStatus !== "PAID" &&
                 entry.displayStatus !== "VOID" &&
-                entry.outstandingPence > 0;
+                entry.outstandingPence > 0 &&
+                isPayableOnMatchDay;
               const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]
                 .filter(Boolean)
                 .join(" · ");
@@ -415,7 +418,9 @@ export default async function CaptainPaymentsPage({
                         entry.displayStatus !== "VOID" &&
                         entry.outstandingPence > 0 ? (
                         <div className="text-xs text-white/45">
-                          Online payment link not ready yet.
+                          {isPayableOnMatchDay
+                            ? "Online payment link not ready yet."
+                            : "Payment opens on match day."}
                         </div>
                       ) : null}
                     </div>
