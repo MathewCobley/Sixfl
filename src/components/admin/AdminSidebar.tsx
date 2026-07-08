@@ -101,6 +101,12 @@ const navigationGroups = [
         description: "Draft fixtures",
       },
       {
+        name: "Drop team",
+        href: "/admin/fixtures/drop-team",
+        icon: ExclamationTriangleIcon,
+        description: "Remove draft fixtures",
+      },
+      {
         name: "Replace team",
         href: "/admin/fixtures/replace-team",
         icon: UserGroupIcon,
