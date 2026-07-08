@@ -75,13 +75,12 @@ function describeFixture(input: {
   return `${input.homeTeamName} vs ${input.awayTeamName}\nKick-off: ${formatKickoff(input.kickoffAt)}${venuePart}${pitchPart}\nStatus: ${formatStatus(input.status)}`;
 }
 
-function buildChangeLines(input: {
+function buildMaterialChangeLines(input: {
   oldFixture: {
     homeTeamName: string;
     awayTeamName: string;
     kickoffAt: Date;
     venueName: string | null;
-    pitch: string | null;
     status: FixtureStatus;
   };
   nextFixture: {
@@ -89,7 +88,6 @@ function buildChangeLines(input: {
     awayTeamName: string;
     kickoffAt: Date;
     venueName: string | null;
-    pitch: string | null;
     status: FixtureStatus;
   };
 }) {
@@ -116,12 +114,6 @@ function buildChangeLines(input: {
     );
   }
 
-  if (valuesDiffer(input.oldFixture.pitch, input.nextFixture.pitch)) {
-    lines.push(
-      `Pitch: ${input.oldFixture.pitch ?? "TBC"} → ${input.nextFixture.pitch ?? "TBC"}`,
-    );
-  }
-
   if (input.oldFixture.status !== input.nextFixture.status) {
     lines.push(
       `Status: ${formatStatus(input.oldFixture.status)} → ${formatStatus(input.nextFixture.status)}`,
@@ -129,6 +121,13 @@ function buildChangeLines(input: {
   }
 
   return lines;
+}
+
+function pitchChanged(input: {
+  oldPitch: string | null;
+  nextPitch: string | null;
+}) {
+  return valuesDiffer(input.oldPitch, input.nextPitch);
 }
 
 export async function POST(request: Request) {
@@ -233,13 +232,12 @@ export async function POST(request: Request) {
     });
   }
 
-  const changeLines = buildChangeLines({
+  const changeLines = buildMaterialChangeLines({
     oldFixture: {
       homeTeamName: fixture.homeTeam.name,
       awayTeamName: fixture.awayTeam.name,
       kickoffAt: fixture.kickoffAt,
       venueName: fixture.venue?.name ?? null,
-      pitch: fixture.pitch,
       status: fixture.status,
     },
     nextFixture: {
@@ -247,13 +245,17 @@ export async function POST(request: Request) {
       awayTeamName: nextAwayTeam.name,
       kickoffAt: nextKickoffAt,
       venueName: nextVenue?.name ?? null,
-      pitch,
       status,
     },
   });
 
   if (changeLines.length === 0) {
-    return NextResponse.json({ queued: 0, reason: "No material fixture changes." });
+    return NextResponse.json({
+      queued: 0,
+      reason: pitchChanged({ oldPitch: fixture.pitch, nextPitch: pitch })
+        ? "Pitch-only changes are admin/night-board changes and are not emailed."
+        : "No material fixture changes.",
+    });
   }
 
   const affectedTeamIds = Array.from(
@@ -270,13 +272,11 @@ export async function POST(request: Request) {
     oldAwayTeamId: fixture.awayTeamId,
     oldVenueId: fixture.venueId,
     oldKickoffAt: fixture.kickoffAt.toISOString(),
-    oldPitch: fixture.pitch,
     oldStatus: fixture.status,
     homeTeamId,
     awayTeamId,
     venueId,
     kickoffAt: nextKickoffAt.toISOString(),
-    pitch,
     status,
   })}`;
 
