@@ -80,6 +80,8 @@ function getSavedMessage(saved?: string) {
       return "That fixture is not published or could not be found.";
     case "squad-full":
       return "The matchday squad has already been picked for this fixture, so you cannot mark yourself as available now.";
+    case "selected-player-locked":
+      return "You have already been selected for this fixture. If you can no longer play, please contact your captain or SIXFL so the squad and payment link can be updated properly.";
     default:
       return null;
   }
@@ -338,6 +340,7 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
                 <span className="mt-4 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/60">Current: {getResponseLabel(selectedAvailability?.response)}</span>
 
                 {squadIsFull && !playerAlreadySelected ? <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm text-amber-100">The matchday squad has already been picked for this fixture.</div> : null}
+                {playerAlreadySelected ? <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">You have already been selected for this fixture. If you can no longer play, contact your captain or SIXFL so the squad and payment link can be updated properly.</div> : null}
 
                 <form action={updatePlayerFixtureAvailabilityAction} className="mt-6 space-y-5">
                   <input type="hidden" name="teamId" value={teamid} />
@@ -348,7 +351,7 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
                     {[
                       { value: "AVAILABLE", label: "Available", disabled: availableOptionLocked },
                       { value: "MAYBE", label: "Maybe", disabled: false },
-                      { value: "UNAVAILABLE", label: "Unavailable", disabled: false },
+                      { value: "UNAVAILABLE", label: "Unavailable", disabled: playerAlreadySelected && !previewMembership },
                     ].map((option) => (
                       <label key={option.value} className={`rounded-2xl border p-4 text-sm ${option.disabled ? "cursor-not-allowed border-white/5 bg-black/20 text-white/25" : "cursor-pointer border-white/10 bg-black/20 text-white hover:bg-white/[0.05]"}`}>
                         <input className="mr-2" type="radio" name="response" value={option.value} defaultChecked={selectedAvailability?.response === option.value} disabled={option.disabled} required />
