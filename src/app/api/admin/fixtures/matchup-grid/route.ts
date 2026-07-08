@@ -32,6 +32,7 @@ type TeamOption = {
 };
 
 type FixtureVisibilityFilter = "all" | "published" | "draft";
+type FixtureStatusFilter = "active" | "postponed" | "cancelled" | "all";
 
 const COUNTABLE_FIXTURE_STATUSES = [
   FixtureStatus.SCHEDULED,
@@ -53,10 +54,31 @@ function parseVisibility(value: string | null): FixtureVisibilityFilter {
   return "all";
 }
 
+function parseStatusFilter(value: string | null): FixtureStatusFilter {
+  if (value === "postponed" || value === "cancelled" || value === "all") return value;
+  return "active";
+}
+
 function getPublishedWhere(visibility: FixtureVisibilityFilter) {
   if (visibility === "published") return { publishedAt: { not: null } };
   if (visibility === "draft") return { publishedAt: null };
   return {};
+}
+
+function getStatusWhere(statusFilter: FixtureStatusFilter) {
+  if (statusFilter === "postponed") return { status: FixtureStatus.POSTPONED };
+  if (statusFilter === "cancelled") return { status: FixtureStatus.CANCELLED };
+  if (statusFilter === "all") return {};
+
+  return {
+    status: {
+      in: [...COUNTABLE_FIXTURE_STATUSES],
+    },
+  };
+}
+
+function isCountableFixtureStatus(status: FixtureStatus) {
+  return COUNTABLE_FIXTURE_STATUSES.includes(status as (typeof COUNTABLE_FIXTURE_STATUSES)[number]);
 }
 
 async function getLeagueDivisions(leagueId: string) {
@@ -87,6 +109,7 @@ async function getSeasonTeams(input: {
       WHERE lst."leagueId" = ${input.leagueId}
         AND lst."divisionId" = ${input.divisionId}
         AND lst."isActive" = true
+        AND t."leagueId" = ${input.leagueId}
       ORDER BY t."name" ASC
     `);
   }
@@ -97,6 +120,7 @@ async function getSeasonTeams(input: {
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
       AND lst."isActive" = true
+      AND t."leagueId" = ${input.leagueId}
     ORDER BY t."name" ASC
   `);
 }
@@ -118,6 +142,7 @@ export async function GET(request: Request) {
   const requestedLeagueId = url.searchParams.get("leagueId")?.trim() || null;
   const requestedDivisionId = url.searchParams.get("divisionId")?.trim() || null;
   const visibility = parseVisibility(url.searchParams.get("visibility"));
+  const statusFilter = parseStatusFilter(url.searchParams.get("status"));
 
   const leagues = await getCurrentLeagueOptions(requestedLeagueId);
   const league =
@@ -130,6 +155,7 @@ export async function GET(request: Request) {
       selectedLeagueId: null,
       selectedDivisionId: null,
       selectedVisibility: visibility,
+      selectedStatus: statusFilter,
       selectedLeagueLabel: null,
       selectedDivisionLabel: null,
       teams: [],
@@ -157,9 +183,7 @@ export async function GET(request: Request) {
         leagueId: league.id,
         ...(selectedDivisionId ? { divisionId: selectedDivisionId } : {}),
         ...getPublishedWhere(visibility),
-        status: {
-          in: [...COUNTABLE_FIXTURE_STATUSES],
-        },
+        ...getStatusWhere(statusFilter),
       },
       orderBy: [{ kickoffAt: "asc" }, { round: "asc" }, { position: "asc" }],
       select: {
@@ -222,6 +246,7 @@ export async function GET(request: Request) {
   }
 
   for (const fixture of fixtures) {
+    if (!isCountableFixtureStatus(fixture.status)) continue;
     if (!fixture.homeTeamId || !fixture.awayTeamId) continue;
     if (!teamIds.has(fixture.homeTeamId) || !teamIds.has(fixture.awayTeamId)) continue;
 
@@ -296,6 +321,7 @@ export async function GET(request: Request) {
     selectedLeagueId: league.id,
     selectedDivisionId,
     selectedVisibility: visibility,
+    selectedStatus: statusFilter,
     selectedLeagueLabel: `${league.name}${league.season ? ` · ${league.season}` : ""}`,
     selectedDivisionLabel: selectedDivision?.name ?? null,
     teams,
