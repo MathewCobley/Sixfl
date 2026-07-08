@@ -3,9 +3,15 @@
 // ========================================
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { notFound, redirect } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import {
+  applyAvailableTeamCreditToCharge,
+  getTeamCreditLedger,
+  type TeamCreditLedgerEntry,
+} from "@/lib/payments/team-credits";
 import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
 import {
   formatPaymentFixtureDate,
@@ -114,6 +120,17 @@ function formatUkDateTime(value: Date) {
   });
 }
 
+function formatCreditEntryType(entryType: string) {
+  if (entryType === "CREDIT_ADDED") return "Credit added";
+  if (entryType === "CREDIT_USED") return "Credit used";
+  if (entryType === "CREDIT_REVERSED") return "Credit reversed";
+  return entryType.replaceAll("_", " ");
+}
+
+function getCreditEntrySignedAmount(entry: TeamCreditLedgerEntry) {
+  return entry.entryType === "CREDIT_ADDED" ? entry.amountPence : -entry.amountPence;
+}
+
 function getSubscriptionMessage(state?: string) {
   switch (state) {
     case "success":
@@ -128,6 +145,19 @@ function getSubscriptionMessage(state?: string) {
       return "A Stripe customer has not been created for this team yet.";
     case "no_fixture":
       return "Automatic payments can be set up once this team has a published upcoming match-fee fixture.";
+    default:
+      return null;
+  }
+}
+
+function getCreditMessage(state?: string, amount?: string) {
+  switch (state) {
+    case "used":
+      return `Team credit used${amount ? `: ${formatMoney(Number(amount))}` : ""}.`;
+    case "none":
+      return "No available team credit could be used against that charge.";
+    case "invalid":
+      return "That credit could not be used against this charge.";
     default:
       return null;
   }
@@ -153,12 +183,51 @@ function getPaymentTransactionWhere(teamIds: string[], teamMode: string) {
   };
 }
 
+async function useTeamCreditAction(formData: FormData) {
+  "use server";
+
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const chargeId = String(formData.get("chargeId") ?? "").trim();
+
+  if (!teamId || !chargeId) {
+    redirect(teamId ? `/captain/team/${teamId}/payments?credit=invalid` : "/captain");
+  }
+
+  await requireCaptain(teamId);
+
+  const ledger = await getTeamPaymentLedger(teamId);
+  const entry = ledger?.entries.find((item) => item.chargeId === chargeId) ?? null;
+
+  if (!ledger || !entry || entry.outstandingPence <= 0 || entry.displayStatus === "PAID" || entry.displayStatus === "VOID") {
+    redirect(`/captain/team/${teamId}/payments?credit=invalid`);
+  }
+
+  try {
+    const result = await applyAvailableTeamCreditToCharge({
+      chargeId,
+      teamIds: ledger.relatedTeamIds,
+      description: `Team credit used against ${entry.title}.`,
+    });
+
+    revalidatePath(`/captain/team/${teamId}/payments`);
+    revalidatePath(`/captain/team/${teamId}`);
+
+    if (result.amountUsedPence <= 0) {
+      redirect(`/captain/team/${teamId}/payments?credit=none`);
+    }
+
+    redirect(`/captain/team/${teamId}/payments?credit=used&amount=${result.amountUsedPence}`);
+  } catch {
+    redirect(`/captain/team/${teamId}/payments?credit=invalid`);
+  }
+}
+
 export default async function CaptainPaymentsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ teamid: string }>;
-  searchParams?: Promise<{ subscription?: string }>;
+  searchParams?: Promise<{ subscription?: string; credit?: string; amount?: string }>;
 }) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
@@ -176,6 +245,10 @@ export default async function CaptainPaymentsPage({
   if (!team || !ledger) {
     notFound();
   }
+
+  const creditLedger = await getTeamCreditLedger(ledger.relatedTeamIds);
+  const creditBalancePence = Math.max(creditLedger.balancePence, 0);
+  const recentCreditEntries = creditLedger.entries.slice(0, 6);
 
   const paymentTransactions = await prisma.paymentTransaction.findMany({
     where: getPaymentTransactionWhere(ledger.relatedTeamIds, team.teamMode),
@@ -197,6 +270,7 @@ export default async function CaptainPaymentsPage({
   });
 
   const subscriptionMessage = getSubscriptionMessage(sp.subscription);
+  const creditMessage = getCreditMessage(sp.credit, sp.amount);
   const canOpenPortal = Boolean(subscription?.stripeCustomerId);
   const subscriptionIsManaged = isManagedByStripe(subscription?.subscriptionStatus ?? null);
 
@@ -208,7 +282,13 @@ export default async function CaptainPaymentsPage({
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-3">
+      {creditMessage ? (
+        <div className={`rounded-2xl border px-5 py-4 text-sm ${sp.credit === "used" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : "border-amber-400/20 bg-amber-500/10 text-amber-100"}`}>
+          {creditMessage}
+        </div>
+      ) : null}
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
             Due now
@@ -235,6 +315,18 @@ export default async function CaptainPaymentsPage({
 
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+            Team credit
+          </p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {formatMoney(creditBalancePence)}
+          </p>
+          <p className="mt-2 text-sm text-emerald-100/75">
+            Credit available to use against fixture charges.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
             Payment history
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
@@ -245,6 +337,39 @@ export default async function CaptainPaymentsPage({
           </p>
         </div>
       </section>
+
+      {creditLedger.entries.length > 0 ? (
+        <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10">
+          <div className="border-b border-emerald-400/10 px-6 py-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+              Credits
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              Team credit ledger
+            </h2>
+            <p className="mt-2 text-sm text-emerald-50/75">
+              Credits are normally added when a postponed or abandoned fixture fee is carried forward. You can use available credit against a fixture charge below.
+            </p>
+          </div>
+          <div className="divide-y divide-emerald-400/10">
+            {recentCreditEntries.map((entry) => {
+              const signedAmount = getCreditEntrySignedAmount(entry);
+              return (
+                <div key={entry.id} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="font-semibold text-white">{formatCreditEntryType(entry.entryType)}</div>
+                    <div className="mt-1 text-sm text-emerald-50/70">{entry.description || entry.chargeTitle || "No note"}</div>
+                    <div className="mt-1 text-xs text-emerald-50/45">{formatUkDateTime(entry.createdAt)}</div>
+                  </div>
+                  <div className={signedAmount >= 0 ? "font-semibold text-emerald-100" : "font-semibold text-red-100"}>
+                    {signedAmount >= 0 ? "+" : "−"}{formatMoney(Math.abs(entry.amountPence))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-500/10">
         <div className="flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
@@ -336,6 +461,11 @@ export default async function CaptainPaymentsPage({
                 entry.displayStatus !== "PAID" &&
                 entry.displayStatus !== "VOID" &&
                 entry.outstandingPence > 0;
+              const canUseCredit =
+                creditBalancePence > 0 &&
+                entry.displayStatus !== "PAID" &&
+                entry.displayStatus !== "VOID" &&
+                entry.outstandingPence > 0;
               const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]
                 .filter(Boolean)
                 .join(" · ");
@@ -408,27 +538,42 @@ export default async function CaptainPaymentsPage({
                         </div>
                       </div>
 
-                      {canPayOnline ? (
-                        <div className="flex flex-col gap-1 lg:items-end">
-                          <Link
-                            href={`/pay/charge/${entry.paymentToken}`}
-                            className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-500/15"
-                          >
-                            Pay now
-                          </Link>
-                          {!isDueNow ? (
-                            <div className="text-xs text-white/45">
-                              Optional early payment — due on match day.
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : entry.displayStatus !== "PAID" &&
-                        entry.displayStatus !== "VOID" &&
-                        entry.outstandingPence > 0 ? (
-                        <div className="text-xs text-white/45">
-                          Online payment link not ready yet.
-                        </div>
-                      ) : null}
+                      <div className="flex flex-col gap-2 lg:items-end">
+                        {canUseCredit ? (
+                          <form action={useTeamCreditAction}>
+                            <input type="hidden" name="teamId" value={team.id} />
+                            <input type="hidden" name="chargeId" value={entry.chargeId} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15"
+                            >
+                              Use team credit
+                            </button>
+                          </form>
+                        ) : null}
+
+                        {canPayOnline ? (
+                          <div className="flex flex-col gap-1 lg:items-end">
+                            <Link
+                              href={`/pay/charge/${entry.paymentToken}`}
+                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-500/15"
+                            >
+                              Pay now
+                            </Link>
+                            {!isDueNow ? (
+                              <div className="text-xs text-white/45">
+                                Optional early payment — due on match day.
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : entry.displayStatus !== "PAID" &&
+                          entry.displayStatus !== "VOID" &&
+                          entry.outstandingPence > 0 ? (
+                          <div className="text-xs text-white/45">
+                            Online payment link not ready yet.
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
