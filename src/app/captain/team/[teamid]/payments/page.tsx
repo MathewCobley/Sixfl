@@ -211,25 +211,25 @@ export default async function CaptainPaymentsPage({
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-            Payable now
+            Due now
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {formatMoney(ledger.outstandingPence)}
           </p>
           <p className="mt-2 text-sm text-amber-100/75">
-            Match-fee charges due now. Future fixtures are shown in the ledger but are not included until payment opens.
+            Match fees are due on match day. Future fixture payment links are still available for teams who want to pay early.
           </p>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Payable charges
+            Due charges
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {ledger.openChargeCount}
           </p>
           <p className="mt-2 text-sm text-white/60">
-            Charges currently open for payment or part payment.
+            Charges currently due for payment or part payment.
           </p>
         </div>
 
@@ -330,13 +330,12 @@ export default async function CaptainPaymentsPage({
             </div>
           ) : (
             ledger.entries.map((entry) => {
-              const isPayableOnMatchDay = isMatchFeeChargePayable(entry.dueDate);
+              const isDueNow = isMatchFeeChargePayable(entry.dueDate);
               const canPayOnline =
                 Boolean(entry.paymentToken) &&
                 entry.displayStatus !== "PAID" &&
                 entry.displayStatus !== "VOID" &&
-                entry.outstandingPence > 0 &&
-                isPayableOnMatchDay;
+                entry.outstandingPence > 0;
               const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]
                 .filter(Boolean)
                 .join(" · ");
@@ -410,19 +409,24 @@ export default async function CaptainPaymentsPage({
                       </div>
 
                       {canPayOnline ? (
-                        <Link
-                          href={`/pay/charge/${entry.paymentToken}`}
-                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-500/15"
-                        >
-                          Pay now
-                        </Link>
+                        <div className="flex flex-col gap-1 lg:items-end">
+                          <Link
+                            href={`/pay/charge/${entry.paymentToken}`}
+                            className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-500/15"
+                          >
+                            Pay now
+                          </Link>
+                          {!isDueNow ? (
+                            <div className="text-xs text-white/45">
+                              Optional early payment — due on match day.
+                            </div>
+                          ) : null}
+                        </div>
                       ) : entry.displayStatus !== "PAID" &&
                         entry.displayStatus !== "VOID" &&
                         entry.outstandingPence > 0 ? (
                         <div className="text-xs text-white/45">
-                          {isPayableOnMatchDay
-                            ? "Online payment link not ready yet."
-                            : "Payment opens on match day."}
+                          Online payment link not ready yet.
                         </div>
                       ) : null}
                     </div>
