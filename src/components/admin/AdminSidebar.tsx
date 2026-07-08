@@ -173,6 +173,12 @@ const navigationGroups = [
         description: "Charges/payments",
       },
       {
+        name: "Team credits",
+        href: "/admin/payments/team-credits",
+        icon: CreditCardIcon,
+        description: "Credit ledger",
+      },
+      {
         name: "Subscriptions",
         href: "/admin/payments/subscriptions",
         icon: CreditCardIcon,
@@ -218,148 +224,85 @@ const navigationGroups = [
         name: "Templates",
         href: "/admin/templates",
         icon: DocumentTextIcon,
-        description: "Message copy",
+        description: "Message content",
       },
       {
-        name: "Queue",
-        href: "/admin/queue",
-        icon: Cog6ToothIcon,
-        description: "Dispatches",
+        name: "Team messages",
+        href: "/admin/team-messages",
+        icon: DocumentTextIcon,
+        description: "Captain updates",
       },
       {
-        name: "Social",
+        name: "Social posts",
         href: "/admin/social",
         icon: PhotoIcon,
-        description: "Drafts/publishing",
+        description: "Fixture/results cards",
+      },
+      {
+        name: "Settings",
+        href: "/admin/settings",
+        icon: Cog6ToothIcon,
+        description: "Platform config",
       },
     ],
   },
 ];
 
-const navigation = navigationGroups.flatMap((group) => group.items);
-
-function isActivePath(pathname: string, href: string, exact?: boolean) {
-  if (exact) return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
+function navItemClasses(active: boolean) {
+  return [
+    "group flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm transition",
+    active
+      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 shadow-[0_10px_30px_rgba(16,185,129,0.08)]"
+      : "border-transparent text-white/58 hover:border-white/10 hover:bg-white/[0.04] hover:text-white/85",
+  ].join(" ");
 }
 
-function getActiveHref(pathname: string) {
-  return navigation
-    .filter((item) => isActivePath(pathname, item.href, item.exact))
-    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
-}
-
-function groupTintClasses(tint: string) {
-  switch (tint) {
-    case "sky":
-      return "border-sky-400/15 bg-sky-400/[0.035]";
-    case "amber":
-      return "border-amber-400/15 bg-amber-400/[0.035]";
-    case "violet":
-      return "border-violet-400/15 bg-violet-400/[0.035]";
-    case "rose":
-      return "border-rose-400/15 bg-rose-400/[0.035]";
-    case "lime":
-      return "border-lime-400/15 bg-lime-400/[0.035]";
-    case "cyan":
-      return "border-cyan-400/15 bg-cyan-400/[0.035]";
-    default:
-      return "border-emerald-400/15 bg-emerald-400/[0.035]";
-  }
-}
-
-export default function AdminSidebar({
-  name,
-  email,
-  unreadMessagingCount = 0,
-}: AdminSidebarProps) {
+export default function AdminSidebar({ name, email, unreadMessagingCount = 0 }: AdminSidebarProps) {
   const pathname = usePathname();
-  const activeHref = getActiveHref(pathname);
 
   return (
-    <aside className="fixed bottom-4 top-24 w-[34rem] 2xl:w-[38rem]">
-      <div className="h-full overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-        <div className="border-b border-white/10 px-4 py-4 xl:px-3 xl:py-3 2xl:px-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35 xl:text-[10px]">
-            Admin console
-          </div>
+    <aside className="flex h-screen w-80 shrink-0 flex-col border-r border-white/10 bg-[#070d0b]/95 px-4 py-5 backdrop-blur-xl">
+      <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+        <div className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-300/90">SIXFL</div>
+        <div className="mt-2 text-lg font-semibold text-white">Admin Console</div>
+        <div className="mt-2 text-xs text-white/45">
+          {name || email || "Signed in"}
+        </div>
+      </div>
 
-          <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 xl:mt-2 xl:rounded-xl xl:p-2.5">
-            <div className="flex min-w-0 items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-white xl:text-[13px]">
-                  {name?.trim() || "Admin"}
-                </div>
-                <div className="mt-1 truncate text-xs text-white/45 xl:text-[11px]">
-                  {email?.trim() || "SIXFL operations"}
-                </div>
-              </div>
+      <nav className="mt-5 flex-1 space-y-5 overflow-y-auto pr-1">
+        {navigationGroups.map((group) => (
+          <div key={group.title}>
+            <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/28">
+              {group.title}
+            </div>
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const active = item.exact ? pathname === item.href : pathname?.startsWith(item.href);
+                const Icon = item.icon;
+                const showBadge = item.href === "/admin/messaging" && unreadMessagingCount > 0;
 
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 xl:h-8 xl:w-8 xl:rounded-xl">
-                <Cog6ToothIcon className="h-4 w-4 text-emerald-300" />
-              </div>
+                return (
+                  <Link key={item.href} href={item.href} className={navItemClasses(Boolean(active))}>
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate font-medium">{item.name}</span>
+                        {showBadge ? (
+                          <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                            {unreadMessagingCount}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="block truncate text-[11px] text-white/35">{item.description}</span>
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
-        </div>
-
-        <nav className="h-[calc(100%-7.7rem)] overflow-y-auto px-3 py-3 xl:h-[calc(100%-7rem)] 2xl:h-[calc(100%-7.4rem)]">
-          <div className="grid grid-cols-2 gap-3">
-            {navigationGroups.map((group) => (
-              <div
-                key={group.title}
-                className={`rounded-2xl border p-2.5 ${groupTintClasses(group.tint)}`}
-              >
-                <div className="mb-2 px-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">
-                  {group.title}
-                </div>
-                <div className="grid gap-1.5">
-                  {group.items.map((item) => {
-                    const isActive = activeHref === item.href;
-                    const Icon = item.icon;
-                    const showUnreadBadge = item.href === "/admin/messaging" && unreadMessagingCount > 0;
-
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`group flex items-center gap-2 rounded-xl border px-2 py-2 transition ${
-                          isActive
-                            ? "border-emerald-400/30 bg-emerald-400/12 text-white shadow-[0_0_24px_rgba(16,185,129,0.12)]"
-                            : "border-white/8 bg-black/18 text-white/65 hover:border-white/18 hover:bg-white/[0.045] hover:text-white"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition ${
-                            isActive
-                              ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
-                              : "border-white/10 bg-black/25 text-white/45 group-hover:text-white/75"
-                          }`}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1.5 truncate text-[12px] font-semibold leading-tight">
-                            {item.name}
-                            {showUnreadBadge ? (
-                              <span className="rounded-full bg-emerald-400 px-1.5 py-0.5 text-[9px] font-bold text-black">
-                                {unreadMessagingCount}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[10px] leading-tight text-white/38">
-                            {item.description}
-                          </span>
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </nav>
-      </div>
+        ))}
+      </nav>
     </aside>
   );
 }
