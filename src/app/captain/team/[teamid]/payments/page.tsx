@@ -211,25 +211,25 @@ export default async function CaptainPaymentsPage({
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-            Outstanding balance
+            Payable now
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {formatMoney(ledger.outstandingPence)}
           </p>
           <p className="mt-2 text-sm text-amber-100/75">
-            Current unpaid balance across fixture-linked team charges.
+            Match-fee charges due now. Future fixtures are shown in the ledger but are not included until payment opens.
           </p>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Open charges
+            Payable charges
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {ledger.openChargeCount}
           </p>
           <p className="mt-2 text-sm text-white/60">
-            Team charges still awaiting payment or part payment.
+            Charges currently open for payment or part payment.
           </p>
         </div>
 
