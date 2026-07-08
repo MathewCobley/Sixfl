@@ -4,6 +4,7 @@
 
 import type Stripe from "stripe";
 
+import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
 import { prisma } from "@/lib/prisma";
 
 type TeamSubscriptionDb = Pick<
@@ -57,6 +58,7 @@ type OpenChargeRow = {
   id: string;
   amountPence: number;
   paidPence: number;
+  dueDate: Date | null;
 };
 
 function toDateFromUnix(value: number | null | undefined) {
@@ -232,6 +234,7 @@ async function findOldestOpenChargeForSubscriptionPayment(input: {
     SELECT
       pc."id",
       pc."amountPence"::int AS "amountPence",
+      pc."dueDate",
       COALESCE(SUM(tx."amountPence"), 0)::int AS "paidPence"
     FROM "PaymentCharge" pc
     LEFT JOIN "PaymentTransaction" tx ON tx."chargeId" = pc."id"
@@ -243,10 +246,9 @@ async function findOldestOpenChargeForSubscriptionPayment(input: {
       CASE WHEN (pc."amountPence" - COALESCE(SUM(tx."amountPence"), 0)) = ${input.amountPence} THEN 0 ELSE 1 END,
       COALESCE(pc."dueDate", pc."createdAt") ASC,
       pc."createdAt" ASC
-    LIMIT 1
   `;
 
-  return rows[0] ?? null;
+  return rows.find((row) => isMatchFeeChargePayable(row.dueDate)) ?? null;
 }
 
 async function refreshChargeStatus(input: {
@@ -410,7 +412,7 @@ export async function recordTeamSubscriptionInvoicePaid(input: {
       method: "STRIPE",
       reference: stripeInvoiceId,
       notes: targetCharge
-        ? "Recurring team subscription paid via Stripe and applied to the oldest open team charge."
+        ? "Recurring team subscription paid via Stripe and applied to the oldest payable team charge."
         : "Recurring team subscription paid via Stripe.",
       paidAt,
       stripePaymentIntentId: paymentIntentId,
