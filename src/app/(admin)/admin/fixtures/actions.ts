@@ -108,12 +108,12 @@ function parseOptionalPositiveInt(
 function parseRequiredPositiveInt(
   value: FormDataEntryValue | null,
   fieldName: string,
-  min = 1,
+  min = 0,
 ) {
   const str = String(value ?? "").trim();
   const num = Number(str);
 
-  if (!Number.isFinite(num) || !Number.isInteger(num) || num < min) {
+  if (!Number.isInteger(num) || num < min) {
     throw new Error(`${fieldName} must be ${min} or more.`);
   }
 
@@ -386,6 +386,11 @@ function sortPairsByRestriction(
   });
 }
 
+function getSafeAdminFixturesReturnTo(value: FormDataEntryValue | null) {
+  const returnTo = String(value ?? "").trim();
+  return returnTo.startsWith("/admin/fixtures") ? returnTo : "/admin/fixtures";
+}
+
 export async function submitResultAction(formData: FormData) {
   await requireAdmin();
 
@@ -400,6 +405,7 @@ export async function submitResultAction(formData: FormData) {
     "Team 2 score",
     0,
   );
+  const returnTo = getSafeAdminFixturesReturnTo(formData.get("returnTo"));
 
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },
@@ -445,6 +451,7 @@ export async function submitResultAction(formData: FormData) {
   });
 
   revalidatePath("/admin/fixtures");
+  revalidatePath(returnTo);
   revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
   revalidatePath(`/admin/leagues/${fixture.leagueId}`);
 
@@ -452,6 +459,8 @@ export async function submitResultAction(formData: FormData) {
     revalidatePath(`/leagues/${fixture.league.slug}`);
     revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
   }
+
+  redirect(returnTo);
 }
 
 export async function createFixtureAction(formData: FormData) {
@@ -823,15 +832,7 @@ export async function deleteFixtureAction(formData: FormData) {
 
   const fixture = await prisma.fixture.findUnique({
     where: { id },
-    select: {
-      id: true,
-      leagueId: true,
-      league: {
-        select: {
-          slug: true,
-        },
-      },
-    },
+    select: { leagueId: true, league: { select: { slug: true } } },
   });
 
   if (!fixture) {
@@ -839,15 +840,11 @@ export async function deleteFixtureAction(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
-    const fixtureIdsToDelete = [id];
-
-    await voidFixtureMatchFeeChargesOrThrow(fixtureIdsToDelete, tx);
-    await cancelQueuedFixtureNotificationDispatches(fixtureIdsToDelete, tx);
-
-    await tx.fixture.delete({
-      where: { id },
-    });
+    await voidFixtureMatchFeeChargesOrThrow([id], tx);
+    await tx.fixture.delete({ where: { id } });
   });
+
+  await cancelQueuedFixtureNotificationDispatches([id]);
 
   revalidatePath("/admin/fixtures");
   revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
@@ -856,236 +853,6 @@ export async function deleteFixtureAction(formData: FormData) {
   if (fixture.league.slug) {
     revalidatePath(`/leagues/${fixture.league.slug}`);
     revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
-  }
-
-  redirect("/admin/fixtures");
-}
-
-export async function deleteLeagueFixturesAction(formData: FormData) {
-  await requireAdmin();
-
-  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
-
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: {
-      id: true,
-      slug: true,
-    },
-  });
-
-  if (!league) {
-    throw new Error("League not found.");
-  }
-
-  const fixtureIds = await prisma.fixture.findMany({
-    where: { leagueId },
-    select: {
-      id: true,
-    },
-  });
-
-  const fixtureIdsToDelete = fixtureIds.map((fixture) => fixture.id);
-
-  await prisma.$transaction(async (tx) => {
-    await voidFixtureMatchFeeChargesOrThrow(fixtureIdsToDelete, tx);
-    await cancelQueuedFixtureNotificationDispatches(fixtureIdsToDelete, tx);
-
-    await tx.fixture.deleteMany({
-      where: { leagueId },
-    });
-  });
-
-  revalidatePath("/admin/fixtures");
-  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
-  revalidatePath(`/admin/leagues/${leagueId}`);
-
-  if (league.slug) {
-    revalidatePath(`/leagues/${league.slug}`);
-    revalidatePath(`/leagues/${league.slug}/fixtures`);
-  }
-
-  redirect("/admin/fixtures");
-}
-
-export async function generateFixtures(formData: FormData) {
-  await requireAdmin();
-
-  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
-  const startDate = parseRequiredString(formData.get("startDate"), "Start date");
-  const startTime = parseRequiredString(formData.get("startTime"), "Start time");
-  const weekGapDays = parseRequiredPositiveInt(
-    formData.get("weekGapDays"),
-    "Week gap days",
-    1,
-  );
-  const slotMinutes = parseRequiredPositiveInt(
-    formData.get("slotMinutes"),
-    "Slot minutes",
-    10,
-  );
-  const pitches = parseRequiredPositiveInt(formData.get("pitches"), "Pitches", 1);
-  const maxGamesPerNight = parseRequiredPositiveInt(
-    formData.get("maxGamesPerNight"),
-    "Max games per night",
-    1,
-  );
-  const startRound = parseRequiredPositiveInt(
-    formData.get("startRound"),
-    "Start week",
-    1,
-  );
-  const doubleRoundRobin =
-    String(formData.get("doubleRoundRobin") || "") === "on";
-  const clearExisting = String(formData.get("clearExisting") || "") === "on";
-  const venueId = parseOptionalString(formData.get("venueId"));
-  const status = parseFixtureStatus(formData.get("status"));
-
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true, name: true, season: true, slug: true },
-  });
-
-  if (!league) {
-    throw new Error("League not found.");
-  }
-
-  const teams = await prisma.team.findMany({
-    where: { leagueId },
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      latestKickoffTime: true,
-    },
-  });
-
-  if (teams.length < 2) {
-    throw new Error(
-      "This league needs at least 2 teams assigned before generating fixtures.",
-    );
-  }
-
-  if (venueId) {
-    const venue = await prisma.venue.findUnique({
-      where: { id: venueId },
-      select: { id: true },
-    });
-
-    if (!venue) {
-      throw new Error("Selected venue was not found.");
-    }
-  }
-
-  if (clearExisting) {
-    const existingFixtureIds = await prisma.fixture.findMany({
-      where: { leagueId },
-      select: {
-        id: true,
-      },
-    });
-
-    const fixtureIdsToClear = existingFixtureIds.map((fixture) => fixture.id);
-
-    await prisma.$transaction(async (tx) => {
-      await voidFixtureMatchFeeChargesOrThrow(fixtureIdsToClear, tx);
-      await cancelQueuedFixtureNotificationDispatches(fixtureIdsToClear, tx);
-
-      await tx.fixture.deleteMany({
-        where: { leagueId },
-      });
-    });
-  }
-
-  let rounds = generateRounds(teams.map((t) => t.id));
-
-  if (doubleRoundRobin) {
-    rounds = [...rounds, ...mirrorRounds(rounds)];
-  }
-
-  const startDateTime = parseLondonDateTime(startDate, startTime);
-
-  const fixturesToCreate: {
-    leagueId: string;
-    homeTeamId: string;
-    awayTeamId: string;
-    venueId: string | null;
-    kickoffAt: Date;
-    round: number;
-    position: number;
-    pitch: string;
-    status: FixtureStatus;
-  }[] = [];
-
-  const teamMap = new Map<string, TeamSchedulingRule>(
-    teams.map((team) => [team.id, team]),
-  );
-
-  let nightOffset = 0;
-
-  rounds.forEach((pairs, roundIndex) => {
-    const roundNumber = startRound + roundIndex;
-
-    for (
-      let chunkStart = 0;
-      chunkStart < pairs.length;
-      chunkStart += maxGamesPerNight
-    ) {
-      const nightlyPairs = sortPairsByRestriction(
-        pairs.slice(chunkStart, chunkStart + maxGamesPerNight),
-        teamMap,
-      );
-
-      const roundBase = addDays(startDateTime, nightOffset * weekGapDays);
-
-      nightlyPairs.forEach((pair, nightlyIndex) => {
-        const batch = Math.floor(nightlyIndex / pitches);
-        const pitchNumber = (nightlyIndex % pitches) + 1;
-        const kickoffAt = addMinutes(roundBase, batch * slotMinutes);
-
-        const homeTeam = teamMap.get(pair.homeId);
-        const awayTeam = teamMap.get(pair.awayId);
-
-        if (!homeTeam || !awayTeam) {
-          throw new Error("Fixture generation failed because a team was missing.");
-        }
-
-        const allowed = isKickoffAllowed(kickoffAt, homeTeam, awayTeam);
-
-        if (!allowed.allowed) {
-          throw new Error(
-            `Unable to generate fixtures. Week ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${formatTimeInLondon(kickoffAt)}, but ${allowed.reason}`,
-          );
-        }
-
-        fixturesToCreate.push({
-          leagueId,
-          homeTeamId: pair.homeId,
-          awayTeamId: pair.awayId,
-          venueId,
-          kickoffAt,
-          round: roundNumber,
-          position: chunkStart + nightlyIndex + 1,
-          pitch: `Pitch ${pitchNumber}`,
-          status,
-        });
-      });
-
-      nightOffset += 1;
-    }
-  });
-
-  await prisma.fixture.createMany({
-    data: fixturesToCreate,
-  });
-
-  revalidatePath("/admin/fixtures");
-  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
-  revalidatePath(`/admin/leagues/${leagueId}`);
-
-  if (league.slug) {
-    revalidatePath(`/leagues/${league.slug}`);
-    revalidatePath(`/leagues/${league.slug}/fixtures`);
   }
 
   redirect("/admin/fixtures");
