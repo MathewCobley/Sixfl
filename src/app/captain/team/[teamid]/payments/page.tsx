@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
 import {
   formatPaymentFixtureDate,
   formatPaymentMoney,
@@ -125,6 +126,8 @@ function getSubscriptionMessage(state?: string) {
       return "Automatic payments are not configured yet. Ask an admin to add the Stripe subscription price ID.";
     case "missing_customer":
       return "A Stripe customer has not been created for this team yet.";
+    case "no_fixture":
+      return "Automatic payments can be set up once this team has a published upcoming match-fee fixture.";
     default:
       return null;
   }
@@ -327,11 +330,13 @@ export default async function CaptainPaymentsPage({
             </div>
           ) : (
             ledger.entries.map((entry) => {
+              const isPayableOnMatchDay = isMatchFeeChargePayable(entry.dueDate);
               const canPayOnline =
                 Boolean(entry.paymentToken) &&
                 entry.displayStatus !== "PAID" &&
                 entry.displayStatus !== "VOID" &&
-                entry.outstandingPence > 0;
+                entry.outstandingPence > 0 &&
+                isPayableOnMatchDay;
               const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]
                 .filter(Boolean)
                 .join(" · ");
@@ -415,7 +420,9 @@ export default async function CaptainPaymentsPage({
                         entry.displayStatus !== "VOID" &&
                         entry.outstandingPence > 0 ? (
                         <div className="text-xs text-white/45">
-                          Online payment link not ready yet.
+                          {isPayableOnMatchDay
+                            ? "Online payment link not ready yet."
+                            : "Payment opens on match day."}
                         </div>
                       ) : null}
                     </div>

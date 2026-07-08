@@ -4,6 +4,7 @@
 
 import { NextResponse } from "next/server";
 
+import { getMatchFeePaymentRequestScheduledFor } from "@/lib/payments/match-day-billing";
 import {
   getTeamSubscriptionPriceId,
   getTeamSubscriptionSnapshot,
@@ -14,7 +15,10 @@ import { getPublicSiteUrl, getStripeServerClient } from "@/lib/stripe/client";
 
 export const dynamic = "force-dynamic";
 
-function buildReturnUrl(teamId: string, state: "success" | "cancelled" | "active" | "missing_price") {
+function buildReturnUrl(
+  teamId: string,
+  state: "success" | "cancelled" | "active" | "missing_price" | "no_fixture",
+) {
   const url = new URL(`/captain/team/${teamId}/payments`, `${getPublicSiteUrl()}/`);
   url.searchParams.set("subscription", state);
   return url.toString();
@@ -39,7 +43,7 @@ export async function POST(
     return NextResponse.redirect(buildReturnUrl(teamid, "missing_price"), 303);
   }
 
-  const [team, subscription] = await Promise.all([
+  const [team, subscription, nextCharge] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
       select: {
@@ -57,6 +61,16 @@ export async function POST(
       },
     }),
     getTeamSubscriptionSnapshot(teamid),
+    prisma.paymentCharge.findFirst({
+      where: {
+        teamId: teamid,
+        fixtureId: { not: null },
+        status: { not: "VOID" },
+        dueDate: { gte: new Date() },
+      },
+      orderBy: { dueDate: "asc" },
+      select: { dueDate: true },
+    }),
   ]);
 
   if (!team) {
@@ -67,6 +81,10 @@ export async function POST(
     return NextResponse.redirect(buildReturnUrl(teamid, "active"), 303);
   }
 
+  if (!nextCharge?.dueDate) {
+    return NextResponse.redirect(buildReturnUrl(teamid, "no_fixture"), 303);
+  }
+
   const stripe = getStripeServerClient();
   const returnUrl = buildReturnUrl(teamid, "success");
   const cancelUrl = buildReturnUrl(teamid, "cancelled");
@@ -75,6 +93,11 @@ export async function POST(
   const description = team.league?.name
     ? `${team.name} · ${team.league.name}${team.league.season ? ` ${team.league.season}` : ""}`
     : team.name;
+  const subscriptionStartsAt = getMatchFeePaymentRequestScheduledFor(nextCharge.dueDate);
+  const trialEnd =
+    subscriptionStartsAt.getTime() > Date.now() + 5 * 60 * 1000
+      ? Math.floor(subscriptionStartsAt.getTime() / 1000)
+      : undefined;
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -102,6 +125,7 @@ export async function POST(
         teamName: team.name,
       },
       description,
+      ...(trialEnd ? { trial_end: trialEnd } : {}),
     },
   });
 

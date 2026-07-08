@@ -10,6 +10,7 @@ import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
+import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -97,10 +98,12 @@ export default async function PayChargePage({
   const fixturesHref = charge.fixture?.league?.slug
     ? `/leagues/${charge.fixture.league.slug}/fixtures`
     : "/";
+  const isPayableOnMatchDay = isMatchFeeChargePayable(charge.dueDate);
   const canPay =
     charge.status !== "VOID" &&
     outstandingPence > 0 &&
-    Boolean(charge.paymentToken);
+    Boolean(charge.paymentToken) &&
+    isPayableOnMatchDay;
 
   return (
     <div className="min-h-screen bg-[#050816] px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -180,6 +183,10 @@ export default async function PayChargePage({
             ) : charge.status === "VOID" ? (
               <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
                 This payment request is no longer active.
+              </div>
+            ) : !isPayableOnMatchDay ? (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
+                This payment will be available on match day.
               </div>
             ) : (
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-100">

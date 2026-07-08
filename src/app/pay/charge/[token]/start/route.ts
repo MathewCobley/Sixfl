@@ -8,6 +8,7 @@ import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
+import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
 import { prisma } from "@/lib/prisma";
 import { getPublicSiteUrl, getStripeServerClient } from "@/lib/stripe/client";
 
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 function buildReturnPath(input: {
   leagueSlug: string | null;
   paymentToken: string;
-  state: "success" | "cancelled" | "already_paid" | "not_available";
+  state: "success" | "cancelled" | "already_paid" | "not_available" | "not_due";
 }) {
   const path = input.leagueSlug ? `/leagues/${input.leagueSlug}/fixtures` : "/";
   const url = new URL(path, `${getPublicSiteUrl()}/`);
@@ -79,6 +80,17 @@ export async function POST(
         leagueSlug: charge.fixture?.league?.slug ?? null,
         paymentToken: token,
         state: "not_available",
+      }),
+      303,
+    );
+  }
+
+  if (!isMatchFeeChargePayable(charge.dueDate)) {
+    return NextResponse.redirect(
+      buildReturnPath({
+        leagueSlug: charge.fixture?.league?.slug ?? null,
+        paymentToken: token,
+        state: "not_due",
       }),
       303,
     );
