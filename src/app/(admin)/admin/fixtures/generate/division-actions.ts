@@ -4,7 +4,7 @@
 
 "use server";
 
-import { FixtureStatus, Prisma } from "@prisma/client";
+import { FixtureStatus, NotificationDispatchStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -14,6 +14,7 @@ import {
   parseLondonDateTime,
 } from "@/lib/datetime/london";
 import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
+import { voidFixtureMatchFeeChargesOrThrow } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -26,6 +27,8 @@ type TeamSchedulingRule = {
   latestKickoffTime: string | null;
   standardMatchFeePence: number | null;
 };
+
+type FixtureDeletionDbClient = Pick<typeof prisma, "fixture" | "paymentCharge" | "notificationDispatch">;
 
 function addDays(date: Date, days: number) {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
@@ -65,7 +68,7 @@ function parseFixtureStatus(value: FormDataEntryValue | null) {
 
 function parseTimeToMinutes(value: string | null) {
   if (!value) return null;
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value.trim());
   if (!match) return null;
 
   const hours = Number(match[1]);
@@ -183,6 +186,83 @@ function revalidateFixturePaths(leagueId: string, leagueSlug: string | null) {
   }
 }
 
+function getUnpublishedFixtureWhere(input: { leagueId: string; divisionId: string | null }) {
+  return {
+    leagueId: input.leagueId,
+    publishedAt: null,
+    ...(input.divisionId ? { divisionId: input.divisionId } : {}),
+  };
+}
+
+async function getUnpublishedFixtureIds(input: {
+  db: Pick<typeof prisma, "fixture">;
+  leagueId: string;
+  divisionId: string | null;
+}) {
+  const fixtures = await input.db.fixture.findMany({
+    where: getUnpublishedFixtureWhere({
+      leagueId: input.leagueId,
+      divisionId: input.divisionId,
+    }),
+    select: { id: true },
+  });
+
+  return fixtures.map((fixture) => fixture.id);
+}
+
+async function cancelQueuedFixtureDispatches(input: {
+  db: FixtureDeletionDbClient;
+  fixtureIds: string[];
+  reason: string;
+}) {
+  if (input.fixtureIds.length === 0) return;
+
+  await input.db.notificationDispatch.updateMany({
+    where: {
+      status: NotificationDispatchStatus.QUEUED,
+      OR: input.fixtureIds.flatMap((fixtureId) => [
+        { sourceId: fixtureId },
+        { sourceId: { startsWith: `${fixtureId}:` } },
+      ]),
+    },
+    data: {
+      status: NotificationDispatchStatus.CANCELLED,
+      cancelledAt: new Date(),
+      failureReason: input.reason,
+    },
+  });
+}
+
+async function deleteUnpublishedFixtures(input: {
+  db: FixtureDeletionDbClient;
+  leagueId: string;
+  divisionId: string | null;
+}) {
+  const fixtureIds = await getUnpublishedFixtureIds({
+    db: input.db,
+    leagueId: input.leagueId,
+    divisionId: input.divisionId,
+  });
+
+  if (fixtureIds.length === 0) return 0;
+
+  await voidFixtureMatchFeeChargesOrThrow(fixtureIds, input.db);
+  await cancelQueuedFixtureDispatches({
+    db: input.db,
+    fixtureIds,
+    reason: "Unpublished fixture was deleted before queued fixture messages were sent.",
+  });
+
+  const result = await input.db.fixture.deleteMany({
+    where: getUnpublishedFixtureWhere({
+      leagueId: input.leagueId,
+      divisionId: input.divisionId,
+    }),
+  });
+
+  return result.count;
+}
+
 async function getGenerationTeams(input: { leagueId: string; divisionId: string | null }) {
   await ensureSeasonTeamRowsForLeague(input.leagueId);
 
@@ -206,6 +286,36 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
       AND lst."isActive" = true
     ORDER BY t."name" ASC
   `);
+}
+
+export async function deleteUnpublishedFixturesAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+  const divisionId = parseOptionalString(formData.get("divisionId"));
+
+  const [league, divisionRows] = await Promise.all([
+    prisma.league.findUnique({ where: { id: leagueId }, select: { id: true, slug: true } }),
+    divisionId
+      ? prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT "id"
+          FROM "LeagueDivision"
+          WHERE "id" = ${divisionId}
+            AND "leagueId" = ${leagueId}
+          LIMIT 1
+        `)
+      : Promise.resolve([]),
+  ]);
+
+  if (!league) throw new Error("League not found.");
+  if (divisionId && !divisionRows[0]) throw new Error("Selected division was not found for this league.");
+
+  const deletedCount = await prisma.$transaction((tx) =>
+    deleteUnpublishedFixtures({ db: tx, leagueId, divisionId }),
+  );
+
+  revalidateFixturePaths(leagueId, league.slug);
+  redirect(`/admin/fixtures/generate?unpublishedDeleted=${deletedCount}`);
 }
 
 export async function generateDraftFixturesWithDivisionsAction(formData: FormData) {
@@ -330,15 +440,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
 
   await prisma.$transaction(async (tx) => {
     if (clearExisting) {
-      if (divisionId) {
-        await tx.$executeRaw(Prisma.sql`
-          DELETE FROM "Fixture"
-          WHERE "leagueId" = ${leagueId}
-            AND "divisionId" = ${divisionId}
-        `);
-      } else {
-        await tx.fixture.deleteMany({ where: { leagueId } });
-      }
+      await deleteUnpublishedFixtures({ db: tx, leagueId, divisionId });
     }
 
     for (const fixtureData of fixturesToCreate) {
