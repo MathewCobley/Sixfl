@@ -107,6 +107,12 @@ const navigationGroups = [
         description: "Remove draft fixtures",
       },
       {
+        name: "Carry fees",
+        href: "/admin/fixtures/carry-forward-payments",
+        icon: CreditCardIcon,
+        description: "Postponed payments",
+      },
+      {
         name: "Replace team",
         href: "/admin/fixtures/replace-team",
         icon: UserGroupIcon,
