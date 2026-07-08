@@ -9,6 +9,8 @@ import { FixtureStatus, NotificationDispatchStatus, Prisma } from "@prisma/clien
 
 import AdminCard from "@/components/admin/AdminCard";
 import {
+  formatTimeInLondon,
+  getLondonMinutesSinceMidnight,
   parseLondonDateTime,
   toLondonDateInputValue,
   toLondonTimeInputValue,
@@ -25,6 +27,11 @@ type PageProps = {
 type TeamOption = {
   id: string;
   name: string;
+};
+
+type TeamLatestKickoffRule = {
+  name: string;
+  latestKickoffTime: string | null;
 };
 
 const FIXTURE_CONFIRMATION_CHASE_SOURCE_TYPES = [
@@ -94,6 +101,53 @@ function parseKickoffAt(formData: FormData) {
   const dateStr = parseRequiredString(formData.get("kickoffDate"), "Kickoff date");
   const timeStr = parseRequiredString(formData.get("kickoffTime"), "Kickoff time");
   return parseLondonDateTime(dateStr, timeStr);
+}
+
+function parseTimeToMinutes(value: string | null) {
+  if (!value) return null;
+
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value.trim());
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function assertTeamLatestKickoffAllowed(input: {
+  kickoffAt: Date;
+  team: TeamLatestKickoffRule;
+}) {
+  const latestMinutes = parseTimeToMinutes(input.team.latestKickoffTime);
+  if (latestMinutes === null) return;
+
+  const kickoffMinutes = getLondonMinutesSinceMidnight(input.kickoffAt);
+  if (kickoffMinutes <= latestMinutes) return;
+
+  throw new Error(
+    `${input.team.name} has latest KO ${input.team.latestKickoffTime}, so ${formatTimeInLondon(input.kickoffAt)} is too late. Change the fixture time or update the team's Latest KO first.`,
+  );
+}
+
+function assertFixtureLatestKickoffAllowed(input: {
+  kickoffAt: Date;
+  homeTeam: TeamLatestKickoffRule;
+  awayTeam: TeamLatestKickoffRule;
+}) {
+  assertTeamLatestKickoffAllowed({ kickoffAt: input.kickoffAt, team: input.homeTeam });
+  assertTeamLatestKickoffAllowed({ kickoffAt: input.kickoffAt, team: input.awayTeam });
 }
 
 async function getFixtureLeagueTeams(input: {
@@ -206,11 +260,11 @@ async function updateFixtureFromEditPageAction(formData: FormData) {
     }),
     prisma.team.findUnique({
       where: { id: homeTeamId },
-      select: { id: true, name: true, leagueId: true, logoUrl: true },
+      select: { id: true, name: true, leagueId: true, logoUrl: true, latestKickoffTime: true },
     }),
     prisma.team.findUnique({
       where: { id: awayTeamId },
-      select: { id: true, name: true, leagueId: true, logoUrl: true },
+      select: { id: true, name: true, leagueId: true, logoUrl: true, latestKickoffTime: true },
     }),
     venueId ? prisma.venue.findUnique({ where: { id: venueId }, select: { id: true } }) : Promise.resolve(null),
     refereeId ? prisma.user.findUnique({ where: { id: refereeId }, select: { id: true, role: true } }) : Promise.resolve(null),
@@ -226,6 +280,10 @@ async function updateFixtureFromEditPageAction(formData: FormData) {
   if (!awayAllowed) throw new Error("Team 2 is not attached to this league season.");
   if (venueId && !venue) throw new Error("Selected venue was not found.");
   if (refereeId && (!referee || referee.role !== "REFEREE")) throw new Error("Selected referee was not found.");
+
+  if (status === FixtureStatus.SCHEDULED || status === FixtureStatus.COMPLETED) {
+    assertFixtureLatestKickoffAllowed({ kickoffAt, homeTeam, awayTeam });
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.fixture.update({
