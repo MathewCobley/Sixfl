@@ -118,6 +118,7 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
         },
         select: {
           teamMemberId: true,
+          status: true,
         },
       },
     },
@@ -141,6 +142,10 @@ export async function updatePlayerFixtureAvailabilityAction(formData: FormData) 
 
   if (response === "AVAILABLE" && squadIsFull && !playerAlreadySelected) {
     redirect(redirectPath("squad-full"));
+  }
+
+  if (response === "UNAVAILABLE" && playerAlreadySelected && user?.role !== UserRole.ADMIN) {
+    redirect(redirectPath("selected-player-locked"));
   }
 
   await prisma.fixtureAvailability.upsert({
