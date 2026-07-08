@@ -50,7 +50,3 @@ CREATE INDEX "TeamCreditLedgerEntry_sourceFixtureId_idx"
 
 CREATE INDEX "TeamCreditLedgerEntry_entryType_idx"
   ON "TeamCreditLedgerEntry"("entryType");
-
-CREATE UNIQUE INDEX "TeamCreditLedgerEntry_credit_used_chargeId_key"
-  ON "TeamCreditLedgerEntry"("chargeId")
-  WHERE "entryType" = 'CREDIT_USED' AND "chargeId" IS NOT NULL;
