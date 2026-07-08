@@ -5,6 +5,7 @@
 import { Prisma } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
 import {
   getDirectChargePaidTotal,
   getDisplayChargeOutstandingPence,
@@ -47,6 +48,7 @@ export type TeamPaymentLedgerEntry = {
   overpaidPence: number;
   storedStatus: string;
   displayStatus: string;
+  isPayableNow: boolean;
 };
 
 export type TeamPaymentLedger = {
@@ -182,6 +184,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     const fixtureLabel = charge.fixture
       ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
       : charge.title;
+    const isPayableNow = isMatchFeeChargePayable(charge.dueDate);
 
     return {
       chargeId: charge.id,
@@ -208,11 +211,16 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       overpaidPence,
       storedStatus: charge.status,
       displayStatus,
+      isPayableNow,
     };
   });
 
   const openEntries = entries
-    .filter((entry) => entry.displayStatus !== "PAID" && entry.outstandingPence > 0)
+    .filter((entry) =>
+      entry.displayStatus !== "PAID" &&
+      entry.outstandingPence > 0 &&
+      entry.isPayableNow,
+    )
     .sort((a, b) => {
       const aDate = a.dueDate ?? a.kickoffAt ?? new Date(8640000000000000);
       const bDate = b.dueDate ?? b.kickoffAt ?? new Date(8640000000000000);
