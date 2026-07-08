@@ -7,7 +7,7 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { TeamMode } from "@prisma/client";
+import { Prisma, TeamMode } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -123,24 +123,18 @@ export async function updateTeamDetailsAction(formData: FormData) {
     });
 
     if (leagueId) {
-      await tx.leagueSeasonTeam.updateMany({
-        where: {
-          teamId: id,
-          leagueId: {
-            not: leagueId,
-          },
-        },
-        data: {
-          isActive: false,
-        },
-      });
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "LeagueSeasonTeam"
+        SET "isActive" = false, "updatedAt" = NOW()
+        WHERE "teamId" = ${id}
+          AND "leagueId" <> ${leagueId}
+      `);
     } else {
-      await tx.leagueSeasonTeam.updateMany({
-        where: { teamId: id },
-        data: {
-          isActive: false,
-        },
-      });
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "LeagueSeasonTeam"
+        SET "isActive" = false, "updatedAt" = NOW()
+        WHERE "teamId" = ${id}
+      `);
     }
 
     return updated;
