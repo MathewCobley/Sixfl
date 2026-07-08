@@ -10,7 +10,10 @@ import { getAllLeagueDivisionOptions } from "@/lib/league-divisions";
 import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { generateDraftFixturesWithDivisionsAction } from "./division-actions";
+import {
+  deleteUnpublishedFixturesAction,
+  generateDraftFixturesWithDivisionsAction,
+} from "./division-actions";
 import { backfillRefereeAssignmentsAction } from "./referee-backfill-actions";
 import { backfillStandardFixtureFeesAction } from "./standard-fee-actions";
 
@@ -45,6 +48,7 @@ type SearchParams = {
   refBackfilled?: string;
   refAssigned?: string;
   refEmails?: string;
+  unpublishedDeleted?: string;
 };
 
 export default async function ImprovedFixtureGeneratorPage({
@@ -95,6 +99,10 @@ export default async function ImprovedFixtureGeneratorPage({
   const refereeAssignedCount = Number(sp.refAssigned ?? "");
   const refereeEmailCount = Number(sp.refEmails ?? "");
   const hasRefereeBackfillNotice = Number.isFinite(refereeBackfilledCount) && sp.refBackfilled !== undefined;
+
+  const unpublishedDeletedCount = Number(sp.unpublishedDeleted ?? "");
+  const hasUnpublishedDeletedNotice = Number.isFinite(unpublishedDeletedCount) && sp.unpublishedDeleted !== undefined;
+
   const noCurrentLeagues = leagues.length === 0;
 
   return (
@@ -132,6 +140,12 @@ export default async function ImprovedFixtureGeneratorPage({
       {hasRefereeBackfillNotice ? (
         <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
           Linked {refereeBackfilledCount} fixture{refereeBackfilledCount === 1 ? "" : "s"} to referee night{refereeBackfilledCount === 1 ? "" : "s"}. Filled {Number.isFinite(refereeAssignedCount) ? refereeAssignedCount : 0} blank referee assignment{refereeAssignedCount === 1 ? "" : "s"}. Queued {Number.isFinite(refereeEmailCount) ? refereeEmailCount : 0} referee email{refereeEmailCount === 1 ? "" : "s"}.
+        </div>
+      ) : null}
+
+      {hasUnpublishedDeletedNotice ? (
+        <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100">
+          Deleted {unpublishedDeletedCount} unpublished fixture{unpublishedDeletedCount === 1 ? "" : "s"}. Published/live fixtures were left untouched.
         </div>
       ) : null}
 
@@ -230,6 +244,45 @@ export default async function ImprovedFixtureGeneratorPage({
         </form>
       </AdminCard>
 
+      <AdminCard className="rounded-3xl border border-rose-400/25 bg-rose-500/[0.06] p-6 md:p-8">
+        <form action={deleteUnpublishedFixturesAction} className="space-y-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-200/80">Safe draft cleanup</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Delete unpublished fixtures only</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
+              Removes fixtures that are still draft/unpublished for the selected current season. Published/live fixtures are not deleted.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className={labelClass}>Current season</label>
+              <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Division</label>
+              <select name="divisionId" className={inputClass} disabled={noCurrentLeagues}>
+                <option value="">Whole league / all divisions</option>
+                {divisionOptions.map((division) => (
+                  <option key={division.id} value={division.id}>{divisionLabel(division)}</option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs leading-5 text-white/45">
+                Choose a division to remove only that division’s drafts, or leave blank to remove all unpublished fixtures in the season.
+              </p>
+            </div>
+          </div>
+
+          <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl border border-rose-300/30 bg-rose-500/15 px-6 text-sm font-semibold text-rose-50 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-40">
+            Delete unpublished fixtures
+          </button>
+        </form>
+      </AdminCard>
+
       <AdminCard className="rounded-3xl border border-emerald-400/15 bg-white/[0.03] p-6 md:p-8">
         <form action={generateDraftFixturesWithDivisionsAction} className="space-y-8">
           <div className="grid gap-6 md:grid-cols-2">
@@ -286,7 +339,7 @@ export default async function ImprovedFixtureGeneratorPage({
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4"><input type="checkbox" name="doubleRoundRobin" className="mt-1" /><span><span className="block text-sm font-semibold text-white">Double round robin</span><span className="mt-1 block text-sm leading-6 text-white/50">Every team plays each opponent twice.</span></span></label>
-            <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4"><input type="checkbox" name="clearExisting" className="mt-1" /><span><span className="block text-sm font-semibold text-red-100">Clear existing fixtures first</span><span className="mt-1 block text-sm leading-6 text-red-100/65">For divisions, this only clears the selected division’s fixtures.</span></span></label>
+            <label className="flex min-h-[112px] cursor-pointer items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4"><input type="checkbox" name="clearExisting" className="mt-1" /><span><span className="block text-sm font-semibold text-red-100">Clear unpublished fixtures first</span><span className="mt-1 block text-sm leading-6 text-red-100/65">Deletes draft/unpublished fixtures only for the selected league/division. Published fixtures are kept.</span></span></label>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
