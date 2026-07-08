@@ -25,102 +25,159 @@ function getAllowedClaimEmails(team: {
   ].filter((email): email is string => Boolean(email));
 }
 
+function getClaimPath(code?: string | null) {
+  const cleanCode = code?.trim();
+  return cleanCode ? `/claim?code=${encodeURIComponent(cleanCode)}` : "/claim";
+}
+
+function getLoginPath(input: { code?: string | null; email?: string | null }) {
+  const params = new URLSearchParams();
+  params.set("callbackUrl", getClaimPath(input.code));
+
+  const email = input.email?.trim();
+  if (email) params.set("email", email);
+
+  return `/login?${params.toString()}`;
+}
+
+async function getTeamByClaimCode(code: string) {
+  return prisma.team.findFirst({
+    where: {
+      claimCode: {
+        equals: code,
+        mode: "insensitive",
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      contactName: true,
+      contactEmail: true,
+      secondaryContactEmail: true,
+      captainInviteSentTo: true,
+      captainUserId: true,
+    },
+  });
+}
+
+async function claimTeamForSession(input: { code: string; email: string }) {
+  const email = input.email.toLowerCase().trim();
+  const code = input.code.trim();
+
+  if (!code) return { ok: false as const, error: "missing_code" };
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true },
+  });
+
+  if (!user) return { ok: false as const, error: "not_signed_in" };
+
+  const team = await getTeamByClaimCode(code);
+
+  if (!team) return { ok: false as const, error: "invalid" };
+
+  const allowedEmails = getAllowedClaimEmails(team);
+  if (allowedEmails.length > 0 && !allowedEmails.includes(email)) {
+    return { ok: false as const, error: "wrong_email", code };
+  }
+
+  if (team.captainUserId && team.captainUserId !== user.id) {
+    return { ok: false as const, error: "already_claimed", code };
+  }
+
+  const captainName = team.contactName?.trim() || null;
+  const userNameUpdate = captainName && !user.name?.trim()
+    ? prisma.user.update({
+        where: { id: user.id },
+        data: { name: captainName },
+      })
+    : null;
+
+  await prisma.$transaction([
+    prisma.teamMember.upsert({
+      where: {
+        userId_teamId: {
+          userId: user.id,
+          teamId: team.id,
+        },
+      },
+      update: { role: TeamRole.CAPTAIN },
+      create: {
+        userId: user.id,
+        teamId: team.id,
+        role: TeamRole.CAPTAIN,
+      },
+    }),
+    prisma.team.update({
+      where: { id: team.id },
+      data: {
+        captainUserId: user.id,
+        captainLinkedAt: new Date(),
+        captainLinkedSource: "CLAIM_LINK",
+        captainClaimedAt: new Date(),
+        captainClaimSource: "CLAIM_LINK",
+      },
+    }),
+    ...(userNameUpdate ? [userNameUpdate] : []),
+  ]);
+
+  return { ok: true as const, teamId: team.id };
+}
+
 export default async function ClaimTeamPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ code?: string; error?: string }>;
+  searchParams?: Promise<{ code?: string; error?: string }>; 
 }) {
+  const sp = (await searchParams) ?? {};
+  const codeFromUrl = (sp.code ?? "").trim();
+  let error = sp.error;
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
-    redirect("/login");
+    const team = codeFromUrl ? await getTeamByClaimCode(codeFromUrl) : null;
+    redirect(
+      getLoginPath({
+        code: codeFromUrl,
+        email: team?.captainInviteSentTo ?? team?.contactEmail ?? team?.secondaryContactEmail ?? null,
+      }),
+    );
   }
 
-  const sp = (await searchParams) ?? {};
-  const codeFromUrl = (sp.code ?? "").trim();
-  const error = sp.error;
+  if (codeFromUrl && !error) {
+    const result = await claimTeamForSession({
+      code: codeFromUrl,
+      email: session.user.email,
+    });
+
+    if (result.ok) {
+      redirect(`/captain/team/${result.teamId}?claimed=1`);
+    }
+
+    error = result.error;
+  }
 
   async function claimTeamAction(formData: FormData) {
     "use server";
 
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) redirect("/login");
-
-    const email = session.user.email.toLowerCase().trim();
     const code = String(formData.get("code") ?? "").trim();
 
-    if (!code) redirect("/claim?error=missing_code");
-
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true, name: true },
-    });
-
-    if (!user) redirect("/login");
-
-    const team = await prisma.team.findFirst({
-      where: {
-        claimCode: {
-          equals: code,
-          mode: "insensitive",
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        contactName: true,
-        contactEmail: true,
-        secondaryContactEmail: true,
-        captainInviteSentTo: true,
-      },
-    });
-
-    if (!team) {
-      redirect(`/claim?error=invalid&code=${encodeURIComponent(code)}`);
+    if (!session?.user?.email) {
+      redirect(getLoginPath({ code }));
     }
 
-    const allowedEmails = getAllowedClaimEmails(team);
-    if (allowedEmails.length > 0 && !allowedEmails.includes(email)) {
-      redirect(`/claim?error=wrong_email&code=${encodeURIComponent(code)}`);
+    const result = await claimTeamForSession({
+      code,
+      email: session.user.email,
+    });
+
+    if (!result.ok) {
+      redirect(`/claim?error=${encodeURIComponent(result.error)}&code=${encodeURIComponent(code)}`);
     }
 
-    const captainName = team.contactName?.trim() || null;
-    const userNameUpdate = captainName && !user.name?.trim()
-      ? prisma.user.update({
-          where: { id: user.id },
-          data: { name: captainName },
-        })
-      : null;
-
-    await prisma.$transaction([
-      prisma.teamMember.upsert({
-        where: {
-          userId_teamId: {
-            userId: user.id,
-            teamId: team.id,
-          },
-        },
-        update: { role: TeamRole.CAPTAIN },
-        create: {
-          userId: user.id,
-          teamId: team.id,
-          role: TeamRole.CAPTAIN,
-        },
-      }),
-      prisma.team.update({
-        where: { id: team.id },
-        data: {
-          captainUserId: user.id,
-          captainLinkedAt: new Date(),
-          captainLinkedSource: "CLAIM_LINK",
-          captainClaimedAt: new Date(),
-          captainClaimSource: "CLAIM_LINK",
-        },
-      }),
-      ...(userNameUpdate ? [userNameUpdate] : []),
-    ]);
-
-    redirect(`/captain/team/${team.id}?claimed=1`);
+    redirect(`/captain/team/${result.teamId}?claimed=1`);
   }
 
   return (
@@ -143,6 +200,11 @@ export default async function ClaimTeamPage({
           {error === "wrong_email" && (
             <div className="text-red-300">
               This claim link is for a different contact email. Please log in with the email address the team invite was sent to, or ask SIXFL to resend the captain invite.
+            </div>
+          )}
+          {error === "already_claimed" && (
+            <div className="text-red-300">
+              This team has already been claimed by another captain account. Ask SIXFL admin to check the team access.
             </div>
           )}
         </div>
