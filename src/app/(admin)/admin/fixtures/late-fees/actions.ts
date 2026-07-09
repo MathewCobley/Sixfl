@@ -582,6 +582,7 @@ export type LateConfirmationFeeRow = {
   leagueName: string;
   leagueSeason: string | null;
   kickoffAt: Date;
+  venueName: string | null;
   homeTeamId: string;
   homeTeamName: string;
   awayTeamId: string;
@@ -608,6 +609,7 @@ export async function getLateConfirmationFeeRows() {
         league."name" AS "leagueName",
         league."season" AS "leagueSeason",
         fixture."kickoffAt",
+        venue."name" AS "venueName",
         fixture."homeTeamId",
         home_team."name" AS "homeTeamName",
         fixture."awayTeamId",
@@ -616,6 +618,7 @@ export async function getLateConfirmationFeeRows() {
         home_team."name" AS "teamName"
       FROM "Fixture" fixture
       INNER JOIN "League" league ON league."id" = fixture."leagueId"
+      LEFT JOIN "Venue" venue ON venue."id" = fixture."venueId"
       INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
       INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
       WHERE fixture."publishedAt" IS NOT NULL
@@ -630,6 +633,7 @@ export async function getLateConfirmationFeeRows() {
         league."name" AS "leagueName",
         league."season" AS "leagueSeason",
         fixture."kickoffAt",
+        venue."name" AS "venueName",
         fixture."homeTeamId",
         home_team."name" AS "homeTeamName",
         fixture."awayTeamId",
@@ -638,6 +642,7 @@ export async function getLateConfirmationFeeRows() {
         away_team."name" AS "teamName"
       FROM "Fixture" fixture
       INNER JOIN "League" league ON league."id" = fixture."leagueId"
+      LEFT JOIN "Venue" venue ON venue."id" = fixture."venueId"
       INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
       INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
       WHERE fixture."publishedAt" IS NOT NULL
@@ -650,7 +655,7 @@ export async function getLateConfirmationFeeRows() {
         COUNT(*) FILTER (WHERE fee."status" = 'WARNING')::int AS "historyWarnings",
         COUNT(*) FILTER (WHERE fee."status" = 'APPLIED')::int AS "historyApplied",
         COUNT(*) FILTER (WHERE fee."status" = 'WAIVED')::int AS "historyWaived"
-    FROM "FixtureConfirmationLateFee" fee
+      FROM "FixtureConfirmationLateFee" fee
       GROUP BY fee."teamId"
     ),
     late_confirm_counts AS (
@@ -669,6 +674,7 @@ export async function getLateConfirmationFeeRows() {
       candidate."leagueName",
       candidate."leagueSeason",
       candidate."kickoffAt",
+      candidate."venueName",
       candidate."homeTeamId",
       candidate."homeTeamName",
       candidate."awayTeamId",
