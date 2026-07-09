@@ -38,13 +38,13 @@ const navigationGroups = [
         href: "/admin",
         icon: ShieldCheckIcon,
         exact: true,
-        description: "Admin dashboard",
+        description: "Dashboard",
       },
       {
         name: "Search",
         href: "/admin/search",
         icon: MagnifyingGlassIcon,
-        description: "Find by mobile or email",
+        description: "Find people",
       },
     ],
   },
@@ -56,25 +56,25 @@ const navigationGroups = [
         name: "Teams",
         href: "/admin/teams",
         icon: UserGroupIcon,
-        description: "Squads and captains",
+        description: "Squads",
       },
       {
         name: "Users",
         href: "/admin/users",
         icon: UsersIcon,
-        description: "Linked accounts",
+        description: "Accounts",
       },
       {
         name: "Leagues",
         href: "/admin/leagues",
         icon: TrophyIcon,
-        description: "League setup",
+        description: "Setup",
       },
       {
         name: "Venues",
         href: "/admin/venues",
         icon: MapPinIcon,
-        description: "Match locations",
+        description: "Locations",
       },
     ],
   },
@@ -86,7 +86,7 @@ const navigationGroups = [
         name: "Night board",
         href: "/admin/night-board",
         icon: CalendarDaysIcon,
-        description: "Pitch, refs, cashup",
+        description: "Refs/cashup",
       },
       {
         name: "Fixtures",
@@ -98,43 +98,43 @@ const navigationGroups = [
         name: "Bulk generator",
         href: "/admin/fixtures/generate",
         icon: CalendarDaysIcon,
-        description: "Draft fixtures",
+        description: "Drafts",
       },
       {
         name: "Drop team",
         href: "/admin/fixtures/drop-team",
         icon: ExclamationTriangleIcon,
-        description: "Remove draft fixtures",
+        description: "Draft removal",
       },
       {
         name: "Carry fees",
         href: "/admin/fixtures/carry-forward-payments",
         icon: CreditCardIcon,
-        description: "Postponed payments",
+        description: "Postponed",
       },
       {
         name: "Replace team",
         href: "/admin/fixtures/replace-team",
         icon: UserGroupIcon,
-        description: "Swap fixtures",
+        description: "Swap",
       },
       {
-        name: "Fixture backfill",
+        name: "Backfill",
         href: "/admin/fixtures/backfill",
         icon: WrenchScrewdriverIcon,
-        description: "Fees/referees",
+        description: "Fees/refs",
       },
       {
         name: "Late fees",
         href: "/admin/fixtures/late-fees",
         icon: ExclamationTriangleIcon,
-        description: "72h review",
+        description: "72h",
       },
       {
-        name: "Result disputes",
+        name: "Disputes",
         href: "/admin/results",
         icon: ExclamationTriangleIcon,
-        description: "Captain issues",
+        description: "Issues",
       },
     ],
   },
@@ -149,7 +149,7 @@ const navigationGroups = [
         description: "Officials",
       },
       {
-        name: "Referee nights",
+        name: "Ref nights",
         href: "/admin/referee-nights",
         icon: CalendarDaysIcon,
         description: "Night fees",
@@ -158,7 +158,7 @@ const navigationGroups = [
         name: "Availability",
         href: "/admin/referee-availability",
         icon: CalendarDaysIcon,
-        description: "Monthly cover",
+        description: "Cover",
       },
     ],
   },
@@ -170,19 +170,19 @@ const navigationGroups = [
         name: "Payments",
         href: "/admin/payments",
         icon: DocumentTextIcon,
-        description: "Charges/payments",
+        description: "Charges",
       },
       {
         name: "Team credits",
         href: "/admin/payments/team-credits",
         icon: CreditCardIcon,
-        description: "Credit ledger",
+        description: "Credit",
       },
       {
         name: "Subscriptions",
         href: "/admin/payments/subscriptions",
         icon: CreditCardIcon,
-        description: "Stripe billing",
+        description: "Stripe",
       },
     ],
   },
@@ -194,19 +194,19 @@ const navigationGroups = [
         name: "Leads",
         href: "/admin/leads",
         icon: UsersIcon,
-        description: "Inbound enquiries",
+        description: "Inbound",
       },
       {
-        name: "Player prospects",
+        name: "Players",
         href: "/admin/player-prospects",
         icon: UsersIcon,
-        description: "Player pipeline",
+        description: "Pipeline",
       },
       {
         name: "Prospect teams",
         href: "/admin/team-prospects",
         icon: UserGroupIcon,
-        description: "Team enquiries",
+        description: "Teams",
       },
     ],
   },
@@ -215,7 +215,7 @@ const navigationGroups = [
     tint: "cyan",
     items: [
       {
-        name: "Communications",
+        name: "Comms",
         href: "/admin/messaging",
         icon: DocumentTextIcon,
         description: "Email/SMS",
@@ -224,85 +224,141 @@ const navigationGroups = [
         name: "Templates",
         href: "/admin/templates",
         icon: DocumentTextIcon,
-        description: "Message content",
+        description: "Content",
       },
       {
         name: "Team messages",
         href: "/admin/team-messages",
         icon: DocumentTextIcon,
-        description: "Captain updates",
+        description: "Captains",
       },
       {
         name: "Social posts",
         href: "/admin/social",
         icon: PhotoIcon,
-        description: "Fixture/results cards",
+        description: "Cards",
       },
       {
         name: "Settings",
         href: "/admin/settings",
         icon: Cog6ToothIcon,
-        description: "Platform config",
+        description: "Config",
       },
     ],
   },
 ];
 
+const navigation = navigationGroups.flatMap((group) => group.items);
+
+function isActivePath(pathname: string, href: string, exact?: boolean) {
+  if (exact) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function getActiveHref(pathname: string) {
+  return navigation
+    .filter((item) => isActivePath(pathname, item.href, item.exact))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
+
+function groupTintClasses(tint: string) {
+  switch (tint) {
+    case "sky":
+      return "border-sky-400/15 bg-sky-400/[0.035]";
+    case "amber":
+      return "border-amber-400/15 bg-amber-400/[0.035]";
+    case "violet":
+      return "border-violet-400/15 bg-violet-400/[0.035]";
+    case "rose":
+      return "border-rose-400/15 bg-rose-400/[0.035]";
+    case "lime":
+      return "border-lime-400/15 bg-lime-400/[0.035]";
+    case "cyan":
+      return "border-cyan-400/15 bg-cyan-400/[0.035]";
+    default:
+      return "border-emerald-400/15 bg-emerald-400/[0.035]";
+  }
+}
+
 function navItemClasses(active: boolean) {
   return [
-    "group flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm transition",
+    "group flex min-w-0 items-center gap-2 rounded-xl border px-2 py-1.5 transition",
     active
-      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 shadow-[0_10px_30px_rgba(16,185,129,0.08)]"
-      : "border-transparent text-white/58 hover:border-white/10 hover:bg-white/[0.04] hover:text-white/85",
+      ? "border-emerald-400/30 bg-emerald-400/12 text-white shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+      : "border-white/8 bg-black/18 text-white/65 hover:border-white/18 hover:bg-white/[0.045] hover:text-white",
   ].join(" ");
 }
 
-export default function AdminSidebar({ name, email, unreadMessagingCount = 0 }: AdminSidebarProps) {
+export default function AdminSidebar({
+  name,
+  email,
+  unreadMessagingCount = 0,
+}: AdminSidebarProps) {
   const pathname = usePathname();
+  const activeHref = getActiveHref(pathname);
 
   return (
-    <aside className="flex h-screen w-80 shrink-0 flex-col border-r border-white/10 bg-[#070d0b]/95 px-4 py-5 backdrop-blur-xl">
-      <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-        <div className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-300/90">SIXFL</div>
-        <div className="mt-2 text-lg font-semibold text-white">Admin Console</div>
-        <div className="mt-2 text-xs text-white/45">
-          {name || email || "Signed in"}
-        </div>
-      </div>
-
-      <nav className="mt-5 flex-1 space-y-5 overflow-y-auto pr-1">
-        {navigationGroups.map((group) => (
-          <div key={group.title}>
-            <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/28">
-              {group.title}
+    <aside className="fixed bottom-4 top-24 w-[34rem] 2xl:w-[38rem]">
+      <div className="h-full overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <div className="border-b border-white/10 px-3 py-3">
+          <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5">
+            <div className="min-w-0">
+              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300/90">SIXFL</div>
+              <div className="mt-1 truncate text-sm font-semibold text-white">Admin Console</div>
+              <div className="mt-0.5 truncate text-[11px] text-white/45">{name || email || "Signed in"}</div>
             </div>
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const active = item.exact ? pathname === item.href : pathname?.startsWith(item.href);
-                const Icon = item.icon;
-                const showBadge = item.href === "/admin/messaging" && unreadMessagingCount > 0;
-
-                return (
-                  <Link key={item.href} href={item.href} className={navItemClasses(Boolean(active))}>
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate font-medium">{item.name}</span>
-                        {showBadge ? (
-                          <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                            {unreadMessagingCount}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="block truncate text-[11px] text-white/35">{item.description}</span>
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
+            <Cog6ToothIcon className="h-5 w-5 shrink-0 text-emerald-300/70" />
           </div>
-        ))}
-      </nav>
+        </div>
+
+        <nav className="h-[calc(100%-5.7rem)] overflow-hidden px-2.5 py-2.5">
+          <div className="grid grid-cols-2 gap-2">
+            {navigationGroups.map((group) => (
+              <div key={group.title} className={`rounded-2xl border p-2 ${groupTintClasses(group.tint)}`}>
+                <div className="mb-1.5 px-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-white/35">
+                  {group.title}
+                </div>
+                <div className="grid gap-1">
+                  {group.items.map((item) => {
+                    const active = activeHref === item.href;
+                    const Icon = item.icon;
+                    const showBadge = item.href === "/admin/messaging" && unreadMessagingCount > 0;
+
+                    return (
+                      <Link key={item.href} href={item.href} className={navItemClasses(Boolean(active))}>
+                        <span
+                          className={[
+                            "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition",
+                            active
+                              ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+                              : "border-white/10 bg-black/25 text-white/45 group-hover:text-white/75",
+                          ].join(" ")}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1 truncate text-[11px] font-semibold leading-tight">
+                            <span className="truncate">{item.name}</span>
+                            {showBadge ? (
+                              <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold text-white">
+                                {unreadMessagingCount}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[9px] leading-tight text-white/35">
+                            {item.description}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </nav>
+      </div>
     </aside>
   );
 }
