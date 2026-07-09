@@ -439,16 +439,27 @@ export default async function LateFeesPage({ searchParams }: { searchParams?: Pr
         </div>
         {confirmationRows.length === 0 ? <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/55">No scheduled fixtures are inside the review window.</div> : null}
         {confirmationRows.map((row) => (
-          <section key={row.fixtureId} id={`fixture-${row.fixtureId}`} className="scroll-mt-6 space-y-4 rounded-3xl border border-white/10 bg-black/20 p-4 md:p-5">
+          <section key={`${row.fixtureId}:${row.teamId}`} id={`fixture-${row.fixtureId}`} className="scroll-mt-6 space-y-4 rounded-3xl border border-white/10 bg-black/20 p-4 md:p-5">
             <div className="border-b border-white/10 pb-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/35">{row.leagueName ?? "No league"}{row.leagueSeason ? ` · ${row.leagueSeason}` : ""}</p>
               <h2 className="mt-2 text-xl font-semibold text-white">{getFixtureLabel(row)}</h2>
               <p className="mt-1 text-sm text-white/55">{formatDate(row.kickoffAt)} · {row.venueName ?? "Venue TBC"}</p>
             </div>
-            <div className="grid gap-4">
-              <TeamRow fixtureId={row.fixtureId} kickoffAt={row.kickoffAt} teamId={row.homeTeamId} teamName={row.homeTeamName} confirmationStatus={row.homeConfirmationStatus} confirmedAt={row.homeConfirmedAt} lastChasedAt={row.homeLastChasedAt} decisionStatus={row.homeLateFeeStatus} decisionNote={row.homeLateFeeNote} historyWarnings={row.homeHistoryWarnings} historyApplied={row.homeHistoryApplied} historyWaived={row.homeHistoryWaived} historyLateConfirms={row.homeHistoryLateConfirms} />
-              <TeamRow fixtureId={row.fixtureId} kickoffAt={row.kickoffAt} teamId={row.awayTeamId} teamName={row.awayTeamName} confirmationStatus={row.awayConfirmationStatus} confirmedAt={row.awayConfirmedAt} lastChasedAt={row.awayLastChasedAt} decisionStatus={row.awayLateFeeStatus} decisionNote={row.awayLateFeeNote} historyWarnings={row.awayHistoryWarnings} historyApplied={row.awayHistoryApplied} historyWaived={row.awayHistoryWaived} historyLateConfirms={row.awayHistoryLateConfirms} />
-            </div>
+            <TeamRow
+              fixtureId={row.fixtureId}
+              kickoffAt={row.kickoffAt}
+              teamId={row.teamId}
+              teamName={row.teamName}
+              confirmationStatus={row.confirmationStatus}
+              confirmedAt={row.confirmedAt}
+              lastChasedAt={row.lastChasedAt}
+              decisionStatus={row.decisionStatus}
+              decisionNote={row.decisionNote}
+              historyWarnings={row.historyWarnings}
+              historyApplied={row.historyApplied}
+              historyWaived={row.historyWaived}
+              historyLateConfirms={row.historyLateConfirms}
+            />
           </section>
         ))}
       </AdminCard>
