@@ -208,6 +208,12 @@ const navigationGroups = [
         icon: UserGroupIcon,
         description: "Teams",
       },
+      {
+        name: "Polls",
+        href: "/admin/polls",
+        icon: DocumentTextIcon,
+        description: "Votes",
+      },
     ],
   },
   {
