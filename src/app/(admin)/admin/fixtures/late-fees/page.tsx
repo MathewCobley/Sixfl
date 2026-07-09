@@ -140,6 +140,32 @@ function getConfirmationLabel(status: string | null, confirmedAt: Date | null, d
   return "No confirmation";
 }
 
+function getPaymentLateFeeAuditItems(row: PaymentLateFeeRow) {
+  return [
+    row.paymentLateFeeWarningAt
+      ? {
+          label: "Warning sent",
+          value: formatDate(row.paymentLateFeeWarningAt),
+          tone: "border-amber-400/20 bg-amber-500/10 text-amber-100",
+        }
+      : null,
+    row.paymentLateFeeAppliedAt
+      ? {
+          label: "£10 added",
+          value: formatDate(row.paymentLateFeeAppliedAt),
+          tone: "border-red-400/20 bg-red-500/10 text-red-100",
+        }
+      : null,
+    row.paymentLateFeeWaivedAt
+      ? {
+          label: "Waived",
+          value: formatDate(row.paymentLateFeeWaivedAt),
+          tone: "border-sky-400/20 bg-sky-500/10 text-sky-100",
+        }
+      : null,
+  ].filter((item): item is { label: string; value: string; tone: string } => item !== null);
+}
+
 function PaymentLateFeeDecisionForm({
   chargeId,
   note,
@@ -227,6 +253,7 @@ function PaymentLateFeeRowCard({ row }: { row: PaymentLateFeeRow }) {
     row.paymentLateFeeStatus === "APPLIED"
       ? Math.max(0, row.amountPence - feeAmount)
       : row.amountPence;
+  const auditItems = getPaymentLateFeeAuditItems(row);
 
   return (
     <div id={`payment-charge-${row.chargeId}`} className={cx("scroll-mt-6 rounded-3xl border p-5", row.paymentLateFeeStatus === "APPLIED" ? "border-red-400/25 bg-red-500/[0.06]" : "border-amber-400/25 bg-amber-500/[0.05]")}> 
@@ -242,6 +269,11 @@ function PaymentLateFeeRowCard({ row }: { row: PaymentLateFeeRow }) {
             <span className={cx("rounded-full border px-3 py-1 text-xs font-semibold", getDecisionTone(row.paymentLateFeeStatus))}>
               {getDecisionLabel(row.paymentLateFeeStatus)}
             </span>
+            {row.paymentLateFeeStatus === "WARNING" && row.paymentLateFeeWarningAt ? (
+              <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">
+                Warning sent {formatDate(row.paymentLateFeeWarningAt)}
+              </span>
+            ) : null}
           </div>
 
           <h3 className="mt-3 text-base font-semibold text-white">{row.title}</h3>
@@ -255,6 +287,21 @@ function PaymentLateFeeRowCard({ row }: { row: PaymentLateFeeRow }) {
             <div>Paid: {formatMoney(row.paidTotalPence)}</div>
             <div>Outstanding: {formatMoney(row.outstandingPence)}</div>
           </div>
+
+          {auditItems.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                Admin fee audit trail
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {auditItems.map((item) => (
+                  <span key={item.label} className={cx("rounded-full border px-3 py-1 text-xs font-semibold", item.tone)}>
+                    {item.label}: {item.value}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href={`/admin/payments?paymentChargeId=${encodeURIComponent(row.chargeId)}#record-payment`} className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/15">
