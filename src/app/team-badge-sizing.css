@@ -1,0 +1,49 @@
+/* ========================================
+   File: src/app/team-badge-sizing.css
+   ======================================== */
+
+/* Captain dashboard badge */
+.captain-team-shell .captain-team-logo {
+  width: clamp(5.5rem, 9vw, 9rem) !important;
+  height: clamp(5.5rem, 9vw, 9rem) !important;
+  padding: 0.45rem;
+  border-radius: clamp(1.35rem, 2.4vw, 2rem) !important;
+}
+
+.captain-team-shell .captain-team-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain !important;
+}
+
+/* Player dashboard badge. The selector is intentionally scoped to the player team page hero. */
+main:has(a[href*="/player/team/"][href*="/availability"]) > div > section:first-child > div > div:first-child > div:first-child {
+  width: clamp(5.5rem, 9vw, 9rem) !important;
+  height: clamp(5.5rem, 9vw, 9rem) !important;
+  padding: 0.45rem;
+  border-radius: clamp(1.35rem, 2.4vw, 2rem) !important;
+}
+
+main:has(a[href*="/player/team/"][href*="/availability"]) > div > section:first-child > div > div:first-child > div:first-child img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain !important;
+}
+
+@media (max-width: 640px) {
+  .captain-team-shell .captain-team-logo,
+  main:has(a[href*="/player/team/"][href*="/availability"]) > div > section:first-child > div > div:first-child > div:first-child {
+    width: 5.75rem !important;
+    height: 5.75rem !important;
+    padding: 0.35rem;
+    border-radius: 1.5rem !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .captain-team-shell .captain-team-logo,
+  main:has(a[href*="/player/team/"][href*="/availability"]) > div > section:first-child > div > div:first-child > div:first-child {
+    width: 5rem !important;
+    height: 5rem !important;
+  }
+}
