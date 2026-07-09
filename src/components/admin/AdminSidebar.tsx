@@ -221,6 +221,12 @@ const navigationGroups = [
         description: "Email/SMS",
       },
       {
+        name: "Queue",
+        href: "/admin/queue",
+        icon: Cog6ToothIcon,
+        description: "Dispatches",
+      },
+      {
         name: "Templates",
         href: "/admin/templates",
         icon: DocumentTextIcon,
