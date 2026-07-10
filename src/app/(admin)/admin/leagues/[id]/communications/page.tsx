@@ -8,6 +8,7 @@ import {
   FixtureStatus,
   NotificationChannel,
   NotificationDispatchStatus,
+  Prisma,
 } from "@prisma/client";
 
 import LeagueCommunicationsComposer from "@/components/admin/communications/LeagueCommunicationsComposer";
@@ -39,6 +40,16 @@ type FixtureLineInput = {
   homeTeam: { name: string };
   awayTeam: { name: string };
   venue: { name: string } | null;
+};
+
+type PollRow = {
+  id: string;
+  title: string;
+  question: string;
+  status: string;
+  optionId: string;
+  optionLabel: string;
+  optionSortOrder: number;
 };
 
 function getChannelLabel(value?: string) {
@@ -90,6 +101,53 @@ function formatFixtureLine(fixture: FixtureLineInput) {
   const venue = fixture.venue?.name?.trim() ? ` · ${fixture.venue.name.trim()}` : "";
 
   return `${kickoff} – ${fixture.homeTeam.name} v ${fixture.awayTeam.name}${pitch}${venue}`;
+}
+
+async function getPollOptionsForComposer() {
+  const rows = await prisma.$queryRaw<PollRow[]>(Prisma.sql`
+    SELECT
+      poll."id",
+      poll."title",
+      poll."question",
+      poll."status",
+      option."id" AS "optionId",
+      option."label" AS "optionLabel",
+      option."sortOrder" AS "optionSortOrder"
+    FROM "SIXFLPoll" poll
+    INNER JOIN "SIXFLPollOption" option ON option."pollId" = poll."id"
+    WHERE poll."status" IN ('ACTIVE', 'DRAFT')
+    ORDER BY poll."createdAt" DESC, option."sortOrder" ASC, option."label" ASC
+  `);
+
+  const pollMap = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      question: string;
+      status: string;
+      options: Array<{ id: string; label: string }>;
+    }
+  >();
+
+  for (const row of rows) {
+    const existing = pollMap.get(row.id);
+
+    if (existing) {
+      existing.options.push({ id: row.optionId, label: row.optionLabel });
+      continue;
+    }
+
+    pollMap.set(row.id, {
+      id: row.id,
+      title: row.title,
+      question: row.question,
+      status: row.status,
+      options: [{ id: row.optionId, label: row.optionLabel }],
+    });
+  }
+
+  return Array.from(pollMap.values());
 }
 
 export default async function AdminLeagueCommunicationsPage({
@@ -147,6 +205,7 @@ export default async function AdminLeagueCommunicationsPage({
     upcomingFixtures,
     teamThreads,
     recentEmailProblemDispatches,
+    polls,
   ] = await Promise.all([
     prisma.emailTemplate.findMany({
       where: {
@@ -259,6 +318,7 @@ export default async function AdminLeagueCommunicationsPage({
           take: 12,
         })
       : [],
+    getPollOptionsForComposer(),
   ]);
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -447,6 +507,7 @@ export default async function AdminLeagueCommunicationsPage({
           fixtureLines={fixtureLines}
           emailTemplates={resolvedEmailTemplates}
           smsTemplates={smsTemplates}
+          polls={polls}
         />
 
         <div className="rounded-3xl border border-white/10 bg-white/5">
