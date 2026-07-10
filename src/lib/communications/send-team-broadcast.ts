@@ -13,6 +13,8 @@ import { prisma } from "@/lib/prisma";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { queueDirectNotification } from "@/lib/notifications/service";
 
+type BroadcastVariables = Record<string, string | number | boolean | null>;
+
 type Input = {
   teamId: string;
   channel: NotificationChannel;
@@ -25,6 +27,7 @@ type Input = {
   origin: string;
   originLabel: string;
   metadata?: Record<string, unknown>;
+  variables?: BroadcastVariables;
   createdByUserId?: string | null;
 };
 
@@ -60,6 +63,17 @@ export async function sendTeamBroadcastMessage(input: Input) {
     ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
     : "";
 
+  const variables = {
+    firstName: getFirstName(contactName),
+    name: contactName,
+    fullName: contactName,
+    teamName: team.name,
+    leagueName,
+    signupUrl: "https://www.sixfl.co.uk/register-interest",
+    link: input.ctaUrl ?? "",
+    ...(input.variables ?? {}),
+  };
+
   const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
     channel: input.channel,
@@ -69,15 +83,7 @@ export async function sendTeamBroadcastMessage(input: Input) {
     isTransactional: true,
     sourceType: "TEAM",
     sourceId: team.id,
-    variables: {
-      firstName: getFirstName(contactName),
-      name: contactName,
-      fullName: contactName,
-      teamName: team.name,
-      leagueName,
-      signupUrl: "https://www.sixfl.co.uk/register-interest",
-      link: input.ctaUrl ?? "",
-    },
+    variables,
     emailBranding:
       input.channel === NotificationChannel.EMAIL
         ? {
