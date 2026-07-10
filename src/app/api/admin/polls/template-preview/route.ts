@@ -13,6 +13,7 @@ type PollPreviewRow = {
   title: string;
   question: string;
   status: string;
+  choiceMode: string;
   optionId: string;
   optionLabel: string;
   sortOrder: number;
@@ -30,6 +31,7 @@ export async function GET() {
       poll."title",
       poll."question",
       poll."status",
+      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode",
       option."id" AS "optionId",
       option."label" AS "optionLabel",
       option."sortOrder"
@@ -47,6 +49,7 @@ export async function GET() {
       title: string;
       question: string;
       status: string;
+      choiceMode: string;
       options: Array<{ id: string; label: string; sortOrder: number }>;
     }
   >();
@@ -57,6 +60,7 @@ export async function GET() {
       title: row.title,
       question: row.question,
       status: row.status,
+      choiceMode: row.choiceMode,
       options: [],
     };
 
