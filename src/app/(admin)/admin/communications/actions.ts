@@ -42,22 +42,36 @@ function getErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
-function hasUnresolvedTemplatePlaceholder(text: string) {
-  return /\{\{[^}]+\}\}/.test(text);
+function getUnresolvedTemplateTokens(text: string, allowedTokens: string[] = []) {
+  const allowed = new Set(allowedTokens.map((token) => token.toLowerCase()));
+  const unresolved = new Set<string>();
+  const pattern = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
+
+  for (const match of text.matchAll(pattern)) {
+    const token = match[1]?.trim();
+    if (token && !allowed.has(token.toLowerCase())) unresolved.add(token);
+  }
+
+  return Array.from(unresolved);
 }
 
 function redirectIfUnresolvedTemplatePlaceholder(input: {
   from: string;
   subject?: string | null;
   body: string;
+  allowedTokens?: string[];
 }) {
-  if (
-    hasUnresolvedTemplatePlaceholder(input.body) ||
-    hasUnresolvedTemplatePlaceholder(input.subject ?? "")
-  ) {
+  const unresolved = [
+    ...getUnresolvedTemplateTokens(input.body, input.allowedTokens),
+    ...getUnresolvedTemplateTokens(input.subject ?? "", input.allowedTokens),
+  ];
+
+  if (unresolved.length > 0) {
     redirect(
       `${input.from}?error=${encodeURIComponent(
-        "The message still contains an unresolved template placeholder such as {{fixtures}}. Please reselect the template or edit the message before sending.",
+        `The message still contains unresolved placeholder${unresolved.length === 1 ? "" : "s"}: ${unresolved
+          .map((token) => `{{${token}}}`)
+          .join(", ")}. Please reselect the template or edit the message before sending.`,
       )}`,
     );
   }
@@ -509,6 +523,7 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   const templateKey = getTrimmedValue(formData.get("templateKey")) || null;
   const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
   const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
+  const selectedPollId = getTrimmedValue(formData.get("pollId")) || null;
   const selectedTeamIds = formData
     .getAll("teamIds")
     .map((value) => String(value).trim())
@@ -529,10 +544,18 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
   }
 
+  const pollTokens = ["pollOptions", "pollLink"];
+  const bodyUsesPoll = pollTokens.some((token) => body.includes(`{{${token}}}`));
+
+  if (bodyUsesPoll && !selectedPollId) {
+    redirect(`${from}?error=${encodeURIComponent("Choose a poll before sending a message that contains {{pollOptions}} or {{pollLink}}.")}`);
+  }
+
   redirectIfUnresolvedTemplatePlaceholder({
     from,
     subject: channel === NotificationChannel.EMAIL ? subject : null,
     body,
+    allowedTokens: selectedPollId ? pollTokens : [],
   });
 
   const league = await prisma.league.findUnique({
@@ -582,6 +605,7 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
         templateKey,
         ctaLabel,
         ctaUrl,
+        pollId: selectedPollId,
         origin: "league_communications_hub",
         originLabel: "Sent from league communications hub",
         metadata: {
