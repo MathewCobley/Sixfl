@@ -365,14 +365,10 @@ function parsePollButtons(rawBlock: string): PollButton[] {
     .map((line) => line.trim())
     .filter(Boolean)
     .flatMap((line) => {
-      const separatorIndex = line.lastIndexOf(":");
-      if (separatorIndex <= 0) return [];
+      const match = line.match(/^(.+?):\s*(https?:\/\/\S+)$/i);
+      if (!match?.[1] || !match?.[2]) return [];
 
-      const label = line.slice(0, separatorIndex).trim();
-      const url = line.slice(separatorIndex + 1).trim();
-
-      if (!label || !/^https?:\/\//i.test(url)) return [];
-      return [{ label, url }];
+      return [{ label: match[1].trim(), url: match[2].trim() }];
     });
 }
 
@@ -451,7 +447,7 @@ function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
             <td width="60" valign="middle" style="padding-right:14px;">
               <img
                 src="${escapeHtml(teamLogoUrl)}"
-                alt="${escapeHtml(teamName || "Team logo") }"
+                alt="${escapeHtml(teamName || "Team logo")}"
                 width="48"
                 height="48"
                 style="display:block;width:48px;height:48px;object-fit:contain;border:0;outline:none;text-decoration:none;"
