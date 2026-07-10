@@ -10,6 +10,8 @@ import {
 } from "@/lib/fixtures/confirmation-reminders";
 import { prisma } from "@/lib/prisma";
 
+type AutoFixtureConfirmationReminderMode = Exclude<FixtureConfirmationReminderMode, "manual">;
+
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
@@ -21,7 +23,7 @@ function addMinutes(date: Date, minutes: number) {
 function getReminderMode(input: {
   kickoffAt: Date;
   urgentCutoff: Date;
-}): FixtureConfirmationReminderMode {
+}): AutoFixtureConfirmationReminderMode {
   return input.kickoffAt <= input.urgentCutoff ? "auto24h" : "auto72h";
 }
 
@@ -68,7 +70,7 @@ export async function runFixtureConfirmationReminderJob() {
     byMode: {
       auto72h: 0,
       auto24h: 0,
-    },
+    } satisfies Record<AutoFixtureConfirmationReminderMode, number>,
     skippedByReason,
   };
 
