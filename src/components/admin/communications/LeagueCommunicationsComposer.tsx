@@ -35,6 +35,19 @@ type TeamOption = {
   smsReady: boolean;
 };
 
+type PollOption = {
+  id: string;
+  label: string;
+};
+
+type PollOptionGroup = {
+  id: string;
+  title: string;
+  question: string;
+  status: string;
+  options: PollOption[];
+};
+
 type Props = {
   leagueId: string;
   fromPath: string;
@@ -44,7 +57,11 @@ type Props = {
   fixtureLines: string[];
   emailTemplates: EmailTemplateOption[];
   smsTemplates: SmsTemplateOption[];
+  polls?: PollOptionGroup[];
 };
+
+const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
+const POLL_LINK_PLACEHOLDER = "{{pollLink}}";
 
 const FIXTURE_UPDATE_TEMPLATE: EmailTemplateOption = {
   id: "fixture-update-inline-template",
@@ -86,6 +103,13 @@ function resolveText(
   return text
     .replaceAll("{{leagueName}}", context.leagueName)
     .replaceAll("{{fixtures}}", getFixtureText(context.fixtureLines));
+}
+
+function appendSnippet(current: string, snippet: string) {
+  const trimmedCurrent = current.trimEnd();
+  const trimmedSnippet = snippet.trim();
+  if (!trimmedCurrent) return trimmedSnippet;
+  return `${trimmedCurrent}\n\n${trimmedSnippet}`;
 }
 
 function TeamSelectionCard({
@@ -163,12 +187,14 @@ export default function LeagueCommunicationsComposer({
   fixtureLines,
   emailTemplates,
   smsTemplates,
+  polls = [],
 }: Props) {
   const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState("");
   const [smsBody, setSmsBody] = useState("");
+  const [selectedPollId, setSelectedPollId] = useState("");
   const [selectedEmailTeamIds, setSelectedEmailTeamIds] = useState<string[]>(() =>
     teams.map((team) => team.id),
   );
@@ -196,6 +222,11 @@ export default function LeagueCommunicationsComposer({
     () => smsTemplates.find((template) => template.id === selectedSmsTemplateId) ?? null,
     [smsTemplates, selectedSmsTemplateId],
   );
+  const selectedPoll = useMemo(
+    () => polls.find((poll) => poll.id === selectedPollId) ?? null,
+    [polls, selectedPollId],
+  );
+  const emailNeedsPoll = emailBody.includes(POLL_OPTIONS_PLACEHOLDER) || emailBody.includes(POLL_LINK_PLACEHOLDER);
 
   useEffect(() => {
     setSelectedEmailTeamIds((current) => {
@@ -268,6 +299,7 @@ export default function LeagueCommunicationsComposer({
         <input type="hidden" name="templateKey" value={selectedEmailTemplate?.key || ""} />
         <input type="hidden" name="ctaLabel" value={selectedEmailTemplate?.ctaLabel || ""} />
         <input type="hidden" name="ctaUrl" value={selectedEmailTemplate?.ctaUrl || ""} />
+        <input type="hidden" name="pollId" value={selectedPollId} />
         {selectedEmailTeamIds.map((teamId) => (
           <input key={teamId} type="hidden" name="teamIds" value={teamId} />
         ))}
@@ -298,6 +330,64 @@ export default function LeagueCommunicationsComposer({
             availabilityKey="emailReady"
           />
 
+          <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-cyan-100">Poll options</div>
+                <p className="mt-1 text-xs leading-5 text-cyan-100/70">
+                  Choose a poll here if the email uses {POLL_OPTIONS_PLACEHOLDER} or {POLL_LINK_PLACEHOLDER}. Each team gets its own unique voting link.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEmailBody((current) => appendSnippet(current, POLL_OPTIONS_PLACEHOLDER))}
+                  disabled={!selectedPollId}
+                  className="rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Insert poll option buttons
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmailBody((current) => appendSnippet(current, POLL_LINK_PLACEHOLDER))}
+                  disabled={!selectedPollId}
+                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Insert full poll link
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
+              <select
+                value={selectedPollId}
+                onChange={(event) => setSelectedPollId(event.target.value)}
+                className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
+              >
+                <option value="">No poll selected</option>
+                {polls.map((poll) => (
+                  <option key={poll.id} value={poll.id}>
+                    {poll.title} · {poll.options.length} option{poll.options.length === 1 ? "" : "s"}
+                  </option>
+                ))}
+              </select>
+
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/50">
+                {selectedPoll
+                  ? `${selectedPoll.question} · ${selectedPoll.options.map((option) => option.label).join(" / ")}`
+                  : polls.length === 0
+                    ? "No polls found. Create one under Admin → Polls first."
+                    : "Select a poll, then insert the buttons into the message."}
+              </div>
+            </div>
+
+            {emailNeedsPoll && !selectedPollId ? (
+              <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                This email contains a poll placeholder. Select a poll before queueing.
+              </div>
+            ) : null}
+          </div>
+
           <input
             name="subject"
             value={emailSubject}
@@ -317,7 +407,7 @@ export default function LeagueCommunicationsComposer({
 
         <button
           type="submit"
-          disabled={selectedEmailTeamIds.length === 0}
+          disabled={selectedEmailTeamIds.length === 0 || (emailNeedsPoll && !selectedPollId)}
           className="mt-4 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Queue league email
