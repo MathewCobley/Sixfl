@@ -5,6 +5,7 @@
 import Link from "next/link";
 import AdminCard from "@/components/admin/AdminCard";
 import EmailTemplateForm from "@/components/admin/email-templates/EmailTemplateForm";
+import EmailTemplatePollBridge from "@/components/admin/email-templates/EmailTemplatePollBridge";
 import SmsTemplateForm from "@/components/admin/sms-templates/SmsTemplateForm";
 import { createEmailTemplateAction } from "@/app/(admin)/admin/email-templates/actions";
 import { createSmsTemplateAction, createSystemSmsTemplateAction } from "@/app/(admin)/admin/sms-templates/actions";
@@ -89,9 +90,17 @@ export default async function NewTemplatePage({ searchParams }: { searchParams: 
         </section>
 
         {selectedType === "system" ? (
-          selectedChannel === "EMAIL" ? <EmailTemplateForm mode="create" action={createSystemEmailTemplateAction} /> : <SmsTemplateForm mode="create" action={createSystemSmsTemplateAction} />
+          selectedChannel === "EMAIL" ? (
+            <>
+              <EmailTemplatePollBridge />
+              <EmailTemplateForm mode="create" action={createSystemEmailTemplateAction} />
+            </>
+          ) : <SmsTemplateForm mode="create" action={createSystemSmsTemplateAction} />
         ) : selectedChannel === "EMAIL" ? (
-          <EmailTemplateForm mode="create" action={createEmailTemplateAction} />
+          <>
+            <EmailTemplatePollBridge />
+            <EmailTemplateForm mode="create" action={createEmailTemplateAction} />
+          </>
         ) : (
           <SmsTemplateForm mode="create" action={createSmsTemplateAction} />
         )}
