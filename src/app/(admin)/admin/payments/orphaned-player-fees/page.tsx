@@ -7,6 +7,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import {
+  getPlayerMatchFeeSnapshots,
+  recoverPlayerMatchFeeSnapshotFromNotifications,
+} from "@/lib/payments/player-match-fee-snapshots";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -41,11 +45,6 @@ function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-function appendParam(path: string, key: string, value: string) {
-  const separator = path.includes("?") ? "&" : "?";
-  return `${path}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-}
-
 function getRepairHref(params: Record<string, string | null | undefined>) {
   const searchParams = new URLSearchParams();
 
@@ -77,13 +76,6 @@ async function attachOrphanedPlayerFeeAction(formData: FormData) {
       fixtureId: true,
       teamMemberId: true,
       prospectId: true,
-      fixture: {
-        select: {
-          id: true,
-          homeTeam: { select: { name: true } },
-          awayTeam: { select: { name: true } },
-        },
-      },
     },
   });
 
@@ -173,11 +165,37 @@ async function attachOrphanedPlayerFeeAction(formData: FormData) {
   );
 }
 
+async function recoverSnapshotAction(formData: FormData) {
+  "use server";
+
+  await requireAdmin();
+  const feeId = getString(formData, "feeId");
+  if (!feeId) redirect(getRepairHref({ error: "fee_not_found" }));
+
+  const snapshot = await recoverPlayerMatchFeeSnapshotFromNotifications(feeId);
+
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/payments/orphaned-player-fees");
+
+  if (!snapshot?.name && !snapshot?.email && !snapshot?.phone) {
+    redirect(getRepairHref({ error: "no_recovery", feeId }));
+  }
+
+  redirect(getRepairHref({ saved: "recovered", feeId, user: snapshot.name ?? snapshot.email ?? snapshot.phone }));
+}
+
 function getNotice(params: SearchParams) {
   if (params.saved === "reattached") {
     return {
       tone: "success" as const,
       text: `Payment reattached${params.user ? ` to ${params.user}` : ""}.`,
+    };
+  }
+
+  if (params.saved === "recovered") {
+    return {
+      tone: "success" as const,
+      text: `Original player details recovered${params.user ? `: ${params.user}` : ""}.`,
     };
   }
 
@@ -195,6 +213,8 @@ function getNotice(params: SearchParams) {
         tone: "error" as const,
         text: "That user already has a fee for this fixture. Do not attach this orphan until the duplicate fee is checked.",
       };
+    case "no_recovery":
+      return { tone: "error" as const, text: "No old notification recipient was found for that fee." };
     default:
       return null;
   }
@@ -229,6 +249,7 @@ export default async function OrphanedPlayerFeesPage({
       },
     },
   });
+  const snapshotByFeeId = await getPlayerMatchFeeSnapshots(orphanedFees.map((fee) => fee.id));
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-6 py-6">
@@ -239,7 +260,7 @@ export default async function OrphanedPlayerFeesPage({
           </Link>
           <h1 className="mt-4 text-3xl font-semibold text-white">Orphaned player fees</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-            These are open player payment rows where the original squad player/prospect link has been lost, usually after a duplicate lead or prospect was deleted. Reattach the fee to the real user account.
+            These are open player payment rows where the original squad player/prospect link has been lost. If available, SIXFL now shows the saved or recovered player snapshot so historic charges still make sense.
           </p>
         </div>
         <span className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100">
@@ -272,6 +293,9 @@ export default async function OrphanedPlayerFeesPage({
             orphanedFees.map((fee) => {
               const fixtureName = `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`;
               const highlighted = sp.feeId === fee.id;
+              const snapshot = snapshotByFeeId.get(fee.id);
+              const recoveredName = snapshot?.name || snapshot?.email || snapshot?.phone || null;
+              const recoveredContact = [snapshot?.email, snapshot?.phone].filter(Boolean).join(" · ");
 
               return (
                 <article
@@ -284,10 +308,13 @@ export default async function OrphanedPlayerFeesPage({
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="text-base font-semibold text-white">
-                        {fee.team.name} · {formatMoney(fee.amountPence)}
+                        {recoveredName ?? fee.team.name} · {formatMoney(fee.amountPence)}
                       </div>
+                      {recoveredContact ? (
+                        <div className="mt-1 text-sm text-emerald-100/70">Recovered contact: {recoveredContact}</div>
+                      ) : null}
                       <div className="mt-1 text-sm text-white/55">
-                        {fixtureName} · {formatFixtureDate(fee.fixture.kickoffAt)}
+                        {fee.team.name} · {fixtureName} · {formatFixtureDate(fee.fixture.kickoffAt)}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs">
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-white/55">
@@ -296,29 +323,48 @@ export default async function OrphanedPlayerFeesPage({
                         <span className="rounded-full border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-red-100">
                           Missing player link
                         </span>
+                        {recoveredName ? (
+                          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-100">
+                            Snapshot available
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 
-                    <form action={attachOrphanedPlayerFeeAction} className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/20 p-3">
-                      <input type="hidden" name="feeId" value={fee.id} />
-                      <label className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                        Reattach to user ID / email / exact name
-                      </label>
-                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                        <input
-                          name="userLookup"
-                          defaultValue={sp.feeId === fee.id ? sp.user ?? "" : ""}
-                          placeholder="e.g. Liam Craig user ID or email"
-                          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-                        >
-                          Attach fee
-                        </button>
-                      </div>
-                    </form>
+                    <div className="flex w-full max-w-xl flex-col gap-3">
+                      {!recoveredName ? (
+                        <form action={recoverSnapshotAction} className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3">
+                          <input type="hidden" name="feeId" value={fee.id} />
+                          <button
+                            type="submit"
+                            className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
+                          >
+                            Recover from old notification
+                          </button>
+                        </form>
+                      ) : null}
+
+                      <form action={attachOrphanedPlayerFeeAction} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <input type="hidden" name="feeId" value={fee.id} />
+                        <label className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                          Reattach to user ID / email / exact name
+                        </label>
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                          <input
+                            name="userLookup"
+                            defaultValue={sp.feeId === fee.id ? sp.user ?? recoveredContact ?? "" : recoveredContact ?? ""}
+                            placeholder="e.g. Liam Craig user ID or email"
+                            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
+                          />
+                          <button
+                            type="submit"
+                            className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                          >
+                            Attach fee
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
                 </article>
               );
