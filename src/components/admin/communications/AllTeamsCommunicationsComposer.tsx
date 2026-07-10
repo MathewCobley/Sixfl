@@ -39,15 +39,31 @@ type TeamOption = {
   smsReady: boolean;
 };
 
+type PollOption = {
+  id: string;
+  label: string;
+};
+
+type PollOptionGroup = {
+  id: string;
+  title: string;
+  question: string;
+  status: string;
+  options: PollOption[];
+};
+
 type Props = {
   fromPath: string;
   teams: TeamOption[];
   emailTemplates: EmailTemplateOption[];
   smsTemplates: SmsTemplateOption[];
+  polls?: PollOptionGroup[];
 };
 
 const ALL_LEAGUES_VALUE = "all";
 const NO_LEAGUE_LABEL = "No league assigned";
+const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
+const POLL_LINK_PLACEHOLDER = "{{pollLink}}";
 
 const DEFAULT_SUMMER_LEAGUE_TEMPLATE: EmailTemplateOption = {
   id: "summer-league-returning-teams-inline-template",
@@ -352,6 +368,7 @@ export default function AllTeamsCommunicationsComposer({
   teams,
   emailTemplates,
   smsTemplates,
+  polls = [],
 }: Props) {
   const [selectedChannel, setSelectedChannel] = useState<Channel>("EMAIL");
   const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState(DEFAULT_SUMMER_LEAGUE_TEMPLATE.id);
@@ -359,6 +376,7 @@ export default function AllTeamsCommunicationsComposer({
   const [emailBody, setEmailBody] = useState(DEFAULT_SUMMER_LEAGUE_TEMPLATE.body);
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState(DEFAULT_TEAM_SMS_TEMPLATE.id);
   const [smsBody, setSmsBody] = useState(DEFAULT_TEAM_SMS_TEMPLATE.body);
+  const [selectedPollId, setSelectedPollId] = useState("");
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState(ALL_LEAGUES_VALUE);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(() =>
     teams.filter((team) => team.emailReady).map((team) => team.id),
@@ -384,6 +402,10 @@ export default function AllTeamsCommunicationsComposer({
       smsTemplateOptions.find((template) => template.id === selectedSmsTemplateId) ??
       DEFAULT_TEAM_SMS_TEMPLATE,
     [selectedSmsTemplateId, smsTemplateOptions],
+  );
+  const selectedPoll = useMemo(
+    () => polls.find((poll) => poll.id === selectedPollId) ?? null,
+    [polls, selectedPollId],
   );
 
   useEffect(() => {
@@ -442,6 +464,23 @@ export default function AllTeamsCommunicationsComposer({
     );
   }
 
+  function insertTextIntoBody(textToInsert: string) {
+    if (selectedChannel === "SMS") {
+      setSmsBody((current) => `${current.trim()}\n\n${textToInsert}`.trim());
+      return;
+    }
+
+    setEmailBody((current) => `${current.trim()}\n\n${textToInsert}`.trim());
+  }
+
+  function handleInsertPollOptions() {
+    insertTextIntoBody(POLL_OPTIONS_PLACEHOLDER);
+  }
+
+  function handleInsertPollLink() {
+    insertTextIntoBody(POLL_LINK_PLACEHOLDER);
+  }
+
   const selectedEmailReadyCount = selectedTeamIds.filter((teamId) => {
     const team = teams.find((item) => item.id === teamId);
     return Boolean(team?.emailReady);
@@ -457,11 +496,14 @@ export default function AllTeamsCommunicationsComposer({
   const selectedBody = selectedChannel === "SMS" ? smsBody : emailBody;
   const selectedSubject = selectedChannel === "SMS" ? "" : emailSubject;
   const channelLabel = getChannelLabel(selectedChannel);
+  const bodyContainsPollPlaceholder =
+    selectedBody.includes(POLL_OPTIONS_PLACEHOLDER) || selectedBody.includes(POLL_LINK_PLACEHOLDER);
   const canSubmit =
     selectedTeamIds.length > 0 &&
     selectedReadyCount > 0 &&
     selectedBody.trim().length > 0 &&
-    (selectedChannel === "SMS" || selectedSubject.trim().length > 0);
+    (selectedChannel === "SMS" || selectedSubject.trim().length > 0) &&
+    (!bodyContainsPollPlaceholder || Boolean(selectedPollId));
 
   return (
     <form
@@ -478,6 +520,7 @@ export default function AllTeamsCommunicationsComposer({
         value={selectedChannel === "SMS" ? "" : selectedEmailTemplate.ctaLabel || ""}
       />
       <input type="hidden" name="ctaUrl" value={selectedTemplate.ctaUrl || ""} />
+      <input type="hidden" name="pollId" value={selectedPollId} />
       <input type="hidden" name="selectedLeagueFilter" value={selectedLeagueFilter} />
       <input type="hidden" name="subject" value={selectedSubject} />
       <input type="hidden" name="body" value={selectedBody} />
@@ -549,6 +592,64 @@ export default function AllTeamsCommunicationsComposer({
           onClear={() => setSelectedTeamIds([])}
         />
 
+        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-cyan-100">Poll options</div>
+              <p className="mt-1 text-xs leading-5 text-cyan-100/70">
+                Choose an existing poll and insert its options into this normal team message. Each selected team gets their own unique one-click voting links automatically.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleInsertPollOptions}
+                disabled={!selectedPollId}
+                className="rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Insert poll option buttons
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertPollLink}
+                disabled={!selectedPollId}
+                className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Insert full poll link
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
+            <select
+              value={selectedPollId}
+              onChange={(event) => setSelectedPollId(event.target.value)}
+              className="h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
+            >
+              <option value="">No poll selected</option>
+              {polls.map((poll) => (
+                <option key={poll.id} value={poll.id}>
+                  {poll.title} · {poll.options.length} option{poll.options.length === 1 ? "" : "s"}
+                </option>
+              ))}
+            </select>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/50">
+              {selectedPoll
+                ? `${selectedPoll.question} · ${selectedPoll.options.map((option) => option.label).join(" / ")}`
+                : polls.length === 0
+                  ? "No polls found. Create one under Admin → Polls first."
+                  : "Select a poll, then insert the buttons into the message."}
+            </div>
+          </div>
+
+          {bodyContainsPollPlaceholder && !selectedPollId ? (
+            <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              This message contains a poll placeholder. Select a poll before queueing.
+            </div>
+          ) : null}
+        </div>
+
         {selectedChannel === "EMAIL" ? (
           <input
             value={emailSubject}
@@ -572,7 +673,7 @@ export default function AllTeamsCommunicationsComposer({
 
         {selectedChannel === "SMS" ? (
           <p className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 text-xs leading-5 text-sky-100/85">
-            SMS sends only to teams with a saved mobile number. The SIXFL SMS signature and quiet-hours handling are applied by the notification system.
+            SMS sends only to teams with a saved mobile number. Poll links can be inserted, but full option buttons are best used in email because SMS length is limited.
           </p>
         ) : null}
       </div>
