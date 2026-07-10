@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
+import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
 import { getPhoneDisplayValue } from "@/lib/notifications/phone";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
@@ -21,6 +22,9 @@ import { createPlayerInterestResponseToken } from "@/lib/player-interest/respons
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
+
+const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
+const POLL_LINK_PLACEHOLDER = "{{pollLink}}";
 
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -68,6 +72,10 @@ function parseRecipientValue(value: string) {
   const [type, id] = value.split(":");
   if (type === "teamMember" || type === "prospect") return { type, id: id || "" } as const;
   return { type: "team", id: "" } as const;
+}
+
+function messageNeedsPoll(body: string) {
+  return body.includes(POLL_OPTIONS_PLACEHOLDER) || body.includes(POLL_LINK_PLACEHOLDER);
 }
 
 function responseUrls(input: { teamId: string; type: "team" | "teamMember" | "prospect"; id: string }) {
@@ -253,6 +261,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   const templateKey = text(formData.get("templateKey")) || null;
   const ctaLabel = text(formData.get("ctaLabel")) || null;
   const ctaUrl = text(formData.get("ctaUrl")) || null;
+  const selectedPollId = text(formData.get("pollId")) || null;
   const claimCode = text(formData.get("claimCode"));
   const claimLink = text(formData.get("claimLink"));
   const captainDashboardUrl = text(formData.get("captainDashboardUrl")) || claimLink;
@@ -277,11 +286,18 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: "Email subject is required." }));
   }
 
+  const hasPollPlaceholder = messageNeedsPoll(body);
+  const usesPoll = Boolean(selectedPollId || hasPollPlaceholder);
+  const parsedRecipients = Array.from(new Set(recipientValues)).map((value) => ({ value, parsed: parseRecipientValue(value) }));
+
+  if (usesPoll && parsedRecipients.some((item) => item.parsed.type !== "team")) {
+    redirect(appendRedirectParams(from, { error: "Poll templates can only be sent to the team contact. Untick squad/prospect recipients before sending a poll." }));
+  }
+
   let queuedCount = 0;
   let skippedMissingContactCount = 0;
 
-  for (const recipientValue of Array.from(new Set(recipientValues))) {
-    const parsed = parseRecipientValue(recipientValue);
+  for (const { parsed } of parsedRecipients) {
     const recipientContext = await getTeamCommunicationRecipientContext({
       teamId,
       recipientType: parsed.type,
@@ -311,6 +327,38 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       noResponseUrl: urls.noResponseUrl,
     };
     const isTransactional = !isMarketingMessage;
+
+    if (parsed.type === "team" && usesPoll) {
+      const result = await sendTeamBroadcastMessage({
+        teamId,
+        channel,
+        subject: channel === NotificationChannel.EMAIL ? subject : null,
+        body,
+        templateId,
+        templateKey,
+        ctaLabel,
+        ctaUrl,
+        pollId: selectedPollId,
+        origin: "team_communications_hub",
+        originLabel: isTransactional
+          ? "Sent from communications hub as service message"
+          : "Sent from communications hub as marketing message",
+        metadata: {
+          isMarketingMessage,
+          isTransactional,
+          yesResponseUrl: urls.yesResponseUrl,
+          noResponseUrl: urls.noResponseUrl,
+          bulkRecipientCount: recipientValues.length,
+          ...recipientContext.metadata,
+        },
+        variables,
+        createdByUserId: user?.id ?? null,
+      });
+
+      if (result.skipped) skippedMissingContactCount += 1;
+      else queuedCount += 1;
+      continue;
+    }
 
     const dispatch = await queueDirectNotification({
       recipientId: recipientContext.recipient.id,
