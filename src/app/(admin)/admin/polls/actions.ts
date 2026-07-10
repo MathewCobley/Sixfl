@@ -32,6 +32,11 @@ function parseOptions(value: string) {
     .filter((line, index, arr) => arr.findIndex((other) => other.toLowerCase() === line.toLowerCase()) === index);
 }
 
+function parsePollStatus(value: FormDataEntryValue | null) {
+  const status = clean(value).toUpperCase();
+  return ["DRAFT", "ACTIVE", "CLOSED"].includes(status) ? status : "ACTIVE";
+}
+
 function buildPollRedirect(pollId: string, params?: Record<string, string | number | null | undefined>) {
   const searchParams = new URLSearchParams();
 
@@ -94,6 +99,77 @@ export async function createPollAction(formData: FormData) {
 
   revalidatePath("/admin/polls");
   redirect(buildPollRedirect(pollId, { created: 1 }));
+}
+
+export async function updatePollAction(formData: FormData) {
+  await requireAdmin();
+
+  const pollId = clean(formData.get("pollId"));
+  const title = clean(formData.get("title"));
+  const question = clean(formData.get("question"));
+  const status = parsePollStatus(formData.get("status"));
+  const optionIds = formData.getAll("optionId").map((value) => clean(value)).filter(Boolean);
+  const optionLabels = formData.getAll("optionLabel").map((value) => clean(value));
+  const newOptions = parseOptions(clean(formData.get("newOptions")));
+
+  if (!pollId || !title || !question) {
+    redirect(pollId ? `/admin/polls/${pollId}/edit?error=invalid_poll` : "/admin/polls?error=invalid_poll");
+  }
+
+  const pollRows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id"
+    FROM "SIXFLPoll"
+    WHERE "id" = ${pollId}
+    LIMIT 1
+  `);
+
+  if (!pollRows[0]) redirect("/admin/polls?error=poll_not_found");
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "SIXFLPoll"
+      SET "title" = ${title},
+          "question" = ${question},
+          "status" = ${status},
+          "updatedAt" = ${now}
+      WHERE "id" = ${pollId}
+    `);
+
+    for (const [index, optionId] of optionIds.entries()) {
+      const label = optionLabels[index]?.trim();
+      if (!label) continue;
+
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "SIXFLPollOption"
+        SET "label" = ${label},
+            "sortOrder" = ${index + 1},
+            "updatedAt" = ${now}
+        WHERE "id" = ${optionId}
+          AND "pollId" = ${pollId}
+      `);
+    }
+
+    const [maxSortRow] = await tx.$queryRaw<Array<{ maxSortOrder: number | null }>>(Prisma.sql`
+      SELECT MAX("sortOrder")::int AS "maxSortOrder"
+      FROM "SIXFLPollOption"
+      WHERE "pollId" = ${pollId}
+    `);
+    const startSort = Number(maxSortRow?.maxSortOrder ?? optionIds.length);
+
+    for (const [index, label] of newOptions.entries()) {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "SIXFLPollOption" ("id", "pollId", "label", "sortOrder", "createdAt", "updatedAt")
+        VALUES (${randomUUID()}, ${pollId}, ${label}, ${startSort + index + 1}, ${now}, ${now})
+      `);
+    }
+  });
+
+  revalidatePath("/admin/polls");
+  revalidatePath(`/admin/polls/${pollId}`);
+  revalidatePath(`/admin/polls/${pollId}/edit`);
+  redirect(buildPollRedirect(pollId, { updated: 1 }));
 }
 
 export async function addPollRecipientAction(formData: FormData) {
