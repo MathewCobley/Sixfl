@@ -6,7 +6,7 @@ import "./globals.css";
 import "./mobile.css";
 import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
 import Providers from "./providers";
 
@@ -99,7 +99,9 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <script dangerouslySetInnerHTML={{ __html: safeClosestPatch }} />
         <Providers>
-          <AdminPaymentsPageBridge />
+          <Suspense fallback={null}>
+            <AdminPaymentsPageBridge />
+          </Suspense>
           {children}
         </Providers>
       </body>
