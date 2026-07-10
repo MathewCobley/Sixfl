@@ -7,6 +7,7 @@ import "./mobile.css";
 import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import type { ReactNode } from "react";
+import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
 import Providers from "./providers";
 
 export const metadata = {
@@ -97,7 +98,10 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <script dangerouslySetInnerHTML={{ __html: safeClosestPatch }} />
-        <Providers>{children}</Providers>
+        <Providers>
+          <AdminPaymentsPageBridge />
+          {children}
+        </Providers>
       </body>
     </html>
   );
