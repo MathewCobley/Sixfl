@@ -2,6 +2,8 @@
 // File: src/lib/payments/player-match-fee-snapshots.ts
 // ========================================
 
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 export type PlayerMatchFeeSnapshot = {
@@ -68,7 +70,7 @@ export async function getPlayerMatchFeeSnapshots(feeIds: string[]) {
       "playerEmailSnapshot",
       "playerPhoneSnapshot"
     FROM "PlayerMatchFee"
-    WHERE "id" = ANY(${uniqueFeeIds})
+    WHERE "id" IN (${Prisma.join(uniqueFeeIds)})
   `;
 
   return new Map(
