@@ -29,7 +29,8 @@ export const metadata = {
   title: "Admin Payments | SIXFL",
 };
 
-type PaymentsViewFilter = "all" | "playerFees" | "teamCharges" | "recentPayments";
+type PaymentsViewFilter = "none" | "all" | "playerFees" | "teamCharges" | "recentPayments";
+type PaymentsActionFilter = "none" | "createCharge" | "recordPayment";
 
 type PaymentsSearchParams = {
   created?: string;
@@ -39,6 +40,7 @@ type PaymentsSearchParams = {
   teamId?: string;
   view?: string;
   limit?: string;
+  action?: string;
 };
 
 const paymentMethodValues = new Set<PaymentMethod>(Object.values(PaymentMethod));
@@ -46,10 +48,16 @@ const ADMIN_CHASE_THRESHOLD_MS = 72 * 60 * 60 * 1000;
 const DEFAULT_LIST_LIMIT = 10;
 const LIST_LIMIT_OPTIONS = [10, 25, 50, 100];
 const VIEW_OPTIONS: Array<{ value: PaymentsViewFilter; label: string }> = [
+  { value: "none", label: "Choose a payment list" },
   { value: "all", label: "All payment lists" },
   { value: "playerFees", label: "Player fees only" },
   { value: "teamCharges", label: "Team charges only" },
   { value: "recentPayments", label: "Recent payments only" },
+];
+const ACTION_OPTIONS: Array<{ value: PaymentsActionFilter; label: string; description: string }> = [
+  { value: "none", label: "No form open", description: "Keep charge and payment forms hidden." },
+  { value: "createCharge", label: "Create charge", description: "Open the form to add a new team charge." },
+  { value: "recordPayment", label: "Record payment", description: "Open the form to record a team payment." },
 ];
 
 function isPaymentMethod(value: string): value is PaymentMethod {
@@ -199,11 +207,16 @@ function matchesSearch(search: string, values: Array<string | number | Date | nu
 }
 
 function parseViewFilter(value: string | undefined): PaymentsViewFilter {
-  if (value === "playerFees" || value === "teamCharges" || value === "recentPayments") {
+  if (value === "all" || value === "playerFees" || value === "teamCharges" || value === "recentPayments") {
     return value;
   }
 
-  return "all";
+  return "none";
+}
+
+function parseActionFilter(value: string | undefined): PaymentsActionFilter {
+  if (value === "createCharge" || value === "recordPayment") return value;
+  return "none";
 }
 
 function parseListLimit(value: string | undefined) {
@@ -216,12 +229,16 @@ function buildFilterQuery(input: {
   teamId: string;
   view: PaymentsViewFilter;
   limit: number;
+  action?: PaymentsActionFilter;
+  paymentChargeId?: string | null;
 }) {
   const params = new URLSearchParams();
   if (input.q) params.set("q", input.q);
   if (input.teamId) params.set("teamId", input.teamId);
-  if (input.view !== "all") params.set("view", input.view);
+  if (input.view !== "none") params.set("view", input.view);
   if (input.limit !== DEFAULT_LIST_LIMIT) params.set("limit", String(input.limit));
+  if (input.action && input.action !== "none") params.set("action", input.action);
+  if (input.paymentChargeId) params.set("paymentChargeId", input.paymentChargeId);
   const query = params.toString();
   return query ? `/admin/payments?${query}` : "/admin/payments";
 }
@@ -498,8 +515,17 @@ export default async function AdminPaymentsPage({
   const normalisedQuery = normaliseSearch(searchQuery);
   const selectedTeamId = String(sp.teamId ?? "").trim();
   const selectedView = parseViewFilter(sp.view);
+  const selectedAction = parseActionFilter(sp.action);
+  const selectedPaymentChargeId = String(sp.paymentChargeId ?? "").trim();
   const listLimit = parseListLimit(sp.limit);
-  const hasFilters = Boolean(searchQuery || selectedTeamId || selectedView !== "all" || listLimit !== DEFAULT_LIST_LIMIT);
+  const hasFilters = Boolean(
+    searchQuery ||
+    selectedTeamId ||
+    selectedView !== "none" ||
+    selectedAction !== "none" ||
+    selectedPaymentChargeId ||
+    listLimit !== DEFAULT_LIST_LIMIT,
+  );
 
   const [teams, charges, transactions, openPlayerFeesRaw, paidPlayerMatchFees] = await Promise.all([
     prisma.team.findMany({
@@ -599,17 +625,13 @@ export default async function AdminPaymentsPage({
       const aOpen = !isChargeDisplayClosed(a.summary.displayStatus) && a.summary.outstandingPence > 0;
       const bOpen = !isChargeDisplayClosed(b.summary.displayStatus) && b.summary.outstandingPence > 0;
       if (aOpen !== bOpen) return aOpen ? -1 : 1;
-
       if (a.needsAdminChase !== b.needsAdminChase) return a.needsAdminChase ? -1 : 1;
-
       const aOutstanding = a.summary.outstandingPence > 0;
       const bOutstanding = b.summary.outstandingPence > 0;
       if (aOutstanding !== bOutstanding) return aOutstanding ? -1 : 1;
-
       const aDueSort = getChargeSortDate(a.charge.dueDate, a.charge.createdAt);
       const bDueSort = getChargeSortDate(b.charge.dueDate, b.charge.createdAt);
       if (aDueSort !== bDueSort) return aDueSort - bDueSort;
-
       return a.charge.createdAt.getTime() - b.charge.createdAt.getTime();
     });
 
@@ -722,7 +744,6 @@ export default async function AdminPaymentsPage({
   const visibleChargeRows = filteredChargeRows.slice(0, listLimit);
   const visibleTransactions = filteredTransactions.slice(0, listLimit);
   const filteredPlayerFeeOutstanding = filteredOpenPlayerFees.reduce((sum, fee) => sum + fee.amountPence, 0);
-  const filterQueryHref = buildFilterQuery({ q: searchQuery, teamId: selectedTeamId, view: selectedView, limit: listLimit });
   const showPlayerFees = selectedView === "all" || selectedView === "playerFees";
   const showTeamCharges = selectedView === "all" || selectedView === "teamCharges";
   const showRecentPayments = selectedView === "all" || selectedView === "recentPayments";
@@ -738,7 +759,6 @@ export default async function AdminPaymentsPage({
     label: `${row.charge.team.name} · ${row.charge.title} · ${formatMoney(row.summary.outstandingPence)}`,
   }));
 
-  const selectedPaymentChargeId = String(sp.paymentChargeId ?? "").trim();
   const selectedPaymentChargeRow =
     openChargeRows.find((row) => row.charge.id === selectedPaymentChargeId) ?? null;
   const recordPaymentTeamId = selectedPaymentChargeRow?.charge.teamId ?? "";
@@ -809,21 +829,24 @@ export default async function AdminPaymentsPage({
       <section className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-100/70">Payment list filters</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Search and narrow the payment lists</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-100/70">Payment list selector</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Choose what payment list to show</h2>
             <p className="mt-2 text-sm text-sky-50/70">
-              The page now shows a limited number of rows by default. Search by player, team, email, fixture or reference, or use the selector to focus on one list.
+              No payment rows are shown until you choose a list. Search by player, team, email, fixture or reference once you know what you need.
             </p>
           </div>
 
           {hasFilters ? (
             <Link href="/admin/payments" className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-black/25 px-4 text-sm font-semibold text-white/75 transition hover:bg-black/35">
-              Clear filters
+              Reset page
             </Link>
           ) : null}
         </div>
 
         <form method="get" action="/admin/payments" className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_0.7fr_auto]">
+          {selectedAction !== "none" ? <input type="hidden" name="action" value={selectedAction} /> : null}
+          {selectedPaymentChargeId ? <input type="hidden" name="paymentChargeId" value={selectedPaymentChargeId} /> : null}
+
           <label className="space-y-1.5 text-sm font-semibold text-white">
             Search
             <input
@@ -869,11 +892,58 @@ export default async function AdminPaymentsPage({
         </form>
 
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-sky-50/75">
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Player fees: {filteredOpenPlayerFees.length} match{filteredOpenPlayerFees.length === 1 ? "" : "es"}</span>
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Team charges: {filteredChargeRows.length}</span>
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Recent payments: {filteredTransactions.length}</span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Matching player fees: {filteredOpenPlayerFees.length}</span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Matching team charges: {filteredChargeRows.length}</span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Matching recent payments: {filteredTransactions.length}</span>
         </div>
       </section>
+
+      <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-100/70">Payment actions</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Choose an admin action</h2>
+            <p className="mt-2 text-sm text-emerald-50/70">
+              Create charge and Record payment are hidden until selected, so the page stays clear.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            {ACTION_OPTIONS.map((option) => {
+              const href = buildFilterQuery({
+                q: searchQuery,
+                teamId: selectedTeamId,
+                view: selectedView,
+                limit: listLimit,
+                action: option.value,
+                paymentChargeId: option.value === "recordPayment" ? selectedPaymentChargeId : null,
+              });
+              const active = selectedAction === option.value;
+
+              return (
+                <Link
+                  key={option.value}
+                  href={href}
+                  className={[
+                    "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+                    active
+                      ? "border-emerald-300/35 bg-emerald-400/20 text-emerald-50"
+                      : "border-white/10 bg-black/25 text-white/70 hover:bg-black/35 hover:text-white",
+                  ].join(" ")}
+                  title={option.description}
+                >
+                  {option.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {selectedView === "none" ? (
+        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 text-sm leading-6 text-white/60">
+          Choose a payment list above to show player fees, team charges or recent payments.
+        </section>
+      ) : null}
 
       {showPlayerFees ? (
         <section className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-6">
@@ -882,7 +952,7 @@ export default async function AdminPaymentsPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-100/70">Player match fees</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">{formatMoney(filteredPlayerFeeOutstanding)} pending from players</h2>
               <p className="mt-2 max-w-3xl text-sm text-white/65">
-                Showing {visibleOpenPlayerFees.length} of {filteredOpenPlayerFees.length} matching open player fees. Use the search, team selector or row selector above to narrow this list.
+                Showing {visibleOpenPlayerFees.length} of {filteredOpenPlayerFees.length} matching open player fees.
               </p>
             </div>
             <span className="rounded-2xl border border-amber-400/25 bg-black/20 px-4 py-3 text-sm font-semibold text-amber-100">
@@ -927,43 +997,49 @@ export default async function AdminPaymentsPage({
         </section>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <form action={createChargeAction} className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-          <h2 className="text-xl font-semibold text-white">Create charge</h2>
-          <div className="mt-4 space-y-4">
-            <FormListboxField name="teamId" options={teamOptions} placeholder="Select team" />
-            <input type="text" name="title" placeholder="Charge title" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <textarea name="description" rows={4} placeholder="Optional description" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <input type="number" step="0.01" min="0" name="amountPounds" placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <input type="date" name="dueDate" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <button type="submit" className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">Create charge</button>
-          </div>
-        </form>
+      {selectedAction !== "none" ? (
+        <div className="grid gap-6 xl:grid-cols-2">
+          {selectedAction === "createCharge" ? (
+            <form action={createChargeAction} className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+              <h2 className="text-xl font-semibold text-white">Create charge</h2>
+              <div className="mt-4 space-y-4">
+                <FormListboxField name="teamId" options={teamOptions} placeholder="Select team" />
+                <input type="text" name="title" placeholder="Charge title" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <textarea name="description" rows={4} placeholder="Optional description" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <input type="number" step="0.01" min="0" name="amountPounds" placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <input type="date" name="dueDate" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <button type="submit" className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">Create charge</button>
+              </div>
+            </form>
+          ) : null}
 
-        <form id="record-payment" action={recordPaymentAction} className="scroll-mt-24 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-white">Record payment</h2>
-              <p className="mt-1 text-sm text-white/55">{recordPaymentHelpText}</p>
-            </div>
-            {selectedPaymentChargeRow ? (
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200">
-                Outstanding {formatMoney(selectedPaymentChargeRow.summary.outstandingPence)}
-              </span>
-            ) : null}
-          </div>
-          <div className="mt-4 space-y-4">
-            <FormListboxField name="teamId" value={recordPaymentTeamId} options={teamOptions} placeholder="Select team" />
-            <FormListboxField name="chargeId" value={recordPaymentChargeId} options={[{ value: "", label: "No linked charge" }, ...openChargeOptions]} placeholder="Optional linked charge" />
-            <input type="number" step="0.01" min="0" name="amountPounds" defaultValue={recordPaymentAmount} placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <FormListboxField name="method" value={PaymentMethod.BANK_TRANSFER} options={methodOptions} placeholder="Select payment method" />
-            <input type="text" name="reference" placeholder="Reference" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <textarea name="notes" rows={4} placeholder="Optional notes" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <input type="datetime-local" name="paidAt" defaultValue={defaultPaidAt} className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
-            <button type="submit" className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">Record payment</button>
-          </div>
-        </form>
-      </div>
+          {selectedAction === "recordPayment" ? (
+            <form id="record-payment" action={recordPaymentAction} className="scroll-mt-24 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Record payment</h2>
+                  <p className="mt-1 text-sm text-white/55">{recordPaymentHelpText}</p>
+                </div>
+                {selectedPaymentChargeRow ? (
+                  <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                    Outstanding {formatMoney(selectedPaymentChargeRow.summary.outstandingPence)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-4">
+                <FormListboxField name="teamId" value={recordPaymentTeamId} options={teamOptions} placeholder="Select team" />
+                <FormListboxField name="chargeId" value={recordPaymentChargeId} options={[{ value: "", label: "No linked charge" }, ...openChargeOptions]} placeholder="Optional linked charge" />
+                <input type="number" step="0.01" min="0" name="amountPounds" defaultValue={recordPaymentAmount} placeholder="Amount in pounds" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <FormListboxField name="method" value={PaymentMethod.BANK_TRANSFER} options={methodOptions} placeholder="Select payment method" />
+                <input type="text" name="reference" placeholder="Reference" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <textarea name="notes" rows={4} placeholder="Optional notes" className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <input type="datetime-local" name="paidAt" defaultValue={defaultPaidAt} className="w-full rounded-xl border border-white/10 bg-[#0d1428] px-4 py-3 text-sm text-white outline-none" />
+                <button type="submit" className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">Record payment</button>
+              </div>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
 
       {showTeamCharges ? (
         <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
@@ -1003,7 +1079,7 @@ export default async function AdminPaymentsPage({
                       {(canRecordPayment || canChaseTeamCharge || canVoidCharge) ? (
                         <div className="mt-4 flex flex-wrap gap-2">
                           {canRecordPayment ? (
-                            <Link href={`/admin/payments?paymentChargeId=${encodeURIComponent(row.charge.id)}#record-payment`} className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Record payment</Link>
+                            <Link href={`${buildFilterQuery({ q: searchQuery, teamId: selectedTeamId, view: selectedView, limit: listLimit, action: "recordPayment", paymentChargeId: row.charge.id })}#record-payment`} className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Record payment</Link>
                           ) : null}
                           {canChaseTeamCharge ? (
                             <form action={sendTeamChargeReminderAction}>
