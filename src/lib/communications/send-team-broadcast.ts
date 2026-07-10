@@ -79,27 +79,42 @@ function buildPollVoteUrl(token: string, optionId: string) {
   return `${getPublicSiteUrl()}/polls/${encodeURIComponent(token)}/vote/${encodeURIComponent(optionId)}`;
 }
 
-async function getPollForBroadcast(pollId: string | null | undefined): Promise<PollRow | null> {
-  const id = pollId?.trim();
-  if (!id) return null;
-
-  const [poll] = await prisma.$queryRaw<
-    Array<{ id: string; title: string; question: string; status: string }>
-  >(Prisma.sql`
-    SELECT "id", "title", "question", "status"
-    FROM "SIXFLPoll"
-    WHERE "id" = ${id}
-    LIMIT 1
-  `);
-
-  if (!poll) return null;
-
-  const options = await prisma.$queryRaw<PollOptionRow[]>(Prisma.sql`
+async function getPollOptions(pollId: string) {
+  return prisma.$queryRaw<PollOptionRow[]>(Prisma.sql`
     SELECT "id", "label", "sortOrder"
     FROM "SIXFLPollOption"
-    WHERE "pollId" = ${poll.id}
+    WHERE "pollId" = ${pollId}
     ORDER BY "sortOrder" ASC, "label" ASC
   `);
+}
+
+async function getPollForBroadcast(
+  pollId: string | null | undefined,
+  allowLatestFallback = false,
+): Promise<PollRow | null> {
+  const id = pollId?.trim();
+
+  const rows = id
+    ? await prisma.$queryRaw<Array<{ id: string; title: string; question: string; status: string }>>(Prisma.sql`
+        SELECT "id", "title", "question", "status"
+        FROM "SIXFLPoll"
+        WHERE "id" = ${id}
+        LIMIT 1
+      `)
+    : allowLatestFallback
+      ? await prisma.$queryRaw<Array<{ id: string; title: string; question: string; status: string }>>(Prisma.sql`
+          SELECT "id", "title", "question", "status"
+          FROM "SIXFLPoll"
+          WHERE "status" IN ('ACTIVE', 'DRAFT')
+          ORDER BY "updatedAt" DESC, "createdAt" DESC
+          LIMIT 1
+        `)
+      : [];
+
+  const poll = rows[0] ?? null;
+  if (!poll) return null;
+
+  const options = await getPollOptions(poll.id);
 
   return {
     ...poll,
@@ -175,11 +190,11 @@ async function resolvePollContent(input: {
   pollId?: string | null;
   team: TeamForPoll;
 }) {
-  const poll = await getPollForBroadcast(input.pollId);
   const needsPoll = messageNeedsPoll(input.body);
+  const poll = await getPollForBroadcast(input.pollId, needsPoll);
 
   if (needsPoll && !poll) {
-    throw new Error("This message contains {{pollOptions}} or {{pollLink}}, but no poll was selected.");
+    throw new Error("This message contains {{pollOptions}} or {{pollLink}}, but no poll was selected and no open poll could be found.");
   }
 
   if (!poll) {
