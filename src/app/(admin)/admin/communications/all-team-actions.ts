@@ -222,7 +222,7 @@ function buildPollOptionsBlock(input: { poll: PollRow; token: string }) {
     ...optionLines,
     POLL_OPTIONS_BLOCK_END,
     "",
-    `Open the poll / add a note: ${buildPollUrl(input.token)}`,
+    `Open the poll / change your answer: ${buildPollUrl(input.token)}`,
   ].join("\n");
 }
 
@@ -369,6 +369,8 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
             },
           })
         : null;
+      const pollOptions = poll && pollToken ? buildPollOptionsBlock({ poll, token: pollToken }) : "";
+      const pollLink = pollToken ? buildPollUrl(pollToken) : "";
       const teamBody = applyPollToMessage({ body, poll, token: pollToken });
 
       const result = await sendTeamBroadcastMessage({
@@ -388,6 +390,10 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
           channel === NotificationChannel.SMS
             ? "Sent from all-teams SMS picker"
             : "Sent from all-teams email picker",
+        variables: {
+          pollOptions,
+          pollLink,
+        },
         metadata: {
           broadcastType: channel === NotificationChannel.SMS ? "selected_teams_sms" : "selected_teams_email",
           selectedTeamCount: targetTeams.length,
@@ -396,6 +402,7 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
           leagueName: team.league ? leagueName : null,
           pollId: poll?.id ?? null,
           pollTitle: poll?.title ?? null,
+          pollToken,
         },
         createdByUserId: user?.id ?? null,
       });
