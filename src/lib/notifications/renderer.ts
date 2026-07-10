@@ -7,10 +7,23 @@ export type NotificationTemplateVariables = Record<
   string | number | boolean | null | undefined
 >;
 
+const SAFE_EMPTY_PLACEHOLDERS = new Set(["pollOptions", "pollLink"]);
+
 function normalizeValue(value: NotificationTemplateVariables[string]) {
   if (value === null || value === undefined) return "";
   if (typeof value === "boolean") return value ? "true" : "false";
   return String(value);
+}
+
+function stripSafeEmptyPlaceholders(value: string) {
+  let output = value;
+
+  for (const key of SAFE_EMPTY_PLACEHOLDERS) {
+    const pattern = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g");
+    output = output.replace(pattern, "");
+  }
+
+  return output.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function renderNotificationText(
@@ -25,7 +38,7 @@ export function renderNotificationText(
     output = output.replace(pattern, value);
   }
 
-  return output;
+  return stripSafeEmptyPlaceholders(output);
 }
 
 export function extractNotificationTokens(template: string) {
