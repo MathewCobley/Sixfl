@@ -4,13 +4,10 @@
 
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
-import {
-  queueFixtureConfirmationSmsReminder,
-  type FixtureConfirmationReminderMode,
-} from "@/lib/fixtures/confirmation-reminders";
+import { queueFixtureConfirmationSmsReminder } from "@/lib/fixtures/confirmation-reminders";
 import { prisma } from "@/lib/prisma";
 
-type AutoFixtureConfirmationReminderMode = Exclude<FixtureConfirmationReminderMode, "manual">;
+type AutoFixtureConfirmationReminderMode = "auto72h" | "auto24h";
 
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
@@ -25,6 +22,18 @@ function getReminderMode(input: {
   urgentCutoff: Date;
 }): AutoFixtureConfirmationReminderMode {
   return input.kickoffAt <= input.urgentCutoff ? "auto24h" : "auto72h";
+}
+
+function incrementModeCount(
+  byMode: Record<AutoFixtureConfirmationReminderMode, number>,
+  mode: AutoFixtureConfirmationReminderMode,
+) {
+  if (mode === "auto24h") {
+    byMode.auto24h += 1;
+    return;
+  }
+
+  byMode.auto72h += 1;
 }
 
 export async function runFixtureConfirmationReminderJob() {
@@ -61,16 +70,17 @@ export async function runFixtureConfirmationReminderJob() {
   });
 
   const skippedByReason: Record<string, number> = {};
+  const byMode: Record<AutoFixtureConfirmationReminderMode, number> = {
+    auto72h: 0,
+    auto24h: 0,
+  };
   const summary = {
     scannedFixtures: fixtures.length,
     scannedTeamFixtures: 0,
     queued: 0,
     alreadySent: 0,
     skipped: 0,
-    byMode: {
-      auto72h: 0,
-      auto24h: 0,
-    } satisfies Record<AutoFixtureConfirmationReminderMode, number>,
+    byMode,
     skippedByReason,
   };
 
@@ -101,7 +111,7 @@ export async function runFixtureConfirmationReminderJob() {
 
       if (result.ok && result.status === "queued") {
         summary.queued += 1;
-        summary.byMode[mode] += 1;
+        incrementModeCount(summary.byMode, mode);
         continue;
       }
 
