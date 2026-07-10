@@ -70,7 +70,8 @@ function injectPaymentStatusSelector() {
 
   const select = document.createElement("select");
   select.name = PAYMENT_STATUS_PARAM;
-  select.defaultValue = current;
+  select.value = current;
+  select.setAttribute("data-default-value", current);
   select.className = "h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none focus:border-sky-300/50";
 
   [
@@ -139,76 +140,104 @@ function applyPaymentStatusFilter() {
   const teamChargesSection = findSectionByHeading("Team charges");
   const recentPaymentsSection = findSectionByHeading("Recent payments");
 
-  hideSection(recentPaymentsSection, status === "due" || status === "overdue");
-  hideSection(playerFeesSection, status === "paid");
+  const playerRows = getListRows(playerFeesSection);
+  const teamRows = getListRows(teamChargesSection);
+  const recentPaymentRows = getListRows(recentPaymentsSection);
 
-  for (const row of getListRows(playerFeesSection)) {
+  let visiblePlayerRows = 0;
+  let visibleTeamRows = 0;
+  let visibleRecentRows = 0;
+
+  playerRows.forEach((row) => {
     const text = normaliseText(row.textContent);
-    const wasChased = text.includes("last request/chase:") && !text.includes("not sent yet");
+    const isPaid = text.includes("paid") && !text.includes("unpaid");
+    const isOverdue = text.includes("overdue") || text.includes("chase");
+    const isDue = text.includes("open") || text.includes("due") || text.includes("unpaid") || text.includes("outstanding");
 
-    if (status === "overdue") {
-      row.style.display = wasChased ? "" : "none";
-    } else if (status === "due") {
-      row.style.display = "";
-    } else {
-      row.style.display = status === "paid" ? "none" : "";
-    }
-  }
+    const show =
+      status === "paid"
+        ? isPaid
+        : status === "overdue"
+          ? isOverdue
+          : status === "due"
+            ? isDue && !isPaid
+            : true;
 
-  for (const row of getListRows(teamChargesSection)) {
+    row.style.display = show ? "" : "none";
+    if (show) visiblePlayerRows += 1;
+  });
+
+  teamRows.forEach((row) => {
     const text = normaliseText(row.textContent);
-    const isPaid = text.includes("paid") && !text.includes("awaiting payment") && !text.includes("outstanding £");
-    const isOverdue = text.includes("needs admin chase");
-    const isDue = text.includes("awaiting payment") && !isOverdue;
+    const isPaid = text.includes("paid") && !text.includes("part paid") && !text.includes("unpaid");
+    const isOverdue = text.includes("overdue") || text.includes("late") || text.includes("chase");
+    const isDue = text.includes("open") || text.includes("due") || text.includes("outstanding") || text.includes("part paid");
 
-    if (status === "paid") {
-      row.style.display = isPaid ? "" : "none";
-    } else if (status === "overdue") {
-      row.style.display = isOverdue ? "" : "none";
-    } else if (status === "due") {
-      row.style.display = isDue ? "" : "none";
-    } else {
-      row.style.display = "";
-    }
-  }
+    const show =
+      status === "paid"
+        ? isPaid
+        : status === "overdue"
+          ? isOverdue
+          : status === "due"
+            ? isDue && !isPaid
+            : true;
+
+    row.style.display = show ? "" : "none";
+    if (show) visibleTeamRows += 1;
+  });
+
+  recentPaymentRows.forEach((row) => {
+    const text = normaliseText(row.textContent);
+    const show = status === "paid" ? true : status === "";
+    row.style.display = show ? "" : "none";
+    if (show) visibleRecentRows += 1;
+  });
+
+  hideSection(playerFeesSection, status === "paid" || visiblePlayerRows === 0);
+  hideSection(teamChargesSection, status === "paid" || visibleTeamRows === 0);
+  hideSection(recentPaymentsSection, status !== "paid" || visibleRecentRows === 0);
+}
+
+function restoreReturnToAfterChase(pathname: string | null, search: string, replace: (href: string) => void) {
+  if (!isAdminPaymentsPath(pathname)) return;
+
+  const params = new URLSearchParams(search);
+  if (!params.get("created") && !params.get("error")) return;
+  if (hasPaymentViewState(params)) return;
+
+  const returnTo = sessionStorage.getItem(RETURN_TO_KEY);
+  if (!returnTo) return;
+  sessionStorage.removeItem(RETURN_TO_KEY);
+
+  if (!returnTo.startsWith("/admin/payments")) return;
+  replace(mergeNoticeIntoReturnTo(returnTo, search));
 }
 
 export default function AdminPaymentsPageBridge() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const search = searchParams.toString();
 
   useEffect(() => {
     if (!isAdminPaymentsPath(pathname)) return;
 
-    const params = new URLSearchParams(window.location.search);
-    const hasNotice = Boolean(params.get("created") || params.get("error"));
-    const storedReturnTo = sessionStorage.getItem(RETURN_TO_KEY);
+    const listener = (event: Event) => storeReturnToBeforeChase(event as SubmitEvent);
+    document.addEventListener("submit", listener, true);
+    return () => document.removeEventListener("submit", listener, true);
+  }, [pathname]);
 
-    if (hasNotice && storedReturnTo && !hasPaymentViewState(params)) {
-      sessionStorage.removeItem(RETURN_TO_KEY);
-      router.replace(mergeNoticeIntoReturnTo(storedReturnTo, window.location.search));
-      return;
-    }
+  useEffect(() => {
+    restoreReturnToAfterChase(pathname, search, router.replace);
+  }, [pathname, router.replace, search]);
 
-    const onSubmit = (event: SubmitEvent) => storeReturnToBeforeChase(event);
-    document.addEventListener("submit", onSubmit, true);
+  useEffect(() => {
+    if (!isAdminPaymentsPath(pathname)) return;
 
-    const runEnhancements = () => {
-      injectPaymentStatusSelector();
-      updateLinksToPreservePaymentStatus();
-      applyPaymentStatusFilter();
-    };
-
-    runEnhancements();
-    const observer = new MutationObserver(runEnhancements);
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    return () => {
-      document.removeEventListener("submit", onSubmit, true);
-      observer.disconnect();
-    };
-  }, [pathname, router, searchParams]);
+    injectPaymentStatusSelector();
+    updateLinksToPreservePaymentStatus();
+    applyPaymentStatusFilter();
+  }, [pathname, search]);
 
   return null;
 }
