@@ -34,6 +34,7 @@ type PollRow = {
   question: string;
   slug: string;
   status: string;
+  choiceMode: string;
   createdAt: Date;
 };
 
@@ -50,8 +51,7 @@ type RecipientRow = {
   contactEmail: string | null;
   contactPhone: string | null;
   token: string;
-  selectedOptionId: string | null;
-  selectedOptionLabel: string | null;
+  selectedOptionLabels: string | null;
   note: string | null;
   votedAt: Date | null;
   createdAt: Date;
@@ -91,6 +91,10 @@ function statusTone(status: string) {
   }
 }
 
+function choiceModeLabel(choiceMode: string) {
+  return choiceMode === "MULTIPLE" ? "multiple choice" : "single choice";
+}
+
 function voteUrl(token: string, optionId: string) {
   return `${getPublicSiteUrl()}/polls/${encodeURIComponent(token)}/vote/${encodeURIComponent(optionId)}`;
 }
@@ -111,12 +115,16 @@ function buildEmailText(input: {
     "",
     input.poll.question,
     "",
+    input.poll.choiceMode === "MULTIPLE"
+      ? "You can choose more than one option. Click any quick option below, or open the full poll to review and tick several options."
+      : "Please choose one option.",
+    "",
     ...input.options.flatMap((option) => [
       `${option.label}:`,
       voteUrl(input.recipient.token, option.id),
       "",
     ]),
-    "Or open the full poll here to add a note or change your answer:",
+    "Open the full poll here to add a note or change your answer:",
     pollUrl(input.recipient.token),
     "",
     "Thanks,",
@@ -126,7 +134,7 @@ function buildEmailText(input: {
 
 async function getPoll(id: string) {
   const rows = await prisma.$queryRaw<PollRow[]>(Prisma.sql`
-    SELECT "id", "title", "question", "slug", "status", "createdAt"
+    SELECT "id", "title", "question", "slug", "status", COALESCE("choiceMode", 'SINGLE') AS "choiceMode", "createdAt"
     FROM "SIXFLPoll"
     WHERE "id" = ${id}
     LIMIT 1
@@ -153,14 +161,15 @@ async function getRecipients(pollId: string) {
       recipient."contactEmail",
       recipient."contactPhone",
       recipient."token",
-      recipient."selectedOptionId",
-      option."label" AS "selectedOptionLabel",
+      STRING_AGG(option."label", ', ' ORDER BY option."sortOrder", option."label") AS "selectedOptionLabels",
       recipient."note",
       recipient."votedAt",
       recipient."createdAt"
     FROM "SIXFLPollRecipient" recipient
-    LEFT JOIN "SIXFLPollOption" option ON option."id" = recipient."selectedOptionId"
+    LEFT JOIN "SIXFLPollRecipientOption" selected ON selected."recipientId" = recipient."id"
+    LEFT JOIN "SIXFLPollOption" option ON option."id" = selected."optionId"
     WHERE recipient."pollId" = ${pollId}
+    GROUP BY recipient."id"
     ORDER BY recipient."createdAt" ASC, recipient."teamName" ASC
   `);
 }
@@ -171,9 +180,9 @@ async function getResults(pollId: string) {
       option."id" AS "optionId",
       option."label",
       option."sortOrder",
-      COUNT(recipient."id") FILTER (WHERE recipient."selectedOptionId" = option."id")::int AS "voteCount"
+      COUNT(DISTINCT selected."recipientId")::int AS "voteCount"
     FROM "SIXFLPollOption" option
-    LEFT JOIN "SIXFLPollRecipient" recipient ON recipient."pollId" = option."pollId"
+    LEFT JOIN "SIXFLPollRecipientOption" selected ON selected."optionId" = option."id"
     WHERE option."pollId" = ${pollId}
     GROUP BY option."id", option."label", option."sortOrder"
     ORDER BY option."sortOrder" ASC, option."label" ASC
@@ -185,7 +194,15 @@ export default async function PollDetailPage({ params, searchParams }: PageProps
 
   const { id } = await params;
   const sp = (await searchParams) ?? {};
-  const notice = getSearchParam(sp.created) ? "Poll created." : getSearchParam(sp.recipient) === "added" ? "Recipient added." : getSearchParam(sp.status) ? "Poll status updated." : null;
+  const notice = getSearchParam(sp.created)
+    ? "Poll created."
+    : getSearchParam(sp.updated)
+      ? "Poll updated."
+      : getSearchParam(sp.recipient) === "added"
+        ? "Recipient added."
+        : getSearchParam(sp.status)
+          ? "Poll status updated."
+          : null;
 
   const [poll, options, recipients, results] = await Promise.all([
     getPoll(id),
@@ -196,8 +213,9 @@ export default async function PollDetailPage({ params, searchParams }: PageProps
 
   if (!poll) notFound();
 
-  const totalVotes = recipients.filter((recipient) => recipient.selectedOptionId).length;
+  const totalVotes = recipients.filter((recipient) => recipient.selectedOptionLabels).length;
   const responseRate = recipients.length > 0 ? Math.round((totalVotes / recipients.length) * 100) : 0;
+  const isMultiple = poll.choiceMode === "MULTIPLE";
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -212,13 +230,23 @@ export default async function PollDetailPage({ params, searchParams }: PageProps
           <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusTone(poll.status)}`}>
             {poll.status.toLowerCase()}
           </span>
+          <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-100">
+            {choiceModeLabel(poll.choiceMode)}
+          </span>
         </div>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-          {poll.title}
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">
-          {poll.question}
-        </p>
+        <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+              {poll.title}
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">
+              {poll.question}
+            </p>
+          </div>
+          <Link href={`/admin/polls/${poll.id}/edit`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07]">
+            Edit poll
+          </Link>
+        </div>
       </div>
 
       {notice ? (
@@ -236,7 +264,7 @@ export default async function PollDetailPage({ params, searchParams }: PageProps
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Options</p>
           <p className="mt-3 text-3xl font-semibold text-white">{options.length}</p>
-          <p className="mt-2 text-sm text-white/60">One-click vote links generated for each option.</p>
+          <p className="mt-2 text-sm text-white/60">{isMultiple ? "Teams can choose several options." : "Teams choose one option."}</p>
         </AdminCard>
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Status</p>
@@ -254,6 +282,9 @@ export default async function PollDetailPage({ params, searchParams }: PageProps
       <section className="grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
           <h2 className="text-xl font-semibold text-white">Result totals</h2>
+          <p className="mt-2 text-sm text-white/55">
+            {isMultiple ? "Each tick is counted, so totals may add up to more than the number of teams." : "Each team contributes one vote."}
+          </p>
           <div className="mt-5 space-y-3">
             {results.map((result) => {
               const width = totalVotes > 0 ? Math.max(4, Math.round((result.voteCount / totalVotes) * 100)) : 0;
@@ -320,8 +351,8 @@ export default async function PollDetailPage({ params, searchParams }: PageProps
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-lg font-semibold text-white">{recipient.teamName}</div>
-                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${recipient.selectedOptionId ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>
-                        {recipient.selectedOptionLabel ?? "No vote yet"}
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${recipient.selectedOptionLabels ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : "border-amber-400/25 bg-amber-500/10 text-amber-100"}`}>
+                        {recipient.selectedOptionLabels ?? "No vote yet"}
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-white/50">
