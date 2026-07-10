@@ -21,6 +21,7 @@ const SIXFL_SIGNATURE_LINES = [
 const CTA_PLACEHOLDER = "{{cta}}";
 const RESPONSE_BUTTONS_PATTERN =
   /(?:^|\n)\s*YES,\s*I still want to play:\s*(https?:\/\/\S+)\s*\n\s*NO,\s*remove me from the squad list:\s*(https?:\/\/\S+)\s*(?:\n|$)/i;
+const POLL_BUTTONS_PATTERN = /(?:^|\n)\s*SIXFL_POLL_OPTIONS_START\s*\n([\s\S]*?)\n\s*SIXFL_POLL_OPTIONS_END\s*(?:\n|$)/i;
 
 // ========================================
 // Types
@@ -46,6 +47,11 @@ type EmailListLine = {
   depth: number;
   marker: string;
   text: string;
+};
+
+type PollButton = {
+  label: string;
+  url: string;
 };
 
 // ========================================
@@ -353,6 +359,64 @@ function extractPlayerResponseButtons(body: string) {
   };
 }
 
+function parsePollButtons(rawBlock: string): PollButton[] {
+  return rawBlock
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const separatorIndex = line.lastIndexOf(":");
+      if (separatorIndex <= 0) return [];
+
+      const label = line.slice(0, separatorIndex).trim();
+      const url = line.slice(separatorIndex + 1).trim();
+
+      if (!label || !/^https?:\/\//i.test(url)) return [];
+      return [{ label, url }];
+    });
+}
+
+function buildPollButtonsHtml(buttons: PollButton[]) {
+  if (buttons.length === 0) return "";
+
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:12px 0 0 0;border-collapse:separate;">
+      ${buttons
+        .map(
+          (button) => `
+            <tr>
+              <td bgcolor="#1E5A43" style="border-radius:12px;background:#1E5A43;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.12);">
+                <a href="${escapeHtml(button.url)}" target="_blank" style="display:block;background:#1E5A43;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.2;letter-spacing:0.01em;mso-padding-alt:0;">
+                  ${escapeHtml(button.label)}
+                </a>
+              </td>
+            </tr>
+            <tr><td height="10" style="height:10px;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+          `.trim(),
+        )
+        .join("")}
+    </table>
+  `.trim();
+}
+
+function extractPollButtons(body: string) {
+  const match = body.match(POLL_BUTTONS_PATTERN);
+
+  if (!match?.[1]) {
+    return {
+      body,
+      buttonsHtml: "",
+    };
+  }
+
+  const buttons = parsePollButtons(match[1]);
+
+  return {
+    body: body.replace(POLL_BUTTONS_PATTERN, "\n").replace(/\n{3,}/g, "\n\n").trim(),
+    buttonsHtml: buildPollButtonsHtml(buttons),
+  };
+}
+
 function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
   const teamName = branding?.teamName?.trim();
   const teamLogoUrl = resolveEmailAssetUrl(branding?.teamLogoUrl);
@@ -387,7 +451,7 @@ function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
             <td width="60" valign="middle" style="padding-right:14px;">
               <img
                 src="${escapeHtml(teamLogoUrl)}"
-                alt="${escapeHtml(teamName || "Team logo")}"
+                alt="${escapeHtml(teamName || "Team logo") }"
                 width="48"
                 height="48"
                 style="display:block;width:48px;height:48px;object-fit:contain;border:0;outline:none;text-decoration:none;"
@@ -479,15 +543,18 @@ function buildPaymentSummaryHtml(payment?: SIXFLPaymentSummary) {
 function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
   const cleanedBody = stripTrailingSIXFLSignature(body);
   const responseButtons = extractPlayerResponseButtons(cleanedBody);
+  const pollButtons = extractPollButtons(responseButtons.body);
   const ctaHtml = buildCtaHtml(cta);
-  const bodyWithoutResponseButtons = responseButtons.body;
+  const bodyWithoutResponseButtons = pollButtons.body;
+  const extraButtonsHtml = [pollButtons.buttonsHtml, responseButtons.buttonsHtml]
+    .filter(Boolean)
+    .map((html) => `<div style="margin:24px 0 28px 0;">${html}</div>`)
+    .join("");
 
   if (!ctaHtml) {
     const bodyHtml = convertTextToHtml(stripCtaPlaceholder(bodyWithoutResponseButtons));
 
-    return responseButtons.buttonsHtml
-      ? `${bodyHtml}<div style="margin:24px 0 28px 0;">${responseButtons.buttonsHtml}</div>`
-      : bodyHtml;
+    return `${bodyHtml}${extraButtonsHtml}`;
   }
 
   if (bodyWithoutResponseButtons.includes(CTA_PLACEHOLDER)) {
@@ -510,9 +577,7 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
       })
       .join("");
 
-    return responseButtons.buttonsHtml
-      ? `${html}<div style="margin:24px 0 28px 0;">${responseButtons.buttonsHtml}</div>`
-      : html;
+    return `${html}${extraButtonsHtml}`;
   }
 
   const bodyHtml = convertTextToHtml(bodyWithoutResponseButtons);
@@ -522,11 +587,7 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
     <div style="margin:28px 0 8px 0;">
       ${ctaHtml}
     </div>
-    ${
-      responseButtons.buttonsHtml
-        ? `<div style="margin:24px 0 28px 0;">${responseButtons.buttonsHtml}</div>`
-        : ""
-    }
+    ${extraButtonsHtml}
   `.trim();
 }
 
