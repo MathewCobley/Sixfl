@@ -32,6 +32,7 @@ type PollRecipientRow = {
   title: string;
   question: string;
   status: string;
+  choiceMode: string;
 };
 
 type OptionRow = {
@@ -57,7 +58,8 @@ async function getRecipient(token: string) {
       poll."id" AS "pollId",
       poll."title",
       poll."question",
-      poll."status"
+      poll."status",
+      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode"
     FROM "SIXFLPollRecipient" recipient
     INNER JOIN "SIXFLPoll" poll ON poll."id" = recipient."pollId"
     WHERE recipient."token" = ${token}
@@ -76,6 +78,16 @@ async function getOptions(pollId: string) {
   `);
 }
 
+async function getSelectedOptionIds(recipientId: string) {
+  const rows = await prisma.$queryRaw<Array<{ optionId: string }>>(Prisma.sql`
+    SELECT "optionId"
+    FROM "SIXFLPollRecipientOption"
+    WHERE "recipientId" = ${recipientId}
+  `);
+
+  return rows.map((row) => row.optionId);
+}
+
 export default async function PollVotePage({ params, searchParams }: PageProps) {
   const { token } = await params;
   const sp = (await searchParams) ?? {};
@@ -85,9 +97,19 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
   const recipient = await getRecipient(token);
   if (!recipient) notFound();
 
-  const options = await getOptions(recipient.pollId);
-  const selectedOption = options.find((option) => option.id === recipient.selectedOptionId) ?? null;
+  const [options, selectedIdsFromJoin] = await Promise.all([
+    getOptions(recipient.pollId),
+    getSelectedOptionIds(recipient.recipientId),
+  ]);
+
+  const selectedOptionIds = selectedIdsFromJoin.length > 0
+    ? selectedIdsFromJoin
+    : recipient.selectedOptionId
+      ? [recipient.selectedOptionId]
+      : [];
+  const selectedOptions = options.filter((option) => selectedOptionIds.includes(option.id));
   const isActive = recipient.status === "ACTIVE";
+  const isMultiple = recipient.choiceMode === "MULTIPLE";
 
   return (
     <main className="min-h-screen bg-[#06120e] px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -105,11 +127,14 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
           <div className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70">
             {recipient.teamName}{recipient.contactName ? ` · ${recipient.contactName}` : ""}
           </div>
+          <div className="mx-auto mt-3 w-fit rounded-full border border-sky-400/20 bg-sky-500/10 px-4 py-2 text-xs font-semibold text-sky-100">
+            {isMultiple ? "You can choose more than one option" : "Choose one option"}
+          </div>
         </section>
 
         {saved ? (
           <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-            Thanks — your vote has been recorded.
+            Thanks — your answer has been recorded.
           </div>
         ) : null}
 
@@ -119,9 +144,15 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
           </div>
         ) : null}
 
-        {selectedOption ? (
+        {error === "invalid" ? (
+          <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
+            Please choose at least one valid option.
+          </div>
+        ) : null}
+
+        {selectedOptions.length > 0 ? (
           <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
-            Current answer: <strong>{selectedOption.label}</strong>. You can change it below while the poll is open.
+            Current answer: <strong>{selectedOptions.map((option) => option.label).join(", ")}</strong>. You can change it below while the poll is open.
           </div>
         ) : null}
 
@@ -130,27 +161,30 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
             <input type="hidden" name="token" value={recipient.token} />
 
             <div className="space-y-3">
-              {options.map((option) => (
-                <label
-                  key={option.id}
-                  className={[
-                    "flex cursor-pointer items-center gap-3 rounded-2xl border p-4 text-sm font-semibold transition",
-                    recipient.selectedOptionId === option.id
-                      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
-                      : "border-white/10 bg-black/20 text-white/75 hover:bg-white/[0.06]",
-                  ].join(" ")}
-                >
-                  <input
-                    type="radio"
-                    name="optionId"
-                    value={option.id}
-                    defaultChecked={recipient.selectedOptionId === option.id}
-                    disabled={!isActive}
-                    required
-                  />
-                  {option.label}
-                </label>
-              ))}
+              {options.map((option) => {
+                const checked = selectedOptionIds.includes(option.id);
+                return (
+                  <label
+                    key={option.id}
+                    className={[
+                      "flex cursor-pointer items-center gap-3 rounded-2xl border p-4 text-sm font-semibold transition",
+                      checked
+                        ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                        : "border-white/10 bg-black/20 text-white/75 hover:bg-white/[0.06]",
+                    ].join(" ")}
+                  >
+                    <input
+                      type={isMultiple ? "checkbox" : "radio"}
+                      name="optionId"
+                      value={option.id}
+                      defaultChecked={checked}
+                      disabled={!isActive}
+                      required={!isMultiple}
+                    />
+                    {option.label}
+                  </label>
+                );
+              })}
             </div>
 
             <label className="space-y-2 text-sm font-semibold text-white">
@@ -159,7 +193,7 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
                 name="note"
                 rows={4}
                 defaultValue={recipient.note ?? ""}
-                placeholder="For example: Thursday works, but only after 8pm."
+                placeholder={isMultiple ? "For example: Monday and Tuesday work, but Tuesday would need to be after 8pm." : "For example: Thursday works, but only after 8pm."}
                 disabled={!isActive}
                 className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50 disabled:opacity-60"
               />
@@ -170,7 +204,7 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
               disabled={!isActive}
               className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/45"
             >
-              {selectedOption ? "Update vote" : "Submit vote"}
+              {selectedOptions.length > 0 ? "Update answer" : "Submit answer"}
             </button>
           </form>
         </section>
