@@ -9,6 +9,10 @@ import { redirect } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
 import {
+  buildPlayerNameSnapshot,
+  setPlayerMatchFeeSnapshot,
+} from "@/lib/payments/player-match-fee-snapshots";
+import {
   ensurePlayerMatchFeePaymentDetailsForFees,
   queuePlayerMatchFeeReminder,
 } from "@/lib/payments/player-match-fees";
@@ -302,10 +306,20 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
     if (player.type === "member") {
       const member = await prisma.teamMember.findFirst({
         where: { id: player.id, teamId },
-        select: { id: true },
+        select: {
+          id: true,
+          user: { select: { name: true, email: true } },
+        },
       });
 
       if (!member) continue;
+
+      const profile = profileByMemberId.get(player.id);
+      const snapshot = {
+        name: buildPlayerNameSnapshot({ name: member.user.name, email: member.user.email }),
+        email: member.user.email,
+        phone: profile?.phone ?? null,
+      };
 
       const existing = await prisma.playerMatchFee.findFirst({
         where: { fixtureId, teamMemberId: player.id },
@@ -341,16 +355,28 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
             select: { id: true, status: true },
           });
 
+      await setPlayerMatchFeeSnapshot({ feeId: fee.id, snapshot });
       if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
     }
 
     if (player.type === "prospect") {
       const prospect = await prisma.teamPlayerProspect.findFirst({
         where: { id: player.id, teamId },
-        select: { id: true },
+        select: { id: true, firstName: true, lastName: true, email: true, phone: true },
       });
 
       if (!prospect) continue;
+
+      const snapshot = {
+        name: buildPlayerNameSnapshot({
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+          email: prospect.email,
+          phone: prospect.phone,
+        }),
+        email: prospect.email,
+        phone: prospect.phone,
+      };
 
       const existing = await prisma.playerMatchFee.findFirst({
         where: { fixtureId, prospectId: player.id },
@@ -386,6 +412,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
             select: { id: true, status: true },
           });
 
+      await setPlayerMatchFeeSnapshot({ feeId: fee.id, snapshot });
       if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
     }
   }
