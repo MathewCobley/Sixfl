@@ -30,6 +30,7 @@ type PollRow = {
   slug: string;
   status: string;
   choiceMode: string;
+  buttonText: string | null;
 };
 
 type OptionRow = {
@@ -45,7 +46,14 @@ function getSearchParam(value: string | string[] | undefined) {
 
 async function getPoll(id: string) {
   const rows = await prisma.$queryRaw<PollRow[]>(Prisma.sql`
-    SELECT "id", "title", "question", "slug", "status", COALESCE("choiceMode", 'SINGLE') AS "choiceMode"
+    SELECT
+      "id",
+      "title",
+      "question",
+      "slug",
+      "status",
+      COALESCE("choiceMode", 'SINGLE') AS "choiceMode",
+      COALESCE("buttonText", 'Open poll') AS "buttonText"
     FROM "SIXFLPoll"
     WHERE "id" = ${id}
     LIMIT 1
@@ -110,7 +118,7 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
           Edit poll
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Edit the wording, answer type and options. Existing options are renamed rather than deleted so existing votes do not break.
+          Edit the wording, answer type, email button text and options. Existing options are renamed rather than deleted so existing votes do not break.
         </p>
       </div>
 
@@ -191,6 +199,19 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
               defaultValue={poll.question}
               className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40"
             />
+          </label>
+
+          <label className="space-y-2 text-sm font-semibold text-white">
+            Email button text
+            <input
+              name="buttonText"
+              defaultValue={poll.buttonText ?? "Open poll"}
+              placeholder="Choose your nights"
+              className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40"
+            />
+            <span className="block text-xs font-normal text-white/45">
+              This is the single button shown in team emails when you use {'{{pollOptions}}'}.
+            </span>
           </label>
 
           <section className="rounded-3xl border border-white/10 bg-black/20 p-5">
