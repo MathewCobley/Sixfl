@@ -2,6 +2,7 @@
 // File: src/app/polls/[token]/vote/[optionId]/route.ts
 // ========================================
 
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
@@ -26,8 +27,14 @@ export async function GET(
 ) {
   const { token, optionId } = await context.params;
 
-  const rows = await prisma.$queryRaw<Array<{ pollId: string; status: string }>>(Prisma.sql`
-    SELECT poll."id" AS "pollId", poll."status"
+  const rows = await prisma.$queryRaw<
+    Array<{ recipientId: string; pollId: string; status: string; choiceMode: string }>
+  >(Prisma.sql`
+    SELECT
+      recipient."id" AS "recipientId",
+      poll."id" AS "pollId",
+      poll."status",
+      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode"
     FROM "SIXFLPollRecipient" recipient
     INNER JOIN "SIXFLPoll" poll ON poll."id" = recipient."pollId"
     INNER JOIN "SIXFLPollOption" option ON option."id" = ${optionId} AND option."pollId" = poll."id"
@@ -40,14 +47,62 @@ export async function GET(
   if (!poll) return redirectToPoll(token, "invalid");
   if (poll.status !== "ACTIVE") return redirectToPoll(token, "closed");
 
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "SIXFLPollRecipient"
-    SET
-      "selectedOptionId" = ${optionId},
-      "votedAt" = NOW(),
-      "updatedAt" = NOW()
-    WHERE "token" = ${token}
-  `);
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    if (poll.choiceMode === "MULTIPLE") {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "SIXFLPollRecipientOption" (
+          "id",
+          "recipientId",
+          "pollId",
+          "optionId",
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, ${now}, ${now})
+        ON CONFLICT DO NOTHING
+      `);
+
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "SIXFLPollRecipient"
+        SET
+          "selectedOptionId" = COALESCE("selectedOptionId", ${optionId}),
+          "votedAt" = ${now},
+          "updatedAt" = ${now}
+        WHERE "token" = ${token}
+      `);
+
+      return;
+    }
+
+    await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "SIXFLPollRecipientOption"
+      WHERE "recipientId" = ${poll.recipientId}
+    `);
+
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "SIXFLPollRecipientOption" (
+        "id",
+        "recipientId",
+        "pollId",
+        "optionId",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, ${now}, ${now})
+      ON CONFLICT DO NOTHING
+    `);
+
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "SIXFLPollRecipient"
+      SET
+        "selectedOptionId" = ${optionId},
+        "votedAt" = ${now},
+        "updatedAt" = ${now}
+      WHERE "token" = ${token}
+    `);
+  });
 
   return redirectToPoll(token, "saved");
 }
