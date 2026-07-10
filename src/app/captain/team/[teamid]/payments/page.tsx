@@ -28,6 +28,13 @@ export const metadata = {
   title: "Captain Payments | SIXFL",
 };
 
+type PlayerFeePaymentInfo = {
+  id: string;
+  payerName: string;
+  payerContact: string | null;
+  fixtureLabel: string | null;
+};
+
 function formatMoney(amountPence: number) {
   return formatPaymentMoney(amountPence);
 }
@@ -131,6 +138,43 @@ function getCreditEntrySignedAmount(entry: TeamCreditLedgerEntry) {
   return entry.entryType === "CREDIT_ADDED" ? entry.amountPence : -entry.amountPence;
 }
 
+function extractPlayerFeeId(notes: string | null) {
+  const match = /Player fee ID:\s*([a-zA-Z0-9_-]+)/i.exec(notes ?? "");
+  return match?.[1] ?? null;
+}
+
+function getPayerName(input: {
+  teamMember: { user: { name: string | null; email: string | null } } | null;
+  prospect: { firstName: string; lastName: string | null; email: string | null; phone: string | null } | null;
+}) {
+  if (input.teamMember) {
+    return input.teamMember.user.name || input.teamMember.user.email || "Linked player";
+  }
+
+  if (input.prospect) {
+    return [input.prospect.firstName, input.prospect.lastName].filter(Boolean).join(" ").trim() ||
+      input.prospect.email ||
+      input.prospect.phone ||
+      "Player prospect";
+  }
+
+  return "Player";
+}
+
+function getPayerContact(input: {
+  teamMember: { user: { email: string | null } } | null;
+  prospect: { email: string | null; phone: string | null } | null;
+}) {
+  if (input.teamMember) return input.teamMember.user.email;
+  if (input.prospect) return [input.prospect.email, input.prospect.phone].filter(Boolean).join(" · ") || null;
+  return null;
+}
+
+function formatPlayerPaymentNote(notes: string | null, playerFeeInfo: PlayerFeePaymentInfo | null) {
+  if (playerFeeInfo) return "Player match fee paid online via Stripe Checkout.";
+  return notes;
+}
+
 function getSubscriptionMessage(state?: string) {
   switch (state) {
     case "success":
@@ -202,24 +246,26 @@ async function useTeamCreditAction(formData: FormData) {
     redirect(`/captain/team/${teamId}/payments?credit=invalid`);
   }
 
+  let result: Awaited<ReturnType<typeof applyAvailableTeamCreditToCharge>>;
+
   try {
-    const result = await applyAvailableTeamCreditToCharge({
+    result = await applyAvailableTeamCreditToCharge({
       chargeId,
       teamIds: ledger.relatedTeamIds,
       description: `Team credit used against ${entry.title}.`,
     });
-
-    revalidatePath(`/captain/team/${teamId}/payments`);
-    revalidatePath(`/captain/team/${teamId}`);
-
-    if (result.amountUsedPence <= 0) {
-      redirect(`/captain/team/${teamId}/payments?credit=none`);
-    }
-
-    redirect(`/captain/team/${teamId}/payments?credit=used&amount=${result.amountUsedPence}`);
   } catch {
     redirect(`/captain/team/${teamId}/payments?credit=invalid`);
   }
+
+  revalidatePath(`/captain/team/${teamId}/payments`);
+  revalidatePath(`/captain/team/${teamId}`);
+
+  if (result.amountUsedPence <= 0) {
+    redirect(`/captain/team/${teamId}/payments?credit=none`);
+  }
+
+  redirect(`/captain/team/${teamId}/payments?credit=used&amount=${result.amountUsedPence}`);
 }
 
 export default async function CaptainPaymentsPage({
@@ -268,6 +314,62 @@ export default async function CaptainPaymentsPage({
       },
     },
   });
+
+  const playerFeeIds = Array.from(
+    new Set(
+      paymentTransactions
+        .map((transaction) => extractPlayerFeeId(transaction.notes))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const playerFeeRows = playerFeeIds.length
+    ? await prisma.playerMatchFee.findMany({
+        where: { id: { in: playerFeeIds } },
+        select: {
+          id: true,
+          teamMember: {
+            select: {
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          prospect: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+          fixture: {
+            select: {
+              kickoffAt: true,
+              homeTeam: { select: { name: true } },
+              awayTeam: { select: { name: true } },
+            },
+          },
+        },
+      })
+    : [];
+
+  const playerFeeInfoById = new Map<string, PlayerFeePaymentInfo>(
+    playerFeeRows.map((fee) => [
+      fee.id,
+      {
+        id: fee.id,
+        payerName: getPayerName({ teamMember: fee.teamMember, prospect: fee.prospect }),
+        payerContact: getPayerContact({ teamMember: fee.teamMember, prospect: fee.prospect }),
+        fixtureLabel: fee.fixture
+          ? `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name} · ${formatPaymentFixtureDate(fee.fixture.kickoffAt)}`
+          : null,
+      },
+    ]),
+  );
 
   const subscriptionMessage = getSubscriptionMessage(sp.subscription);
   const creditMessage = getCreditMessage(sp.credit, sp.amount);
@@ -333,7 +435,7 @@ export default async function CaptainPaymentsPage({
             {paymentTransactions.length}
           </p>
           <p className="mt-2 text-sm text-emerald-100/75">
-            Most recent recorded team payments.
+            Most recent recorded team and squad payments.
           </p>
         </div>
       </section>
@@ -591,6 +693,9 @@ export default async function CaptainPaymentsPage({
           <h2 className="mt-2 text-xl font-semibold text-white">
             Payment history
           </h2>
+          <p className="mt-2 text-sm text-white/55">
+            Recent team payments and squad payments, including who paid where we can match the player fee.
+          </p>
         </div>
 
         <div className="divide-y divide-white/10">
@@ -599,35 +704,62 @@ export default async function CaptainPaymentsPage({
               No payments recorded yet.
             </div>
           ) : (
-            paymentTransactions.map((tx) => (
-              <div key={tx.id} className="px-6 py-5">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="text-base font-semibold text-white">
-                      {tx.charge?.title ?? "Unallocated payment"}
-                    </div>
-                    <div className="mt-1 text-sm text-white/55">
-                      {tx.method.replaceAll("_", " ")}
-                      {tx.reference ? ` · Ref ${tx.reference}` : ""}
-                    </div>
-                    <div className="mt-1 text-sm text-white/45">
-                      {formatUkDateTime(tx.paidAt)}
-                    </div>
-                  </div>
+            paymentTransactions.map((tx) => {
+              const playerFeeId = extractPlayerFeeId(tx.notes);
+              const playerFeeInfo = playerFeeId ? playerFeeInfoById.get(playerFeeId) ?? null : null;
+              const paymentNote = formatPlayerPaymentNote(tx.notes, playerFeeInfo);
 
-                  <div className="text-right">
-                    <div className="text-base font-semibold text-white">
-                      {formatMoney(tx.amountPence)}
-                    </div>
-                    {tx.notes ? (
-                      <div className="mt-1 text-sm text-white/55">
-                        {tx.notes}
+              return (
+                <div key={tx.id} className="px-6 py-5">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="text-base font-semibold text-white">
+                        {tx.charge?.title ?? "Unallocated payment"}
                       </div>
-                    ) : null}
+
+                      {playerFeeInfo ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+                            Paid by {playerFeeInfo.payerName}
+                          </span>
+                          {playerFeeInfo.payerContact ? (
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/55">
+                              {playerFeeInfo.payerContact}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-2 text-sm text-white/55">
+                        {tx.method.replaceAll("_", " ")}
+                        {tx.reference ? ` · Ref ${tx.reference}` : ""}
+                      </div>
+
+                      {playerFeeInfo?.fixtureLabel ? (
+                        <div className="mt-1 text-sm text-emerald-100/70">
+                          {playerFeeInfo.fixtureLabel}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-1 text-sm text-white/45">
+                        {formatUkDateTime(tx.paidAt)}
+                      </div>
+                    </div>
+
+                    <div className="text-left lg:text-right">
+                      <div className="text-base font-semibold text-white">
+                        {formatMoney(tx.amountPence)}
+                      </div>
+                      {paymentNote ? (
+                        <div className="mt-1 max-w-2xl text-sm text-white/55">
+                          {paymentNote}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>
