@@ -37,6 +37,7 @@ type PaymentsSearchParams = {
   error?: string;
   paymentChargeId?: string;
   q?: string;
+  leagueId?: string;
   teamId?: string;
   view?: string;
   limit?: string;
@@ -226,6 +227,7 @@ function parseListLimit(value: string | undefined) {
 
 function buildFilterQuery(input: {
   q: string;
+  leagueId: string;
   teamId: string;
   view: PaymentsViewFilter;
   limit: number;
@@ -234,6 +236,7 @@ function buildFilterQuery(input: {
 }) {
   const params = new URLSearchParams();
   if (input.q) params.set("q", input.q);
+  if (input.leagueId) params.set("leagueId", input.leagueId);
   if (input.teamId) params.set("teamId", input.teamId);
   if (input.view !== "none") params.set("view", input.view);
   if (input.limit !== DEFAULT_LIST_LIMIT) params.set("limit", String(input.limit));
@@ -513,18 +516,21 @@ export default async function AdminPaymentsPage({
   const sp = (await searchParams) ?? {};
   const searchQuery = String(sp.q ?? "").trim();
   const normalisedQuery = normaliseSearch(searchQuery);
+  const selectedLeagueId = String(sp.leagueId ?? "").trim();
   const selectedTeamId = String(sp.teamId ?? "").trim();
   const selectedView = parseViewFilter(sp.view);
-  const selectedAction = parseActionFilter(sp.action);
-  const selectedPaymentChargeId = String(sp.paymentChargeId ?? "").trim();
   const listLimit = parseListLimit(sp.limit);
+  const selectedPaymentChargeId = String(sp.paymentChargeId ?? "").trim();
+  const selectedActionFromUrl = parseActionFilter(sp.action);
+  const selectedAction = selectedActionFromUrl === "none" && selectedPaymentChargeId ? "recordPayment" : selectedActionFromUrl;
   const hasFilters = Boolean(
     searchQuery ||
-    selectedTeamId ||
-    selectedView !== "none" ||
-    selectedAction !== "none" ||
-    selectedPaymentChargeId ||
-    listLimit !== DEFAULT_LIST_LIMIT,
+      selectedLeagueId ||
+      selectedTeamId ||
+      selectedView !== "none" ||
+      selectedAction !== "none" ||
+      selectedPaymentChargeId ||
+      listLimit !== DEFAULT_LIST_LIMIT,
   );
 
   const [teams, charges, transactions, openPlayerFeesRaw, paidPlayerMatchFees] = await Promise.all([
@@ -533,7 +539,7 @@ export default async function AdminPaymentsPage({
       select: {
         id: true,
         name: true,
-        league: { select: { name: true, season: true } },
+        league: { select: { id: true, name: true, season: true } },
       },
     }),
     prisma.paymentCharge.findMany({
@@ -585,6 +591,25 @@ export default async function AdminPaymentsPage({
     }),
   ]);
 
+  const teamLeagueById = new Map(teams.map((team) => [team.id, team.league?.id ?? null]));
+  const leagueOptionsById = new Map<string, string>();
+
+  for (const team of teams) {
+    if (!team.league?.id) continue;
+    leagueOptionsById.set(
+      team.league.id,
+      `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`,
+    );
+  }
+
+  const leagueOptions = Array.from(leagueOptionsById, ([value, label]) => ({ value, label })).sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
+  const visibleTeamOptions = selectedLeagueId
+    ? teams.filter((team) => team.league?.id === selectedLeagueId)
+    : teams;
+  const matchesSelectedLeague = (teamId: string) => !selectedLeagueId || teamLeagueById.get(teamId) === selectedLeagueId;
+
   const paidPlayerMatchFeesByTeamId = new Map<string, typeof paidPlayerMatchFees>();
   for (const fee of paidPlayerMatchFees) {
     const existing = paidPlayerMatchFeesByTeamId.get(fee.teamId) ?? [];
@@ -625,13 +650,17 @@ export default async function AdminPaymentsPage({
       const aOpen = !isChargeDisplayClosed(a.summary.displayStatus) && a.summary.outstandingPence > 0;
       const bOpen = !isChargeDisplayClosed(b.summary.displayStatus) && b.summary.outstandingPence > 0;
       if (aOpen !== bOpen) return aOpen ? -1 : 1;
+
       if (a.needsAdminChase !== b.needsAdminChase) return a.needsAdminChase ? -1 : 1;
+
       const aOutstanding = a.summary.outstandingPence > 0;
       const bOutstanding = b.summary.outstandingPence > 0;
       if (aOutstanding !== bOutstanding) return aOutstanding ? -1 : 1;
+
       const aDueSort = getChargeSortDate(a.charge.dueDate, a.charge.createdAt);
       const bDueSort = getChargeSortDate(b.charge.dueDate, b.charge.createdAt);
       if (aDueSort !== bDueSort) return aDueSort - bDueSort;
+
       return a.charge.createdAt.getTime() - b.charge.createdAt.getTime();
     });
 
@@ -702,6 +731,7 @@ export default async function AdminPaymentsPage({
     const fixtureName = `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`;
 
     return (
+      matchesSelectedLeague(fee.teamId) &&
       (!selectedTeamId || fee.teamId === selectedTeamId) &&
       matchesSearch(normalisedQuery, [
         playerName,
@@ -715,6 +745,7 @@ export default async function AdminPaymentsPage({
   });
 
   const filteredChargeRows = chargeRows.filter((row) =>
+    matchesSelectedLeague(row.charge.teamId) &&
     (!selectedTeamId || row.charge.teamId === selectedTeamId) &&
     matchesSearch(normalisedQuery, [
       row.charge.team.name,
@@ -728,6 +759,7 @@ export default async function AdminPaymentsPage({
   );
 
   const filteredTransactions = transactions.filter((payment) =>
+    matchesSelectedLeague(payment.teamId) &&
     (!selectedTeamId || payment.teamId === selectedTeamId) &&
     matchesSearch(normalisedQuery, [
       payment.team.name,
@@ -832,7 +864,7 @@ export default async function AdminPaymentsPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-100/70">Payment list selector</p>
             <h2 className="mt-2 text-xl font-semibold text-white">Choose what payment list to show</h2>
             <p className="mt-2 text-sm text-sky-50/70">
-              No payment rows are shown until you choose a list. Search by player, team, email, fixture or reference once you know what you need.
+              No payment rows are shown until you choose a list. Narrow by league, team, player, email, fixture or reference.
             </p>
           </div>
 
@@ -843,7 +875,7 @@ export default async function AdminPaymentsPage({
           ) : null}
         </div>
 
-        <form method="get" action="/admin/payments" className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_0.7fr_auto]">
+        <form method="get" action="/admin/payments" className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.25fr_1fr_1fr_1fr_0.65fr_auto]">
           {selectedAction !== "none" ? <input type="hidden" name="action" value={selectedAction} /> : null}
           {selectedPaymentChargeId ? <input type="hidden" name="paymentChargeId" value={selectedPaymentChargeId} /> : null}
 
@@ -859,11 +891,21 @@ export default async function AdminPaymentsPage({
           </label>
 
           <label className="space-y-1.5 text-sm font-semibold text-white">
+            League
+            <select name="leagueId" defaultValue={selectedLeagueId} className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none focus:border-sky-300/50">
+              <option value="">All leagues</option>
+              {leagueOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1.5 text-sm font-semibold text-white">
             Team
             <select name="teamId" defaultValue={selectedTeamId} className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none focus:border-sky-300/50">
               <option value="">All teams</option>
-              {teamOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+              {visibleTeamOptions.map((team) => (
+                <option key={team.id} value={team.id}>{team.name}</option>
               ))}
             </select>
           </label>
@@ -911,6 +953,7 @@ export default async function AdminPaymentsPage({
             {ACTION_OPTIONS.map((option) => {
               const href = buildFilterQuery({
                 q: searchQuery,
+                leagueId: selectedLeagueId,
                 teamId: selectedTeamId,
                 view: selectedView,
                 limit: listLimit,
@@ -1062,6 +1105,15 @@ export default async function AdminPaymentsPage({
                 row.summary.outstandingPence > 0;
               const canVoidCharge = !isChargeDisplayClosed(row.summary.displayStatus);
               const statusChanged = row.summary.displayStatus !== row.charge.status;
+              const recordPaymentHref = `${buildFilterQuery({
+                q: searchQuery,
+                leagueId: selectedLeagueId,
+                teamId: selectedTeamId,
+                view: selectedView,
+                limit: listLimit,
+                action: "recordPayment",
+                paymentChargeId: row.charge.id,
+              })}#record-payment`;
 
               return (
                 <div key={row.charge.id} className={`rounded-2xl border bg-[#0d1428] p-4 ${row.needsAdminChase ? "border-red-500/30" : "border-white/10"}`}>
@@ -1079,7 +1131,7 @@ export default async function AdminPaymentsPage({
                       {(canRecordPayment || canChaseTeamCharge || canVoidCharge) ? (
                         <div className="mt-4 flex flex-wrap gap-2">
                           {canRecordPayment ? (
-                            <Link href={`${buildFilterQuery({ q: searchQuery, teamId: selectedTeamId, view: selectedView, limit: listLimit, action: "recordPayment", paymentChargeId: row.charge.id })}#record-payment`} className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Record payment</Link>
+                            <Link href={recordPaymentHref} className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">Record payment</Link>
                           ) : null}
                           {canChaseTeamCharge ? (
                             <form action={sendTeamChargeReminderAction}>
