@@ -73,7 +73,8 @@ function injectPaymentStatusSelector() {
 
   const select = document.createElement("select");
   select.name = PAYMENT_STATUS_PARAM;
-  select.defaultValue = current;
+  select.value = current;
+  select.setAttribute("data-initial-value", current);
   select.className = "h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none focus:border-sky-300/50";
 
   [
@@ -88,6 +89,8 @@ function injectPaymentStatusSelector() {
     if (value === current) option.selected = true;
     select.appendChild(option);
   });
+
+  select.value = current;
 
   label.appendChild(caption);
   label.appendChild(select);
@@ -331,23 +334,15 @@ export default function AdminPaymentsPageBridge() {
     };
 
     document.addEventListener("submit", onSubmit, true);
-    document.addEventListener("click", onDocumentClick, true);
-
-    const runEnhancements = () => {
-      injectPaymentStatusSelector();
-      enhancePaymentFilterDropdowns();
-      updateLinksToPreservePaymentStatus();
-      applyPaymentStatusFilter();
-    };
-
-    runEnhancements();
-    const observer = new MutationObserver(runEnhancements);
-    observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("click", onDocumentClick);
+    injectPaymentStatusSelector();
+    enhancePaymentFilterDropdowns();
+    applyPaymentStatusFilter();
+    updateLinksToPreservePaymentStatus();
 
     return () => {
       document.removeEventListener("submit", onSubmit, true);
-      document.removeEventListener("click", onDocumentClick, true);
-      observer.disconnect();
+      document.removeEventListener("click", onDocumentClick);
     };
   }, [pathname, router, searchParams]);
 
