@@ -174,9 +174,14 @@ export default async function PollsAdminPage({ searchParams }: PageProps) {
                     Created {formatDate(poll.createdAt)} · {poll.optionCount} options · {poll.voteCount}/{poll.recipientCount} responses
                   </p>
                 </div>
-                <Link href={`/admin/polls/${poll.id}`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
-                  Open results
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                  <Link href={`/admin/polls/${poll.id}/edit`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 px-5 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15">
+                    Edit
+                  </Link>
+                  <Link href={`/admin/polls/${poll.id}`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
+                    Open results
+                  </Link>
+                </div>
               </div>
             ))
           )}
