@@ -183,16 +183,18 @@ export async function runFixtureConfirmationReminderJob() {
         continue;
       }
 
-      summary.skipped += 1;
-      const reason = result.status;
-      skippedByReason[reason] = (skippedByReason[reason] ?? 0) + 1;
+      if (!result.ok) {
+        summary.skipped += 1;
+        const reason = result.status;
+        skippedByReason[reason] = (skippedByReason[reason] ?? 0) + 1;
 
-      await recordSkippedConfirmationReason({
-        fixtureId: fixture.id,
-        teamId,
-        reason,
-        mode,
-      });
+        await recordSkippedConfirmationReason({
+          fixtureId: fixture.id,
+          teamId,
+          reason,
+          mode,
+        });
+      }
     }
   }
 
