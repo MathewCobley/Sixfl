@@ -207,6 +207,7 @@ export async function GET(request: Request) {
             teamId: true,
             amountPence: true,
             status: true,
+            transactions: { select: { amountPence: true } },
           },
         },
         captainConfirmations: {
@@ -330,8 +331,25 @@ export async function GET(request: Request) {
       const homeCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.homeTeamId);
       const awayCharge = fixture.paymentCharges.find((charge) => charge.teamId === fixture.awayTeamId);
       const legacyFee = fixture.matchFeePence ?? null;
-      const homeMatchFeePence = homeCharge?.amountPence ?? (legacyFee && !awayCharge ? legacyFee : null);
-      const awayMatchFeePence = awayCharge?.amountPence ?? (legacyFee && !homeCharge ? legacyFee : null);
+
+      function getFeeInfo(charge: typeof fixture.paymentCharges[number] | undefined) {
+        const amountPence = charge?.amountPence ?? legacyFee;
+        const paidPence = charge?.transactions.reduce((sum, transaction) => sum + transaction.amountPence, 0) ?? null;
+        const outstandingPence = amountPence === null
+          ? null
+          : Math.max(0, amountPence - (paidPence ?? 0));
+
+        return {
+          amountPence,
+          paidPence,
+          outstandingPence,
+          status: charge?.status ?? null,
+          hasPaymentCharge: Boolean(charge),
+        };
+      }
+
+      const homeFee = getFeeInfo(homeCharge);
+      const awayFee = getFeeInfo(awayCharge);
       const homeConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.homeTeamId) ?? null;
       const awayConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.awayTeamId) ?? null;
 
@@ -349,8 +367,16 @@ export async function GET(request: Request) {
         venueName: fixture.venue?.name ?? null,
         status: fixture.status,
         publishedAt: fixture.publishedAt?.toISOString() ?? null,
-        homeMatchFeePence,
-        awayMatchFeePence,
+        homeMatchFeePence: homeFee.amountPence,
+        homePaidPence: homeFee.paidPence,
+        homeOutstandingPence: homeFee.outstandingPence,
+        homePaymentStatus: homeFee.status,
+        homeHasPaymentCharge: homeFee.hasPaymentCharge,
+        awayMatchFeePence: awayFee.amountPence,
+        awayPaidPence: awayFee.paidPence,
+        awayOutstandingPence: awayFee.outstandingPence,
+        awayPaymentStatus: awayFee.status,
+        awayHasPaymentCharge: awayFee.hasPaymentCharge,
         homeConfirmationStatus: homeConfirmation?.status ?? getFallbackConfirmationStatus({ fixtureStatus: fixture.status, kickoffAt: fixture.kickoffAt }),
         homeConfirmationNote: homeConfirmation?.note ?? null,
         homeConfirmedAt: homeConfirmation?.confirmedAt?.toISOString() ?? null,
