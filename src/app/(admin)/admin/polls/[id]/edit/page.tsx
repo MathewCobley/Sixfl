@@ -29,6 +29,7 @@ type PollRow = {
   question: string;
   slug: string;
   status: string;
+  choiceMode: string;
 };
 
 type OptionRow = {
@@ -44,7 +45,7 @@ function getSearchParam(value: string | string[] | undefined) {
 
 async function getPoll(id: string) {
   const rows = await prisma.$queryRaw<PollRow[]>(Prisma.sql`
-    SELECT "id", "title", "question", "slug", "status"
+    SELECT "id", "title", "question", "slug", "status", COALESCE("choiceMode", 'SINGLE') AS "choiceMode"
     FROM "SIXFLPoll"
     WHERE "id" = ${id}
     LIMIT 1
@@ -59,9 +60,9 @@ async function getOptions(pollId: string) {
       option."id",
       option."label",
       option."sortOrder",
-      COUNT(recipient."id") FILTER (WHERE recipient."selectedOptionId" = option."id")::int AS "voteCount"
+      COUNT(DISTINCT selected."recipientId")::int AS "voteCount"
     FROM "SIXFLPollOption" option
-    LEFT JOIN "SIXFLPollRecipient" recipient ON recipient."selectedOptionId" = option."id"
+    LEFT JOIN "SIXFLPollRecipientOption" selected ON selected."optionId" = option."id"
     WHERE option."pollId" = ${pollId}
     GROUP BY option."id", option."label", option."sortOrder"
     ORDER BY option."sortOrder" ASC, option."label" ASC
@@ -73,6 +74,15 @@ function statusButtonClass(isActive: boolean) {
     "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
     isActive
       ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-50"
+      : "border-white/10 bg-black/25 text-white/65 hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
+  ].join(" ");
+}
+
+function modeButtonClass(isActive: boolean) {
+  return [
+    "rounded-2xl border p-4 text-left text-sm font-semibold transition",
+    isActive
+      ? "border-sky-400/35 bg-sky-500/15 text-sky-50"
       : "border-white/10 bg-black/25 text-white/65 hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
   ].join(" ");
 }
@@ -100,7 +110,7 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
           Edit poll
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Edit the wording and add extra options. Existing options are renamed rather than deleted so existing votes do not break.
+          Edit the wording, answer type and options. Existing options are renamed rather than deleted so existing votes do not break.
         </p>
       </div>
 
@@ -142,6 +152,37 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
               </div>
             </label>
           </div>
+
+          <section className="rounded-3xl border border-sky-400/15 bg-sky-500/[0.04] p-5">
+            <h2 className="text-lg font-semibold text-white">Answer type</h2>
+            <p className="mt-1 text-sm text-white/55">
+              Use multiple choice when a team may be available on more than one night.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className={modeButtonClass(poll.choiceMode !== "MULTIPLE")}>
+                <input
+                  type="radio"
+                  name="choiceMode"
+                  value="SINGLE"
+                  defaultChecked={poll.choiceMode !== "MULTIPLE"}
+                  className="sr-only"
+                />
+                <span className="block text-white">Single choice</span>
+                <span className="mt-1 block text-xs font-normal text-white/55">Each team can pick one option only.</span>
+              </label>
+              <label className={modeButtonClass(poll.choiceMode === "MULTIPLE")}>
+                <input
+                  type="radio"
+                  name="choiceMode"
+                  value="MULTIPLE"
+                  defaultChecked={poll.choiceMode === "MULTIPLE"}
+                  className="sr-only"
+                />
+                <span className="block text-white">Multiple choice</span>
+                <span className="mt-1 block text-xs font-normal text-white/55">Teams can tick several options, such as Monday and Tuesday.</span>
+              </label>
+            </div>
+          </section>
 
           <label className="space-y-2 text-sm font-semibold text-white">
             Question
