@@ -402,3 +402,50 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
 }
+
+export async function sendCaptainPlayerMatchFeeReminderAction(formData: FormData) {
+  const teamId = getString(formData, "teamId");
+  const fixtureId = getString(formData, "fixtureId");
+  const feeId = getString(formData, "feeId");
+
+  const access = teamId ? await requireCaptain(teamId) : null;
+  redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
+
+  if (!teamId || !fixtureId || !feeId) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  const fee = await prisma.playerMatchFee.findFirst({
+    where: { id: feeId, teamId, fixtureId },
+    select: { id: true, status: true },
+  });
+
+  if (!fee) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  if (fee.status !== "OPEN") {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=fee_not_open"));
+  }
+
+  const reminderModes = ["request", "chase24h", "chase72h"] as const;
+
+  for (const mode of reminderModes) {
+    const result = await queuePlayerMatchFeeReminder({
+      feeId: fee.id,
+      mode,
+      channels: ["SMS"],
+    });
+
+    if (result.queued > 0) {
+      revalidatePath(getMatchFeesPath(teamId, fixtureId));
+      redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_sms_queued"));
+    }
+
+    if (["no_contact", "not_open", "no_payment_url"].includes(result.status)) {
+      redirect(getMatchFeesPath(teamId, fixtureId, `&error=${result.status}`));
+    }
+  }
+
+  redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_sms_already_sent"));
+}
