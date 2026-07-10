@@ -29,8 +29,28 @@ export const metadata = {
   title: "Admin Payments | SIXFL",
 };
 
+type PaymentsViewFilter = "all" | "playerFees" | "teamCharges" | "recentPayments";
+
+type PaymentsSearchParams = {
+  created?: string;
+  error?: string;
+  paymentChargeId?: string;
+  q?: string;
+  teamId?: string;
+  view?: string;
+  limit?: string;
+};
+
 const paymentMethodValues = new Set<PaymentMethod>(Object.values(PaymentMethod));
 const ADMIN_CHASE_THRESHOLD_MS = 72 * 60 * 60 * 1000;
+const DEFAULT_LIST_LIMIT = 10;
+const LIST_LIMIT_OPTIONS = [10, 25, 50, 100];
+const VIEW_OPTIONS: Array<{ value: PaymentsViewFilter; label: string }> = [
+  { value: "all", label: "All payment lists" },
+  { value: "playerFees", label: "Player fees only" },
+  { value: "teamCharges", label: "Team charges only" },
+  { value: "recentPayments", label: "Recent payments only" },
+];
 
 function isPaymentMethod(value: string): value is PaymentMethod {
   return paymentMethodValues.has(value as PaymentMethod);
@@ -87,8 +107,8 @@ function formatFixtureDate(value: Date) {
 }
 
 function formatLastChasedLabel(value: Date | null) {
-  if (!value) return "Last chased: not chased yet";
-  return `Last chased: ${formatFixtureDate(value)}`;
+  if (!value) return "Last request/chase: not sent yet";
+  return `Last request/chase: ${formatFixtureDate(value)}`;
 }
 
 function getChargeSortDate(value: Date | null, fallback: Date) {
@@ -162,6 +182,48 @@ function getPlayerFeeContact(input: {
 function isPlayerFeePaymentNotes(value: string | null) {
   const notes = value?.toLowerCase() ?? "";
   return notes.includes("player match fee paid online") || notes.includes("player fee id:");
+}
+
+function normaliseSearch(value: string | null | undefined) {
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function matchesSearch(search: string, values: Array<string | number | Date | null | undefined>) {
+  if (!search) return true;
+
+  return values.some((value) => {
+    if (value === null || value === undefined) return false;
+    const text = value instanceof Date ? formatDateTimeLabel(value) : String(value);
+    return normaliseSearch(text).includes(search);
+  });
+}
+
+function parseViewFilter(value: string | undefined): PaymentsViewFilter {
+  if (value === "playerFees" || value === "teamCharges" || value === "recentPayments") {
+    return value;
+  }
+
+  return "all";
+}
+
+function parseListLimit(value: string | undefined) {
+  const parsed = Number(value);
+  return LIST_LIMIT_OPTIONS.includes(parsed) ? parsed : DEFAULT_LIST_LIMIT;
+}
+
+function buildFilterQuery(input: {
+  q: string;
+  teamId: string;
+  view: PaymentsViewFilter;
+  limit: number;
+}) {
+  const params = new URLSearchParams();
+  if (input.q) params.set("q", input.q);
+  if (input.teamId) params.set("teamId", input.teamId);
+  if (input.view !== "all") params.set("view", input.view);
+  if (input.limit !== DEFAULT_LIST_LIMIT) params.set("limit", String(input.limit));
+  const query = params.toString();
+  return query ? `/admin/payments?${query}` : "/admin/payments";
 }
 
 const methodOptions = [
@@ -427,11 +489,17 @@ async function sendPlayerMatchFeeReminderAction(formData: FormData) {
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ created?: string; error?: string; paymentChargeId?: string }>;
+  searchParams?: Promise<PaymentsSearchParams>;
 }) {
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
+  const searchQuery = String(sp.q ?? "").trim();
+  const normalisedQuery = normaliseSearch(searchQuery);
+  const selectedTeamId = String(sp.teamId ?? "").trim();
+  const selectedView = parseViewFilter(sp.view);
+  const listLimit = parseListLimit(sp.limit);
+  const hasFilters = Boolean(searchQuery || selectedTeamId || selectedView !== "all" || listLimit !== DEFAULT_LIST_LIMIT);
 
   const [teams, charges, transactions, openPlayerFeesRaw, paidPlayerMatchFees] = await Promise.all([
     prisma.team.findMany({
@@ -455,12 +523,12 @@ export default async function AdminPaymentsPage({
         team: { select: { id: true, name: true } },
         charge: { select: { id: true, title: true } },
       },
-      take: 20,
+      take: 150,
     }),
     prisma.playerMatchFee.findMany({
       where: { status: PlayerMatchFeeStatus.OPEN },
       orderBy: [{ createdAt: "asc" }],
-      take: 50,
+      take: 300,
       include: {
         team: { select: { id: true, name: true } },
         fixture: {
@@ -606,6 +674,59 @@ export default async function AdminPaymentsPage({
   const totalOutstanding = teamChargeOutstanding + standalonePlayerFeeOutstanding;
   const needsAdminChaseCount = chargeRows.filter((row) => row.needsAdminChase).length;
 
+  const filteredOpenPlayerFees = openPlayerFees.filter((fee) => {
+    const playerName = getPlayerFeeName({ teamMember: fee.teamMember, prospect: fee.prospect });
+    const playerContact = getPlayerFeeContact({ teamMember: fee.teamMember, prospect: fee.prospect });
+    const fixtureName = `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`;
+
+    return (
+      (!selectedTeamId || fee.teamId === selectedTeamId) &&
+      matchesSearch(normalisedQuery, [
+        playerName,
+        playerContact,
+        fee.team.name,
+        fixtureName,
+        fee.fixture.kickoffAt,
+        fee.amountPence / 100,
+      ])
+    );
+  });
+
+  const filteredChargeRows = chargeRows.filter((row) =>
+    (!selectedTeamId || row.charge.teamId === selectedTeamId) &&
+    matchesSearch(normalisedQuery, [
+      row.charge.team.name,
+      row.charge.title,
+      row.charge.description,
+      row.charge.status,
+      row.summary.displayStatus,
+      row.summary.outstandingPence / 100,
+      row.charge.dueDate,
+    ]),
+  );
+
+  const filteredTransactions = transactions.filter((payment) =>
+    (!selectedTeamId || payment.teamId === selectedTeamId) &&
+    matchesSearch(normalisedQuery, [
+      payment.team.name,
+      payment.charge?.title,
+      payment.notes,
+      payment.reference,
+      formatPaymentMethodLabel(payment.method),
+      payment.amountPence / 100,
+      payment.paidAt,
+    ]),
+  );
+
+  const visibleOpenPlayerFees = filteredOpenPlayerFees.slice(0, listLimit);
+  const visibleChargeRows = filteredChargeRows.slice(0, listLimit);
+  const visibleTransactions = filteredTransactions.slice(0, listLimit);
+  const filteredPlayerFeeOutstanding = filteredOpenPlayerFees.reduce((sum, fee) => sum + fee.amountPence, 0);
+  const filterQueryHref = buildFilterQuery({ q: searchQuery, teamId: selectedTeamId, view: selectedView, limit: listLimit });
+  const showPlayerFees = selectedView === "all" || selectedView === "playerFees";
+  const showTeamCharges = selectedView === "all" || selectedView === "teamCharges";
+  const showRecentPayments = selectedView === "all" || selectedView === "recentPayments";
+
   const teamOptions = teams.map((team) => ({
     value: team.id,
     label: team.league?.name
@@ -685,23 +806,96 @@ export default async function AdminPaymentsPage({
         </div>
       </div>
 
-      {openPlayerFees.length > 0 ? (
+      <section className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-100/70">Payment list filters</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Search and narrow the payment lists</h2>
+            <p className="mt-2 text-sm text-sky-50/70">
+              The page now shows a limited number of rows by default. Search by player, team, email, fixture or reference, or use the selector to focus on one list.
+            </p>
+          </div>
+
+          {hasFilters ? (
+            <Link href="/admin/payments" className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-black/25 px-4 text-sm font-semibold text-white/75 transition hover:bg-black/35">
+              Clear filters
+            </Link>
+          ) : null}
+        </div>
+
+        <form method="get" action="/admin/payments" className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_0.7fr_auto]">
+          <label className="space-y-1.5 text-sm font-semibold text-white">
+            Search
+            <input
+              type="search"
+              name="q"
+              defaultValue={searchQuery}
+              placeholder="Player, team, email, fixture, reference..."
+              className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-sky-300/50"
+            />
+          </label>
+
+          <label className="space-y-1.5 text-sm font-semibold text-white">
+            Team
+            <select name="teamId" defaultValue={selectedTeamId} className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none focus:border-sky-300/50">
+              <option value="">All teams</option>
+              {teamOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1.5 text-sm font-semibold text-white">
+            Show
+            <select name="view" defaultValue={selectedView} className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none focus:border-sky-300/50">
+              {VIEW_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1.5 text-sm font-semibold text-white">
+            Rows
+            <select name="limit" defaultValue={String(listLimit)} className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none focus:border-sky-300/50">
+              {LIST_LIMIT_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+
+          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-sky-300 px-5 text-sm font-semibold text-black transition hover:bg-sky-200 xl:self-end">
+            Apply
+          </button>
+        </form>
+
+        <div className="mt-4 flex flex-wrap gap-2 text-xs text-sky-50/75">
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Player fees: {filteredOpenPlayerFees.length} match{filteredOpenPlayerFees.length === 1 ? "" : "es"}</span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Team charges: {filteredChargeRows.length}</span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Recent payments: {filteredTransactions.length}</span>
+        </div>
+      </section>
+
+      {showPlayerFees ? (
         <section className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-100/70">Player match fees</p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">{formatMoney(playerFeeOutstanding)} pending from players</h2>
+              <h2 className="mt-3 text-2xl font-semibold text-white">{formatMoney(filteredPlayerFeeOutstanding)} pending from players</h2>
               <p className="mt-2 max-w-3xl text-sm text-white/65">
-                Paid player fees reduce the related team charge automatically. Open player fees remain listed here for chasing individuals.
+                Showing {visibleOpenPlayerFees.length} of {filteredOpenPlayerFees.length} matching open player fees. Use the search, team selector or row selector above to narrow this list.
               </p>
             </div>
             <span className="rounded-2xl border border-amber-400/25 bg-black/20 px-4 py-3 text-sm font-semibold text-amber-100">
-              {openPlayerFees.length} open player fee{openPlayerFees.length === 1 ? "" : "s"}
+              {filteredOpenPlayerFees.length} open player fee{filteredOpenPlayerFees.length === 1 ? "" : "s"}
             </span>
           </div>
 
           <div className="mt-5 space-y-3">
-            {openPlayerFees.map((fee) => {
+            {filteredOpenPlayerFees.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No open player fees match the current filters.</div>
+            ) : null}
+
+            {visibleOpenPlayerFees.map((fee) => {
               const playerName = getPlayerFeeName({ teamMember: fee.teamMember, prospect: fee.prospect });
               const playerContact = getPlayerFeeContact({ teamMember: fee.teamMember, prospect: fee.prospect });
               const fixtureName = `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`;
@@ -771,16 +965,17 @@ export default async function AdminPaymentsPage({
         </form>
       </div>
 
-      <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-        <div className="space-y-2">
-          <h2 className="text-xl font-semibold text-white">Team charges</h2>
-          <p className="text-sm text-white/55">Calculated from team charge payments plus paid squad/player match fees for the same fixture.</p>
-        </div>
-        <div className="mt-4 space-y-3">
-          {chargeRows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No charges yet.</div>
-          ) : (
-            chargeRows.map((row) => {
+      {showTeamCharges ? (
+        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-white">Team charges</h2>
+            <p className="text-sm text-white/55">Showing {visibleChargeRows.length} of {filteredChargeRows.length} matching charges. Calculated from team payments plus paid squad/player match fees for the same fixture.</p>
+          </div>
+          <div className="mt-4 space-y-3">
+            {filteredChargeRows.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No team charges match the current filters.</div>
+            ) : null}
+            {visibleChargeRows.map((row) => {
               const lastChasedAt = lastTeamChargeChaseByChargeId.get(row.charge.id) ?? null;
               const canChaseTeamCharge =
                 !isChargeDisplayClosed(row.summary.displayStatus) &&
@@ -832,31 +1027,35 @@ export default async function AdminPaymentsPage({
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
-      </section>
+            })}
+          </div>
+        </section>
+      ) : null}
 
-      <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-        <h2 className="text-xl font-semibold text-white">Recent payments</h2>
-        <div className="mt-4 space-y-3">
-          {transactions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No payments recorded yet.</div> : null}
-          {transactions.map((payment) => (
-            <div key={payment.id} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-[#0d1428] p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="font-semibold text-white">{payment.team.name}</div>
-                <div className="mt-1 text-sm text-white/55">
-                  {payment.charge?.title ?? (isPlayerFeePaymentNotes(payment.notes) ? "Squad player payment" : "Unlinked payment")} · {formatPaymentMethodLabel(payment.method)}
+      {showRecentPayments ? (
+        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <h2 className="text-xl font-semibold text-white">Recent payments</h2>
+          <p className="mt-2 text-sm text-white/55">Showing {visibleTransactions.length} of {filteredTransactions.length} matching recent payments.</p>
+          <div className="mt-4 space-y-3">
+            {filteredTransactions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">No recent payments match the current filters.</div> : null}
+            {visibleTransactions.map((payment) => (
+              <div key={payment.id} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-[#0d1428] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="font-semibold text-white">{payment.team.name}</div>
+                  <div className="mt-1 text-sm text-white/55">
+                    {payment.charge?.title ?? (isPlayerFeePaymentNotes(payment.notes) ? "Squad player payment" : "Unlinked payment")} · {formatPaymentMethodLabel(payment.method)}
+                  </div>
+                  {payment.reference ? <div className="mt-1 text-xs text-white/40">Ref {payment.reference}</div> : null}
+                </div>
+                <div className="text-sm text-white/60 sm:text-right">
+                  <div className="font-semibold text-white">{formatMoney(payment.amountPence)}</div>
+                  <div>{formatDateTimeLabel(payment.paidAt)}</div>
                 </div>
               </div>
-              <div className="text-sm text-white/60 sm:text-right">
-                <div className="font-semibold text-white">{formatMoney(payment.amountPence)}</div>
-                <div>{formatDateTimeLabel(payment.paidAt)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
