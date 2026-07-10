@@ -4,17 +4,11 @@
 
 "use server";
 
-import {
-  FixtureStatus,
-  NotificationDispatchStatus,
-} from "@prisma/client";
+import { FixtureStatus, NotificationDispatchStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  formatTimeInLondon,
-  getLondonMinutesSinceMidnight,
-  parseLondonDateTime,
-} from "@/lib/datetime/london";
+
+import { parseLondonDateTime } from "@/lib/datetime/london";
 import {
   cancelQueuedMatchFeeNotificationDispatches,
   queueFixtureMatchFeeEmails,
@@ -24,33 +18,10 @@ import {
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
-type Pair = {
-  homeId: string;
-  awayId: string;
-};
-
-type TeamSchedulingRule = {
-  id: string;
-  name: string;
-  latestKickoffTime: string | null;
-};
-
 type FixtureNotificationDbClient = Pick<
   typeof prisma,
   "notificationDispatch" | "paymentCharge"
 >;
-
-function addDays(d: Date, days: number) {
-  const out = new Date(d);
-  out.setDate(out.getDate() + days);
-  return out;
-}
-
-function addMinutes(d: Date, mins: number) {
-  const out = new Date(d);
-  out.setMinutes(out.getMinutes() + mins);
-  return out;
-}
 
 function parseOptionalString(value: FormDataEntryValue | null) {
   const str = String(value ?? "").trim();
@@ -70,10 +41,7 @@ function parseRequiredString(
   return str;
 }
 
-function parseOptionalInt(
-  value: FormDataEntryValue | null,
-  fieldName: string,
-) {
+function parseOptionalInt(value: FormDataEntryValue | null, fieldName: string) {
   const str = String(value ?? "").trim();
 
   if (!str) return null;
@@ -190,61 +158,9 @@ function parseFixtureTeamFees(formData: FormData) {
   };
 }
 
-function parseTimeToMinutes(value: string | null) {
-  if (!value) return null;
-
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
-
-  if (!match) return null;
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-
-  if (
-    !Number.isInteger(hours) ||
-    !Number.isInteger(minutes) ||
-    hours < 0 ||
-    hours > 23 ||
-    minutes < 0 ||
-    minutes > 59
-  ) {
-    return null;
-  }
-
-  return hours * 60 + minutes;
-}
-
-function getKickoffMinutes(kickoffAt: Date) {
-  return getLondonMinutesSinceMidnight(kickoffAt);
-}
-
-function isKickoffAllowed(
-  kickoffAt: Date,
-  homeTeam: TeamSchedulingRule,
-  awayTeam: TeamSchedulingRule,
-) {
-  const kickoffMinutes = getKickoffMinutes(kickoffAt);
-  const homeLatest = parseTimeToMinutes(homeTeam.latestKickoffTime);
-  const awayLatest = parseTimeToMinutes(awayTeam.latestKickoffTime);
-
-  if (homeLatest !== null && kickoffMinutes > homeLatest) {
-    return {
-      allowed: false,
-      reason: `${homeTeam.name} cannot kick off later than ${homeTeam.latestKickoffTime}.`,
-    };
-  }
-
-  if (awayLatest !== null && kickoffMinutes > awayLatest) {
-    return {
-      allowed: false,
-      reason: `${awayTeam.name} cannot kick off later than ${awayTeam.latestKickoffTime}.`,
-    };
-  }
-
-  return {
-    allowed: true,
-    reason: null,
-  };
+function getSafeAdminFixturesReturnTo(value: FormDataEntryValue | null) {
+  const returnTo = String(value ?? "").trim();
+  return returnTo.startsWith("/admin/fixtures") ? returnTo : "/admin/fixtures";
 }
 
 async function cancelQueuedFixtureReminderDispatches(
@@ -302,93 +218,6 @@ async function cancelQueuedFixtureNotificationDispatches(
       reason: "Fixture deleted before queued match fee emails were sent.",
     },
   );
-}
-
-/**
- * Circle method (round-robin)
- * - Teams are arranged in a list.
- * - Each round pairs first-last, second-secondlast, etc.
- * - Then rotate all but the first team.
- * - If odd teams, add a BYE (null).
- */
-function generateRounds(teamIds: string[]): Pair[][] {
-  const ids: (string | null)[] = [...teamIds];
-
-  if (ids.length < 2) return [];
-
-  if (ids.length % 2 === 1) ids.push(null);
-
-  const n = ids.length;
-  const rounds: Pair[][] = [];
-  let arr = [...ids];
-
-  for (let round = 0; round < n - 1; round++) {
-    const pairs: Pair[] = [];
-
-    for (let i = 0; i < n / 2; i++) {
-      const a = arr[i];
-      const b = arr[n - 1 - i];
-
-      if (!a || !b) continue;
-
-      const isEvenRound = round % 2 === 0;
-      const homeId = isEvenRound ? a : b;
-      const awayId = isEvenRound ? b : a;
-
-      pairs.push({ homeId, awayId });
-    }
-
-    rounds.push(pairs);
-
-    const fixed = arr[0];
-    const rest = arr.slice(1);
-    rest.unshift(rest.pop()!);
-    arr = [fixed, ...rest];
-  }
-
-  return rounds;
-}
-
-function mirrorRounds(rounds: Pair[][]): Pair[][] {
-  return rounds.map((pairs) =>
-    pairs.map((p) => ({
-      homeId: p.awayId,
-      awayId: p.homeId,
-    })),
-  );
-}
-
-function sortPairsByRestriction(
-  pairs: Pair[],
-  teamMap: Map<string, TeamSchedulingRule>,
-) {
-  return [...pairs].sort((a, b) => {
-    const aHome = teamMap.get(a.homeId);
-    const aAway = teamMap.get(a.awayId);
-    const bHome = teamMap.get(b.homeId);
-    const bAway = teamMap.get(b.awayId);
-
-    const aLimit = Math.min(
-      parseTimeToMinutes(aHome?.latestKickoffTime ?? null) ??
-        Number.MAX_SAFE_INTEGER,
-      parseTimeToMinutes(aAway?.latestKickoffTime ?? null) ??
-        Number.MAX_SAFE_INTEGER,
-    );
-
-    const bLimit = Math.min(
-      parseTimeToMinutes(bHome?.latestKickoffTime ?? null) ??
-        Number.MAX_SAFE_INTEGER,
-      parseTimeToMinutes(bAway?.latestKickoffTime ?? null) ??
-        Number.MAX_SAFE_INTEGER,
-    );
-
-    return aLimit - bLimit;
-  });
-}
-
-function getSafeAdminFixturesReturnTo(value: FormDataEntryValue | null) {
-  const returnTo = String(value ?? "").trim();
-  return returnTo.startsWith("/admin/fixtures") ? returnTo : "/admin/fixtures";
 }
 
 export async function submitResultAction(formData: FormData) {
@@ -657,6 +486,7 @@ export async function updateFixtureAction(formData: FormData) {
           homeTeamId: true,
           awayTeamId: true,
           matchFeePence: true,
+          status: true,
           league: {
             select: {
               slug: true,
@@ -723,19 +553,6 @@ export async function updateFixtureAction(formData: FormData) {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    const chargeSync = await syncFixtureMatchFeeCharges({
-      db: tx,
-      fixtureId,
-      leagueId,
-      leagueName: league.name,
-      leagueSeason: league.season,
-      kickoffAt,
-      homeTeam,
-      awayTeam,
-      homeMatchFeePence,
-      awayMatchFeePence,
-    });
-
     const updatedFixture = await tx.fixture.update({
       where: { id: fixtureId },
       data: {
@@ -751,6 +568,19 @@ export async function updateFixtureAction(formData: FormData) {
         status,
         matchFeePence: fixtureMatchFeePence,
       },
+    });
+
+    const chargeSync = await syncFixtureMatchFeeCharges({
+      db: tx,
+      fixtureId,
+      leagueId,
+      leagueName: league.name,
+      leagueSeason: league.season,
+      kickoffAt,
+      homeTeam,
+      awayTeam,
+      homeMatchFeePence,
+      awayMatchFeePence,
     });
 
     return {
@@ -769,9 +599,11 @@ export async function updateFixtureAction(formData: FormData) {
     fixture.homeTeamId !== homeTeamId || fixture.awayTeamId !== awayTeamId;
   const feeAmountChanged =
     (fixture.matchFeePence ?? 0) !== (fixtureMatchFeePence ?? 0);
+  const reactivatedFixture =
+    fixture.status !== FixtureStatus.SCHEDULED && status === FixtureStatus.SCHEDULED;
 
   const shouldSendInitialFeeEmail =
-    !hadExistingFee || teamsChanged || feeAmountChanged;
+    !hadExistingFee || teamsChanged || feeAmountChanged || reactivatedFixture;
 
   if (hasMatchFee && updated.activeCharges.length > 0) {
     await cancelQueuedMatchFeeNotificationDispatches(
