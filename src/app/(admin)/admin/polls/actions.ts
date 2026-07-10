@@ -37,6 +37,11 @@ function parsePollStatus(value: FormDataEntryValue | null) {
   return ["DRAFT", "ACTIVE", "CLOSED"].includes(status) ? status : "ACTIVE";
 }
 
+function parseChoiceMode(value: FormDataEntryValue | null) {
+  const mode = clean(value).toUpperCase();
+  return mode === "MULTIPLE" ? "MULTIPLE" : "SINGLE";
+}
+
 function buildPollRedirect(pollId: string, params?: Record<string, string | number | null | undefined>) {
   const searchParams = new URLSearchParams();
 
@@ -73,6 +78,7 @@ export async function createPollAction(formData: FormData) {
 
   const title = clean(formData.get("title"));
   const question = clean(formData.get("question"));
+  const choiceMode = parseChoiceMode(formData.get("choiceMode"));
   const options = parseOptions(clean(formData.get("options")));
 
   if (!title || !question || options.length < 2) {
@@ -85,8 +91,8 @@ export async function createPollAction(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "SIXFLPoll" ("id", "title", "question", "slug", "status", "createdAt", "updatedAt")
-      VALUES (${pollId}, ${title}, ${question}, ${slug}, 'ACTIVE', ${now}, ${now})
+      INSERT INTO "SIXFLPoll" ("id", "title", "question", "slug", "status", "choiceMode", "createdAt", "updatedAt")
+      VALUES (${pollId}, ${title}, ${question}, ${slug}, 'ACTIVE', ${choiceMode}, ${now}, ${now})
     `);
 
     for (const [index, label] of options.entries()) {
@@ -108,6 +114,7 @@ export async function updatePollAction(formData: FormData) {
   const title = clean(formData.get("title"));
   const question = clean(formData.get("question"));
   const status = parsePollStatus(formData.get("status"));
+  const choiceMode = parseChoiceMode(formData.get("choiceMode"));
   const optionIds = formData.getAll("optionId").map((value) => clean(value)).filter(Boolean);
   const optionLabels = formData.getAll("optionLabel").map((value) => clean(value));
   const newOptions = parseOptions(clean(formData.get("newOptions")));
@@ -133,6 +140,7 @@ export async function updatePollAction(formData: FormData) {
       SET "title" = ${title},
           "question" = ${question},
           "status" = ${status},
+          "choiceMode" = ${choiceMode},
           "updatedAt" = ${now}
       WHERE "id" = ${pollId}
     `);
