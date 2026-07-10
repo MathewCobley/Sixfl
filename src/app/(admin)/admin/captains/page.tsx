@@ -1,8 +1,6 @@
 // ========================================
-// File: src/app/admin/captains/page.tsx
+// File: src/app/(admin)/admin/captains/page.tsx
 // ========================================
-
-"use server";
 
 // ========================================
 // Imports
@@ -13,12 +11,15 @@ import { TeamRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // ========================================
 // Helpers
 // ========================================
 
 function buildClaimUrl(claimCode: string) {
-  return `/teams/claim/${claimCode}`;
+  return `/claim?code=${encodeURIComponent(claimCode)}`;
 }
 
 // ========================================
