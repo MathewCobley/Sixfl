@@ -45,6 +45,14 @@ function revalidateSquadAndProspectPaths(teamId: string) {
   revalidatePath("/admin/player-prospects");
 }
 
+function cleanText(value: FormDataEntryValue | null) {
+  return String(value ?? "").trim();
+}
+
+function cleanEmail(value: FormDataEntryValue | null) {
+  return cleanText(value).toLowerCase();
+}
+
 export async function addAdminSquadMemberAction(formData: FormData) {
   await requireAdmin();
 
@@ -103,6 +111,87 @@ export async function addAdminSquadMemberAction(formData: FormData) {
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath(`/admin/teams/${teamId}/squad`);
   redirect(buildRedirect(teamId, "?saved=member-added"));
+}
+
+export async function grantAdminCaptainAccessAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = cleanText(formData.get("teamId"));
+  const email = cleanEmail(formData.get("email"));
+  const name = cleanText(formData.get("name")) || null;
+
+  if (!teamId) redirect("/admin/teams");
+
+  if (!email) {
+    redirect(buildRedirect(teamId, "?error=Captain%20email%20is%20required."));
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      id: true,
+      name: true,
+      contactName: true,
+      contactEmail: true,
+      captainUserId: true,
+    },
+  });
+
+  if (!team) redirect("/admin/teams");
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.upsert({
+      where: { email },
+      update: name ? { name } : {},
+      create: {
+        email,
+        name: name ?? team.contactName ?? null,
+      },
+      select: { id: true },
+    });
+
+    await tx.teamMember.upsert({
+      where: {
+        userId_teamId: {
+          userId: user.id,
+          teamId: team.id,
+        },
+      },
+      update: {
+        role: TeamRole.CAPTAIN,
+      },
+      create: {
+        userId: user.id,
+        teamId: team.id,
+        role: TeamRole.CAPTAIN,
+      },
+    });
+
+    await tx.team.update({
+      where: { id: team.id },
+      data: {
+        contactEmail: team.contactEmail?.trim() || email,
+        contactName: team.contactName?.trim() || name,
+        captainUserId: user.id,
+        captainLinkedAt: now,
+        captainLinkedSource: "ADMIN_CAPTAIN_ACCESS_OVERRIDE",
+        captainInviteSentTo: email,
+        captainClaimedAt: now,
+        captainClaimSource: "ADMIN_CAPTAIN_ACCESS_OVERRIDE",
+      },
+    });
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/squad`);
+  revalidatePath(`/captain/team/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/fixtures`);
+  revalidatePath(`/captain/team/${teamId}/squad`);
+  revalidatePath("/admin/captains");
+
+  redirect(buildRedirect(teamId, "?saved=captain-access-granted"));
 }
 
 export async function updateAdminSquadMemberRoleAction(formData: FormData) {
