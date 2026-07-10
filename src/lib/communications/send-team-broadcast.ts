@@ -54,6 +54,7 @@ type PollRow = {
   title: string;
   question: string;
   status: string;
+  buttonText: string | null;
   options: PollOptionRow[];
 };
 
@@ -75,8 +76,8 @@ function buildPollUrl(token: string) {
   return `${getPublicSiteUrl()}/polls/${encodeURIComponent(token)}`;
 }
 
-function buildPollVoteUrl(token: string, optionId: string) {
-  return `${getPublicSiteUrl()}/polls/${encodeURIComponent(token)}/vote/${encodeURIComponent(optionId)}`;
+function getPollButtonText(poll: Pick<PollRow, "buttonText" | "title">) {
+  return poll.buttonText?.trim() || "Open poll";
 }
 
 async function getPollOptions(pollId: string) {
@@ -95,15 +96,15 @@ async function getPollForBroadcast(
   const id = pollId?.trim();
 
   const rows = id
-    ? await prisma.$queryRaw<Array<{ id: string; title: string; question: string; status: string }>>(Prisma.sql`
-        SELECT "id", "title", "question", "status"
+    ? await prisma.$queryRaw<Array<{ id: string; title: string; question: string; status: string; buttonText: string | null }>>(Prisma.sql`
+        SELECT "id", "title", "question", "status", COALESCE("buttonText", 'Open poll') AS "buttonText"
         FROM "SIXFLPoll"
         WHERE "id" = ${id}
         LIMIT 1
       `)
     : allowLatestFallback
-      ? await prisma.$queryRaw<Array<{ id: string; title: string; question: string; status: string }>>(Prisma.sql`
-          SELECT "id", "title", "question", "status"
+      ? await prisma.$queryRaw<Array<{ id: string; title: string; question: string; status: string; buttonText: string | null }>>(Prisma.sql`
+          SELECT "id", "title", "question", "status", COALESCE("buttonText", 'Open poll') AS "buttonText"
           FROM "SIXFLPoll"
           WHERE "status" IN ('ACTIVE', 'DRAFT')
           ORDER BY "updatedAt" DESC, "createdAt" DESC
@@ -170,18 +171,13 @@ async function ensurePollRecipient(input: { poll: PollRow; team: TeamForPoll }) 
 }
 
 function buildPollOptionsBlock(input: { poll: PollRow; token: string }) {
-  const optionLines = input.poll.options.map(
-    (option) => `${option.label}: ${buildPollVoteUrl(input.token, option.id)}`,
-  );
+  const pollUrl = buildPollUrl(input.token);
+  const buttonText = getPollButtonText(input.poll);
 
   return [
-    input.poll.question,
-    "",
     POLL_OPTIONS_BLOCK_START,
-    ...optionLines,
+    `${buttonText}: ${pollUrl}`,
     POLL_OPTIONS_BLOCK_END,
-    "",
-    `Open the poll / change your answer: ${buildPollUrl(input.token)}`,
   ].join("\n");
 }
 
