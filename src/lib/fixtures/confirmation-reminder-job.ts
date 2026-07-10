@@ -9,6 +9,16 @@ import { prisma } from "@/lib/prisma";
 
 type AutoFixtureConfirmationReminderMode = "auto72h" | "auto24h";
 
+type FixtureConfirmationSkipReason =
+  | "fixture_not_found"
+  | "team_not_in_fixture"
+  | "not_available"
+  | "confirmed"
+  | "issue_raised"
+  | "no_phone"
+  | "template_missing"
+  | "skipped";
+
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
@@ -34,6 +44,59 @@ function incrementModeCount(
   }
 
   byMode.auto72h += 1;
+}
+
+function getSkippedConfirmationNote(input: {
+  reason: FixtureConfirmationSkipReason;
+  mode: AutoFixtureConfirmationReminderMode;
+}) {
+  const prefix = input.mode === "auto24h" ? "Automatic 24h confirmation chase" : "Automatic 72h confirmation chase";
+
+  switch (input.reason) {
+    case "no_phone":
+      return `${prefix} not sent: no usable captain/team mobile number was found.`;
+    case "template_missing":
+      return `${prefix} not sent: SMS template is missing or inactive.`;
+    case "not_available":
+      return `${prefix} not sent: fixture was not available for confirmation when the job ran.`;
+    case "team_not_in_fixture":
+      return `${prefix} not sent: selected team was not attached to this fixture.`;
+    case "fixture_not_found":
+      return `${prefix} not sent: fixture could not be found.`;
+    case "confirmed":
+      return `${prefix} skipped: fixture was already confirmed.`;
+    case "issue_raised":
+      return `${prefix} skipped: captain had already raised an issue.`;
+    default:
+      return `${prefix} not sent: notification provider or queue skipped it.`;
+  }
+}
+
+async function recordSkippedConfirmationReason(input: {
+  fixtureId: string;
+  teamId: string;
+  reason: FixtureConfirmationSkipReason;
+  mode: AutoFixtureConfirmationReminderMode;
+}) {
+  if (input.reason === "confirmed" || input.reason === "issue_raised") return;
+
+  await prisma.fixtureCaptainConfirmation.upsert({
+    where: {
+      fixtureId_teamId: {
+        fixtureId: input.fixtureId,
+        teamId: input.teamId,
+      },
+    },
+    update: {
+      note: getSkippedConfirmationNote({ reason: input.reason, mode: input.mode }),
+    },
+    create: {
+      fixtureId: input.fixtureId,
+      teamId: input.teamId,
+      status: FixtureCaptainConfirmationStatus.PENDING,
+      note: getSkippedConfirmationNote({ reason: input.reason, mode: input.mode }),
+    },
+  });
 }
 
 export async function runFixtureConfirmationReminderJob() {
@@ -123,6 +186,13 @@ export async function runFixtureConfirmationReminderJob() {
       summary.skipped += 1;
       const reason = result.status;
       skippedByReason[reason] = (skippedByReason[reason] ?? 0) + 1;
+
+      await recordSkippedConfirmationReason({
+        fixtureId: fixture.id,
+        teamId,
+        reason,
+        mode,
+      });
     }
   }
 
