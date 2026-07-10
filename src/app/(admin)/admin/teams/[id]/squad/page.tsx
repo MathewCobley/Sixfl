@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   addAdminSquadMemberAction,
+  grantAdminCaptainAccessAction,
   moveAdminSquadMemberToProspectsAction,
   removeAdminSquadMemberAction,
   updateAdminSquadMemberRoleAction,
@@ -161,6 +162,8 @@ function getSavedMessage(saved?: string) {
   switch (saved) {
     case "member-added":
       return "Squad member added.";
+    case "captain-access-granted":
+      return "Captain access created and linked. The captain can now log in directly with that email.";
     case "role-updated":
       return "Squad role updated.";
     case "member-removed":
@@ -191,6 +194,8 @@ export default async function AdminTeamSquadPage({
       name: true,
       teamMode: true,
       isRecruiting: true,
+      contactName: true,
+      contactEmail: true,
       league: {
         select: {
           id: true,
@@ -552,6 +557,56 @@ export default async function AdminTeamSquadPage({
         </div>
 
         <div className="space-y-6">
+          <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+              Captain access override
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              Create / link captain access
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-amber-100/80">
+              Use this if a captain is stuck in the claim-link loop. It creates the user if needed, adds them as captain, and links the team directly.
+            </p>
+
+            <form action={grantAdminCaptainAccessAction} className="mt-5 space-y-4">
+              <input type="hidden" name="teamId" value={team.id} />
+
+              <div className="space-y-2">
+                <label htmlFor="captain-name" className="text-sm text-amber-100/80">
+                  Captain name
+                </label>
+                <input
+                  id="captain-name"
+                  name="name"
+                  defaultValue={team.contactName ?? ""}
+                  placeholder="Captain name"
+                  className="w-full rounded-xl border border-amber-400/20 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-amber-300/60"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="captain-email" className="text-sm text-amber-100/80">
+                  Captain email
+                </label>
+                <input
+                  id="captain-email"
+                  name="email"
+                  type="email"
+                  defaultValue={team.contactEmail ?? ""}
+                  placeholder="captain@example.com"
+                  className="w-full rounded-xl border border-amber-400/20 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-amber-300/60"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="inline-flex items-center rounded-xl bg-amber-300 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-200"
+              >
+                Link captain access
+              </button>
+            </form>
+          </section>
+
           <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Add existing user
