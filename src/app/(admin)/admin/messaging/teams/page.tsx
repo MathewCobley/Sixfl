@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 
 import AllTeamsCommunicationsComposer from "@/components/admin/communications/AllTeamsCommunicationsComposer";
 import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
@@ -20,6 +21,16 @@ type SearchParams = {
   failed?: string;
   warning?: string;
   error?: string;
+};
+
+type PollRow = {
+  id: string;
+  title: string;
+  question: string;
+  status: string;
+  optionId: string;
+  optionLabel: string;
+  optionSortOrder: number;
 };
 
 function getNotice(params: SearchParams) {
@@ -59,6 +70,53 @@ function resolveTemplateCtaUrl(ctaUrlKey: string | null, input: { baseUrl: strin
   }
 }
 
+async function getPollOptionsForComposer() {
+  const rows = await prisma.$queryRaw<PollRow[]>(Prisma.sql`
+    SELECT
+      poll."id",
+      poll."title",
+      poll."question",
+      poll."status",
+      option."id" AS "optionId",
+      option."label" AS "optionLabel",
+      option."sortOrder" AS "optionSortOrder"
+    FROM "SIXFLPoll" poll
+    INNER JOIN "SIXFLPollOption" option ON option."pollId" = poll."id"
+    WHERE poll."status" IN ('ACTIVE', 'DRAFT')
+    ORDER BY poll."createdAt" DESC, option."sortOrder" ASC, option."label" ASC
+  `);
+
+  const pollMap = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      question: string;
+      status: string;
+      options: Array<{ id: string; label: string }>;
+    }
+  >();
+
+  for (const row of rows) {
+    const existing = pollMap.get(row.id);
+
+    if (existing) {
+      existing.options.push({ id: row.optionId, label: row.optionLabel });
+      continue;
+    }
+
+    pollMap.set(row.id, {
+      id: row.id,
+      title: row.title,
+      question: row.question,
+      status: row.status,
+      options: [{ id: row.optionId, label: row.optionLabel }],
+    });
+  }
+
+  return Array.from(pollMap.values());
+}
+
 export default async function AdminAllTeamsCommunicationsPage({
   searchParams,
 }: {
@@ -70,7 +128,7 @@ export default async function AdminAllTeamsCommunicationsPage({
   const notice = getNotice(sp);
   const warningMessage = sp.warning ? decodeURIComponent(sp.warning) : null;
 
-  const [teams, emailTemplates, smsTemplates] = await Promise.all([
+  const [teams, emailTemplates, smsTemplates, polls] = await Promise.all([
     prisma.team.findMany({
       orderBy: [{ name: "asc" }],
       select: {
@@ -121,6 +179,7 @@ export default async function AdminAllTeamsCommunicationsPage({
         ctaUrlKey: true,
       },
     }),
+    getPollOptionsForComposer(),
   ]);
 
   const snapshots = await Promise.all(teams.map((team) => getTeamContactSnapshot(team.id)));
@@ -275,6 +334,7 @@ export default async function AdminAllTeamsCommunicationsPage({
         teams={teamOptions}
         emailTemplates={resolvedEmailTemplates}
         smsTemplates={resolvedSmsTemplates}
+        polls={polls}
       />
     </div>
   );
