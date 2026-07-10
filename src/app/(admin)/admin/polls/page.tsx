@@ -27,6 +27,7 @@ type PollListRow = {
   question: string;
   slug: string;
   status: string;
+  choiceMode: string;
   createdAt: Date;
   optionCount: number;
   recipientCount: number;
@@ -58,6 +59,10 @@ function statusTone(status: string) {
   }
 }
 
+function choiceModeLabel(choiceMode: string) {
+  return choiceMode === "MULTIPLE" ? "multiple choice" : "single choice";
+}
+
 async function getPolls() {
   return prisma.$queryRaw<PollListRow[]>(Prisma.sql`
     SELECT
@@ -66,13 +71,18 @@ async function getPolls() {
       poll."question",
       poll."slug",
       poll."status",
+      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode",
       poll."createdAt",
       COUNT(DISTINCT option."id")::int AS "optionCount",
       COUNT(DISTINCT recipient."id")::int AS "recipientCount",
-      COUNT(DISTINCT recipient."id") FILTER (WHERE recipient."selectedOptionId" IS NOT NULL)::int AS "voteCount"
+      COUNT(DISTINCT recipient."id") FILTER (
+        WHERE recipient."selectedOptionId" IS NOT NULL
+           OR selected."recipientId" IS NOT NULL
+      )::int AS "voteCount"
     FROM "SIXFLPoll" poll
     LEFT JOIN "SIXFLPollOption" option ON option."pollId" = poll."id"
     LEFT JOIN "SIXFLPollRecipient" recipient ON recipient."pollId" = poll."id"
+    LEFT JOIN "SIXFLPollRecipientOption" selected ON selected."recipientId" = recipient."id"
     GROUP BY poll."id"
     ORDER BY poll."createdAt" DESC
   `);
@@ -123,17 +133,31 @@ export default async function PollsAdminPage({ searchParams }: PageProps) {
             Question
             <input
               name="question"
-              placeholder="Which night would your team prefer?"
+              placeholder="Which nights can your team play?"
               className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40"
             />
           </label>
+
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-4 lg:col-span-2">
+            <div className="text-sm font-semibold text-white">Answer type</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
+                <input type="radio" name="choiceMode" value="SINGLE" defaultChecked className="mr-2" />
+                Single choice — teams pick one option.
+              </label>
+              <label className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-4 text-sm text-emerald-50/85">
+                <input type="radio" name="choiceMode" value="MULTIPLE" className="mr-2" />
+                Multiple choice — teams can tick Monday and Tuesday, etc.
+              </label>
+            </div>
+          </div>
 
           <label className="space-y-2 text-sm font-semibold text-white lg:col-span-2">
             Answer options — one per line
             <textarea
               name="options"
               rows={7}
-              defaultValue={["Wednesday only", "Thursday only", "Either Wednesday or Thursday", "Prefer Wednesday but could do Thursday", "Prefer Thursday but could do Wednesday", "Need to check with squad"].join("\n")}
+              defaultValue={["Monday", "Tuesday", "Wednesday", "Thursday", "Need to check with squad"].join("\n")}
               className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/40"
             />
           </label>
@@ -168,6 +192,9 @@ export default async function PollsAdminPage({ searchParams }: PageProps) {
                     <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusTone(poll.status)}`}>
                       {poll.status.toLowerCase()}
                     </span>
+                    <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-100">
+                      {choiceModeLabel(poll.choiceMode)}
+                    </span>
                   </div>
                   <p className="mt-1 text-sm text-white/55">{poll.question}</p>
                   <p className="mt-2 text-xs text-white/35">
@@ -175,7 +202,7 @@ export default async function PollsAdminPage({ searchParams }: PageProps) {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link href={`/admin/polls/${poll.id}/edit`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 px-5 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15">
+                  <Link href={`/admin/polls/${poll.id}/edit`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07]">
                     Edit
                   </Link>
                   <Link href={`/admin/polls/${poll.id}`} className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
