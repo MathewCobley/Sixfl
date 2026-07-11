@@ -61,6 +61,10 @@ function getChangeHash(input: unknown) {
   return createHash("sha1").update(JSON.stringify(input)).digest("hex").slice(0, 16);
 }
 
+function shouldSendReconfirmNoticeForStatus(status: FixtureStatus) {
+  return status === FixtureStatus.SCHEDULED || status === FixtureStatus.COMPLETED;
+}
+
 function describeFixture(input: {
   homeTeamName: string;
   awayTeamName: string;
@@ -158,6 +162,14 @@ export async function POST(request: Request) {
   }
 
   const status = rawStatus as FixtureStatus;
+
+  if (!shouldSendReconfirmNoticeForStatus(status)) {
+    return NextResponse.json({
+      queued: 0,
+      reason: "No reconfirmation notice sent because this fixture is being postponed or cancelled.",
+    });
+  }
+
   const nextKickoffAt = parseLondonDateTime(kickoffDate, kickoffTime);
 
   const [fixture, league, nextHomeTeam, nextAwayTeam, nextVenue] = await Promise.all([
