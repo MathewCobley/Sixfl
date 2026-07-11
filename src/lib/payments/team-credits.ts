@@ -44,6 +44,151 @@ function getEntrySignedAmount(entry: Pick<TeamCreditLedgerEntry, "entryType" | "
   return -entry.amountPence;
 }
 
+export async function syncLegacyTeamCreditPotEntries(
+  teamIdsInput: string[],
+  db: CreditDb = prisma,
+) {
+  const teamIds = uniqueIds(teamIdsInput);
+  if (teamIds.length === 0) return;
+
+  await db.$executeRaw(Prisma.sql`
+    INSERT INTO "TeamCreditLedgerEntry" (
+      "id",
+      "teamId",
+      "sourceFixtureId",
+      "chargeId",
+      "entryType",
+      "amountPence",
+      "description",
+      "createdAt"
+    )
+    SELECT
+      CONCAT('tcred_pot_', pot."sourceType", '_', pot."sourceId") AS "id",
+      pot."teamId",
+      pot."fixtureId" AS "sourceFixtureId",
+      pot."chargeId",
+      'CREDIT_ADDED'::"TeamCreditLedgerEntryType" AS "entryType",
+      pot."amountPence",
+      pot."description",
+      pot."createdAt"
+    FROM "TeamCreditPotEntry" pot
+    WHERE pot."teamId" IN (${Prisma.join(teamIds)})
+      AND pot."amountPence" > 0
+    ON CONFLICT ("id") DO UPDATE SET
+      "teamId" = EXCLUDED."teamId",
+      "sourceFixtureId" = EXCLUDED."sourceFixtureId",
+      "chargeId" = EXCLUDED."chargeId",
+      "amountPence" = EXCLUDED."amountPence",
+      "description" = EXCLUDED."description"
+  `);
+}
+
+export async function syncPlayerOverpaymentCreditsForTeams(
+  teamIdsInput: string[],
+  db: CreditDb = prisma,
+) {
+  const teamIds = uniqueIds(teamIdsInput);
+  if (teamIds.length === 0) return;
+
+  await db.$executeRaw(Prisma.sql`
+    WITH player_totals AS (
+      SELECT
+        pmf."teamId",
+        pmf."fixtureId",
+        SUM(pmf."amountPence")::int AS "paidTotalPence"
+      FROM "PlayerMatchFee" pmf
+      WHERE pmf."teamId" IN (${Prisma.join(teamIds)})
+        AND pmf."status" = 'PAID'
+      GROUP BY pmf."teamId", pmf."fixtureId"
+    ),
+    overpaid_charges AS (
+      SELECT
+        CONCAT('tcred_player_overpay_', pt."teamId", '_', pt."fixtureId") AS "id",
+        pt."teamId",
+        pt."fixtureId",
+        pc."id" AS "chargeId",
+        pc."amountPence" AS "chargeAmountPence",
+        pt."paidTotalPence",
+        (pt."paidTotalPence" - pc."amountPence")::int AS "surplusPence"
+      FROM player_totals pt
+      JOIN "PaymentCharge" pc
+        ON pc."teamId" = pt."teamId"
+       AND pc."fixtureId" = pt."fixtureId"
+      WHERE pc."status" <> 'VOID'
+        AND pt."paidTotalPence" > pc."amountPence"
+    )
+    INSERT INTO "TeamCreditLedgerEntry" (
+      "id",
+      "teamId",
+      "sourceFixtureId",
+      "chargeId",
+      "entryType",
+      "amountPence",
+      "description"
+    )
+    SELECT
+      oc."id",
+      oc."teamId",
+      oc."fixtureId",
+      oc."chargeId",
+      'CREDIT_ADDED'::"TeamCreditLedgerEntryType",
+      oc."surplusPence",
+      CONCAT(
+        'Squad payment overpayment added to team credit ledger. Players paid £',
+        TO_CHAR((oc."paidTotalPence"::numeric / 100), 'FM999999990.00'),
+        ' against a £',
+        TO_CHAR((oc."chargeAmountPence"::numeric / 100), 'FM999999990.00'),
+        ' team fee.'
+      )
+    FROM overpaid_charges oc
+    ON CONFLICT ("id") DO UPDATE SET
+      "teamId" = EXCLUDED."teamId",
+      "sourceFixtureId" = EXCLUDED."sourceFixtureId",
+      "chargeId" = EXCLUDED."chargeId",
+      "amountPence" = EXCLUDED."amountPence",
+      "description" = EXCLUDED."description"
+  `);
+
+  await db.$executeRaw(Prisma.sql`
+    WITH player_totals AS (
+      SELECT
+        pmf."teamId",
+        pmf."fixtureId",
+        SUM(pmf."amountPence")::int AS "paidTotalPence"
+      FROM "PlayerMatchFee" pmf
+      WHERE pmf."teamId" IN (${Prisma.join(teamIds)})
+        AND pmf."status" = 'PAID'
+      GROUP BY pmf."teamId", pmf."fixtureId"
+    ),
+    current_overpay_ids AS (
+      SELECT CONCAT('tcred_player_overpay_', pt."teamId", '_', pt."fixtureId") AS "id"
+      FROM player_totals pt
+      JOIN "PaymentCharge" pc
+        ON pc."teamId" = pt."teamId"
+       AND pc."fixtureId" = pt."fixtureId"
+      WHERE pc."status" <> 'VOID'
+        AND pt."paidTotalPence" > pc."amountPence"
+    )
+    DELETE FROM "TeamCreditLedgerEntry" entry
+    WHERE entry."teamId" IN (${Prisma.join(teamIds)})
+      AND entry."id" LIKE 'tcred_player_overpay_%'
+      AND NOT EXISTS (
+        SELECT 1 FROM current_overpay_ids current_ids WHERE current_ids."id" = entry."id"
+      )
+  `);
+}
+
+export async function syncTeamCreditLedgerSources(
+  teamIdsInput: string[],
+  db: CreditDb = prisma,
+) {
+  const teamIds = uniqueIds(teamIdsInput);
+  if (teamIds.length === 0) return;
+
+  await syncLegacyTeamCreditPotEntries(teamIds, db);
+  await syncPlayerOverpaymentCreditsForTeams(teamIds, db);
+}
+
 export async function getTeamCreditLedger(
   teamIdsInput: string[],
   db: CreditDb = prisma,
@@ -53,6 +198,8 @@ export async function getTeamCreditLedger(
   if (teamIds.length === 0) {
     return { teamIds: [], balancePence: 0, entries: [] };
   }
+
+  await syncTeamCreditLedgerSources(teamIds, db);
 
   const entries = await db.$queryRaw<TeamCreditLedgerEntry[]>(Prisma.sql`
     SELECT
