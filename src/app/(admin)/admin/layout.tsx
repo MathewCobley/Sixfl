@@ -11,6 +11,7 @@ import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communicatio
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
 import EmailTemplateListControlsBridge from "@/components/admin/email-templates/EmailTemplateListControlsBridge";
 import FixtureCardResultLinksBridge from "@/components/admin/fixtures/FixtureCardResultLinksBridge";
+import FixtureSeasonWordingBridge from "@/components/admin/fixtures/FixtureSeasonWordingBridge";
 import GenerateNextWeekFixturesBridge from "@/components/admin/fixtures/GenerateNextWeekFixturesBridge";
 import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditButtonBridge";
@@ -49,6 +50,7 @@ export default async function AdminLayout({
       <QueuedSmsReasonHints />
       <FixtureChangeNotificationSubmitBridge />
       <FixtureCardResultLinksBridge />
+      <FixtureSeasonWordingBridge />
       <ProspectCommunicationCtaBridge />
       <AdminTeamContactPhoneFallbackBridge />
       <AdminVoidPaymentChargesBridge />
