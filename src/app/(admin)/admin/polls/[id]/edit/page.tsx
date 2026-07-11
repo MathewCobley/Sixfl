@@ -9,7 +9,7 @@ import { Prisma } from "@prisma/client";
 import AdminCard from "@/components/admin/AdminCard";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { updatePollAction } from "../../actions";
+import { updatePollAction, updatePollStatusAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -39,6 +39,12 @@ type OptionRow = {
   sortOrder: number;
   voteCount: number;
 };
+
+const POLL_STATUSES = [
+  { value: "DRAFT", label: "Draft", helper: "Hidden from teams" },
+  { value: "ACTIVE", label: "Active", helper: "Teams can vote" },
+  { value: "CLOSED", label: "Closed", helper: "Voting disabled" },
+] as const;
 
 function getSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
@@ -77,23 +83,25 @@ async function getOptions(pollId: string) {
   `);
 }
 
-function statusButtonClass(isActive: boolean) {
-  return [
-    "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition",
-    isActive
-      ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-50"
-      : "border-white/10 bg-black/25 text-white/65 hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
-  ].join(" ");
+function statusPillClass(status: string) {
+  if (status === "ACTIVE") return "border-emerald-400/30 bg-emerald-500/15 text-emerald-100";
+  if (status === "CLOSED") return "border-red-400/30 bg-red-500/10 text-red-100";
+  return "border-amber-400/30 bg-amber-500/10 text-amber-100";
 }
 
-function modeButtonClass(isActive: boolean) {
-  return [
-    "rounded-2xl border p-4 text-left text-sm font-semibold transition",
-    isActive
-      ? "border-sky-400/35 bg-sky-500/15 text-sky-50"
-      : "border-white/10 bg-black/25 text-white/65 hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
-  ].join(" ");
-}
+const radioCardClass = [
+  "block h-full cursor-pointer rounded-2xl border p-4 text-left text-sm font-semibold transition",
+  "border-white/10 bg-black/25 text-white/65 hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
+  "peer-checked:border-emerald-400/40 peer-checked:bg-emerald-500/15 peer-checked:text-emerald-50",
+  "peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-400/30",
+].join(" ");
+
+const modeRadioCardClass = [
+  "block h-full cursor-pointer rounded-2xl border p-4 text-left text-sm font-semibold transition",
+  "border-white/10 bg-black/25 text-white/65 hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
+  "peer-checked:border-sky-400/35 peer-checked:bg-sky-500/15 peer-checked:text-sky-50",
+  "peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400/30",
+].join(" ");
 
 export default async function EditPollPage({ params, searchParams }: PageProps) {
   await requireAdmin();
@@ -114,9 +122,14 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
         <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
           Poll editor
         </p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-          Edit poll
-        </h1>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+            Edit poll
+          </h1>
+          <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${statusPillClass(poll.status)}`}>
+            {poll.status.toLowerCase()}
+          </span>
+        </div>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
           Edit the wording, answer type, email button text and options. Existing options are renamed rather than deleted so existing votes do not break.
         </p>
@@ -142,23 +155,29 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
               />
             </label>
 
-            <label className="space-y-2 text-sm font-semibold text-white">
-              Status
+            <fieldset className="space-y-2 text-sm font-semibold text-white">
+              <legend>Status</legend>
               <div className="grid gap-2 sm:grid-cols-3">
-                {["DRAFT", "ACTIVE", "CLOSED"].map((status) => (
-                  <label key={status} className={statusButtonClass(poll.status === status)}>
+                {POLL_STATUSES.map((status) => (
+                  <label key={status.value}>
                     <input
                       type="radio"
                       name="status"
-                      value={status}
-                      defaultChecked={poll.status === status}
-                      className="sr-only"
+                      value={status.value}
+                      defaultChecked={poll.status === status.value}
+                      className="peer sr-only"
                     />
-                    {status.toLowerCase()}
+                    <span className={radioCardClass}>
+                      <span className="block text-white">{status.label}</span>
+                      <span className="mt-1 block text-xs font-normal text-white/55">{status.helper}</span>
+                    </span>
                   </label>
                 ))}
               </div>
-            </label>
+              <p className="text-xs font-normal text-white/45">
+                Choose Closed and save to stop teams submitting more votes.
+              </p>
+            </fieldset>
           </div>
 
           <section className="rounded-3xl border border-sky-400/15 bg-sky-500/[0.04] p-5">
@@ -167,27 +186,31 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
               Use multiple choice when a team may be available on more than one night.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className={modeButtonClass(poll.choiceMode !== "MULTIPLE")}>
+              <label>
                 <input
                   type="radio"
                   name="choiceMode"
                   value="SINGLE"
                   defaultChecked={poll.choiceMode !== "MULTIPLE"}
-                  className="sr-only"
+                  className="peer sr-only"
                 />
-                <span className="block text-white">Single choice</span>
-                <span className="mt-1 block text-xs font-normal text-white/55">Each team can pick one option only.</span>
+                <span className={modeRadioCardClass}>
+                  <span className="block text-white">Single choice</span>
+                  <span className="mt-1 block text-xs font-normal text-white/55">Each team can pick one option only.</span>
+                </span>
               </label>
-              <label className={modeButtonClass(poll.choiceMode === "MULTIPLE")}>
+              <label>
                 <input
                   type="radio"
                   name="choiceMode"
                   value="MULTIPLE"
                   defaultChecked={poll.choiceMode === "MULTIPLE"}
-                  className="sr-only"
+                  className="peer sr-only"
                 />
-                <span className="block text-white">Multiple choice</span>
-                <span className="mt-1 block text-xs font-normal text-white/55">Teams can tick several options, such as Monday and Tuesday.</span>
+                <span className={modeRadioCardClass}>
+                  <span className="block text-white">Multiple choice</span>
+                  <span className="mt-1 block text-xs font-normal text-white/55">Teams can tick several options, such as Monday and Tuesday.</span>
+                </span>
               </label>
             </div>
           </section>
@@ -256,6 +279,15 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
           <div className="flex flex-wrap gap-3">
             <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300">
               Save poll changes
+            </button>
+            <button
+              type="submit"
+              formAction={updatePollStatusAction}
+              name="status"
+              value="CLOSED"
+              className="inline-flex h-12 items-center justify-center rounded-2xl border border-red-400/30 bg-red-500/10 px-6 text-sm font-semibold text-red-100 transition hover:bg-red-500/15"
+            >
+              Close poll now
             </button>
             <Link href={`/admin/polls/${poll.id}`} className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 text-sm font-semibold text-white/75 transition hover:bg-white/[0.07]">
               Cancel
