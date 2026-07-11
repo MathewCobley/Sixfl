@@ -121,18 +121,18 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
-function getThreadTitle(thread: InboxThreadListItem) {
-  if (thread.team?.teamMode === "MANAGED") {
-    return thread.contactName || thread.contactEmail || thread.contactPhone || thread.team.name;
-  }
-
+function getThreadPersonName(thread: InboxThreadListItem) {
   return (
-    thread.team?.name ||
     thread.contactName ||
     thread.contactEmail ||
     thread.contactPhone ||
-    "Unknown contact"
+    thread.phoneNormalized ||
+    null
   );
+}
+
+function getThreadTitle(thread: InboxThreadListItem) {
+  return getThreadPersonName(thread) || thread.team?.name || "Unknown contact";
 }
 
 function getThreadSubtitle(thread: InboxThreadListItem) {
@@ -142,11 +142,12 @@ function getThreadSubtitle(thread: InboxThreadListItem) {
       : thread.league.name
     : null;
 
+  const team = thread.team?.name ? `Team: ${thread.team.name}` : null;
   const managed = thread.team?.teamMode === "MANAGED" && thread.team
-    ? `Managed team: ${thread.team.name}`
+    ? "Managed squad"
     : null;
 
-  return [managed, league].filter(Boolean).join(" · ") ||
+  return [team, managed, league].filter(Boolean).join(" · ") ||
     (thread.channel === "EMAIL" ? "Email conversation" : "SMS conversation");
 }
 
