@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import FormListboxField from "@/components/ui/FormListboxField";
 import ResultsCardGenerator from "@/components/admin/social/ResultsCardGenerator";
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { formatDateTimeInLondon, toLondonDateInputValue } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -92,9 +93,10 @@ export default async function AdminResultsCardGeneratorPage({
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
+  const currentLeagueIds = await getCurrentLeagueIds(sp.leagueId ?? null);
 
   const leagues = await prisma.league.findMany({
-    where: { isActive: true },
+    where: { id: { in: currentLeagueIds } },
     orderBy: [{ name: "asc" }, { season: "asc" }],
     select: {
       id: true,
@@ -203,7 +205,7 @@ export default async function AdminResultsCardGeneratorPage({
               Match results card
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              Generate a square Instagram/Facebook results graphic. 3-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-new.png</span>; 4-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-4.png</span>.
+              Generate a square Instagram/Facebook results graphic from completed fixtures in a selected current season. 3-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-new.png</span>; 4-result cards use <span className="font-mono text-white/80">public/social/templates/match-results-template-4.png</span>.
             </p>
           </div>
 
@@ -220,15 +222,16 @@ export default async function AdminResultsCardGeneratorPage({
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
           <h2 className="text-xl font-semibold text-white">Card inputs</h2>
           <p className="mt-2 text-sm leading-6 text-white/55">
-            Choose the league/date, then download the generated PNG from the preview.
+            Choose the current season/date, then download the generated PNG from the preview.
           </p>
 
           <form className="mt-6 space-y-5" action="/admin/social/results">
             <FormListboxField
               name="leagueId"
+              label="Current season"
               value={selectedLeague?.id ?? ""}
               options={leagueOptions}
-              placeholder="Choose league"
+              placeholder="Choose season"
             />
 
             <label className="block space-y-2 text-sm font-medium text-white/65">
@@ -295,7 +298,7 @@ export default async function AdminResultsCardGeneratorPage({
             <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 p-12 text-center">
               <h2 className="text-xl font-semibold text-white">No completed results found</h2>
               <p className="mt-2 text-sm leading-6 text-white/55">
-                Choose a league/date with completed fixtures, then the preview will appear here.
+                Choose a current season/date with completed fixtures, then the preview will appear here.
               </p>
             </div>
           )}
