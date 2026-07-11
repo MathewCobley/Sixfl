@@ -15,6 +15,12 @@ function clean(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
 
+function parseQuantity(value: FormDataEntryValue | null) {
+  const parsed = Number(clean(value));
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(999, Math.floor(parsed)));
+}
+
 export async function submitPollVoteAction(formData: FormData) {
   const token = clean(formData.get("token"));
   const note = clean(formData.get("note")) || null;
@@ -27,13 +33,14 @@ export async function submitPollVoteAction(formData: FormData) {
   }
 
   const rows = await prisma.$queryRaw<
-    Array<{ recipientId: string; pollId: string; status: string; choiceMode: string }>
+    Array<{ recipientId: string; pollId: string; status: string; choiceMode: string; allowQuantity: boolean }>
   >(Prisma.sql`
     SELECT
       recipient."id" AS "recipientId",
       poll."id" AS "pollId",
       poll."status",
-      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode"
+      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode",
+      COALESCE(poll."allowQuantity", false) AS "allowQuantity"
     FROM "SIXFLPollRecipient" recipient
     INNER JOIN "SIXFLPoll" poll ON poll."id" = recipient."pollId"
     WHERE recipient."token" = ${token}
@@ -72,17 +79,22 @@ export async function submitPollVoteAction(formData: FormData) {
     `);
 
     for (const optionId of selectedOptionIds) {
+      const quantity = poll.allowQuantity ? parseQuantity(formData.get(`quantity_${optionId}`)) : 1;
+
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO "SIXFLPollRecipientOption" (
           "id",
           "recipientId",
           "pollId",
           "optionId",
+          "quantity",
           "createdAt",
           "updatedAt"
         )
-        VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, ${now}, ${now})
-        ON CONFLICT DO NOTHING
+        VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, ${quantity}, ${now}, ${now})
+        ON CONFLICT ("recipientId", "optionId") DO UPDATE SET
+          "quantity" = EXCLUDED."quantity",
+          "updatedAt" = EXCLUDED."updatedAt"
       `);
     }
 
