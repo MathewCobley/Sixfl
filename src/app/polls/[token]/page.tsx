@@ -5,6 +5,7 @@
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
+import TeamBadge from "@/components/admin/TeamBadge";
 import { prisma } from "@/lib/prisma";
 import { submitPollVoteAction } from "./actions";
 
@@ -25,6 +26,7 @@ type PollRecipientRow = {
   token: string;
   teamName: string;
   contactName: string | null;
+  teamLogoUrl: string | null;
   selectedOptionId: string | null;
   note: string | null;
   votedAt: Date | null;
@@ -52,6 +54,7 @@ async function getRecipient(token: string) {
       recipient."token",
       recipient."teamName",
       recipient."contactName",
+      team."logoUrl" AS "teamLogoUrl",
       recipient."selectedOptionId",
       recipient."note",
       recipient."votedAt",
@@ -62,6 +65,7 @@ async function getRecipient(token: string) {
       COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode"
     FROM "SIXFLPollRecipient" recipient
     INNER JOIN "SIXFLPoll" poll ON poll."id" = recipient."pollId"
+    LEFT JOIN "Team" team ON team."id" = recipient."sourceId" AND recipient."sourceType" = 'TEAM'
     WHERE recipient."token" = ${token}
     LIMIT 1
   `);
@@ -115,6 +119,11 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
     <main className="min-h-screen bg-[#06120e] px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl space-y-6">
         <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.32)] md:p-8">
+          {recipient.teamLogoUrl ? (
+            <div className="mb-5 flex justify-center">
+              <TeamBadge name={recipient.teamName} logoUrl={recipient.teamLogoUrl} size="lg" />
+            </div>
+          ) : null}
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
             SIXFL poll
           </p>
