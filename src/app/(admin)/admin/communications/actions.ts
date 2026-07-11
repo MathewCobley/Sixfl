@@ -21,6 +21,19 @@ import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
+type CommunicationVariables = Record<string, string | number | boolean | null>;
+
+const COMMON_COMMUNICATION_TOKENS = [
+  "firstName",
+  "name",
+  "fullName",
+  "teamName",
+  "leagueName",
+  "signupUrl",
+  "link",
+];
+const POLL_TOKENS = ["pollOptions", "pollLink"];
+
 function getTrimmedValue(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
@@ -32,6 +45,44 @@ function getSafeRedirectPath(value: FormDataEntryValue | null, fallback: string)
 
 function getFullName(input: { firstName: string; lastName: string | null }) {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
+}
+
+function getFirstName(value: string | null | undefined) {
+  return value?.trim().split(/\s+/)[0]?.trim() || "there";
+}
+
+function getLeagueName(input?: { name: string; season: string | null } | null) {
+  return input ? `${input.name}${input.season ? ` — ${input.season}` : ""}` : "";
+}
+
+function buildCommunicationVariables(input: {
+  displayName: string;
+  teamName: string;
+  leagueName: string | null;
+  ctaUrl?: string | null;
+}): CommunicationVariables {
+  const name = input.displayName?.trim() || input.teamName || "there";
+  return {
+    firstName: getFirstName(name),
+    name,
+    fullName: name,
+    teamName: input.teamName,
+    leagueName: input.leagueName ?? "",
+    signupUrl: "https://www.sixfl.co.uk/register-interest",
+    link: input.ctaUrl?.trim() || "",
+  };
+}
+
+function getAllowedTemplateTokens(input: {
+  channel: NotificationChannel;
+  hasEmailCta?: boolean;
+  extraTokens?: string[];
+}) {
+  return [
+    ...COMMON_COMMUNICATION_TOKENS,
+    ...(input.channel === NotificationChannel.EMAIL && input.hasEmailCta ? ["cta"] : []),
+    ...(input.extraTokens ?? []),
+  ];
 }
 
 function getErrorMessage(error: unknown) {
@@ -87,6 +138,7 @@ type CommunicationRecipientContext = {
     teamName: string;
     leagueName: string | null;
   };
+  variables: CommunicationVariables;
   metadata: Record<string, unknown>;
 };
 
@@ -94,37 +146,18 @@ async function getTeamCommunicationRecipientContext(input: {
   teamId: string;
   recipientType: string;
   recipientId: string | null;
+  ctaUrl?: string | null;
 }): Promise<CommunicationRecipientContext> {
   const { teamId, recipientType, recipientId } = input;
 
   if (recipientType === "teamMember" && recipientId) {
     const member = await prisma.teamMember.findFirst({
-      where: {
-        id: recipientId,
-        teamId,
-      },
+      where: { id: recipientId, teamId },
       select: {
         id: true,
         role: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        team: {
-          select: {
-            id: true,
-            name: true,
-            league: {
-              select: {
-                name: true,
-                season: true,
-              },
-            },
-          },
-        },
+        user: { select: { id: true, name: true, email: true } },
+        team: { select: { id: true, name: true, league: { select: { name: true, season: true } } } },
       },
     });
 
@@ -135,9 +168,7 @@ async function getTeamCommunicationRecipientContext(input: {
     const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);
     const profile = profiles.get(member.id) ?? null;
     const displayName = member.user.name?.trim() || member.user.email?.trim() || "Squad member";
-    const leagueName = member.team.league
-      ? `${member.team.league.name}${member.team.league.season ? ` — ${member.team.league.season}` : ""}`
-      : null;
+    const leagueName = getLeagueName(member.team.league) || null;
 
     const recipient = await upsertNotificationRecipient({
       sourceType: NotificationRecipientSourceType.GENERAL,
@@ -165,10 +196,13 @@ async function getTeamCommunicationRecipientContext(input: {
       sourceType: "TEAM_MEMBER",
       sourceId: member.id,
       displayName,
-      emailBranding: {
+      emailBranding: { teamName: member.team.name, leagueName },
+      variables: buildCommunicationVariables({
+        displayName,
         teamName: member.team.name,
         leagueName,
-      },
+        ctaUrl: input.ctaUrl,
+      }),
       metadata: {
         recipientType: "teamMember",
         teamMemberId: member.id,
@@ -180,10 +214,7 @@ async function getTeamCommunicationRecipientContext(input: {
 
   if (recipientType === "prospect" && recipientId) {
     const prospect = await prisma.teamPlayerProspect.findFirst({
-      where: {
-        id: recipientId,
-        teamId,
-      },
+      where: { id: recipientId, teamId },
       select: {
         id: true,
         firstName: true,
@@ -191,18 +222,7 @@ async function getTeamCommunicationRecipientContext(input: {
         email: true,
         phone: true,
         status: true,
-        team: {
-          select: {
-            id: true,
-            name: true,
-            league: {
-              select: {
-                name: true,
-                season: true,
-              },
-            },
-          },
-        },
+        team: { select: { id: true, name: true, league: { select: { name: true, season: true } } } },
       },
     });
 
@@ -211,9 +231,7 @@ async function getTeamCommunicationRecipientContext(input: {
     }
 
     const displayName = getFullName(prospect) || prospect.firstName;
-    const leagueName = prospect.team.league
-      ? `${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}`
-      : null;
+    const leagueName = getLeagueName(prospect.team.league) || null;
 
     const recipient = await upsertNotificationRecipient({
       sourceType: NotificationRecipientSourceType.GENERAL,
@@ -239,10 +257,13 @@ async function getTeamCommunicationRecipientContext(input: {
       sourceType: "TEAM_PLAYER_PROSPECT",
       sourceId: prospect.id,
       displayName,
-      emailBranding: {
+      emailBranding: { teamName: prospect.team.name, leagueName },
+      variables: buildCommunicationVariables({
+        displayName,
         teamName: prospect.team.name,
         leagueName,
-      },
+        ctaUrl: input.ctaUrl,
+      }),
       metadata: {
         recipientType: "prospect",
         prospectId: prospect.id,
@@ -252,20 +273,22 @@ async function getTeamCommunicationRecipientContext(input: {
   }
 
   const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
+  const displayName = snapshot.primaryContact.name || snapshot.teamName;
 
   return {
     recipient,
     audience: NotificationAudience.TEAM,
     sourceType: "TEAM",
     sourceId: teamId,
-    displayName: snapshot.primaryContact.name || snapshot.teamName,
-    emailBranding: {
+    displayName,
+    emailBranding: { teamName: snapshot.teamName, leagueName: snapshot.leagueName },
+    variables: buildCommunicationVariables({
+      displayName,
       teamName: snapshot.teamName,
       leagueName: snapshot.leagueName,
-    },
-    metadata: {
-      recipientType: "team",
-    },
+      ctaUrl: input.ctaUrl,
+    }),
+    metadata: { recipientType: "team" },
   };
 }
 
@@ -292,8 +315,8 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     redirect(`${from}?error=Message%20body%20is%20required.`);
   }
 
-  const channel =
-    channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const hasEmailCta = Boolean(ctaLabel && ctaUrl);
 
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
@@ -303,12 +326,14 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     from,
     subject: channel === NotificationChannel.EMAIL ? subject : null,
     body,
+    allowedTokens: getAllowedTemplateTokens({ channel, hasEmailCta }),
   });
 
   const context = await getTeamCommunicationRecipientContext({
     teamId,
     recipientType,
     recipientId,
+    ctaUrl,
   });
 
   if (channel === NotificationChannel.EMAIL && !context.recipient.email?.trim()) {
@@ -328,14 +353,11 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     isTransactional: false,
     sourceType: context.sourceType,
     sourceId: context.sourceId,
-    emailBranding:
-      channel === NotificationChannel.EMAIL ? context.emailBranding : undefined,
+    variables: context.variables,
+    emailBranding: channel === NotificationChannel.EMAIL ? context.emailBranding : undefined,
     emailCta:
       channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
-        ? {
-            label: ctaLabel,
-            url: ctaUrl,
-          }
+        ? { label: ctaLabel, url: ctaUrl }
         : undefined,
     metadata: {
       origin: "team_communications_hub",
@@ -350,10 +372,7 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     createdByUserId: user?.id ?? null,
   });
 
-  await logNotificationDispatchToThread({
-    dispatch,
-    recipient: context.recipient,
-  });
+  await logNotificationDispatchToThread({ dispatch, recipient: context.recipient });
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
 }
@@ -381,10 +400,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
   }
 
   const prospect = await prisma.teamPlayerProspect.findFirst({
-    where: {
-      id: prospectId,
-      teamId,
-    },
+    where: { id: prospectId, teamId },
     select: {
       id: true,
       firstName: true,
@@ -392,17 +408,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
       email: true,
       phone: true,
       status: true,
-      team: {
-        select: {
-          name: true,
-          league: {
-            select: {
-              name: true,
-              season: true,
-            },
-          },
-        },
-      },
+      team: { select: { name: true, league: { select: { name: true, season: true } } } },
     },
   });
 
@@ -410,8 +416,8 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     redirect(`/admin/teams/${teamId}/prospects?error=Prospect%20not%20found.`);
   }
 
-  const channel =
-    channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const hasEmailCta = Boolean(ctaLabel && ctaUrl);
 
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
@@ -421,12 +427,17 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     from,
     subject: channel === NotificationChannel.EMAIL ? subject : null,
     body,
+    allowedTokens: getAllowedTemplateTokens({ channel, hasEmailCta }),
   });
 
-  const displayName = [prospect.firstName, prospect.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  const displayName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+  const leagueName = getLeagueName(prospect.team.league) || null;
+  const variables = buildCommunicationVariables({
+    displayName: displayName || prospect.firstName,
+    teamName: prospect.team.name,
+    leagueName,
+    ctaUrl,
+  });
 
   const recipient = await upsertNotificationRecipient({
     sourceType: NotificationRecipientSourceType.GENERAL,
@@ -439,11 +450,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     marketingSmsOptIn: true,
     transactionalEmailOptIn: true,
     transactionalSmsOptIn: true,
-    metadata: {
-      teamId,
-      prospectId: prospect.id,
-      entityType: "TEAM_PROSPECT",
-    },
+    metadata: { teamId, prospectId: prospect.id, entityType: "TEAM_PROSPECT" },
   });
 
   if (channel === NotificationChannel.EMAIL && !recipient.email?.trim()) {
@@ -460,24 +467,17 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     audience: NotificationAudience.PLAYER,
     subject: channel === NotificationChannel.EMAIL ? subject : null,
     body,
+    variables,
     isTransactional: false,
     sourceType: "TEAM_PLAYER_PROSPECT",
     sourceId: prospect.id,
     emailBranding:
       channel === NotificationChannel.EMAIL
-        ? {
-            teamName: prospect.team.name,
-            leagueName: prospect.team.league
-              ? `${prospect.team.league.name}${prospect.team.league.season ? ` — ${prospect.team.league.season}` : ""}`
-              : null,
-          }
+        ? { teamName: prospect.team.name, leagueName }
         : undefined,
     emailCta:
       channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl
-        ? {
-            label: ctaLabel,
-            url: ctaUrl,
-          }
+        ? { label: ctaLabel, url: ctaUrl }
         : undefined,
     metadata: {
       origin: "prospect_communications_hub",
@@ -492,10 +492,7 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     createdByUserId: user?.id ?? null,
   });
 
-  await logNotificationDispatchToThread({
-    dispatch,
-    recipient,
-  });
+  await logNotificationDispatchToThread({ dispatch, recipient });
 
   await prisma.teamPlayerProspect.update({
     where: { id: prospect.id },
@@ -512,10 +509,7 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
 
   const leagueId = getTrimmedValue(formData.get("leagueId"));
-  const from = getSafeRedirectPath(
-    formData.get("from"),
-    `/admin/leagues/${leagueId}/communications`,
-  );
+  const from = getSafeRedirectPath(formData.get("from"), `/admin/leagues/${leagueId}/communications`);
   const channelInput = getTrimmedValue(formData.get("channel")).toUpperCase();
   const subject = getTrimmedValue(formData.get("subject"));
   const body = getTrimmedValue(formData.get("body"));
@@ -524,10 +518,7 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   const ctaLabel = getTrimmedValue(formData.get("ctaLabel")) || null;
   const ctaUrl = getTrimmedValue(formData.get("ctaUrl")) || null;
   const selectedPollId = getTrimmedValue(formData.get("pollId")) || null;
-  const selectedTeamIds = formData
-    .getAll("teamIds")
-    .map((value) => String(value).trim())
-    .filter(Boolean);
+  const selectedTeamIds = formData.getAll("teamIds").map((value) => String(value).trim()).filter(Boolean);
 
   if (!leagueId) {
     redirect("/admin/leagues?error=missing_id");
@@ -537,15 +528,13 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
     redirect(`${from}?error=Message%20body%20is%20required.`);
   }
 
-  const channel =
-    channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const channel = channelInput === "SMS" ? NotificationChannel.SMS : NotificationChannel.EMAIL;
+  const hasEmailCta = Boolean(ctaLabel && ctaUrl);
+  const bodyUsesPoll = POLL_TOKENS.some((token) => body.includes(`{{${token}}}`));
 
   if (channel === NotificationChannel.EMAIL && !subject) {
     redirect(`${from}?error=Email%20subject%20is%20required.`);
   }
-
-  const pollTokens = ["pollOptions", "pollLink"];
-  const bodyUsesPoll = pollTokens.some((token) => body.includes(`{{${token}}}`));
 
   if (bodyUsesPoll && !selectedPollId) {
     redirect(`${from}?error=${encodeURIComponent("Choose a poll before sending a message that contains {{pollOptions}} or {{pollLink}}.")}`);
@@ -555,13 +544,14 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
     from,
     subject: channel === NotificationChannel.EMAIL ? subject : null,
     body,
-    allowedTokens: selectedPollId ? pollTokens : [],
+    allowedTokens: getAllowedTemplateTokens({
+      channel,
+      hasEmailCta,
+      extraTokens: selectedPollId ? POLL_TOKENS : [],
+    }),
   });
 
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true },
-  });
+  const league = await prisma.league.findUnique({ where: { id: leagueId }, select: { id: true } });
 
   if (!league) {
     redirect("/admin/leagues?error=missing_id");
@@ -570,18 +560,9 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   const teams = await prisma.team.findMany({
     where: {
       leagueId,
-      ...(selectedTeamIds.length > 0
-        ? {
-            id: {
-              in: selectedTeamIds,
-            },
-          }
-        : {}),
+      ...(selectedTeamIds.length > 0 ? { id: { in: selectedTeamIds } } : {}),
     },
-    select: {
-      id: true,
-      name: true,
-    },
+    select: { id: true, name: true },
     orderBy: [{ name: "asc" }],
   });
 
@@ -608,22 +589,15 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
         pollId: selectedPollId,
         origin: "league_communications_hub",
         originLabel: "Sent from league communications hub",
-        metadata: {
-          leagueId,
-          broadcastType: "league",
-        },
+        metadata: { leagueId, broadcastType: "league" },
         createdByUserId: user?.id ?? null,
       });
 
-      if (result.skipped) {
-        skippedCount += 1;
-      } else {
-        deliveredCount += 1;
-      }
+      if (result.skipped) skippedCount += 1;
+      else deliveredCount += 1;
     } catch (error) {
       failedCount += 1;
       failedTeamNames.push(team.name);
-
       console.error("League communication failed for team", {
         leagueId,
         teamId: team.id,
@@ -637,7 +611,6 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
   if (deliveredCount === 0 && failedCount > 0) {
     const failedNames = failedTeamNames.slice(0, 3).join(", ");
     const suffix = failedTeamNames.length > 3 ? ` and ${failedTeamNames.length - 3} more` : "";
-
     redirect(
       `${from}?error=${encodeURIComponent(
         `No ${channel.toLowerCase()} messages were queued. ${failedCount} team${failedCount === 1 ? "" : "s"} failed${failedNames ? `: ${failedNames}${suffix}` : ""}. Check the server logs for the exact error.`,
