@@ -18,7 +18,8 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 
-const SOURCE_TYPE = "FIXTURE_CHANGE_NOTICE";
+const RECONFIRM_SOURCE_TYPE = "FIXTURE_CHANGE_NOTICE";
+const STATUS_SOURCE_TYPE = "FIXTURE_STATUS_NOTICE";
 
 function getString(value: unknown) {
   const parsed = String(value ?? "").trim();
@@ -63,6 +64,34 @@ function getChangeHash(input: unknown) {
 
 function shouldSendReconfirmNoticeForStatus(status: FixtureStatus) {
   return status === FixtureStatus.SCHEDULED || status === FixtureStatus.COMPLETED;
+}
+
+function shouldSendStatusNoticeForStatus(status: FixtureStatus) {
+  return status === FixtureStatus.POSTPONED || status === FixtureStatus.CANCELLED;
+}
+
+function getStatusNoticeCopy(status: FixtureStatus) {
+  if (status === FixtureStatus.CANCELLED) {
+    return {
+      adjective: "cancelled",
+      title: "Fixture cancelled",
+      subjectPrefix: "SIXFL fixture cancelled",
+      intro: "This fixture has been cancelled by SIXFL.",
+      smsAction: "has been cancelled",
+      noReconfirm: "No reconfirmation is needed.",
+      feeLine: "Any match fees already paid will be reviewed and either carried forward or dealt with by SIXFL as appropriate.",
+    };
+  }
+
+  return {
+    adjective: "postponed",
+    title: "Fixture postponed",
+    subjectPrefix: "SIXFL fixture postponed",
+    intro: "This fixture has been postponed by SIXFL.",
+    smsAction: "has been postponed",
+    noReconfirm: "No reconfirmation is needed until a new date is confirmed.",
+    feeLine: "Any match fees already paid will be carried forward or reviewed by SIXFL as appropriate.",
+  };
 }
 
 function describeFixture(input: {
@@ -134,6 +163,20 @@ function pitchChanged(input: {
   return valuesDiffer(input.oldPitch, input.nextPitch);
 }
 
+function getExistingDispatchWhere(input: { sourceType: string; sourceId: string }) {
+  return {
+    sourceType: input.sourceType,
+    sourceId: input.sourceId,
+    status: {
+      in: [
+        NotificationDispatchStatus.QUEUED,
+        NotificationDispatchStatus.PROCESSING,
+        NotificationDispatchStatus.SENT,
+      ],
+    },
+  };
+}
+
 export async function POST(request: Request) {
   await requireAdmin();
 
@@ -162,14 +205,6 @@ export async function POST(request: Request) {
   }
 
   const status = rawStatus as FixtureStatus;
-
-  if (!shouldSendReconfirmNoticeForStatus(status)) {
-    return NextResponse.json({
-      queued: 0,
-      reason: "No reconfirmation notice sent because this fixture is being postponed or cancelled.",
-    });
-  }
-
   const nextKickoffAt = parseLondonDateTime(kickoffDate, kickoffTime);
 
   const [fixture, league, nextHomeTeam, nextAwayTeam, nextVenue] = await Promise.all([
@@ -185,52 +220,18 @@ export async function POST(request: Request) {
         pitch: true,
         status: true,
         publishedAt: true,
-        homeTeam: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        awayTeam: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        venue: {
-          select: {
-            name: true,
-          },
-        },
+        homeTeam: { select: { id: true, name: true } },
+        awayTeam: { select: { id: true, name: true } },
+        venue: { select: { name: true } },
       },
     }),
     prisma.league.findUnique({
       where: { id: leagueId },
-      select: {
-        name: true,
-        season: true,
-      },
+      select: { name: true, season: true },
     }),
-    prisma.team.findUnique({
-      where: { id: homeTeamId },
-      select: {
-        id: true,
-        name: true,
-      },
-    }),
-    prisma.team.findUnique({
-      where: { id: awayTeamId },
-      select: {
-        id: true,
-        name: true,
-      },
-    }),
-    venueId
-      ? prisma.venue.findUnique({
-          where: { id: venueId },
-          select: { name: true },
-        })
-      : Promise.resolve(null),
+    prisma.team.findUnique({ where: { id: homeTeamId }, select: { id: true, name: true } }),
+    prisma.team.findUnique({ where: { id: awayTeamId }, select: { id: true, name: true } }),
+    venueId ? prisma.venue.findUnique({ where: { id: venueId }, select: { name: true } }) : Promise.resolve(null),
   ]);
 
   if (!fixture || !league || !nextHomeTeam || !nextAwayTeam) {
@@ -270,14 +271,127 @@ export async function POST(request: Request) {
     });
   }
 
-  const affectedTeamIds = Array.from(
-    new Set([
-      fixture.homeTeamId,
-      fixture.awayTeamId,
+  const affectedTeamIds = Array.from(new Set([fixture.homeTeamId, fixture.awayTeamId, homeTeamId, awayTeamId]));
+  const leagueLabel = `${league.name}${league.season ? ` · ${league.season}` : ""}`;
+  const newFixtureSummary = describeFixture({
+    homeTeamName: nextHomeTeam.name,
+    awayTeamName: nextAwayTeam.name,
+    kickoffAt: nextKickoffAt,
+    venueName: nextVenue?.name ?? null,
+    pitch,
+    status,
+  });
+
+  if (shouldSendStatusNoticeForStatus(status)) {
+    const copy = getStatusNoticeCopy(status);
+    const sourceId = `${fixture.id}:${status}:${getChangeHash({
+      oldHomeTeamId: fixture.homeTeamId,
+      oldAwayTeamId: fixture.awayTeamId,
+      oldVenueId: fixture.venueId,
+      oldKickoffAt: fixture.kickoffAt.toISOString(),
+      oldStatus: fixture.status,
       homeTeamId,
       awayTeamId,
-    ]),
-  );
+      venueId,
+      kickoffAt: nextKickoffAt.toISOString(),
+      status,
+    })}`;
+
+    const existingDispatch = await prisma.notificationDispatch.findFirst({
+      where: getExistingDispatchWhere({ sourceType: STATUS_SOURCE_TYPE, sourceId }),
+      select: { id: true },
+    });
+
+    if (existingDispatch) {
+      return NextResponse.json({ queued: 0, reason: `${copy.title} notice already queued.` });
+    }
+
+    await prisma.fixtureCaptainConfirmation.updateMany({
+      where: {
+        fixtureId: fixture.id,
+        teamId: { in: affectedTeamIds },
+        status: FixtureCaptainConfirmationStatus.CONFIRMED,
+      },
+      data: {
+        status: FixtureCaptainConfirmationStatus.PENDING,
+        confirmedAt: null,
+        confirmedByUserId: null,
+        note: `Fixture ${copy.adjective} by SIXFL. No reconfirmation required.`,
+      },
+    });
+
+    let queued = 0;
+
+    for (const teamId of affectedTeamIds) {
+      const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
+      const dashboardUrl = buildCaptainFixturesUrl(teamId, fixture.id);
+      const emailBody = [
+        `Hi ${snapshot.primaryContact.name ?? snapshot.teamName},`,
+        "",
+        copy.intro,
+        "",
+        "Fixture:",
+        newFixtureSummary,
+        "",
+        copy.noReconfirm,
+        copy.feeLine,
+        "",
+        "{{cta}}",
+        "",
+        "If you have any questions, please contact SIXFL directly so we can manage it properly.",
+      ].join("\n");
+
+      const emailDispatch = await queueDirectNotification({
+        recipientId: recipient.id,
+        channel: NotificationChannel.EMAIL,
+        audience: NotificationAudience.TEAM,
+        subject: `${copy.subjectPrefix}: ${nextHomeTeam.name} vs ${nextAwayTeam.name}`,
+        body: emailBody,
+        isTransactional: true,
+        sourceType: STATUS_SOURCE_TYPE,
+        sourceId,
+        emailCta: { label: "Open fixture", url: dashboardUrl },
+        metadata: {
+          fixtureId: fixture.id,
+          teamId,
+          leagueId,
+          leagueLabel,
+          status,
+          changeLines,
+        },
+      });
+
+      const smsDispatch = await queueDirectNotification({
+        recipientId: recipient.id,
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.TEAM,
+        body: `SIXFL: ${nextHomeTeam.name} vs ${nextAwayTeam.name} on ${formatKickoff(nextKickoffAt)} ${copy.smsAction}. ${copy.noReconfirm}`,
+        isTransactional: true,
+        sourceType: STATUS_SOURCE_TYPE,
+        sourceId,
+        metadata: {
+          fixtureId: fixture.id,
+          teamId,
+          leagueId,
+          leagueLabel,
+          status,
+          changeLines,
+        },
+      });
+
+      if (emailDispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
+      if (smsDispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
+    }
+
+    return NextResponse.json({ queued, kind: copy.adjective });
+  }
+
+  if (!shouldSendReconfirmNoticeForStatus(status)) {
+    return NextResponse.json({
+      queued: 0,
+      reason: "No reconfirmation notice sent for this fixture status.",
+    });
+  }
 
   const sourceId = `${fixture.id}:${getChangeHash({
     oldHomeTeamId: fixture.homeTeamId,
@@ -293,20 +407,8 @@ export async function POST(request: Request) {
   })}`;
 
   const existingDispatch = await prisma.notificationDispatch.findFirst({
-    where: {
-      sourceType: SOURCE_TYPE,
-      sourceId,
-      status: {
-        in: [
-          NotificationDispatchStatus.QUEUED,
-          NotificationDispatchStatus.PROCESSING,
-          NotificationDispatchStatus.SENT,
-        ],
-      },
-    },
-    select: {
-      id: true,
-    },
+    where: getExistingDispatchWhere({ sourceType: RECONFIRM_SOURCE_TYPE, sourceId }),
+    select: { id: true },
   });
 
   if (existingDispatch) {
@@ -316,9 +418,7 @@ export async function POST(request: Request) {
   await prisma.fixtureCaptainConfirmation.updateMany({
     where: {
       fixtureId: fixture.id,
-      teamId: {
-        in: affectedTeamIds,
-      },
+      teamId: { in: affectedTeamIds },
       status: FixtureCaptainConfirmationStatus.CONFIRMED,
     },
     data: {
@@ -330,20 +430,11 @@ export async function POST(request: Request) {
   });
 
   let queued = 0;
-  const leagueLabel = `${league.name}${league.season ? ` · ${league.season}` : ""}`;
-  const newFixtureSummary = describeFixture({
-    homeTeamName: nextHomeTeam.name,
-    awayTeamName: nextAwayTeam.name,
-    kickoffAt: nextKickoffAt,
-    venueName: nextVenue?.name ?? null,
-    pitch,
-    status,
-  });
 
   for (const teamId of affectedTeamIds) {
     const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
     const dashboardUrl = buildCaptainFixturesUrl(teamId, fixture.id);
-    const body = [
+    const emailBody = [
       `Hi ${snapshot.primaryContact.name ?? snapshot.teamName},`,
       "",
       "A SIXFL fixture involving your team has been updated.",
@@ -366,21 +457,12 @@ export async function POST(request: Request) {
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.TEAM,
       subject: `SIXFL fixture update: ${nextHomeTeam.name} vs ${nextAwayTeam.name}`,
-      body,
+      body: emailBody,
       isTransactional: true,
-      sourceType: SOURCE_TYPE,
+      sourceType: RECONFIRM_SOURCE_TYPE,
       sourceId,
-      emailCta: {
-        label: "Open fixture",
-        url: dashboardUrl,
-      },
-      metadata: {
-        fixtureId: fixture.id,
-        teamId,
-        leagueId,
-        leagueLabel,
-        changeLines,
-      },
+      emailCta: { label: "Open fixture", url: dashboardUrl },
+      metadata: { fixtureId: fixture.id, teamId, leagueId, leagueLabel, changeLines },
     });
 
     const smsDispatch = await queueDirectNotification({
@@ -389,15 +471,9 @@ export async function POST(request: Request) {
       audience: NotificationAudience.TEAM,
       body: `SIXFL fixture update: ${nextHomeTeam.name} vs ${nextAwayTeam.name} is now ${formatKickoff(nextKickoffAt)}. Please check and reconfirm if needed: ${dashboardUrl}`,
       isTransactional: true,
-      sourceType: SOURCE_TYPE,
+      sourceType: RECONFIRM_SOURCE_TYPE,
       sourceId,
-      metadata: {
-        fixtureId: fixture.id,
-        teamId,
-        leagueId,
-        leagueLabel,
-        changeLines,
-      },
+      metadata: { fixtureId: fixture.id, teamId, leagueId, leagueLabel, changeLines },
     });
 
     if (emailDispatch.status === NotificationDispatchStatus.QUEUED) queued += 1;
