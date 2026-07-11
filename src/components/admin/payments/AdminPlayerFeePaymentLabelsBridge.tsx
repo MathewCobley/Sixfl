@@ -12,6 +12,7 @@ type PlayerFeePaymentLabel = {
   teamName: string;
   amountPence: number;
   paidAt: string;
+  reference: string | null;
   title: string;
   subtitle: string;
 };
@@ -27,17 +28,9 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
-function isPlaceholderPlayerFeeSubtitle(value: string) {
-  return value === "Unlinked payment · Stripe" || value === "Squad player payment · Stripe";
-}
-
-function isPlaceholderPlayerFeePaymentCard(card: Element) {
+function isRecentPaymentCard(card: Element) {
   const text = card.textContent ?? "";
-
-  return (
-    text.includes("Stripe") &&
-    (text.includes("Unlinked payment") || text.includes("Squad player payment"))
-  );
+  return text.includes("Ref ") && text.includes("£");
 }
 
 function getRecentPaymentsCards() {
@@ -50,15 +43,16 @@ function getRecentPaymentsCards() {
     if (!section) return [];
 
     return Array.from(section.querySelectorAll("div.rounded-2xl")).filter(
-      isPlaceholderPlayerFeePaymentCard,
+      isRecentPaymentCard,
     );
   });
 }
 
 function getPaymentSubtitleElement(card: Element) {
-  return Array.from(card.querySelectorAll("div")).find((element) =>
-    isPlaceholderPlayerFeeSubtitle(element.textContent?.trim() ?? ""),
-  );
+  return Array.from(card.querySelectorAll("div")).find((element) => {
+    const text = element.textContent?.trim() ?? "";
+    return text.includes(" · Stripe") || text.includes(" · Bank transfer") || text.includes(" · Card") || text.includes(" · Cash") || text.includes(" · Other");
+  });
 }
 
 function findLabelForCard(
@@ -67,6 +61,15 @@ function findLabelForCard(
   usedTransactionIds: Set<string>,
 ) {
   const cardText = card.textContent ?? "";
+
+  const referenceMatch = labels.find(
+    (label) =>
+      !usedTransactionIds.has(label.transactionId) &&
+      Boolean(label.reference) &&
+      cardText.includes(`Ref ${label.reference}`),
+  );
+
+  if (referenceMatch) return referenceMatch;
 
   return labels.find(
     (label) =>
@@ -134,7 +137,6 @@ async function loadPlayerFeePaymentLabels() {
   });
 
   if (!response.ok) return [];
-
   const payload = (await response.json().catch(() => null)) as LabelsPayload | null;
   return payload?.labels ?? [];
 }
