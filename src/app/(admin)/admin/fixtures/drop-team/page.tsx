@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { NotificationDispatchStatus, Prisma } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { voidFixtureMatchFeeChargesOrThrow } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -173,6 +174,7 @@ export default async function DropTeamFromDraftFixturesPage({ searchParams }: Pa
 
   const params = (await searchParams) ?? {};
   const notice = getNotice(params);
+  const currentLeagueIds = await getCurrentLeagueIds();
 
   const [teams, leagues, draftCounts] = await Promise.all([
     prisma.team.findMany({
@@ -185,6 +187,7 @@ export default async function DropTeamFromDraftFixturesPage({ searchParams }: Pa
       },
     }),
     prisma.league.findMany({
+      where: { id: { in: currentLeagueIds } },
       orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: { id: true, name: true, season: true, isActive: true },
     }),
@@ -224,7 +227,7 @@ export default async function DropTeamFromDraftFixturesPage({ searchParams }: Pa
           Drop a team from draft fixtures
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Use this when a team drops out before fixtures have gone live. It only deletes unpublished draft fixtures involving that team. Published, completed and resulted fixtures are left alone.
+          Use this when a team drops out before fixtures have gone live. It only deletes unpublished draft fixtures involving that team in the selected current season. Published, completed and resulted fixtures are left alone.
         </p>
       </div>
 
@@ -254,9 +257,9 @@ export default async function DropTeamFromDraftFixturesPage({ searchParams }: Pa
             </label>
 
             <label className="space-y-2 text-sm font-semibold text-white">
-              League to clean
+              Current season to clean
               <select name="leagueId" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-red-400/40">
-                <option value="">Choose league</option>
+                <option value="">Choose current season</option>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>
                     {league.name}{league.season ? ` · ${league.season}` : ""}{league.isActive ? "" : " · inactive"}
