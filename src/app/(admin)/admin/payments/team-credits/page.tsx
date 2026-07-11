@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
-import { addTeamCredit } from "@/lib/payments/team-credits";
+import { addTeamCredit, syncLegacyTeamCreditPotEntries } from "@/lib/payments/team-credits";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -172,16 +172,19 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
   const saved = getSearchParam(params.saved);
   const error = getSearchParam(params.error);
 
-  const [teams, recentCredits, balances] = await Promise.all([
-    prisma.team.findMany({
-      where: { leagueId: { not: null } },
-      orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        league: { select: { name: true, season: true } },
-      },
-    }),
+  const teams = await prisma.team.findMany({
+    where: { leagueId: { not: null } },
+    orderBy: [{ name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      league: { select: { name: true, season: true } },
+    },
+  });
+
+  await syncLegacyTeamCreditPotEntries(teams.map((team) => team.id));
+
+  const [recentCredits, balances] = await Promise.all([
     getRecentCredits(),
     getCreditBalances(),
   ]);
