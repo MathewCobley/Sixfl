@@ -13,9 +13,10 @@ import {
 
 import LeagueCommunicationsComposer from "@/components/admin/communications/LeagueCommunicationsComposer";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getLeagueSeasonTeams } from "@/lib/league-season-teams";
+import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { getTeamContactSnapshot } from "@/lib/notifications/team-contacts";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -168,15 +169,6 @@ export default async function AdminLeagueCommunicationsPage({
       id: true,
       name: true,
       season: true,
-      teams: {
-        orderBy: [{ name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          contactEmail: true,
-          contactPhone: true,
-        },
-      },
     },
   });
 
@@ -184,8 +176,13 @@ export default async function AdminLeagueCommunicationsPage({
     notFound();
   }
 
+  const seasonTeams = await getLeagueSeasonTeams({
+    leagueId: league.id,
+    activeOnly: true,
+  });
+
   const teamSnapshots = await Promise.all(
-    league.teams.map((team) => getTeamContactSnapshot(team.id)),
+    seasonTeams.map((team) => getTeamContactSnapshot(team.teamId)),
   );
 
   const snapshotMap = new Map<string, NonNullable<(typeof teamSnapshots)[number]>>();
@@ -195,7 +192,7 @@ export default async function AdminLeagueCommunicationsPage({
     }
   }
 
-  const leagueTeamIds = league.teams.map((team) => team.id);
+  const leagueTeamIds = seasonTeams.map((team) => team.teamId);
   const recentDeliveryCutoff = new Date(Date.now() - 1000 * 60 * 60 * 24);
   const fixtureWindow = getUpcomingFixtureWindow();
 
@@ -359,16 +356,16 @@ export default async function AdminLeagueCommunicationsPage({
     .flatMap((thread) => thread.messages.map((message) => ({ thread, message })))
     .sort((a, b) => b.message.createdAt.getTime() - a.message.createdAt.getTime());
 
-  const emailReadyCount = league.teams.filter((team) => {
-    const snapshot = snapshotMap.get(team.id);
+  const emailReadyCount = seasonTeams.filter((team) => {
+    const snapshot = snapshotMap.get(team.teamId);
     return Boolean(snapshot?.primaryContact.email?.trim());
   }).length;
-  const smsReadyCount = league.teams.filter((team) => {
-    const snapshot = snapshotMap.get(team.id);
+  const smsReadyCount = seasonTeams.filter((team) => {
+    const snapshot = snapshotMap.get(team.teamId);
     return Boolean(snapshot?.primaryContact.phone?.trim());
   }).length;
 
-  const teamNameById = new Map(league.teams.map((team) => [team.id, team.name]));
+  const teamNameById = new Map(seasonTeams.map((team) => [team.teamId, team.teamName]));
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -385,7 +382,7 @@ export default async function AdminLeagueCommunicationsPage({
             {league.season ? ` · ${league.season}` : ""} communications
           </h1>
           <p className="text-sm text-white/60">
-            Queue a broadcast to all teams in this league and keep the resulting history inside each team thread.
+            Queue a broadcast to all teams entered in this season and keep the resulting history inside each team thread.
           </p>
         </div>
 
@@ -459,13 +456,13 @@ export default async function AdminLeagueCommunicationsPage({
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">League broadcast</p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Whole-league outreach</h2>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Whole-season outreach</h2>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Use Communications to send one message across the entire league, while still writing the history back into each team’s own thread.
+              Uses the teams entered into this season, not the team’s permanent/default league field.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Teams: {league.teams.length}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Season teams: {seasonTeams.length}</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Email ready: {emailReadyCount}</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">SMS ready: {smsReadyCount}</span>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Fixtures loaded: {fixtureLines.length}</span>
@@ -475,7 +472,7 @@ export default async function AdminLeagueCommunicationsPage({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Teams</p>
-              <p className="mt-3 text-3xl font-semibold text-white">{league.teams.length}</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{seasonTeams.length}</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Threads</p>
@@ -494,12 +491,12 @@ export default async function AdminLeagueCommunicationsPage({
           leagueId={league.id}
           fromPath={`/admin/leagues/${league.id}/communications`}
           leagueName={`${league.name}${league.season ? ` — ${league.season}` : ""}`}
-          teamCount={league.teams.length}
-          teams={league.teams.map((team) => {
-            const snapshot = snapshotMap.get(team.id);
+          teamCount={seasonTeams.length}
+          teams={seasonTeams.map((team) => {
+            const snapshot = snapshotMap.get(team.teamId);
             return {
-              id: team.id,
-              name: team.name,
+              id: team.teamId,
+              name: team.teamName,
               emailReady: Boolean(snapshot?.primaryContact.email?.trim()),
               smsReady: Boolean(snapshot?.primaryContact.phone?.trim()),
             };
