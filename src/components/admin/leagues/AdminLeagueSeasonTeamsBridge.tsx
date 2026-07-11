@@ -50,10 +50,14 @@ function getInitials(name: string) {
     .join("") || "?";
 }
 
-function buttonClass(active: boolean) {
+function divisionButtonClass(active: boolean) {
   return active
     ? "rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-50"
     : "rounded-xl border border-white/10 bg-[#0d1428] px-3 py-2 text-sm font-semibold text-white/65 transition hover:border-white/20 hover:text-white";
+}
+
+function removeButtonClass() {
+  return "rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/15";
 }
 
 function renderTeamRow(input: {
@@ -94,7 +98,7 @@ function renderTeamRow(input: {
     const active = (input.team.divisionId ?? "") === division.id;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = buttonClass(active);
+    button.className = divisionButtonClass(active);
     button.textContent = division.name;
     button.addEventListener("click", async () => {
       button.textContent = "Saving…";
@@ -110,6 +114,27 @@ function renderTeamRow(input: {
     });
     controls.appendChild(button);
   }
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = removeButtonClass();
+  removeButton.textContent = "Remove from season";
+  removeButton.addEventListener("click", async () => {
+    const confirmed = window.confirm(
+      `Remove ${input.team.teamName} from this season? This will not delete the team record.`,
+    );
+
+    if (!confirmed) return;
+
+    removeButton.textContent = "Removing…";
+    await fetch(`/api/admin/leagues/${input.leagueId}/season-teams`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teamId: input.team.teamId }),
+    });
+    window.location.reload();
+  });
+  controls.appendChild(removeButton);
 
   layout.append(link, controls);
   row.appendChild(layout);
