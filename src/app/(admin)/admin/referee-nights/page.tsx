@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { Prisma, UserRole } from "@prisma/client";
 import { ensureRefereeNightConfirmationColumns } from "@/lib/referee-night-confirmations";
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -115,6 +116,7 @@ export default async function AdminRefereeNightsPage({
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
+  const currentLeagueIds = await getCurrentLeagueIds();
   const [nights, referees, leagues, venues] = await Promise.all([
     getRefereeNightSummaries(),
     prisma.user.findMany({
@@ -127,7 +129,8 @@ export default async function AdminRefereeNightsPage({
       select: { id: true, name: true, email: true, role: true },
     }),
     prisma.league.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      where: { id: { in: currentLeagueIds } },
+      orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: { id: true, name: true, season: true },
     }),
     prisma.venue.findMany({
@@ -184,7 +187,7 @@ export default async function AdminRefereeNightsPage({
               Referee confirmations & cashup
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-              Use the Night Board to organise fixtures. Use this page to confirm each referee will attend, chase them if needed, and settle cashup after the night.
+              Use the Night Board to organise fixtures. Use this page to confirm each referee will attend, chase them if needed, and settle cashup after the night. Manual referee nights are linked to a current league season.
             </p>
           </div>
 
@@ -302,13 +305,13 @@ export default async function AdminRefereeNightsPage({
               </div>
 
               <div>
-                <div className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">League</div>
-                <FormListboxField name="leagueId" options={leagueOptions} placeholder="Choose league" />
+                <div className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">League season</div>
+                <FormListboxField name="leagueId" options={leagueOptions} placeholder="Choose current season" />
               </div>
 
               <div>
                 <div className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Venue</div>
-                <FormListboxField name="venueId" options={venueOptions} placeholder="Any venue for this league/date" />
+                <FormListboxField name="venueId" options={venueOptions} placeholder="Any venue for this season/date" />
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
