@@ -5,6 +5,7 @@
 import Link from "next/link";
 
 import AdminCard from "@/components/admin/AdminCard";
+import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { backfillFixtureMatchFeeChargesAction } from "../generate/actions";
@@ -41,10 +42,12 @@ export default async function FixtureBackfillPage({
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
+  const currentLeagueIds = await getCurrentLeagueIds();
 
   const [leagues, referees] = await Promise.all([
     prisma.league.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      where: { id: { in: currentLeagueIds } },
+      orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: { id: true, name: true, season: true },
     }),
     prisma.user.findMany({
@@ -54,6 +57,7 @@ export default async function FixtureBackfillPage({
     }),
   ]);
 
+  const noCurrentLeagues = leagues.length === 0;
   const backfilledCount = Number(sp.backfilled ?? "");
   const paymentRequestCount = Number(sp.paymentRequests ?? "");
   const hasFeeNotice = Number.isFinite(backfilledCount) && sp.backfilled !== undefined;
@@ -73,9 +77,15 @@ export default async function FixtureBackfillPage({
           Fixture backfill tools
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Use these tools when fixtures already exist but you need to add payment charges or referee assignments without resending team fixture emails.
+          Use these tools when fixtures already exist but you need to add payment charges or referee assignments without resending team fixture emails. These actions are season-specific and only show current competition seasons.
         </p>
       </div>
+
+      {noCurrentLeagues ? (
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+          No current league seasons are available for backfill. Open the relevant league and set its current season first.
+        </div>
+      ) : null}
 
       {hasFeeNotice ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
@@ -95,14 +105,14 @@ export default async function FixtureBackfillPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/80">Existing fixtures</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Backfill missing match fee charges</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
-              Adds payment charges to upcoming scheduled fixtures that do not already have active charges. It does not amend fixtures or send amended fixture emails.
+              Adds payment charges to upcoming scheduled fixtures in the selected current season that do not already have active charges. It does not amend fixtures or send amended fixture emails.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
             <div>
-              <label className={labelClass}>League</label>
-              <select name="leagueId" required className={inputClass}>
+              <label className={labelClass}>Current season</label>
+              <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
                 ))}
@@ -128,7 +138,7 @@ export default async function FixtureBackfillPage({
             </span>
           </label>
 
-          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/15 px-6 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20">
+          <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/15 px-6 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40">
             Backfill missing charges
           </button>
         </form>
@@ -140,14 +150,14 @@ export default async function FixtureBackfillPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-200/80">Existing fixtures</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">Backfill referee assignments</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
-              Fills blank referee assignments from the pitch referees below, creates referee nights, and queues referee emails only. Team fixture emails are not resent.
+              Fills blank referee assignments from the pitch referees below, creates referee nights, and queues referee emails only for the selected current season. Team fixture emails are not resent.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
             <div>
-              <label className={labelClass}>League</label>
-              <select name="leagueId" required className={inputClass}>
+              <label className={labelClass}>Current season</label>
+              <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
                 ))}
@@ -193,7 +203,7 @@ export default async function FixtureBackfillPage({
             </span>
           </label>
 
-          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/15 px-6 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/20">
+          <button type="submit" disabled={noCurrentLeagues} className="inline-flex h-12 items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/15 px-6 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40">
             Backfill referee assignments
           </button>
         </form>
