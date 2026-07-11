@@ -60,8 +60,7 @@ type PollRow = {
 
 const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
 const POLL_LINK_PLACEHOLDER = "{{pollLink}}";
-const POLL_OPTIONS_BLOCK_START = "SIXFL_POLL_OPTIONS_START";
-const POLL_OPTIONS_BLOCK_END = "SIXFL_POLL_OPTIONS_END";
+const CTA_PLACEHOLDER = "{{cta}}";
 
 function getFirstName(name?: string | null) {
   const firstName = name?.trim().split(/\s+/)[0]?.trim();
@@ -74,10 +73,6 @@ function messageNeedsPoll(body: string) {
 
 function buildPollUrl(token: string) {
   return `${getPublicSiteUrl()}/polls/${encodeURIComponent(token)}`;
-}
-
-function getPollButtonText(poll: Pick<PollRow, "buttonText" | "title">) {
-  return poll.buttonText?.trim() || "Open poll";
 }
 
 async function getPollOptions(pollId: string) {
@@ -170,17 +165,6 @@ async function ensurePollRecipient(input: { poll: PollRow; team: TeamForPoll }) 
   return token;
 }
 
-function buildPollOptionsBlock(input: { poll: PollRow; token: string }) {
-  const pollUrl = buildPollUrl(input.token);
-  const buttonText = getPollButtonText(input.poll);
-
-  return [
-    POLL_OPTIONS_BLOCK_START,
-    `${buttonText}: ${pollUrl}`,
-    POLL_OPTIONS_BLOCK_END,
-  ].join("\n");
-}
-
 async function resolvePollContent(input: {
   body: string;
   pollId?: string | null;
@@ -198,6 +182,7 @@ async function resolvePollContent(input: {
       body: input.body,
       variables: {},
       metadata: {},
+      cta: null as { label: string; url: string } | null,
     };
   }
 
@@ -210,17 +195,18 @@ async function resolvePollContent(input: {
   }
 
   const token = await ensurePollRecipient({ poll, team: input.team });
-  const pollOptions = buildPollOptionsBlock({ poll, token });
   const pollLink = buildPollUrl(token);
+  const buttonLabel = poll.buttonText?.trim() || "Open poll";
+  const shouldUsePollButton = input.body.includes(POLL_OPTIONS_PLACEHOLDER);
 
   return {
     body: input.body
-      .replaceAll(POLL_OPTIONS_PLACEHOLDER, pollOptions)
+      .replaceAll(POLL_OPTIONS_PLACEHOLDER, CTA_PLACEHOLDER)
       .replaceAll(POLL_LINK_PLACEHOLDER, pollLink)
       .replace(/\n{3,}/g, "\n\n")
       .trim(),
     variables: {
-      pollOptions,
+      pollOptions: CTA_PLACEHOLDER,
       pollLink,
     },
     metadata: {
@@ -228,6 +214,12 @@ async function resolvePollContent(input: {
       pollTitle: poll.title,
       pollToken: token,
     },
+    cta: shouldUsePollButton
+      ? {
+          label: buttonLabel,
+          url: pollLink,
+        }
+      : null,
   };
 }
 
@@ -285,6 +277,17 @@ export async function sendTeamBroadcastMessage(input: Input) {
     ...(input.variables ?? {}),
   };
 
+  const emailCta =
+    input.channel === NotificationChannel.EMAIL
+      ? pollContent.cta ??
+        (input.ctaLabel && input.ctaUrl
+          ? {
+              label: input.ctaLabel,
+              url: input.ctaUrl,
+            }
+          : undefined)
+      : undefined;
+
   const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
     channel: input.channel,
@@ -303,13 +306,7 @@ export async function sendTeamBroadcastMessage(input: Input) {
             leagueName: leagueName || null,
           }
         : undefined,
-    emailCta:
-      input.channel === NotificationChannel.EMAIL && input.ctaLabel && input.ctaUrl
-        ? {
-            label: input.ctaLabel,
-            url: input.ctaUrl,
-          }
-        : undefined,
+    emailCta,
     metadata: {
       origin: input.origin,
       originLabel: input.originLabel,
@@ -318,8 +315,8 @@ export async function sendTeamBroadcastMessage(input: Input) {
       leagueId: team.leagueId,
       templateId: input.templateId ?? null,
       templateKey: input.templateKey ?? null,
-      ctaLabel: input.ctaLabel ?? null,
-      ctaUrl: input.ctaUrl ?? null,
+      ctaLabel: pollContent.cta?.label ?? input.ctaLabel ?? null,
+      ctaUrl: pollContent.cta?.url ?? input.ctaUrl ?? null,
       ...pollContent.metadata,
       ...(input.metadata ?? {}),
     },
