@@ -46,6 +46,11 @@ function parseButtonText(value: FormDataEntryValue | null) {
   return clean(value) || "Open poll";
 }
 
+function parseBoolean(value: FormDataEntryValue | null) {
+  const parsed = clean(value).toLowerCase();
+  return parsed === "1" || parsed === "true" || parsed === "on" || parsed === "yes";
+}
+
 function buildPollRedirect(pollId: string, params?: Record<string, string | number | null | undefined>) {
   const searchParams = new URLSearchParams();
 
@@ -84,6 +89,7 @@ export async function createPollAction(formData: FormData) {
   const question = clean(formData.get("question"));
   const choiceMode = parseChoiceMode(formData.get("choiceMode"));
   const buttonText = parseButtonText(formData.get("buttonText"));
+  const allowQuantity = parseBoolean(formData.get("allowQuantity"));
   const options = parseOptions(clean(formData.get("options")));
 
   if (!title || !question || options.length < 2) {
@@ -96,8 +102,8 @@ export async function createPollAction(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "SIXFLPoll" ("id", "title", "question", "slug", "status", "choiceMode", "buttonText", "createdAt", "updatedAt")
-      VALUES (${pollId}, ${title}, ${question}, ${slug}, 'ACTIVE', ${choiceMode}, ${buttonText}, ${now}, ${now})
+      INSERT INTO "SIXFLPoll" ("id", "title", "question", "slug", "status", "choiceMode", "buttonText", "allowQuantity", "createdAt", "updatedAt")
+      VALUES (${pollId}, ${title}, ${question}, ${slug}, 'ACTIVE', ${choiceMode}, ${buttonText}, ${allowQuantity}, ${now}, ${now})
     `);
 
     for (const [index, label] of options.entries()) {
@@ -121,6 +127,7 @@ export async function updatePollAction(formData: FormData) {
   const status = parsePollStatus(formData.get("status"));
   const choiceMode = parseChoiceMode(formData.get("choiceMode"));
   const buttonText = parseButtonText(formData.get("buttonText"));
+  const allowQuantity = parseBoolean(formData.get("allowQuantity"));
   const optionIds = formData.getAll("optionId").map((value) => clean(value)).filter(Boolean);
   const optionLabels = formData.getAll("optionLabel").map((value) => clean(value));
   const newOptions = parseOptions(clean(formData.get("newOptions")));
@@ -148,6 +155,7 @@ export async function updatePollAction(formData: FormData) {
           "status" = ${status},
           "choiceMode" = ${choiceMode},
           "buttonText" = ${buttonText},
+          "allowQuantity" = ${allowQuantity},
           "updatedAt" = ${now}
       WHERE "id" = ${pollId}
     `);
