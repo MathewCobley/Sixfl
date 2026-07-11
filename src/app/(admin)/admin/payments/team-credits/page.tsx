@@ -70,6 +70,17 @@ function signedAmount(type: string, amountPence: number) {
   return type === "CREDIT_ADDED" ? amountPence : -amountPence;
 }
 
+function SummaryCard({ title, value }: { title: string; value: string | number }) {
+  return (
+    <AdminCard className="p-0">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+        {title}
+      </div>
+      <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
+    </AdminCard>
+  );
+}
+
 async function getRequiredAdminUserId() {
   const { user, session } = await requireAdmin();
 
@@ -225,9 +236,9 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <AdminCard title="Teams with credit" value={balances.length} />
-        <AdminCard title="Total credit" value={formatMoney(totalCreditPence)} />
-        <AdminCard title="Ledger entries" value={recentCredits.length} />
+        <SummaryCard title="Teams with credit" value={balances.length} />
+        <SummaryCard title="Total credit" value={formatMoney(totalCreditPence)} />
+        <SummaryCard title="Ledger entries" value={recentCredits.length} />
       </div>
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
