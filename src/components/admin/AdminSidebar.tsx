@@ -71,6 +71,12 @@ const navigationGroups = [
         description: "Setup",
       },
       {
+        name: "League audit",
+        href: "/admin/audits/league-structure",
+        icon: WrenchScrewdriverIcon,
+        description: "Structure",
+      },
+      {
         name: "Venues",
         href: "/admin/venues",
         icon: MapPinIcon,
