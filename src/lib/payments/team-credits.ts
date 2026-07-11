@@ -51,6 +51,15 @@ export async function syncLegacyTeamCreditPotEntries(
   const teamIds = uniqueIds(teamIdsInput);
   if (teamIds.length === 0) return;
 
+  // Player-match-fee overpayments are now calculated directly from PlayerMatchFee + PaymentCharge.
+  // Remove old mirrored pot rows for the same source so the same overpayment is not counted twice.
+  await db.$executeRaw(Prisma.sql`
+    DELETE FROM "TeamCreditLedgerEntry"
+    WHERE "teamId" IN (${Prisma.join(teamIds)})
+      AND "id" LIKE 'tcred_pot_PLAYER_MATCH_FEE_OVERPAYMENT_%'
+      AND "entryType" = 'CREDIT_ADDED'::"TeamCreditLedgerEntryType"
+  `);
+
   await db.$executeRaw(Prisma.sql`
     INSERT INTO "TeamCreditLedgerEntry" (
       "id",
@@ -74,6 +83,7 @@ export async function syncLegacyTeamCreditPotEntries(
     FROM "TeamCreditPotEntry" pot
     WHERE pot."teamId" IN (${Prisma.join(teamIds)})
       AND pot."amountPence" > 0
+      AND pot."sourceType" <> 'PLAYER_MATCH_FEE_OVERPAYMENT'
     ON CONFLICT ("id") DO UPDATE SET
       "teamId" = EXCLUDED."teamId",
       "sourceFixtureId" = EXCLUDED."sourceFixtureId",
