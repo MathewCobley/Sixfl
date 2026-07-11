@@ -200,7 +200,7 @@ export default async function AdminLeaguesPage() {
 
           {competitions.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/50">
-              No parent competitions yet. Existing ungrouped leagues are shown below.
+              No parent competitions yet. Ungrouped league seasons are shown below.
             </p>
           ) : null}
         </div>
@@ -208,9 +208,9 @@ export default async function AdminLeaguesPage() {
 
       {ungroupedLeagues.length > 0 ? (
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.05] p-6">
-          <h2 className="mb-2 text-lg font-semibold text-white">Ungrouped old leagues</h2>
+          <h2 className="mb-2 text-lg font-semibold text-white">Ungrouped league seasons</h2>
           <p className="mb-4 text-sm text-white/55">
-            These are legacy league records that have not yet been placed under a parent competition.
+            These league season records are not yet linked to a parent competition. Link them into a competition when they are part of an ongoing league such as Harrogate Tuesday.
           </p>
           <div className="space-y-3">
             {ungroupedLeagues.map((league) => (
