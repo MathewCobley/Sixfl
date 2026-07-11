@@ -16,6 +16,7 @@ type PlayerFeePaymentLabel = {
   amountPence: number;
   paidAt: Date;
   method: string;
+  reference: string | null;
   playerName: string | null;
   playerContact: string | null;
   fixtureName: string | null;
@@ -28,6 +29,7 @@ type SubscriptionPaymentLabel = {
   amountPence: number;
   paidAt: Date;
   method: string;
+  reference: string | null;
   leagueName: string | null;
   leagueSeason: string | null;
 };
@@ -37,6 +39,7 @@ type DisplayPaymentLabel = {
   teamName: string;
   amountPence: number;
   paidAt: Date;
+  reference: string | null;
   title: string;
   subtitle: string;
 };
@@ -149,6 +152,7 @@ export async function GET() {
           tx."amountPence" AS "amountPence",
           tx."paidAt" AS "paidAt",
           tx."method"::text AS "method",
+          tx."reference" AS "reference",
           COALESCE(
             NULLIF(TRIM("user"."name"), ''),
             NULLIF(TRIM(CONCAT(prospect."firstName", ' ', COALESCE(prospect."lastName", ''))), ''),
@@ -170,7 +174,7 @@ export async function GET() {
         LEFT JOIN "TeamPlayerProspect" prospect ON prospect."id" = fee."prospectId"
         WHERE tx."playerMatchFeeId" IS NOT NULL
         ORDER BY tx."paidAt" DESC
-        LIMIT 50
+        LIMIT 80
       `,
       prisma.$queryRaw<SubscriptionPaymentLabel[]>`
         SELECT
@@ -179,6 +183,7 @@ export async function GET() {
           tx."amountPence" AS "amountPence",
           tx."paidAt" AS "paidAt",
           tx."method"::text AS "method",
+          tx."reference" AS "reference",
           league."name" AS "leagueName",
           league."season" AS "leagueSeason"
         FROM "PaymentTransaction" tx
@@ -200,6 +205,7 @@ export async function GET() {
         teamName: row.teamName,
         amountPence: row.amountPence,
         paidAt: row.paidAt,
+        reference: row.reference,
         title: buildPlayerTitle(row),
         subtitle: buildPlayerSubtitle(row),
       })),
@@ -208,10 +214,11 @@ export async function GET() {
         teamName: row.teamName,
         amountPence: row.amountPence,
         paidAt: row.paidAt,
+        reference: row.reference,
         title: buildSubscriptionTitle(row),
         subtitle: buildSubscriptionSubtitle(row),
       })),
-    ].sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime()).slice(0, 80);
+    ].sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime()).slice(0, 100);
 
     return NextResponse.json({
       labels: labels.map((row) => ({
@@ -219,6 +226,7 @@ export async function GET() {
         teamName: row.teamName,
         amountPence: row.amountPence,
         paidAt: row.paidAt.toISOString(),
+        reference: row.reference,
         title: row.title,
         subtitle: row.subtitle,
       })),
