@@ -40,6 +40,12 @@ async function getDivisions(leagueId: string) {
   `);
 }
 
+function revalidateLeaguePaths(league: { id: string; slug: string }) {
+  revalidatePath(`/admin/leagues/${league.id}`);
+  revalidatePath(`/admin/leagues/${league.id}/communications`);
+  revalidatePath(`/leagues/${league.slug}`);
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ leagueId: string }> },
@@ -82,8 +88,41 @@ export async function POST(
 
   await setSeasonTeamDivision({ leagueId, teamId, divisionId });
 
-  revalidatePath(`/admin/leagues/${league.id}`);
-  revalidatePath(`/leagues/${league.slug}`);
+  revalidateLeaguePaths(league);
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ leagueId: string }> },
+) {
+  await requireAdmin();
+
+  const { leagueId } = await params;
+  const body = (await request.json().catch(() => null)) as Body | null;
+  const teamId = getString(body?.teamId);
+  const league = await getLeague(leagueId);
+
+  if (!league) {
+    return NextResponse.json({ error: "League not found." }, { status: 404 });
+  }
+
+  if (!teamId) {
+    return NextResponse.json({ error: "Team is required." }, { status: 400 });
+  }
+
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "LeagueSeasonTeam"
+    SET
+      "isActive" = false,
+      "divisionId" = NULL,
+      "updatedAt" = NOW()
+    WHERE "leagueId" = ${leagueId}
+      AND "teamId" = ${teamId}
+  `);
+
+  revalidateLeaguePaths(league);
 
   return NextResponse.json({ ok: true });
 }
