@@ -3,6 +3,8 @@
 // ========================================
 
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -15,6 +17,11 @@ import CommunicationsLeagueLauncher from "@/components/admin/communications/Comm
 import CommunicationsProspectLauncher from "@/components/admin/communications/CommunicationsProspectLauncher";
 import CommunicationsTeamLauncher from "@/components/admin/communications/CommunicationsTeamLauncher";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
+
+type LeagueLauncherOption = {
+  id: string;
+  label: string;
+};
 
 function normaliseFilter(value?: string) {
   if (value === "unread" || value === "open" || value === "archived" || value === "all") {
@@ -78,6 +85,45 @@ function getComposeNotice(input: {
   return null;
 }
 
+async function getLeagueLauncherOptions() {
+  return prisma.$queryRaw<LeagueLauncherOption[]>(Prisma.sql`
+    WITH grouped_competitions AS (
+      SELECT
+        current_l."id" AS "id",
+        c."name" AS "competitionName",
+        current_l."season" AS "season",
+        0 AS "sortGroup"
+      FROM "LeagueCompetition" c
+      INNER JOIN "League" current_l ON current_l."id" = c."currentLeagueId"
+      WHERE c."isActive" = true
+        AND c."currentLeagueId" IS NOT NULL
+    ),
+    ungrouped_seasons AS (
+      SELECT
+        l."id" AS "id",
+        l."name" AS "competitionName",
+        l."season" AS "season",
+        1 AS "sortGroup"
+      FROM "League" l
+      WHERE l."competitionId" IS NULL
+        AND l."isActive" = true
+    )
+    SELECT
+      combined."id",
+      CASE
+        WHEN combined."season" IS NOT NULL AND combined."season" <> ''
+          THEN combined."competitionName" || ' · ' || combined."season"
+        ELSE combined."competitionName"
+      END AS "label"
+    FROM (
+      SELECT * FROM grouped_competitions
+      UNION ALL
+      SELECT * FROM ungrouped_seasons
+    ) combined
+    ORDER BY combined."sortGroup" ASC, combined."competitionName" ASC, COALESCE(combined."season", '') DESC
+  `);
+}
+
 export default async function AdminMessagesPage({
   searchParams,
 }: {
@@ -104,7 +150,7 @@ export default async function AdminMessagesPage({
     error: sp.error,
   });
 
-  const [summary, threads, selectedThread, leagues, teams, prospects] = await Promise.all([
+  const [summary, threads, selectedThread, leagueLauncherOptions, teams, prospects] = await Promise.all([
     getAdminInboxSummary(),
     getAdminInboxThreads({
       unreadOnly: selectedFilter === "unread",
@@ -117,15 +163,7 @@ export default async function AdminMessagesPage({
       limit: 100,
     }),
     selectedThreadId ? getMessageThreadById(selectedThreadId) : null,
-    prisma.league.findMany({
-      orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        season: true,
-      },
-    }),
+    getLeagueLauncherOptions(),
     prisma.team.findMany({
       orderBy: [{ name: "asc" }],
       select: {
@@ -309,12 +347,7 @@ export default async function AdminMessagesPage({
 
           <CommunicationsProspectLauncher prospects={prospectLauncherOptions} />
 
-          <CommunicationsLeagueLauncher
-            leagues={leagues.map((league) => ({
-              id: league.id,
-              label: `${league.name}${league.season ? ` · ${league.season}` : ""}`,
-            }))}
-          />
+          <CommunicationsLeagueLauncher leagues={leagueLauncherOptions} />
 
           <CommunicationsLeadLauncher />
         </div>
