@@ -57,11 +57,13 @@ export async function GET(
           "recipientId",
           "pollId",
           "optionId",
+          "quantity",
           "createdAt",
           "updatedAt"
         )
-        VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, ${now}, ${now})
-        ON CONFLICT DO NOTHING
+        VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, 1, ${now}, ${now})
+        ON CONFLICT ("recipientId", "optionId") DO UPDATE SET
+          "updatedAt" = EXCLUDED."updatedAt"
       `);
 
       await tx.$executeRaw(Prisma.sql`
@@ -87,11 +89,14 @@ export async function GET(
         "recipientId",
         "pollId",
         "optionId",
+        "quantity",
         "createdAt",
         "updatedAt"
       )
-      VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, ${now}, ${now})
-      ON CONFLICT DO NOTHING
+      VALUES (${randomUUID()}, ${poll.recipientId}, ${poll.pollId}, ${optionId}, 1, ${now}, ${now})
+      ON CONFLICT ("recipientId", "optionId") DO UPDATE SET
+        "quantity" = 1,
+        "updatedAt" = EXCLUDED."updatedAt"
     `);
 
     await tx.$executeRaw(Prisma.sql`
