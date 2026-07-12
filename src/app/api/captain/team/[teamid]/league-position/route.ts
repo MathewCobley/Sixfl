@@ -3,8 +3,10 @@
 // ========================================
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
+import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { getLeagueTable } from "@/lib/leagueTable";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -34,20 +36,23 @@ async function getCurrentDivisionId(input: {
   relatedTeamIds: string[];
   fallbackDivisionId?: string | null;
 }) {
-  const seasonTeam = await prisma.leagueSeasonTeam.findFirst({
-    where: {
-      leagueId: input.currentLeagueId,
-      teamId: {
-        in: input.relatedTeamIds,
-      },
-      isActive: true,
-    },
-    select: {
-      divisionId: true,
-    },
-  });
+  if (input.relatedTeamIds.length === 0) {
+    return input.fallbackDivisionId ?? null;
+  }
 
-  return seasonTeam?.divisionId ?? input.fallbackDivisionId ?? null;
+  await ensureSeasonTeamRowsForLeague(input.currentLeagueId);
+
+  const rows = await prisma.$queryRaw<Array<{ divisionId: string | null }>>(Prisma.sql`
+    SELECT "divisionId"
+    FROM "LeagueSeasonTeam"
+    WHERE "leagueId" = ${input.currentLeagueId}
+      AND "teamId" IN (${Prisma.join(input.relatedTeamIds)})
+      AND "isActive" = true
+    ORDER BY "updatedAt" DESC
+    LIMIT 1
+  `);
+
+  return rows[0]?.divisionId ?? input.fallbackDivisionId ?? null;
 }
 
 export async function GET(
