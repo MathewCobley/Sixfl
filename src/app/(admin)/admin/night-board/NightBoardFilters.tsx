@@ -64,7 +64,7 @@ function CustomSelect({
   value,
   onChange,
 }: {
-  name: string;
+  name?: string;
   label: string;
   options: Option[];
   value: string;
@@ -79,7 +79,7 @@ function CustomSelect({
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <input type="hidden" name={name} value={value} />
+      {name ? <input type="hidden" name={name} value={value} /> : null}
       <div className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
         {label}
       </div>
@@ -113,7 +113,7 @@ function CustomSelect({
             const isSelected = option.value === value;
             return (
               <button
-                key={`${name}-${option.value || "all"}`}
+                key={`${label}-${option.value || "all"}`}
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
@@ -165,6 +165,21 @@ function MoneyInput({
         onChange={(event) => onChange?.(event.target.value)}
         placeholder={placeholder}
         className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
+      />
+    </label>
+  );
+}
+
+function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+      Board date
+      <input
+        type="date"
+        name="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm normal-case tracking-normal text-white outline-none focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20"
       />
     </label>
   );
@@ -305,8 +320,9 @@ export default function NightBoardFilters({
 
   return (
     <form className="mt-6 space-y-4" action="/admin/night-board/save">
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <CustomSelect name="date" label="Fixture night" options={dateOptions} value={date} onChange={handleDateChange} />
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <DateInput value={date} onChange={handleDateChange} />
+        <CustomSelect label="Known fixture nights" options={dateOptions} value={date} onChange={handleDateChange} />
         <CustomSelect name="leagueId" label="League" options={leagueOptions} value={leagueId} onChange={handleLeagueChange} />
         <CustomSelect name="venueId" label="Venue" options={venueOptions} value={venueId} onChange={handleVenueChange} />
         <MoneyInput label="Ref fee / match" name="refFee" value={refFee} placeholder="e.g. 15" />
