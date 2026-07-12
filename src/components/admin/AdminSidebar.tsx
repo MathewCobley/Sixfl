@@ -85,6 +85,48 @@ const navigationGroups = [
     ],
   },
   {
+    title: "Comms & marketing",
+    tint: "cyan",
+    items: [
+      {
+        name: "Comms",
+        href: "/admin/messaging",
+        icon: DocumentTextIcon,
+        description: "Email/SMS",
+      },
+      {
+        name: "Queue",
+        href: "/admin/queue",
+        icon: Cog6ToothIcon,
+        description: "Dispatches",
+      },
+      {
+        name: "Templates",
+        href: "/admin/templates",
+        icon: DocumentTextIcon,
+        description: "Content",
+      },
+      {
+        name: "Team messages",
+        href: "/admin/team-messages",
+        icon: DocumentTextIcon,
+        description: "Captains",
+      },
+      {
+        name: "Social posts",
+        href: "/admin/social",
+        icon: PhotoIcon,
+        description: "Cards",
+      },
+      {
+        name: "Settings",
+        href: "/admin/settings",
+        icon: Cog6ToothIcon,
+        description: "Config",
+      },
+    ],
+  },
+  {
     title: "Fixtures",
     tint: "amber",
     items: [
@@ -222,48 +264,6 @@ const navigationGroups = [
       },
     ],
   },
-  {
-    title: "Comms & marketing",
-    tint: "cyan",
-    items: [
-      {
-        name: "Comms",
-        href: "/admin/messaging",
-        icon: DocumentTextIcon,
-        description: "Email/SMS",
-      },
-      {
-        name: "Queue",
-        href: "/admin/queue",
-        icon: Cog6ToothIcon,
-        description: "Dispatches",
-      },
-      {
-        name: "Templates",
-        href: "/admin/templates",
-        icon: DocumentTextIcon,
-        description: "Content",
-      },
-      {
-        name: "Team messages",
-        href: "/admin/team-messages",
-        icon: DocumentTextIcon,
-        description: "Captains",
-      },
-      {
-        name: "Social posts",
-        href: "/admin/social",
-        icon: PhotoIcon,
-        description: "Cards",
-      },
-      {
-        name: "Settings",
-        href: "/admin/settings",
-        icon: Cog6ToothIcon,
-        description: "Config",
-      },
-    ],
-  },
 ];
 
 const navigation = navigationGroups.flatMap((group) => group.items);
@@ -300,9 +300,9 @@ function groupTintClasses(tint: string) {
 
 function navItemClasses(active: boolean) {
   return [
-    "group flex min-w-0 items-center gap-2 rounded-xl border px-2 py-1.5 transition",
+    "group flex min-w-0 items-center gap-1.5 rounded-lg border px-1.5 py-1 transition",
     active
-      ? "border-emerald-400/30 bg-emerald-400/12 text-white shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+      ? "border-emerald-400/30 bg-emerald-400/12 text-white shadow-[0_0_18px_rgba(16,185,129,0.12)]"
       : "border-white/8 bg-black/18 text-white/65 hover:border-white/18 hover:bg-white/[0.045] hover:text-white",
   ].join(" ");
 }
@@ -316,27 +316,27 @@ export default function AdminSidebar({
   const activeHref = getActiveHref(pathname);
 
   return (
-    <aside className="fixed bottom-4 top-24 w-[34rem] 2xl:w-[38rem]">
+    <aside className="fixed bottom-2 top-20 w-[34rem] 2xl:w-[38rem]">
       <div className="h-full overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-        <div className="border-b border-white/10 px-3 py-3">
-          <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5">
+        <div className="border-b border-white/10 px-2 py-2">
+          <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-2">
             <div className="min-w-0">
-              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300/90">SIXFL</div>
-              <div className="mt-1 truncate text-sm font-semibold text-white">Admin Console</div>
-              <div className="mt-0.5 truncate text-[11px] text-white/45">{name || email || "Signed in"}</div>
+              <div className="text-[9px] font-black uppercase tracking-[0.22em] text-emerald-300/90">SIXFL</div>
+              <div className="mt-0.5 truncate text-xs font-semibold text-white">Admin Console</div>
+              <div className="truncate text-[9px] text-white/45">{name || email || "Signed in"}</div>
             </div>
-            <Cog6ToothIcon className="h-5 w-5 shrink-0 text-emerald-300/70" />
+            <Cog6ToothIcon className="h-4 w-4 shrink-0 text-emerald-300/70" />
           </div>
         </div>
 
-        <nav className="sixfl-mobile-scroll h-[calc(100%-5.7rem)] overflow-y-auto px-2.5 py-2.5 pr-3">
-          <div className="grid grid-cols-2 gap-2 pb-3">
+        <nav className="h-[calc(100%-4.85rem)] overflow-hidden px-1.5 py-1.5">
+          <div className="grid grid-cols-3 gap-1.5">
             {navigationGroups.map((group) => (
-              <div key={group.title} className={`rounded-2xl border p-2 ${groupTintClasses(group.tint)}`}>
-                <div className="mb-1.5 px-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-white/35">
+              <div key={group.title} className={`rounded-xl border p-1.5 ${groupTintClasses(group.tint)}`}>
+                <div className="mb-1 px-0.5 text-[7px] font-semibold uppercase tracking-[0.16em] text-white/35">
                   {group.title}
                 </div>
-                <div className="grid gap-1">
+                <div className="grid gap-0.5">
                   {group.items.map((item) => {
                     const active = activeHref === item.href;
                     const Icon = item.icon;
@@ -346,25 +346,25 @@ export default function AdminSidebar({
                       <Link key={item.href} href={item.href} className={navItemClasses(Boolean(active))}>
                         <span
                           className={[
-                            "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition",
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition",
                             active
                               ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
                               : "border-white/10 bg-black/25 text-white/45 group-hover:text-white/75",
                           ].join(" ")}
                         >
-                          <Icon className="h-3.5 w-3.5" />
+                          <Icon className="h-3 w-3" />
                         </span>
 
                         <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1 truncate text-[11px] font-semibold leading-tight">
+                          <span className="flex items-center gap-1 truncate text-[10px] font-semibold leading-tight">
                             <span className="truncate">{item.name}</span>
                             {showBadge ? (
-                              <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold text-white">
+                              <span className="rounded-full bg-red-500 px-1 py-0.5 text-[7px] font-bold text-white">
                                 {unreadMessagingCount}
                               </span>
                             ) : null}
                           </span>
-                          <span className="mt-0.5 block truncate text-[9px] leading-tight text-white/35">
+                          <span className="block truncate text-[8px] leading-tight text-white/35">
                             {item.description}
                           </span>
                         </span>
