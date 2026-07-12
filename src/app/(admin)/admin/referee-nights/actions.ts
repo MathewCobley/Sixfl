@@ -300,7 +300,12 @@ export async function updateRefereeNightFixturesAction(formData: FormData) {
 
   await Promise.all(Array.from(affectedNightIds).map((nightId) => recalculateRefereeNightCashup(nightId)));
   revalidateRefereeNightPaths(refereeNightId);
-  redirect(`/admin/referee-nights/${refereeNightId}?fixtures=saved`);
+
+  const selectedQuery = selectedFixtureIds.length > 0
+    ? `&selectedFixtures=${encodeURIComponent(selectedFixtureIds.join(","))}`
+    : "";
+
+  redirect(`/admin/referee-nights/${refereeNightId}?fixtures=saved${selectedQuery}`);
 }
 
 export async function updateRefereeNightAction(formData: FormData) {
