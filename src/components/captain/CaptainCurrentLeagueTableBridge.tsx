@@ -4,14 +4,8 @@
 
 "use client";
 
-import CaptainDashboardFixturesBridge from "@/components/captain/CaptainDashboardFixturesBridge";
 import CaptainOutstandingBalanceBridge from "@/components/captain/CaptainOutstandingBalanceBridge";
 
 export default function CaptainCurrentLeagueTableBridge() {
-  return (
-    <>
-      <CaptainDashboardFixturesBridge />
-      <CaptainOutstandingBalanceBridge />
-    </>
-  );
+  return <CaptainOutstandingBalanceBridge />;
 }
