@@ -8,6 +8,7 @@ export type FixtureAiPreview = {
   headline: string;
   summary: string;
   source: "openai" | "fallback";
+  diagnostic?: string | null;
 };
 
 type FixtureAiPreviewInput = {
@@ -25,6 +26,11 @@ type OpenAIResponsePayload = {
       text?: unknown;
     }>;
   }>;
+};
+
+type ParsedPreviewJson = {
+  headline?: unknown;
+  summary?: unknown;
 };
 
 const AI_PREVIEW_CACHE = new Map<
@@ -119,11 +125,15 @@ export function cleanFixtureAiPreviewForDisplay(preview: FixtureAiPreview): Fixt
   };
 }
 
+export function hasOpenAiPredictorConfig() {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
 function getFavourite(input: FixtureAiPreviewInput) {
   const chance = input.winChance;
 
   if (chance.draw >= chance.home && chance.draw >= chance.away) {
-    return "a tight draw";
+    return "a draw";
   }
 
   if (chance.home >= chance.away) {
@@ -133,16 +143,31 @@ function getFavourite(input: FixtureAiPreviewInput) {
   return input.awayTeamName;
 }
 
-export function getFallbackFixtureAiPreview(input: FixtureAiPreviewInput): FixtureAiPreview {
+function getFavouriteLabel(input: FixtureAiPreviewInput) {
   const favourite = getFavourite(input);
+
+  if (favourite === "a draw") return "a tight draw";
+  return favourite;
+}
+
+export function getFallbackFixtureAiPreview(
+  input: FixtureAiPreviewInput,
+  diagnostic?: string | null,
+): FixtureAiPreview {
+  const favourite = getFavourite(input);
+  const favouriteLabel = getFavouriteLabel(input);
 
   return {
     headline:
-      favourite === "a tight draw"
-        ? "The predictor expects a close one"
-        : `${favourite} edge the predictor`,
-    summary: `SIXFL AI Predictor has this down as ${input.winChance.predictedResult.label}, with ${input.homeTeamName} ${input.winChance.home}%, draw ${input.winChance.draw}% and ${input.awayTeamName} ${input.winChance.away}%.`,
+      favourite === "a draw"
+        ? "This one looks too close to call"
+        : `${favourite} are favourites here`,
+    summary:
+      favourite === "a draw"
+        ? `The numbers point towards ${input.winChance.predictedResult.label}: ${input.homeTeamName} ${input.winChance.home}%, draw ${input.winChance.draw}% and ${input.awayTeamName} ${input.winChance.away}%.`
+        : `The numbers favour ${favouriteLabel}, with the predictor showing ${input.homeTeamName} ${input.winChance.home}%, draw ${input.winChance.draw}% and ${input.awayTeamName} ${input.winChance.away}%.`,
     source: "fallback",
+    diagnostic: diagnostic ?? null,
   };
 }
 
@@ -167,17 +192,47 @@ function extractOpenAIText(payload: OpenAIResponsePayload) {
 function getSafeHeadline(input: FixtureAiPreviewInput) {
   const favourite = getFavourite(input);
 
-  return favourite === "a tight draw"
-    ? "The predictor expects a close one"
-    : `${favourite} edge the predictor`;
+  return favourite === "a draw"
+    ? "This one looks too close to call"
+    : `${favourite} are favourites here`;
+}
+
+function parseJsonPreview(text: string) {
+  const trimmed = text.trim();
+  const jsonStart = trimmed.indexOf("{");
+  const jsonEnd = trimmed.lastIndexOf("}");
+
+  if (jsonStart < 0 || jsonEnd <= jsonStart) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1)) as ParsedPreviewJson;
+    const headline = typeof parsed.headline === "string" ? parsed.headline.trim() : "";
+    const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+
+    if (!headline && !summary) return null;
+
+    return { headline, summary };
+  } catch {
+    return null;
+  }
 }
 
 function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAiPreview {
+  const jsonPreview = parseJsonPreview(text);
+
+  if (jsonPreview) {
+    return {
+      headline: cleanHeadline(jsonPreview.headline || getSafeHeadline(input)),
+      summary: limitCompleteText(jsonPreview.summary || text, SUMMARY_MAX_LENGTH),
+      source: "openai",
+    };
+  }
+
   const cleaned = cleanText(text)
     .replace(/^headline:\s*/i, "")
     .replace(/^summary:\s*/i, "");
 
-  if (!cleaned) return getFallbackFixtureAiPreview(input);
+  if (!cleaned) return getFallbackFixtureAiPreview(input, "OpenAI returned no text");
 
   const [firstSentence, ...rest] = cleaned.split(/(?<=[.!?])\s+/);
   const headline = cleanHeadline(firstSentence || getSafeHeadline(input));
@@ -190,13 +245,78 @@ function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAi
   };
 }
 
+function getModelCandidates() {
+  return Array.from(
+    new Set(
+      [
+        process.env.OPENAI_PREDICTOR_MODEL?.trim(),
+        process.env.OPENAI_MODEL?.trim(),
+        "gpt-5.5",
+        "gpt-4.1-mini",
+        "gpt-4o-mini",
+      ].filter(Boolean) as string[],
+    ),
+  );
+}
+
+async function callOpenAiPreview(input: FixtureAiPreviewInput, model: string, apiKey: string) {
+  const timeoutSignal = (AbortSignal as typeof AbortSignal & { timeout?: (ms: number) => AbortSignal }).timeout?.(8000);
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    signal: timeoutSignal,
+    body: JSON.stringify({
+      model,
+      max_output_tokens: 180,
+      instructions:
+        "You write short, fun, factual 6-a-side football match previews for SIXFL. Use only the data provided. Do not invent injuries, absences, player names, previous fixtures or facts not provided. Keep it suitable for a public sports website. Return only compact JSON with keys headline and summary. The headline must be under 65 characters and must not include the exact scoreline.",
+      input: `Write a public match preview for this fixture as JSON only: ${JSON.stringify({
+        homeTeam: input.homeTeamName,
+        awayTeam: input.awayTeamName,
+        predictedResult: input.winChance.predictedResult.label,
+        homeWinChance: input.winChance.home,
+        drawChance: input.winChance.draw,
+        awayWinChance: input.winChance.away,
+        confidence: input.winChance.confidence,
+        basis: input.winChance.explanation,
+      })}`,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    return {
+      ok: false as const,
+      reason: `${model} returned ${response.status}${errorText ? `: ${errorText.slice(0, 220)}` : ""}`,
+    };
+  }
+
+  const payload = (await response.json()) as OpenAIResponsePayload;
+  const text = extractOpenAIText(payload);
+
+  if (!text.trim()) {
+    return {
+      ok: false as const,
+      reason: `${model} returned an empty response`,
+    };
+  }
+
+  return {
+    ok: true as const,
+    preview: parsePreviewText(text, input),
+  };
+}
+
 export async function getFixtureAiPreview(
   input: FixtureAiPreviewInput,
 ): Promise<FixtureAiPreview> {
-  const fallback = getFallbackFixtureAiPreview(input);
   const apiKey = process.env.OPENAI_API_KEY?.trim();
 
-  if (!apiKey) return fallback;
+  if (!apiKey) return getFallbackFixtureAiPreview(input, "OPENAI_API_KEY is missing");
 
   const cacheKey = getCacheKey(input);
   const cached = AI_PREVIEW_CACHE.get(cacheKey);
@@ -205,45 +325,38 @@ export async function getFixtureAiPreview(
     return cached.value;
   }
 
-  try {
-    const model = process.env.OPENAI_PREDICTOR_MODEL?.trim() || "gpt-5.5";
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        max_output_tokens: 150,
-        instructions:
-          "You write short, fun, factual 6-a-side football match previews for SIXFL. Do not invent injuries, absences, player names or facts not provided. Keep it suitable for a public sports website. The headline must be one short sentence under 65 characters, must not end with a partial word, and must not use ellipses. Do not put the exact scoreline in the headline.",
-        input: `Write one short headline sentence and one short explanation sentence for this fixture. Use only this data: ${JSON.stringify({
-          homeTeam: input.homeTeamName,
-          awayTeam: input.awayTeamName,
-          predictedResult: input.winChance.predictedResult.label,
-          homeWinChance: input.winChance.home,
-          drawChance: input.winChance.draw,
-          awayWinChance: input.winChance.away,
-          confidence: input.winChance.confidence,
-          basis: input.winChance.explanation,
-        })}`,
-      }),
-    });
+  const failures: string[] = [];
 
-    if (!response.ok) return fallback;
+  for (const model of getModelCandidates()) {
+    try {
+      const result = await callOpenAiPreview(input, model, apiKey);
 
-    const payload = (await response.json()) as OpenAIResponsePayload;
-    const text = extractOpenAIText(payload);
-    const value = parsePreviewText(text, input);
+      if (!result.ok) {
+        failures.push(result.reason);
+        continue;
+      }
 
-    AI_PREVIEW_CACHE.set(cacheKey, {
-      expiresAt: Date.now() + CACHE_TTL_MS,
-      value,
-    });
+      const value = cleanFixtureAiPreviewForDisplay(result.preview);
 
-    return value;
-  } catch {
-    return fallback;
+      AI_PREVIEW_CACHE.set(cacheKey, {
+        expiresAt: Date.now() + CACHE_TTL_MS,
+        value,
+      });
+
+      return value;
+    } catch (error) {
+      failures.push(
+        `${model} request failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
+
+  const diagnostic = failures.join(" | ") || "OpenAI preview failed";
+  console.warn("[SIXFL AI Predictor] Falling back to local preview", {
+    homeTeamName: input.homeTeamName,
+    awayTeamName: input.awayTeamName,
+    diagnostic,
+  });
+
+  return getFallbackFixtureAiPreview(input, diagnostic);
 }
