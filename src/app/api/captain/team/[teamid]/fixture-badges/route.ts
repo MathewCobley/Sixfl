@@ -6,7 +6,10 @@ import { NextResponse } from "next/server";
 
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
-import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
+import {
+  getStoredAiPreviewsByFixtureIds,
+  refreshStoredAiPreviewsForLeague,
+} from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -100,6 +103,16 @@ export async function GET(
         },
       },
     });
+
+    const scheduledFixtureIds = fixtures
+      .filter((fixture) => fixture.status === "SCHEDULED")
+      .map((fixture) => fixture.id);
+
+    if (context.currentLeagueId && scheduledFixtureIds.length > 0) {
+      await refreshStoredAiPreviewsForLeague(context.currentLeagueId, {
+        fixtureIds: scheduledFixtureIds,
+      });
+    }
 
     const predictorTeamIds = Array.from(
       new Set(fixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId])),
