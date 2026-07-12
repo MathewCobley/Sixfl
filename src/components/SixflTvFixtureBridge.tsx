@@ -71,7 +71,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
 
   for (const form of forms) {
     if (form.querySelector("[data-sixfl-tv-control]")) continue;
-    const fixtureId = form.querySelector<HTMLInputElement>('input[name="fixtureId"]')?.value;
+    const fixtureId = form.querySelector<HTMLInputElement>('input[name="fixtureId"]')?.value ?? "";
     if (!fixtureId) continue;
 
     const savedFixture = fixtures.get(fixtureId) ?? null;
