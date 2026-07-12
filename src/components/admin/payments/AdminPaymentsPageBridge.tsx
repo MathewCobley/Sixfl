@@ -55,9 +55,69 @@ function storeReturnToBeforeChase(event: SubmitEvent) {
   sessionStorage.setItem(RETURN_TO_KEY, `${window.location.pathname}${window.location.search}`);
 }
 
-function injectPaymentStatusSelector() {
+function getPaymentsFilterForm() {
   const form = document.querySelector<HTMLFormElement>('form[action="/admin/payments"]');
-  if (!form || !form.querySelector('select[name="view"]')) return;
+  if (!form || !form.querySelector('select[name="view"]')) return null;
+  return form;
+}
+
+function relabelPaymentViewOptions() {
+  const form = getPaymentsFilterForm();
+  const select = form?.querySelector<HTMLSelectElement>('select[name="view"]');
+  if (!select) return;
+
+  const labels: Record<string, string> = {
+    playerFees: "Open player fees due",
+    recentPayments: "Payments made",
+    all: "Everything",
+    teamCharges: "Team charges due",
+  };
+
+  Array.from(select.options).forEach((option) => {
+    const label = labels[option.value];
+    if (label) option.textContent = label;
+  });
+}
+
+function shouldRoutePlayerFeesToPaymentsMade(params: URLSearchParams) {
+  const hasTeamFilter = Boolean(params.get("teamId"));
+  const view = params.get("view");
+  const paymentStatus = params.get(PAYMENT_STATUS_PARAM) ?? "";
+
+  return hasTeamFilter && view === "playerFees" && (paymentStatus === "" || paymentStatus === "paid");
+}
+
+function routeExistingAmbiguousPlayerFeeSearch(router: ReturnType<typeof useRouter>) {
+  const params = new URLSearchParams(window.location.search);
+  if (!shouldRoutePlayerFeesToPaymentsMade(params)) return false;
+
+  params.set("view", "recentPayments");
+  params.set(PAYMENT_STATUS_PARAM, "paid");
+  router.replace(`${window.location.pathname}?${params.toString()}`);
+  return true;
+}
+
+function routeAmbiguousPlayerFeeSubmit(event: SubmitEvent) {
+  const form = event.target instanceof HTMLFormElement ? event.target : null;
+  if (!form || form.getAttribute("action") !== "/admin/payments") return;
+
+  const teamSelect = form.querySelector<HTMLSelectElement>('select[name="teamId"]');
+  const viewSelect = form.querySelector<HTMLSelectElement>('select[name="view"]');
+  const statusSelect = form.querySelector<HTMLSelectElement>(`select[name="${PAYMENT_STATUS_PARAM}"]`);
+
+  const hasTeamFilter = Boolean(teamSelect?.value);
+  const wantsPlayerFees = viewSelect?.value === "playerFees";
+  const status = statusSelect?.value ?? "";
+
+  if (hasTeamFilter && wantsPlayerFees && (status === "" || status === "paid")) {
+    viewSelect.value = "recentPayments";
+    if (statusSelect) statusSelect.value = "paid";
+  }
+}
+
+function injectPaymentStatusSelector() {
+  const form = getPaymentsFilterForm();
+  if (!form) return;
   if (form.querySelector(`select[name="${PAYMENT_STATUS_PARAM}"]`)) return;
 
   const current = new URLSearchParams(window.location.search).get(PAYMENT_STATUS_PARAM) ?? "";
@@ -81,7 +141,7 @@ function injectPaymentStatusSelector() {
     ["", "Any status"],
     ["due", "Due / unpaid"],
     ["overdue", "Overdue / chase"],
-    ["paid", "Paid"],
+    ["paid", "Paid / payments made"],
   ].forEach(([value, text]) => {
     const option = document.createElement("option");
     option.value = value;
@@ -223,8 +283,10 @@ function enhanceSixflPaymentSelect(select: HTMLSelectElement) {
 }
 
 function enhancePaymentFilterDropdowns() {
-  const form = document.querySelector<HTMLFormElement>('form[action="/admin/payments"]');
+  const form = getPaymentsFilterForm();
   if (!form) return;
+
+  relabelPaymentViewOptions();
 
   ["leagueId", "teamId", "view", "limit", PAYMENT_STATUS_PARAM].forEach((name) => {
     const select = form.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
@@ -327,7 +389,14 @@ export default function AdminPaymentsPageBridge() {
       return;
     }
 
-    const onSubmit = (event: SubmitEvent) => storeReturnToBeforeChase(event);
+    if (routeExistingAmbiguousPlayerFeeSearch(router)) {
+      return;
+    }
+
+    const onSubmit = (event: SubmitEvent) => {
+      storeReturnToBeforeChase(event);
+      routeAmbiguousPlayerFeeSubmit(event);
+    };
     const onDocumentClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
       if (!target?.closest(`[${SIXFL_SELECT_WRAP_ATTR}]`)) closeSixflPaymentSelects();
@@ -335,6 +404,7 @@ export default function AdminPaymentsPageBridge() {
 
     document.addEventListener("submit", onSubmit, true);
     document.addEventListener("click", onDocumentClick);
+    relabelPaymentViewOptions();
     injectPaymentStatusSelector();
     enhancePaymentFilterDropdowns();
     applyPaymentStatusFilter();
