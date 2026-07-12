@@ -70,6 +70,24 @@ function predictionHash(input: {
     .digest("hex");
 }
 
+function looksCorruptedPrediction(row: StoredPredictionRow) {
+  const combined = `${row.headline} ${row.summary}`;
+  const cleaned = cleanFixtureAiPreviewForDisplay({
+    headline: row.headline,
+    summary: row.summary,
+    source: row.source === "openai" ? "openai" : "fallback",
+  });
+
+  if (/[{}]/.test(combined)) return true;
+  if (/"headline"|"summary"/i.test(combined)) return true;
+  if (/points to points/i.test(combined)) return true;
+  if (/\bundefined\b|\bnull\b/i.test(combined)) return true;
+  if (row.source === "openai" && /\b\d{1,3}%\b/.test(combined)) return true;
+  if (cleaned.headline.length < 8 || cleaned.summary.length < 24) return true;
+
+  return false;
+}
+
 function canReuseExistingPrediction(input: {
   existing: StoredPredictionRow | null;
   inputHash: string;
@@ -77,6 +95,7 @@ function canReuseExistingPrediction(input: {
 }) {
   if (input.force || !input.existing) return false;
   if (input.existing.inputHash !== input.inputHash) return false;
+  if (looksCorruptedPrediction(input.existing)) return false;
 
   const existingSource = input.existing.source === "openai" ? "openai" : "fallback";
 
