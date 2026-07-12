@@ -93,6 +93,34 @@ function buildPlayerFeeTotalsByTeamFixture(fees: PlayerFeeRow[]) {
   return totals;
 }
 
+function getEntryDueTime(entry: TeamPaymentLedgerEntry, fallback: number) {
+  return (entry.dueDate ?? entry.kickoffAt)?.getTime() ?? fallback;
+}
+
+function isOutstandingCharge(entry: TeamPaymentLedgerEntry) {
+  return entry.displayStatus !== "PAID" && entry.displayStatus !== "VOID" && entry.outstandingPence > 0;
+}
+
+function getLedgerDisplayGroup(entry: TeamPaymentLedgerEntry) {
+  if (isOutstandingCharge(entry) && entry.isPayableNow) return 0;
+  if (isOutstandingCharge(entry)) return 1;
+  return 2;
+}
+
+function sortLedgerEntriesForCaptain(entries: TeamPaymentLedgerEntry[]) {
+  return [...entries].sort((a, b) => {
+    const groupDiff = getLedgerDisplayGroup(a) - getLedgerDisplayGroup(b);
+    if (groupDiff !== 0) return groupDiff;
+
+    const group = getLedgerDisplayGroup(a);
+    if (group === 2) {
+      return getEntryDueTime(b, b.createdAt.getTime()) - getEntryDueTime(a, a.createdAt.getTime());
+    }
+
+    return getEntryDueTime(a, Number.MAX_SAFE_INTEGER) - getEntryDueTime(b, Number.MAX_SAFE_INTEGER);
+  });
+}
+
 export async function getRelatedTeamIdsForPaymentLedger(teamId: string) {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -164,7 +192,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
   const paidByTeamFixture = buildPlayerFeeTotalsByTeamFixture(paidPlayerFees);
   const openByTeamFixture = buildPlayerFeeTotalsByTeamFixture(openPlayerFees);
 
-  const entries = charges.map<TeamPaymentLedgerEntry>((charge) => {
+  const unsortedEntries = charges.map<TeamPaymentLedgerEntry>((charge) => {
     const fixtureKey = charge.fixtureId ? playerFeeKey(charge.teamId, charge.fixtureId) : null;
     const directPaidPence = getDirectChargePaidTotal(charge.transactions);
     const playerPaidPence = fixtureKey ? paidByTeamFixture.get(fixtureKey) ?? 0 : 0;
@@ -215,17 +243,8 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     };
   });
 
-  const openEntries = entries
-    .filter((entry) =>
-      entry.displayStatus !== "PAID" &&
-      entry.outstandingPence > 0 &&
-      entry.isPayableNow,
-    )
-    .sort((a, b) => {
-      const aDate = a.dueDate ?? a.kickoffAt ?? new Date(8640000000000000);
-      const bDate = b.dueDate ?? b.kickoffAt ?? new Date(8640000000000000);
-      return aDate.getTime() - bDate.getTime();
-    });
+  const entries = sortLedgerEntriesForCaptain(unsortedEntries);
+  const openEntries = entries.filter((entry) => isOutstandingCharge(entry) && entry.isPayableNow);
 
   return {
     teamId: team.id,
