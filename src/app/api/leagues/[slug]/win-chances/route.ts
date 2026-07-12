@@ -5,10 +5,11 @@
 import { NextResponse } from "next/server";
 
 import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import {
-  getStoredAiPreviewsByFixtureIds,
-  refreshStoredAiPreviewsForLeague,
-} from "@/lib/fixtures/storedAiPredictions";
+  buildNameAwareWinChanceFixtures,
+  shouldIgnoreStaleTooEarlyPreview,
+} from "@/lib/fixtures/winChanceHistory";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
@@ -73,37 +74,10 @@ export async function GET(
       (fixture) => fixture.status === "SCHEDULED",
     );
 
-    if (scheduledFixtures.length > 0) {
-      await refreshStoredAiPreviewsForLeague(league.id, {
-        fixtureIds: scheduledFixtures.map((fixture) => fixture.id),
-      });
-    }
-
-    const predictorTeamIds = Array.from(
-      new Set(scheduledFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id])),
-    );
-    const predictionHistory = predictorTeamIds.length
-      ? await prisma.fixture.findMany({
-          where: {
-            status: "COMPLETED",
-            result: { isNot: null },
-            OR: [
-              { homeTeamId: { in: predictorTeamIds } },
-              { awayTeamId: { in: predictorTeamIds } },
-            ],
-          },
-          orderBy: [{ kickoffAt: "asc" }],
-          take: 500,
-          select: {
-            id: true,
-            kickoffAt: true,
-            status: true,
-            homeTeam: { select: { id: true } },
-            awayTeam: { select: { id: true } },
-            result: { select: { homeScore: true, awayScore: true } },
-          },
-        })
-      : [];
+    const predictionHistory = buildNameAwareWinChanceFixtures({
+      historyFixtures: league.fixtures,
+      targetFixtures: scheduledFixtures,
+    });
 
     const storedPreviews = await getStoredAiPreviewsByFixtureIds(
       scheduledFixtures.map((fixture) => fixture.id),
@@ -116,6 +90,12 @@ export async function GET(
           awayTeamId: fixture.awayTeam.id,
           fixtures: predictionHistory,
         });
+        const storedPreview = storedPreviews.get(fixture.id) ?? null;
+        const fallbackPreview = getFallbackFixtureAiPreview({
+          homeTeamName: fixture.homeTeam.name,
+          awayTeamName: fixture.awayTeam.name,
+          winChance,
+        });
 
         return {
           id: fixture.id,
@@ -126,12 +106,13 @@ export async function GET(
           winChance: {
             ...winChance,
             aiPreview:
-              storedPreviews.get(fixture.id) ??
-              getFallbackFixtureAiPreview({
-                homeTeamName: fixture.homeTeam.name,
-                awayTeamName: fixture.awayTeam.name,
-                winChance,
-              }),
+              !storedPreview ||
+              shouldIgnoreStaleTooEarlyPreview({
+                preview: storedPreview,
+                predictedResultLabel: winChance.predictedResult.label,
+              })
+                ? fallbackPreview
+                : storedPreview,
           },
         };
       }),
