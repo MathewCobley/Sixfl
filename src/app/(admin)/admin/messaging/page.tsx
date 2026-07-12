@@ -334,7 +334,7 @@ export default async function AdminMessagesPage({
           </section>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-2 3xl:grid-cols-4">
+        <div className="grid gap-6 xl:grid-cols-2 3xl:grid-cols-5">
           <CommunicationsTeamLauncher
             teams={teams.map((team) => ({
               id: team.id,
@@ -350,6 +350,22 @@ export default async function AdminMessagesPage({
           <CommunicationsLeagueLauncher leagues={leagueLauncherOptions} />
 
           <CommunicationsLeadLauncher />
+
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">
+              Content
+            </div>
+            <h2 className="mt-3 text-xl font-semibold text-white">Templates</h2>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Edit reusable SMS and email templates used by teams, prospects, leads and whole-league outreach.
+            </p>
+            <Link
+              href="/admin/templates"
+              className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+            >
+              Open templates
+            </Link>
+          </section>
         </div>
 
         <AdminMessagesInbox
