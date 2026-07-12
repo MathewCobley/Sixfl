@@ -45,6 +45,17 @@ function formatStatus(status: RefereeNightStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
+function getSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+function getSavedFixtureIds(value: string | string[] | undefined) {
+  return getSearchParam(value)
+    .split(",")
+    .map((fixtureId) => fixtureId.trim())
+    .filter(Boolean);
+}
+
 function assignmentLabel(input: {
   assignedRefereeNightId: string | null;
   assignedRefereeName: string | null;
@@ -68,11 +79,16 @@ function assignmentClasses(input: { assignedRefereeNightId: string | null; curre
 
 export default async function AdminRefereeNightDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireAdmin();
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
+  const justSavedFixtureIds = getSavedFixtureIds(sp.selectedFixtures);
+  const justSavedFixtureIdSet = new Set(justSavedFixtureIds);
 
   const [night, fixtures, assignableFixtures, cashByTeam] = await Promise.all([
     getRefereeNightById(id),
@@ -152,8 +168,10 @@ export default async function AdminRefereeNightDetailPage({
                 <input type="hidden" name="refereeNightId" value={night.id} />
                 <div className="grid gap-3">
                   {assignableFixtures.map((fixture) => {
-                    const assignedToThisNight = fixture.assignedRefereeNightId === night.id;
-                    const assignedElsewhere = fixture.assignedRefereeNightId && !assignedToThisNight;
+                    const savedAsSelected = justSavedFixtureIdSet.has(fixture.id);
+                    const assignedToThisNight = fixture.assignedRefereeNightId === night.id || savedAsSelected;
+                    const assignedElsewhere = fixture.assignedRefereeNightId && fixture.assignedRefereeNightId !== night.id && !savedAsSelected;
+                    const effectiveAssignedRefereeNightId = assignedToThisNight ? night.id : fixture.assignedRefereeNightId;
 
                     return (
                       <label
@@ -176,9 +194,9 @@ export default async function AdminRefereeNightDetailPage({
                           <span className="mt-2 block text-base font-semibold text-white">
                             {fixture.homeTeam.name} <span className="text-white/35">v</span> {fixture.awayTeam.name}
                           </span>
-                          <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${assignmentClasses({ assignedRefereeNightId: fixture.assignedRefereeNightId, currentNightId: night.id })}`}>
+                          <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${assignmentClasses({ assignedRefereeNightId: effectiveAssignedRefereeNightId, currentNightId: night.id })}`}>
                             {assignmentLabel({
-                              assignedRefereeNightId: fixture.assignedRefereeNightId,
+                              assignedRefereeNightId: effectiveAssignedRefereeNightId,
                               assignedRefereeName: fixture.assignedRefereeName,
                               assignedRefereeEmail: fixture.assignedRefereeEmail,
                               currentNightId: night.id,
