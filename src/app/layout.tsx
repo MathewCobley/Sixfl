@@ -8,6 +8,7 @@ import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import { Suspense, type ReactNode } from "react";
 import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
+import SixflTvFixtureBridge from "@/components/SixflTvFixtureBridge";
 import Providers from "./providers";
 
 export const metadata = {
@@ -101,6 +102,7 @@ export default function RootLayout({
         <Providers>
           <Suspense fallback={null}>
             <AdminPaymentsPageBridge />
+            <SixflTvFixtureBridge />
           </Suspense>
           {children}
         </Providers>
