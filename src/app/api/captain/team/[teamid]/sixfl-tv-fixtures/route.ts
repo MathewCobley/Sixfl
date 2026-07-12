@@ -12,6 +12,7 @@ type TvFixtureRow = {
   id: string;
   homeTeamName: string;
   awayTeamName: string;
+  sixflTvUrl: string | null;
 };
 
 export async function GET(
@@ -29,12 +30,14 @@ export async function GET(
   const rows = await prisma.$queryRaw<TvFixtureRow[]>(Prisma.sql`
     SELECT
       f."id",
+      f."sixflTvUrl",
       home."name" AS "homeTeamName",
       away."name" AS "awayTeamName"
     FROM "Fixture" f
     JOIN "Team" home ON home."id" = f."homeTeamId"
     JOIN "Team" away ON away."id" = f."awayTeamId"
     WHERE f."sixflTvRecorded" = true
+      AND f."sixflTvUrl" IS NOT NULL
       AND f."publishedAt" IS NOT NULL
       AND (
         f."homeTeamId" IN (${Prisma.join(context.relatedTeamIds)})
@@ -47,6 +50,7 @@ export async function GET(
       id: row.id,
       fullLabel: `${row.homeTeamName} vs ${row.awayTeamName}`,
       captainLabels: [`vs ${row.homeTeamName}`, `vs ${row.awayTeamName}`],
+      sixflTvUrl: row.sixflTvUrl,
     })),
   });
 }
