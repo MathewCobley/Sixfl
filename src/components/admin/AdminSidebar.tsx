@@ -329,8 +329,8 @@ export default function AdminSidebar({
           </div>
         </div>
 
-        <nav className="h-[calc(100%-5.7rem)] overflow-hidden px-2.5 py-2.5">
-          <div className="grid grid-cols-2 gap-2">
+        <nav className="sixfl-mobile-scroll h-[calc(100%-5.7rem)] overflow-y-auto px-2.5 py-2.5 pr-3">
+          <div className="grid grid-cols-2 gap-2 pb-3">
             {navigationGroups.map((group) => (
               <div key={group.title} className={`rounded-2xl border p-2 ${groupTintClasses(group.tint)}`}>
                 <div className="mb-1.5 px-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-white/35">
