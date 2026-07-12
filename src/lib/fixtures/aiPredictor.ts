@@ -59,6 +59,9 @@ function getCacheKey(input: FixtureAiPreviewInput) {
 
 function cleanText(value: string) {
   return value
+    .replace(/```(?:json)?/gi, "")
+    .replace(/```/g, "")
+    .replace(/\\n/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
@@ -110,18 +113,84 @@ function limitCompleteText(value: string, maxLength: number) {
   return trimAtWordBoundary(cleaned, maxLength);
 }
 
+function stripJsonFieldNoise(value: string, fieldName: "headline" | "summary") {
+  return cleanText(value)
+    .replace(new RegExp(`^\\s*\\{?\\s*["']?${fieldName}["']?\\s*:\\s*["']?`, "i"), "")
+    .replace(/["']?\s*,\s*["']?(headline|summary)["']?\s*:\s*["']?[\s\S]*$/i, "")
+    .replace(/["']?\s*\}?\s*$/g, "")
+    .trim();
+}
+
+function removeExactPercentages(value: string) {
+  return cleanText(value)
+    .replace(/\ban?\s+(\d{1,3})%\s+(?:win\s+)?chance\b/gi, "a strong chance")
+    .replace(/\b(\d{1,3})%\s+(?:win\s+)?chance\b/gi, "a strong chance")
+    .replace(/\b(\d{1,3})%\b/g, "")
+    .replace(/\bgiven an\s+a strong chance\b/gi, "given a strong chance")
+    .replace(/\bgiven a\s+a strong chance\b/gi, "given a strong chance")
+    .replace(/\s+,/g, ",")
+    .replace(/\s+\./g, ".")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function cleanHeadline(value: string) {
-  const stripped = stripBrokenHeadlineEnding(value);
-  const limited = limitCompleteText(stripped || value, HEADLINE_MAX_LENGTH);
+  const stripped = stripBrokenHeadlineEnding(stripJsonFieldNoise(value, "headline"));
+  const noPercentages = removeExactPercentages(stripped);
+  const limited = limitCompleteText(noPercentages || value, HEADLINE_MAX_LENGTH);
 
   return limited.replace(/[.,;:!?-]+$/, "").trim() || "SIXFL AI Predictor";
 }
 
+function cleanSummary(value: string) {
+  const stripped = stripJsonFieldNoise(value, "summary");
+  const noPercentages = removeExactPercentages(stripped);
+  const cleaned = limitCompleteText(noPercentages, SUMMARY_MAX_LENGTH);
+
+  if (/^the model points to points\.?$/i.test(cleaned)) {
+    return "The model points to a clear favourite based on the available results.";
+  }
+
+  return cleaned || "The model points to a close contest based on the available results.";
+}
+
+function parseJsonPreview(text: string) {
+  const trimmed = cleanText(text);
+  const jsonStart = trimmed.indexOf("{");
+  const jsonEnd = trimmed.lastIndexOf("}");
+
+  if (jsonStart >= 0 && jsonEnd > jsonStart) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1)) as ParsedPreviewJson;
+      const headline = typeof parsed.headline === "string" ? parsed.headline.trim() : "";
+      const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+
+      if (headline || summary) return { headline, summary };
+    } catch {
+      // Try the loose parser below.
+    }
+  }
+
+  // Some models return almost-JSON or a truncated JSON fragment. Pull the fields out defensively.
+  const headlineMatch = trimmed.match(/"headline"\s*:\s*"([^"]*)"/i) ??
+    trimmed.match(/"headline"\s*:\s*"([^"{}]*?)(?=\s*,\s*"summary"|\s*}\s*$|$)/i);
+  const summaryMatch = trimmed.match(/"summary"\s*:\s*"([^"]*)"/i) ??
+    trimmed.match(/"summary"\s*:\s*"([^"{}]*?)(?=\s*}\s*$|$)/i);
+
+  const headline = headlineMatch?.[1]?.trim() ?? "";
+  const summary = summaryMatch?.[1]?.trim() ?? "";
+
+  if (headline || summary) return { headline, summary };
+  return null;
+}
+
 export function cleanFixtureAiPreviewForDisplay(preview: FixtureAiPreview): FixtureAiPreview {
+  const parsed = parseJsonPreview(`${preview.headline}\n${preview.summary}`);
+
   return {
     ...preview,
-    headline: cleanHeadline(preview.headline),
-    summary: limitCompleteText(preview.summary, SUMMARY_MAX_LENGTH),
+    headline: cleanHeadline(parsed?.headline || preview.headline),
+    summary: cleanSummary(parsed?.summary || preview.summary),
   };
 }
 
@@ -164,8 +233,8 @@ export function getFallbackFixtureAiPreview(
         : `${favourite} are favourites here`,
     summary:
       favourite === "a draw"
-        ? `The numbers point towards ${input.winChance.predictedResult.label}: ${input.homeTeamName} ${input.winChance.home}%, draw ${input.winChance.draw}% and ${input.awayTeamName} ${input.winChance.away}%.`
-        : `The numbers favour ${favouriteLabel}, with the predictor showing ${input.homeTeamName} ${input.winChance.home}%, draw ${input.winChance.draw}% and ${input.awayTeamName} ${input.winChance.away}%.`,
+        ? `The numbers point towards ${input.winChance.predictedResult.label}, with both teams still in the mix.`
+        : `The numbers favour ${favouriteLabel}, but there is still plenty to play for on match night.`,
     source: "fallback",
     diagnostic: diagnostic ?? null,
   };
@@ -197,33 +266,13 @@ function getSafeHeadline(input: FixtureAiPreviewInput) {
     : `${favourite} are favourites here`;
 }
 
-function parseJsonPreview(text: string) {
-  const trimmed = text.trim();
-  const jsonStart = trimmed.indexOf("{");
-  const jsonEnd = trimmed.lastIndexOf("}");
-
-  if (jsonStart < 0 || jsonEnd <= jsonStart) return null;
-
-  try {
-    const parsed = JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1)) as ParsedPreviewJson;
-    const headline = typeof parsed.headline === "string" ? parsed.headline.trim() : "";
-    const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
-
-    if (!headline && !summary) return null;
-
-    return { headline, summary };
-  } catch {
-    return null;
-  }
-}
-
 function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAiPreview {
   const jsonPreview = parseJsonPreview(text);
 
   if (jsonPreview) {
     return {
       headline: cleanHeadline(jsonPreview.headline || getSafeHeadline(input)),
-      summary: limitCompleteText(jsonPreview.summary || text, SUMMARY_MAX_LENGTH),
+      summary: cleanSummary(jsonPreview.summary || text),
       source: "openai",
     };
   }
@@ -236,7 +285,7 @@ function parsePreviewText(text: string, input: FixtureAiPreviewInput): FixtureAi
 
   const [firstSentence, ...rest] = cleaned.split(/(?<=[.!?])\s+/);
   const headline = cleanHeadline(firstSentence || getSafeHeadline(input));
-  const summary = limitCompleteText(rest.join(" ") || cleaned, SUMMARY_MAX_LENGTH);
+  const summary = cleanSummary(rest.join(" ") || cleaned);
 
   return {
     headline: headline.length >= 8 ? headline : getSafeHeadline(input),
@@ -273,14 +322,15 @@ async function callOpenAiPreview(input: FixtureAiPreviewInput, model: string, ap
       model,
       max_output_tokens: 180,
       instructions:
-        "You write short, fun, factual 6-a-side football match previews for SIXFL. Use only the data provided. Do not invent injuries, absences, player names, previous fixtures or facts not provided. Keep it suitable for a public sports website. Return only compact JSON with keys headline and summary. The headline must be under 65 characters and must not include the exact scoreline.",
+        "You write short, fun, factual 6-a-side football match previews for SIXFL. Use only the data provided. Do not invent injuries, absences, player names, previous fixtures or facts not provided. Keep it suitable for a public sports website. Return only compact JSON with keys headline and summary. The headline must be under 65 characters. Do not include the exact predicted scoreline. Do not mention exact percentages in either the headline or the summary.",
       input: `Write a public match preview for this fixture as JSON only: ${JSON.stringify({
         homeTeam: input.homeTeamName,
         awayTeam: input.awayTeamName,
         predictedResult: input.winChance.predictedResult.label,
-        homeWinChance: input.winChance.home,
-        drawChance: input.winChance.draw,
-        awayWinChance: input.winChance.away,
+        leadingSide:
+          input.winChance.home >= input.winChance.away
+            ? input.homeTeamName
+            : input.awayTeamName,
         confidence: input.winChance.confidence,
         basis: input.winChance.explanation,
       })}`,
