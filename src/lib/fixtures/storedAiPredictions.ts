@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import {
   cleanFixtureAiPreviewForDisplay,
   getFixtureAiPreview,
+  hasOpenAiPredictorConfig,
   type FixtureAiPreview,
 } from "@/lib/fixtures/aiPredictor";
 import { calculateFixtureWinChance, type FixtureWinChance, type WinChanceFixture } from "@/lib/fixtures/winChance";
@@ -67,6 +68,23 @@ function predictionHash(input: {
       confidence: input.winChance.confidence,
     }))
     .digest("hex");
+}
+
+function canReuseExistingPrediction(input: {
+  existing: StoredPredictionRow | null;
+  inputHash: string;
+  force?: boolean;
+}) {
+  if (input.force || !input.existing) return false;
+  if (input.existing.inputHash !== input.inputHash) return false;
+
+  const existingSource = input.existing.source === "openai" ? "openai" : "fallback";
+
+  if (existingSource === "openai") return true;
+
+  // If OpenAI is now configured, do not keep reusing an old fallback row.
+  // This is what caused the dashboard to keep showing generic text.
+  return !hasOpenAiPredictorConfig();
 }
 
 export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
@@ -130,9 +148,9 @@ async function generateAndSave(input: {
   });
   const inputHash = predictionHash({ fixture: input.fixture, winChance });
 
-  if (!input.force) {
-    const existing = await getExistingPrediction(input.fixture.id);
-    if (existing?.inputHash === inputHash) return toStoredPreview(existing);
+  const existing = await getExistingPrediction(input.fixture.id);
+  if (canReuseExistingPrediction({ existing, inputHash, force: input.force })) {
+    return existing ? toStoredPreview(existing) : null;
   }
 
   const preview = cleanFixtureAiPreviewForDisplay(
