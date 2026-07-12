@@ -6,10 +6,11 @@ import { NextResponse } from "next/server";
 
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
+import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import {
-  getStoredAiPreviewsByFixtureIds,
-  refreshStoredAiPreviewsForLeague,
-} from "@/lib/fixtures/storedAiPredictions";
+  buildNameAwareWinChanceFixtures,
+  shouldIgnoreStaleTooEarlyPreview,
+} from "@/lib/fixtures/winChanceHistory";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -104,28 +105,13 @@ export async function GET(
       },
     });
 
-    const scheduledFixtureIds = fixtures
-      .filter((fixture) => fixture.status === "SCHEDULED")
-      .map((fixture) => fixture.id);
+    const scheduledFixtures = fixtures.filter((fixture) => fixture.status === "SCHEDULED");
 
-    if (context.currentLeagueId && scheduledFixtureIds.length > 0) {
-      await refreshStoredAiPreviewsForLeague(context.currentLeagueId, {
-        fixtureIds: scheduledFixtureIds,
-      });
-    }
-
-    const predictorTeamIds = Array.from(
-      new Set(fixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId])),
-    );
-    const predictionHistory = predictorTeamIds.length
+    const leagueHistory = context.currentLeagueId
       ? await prisma.fixture.findMany({
           where: {
-            status: "COMPLETED",
-            result: { isNot: null },
-            OR: [
-              { homeTeamId: { in: predictorTeamIds } },
-              { awayTeamId: { in: predictorTeamIds } },
-            ],
+            leagueId: context.currentLeagueId,
+            publishedAt: { not: null },
           },
           orderBy: [{ kickoffAt: "asc" }],
           take: 500,
@@ -133,12 +119,17 @@ export async function GET(
             id: true,
             kickoffAt: true,
             status: true,
-            homeTeam: { select: { id: true } },
-            awayTeam: { select: { id: true } },
+            homeTeam: { select: { id: true, name: true } },
+            awayTeam: { select: { id: true, name: true } },
             result: { select: { homeScore: true, awayScore: true } },
           },
         })
       : [];
+
+    const predictionHistory = buildNameAwareWinChanceFixtures({
+      historyFixtures: leagueHistory,
+      targetFixtures: scheduledFixtures,
+    });
 
     const storedPreviews = await getStoredAiPreviewsByFixtureIds(
       fixtures.map((fixture) => fixture.id),
@@ -175,18 +166,25 @@ export async function GET(
           awayTeamId: fixture.awayTeamId,
           fixtures: predictionHistory,
         });
+        const storedPreview = storedPreviews.get(fixture.id) ?? null;
+        const fallbackPreview = getFallbackFixtureAiPreview({
+          homeTeamName: fixture.homeTeam.name,
+          awayTeamName: fixture.awayTeam.name,
+          winChance,
+        });
 
         return {
           ...base,
           winChance: {
             ...winChance,
             aiPreview:
-              storedPreviews.get(fixture.id) ??
-              getFallbackFixtureAiPreview({
-                homeTeamName: fixture.homeTeam.name,
-                awayTeamName: fixture.awayTeam.name,
-                winChance,
-              }),
+              !storedPreview ||
+              shouldIgnoreStaleTooEarlyPreview({
+                preview: storedPreview,
+                predictedResultLabel: winChance.predictedResult.label,
+              })
+                ? fallbackPreview
+                : storedPreview,
           },
         };
       }),
