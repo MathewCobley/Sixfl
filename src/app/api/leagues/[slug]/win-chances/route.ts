@@ -5,7 +5,10 @@
 import { NextResponse } from "next/server";
 
 import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
-import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
+import {
+  getStoredAiPreviewsByFixtureIds,
+  refreshStoredAiPreviewsForLeague,
+} from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 
@@ -69,6 +72,13 @@ export async function GET(
     const scheduledFixtures = league.fixtures.filter(
       (fixture) => fixture.status === "SCHEDULED",
     );
+
+    if (scheduledFixtures.length > 0) {
+      await refreshStoredAiPreviewsForLeague(league.id, {
+        fixtureIds: scheduledFixtures.map((fixture) => fixture.id),
+      });
+    }
+
     const predictorTeamIds = Array.from(
       new Set(scheduledFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id])),
     );
