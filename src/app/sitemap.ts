@@ -46,6 +46,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
     {
+      url: absoluteUrl("/harrogate-6-a-side-football"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.92,
+    },
+    {
+      url: absoluteUrl("/northallerton-6-a-side-football"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.92,
+    },
+    {
+      url: absoluteUrl("/wetherby-6-a-side-football"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.92,
+    },
+    {
       url: absoluteUrl("/register-interest"),
       lastModified: now,
       changeFrequency: "weekly",
