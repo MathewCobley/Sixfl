@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminSidebarDesktopColumnsBridge from "@/components/admin/AdminSidebarDesktopColumnsBridge";
+import RemoveUnusedSettingsNavBridge from "@/components/admin/RemoveUnusedSettingsNavBridge";
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
 import EmailTemplateListControlsBridge from "@/components/admin/email-templates/EmailTemplateListControlsBridge";
@@ -63,6 +64,7 @@ export default async function AdminLayout({
       <PlayerProspectsNotInterestedBridge />
       <GenerateNextWeekFixturesBridge />
       <AdminSidebarDesktopColumnsBridge />
+      <RemoveUnusedSettingsNavBridge />
       <AdminLeagueSeasonsBridge />
       <AdminLeagueSeasonTeamsBridge />
       <AdminDivisionSelectBridge />
