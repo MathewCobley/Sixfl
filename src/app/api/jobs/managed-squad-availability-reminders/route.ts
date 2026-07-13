@@ -10,6 +10,7 @@ import {
   getManagedSquadAvailabilityReminderMode,
   queueManagedSquadAvailabilityReminder,
 } from "@/lib/fixtures/managed-squad-availability-reminders";
+import { ensureTeamMemberSquadStatusColumns } from "@/lib/managed-squad/squadStatus";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { prisma } from "@/lib/prisma";
 import { backfillTeamMemberProfilesFromProspects } from "@/lib/teamMemberProfileBackfill";
@@ -35,6 +36,7 @@ function getErrorMessage(error: unknown) {
 
 async function runManagedSquadAvailabilityReminderJob() {
   await ensureManagedSquadAvailabilityTemplates();
+  await ensureTeamMemberSquadStatusColumns();
 
   const backfill = await backfillTeamMemberProfilesFromProspects();
 
@@ -110,9 +112,20 @@ async function runManagedSquadAvailabilityReminderJob() {
       })
     : [];
 
-  const membersByTeamId = new Map<string, typeof members>();
+  const injuredRows = members.length
+    ? await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "TeamMember"
+        WHERE "id" IN (${members.map((member) => member.id)})
+          AND "squadStatus" = 'INJURED'
+      `
+    : [];
+  const injuredMemberIds = new Set(injuredRows.map((row) => row.id));
+  const activeMembers = members.filter((member) => !injuredMemberIds.has(member.id));
 
-  for (const member of members) {
+  const membersByTeamId = new Map<string, typeof activeMembers>();
+
+  for (const member of activeMembers) {
     membersByTeamId.set(member.teamId, [
       ...(membersByTeamId.get(member.teamId) ?? []),
       member,
@@ -122,6 +135,7 @@ async function runManagedSquadAvailabilityReminderJob() {
   const summary = {
     scannedFixtures: fixtures.length,
     scannedMembers: members.length,
+    skippedInjuredMembers: injuredMemberIds.size,
     queuedDispatches: 0,
     alreadySent: 0,
     skipped: 0,
