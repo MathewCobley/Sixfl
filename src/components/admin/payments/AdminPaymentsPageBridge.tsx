@@ -79,6 +79,31 @@ function relabelPaymentViewOptions() {
   });
 }
 
+function inferViewForPaymentStatus(paymentStatus: string | null | undefined) {
+  if (paymentStatus === "paid") return "recentPayments";
+  if (paymentStatus === "due" || paymentStatus === "overdue") return "teamCharges";
+  return null;
+}
+
+function shouldRouteStatusOnlySearch(params: URLSearchParams) {
+  const currentView = params.get("view") ?? "";
+  const inferredView = inferViewForPaymentStatus(params.get(PAYMENT_STATUS_PARAM));
+
+  return Boolean(inferredView && (!currentView || currentView === "none"));
+}
+
+function routeStatusOnlySearch(router: ReturnType<typeof useRouter>) {
+  const params = new URLSearchParams(window.location.search);
+  if (!shouldRouteStatusOnlySearch(params)) return false;
+
+  const inferredView = inferViewForPaymentStatus(params.get(PAYMENT_STATUS_PARAM));
+  if (!inferredView) return false;
+
+  params.set("view", inferredView);
+  router.replace(`${window.location.pathname}?${params.toString()}`);
+  return true;
+}
+
 function shouldRoutePlayerFeesToPaymentsMade(params: URLSearchParams) {
   const hasTeamFilter = Boolean(params.get("teamId"));
   const view = params.get("view");
@@ -108,6 +133,11 @@ function routeAmbiguousPlayerFeeSubmit(event: SubmitEvent) {
   const hasTeamFilter = Boolean(teamSelect?.value);
   const wantsPlayerFees = viewSelect?.value === "playerFees";
   const status = statusSelect?.value ?? "";
+
+  const inferredView = inferViewForPaymentStatus(status);
+  if (viewSelect && inferredView && (!viewSelect.value || viewSelect.value === "none")) {
+    viewSelect.value = inferredView;
+  }
 
   if (hasTeamFilter && wantsPlayerFees && (status === "" || status === "paid")) {
     viewSelect.value = "recentPayments";
@@ -386,6 +416,10 @@ export default function AdminPaymentsPageBridge() {
     if (hasNotice && storedReturnTo && !hasPaymentViewState(params)) {
       sessionStorage.removeItem(RETURN_TO_KEY);
       router.replace(mergeNoticeIntoReturnTo(storedReturnTo, window.location.search));
+      return;
+    }
+
+    if (routeStatusOnlySearch(router)) {
       return;
     }
 
