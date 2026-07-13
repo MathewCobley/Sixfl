@@ -10,6 +10,7 @@ import { Suspense, type ReactNode } from "react";
 import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
 import CaptainHeaderLeaguePositionBridge from "@/components/captain/CaptainHeaderLeaguePositionBridge";
 import HideImpossibleLeaguePositionBridge from "@/components/captain/HideImpossibleLeaguePositionBridge";
+import TeamAutoPayCopyBridge from "@/components/captain/TeamAutoPayCopyBridge";
 import SixflTvFixtureBridge from "@/components/SixflTvFixtureBridge";
 import Providers from "./providers";
 
@@ -106,6 +107,7 @@ export default function RootLayout({
             <AdminPaymentsPageBridge />
             <CaptainHeaderLeaguePositionBridge />
             <HideImpossibleLeaguePositionBridge />
+            <TeamAutoPayCopyBridge />
             <SixflTvFixtureBridge />
           </Suspense>
           {children}
