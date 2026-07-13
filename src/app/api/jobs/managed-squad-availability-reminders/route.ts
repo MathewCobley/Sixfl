@@ -2,7 +2,7 @@
 // File: src/app/api/jobs/managed-squad-availability-reminders/route.ts
 // ========================================
 
-import { TeamRole } from "@prisma/client";
+import { Prisma, TeamRole } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import {
@@ -112,13 +112,14 @@ async function runManagedSquadAvailabilityReminderJob() {
       })
     : [];
 
-  const injuredRows = members.length
-    ? await prisma.$queryRaw<Array<{ id: string }>>`
+  const memberIds = members.map((member) => member.id);
+  const injuredRows = memberIds.length
+    ? await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id"
         FROM "TeamMember"
-        WHERE "id" IN (${members.map((member) => member.id)})
+        WHERE "id" IN (${Prisma.join(memberIds)})
           AND "squadStatus" = 'INJURED'
-      `
+      `)
     : [];
   const injuredMemberIds = new Set(injuredRows.map((row) => row.id));
   const activeMembers = members.filter((member) => !injuredMemberIds.has(member.id));
