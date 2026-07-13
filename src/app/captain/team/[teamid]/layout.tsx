@@ -20,6 +20,7 @@ import PendingActivationDeleteLinks from "@/components/captain/PendingActivation
 import PendingActivationReturnLinks from "@/components/captain/PendingActivationReturnLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
+import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjuryBridge";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -332,6 +333,7 @@ export default async function CaptainTeamLayout({
       <CaptainFixtureBadgesBridge />
       <CaptainMatchdayAvailabilityBadgesBridge />
       <CaptainOnboardingReminderBridge />
+      {access.isAdmin ? <ManagedSquadInjuryBridge /> : null}
       {access.isAdmin ? <ManagedSquadEditLinks /> : null}
       {access.isAdmin ? <PendingActivationDeleteLinks /> : null}
       {access.isAdmin ? <PendingActivationReturnLinks /> : null}
@@ -358,67 +360,49 @@ export default async function CaptainTeamLayout({
 
                 <div className="min-w-0">
                   <CaptainViewModeHeader
-                    teamId={team.id}
-                    isAdmin={access.isAdmin}
-                    isManagedTeam={isManagedTeam}
-                    accessMode={access.accessMode}
+                    teamName={team.name}
+                    leagueName={displayLeagueName}
+                    season={displaySeason}
+                    isLive={displayIsLive}
                   />
-
-                  <h1 className="captain-team-heading mt-2 text-2xl font-semibold tracking-tight text-white sm:text-4xl">
-                    {team.name}
-                  </h1>
-
-                  <p className="captain-team-meta mt-3 text-sm text-white/55">
-                    {displayLeagueName}
-                    {displaySeason ? ` · ${displaySeason}` : ""}
-                    {displayIsLive ? " · Current live season" : ""}
-                  </p>
                 </div>
               </div>
 
-              {showCaptainTeamSwitcher ? (
-                <div className="w-full rounded-2xl border border-emerald-400/20 bg-black/25 p-3 lg:max-w-md">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">
-                    Switch team
-                  </div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                    {captainTeamOptions.map((option) => {
-                      const active = option.id === teamid;
-                      const optionCompetition = option.league?.competition;
-                      const leagueLabel = optionCompetition
-                        ? `${optionCompetition.name}${optionCompetition.currentLeague?.season ? ` · ${optionCompetition.currentLeague.season}` : ""}`
-                        : option.league
-                          ? `${option.league.name}${option.league.season ? ` · ${option.league.season}` : ""}`
-                          : "No competition assigned";
-
-                      return (
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+                {showCaptainTeamSwitcher ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-2">
+                    <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Switch team
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {captainTeamOptions.map((option) => (
                         <Link
                           key={option.id}
                           href={`/captain/team/${option.id}`}
-                          className={[
-                            "rounded-xl border px-3 py-2 text-left text-sm transition",
-                            active
-                              ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-50"
-                              : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
-                          ].join(" ")}
+                          className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                            option.id === teamid
+                              ? "bg-emerald-400 text-black"
+                              : "bg-white/[0.05] text-white/70 hover:bg-white/[0.08] hover:text-white"
+                          }`}
                         >
-                          <span className="block font-semibold">{option.name}</span>
-                          <span className="mt-0.5 block text-xs text-white/45">{leagueLabel}</span>
+                          {option.name}
                         </Link>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+
+                <CaptainSupportPanel teamId={teamid} />
+              </div>
             </div>
           </div>
 
-          <nav className="captain-team-nav flex flex-wrap gap-2 px-4 py-4 sm:px-6" aria-label="Team navigation">
+          <nav className="captain-team-nav flex flex-wrap gap-2 px-4 py-4 sm:px-6">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-emerald-100"
+                className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100"
               >
                 {item.label}
               </Link>
@@ -426,11 +410,7 @@ export default async function CaptainTeamLayout({
           </nav>
         </header>
 
-        <main className="captain-team-main min-w-0 space-y-8">
-          <CaptainSupportPanel teamId={team.id} />
-          {children}
-          <CaptainAdminFeeRouteNotice teamId={team.id} />
-        </main>
+        <main className="captain-team-main min-w-0">{children}</main>
       </div>
     </div>
   );
