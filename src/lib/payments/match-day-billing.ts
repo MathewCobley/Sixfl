@@ -13,6 +13,15 @@ function getLondonDateKey(value: Date) {
   return toLondonDateInputValue(value);
 }
 
+export function isMatchFeeChargeDueToday(
+  dueDate: Date | null | undefined,
+  now = new Date(),
+) {
+  if (!dueDate) return false;
+
+  return getLondonDateKey(dueDate) === getLondonDateKey(now);
+}
+
 export function isMatchFeeChargePayable(
   dueDate: Date | null | undefined,
   now = new Date(),
@@ -38,7 +47,7 @@ export function getMatchFeePaymentUnavailableReason(
   dueDate: Date | null | undefined,
   now = new Date(),
 ) {
-  if (isMatchFeeChargePayable(dueDate, now)) return null;
+  if (isMatchFeeChargeDueToday(dueDate, now)) return null;
 
   return "Match fee payments open on match day.";
 }
