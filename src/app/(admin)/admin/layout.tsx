@@ -29,6 +29,7 @@ import AdminRefereeCommsHistoryBridge from "@/components/admin/referees/AdminRef
 import RefereeWelcomeInviteBridge from "@/components/admin/referees/RefereeWelcomeInviteBridge";
 import AdminSocialResultsGeneratorLinksBridge from "@/components/admin/social/AdminSocialResultsGeneratorLinksBridge";
 import FreeKitTeamBadgesBridge from "@/components/admin/teams/FreeKitTeamBadgesBridge";
+import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjuryBridge";
 import RemoveDuplicateLatestKickoffBridge from "@/components/admin/teams/RemoveDuplicateLatestKickoffBridge";
 import TeamCompetitionPickerBridge from "@/components/admin/teams/TeamCompetitionPickerBridge";
 import TeamReplaceFixturesButtonBridge from "@/components/admin/teams/TeamReplaceFixturesButtonBridge";
@@ -58,6 +59,7 @@ export default async function AdminLayout({
       <AdminTeamContactPhoneFallbackBridge />
       <AdminVoidPaymentChargesBridge />
       <AdminPlayerFeePaymentLabelsBridge />
+      <ManagedSquadInjuryBridge />
       <AdminLeadEditButtonBridge />
       <AdminSocialResultsGeneratorLinksBridge />
       <EmailTemplateListControlsBridge />
