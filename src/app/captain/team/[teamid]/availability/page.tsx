@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
+  resetFixtureAvailabilityAction,
   sendAvailabilitySmsChaseAction,
   updateFixtureAvailabilityAction,
 } from "./actions";
@@ -73,6 +74,8 @@ function getSavedMessage(saved?: string) {
   switch (saved) {
     case "availability-updated":
       return "Availability updated.";
+    case "fixture-availability-reset":
+      return "Fixture availability reset. Old responses and chase history for this fixture have been cleared, so you can chase players again for the rearranged date.";
     default:
       return saved ? decodeURIComponent(saved) : null;
   }
@@ -529,8 +532,26 @@ export default async function CaptainAvailabilityPage({
                       >
                         Open selection
                       </Link>
+                      {canOpenAdminComms ? (
+                        <form action={resetFixtureAvailabilityAction}>
+                          <input type="hidden" name="teamid" value={teamid} />
+                          <input type="hidden" name="fixtureId" value={fixture.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex items-center rounded-full border border-red-400/30 bg-red-500/10 px-4 py-1.5 text-xs font-semibold text-red-100 transition hover:bg-red-500/20"
+                            title="Clear all old availability replies and SMS chase history for this rearranged fixture."
+                          >
+                            Reset availability
+                          </button>
+                        </form>
+                      ) : null}
                     </div>
                   </div>
+                  {canOpenAdminComms ? (
+                    <p className="mt-3 max-w-4xl text-xs leading-5 text-red-100/55">
+                      Use Reset availability after a postponed/rearranged fixture date changes. It clears old replies and allows the new chases to go out for this fixture.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="divide-y divide-white/10">
