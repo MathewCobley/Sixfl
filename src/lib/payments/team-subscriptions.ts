@@ -2,9 +2,10 @@
 // File: src/lib/payments/team-subscriptions.ts
 // ========================================
 
+import { randomUUID } from "crypto";
 import type Stripe from "stripe";
 
-import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
+import { isMatchFeeChargeDueToday } from "@/lib/payments/match-day-billing";
 import { prisma } from "@/lib/prisma";
 
 type TeamSubscriptionDb = Pick<
@@ -225,7 +226,7 @@ export async function findTeamIdForStripeSubscription(input: {
   return null;
 }
 
-async function findOldestOpenChargeForSubscriptionPayment(input: {
+async function findTodaysMatchdayChargeForSubscriptionPayment(input: {
   teamId: string;
   amountPence: number;
   db: TeamSubscriptionDb;
@@ -237,14 +238,12 @@ async function findOldestOpenChargeForSubscriptionPayment(input: {
       pc."dueDate",
       COALESCE(SUM(tx."amountPence"), 0)::int AS "paidPence"
     FROM "PaymentCharge" pc
-    LEFT JOIN "Fixture" f ON f."id" = pc."fixtureId"
+    JOIN "Fixture" f ON f."id" = pc."fixtureId"
     LEFT JOIN "PaymentTransaction" tx ON tx."chargeId" = pc."id"
     WHERE pc."teamId" = ${input.teamId}
+      AND pc."fixtureId" IS NOT NULL
       AND pc."status" <> 'VOID'
-      AND (
-        pc."fixtureId" IS NULL
-        OR f."status" IN ('SCHEDULED', 'COMPLETED')
-      )
+      AND f."status" IN ('SCHEDULED', 'COMPLETED')
     GROUP BY pc."id", pc."amountPence", pc."dueDate", pc."createdAt"
     HAVING pc."amountPence" > COALESCE(SUM(tx."amountPence"), 0)
     ORDER BY
@@ -253,7 +252,7 @@ async function findOldestOpenChargeForSubscriptionPayment(input: {
       pc."createdAt" ASC
   `;
 
-  return rows.find((row) => isMatchFeeChargePayable(row.dueDate)) ?? null;
+  return rows.find((row) => isMatchFeeChargeDueToday(row.dueDate)) ?? null;
 }
 
 async function refreshChargeStatus(input: {
@@ -403,36 +402,51 @@ export async function recordTeamSubscriptionInvoicePaid(input: {
 
   const paymentIntentId = getStripeId(invoice.payment_intent);
   const stripeChargeId = getStripeId(invoice.charge);
-  const targetCharge = await findOldestOpenChargeForSubscriptionPayment({
+  const targetCharge = await findTodaysMatchdayChargeForSubscriptionPayment({
     teamId,
     amountPence,
     db,
   });
-
-  const transaction = await db.paymentTransaction.create({
-    data: {
-      teamId,
-      chargeId: targetCharge?.id ?? null,
-      amountPence,
-      method: "STRIPE",
-      reference: stripeInvoiceId,
-      notes: targetCharge
-        ? "Recurring team subscription paid via Stripe and applied to the oldest payable team charge."
-        : "Recurring team subscription paid via Stripe.",
-      paidAt,
-      stripePaymentIntentId: paymentIntentId,
-      stripeChargeId,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  await db.$executeRaw`
-    UPDATE "PaymentTransaction"
-    SET "stripeInvoiceId" = ${stripeInvoiceId}
-    WHERE "id" = ${transaction.id}
+  const transactionId = `ptx_${randomUUID()}`;
+  const transactionRows = await db.$queryRaw<Array<{ id: string }>>`
+    INSERT INTO "PaymentTransaction" (
+      "id",
+      "teamId",
+      "chargeId",
+      "amountPence",
+      "method",
+      "reference",
+      "notes",
+      "paidAt",
+      "stripePaymentIntentId",
+      "stripeChargeId",
+      "stripeInvoiceId",
+      "createdAt",
+      "updatedAt"
+    )
+    VALUES (
+      ${transactionId},
+      ${teamId},
+      ${targetCharge?.id ?? null},
+      ${amountPence},
+      'STRIPE'::"PaymentMethod",
+      ${stripeInvoiceId},
+      ${targetCharge
+        ? "Recurring team subscription paid via Stripe and applied to today's matchday team charge."
+        : "Recurring team subscription paid via Stripe, but no matchday team charge was due today."},
+      ${paidAt},
+      ${paymentIntentId},
+      ${stripeChargeId},
+      ${stripeInvoiceId},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT ("stripeInvoiceId") WHERE "stripeInvoiceId" IS NOT NULL DO NOTHING
+    RETURNING "id"
   `;
+
+  const transaction = transactionRows[0] ?? null;
+  if (!transaction) return null;
 
   if (targetCharge?.id) {
     await refreshChargeStatus({ chargeId: targetCharge.id, db });
