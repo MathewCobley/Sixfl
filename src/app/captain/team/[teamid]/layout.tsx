@@ -342,6 +342,15 @@ export default async function CaptainTeamLayout({
       <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-10 sm:py-6">
         <header className="captain-team-header overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-3xl">
           <div className="captain-team-header-top border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+            <div className="mb-5">
+              <CaptainViewModeHeader
+                teamId={team.id}
+                isAdmin={access.isAdmin}
+                isManagedTeam={isManagedTeam}
+                accessMode={access.accessMode}
+              />
+            </div>
+
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
                 <div className="captain-team-logo flex h-18 w-18 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/30 shadow-[0_14px_40px_rgba(0,0,0,0.35)] sm:h-24 sm:w-24 sm:rounded-3xl">
@@ -359,41 +368,40 @@ export default async function CaptainTeamLayout({
                 </div>
 
                 <div className="min-w-0">
-                  <CaptainViewModeHeader
-                    teamName={team.name}
-                    leagueName={displayLeagueName}
-                    season={displaySeason}
-                    isLive={displayIsLive}
-                  />
+                  <h1 className="captain-team-heading mt-2 text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+                    {team.name}
+                  </h1>
+
+                  <p className="captain-team-meta mt-3 text-sm text-white/55">
+                    {displayLeagueName}
+                    {displaySeason ? ` · ${displaySeason}` : ""}
+                    {displayIsLive ? " · Current live season" : ""}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-                {showCaptainTeamSwitcher ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-2">
-                    <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Switch team
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {captainTeamOptions.map((option) => (
-                        <Link
-                          key={option.id}
-                          href={`/captain/team/${option.id}`}
-                          className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                            option.id === teamid
-                              ? "bg-emerald-400 text-black"
-                              : "bg-white/[0.05] text-white/70 hover:bg-white/[0.08] hover:text-white"
-                          }`}
-                        >
-                          {option.name}
-                        </Link>
-                      ))}
-                    </div>
+              {showCaptainTeamSwitcher ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-2">
+                  <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Switch team
                   </div>
-                ) : null}
-
-                <CaptainSupportPanel teamId={teamid} />
-              </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {captainTeamOptions.map((option) => (
+                      <Link
+                        key={option.id}
+                        href={`/captain/team/${option.id}`}
+                        className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                          option.id === teamid
+                            ? "bg-emerald-400 text-black"
+                            : "bg-white/[0.05] text-white/70 hover:bg-white/[0.08] hover:text-white"
+                        }`}
+                      >
+                        {option.name}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -410,7 +418,11 @@ export default async function CaptainTeamLayout({
           </nav>
         </header>
 
-        <main className="captain-team-main min-w-0">{children}</main>
+        <main className="captain-team-main min-w-0 space-y-8">
+          <CaptainSupportPanel teamId={team.id} />
+          {children}
+          <CaptainAdminFeeRouteNotice teamId={team.id} />
+        </main>
       </div>
     </div>
   );
