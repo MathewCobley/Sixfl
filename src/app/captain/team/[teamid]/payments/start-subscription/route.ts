@@ -11,19 +11,25 @@ import { getPublicSiteUrl, getStripeServerClient } from "@/lib/stripe/client";
 
 export const dynamic = "force-dynamic";
 
+type TeamStripeCustomerRow = {
+  stripeCustomerId: string | null;
+};
+
 function buildReturnUrl(teamId: string, state: "success" | "cancelled" | "missing_team") {
   const url = new URL(`/captain/team/${teamId}/payments`, `${getPublicSiteUrl()}/`);
   url.searchParams.set("autopay", state);
   return url.toString();
 }
 
-function getStripeId(value: unknown) {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object" && "id" in value) {
-    const id = (value as { id?: unknown }).id;
-    return typeof id === "string" ? id : null;
-  }
-  return null;
+async function getTeamStripeCustomerId(teamId: string) {
+  const rows = await prisma.$queryRaw<TeamStripeCustomerRow[]>`
+    SELECT "stripeCustomerId"
+    FROM "Team"
+    WHERE "id" = ${teamId}
+    LIMIT 1
+  `;
+
+  return rows[0]?.stripeCustomerId?.trim() || null;
 }
 
 export async function POST(
@@ -40,7 +46,6 @@ export async function POST(
       name: true,
       contactEmail: true,
       secondaryContactEmail: true,
-      stripeCustomerId: true,
     },
   });
 
@@ -52,7 +57,7 @@ export async function POST(
   const successUrl = buildReturnUrl(team.id, "success");
   const cancelUrl = buildReturnUrl(team.id, "cancelled");
   const customerEmail = team.contactEmail?.trim() || team.secondaryContactEmail?.trim() || undefined;
-  let stripeCustomerId = team.stripeCustomerId?.trim() || null;
+  let stripeCustomerId = await getTeamStripeCustomerId(team.id);
 
   if (!stripeCustomerId) {
     const customer = await stripe.customers.create({
