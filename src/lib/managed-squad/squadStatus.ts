@@ -2,7 +2,7 @@
 // File: src/lib/managed-squad/squadStatus.ts
 // ========================================
 
-import { Prisma } from "@prisma/client";
+import { NotificationDispatchStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -16,6 +16,12 @@ export type TeamMemberSquadStatusRow = {
   squadStatusUpdatedAt: Date | null;
   squadStatusNote: string | null;
 };
+
+const MANAGED_SQUAD_AVAILABILITY_SOURCE_TYPES = [
+  "MANAGED_SQUAD_AVAILABILITY_REQUEST",
+  "MANAGED_SQUAD_AVAILABILITY_CHASE_24H",
+  "MANAGED_SQUAD_AVAILABILITY_CHASE_72H",
+];
 
 export async function ensureTeamMemberSquadStatusColumns(db: DbClient = prisma) {
   await db.$executeRaw(Prisma.sql`
@@ -37,6 +43,30 @@ export async function ensureTeamMemberSquadStatusColumns(db: DbClient = prisma) 
     CREATE INDEX IF NOT EXISTS "TeamMember_teamId_squadStatus_idx"
       ON "TeamMember"("teamId", "squadStatus")
   `);
+}
+
+async function cancelQueuedAvailabilityChasesForInjuredPlayer(input: {
+  membershipId: string;
+  db: DbClient;
+}) {
+  await input.db.notificationDispatch.updateMany({
+    where: {
+      sourceType: {
+        in: MANAGED_SQUAD_AVAILABILITY_SOURCE_TYPES,
+      },
+      sourceId: {
+        endsWith: `:${input.membershipId}`,
+      },
+      status: {
+        in: [NotificationDispatchStatus.QUEUED, NotificationDispatchStatus.PROCESSING],
+      },
+    },
+    data: {
+      status: NotificationDispatchStatus.CANCELLED,
+      cancelledAt: new Date(),
+      lastError: "Player marked injured; future availability chase cancelled.",
+    },
+  });
 }
 
 export async function getTeamMemberSquadStatusMap(teamId: string, db: DbClient = prisma) {
@@ -77,5 +107,14 @@ export async function setTeamMemberSquadStatus(input: {
       AND "teamId" = ${input.teamId}
   `);
 
-  return Number(updated) > 0;
+  const didUpdate = Number(updated) > 0;
+
+  if (didUpdate && input.status === "INJURED") {
+    await cancelQueuedAvailabilityChasesForInjuredPlayer({
+      membershipId: input.membershipId,
+      db,
+    });
+  }
+
+  return didUpdate;
 }
