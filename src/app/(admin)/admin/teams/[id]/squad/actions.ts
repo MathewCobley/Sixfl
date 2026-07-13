@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
 import { moveTeamMemberToProspect } from "@/lib/managed-squad/movePlayerToProspect";
+import { setTeamMemberSquadStatus, type TeamMemberSquadStatus } from "@/lib/managed-squad/squadStatus";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -29,6 +30,10 @@ function getRoleValue(input: FormDataEntryValue | null): TeamRole {
   }
 
   return "PLAYER";
+}
+
+function getSquadStatusValue(input: FormDataEntryValue | null): TeamMemberSquadStatus {
+  return String(input ?? "").trim().toUpperCase() === "INJURED" ? "INJURED" : "ACTIVE";
 }
 
 function buildRedirect(teamId: string, query: string) {
@@ -257,6 +262,33 @@ export async function updateAdminSquadMemberRoleAction(formData: FormData) {
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath(`/admin/teams/${teamId}/squad`);
   redirect(buildRedirect(teamId, "?saved=role-updated"));
+}
+
+export async function updateAdminSquadMemberStatusAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = cleanText(formData.get("teamId"));
+  const membershipId = cleanText(formData.get("membershipId"));
+  const status = getSquadStatusValue(formData.get("squadStatus"));
+  const note = cleanText(formData.get("note")) || null;
+
+  if (!teamId || !membershipId) {
+    redirect("/admin/teams");
+  }
+
+  const updated = await setTeamMemberSquadStatus({
+    teamId,
+    membershipId,
+    status,
+    note,
+  });
+
+  if (!updated) {
+    redirect(buildRedirect(teamId, "?error=Squad%20member%20not%20found."));
+  }
+
+  revalidateSquadAndProspectPaths(teamId);
+  redirect(buildRedirect(teamId, status === "INJURED" ? "?saved=member-marked-injured" : "?saved=member-marked-active"));
 }
 
 export async function removeAdminSquadMemberAction(formData: FormData) {
