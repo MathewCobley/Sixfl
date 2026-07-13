@@ -14,6 +14,10 @@ import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixtu
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import { reconcileFixtureChargeFromPlayerPayments } from "@/lib/payments/player-match-fee-reconciliation";
 import {
+  saveTeamAutoPaySetup,
+  TEAM_AUTOPAY_MANDATE_TEXT,
+} from "@/lib/payments/team-autopay";
+import {
   markTeamSubscriptionDeleted,
   markTeamSubscriptionInvoiceFailed,
   recordTeamSubscriptionInvoicePaid,
@@ -31,6 +35,12 @@ function getPaymentIntentId(session: Stripe.Checkout.Session) {
   return typeof session.payment_intent === "string"
     ? session.payment_intent
     : session.payment_intent?.id ?? null;
+}
+
+function getSetupIntentId(session: Stripe.Checkout.Session) {
+  return typeof session.setup_intent === "string"
+    ? session.setup_intent
+    : session.setup_intent?.id ?? null;
 }
 
 function getStripeId(value: unknown): string | null {
@@ -270,6 +280,39 @@ async function handleCompletedPlayerMatchFeeCheckoutSession(
   return true;
 }
 
+async function handleCompletedTeamAutoPaySetupCheckoutSession(
+  session: Stripe.Checkout.Session,
+  stripe: Stripe,
+) {
+  const isTeamAutoPaySetup =
+    session.mode === "setup" && session.metadata?.type === "team_autopay_setup";
+
+  if (!isTeamAutoPaySetup) return false;
+
+  const teamId = session.metadata?.teamId?.trim() || session.client_reference_id?.trim() || null;
+  const setupIntentId = getSetupIntentId(session);
+  const stripeCustomerId = getStripeId(session.customer);
+
+  if (!teamId || !setupIntentId || !stripeCustomerId) return true;
+
+  const setupIntent = await stripe.setupIntents.retrieve(setupIntentId, {
+    expand: ["payment_method"],
+  });
+  const paymentMethodId = getStripeId(setupIntent.payment_method);
+
+  if (!paymentMethodId) return true;
+
+  await saveTeamAutoPaySetup({
+    teamId,
+    stripeCustomerId,
+    stripeDefaultPaymentMethodId: paymentMethodId,
+    setupCheckoutSessionId: session.id,
+    mandateText: session.metadata?.mandateText || TEAM_AUTOPAY_MANDATE_TEXT,
+  });
+
+  return true;
+}
+
 async function handleCompletedTeamSubscriptionCheckoutSession(
   session: Stripe.Checkout.Session,
   stripe: Stripe,
@@ -294,6 +337,10 @@ async function handleCompletedCheckoutSession(
   session: Stripe.Checkout.Session,
   stripe: Stripe,
 ) {
+  const handledTeamAutoPaySetup = await handleCompletedTeamAutoPaySetupCheckoutSession(session, stripe);
+
+  if (handledTeamAutoPaySetup) return;
+
   const handledTeamSubscription = await handleCompletedTeamSubscriptionCheckoutSession(session, stripe);
 
   if (handledTeamSubscription) return;
