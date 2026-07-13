@@ -39,6 +39,17 @@ const CAPTAIN_FACING_REPLACEMENTS = [
 
 type CaptainAccessMode = "admin-preview" | "captain-preview" | "captain";
 
+type CaptainViewModeHeaderProps = {
+  teamId?: string;
+  isAdmin?: boolean;
+  isManagedTeam?: boolean;
+  accessMode?: CaptainAccessMode;
+  teamName?: string;
+  leagueName?: string;
+  season?: string | null;
+  isLive?: boolean;
+};
+
 function getFullAdminHref(input: { pathname: string | null; teamId: string }) {
   const fallback = `/captain/team/${input.teamId}/squad`;
   const pathname = input.pathname || fallback;
@@ -111,29 +122,30 @@ function rewriteCaptainFacingText() {
 }
 
 export default function CaptainViewModeHeader({
-  teamId,
-  isAdmin,
-  isManagedTeam,
+  teamId = "",
+  isAdmin = false,
+  isManagedTeam = false,
   accessMode,
-}: {
-  teamId: string;
-  isAdmin: boolean;
-  isManagedTeam: boolean;
-  accessMode?: CaptainAccessMode;
-}) {
+  teamName,
+  leagueName,
+  season,
+  isLive = false,
+}: CaptainViewModeHeaderProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsKey = searchParams.toString();
+  const hasTeamId = Boolean(teamId);
   const isCaptainOnlyPreview = !isManagedTeam && accessMode === "captain-preview";
-  const canShowAdminControls = isAdmin || isCaptainOnlyPreview;
-  const canPreviewCaptainDashboard = isAdmin && !isManagedTeam;
+  const canShowAdminControls = hasTeamId && (isAdmin || isCaptainOnlyPreview);
+  const canPreviewCaptainDashboard = hasTeamId && isAdmin && !isManagedTeam;
   const isCaptainDashboardPreview = Boolean(
-    isCaptainOnlyPreview || (!isManagedTeam && isAdmin && searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1"),
+    hasTeamId && (isCaptainOnlyPreview || (!isManagedTeam && isAdmin && searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1")),
   );
   const previewHref = `/admin/teams/${teamId}/captain-preview`;
   const fullAdminHref = isCaptainOnlyPreview
     ? getExitCaptainPreviewHref({ pathname, searchParamsKey, teamId })
     : getFullAdminHref({ pathname, teamId });
+  const displaySeason = season?.trim() || null;
 
   useEffect(() => {
     if (isManagedTeam) return;
@@ -151,7 +163,7 @@ export default function CaptainViewModeHeader({
   }, [isManagedTeam, pathname, searchParamsKey]);
 
   useEffect(() => {
-    if (!isCaptainDashboardPreview || isManagedTeam) return;
+    if (!isCaptainDashboardPreview || isManagedTeam || !hasTeamId) return;
 
     const selector = `.captain-team-shell a[href^="/captain/team/${teamId}"]:not([data-captain-preview-ignore="true"])`;
 
@@ -174,7 +186,7 @@ export default function CaptainViewModeHeader({
     observer.observe(root, { childList: true, subtree: true });
 
     return () => observer.disconnect();
-  }, [isCaptainDashboardPreview, isManagedTeam, searchParamsKey, teamId]);
+  }, [hasTeamId, isCaptainDashboardPreview, isManagedTeam, searchParamsKey, teamId]);
 
   const currentViewLabel = isManagedTeam
     ? "Full Admin View — Managed Squad"
@@ -219,6 +231,21 @@ export default function CaptainViewModeHeader({
                 </span>
               ) : null}
             </div>
+
+            {teamName ? (
+              <h1 className="captain-team-heading mt-3 text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+                {teamName}
+              </h1>
+            ) : null}
+
+            {teamName && leagueName ? (
+              <p className="captain-team-meta mt-3 text-sm text-white/55">
+                {leagueName}
+                {displaySeason ? ` · ${displaySeason}` : ""}
+                {isLive ? " · Current live season" : ""}
+              </p>
+            ) : null}
+
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65 sm:text-base">
               {currentViewDescription}
             </p>
