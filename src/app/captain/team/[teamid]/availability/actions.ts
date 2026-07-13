@@ -6,7 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { NotificationAudience, NotificationRecipientSourceType } from "@prisma/client";
+import { NotificationAudience, NotificationRecipientSourceType, Prisma } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
@@ -22,6 +22,12 @@ const ALLOWED_RESPONSES = ["AVAILABLE", "UNAVAILABLE", "MAYBE", "NO_RESPONSE"] a
 type AvailabilityResponse = (typeof ALLOWED_RESPONSES)[number];
 
 const AVAILABILITY_SMS_CHASE_SOURCE_TYPE = "CAPTAIN_AVAILABILITY_SMS_CHASE";
+const AVAILABILITY_RESET_SOURCE_TYPES = [
+  AVAILABILITY_SMS_CHASE_SOURCE_TYPE,
+  "MANAGED_SQUAD_AVAILABILITY_REQUEST",
+  "MANAGED_SQUAD_AVAILABILITY_CHASE_24H",
+  "MANAGED_SQUAD_AVAILABILITY_CHASE_72H",
+] as const;
 
 function getResponseValue(value: FormDataEntryValue | null): AvailabilityResponse {
   const parsed = String(value ?? "").trim().toUpperCase();
@@ -164,6 +170,76 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
   revalidatePath(`/captain/team/${teamid}/fixtures`);
   revalidatePath(`/captain/team/${teamid}/fixtures/${fixtureId}/selection`);
   redirect(buildAvailabilityRedirect(teamid, "?saved=availability-updated"));
+}
+
+export async function resetFixtureAvailabilityAction(formData: FormData) {
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const fixtureId = String(formData.get("fixtureId") ?? "").trim();
+  const access = await requireCaptain(teamid);
+
+  if (!access.isAdmin) {
+    redirect(buildAvailabilityRedirect(teamid, "?error=Only%20admin%20can%20reset%20fixture%20availability."));
+  }
+
+  if (!teamid || !fixtureId) {
+    redirect("/captain");
+  }
+
+  const [team, fixture] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: { id: true, members: { select: { id: true } } },
+    }),
+    prisma.fixture.findFirst({
+      where: {
+        id: fixtureId,
+        ...publishedFixtureWhere,
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!team || !fixture) {
+    redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found%20for%20this%20team."));
+  }
+
+  const teamMemberIds = team.members.map((member) => member.id);
+  const sourceIds = teamMemberIds.map((teamMemberId) => getSmsSourceId({ fixtureId, teamMemberId }));
+  const archivedPrefix = `reset-${Date.now()}`;
+
+  await prisma.$transaction([
+    prisma.fixtureAvailability.deleteMany({
+      where: {
+        fixtureId,
+        teamMemberId: { in: teamMemberIds },
+      },
+    }),
+    sourceIds.length > 0
+      ? prisma.$executeRaw(Prisma.sql`
+          UPDATE "NotificationDispatch"
+          SET
+            "sourceId" = ${archivedPrefix} || ':' || "sourceId",
+            "status" = CASE
+              WHEN "status" IN ('QUEUED', 'PROCESSING') THEN 'CANCELLED'::"NotificationDispatchStatus"
+              ELSE "status"
+            END,
+            "cancelledAt" = CASE
+              WHEN "status" IN ('QUEUED', 'PROCESSING') THEN NOW()
+              ELSE "cancelledAt"
+            END,
+            "failureReason" = COALESCE("failureReason", 'Archived because fixture availability was reset after postponement/rearrangement.')
+          WHERE "sourceType" IN (${Prisma.join(AVAILABILITY_RESET_SOURCE_TYPES)})
+            AND "sourceId" IN (${Prisma.join(sourceIds)})
+        `)
+      : prisma.$executeRaw(Prisma.sql`SELECT 1`),
+  ]);
+
+  revalidatePath(`/captain/team/${teamid}/availability`);
+  revalidatePath(`/captain/team/${teamid}/availability/reset`);
+  revalidatePath(`/captain/team/${teamid}/fixtures/${fixtureId}/selection`);
+
+  redirect(buildAvailabilityRedirect(teamid, `?saved=fixture-availability-reset#fixture-${fixtureId}`));
 }
 
 export async function sendAvailabilitySmsChaseAction(formData: FormData) {
