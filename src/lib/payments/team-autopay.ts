@@ -9,7 +9,7 @@ import { isMatchFeeChargeDueToday } from "@/lib/payments/match-day-billing";
 import { prisma } from "@/lib/prisma";
 import { getStripeServerClient } from "@/lib/stripe/client";
 
-type AutoPayDb = typeof prisma | Prisma.TransactionClient;
+type AutoPayDb = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
 
 export const TEAM_AUTOPAY_MANDATE_TEXT =
   "By saving this card, you authorise SIXFL to charge the agreed team match fee as a one-off payment on the actual matchday only. If a fixture is postponed or cancelled, SIXFL will not take that fixture's match fee from this saved card.";
@@ -212,6 +212,7 @@ async function recordSuccessfulAutoPay(input: {
     WHERE NOT EXISTS (
       SELECT 1 FROM "PaymentTransaction" WHERE "stripePaymentIntentId" = ${paymentIntentId}
     )
+    ON CONFLICT ("id") DO NOTHING
     RETURNING "id"
   `);
 
