@@ -64,7 +64,7 @@ async function cancelQueuedAvailabilityChasesForInjuredPlayer(input: {
     data: {
       status: NotificationDispatchStatus.CANCELLED,
       cancelledAt: new Date(),
-      lastError: "Player marked injured; future availability chase cancelled.",
+      failureReason: "Player marked injured; future availability chase cancelled.",
     },
   });
 }
