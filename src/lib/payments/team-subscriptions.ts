@@ -237,9 +237,14 @@ async function findOldestOpenChargeForSubscriptionPayment(input: {
       pc."dueDate",
       COALESCE(SUM(tx."amountPence"), 0)::int AS "paidPence"
     FROM "PaymentCharge" pc
+    LEFT JOIN "Fixture" f ON f."id" = pc."fixtureId"
     LEFT JOIN "PaymentTransaction" tx ON tx."chargeId" = pc."id"
     WHERE pc."teamId" = ${input.teamId}
       AND pc."status" <> 'VOID'
+      AND (
+        pc."fixtureId" IS NULL
+        OR f."status" IN ('SCHEDULED', 'COMPLETED')
+      )
     GROUP BY pc."id", pc."amountPence", pc."dueDate", pc."createdAt"
     HAVING pc."amountPence" > COALESCE(SUM(tx."amountPence"), 0)
     ORDER BY
