@@ -204,6 +204,58 @@ export default function CaptainViewModeHeader({
         ? "You are using the full SIXFL admin view. Fixtures, results, squad and payment tools are available."
         : "You are using the captain dashboard for this team.";
 
+  if (teamName) {
+    return (
+      <div className="min-w-0 max-w-3xl">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">
+            Current view
+          </p>
+          <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-50">
+            {currentViewLabel}
+          </span>
+        </div>
+
+        <h1 className="captain-team-heading mt-3 text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+          {teamName}
+        </h1>
+
+        {leagueName ? (
+          <p className="captain-team-meta mt-3 text-sm leading-6 text-white/55">
+            {leagueName}
+            {displaySeason ? ` · ${displaySeason}` : ""}
+            {isLive ? " · Current live season" : ""}
+          </p>
+        ) : null}
+
+        {!hasTeamId ? (
+          <p className="mt-3 max-w-xl text-sm leading-6 text-white/65">
+            {currentViewDescription}
+          </p>
+        ) : null}
+
+        {canShowAdminControls ? (
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href="/admin"
+              data-captain-preview-ignore="true"
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+            >
+              Admin home
+            </Link>
+            <Link
+              href={`/admin/teams/${teamId}`}
+              data-captain-preview-ignore="true"
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+            >
+              Admin team page
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <>
       {canShowAdminControls && !isManagedTeam ? (
@@ -231,21 +283,6 @@ export default function CaptainViewModeHeader({
                 </span>
               ) : null}
             </div>
-
-            {teamName ? (
-              <h1 className="captain-team-heading mt-3 text-2xl font-semibold tracking-tight text-white sm:text-4xl">
-                {teamName}
-              </h1>
-            ) : null}
-
-            {teamName && leagueName ? (
-              <p className="captain-team-meta mt-3 text-sm text-white/55">
-                {leagueName}
-                {displaySeason ? ` · ${displaySeason}` : ""}
-                {isLive ? " · Current live season" : ""}
-              </p>
-            ) : null}
-
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65 sm:text-base">
               {currentViewDescription}
             </p>
