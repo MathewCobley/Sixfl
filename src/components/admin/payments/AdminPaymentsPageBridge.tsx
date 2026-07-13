@@ -13,8 +13,30 @@ const SIXFL_SELECT_ATTR = "data-sixfl-payments-select";
 const SIXFL_SELECT_WRAP_ATTR = "data-sixfl-payments-select-wrap";
 const SIXFL_OPTION_ATTR = "data-sixfl-payments-select-option";
 
+type RecentPaymentDetail = {
+  id: string;
+  typeLabel: string;
+  title: string;
+  line1: string;
+  line2: string;
+  referenceLine: string | null;
+  notesLine: string | null;
+  methodLabel: string;
+  amountLabel: string;
+  paidAtLabel: string;
+};
+
 function normaliseText(value: string | null | undefined) {
   return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function escapeHtml(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function isAdminPaymentsPath(pathname: string | null) {
@@ -359,6 +381,58 @@ function hideSection(section: HTMLElement | undefined, shouldHide: boolean) {
   section.style.display = shouldHide ? "none" : "";
 }
 
+function renderRecentPaymentDetail(detail: RecentPaymentDetail) {
+  const reference = detail.referenceLine
+    ? `<div class="mt-1 text-xs text-white/45">${escapeHtml(detail.referenceLine)}</div>`
+    : "";
+  const notes = detail.notesLine
+    ? `<div class="mt-1 text-xs leading-5 text-white/40">${escapeHtml(detail.notesLine)}</div>`
+    : "";
+
+  return `
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="rounded-full border border-sky-300/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100">${escapeHtml(detail.typeLabel)}</span>
+          <div class="font-semibold text-white">${escapeHtml(detail.title)}</div>
+        </div>
+        <div class="mt-2 text-sm text-white/70">${escapeHtml(detail.line1)}</div>
+        <div class="mt-1 text-sm text-white/50">${escapeHtml(detail.line2)}</div>
+        ${reference}
+        ${notes}
+      </div>
+      <div class="shrink-0 text-sm text-white/60 sm:text-right">
+        <div class="font-semibold text-white">${escapeHtml(detail.amountLabel)}</div>
+        <div>${escapeHtml(detail.paidAtLabel)}</div>
+        <div class="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">${escapeHtml(detail.methodLabel)}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function enhanceRecentPaymentRows(isCancelled: () => boolean) {
+  const recentPaymentsSection = findSectionByHeading("Recent payments");
+  const rows = getListRows(recentPaymentsSection).filter((row) => !normaliseText(row.textContent).includes("no recent payments match"));
+  if (!recentPaymentsSection || rows.length === 0) return;
+
+  const response = await fetch(`/api/admin/payments/recent-details${window.location.search}`, {
+    cache: "no-store",
+  }).catch(() => null);
+  if (!response?.ok || isCancelled()) return;
+
+  const payload = (await response.json().catch(() => null)) as { details?: RecentPaymentDetail[] } | null;
+  const details = payload?.details ?? [];
+  if (details.length === 0 || isCancelled()) return;
+
+  rows.forEach((row, index) => {
+    const detail = details[index];
+    if (!detail) return;
+    row.dataset.sixflPaymentExplained = "true";
+    row.className = "rounded-2xl border border-white/10 bg-[#0d1428] p-4";
+    row.innerHTML = renderRecentPaymentDetail(detail);
+  });
+}
+
 function applyPaymentStatusFilter() {
   const status = new URLSearchParams(window.location.search).get(PAYMENT_STATUS_PARAM) ?? "";
   if (!status) return;
@@ -409,6 +483,7 @@ export default function AdminPaymentsPageBridge() {
   useEffect(() => {
     if (!isAdminPaymentsPath(pathname)) return;
 
+    let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const hasNotice = Boolean(params.get("created") || params.get("error"));
     const storedReturnTo = sessionStorage.getItem(RETURN_TO_KEY);
@@ -443,8 +518,10 @@ export default function AdminPaymentsPageBridge() {
     enhancePaymentFilterDropdowns();
     applyPaymentStatusFilter();
     updateLinksToPreservePaymentStatus();
+    void enhanceRecentPaymentRows(() => cancelled);
 
     return () => {
+      cancelled = true;
       document.removeEventListener("submit", onSubmit, true);
       document.removeEventListener("click", onDocumentClick);
     };
