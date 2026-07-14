@@ -253,25 +253,53 @@ function createTvBadge(fixture: CaptainTvFixture) {
   return element;
 }
 
+function textMatchesFixture(text: string, fixture: CaptainTvFixture) {
+  const candidate = normalise(text);
+  return (
+    candidate === normalise(fixture.fullLabel) ||
+    candidate.includes(normalise(fixture.fullLabel)) ||
+    fixture.captainLabels.some((label) => {
+      const normalisedLabel = normalise(label);
+      return candidate === normalisedLabel || candidate.includes(normalisedLabel);
+    })
+  );
+}
+
+function appendBadge(container: HTMLElement, fixture: CaptainTvFixture) {
+  if (container.querySelector(`[data-sixfl-tv-fixture="${fixture.id}"]`)) return true;
+  container.classList.add("flex", "flex-wrap", "items-center", "gap-2");
+  container.appendChild(createTvBadge(fixture));
+  return true;
+}
+
 function injectCaptainBadges(fixtures: CaptainTvFixture[]) {
   if (fixtures.length === 0) return;
+
   const candidates = Array.from(
-    document.querySelectorAll<HTMLElement>("h2, div.text-base.font-semibold.text-white, div.font-semibold.text-white"),
+    document.querySelectorAll<HTMLElement>(
+      "h1, h2, h3, div.text-base.font-semibold.text-white, div.font-semibold.text-white",
+    ),
   );
 
   for (const element of candidates) {
-    const text = normalise(element.textContent);
-    const fixture = fixtures.find(
-      (item) =>
-        text === normalise(item.fullLabel) ||
-        item.captainLabels.some((label) => text === normalise(label)),
-    );
+    const fixture = fixtures.find((item) => textMatchesFixture(element.textContent ?? "", item));
     if (!fixture) continue;
 
     const parent = element.parentElement ?? element;
-    if (parent.querySelector(`[data-sixfl-tv-fixture="${fixture.id}"]`)) continue;
-    parent.classList.add("flex", "flex-wrap", "items-center", "gap-2");
-    parent.appendChild(createTvBadge(fixture));
+    appendBadge(parent, fixture);
+  }
+
+  const statusRows = Array.from(document.querySelectorAll<HTMLElement>("span, div, p"))
+    .filter((element) => normalise(element.textContent).toLowerCase() === "fixture confirmed");
+
+  for (const row of statusRows) {
+    const card = row.closest<HTMLElement>("section, article, div.rounded-3xl") ?? row.parentElement;
+    if (!card) continue;
+
+    const fixture = fixtures.find((item) => textMatchesFixture(card.textContent ?? "", item));
+    if (!fixture) continue;
+
+    appendBadge(row.parentElement ?? row, fixture);
   }
 }
 
