@@ -113,6 +113,11 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     saveButton.className = "rounded-lg border border-fuchsia-300/30 bg-fuchsia-400/15 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-50 transition hover:bg-fuchsia-400/20";
     saveButton.textContent = "Save TV link";
 
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "rounded-lg border border-red-300/30 bg-red-500/10 px-3 py-1.5 text-[11px] font-semibold text-red-100 transition hover:bg-red-500/15";
+    removeButton.textContent = "Remove TV link";
+
     const openLink = document.createElement("a");
     openLink.target = "_blank";
     openLink.rel = "noopener noreferrer";
@@ -130,10 +135,15 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
       }
     }
 
+    function setDisabled(disabled: boolean) {
+      saveButton.disabled = disabled;
+      removeButton.disabled = disabled;
+      checkbox.disabled = disabled;
+      urlInput.disabled = disabled;
+    }
+
     async function save() {
-      saveButton.disabled = true;
-      checkbox.disabled = true;
-      urlInput.disabled = true;
+      setDisabled(true);
       status.textContent = "Saving…";
 
       const url = urlInput.value.trim();
@@ -143,9 +153,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
         sixflTvUrl: url,
       });
 
-      saveButton.disabled = false;
-      checkbox.disabled = false;
-      urlInput.disabled = false;
+      setDisabled(false);
 
       if (!ok) {
         status.textContent = "Could not save — check the URL";
@@ -161,11 +169,40 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
       refreshOpenLink();
     }
 
+    async function remove() {
+      const hasAnythingToRemove = checkbox.checked || Boolean(urlInput.value.trim());
+      if (!hasAnythingToRemove) return;
+
+      setDisabled(true);
+      status.textContent = "Removing…";
+
+      const ok = await saveAdminFixture({
+        fixtureId,
+        sixflTvRecorded: false,
+        sixflTvUrl: "",
+      });
+
+      setDisabled(false);
+
+      if (!ok) {
+        status.textContent = "Could not remove TV link";
+        return;
+      }
+
+      checkbox.checked = false;
+      urlInput.value = "";
+      status.textContent = "Removed from SIXFL TV";
+      refreshOpenLink();
+    }
+
     checkbox.addEventListener("change", () => {
       void save();
     });
     saveButton.addEventListener("click", () => {
       void save();
+    });
+    removeButton.addEventListener("click", () => {
+      void remove();
     });
     urlInput.addEventListener("change", () => {
       refreshOpenLink();
@@ -174,6 +211,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     topRow.appendChild(text);
     topRow.appendChild(checkbox);
     actions.appendChild(saveButton);
+    actions.appendChild(removeButton);
     actions.appendChild(openLink);
     wrapper.appendChild(topRow);
     wrapper.appendChild(status);
