@@ -8,6 +8,9 @@ import {
 } from "@/lib/email/footer";
 
 const SIXFL_LOGO_URL = "https://www.sixfl.co.uk/sixfl-email.png";
+const SIXFL_TV_LOGO_URL = "https://www.sixfl.co.uk/sixfl-tv.png";
+
+export const SIXFL_TV_EMAIL_BRAND_MARKER = "{{emailBrand:sixfl-tv}}";
 
 const SIXFL_SIGNATURE_LINES = [
   "—",
@@ -22,10 +25,7 @@ const CTA_PLACEHOLDER = "{{cta}}";
 const RESPONSE_BUTTONS_PATTERN =
   /(?:^|\n)\s*YES,\s*I still want to play:\s*(https?:\/\/\S+)\s*\n\s*NO,\s*remove me from the squad list:\s*(https?:\/\/\S+)\s*(?:\n|$)/i;
 const POLL_BUTTONS_PATTERN = /(?:^|\n)\s*SIXFL_POLL_OPTIONS_START\s*\n([\s\S]*?)\n\s*SIXFL_POLL_OPTIONS_END\s*(?:\n|$)/i;
-
-// ========================================
-// Types
-// ========================================
+const EMAIL_BRAND_MARKER_PATTERN = /(?:^|\n)\s*(?:\{\{\s*emailBrand\s*:\s*sixfl-tv\s*\}\}|SIXFL_EMAIL_BRAND\s*:\s*sixfl-tv)\s*(?:\n|$)/gi;
 
 export type SIXFLEmailCta = {
   label: string;
@@ -54,9 +54,7 @@ type PollButton = {
   url: string;
 };
 
-// ========================================
-// Helpers
-// ========================================
+type EmailBrand = "sixfl" | "sixfl-tv";
 
 function escapeHtml(value: string) {
   return value
@@ -77,9 +75,39 @@ function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n");
 }
 
+function extractEmailBrand(body: string): { body: string; brand: EmailBrand } {
+  let brand: EmailBrand = "sixfl";
+  const normalised = normalizeLineEndings(body);
+
+  const bodyWithoutMarkers = normalised
+    .replace(EMAIL_BRAND_MARKER_PATTERN, (match) => {
+      brand = "sixfl-tv";
+      return match.startsWith("\n") ? "\n" : "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return { body: bodyWithoutMarkers, brand };
+}
+
+function getLogoDetails(brand: EmailBrand) {
+  if (brand === "sixfl-tv") {
+    return {
+      src: SIXFL_TV_LOGO_URL,
+      alt: "SIXFL TV",
+      width: 220,
+    };
+  }
+
+  return {
+    src: SIXFL_LOGO_URL,
+    alt: "SIXFL",
+    width: 180,
+  };
+}
+
 function getListLine(value: string): EmailListLine | null {
   const match = value.match(/^(\s*)(-|\d+\.)\s+(.+)$/);
-
   if (!match) return null;
 
   const indentation = match[1].replace(/\t/g, "  ").length;
@@ -95,7 +123,6 @@ function getListLine(value: string): EmailListLine | null {
 
 function renderParagraphHtml(lines: string[]) {
   const text = lines.join("\n").trim();
-
   if (!text) return "";
 
   return `
@@ -109,44 +136,17 @@ function renderListGroupHtml(items: EmailListLine[]) {
   if (!items.length) return "";
 
   return `
-    <div
-      style="
-        margin:0 0 18px 0;
-        color:#111827;
-        font-size:16px;
-        line-height:1.65;
-        mso-line-height-rule:exactly;
-      "
-    >
+    <div style="margin:0 0 18px 0;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
       ${items
         .map((item) => {
           const marginLeft = item.depth * 18;
-          const widthPercent = Math.max(88, 100 - item.depth * 4);
-
           return `
-            <table
-              role="presentation"
-              cellpadding="0"
-              cellspacing="0"
-              border="0"
-              width="${widthPercent}%"
-              class="sixfl-list-row"
-              style="width:${widthPercent}% !important;margin:0 0 8px ${marginLeft}px !important;border-collapse:collapse !important;table-layout:fixed !important;"
-            >
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="sixfl-list-row" style="width:100% !important;margin:0 0 8px ${marginLeft}px !important;border-collapse:collapse !important;table-layout:fixed !important;">
               <tr>
-                <td
-                  valign="top"
-                  width="32"
-                  class="sixfl-list-marker"
-                  style="width:32px !important;min-width:32px !important;max-width:32px !important;padding:0 8px 0 0 !important;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
-                >
+                <td valign="top" width="32" class="sixfl-list-marker" style="width:32px !important;min-width:32px !important;max-width:32px !important;padding:0 8px 0 0 !important;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
                   ${escapeHtml(item.marker)}
                 </td>
-                <td
-                  valign="top"
-                  class="sixfl-list-text"
-                  style="padding:0 !important;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;"
-                >
+                <td valign="top" class="sixfl-list-text" style="padding:0 !important;color:#111827;font-size:16px;line-height:1.65;mso-line-height-rule:exactly;">
                   ${renderInlineFormatting(item.text)}
                 </td>
               </tr>
@@ -160,7 +160,6 @@ function renderListGroupHtml(items: EmailListLine[]) {
 
 function getSiteUrl() {
   const fallback = "https://www.sixfl.co.uk";
-
   const value =
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
     process.env.SITE_URL?.trim() ||
@@ -175,11 +174,7 @@ function getSiteUrl() {
 function resolveEmailAssetUrl(value: string | null | undefined) {
   const raw = value?.trim();
   if (!raw) return null;
-
-  if (/^https?:\/\//i.test(raw)) {
-    return raw;
-  }
-
+  if (/^https?:\/\//i.test(raw)) return raw;
   if (raw.startsWith("/")) {
     try {
       return new URL(raw, `${getSiteUrl()}/`).toString();
@@ -187,12 +182,11 @@ function resolveEmailAssetUrl(value: string | null | undefined) {
       return `${getSiteUrl()}${raw}`;
     }
   }
-
   return raw;
 }
 
 function stripTrailingSIXFLSignature(text: string) {
-  let output = normalizeLineEndings(text).trim();
+  let output = extractEmailBrand(text).body;
 
   const escapedLines = SIXFL_SIGNATURE_LINES.map((line) =>
     line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
@@ -203,9 +197,7 @@ function stripTrailingSIXFLSignature(text: string) {
     "i",
   );
 
-  output = output.replace(signaturePattern, "").trim();
-
-  return output;
+  return output.replace(signaturePattern, "").trim();
 }
 
 function stripCtaPlaceholder(text: string) {
@@ -245,20 +237,17 @@ function convertTextToHtml(text: string) {
 
       for (const line of lines) {
         const listLine = getListLine(line);
-
         if (listLine) {
           flushParagraph();
           listItems.push(listLine);
           continue;
         }
-
         flushList();
         paragraphLines.push(line.trim());
       }
 
       flushParagraph();
       flushList();
-
       return chunks.join("");
     })
     .join("");
@@ -267,51 +256,16 @@ function convertTextToHtml(text: string) {
 function buildCtaHtml(cta?: SIXFLEmailCta) {
   const safeCta =
     cta?.label?.trim() && cta?.url?.trim()
-      ? {
-          label: cta.label.trim(),
-          url: cta.url.trim(),
-        }
+      ? { label: cta.label.trim(), url: cta.url.trim() }
       : undefined;
 
-  if (!safeCta) {
-    return "";
-  }
+  if (!safeCta) return "";
 
   return `
-    <table
-      role="presentation"
-      cellpadding="0"
-      cellspacing="0"
-      border="0"
-      style="margin:8px 0 0 0;border-collapse:separate;"
-    >
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;border-collapse:separate;">
       <tr>
-        <td
-          bgcolor="#1E5A43"
-          style="
-            border-radius:12px;
-            background:#1E5A43;
-            text-align:center;
-            box-shadow:0 4px 12px rgba(0,0,0,0.15);
-          "
-        >
-          <a
-            href="${escapeHtml(safeCta.url)}"
-            target="_blank"
-            style="
-              display:inline-block;
-              background:#1E5A43;
-              color:#ffffff;
-              text-decoration:none;
-              padding:14px 22px;
-              border-radius:12px;
-              font-weight:700;
-              font-size:15px;
-              line-height:1.1;
-              letter-spacing:0.01em;
-              mso-padding-alt:0;
-            "
-          >
+        <td bgcolor="#1E5A43" style="border-radius:12px;background:#1E5A43;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+          <a href="${escapeHtml(safeCta.url)}" target="_blank" style="display:inline-block;background:#1E5A43;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">
             ${escapeHtml(safeCta.label)}
           </a>
         </td>
@@ -325,15 +279,11 @@ function buildPlayerResponseButtonsHtml(input: { yesUrl: string; noUrl: string }
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0 0;border-collapse:separate;">
       <tr>
         <td bgcolor="#1E5A43" style="border-radius:12px;background:#1E5A43;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
-          <a href="${escapeHtml(input.yesUrl)}" target="_blank" style="display:inline-block;background:#1E5A43;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">
-            YES, I still want to play
-          </a>
+          <a href="${escapeHtml(input.yesUrl)}" target="_blank" style="display:inline-block;background:#1E5A43;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">YES, I still want to play</a>
         </td>
         <td width="12" style="width:12px;font-size:1px;line-height:1px;">&nbsp;</td>
         <td bgcolor="#7f1d1d" style="border-radius:12px;background:#7f1d1d;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.10);">
-          <a href="${escapeHtml(input.noUrl)}" target="_blank" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">
-            NO, remove me
-          </a>
+          <a href="${escapeHtml(input.noUrl)}" target="_blank" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">NO, remove me</a>
         </td>
       </tr>
     </table>
@@ -342,20 +292,10 @@ function buildPlayerResponseButtonsHtml(input: { yesUrl: string; noUrl: string }
 
 function extractPlayerResponseButtons(body: string) {
   const match = body.match(RESPONSE_BUTTONS_PATTERN);
-
-  if (!match?.[1] || !match?.[2]) {
-    return {
-      body,
-      buttonsHtml: "",
-    };
-  }
-
+  if (!match?.[1] || !match?.[2]) return { body, buttonsHtml: "" };
   return {
     body: body.replace(RESPONSE_BUTTONS_PATTERN, "\n").replace(/\n{3,}/g, "\n\n").trim(),
-    buttonsHtml: buildPlayerResponseButtonsHtml({
-      yesUrl: match[1],
-      noUrl: match[2],
-    }),
+    buttonsHtml: buildPlayerResponseButtonsHtml({ yesUrl: match[1], noUrl: match[2] }),
   };
 }
 
@@ -367,14 +307,12 @@ function parsePollButtons(rawBlock: string): PollButton[] {
     .flatMap((line) => {
       const match = line.match(/^(.+?):\s*(https?:\/\/\S+)$/i);
       if (!match?.[1] || !match?.[2]) return [];
-
       return [{ label: match[1].trim(), url: match[2].trim() }];
     });
 }
 
 function buildPollButtonsHtml(buttons: PollButton[]) {
   if (buttons.length === 0) return "";
-
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:12px 0 0 0;border-collapse:separate;">
       ${buttons
@@ -397,16 +335,8 @@ function buildPollButtonsHtml(buttons: PollButton[]) {
 
 function extractPollButtons(body: string) {
   const match = body.match(POLL_BUTTONS_PATTERN);
-
-  if (!match?.[1]) {
-    return {
-      body,
-      buttonsHtml: "",
-    };
-  }
-
+  if (!match?.[1]) return { body, buttonsHtml: "" };
   const buttons = parsePollButtons(match[1]);
-
   return {
     body: body.replace(POLL_BUTTONS_PATTERN, "\n").replace(/\n{3,}/g, "\n\n").trim(),
     buttonsHtml: buildPollButtonsHtml(buttons),
@@ -418,63 +348,16 @@ function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
   const teamLogoUrl = resolveEmailAssetUrl(branding?.teamLogoUrl);
   const leagueName = branding?.leagueName?.trim();
 
-  if (!teamName && !teamLogoUrl && !leagueName) {
-    return "";
-  }
+  if (!teamName && !teamLogoUrl && !leagueName) return "";
 
   return `
-    <div
-      style="
-        margin:0 0 24px 0;
-        padding:16px 18px;
-        border:1px solid #e5e7eb;
-        border-radius:16px;
-        background:#f9fafb;
-      "
-    >
-      <table
-        role="presentation"
-        cellpadding="0"
-        cellspacing="0"
-        border="0"
-        width="100%"
-        style="border-collapse:collapse;"
-      >
+    <div style="margin:0 0 24px 0;padding:16px 18px;border:1px solid #e5e7eb;border-radius:16px;background:#f9fafb;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
         <tr>
-          ${
-            teamLogoUrl
-              ? `
-            <td width="60" valign="middle" style="padding-right:14px;">
-              <img
-                src="${escapeHtml(teamLogoUrl)}"
-                alt="${escapeHtml(teamName || "Team logo")}"
-                width="48"
-                height="48"
-                style="display:block;width:48px;height:48px;object-fit:contain;border:0;outline:none;text-decoration:none;"
-              />
-            </td>
-          `.trim()
-              : ""
-          }
+          ${teamLogoUrl ? `<td width="60" valign="middle" style="padding-right:14px;"><img src="${escapeHtml(teamLogoUrl)}" alt="${escapeHtml(teamName || "Team logo")}" width="48" height="48" style="display:block;width:48px;height:48px;object-fit:contain;border:0;outline:none;text-decoration:none;" /></td>` : ""}
           <td valign="middle">
-            ${
-              teamName
-                ? `
-              <div style="color:#111827;font-size:16px;font-weight:700;line-height:1.3;">
-                ${escapeHtml(teamName)}
-              </div>
-            `.trim()
-                : ""
-            }
-            ${
-              leagueName
-                ? `
-              <div style="margin-top:4px;color:#6b7280;font-size:13px;line-height:1.4;">
-                ${escapeHtml(leagueName)}
-              </div>
-            `.trim()
-                : ""
-            }
+            ${teamName ? `<div style="color:#111827;font-size:16px;font-weight:700;line-height:1.3;">${escapeHtml(teamName)}</div>` : ""}
+            ${leagueName ? `<div style="margin-top:4px;color:#6b7280;font-size:13px;line-height:1.4;">${escapeHtml(leagueName)}</div>` : ""}
           </td>
         </tr>
       </table>
@@ -485,53 +368,12 @@ function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
 function buildPaymentSummaryHtml(payment?: SIXFLPaymentSummary) {
   const amount = payment?.amount?.trim();
   const reason = payment?.reason?.trim();
-
-  if (!amount && !reason) {
-    return "";
-  }
-
+  if (!amount && !reason) return "";
   return `
-    <div
-      style="
-        margin:0 0 24px 0;
-        padding:16px 18px;
-        border:1px solid #d1fae5;
-        border-radius:16px;
-        background:#ecfdf5;
-      "
-    >
-      <div
-        style="
-          margin:0 0 10px 0;
-          color:#065f46;
-          font-size:12px;
-          font-weight:700;
-          letter-spacing:0.12em;
-          text-transform:uppercase;
-        "
-      >
-        Payment request
-      </div>
-
-      ${
-        amount
-          ? `
-        <div style="margin:0 0 8px 0;color:#111827;font-size:14px;line-height:1.6;">
-          <strong>Amount:</strong> ${escapeHtml(amount)}
-        </div>
-      `.trim()
-          : ""
-      }
-
-      ${
-        reason
-          ? `
-        <div style="margin:0;color:#111827;font-size:14px;line-height:1.6;">
-          <strong>Reason:</strong> ${escapeHtml(reason)}
-        </div>
-      `.trim()
-          : ""
-      }
+    <div style="margin:0 0 24px 0;padding:16px 18px;border:1px solid #d1fae5;border-radius:16px;background:#ecfdf5;">
+      <div style="margin:0 0 10px 0;color:#065f46;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">Payment request</div>
+      ${amount ? `<div style="margin:0 0 8px 0;color:#111827;font-size:14px;line-height:1.6;"><strong>Amount:</strong> ${escapeHtml(amount)}</div>` : ""}
+      ${reason ? `<div style="margin:0;color:#111827;font-size:14px;line-height:1.6;"><strong>Reason:</strong> ${escapeHtml(reason)}</div>` : ""}
     </div>
   `.trim();
 }
@@ -548,43 +390,21 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
     .join("");
 
   if (!ctaHtml) {
-    const bodyHtml = convertTextToHtml(stripCtaPlaceholder(bodyWithoutResponseButtons));
-
-    return `${bodyHtml}${extraButtonsHtml}`;
+    return `${convertTextToHtml(stripCtaPlaceholder(bodyWithoutResponseButtons))}${extraButtonsHtml}`;
   }
 
   if (bodyWithoutResponseButtons.includes(CTA_PLACEHOLDER)) {
     const parts = bodyWithoutResponseButtons.split(CTA_PLACEHOLDER);
-
-    const html = parts
+    return `${parts
       .map((part, index) => {
-        const trimmedPart = part.trim();
-        const partHtml = trimmedPart ? convertTextToHtml(trimmedPart) : "";
-        const shouldInsertCta = index < parts.length - 1;
-
-        return `
-          ${partHtml}
-          ${
-            shouldInsertCta
-              ? `<div style="margin:24px 0 28px 0;">${ctaHtml}</div>`
-              : ""
-          }
-        `.trim();
+        const partHtml = part.trim() ? convertTextToHtml(part.trim()) : "";
+        const buttonHtml = index < parts.length - 1 ? `<div style="margin:24px 0 28px 0;">${ctaHtml}</div>` : "";
+        return `${partHtml}${buttonHtml}`;
       })
-      .join("");
-
-    return `${html}${extraButtonsHtml}`;
+      .join("")}${extraButtonsHtml}`;
   }
 
-  const bodyHtml = convertTextToHtml(bodyWithoutResponseButtons);
-
-  return `
-    ${bodyHtml}
-    <div style="margin:28px 0 8px 0;">
-      ${ctaHtml}
-    </div>
-    ${extraButtonsHtml}
-  `.trim();
+  return `${convertTextToHtml(bodyWithoutResponseButtons)}<div style="margin:28px 0 8px 0;">${ctaHtml}</div>${extraButtonsHtml}`;
 }
 
 function buildResponsiveEmailDocument(contentHtml: string) {
@@ -597,106 +417,33 @@ function buildResponsiveEmailDocument(contentHtml: string) {
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
     <title>SIXFL</title>
     <style>
-      html,
-      body {
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-      }
-
-      * {
-        -ms-text-size-adjust: 100%;
-        -webkit-text-size-adjust: 100%;
-      }
-
-      table,
-      td {
-        mso-table-lspace: 0pt !important;
-        mso-table-rspace: 0pt !important;
-      }
-
-      table {
-        border-spacing: 0 !important;
-        border-collapse: collapse !important;
-        table-layout: fixed !important;
-        margin: 0 auto !important;
-      }
-
-      .sixfl-list-row {
-        margin-right: 0 !important;
-        margin-left: 0 !important;
-        table-layout: fixed !important;
-      }
-
-      .sixfl-list-marker {
-        width: 32px !important;
-        min-width: 32px !important;
-        max-width: 32px !important;
-      }
-
-      .sixfl-list-text {
-        width: auto !important;
-      }
-
-      img {
-        -ms-interpolation-mode: bicubic;
-      }
-
-      a {
-        text-decoration: none;
-      }
-
-      @media screen and (max-width: 680px) {
-        .sixfl-email-outer {
-          padding: 14px 10px !important;
-        }
-
-        .sixfl-email-container {
-          width: 100% !important;
-          max-width: 100% !important;
-          border-radius: 16px !important;
-        }
-
-        .sixfl-email-logo-cell {
-          padding: 24px 22px 18px 22px !important;
-        }
-
-        .sixfl-email-content-cell {
-          padding: 0 22px 26px 22px !important;
-        }
-
-        .sixfl-email-footer-cell {
-          padding: 0 22px 26px 22px !important;
-        }
-
-        .sixfl-email-logo {
-          width: 150px !important;
-          max-width: 150px !important;
-        }
+      html, body { margin:0 !important; padding:0 !important; width:100% !important; height:100% !important; }
+      * { -ms-text-size-adjust:100%; -webkit-text-size-adjust:100%; }
+      table, td { mso-table-lspace:0pt !important; mso-table-rspace:0pt !important; }
+      table { border-spacing:0 !important; border-collapse:collapse !important; table-layout:fixed !important; margin:0 auto !important; }
+      img { -ms-interpolation-mode:bicubic; }
+      a { text-decoration:none; }
+      .sixfl-list-marker { width:32px !important; min-width:32px !important; max-width:32px !important; }
+      @media screen and (max-width:680px) {
+        .sixfl-email-outer { padding:14px 10px !important; }
+        .sixfl-email-container { width:100% !important; max-width:100% !important; border-radius:16px !important; }
+        .sixfl-email-logo-cell { padding:24px 22px 18px 22px !important; }
+        .sixfl-email-content-cell { padding:0 22px 26px 22px !important; }
+        .sixfl-email-footer-cell { padding:0 22px 26px 22px !important; }
+        .sixfl-email-logo { width:150px !important; max-width:150px !important; }
       }
     </style>
   </head>
   <body style="margin:0;padding:0;background:#f3f4f6;word-spacing:normal;">
-    <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
-      SIXFL message
-    </div>
+    <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">SIXFL message</div>
     ${contentHtml}
   </body>
 </html>`;
 }
 
-// ========================================
-// Public API
-// ========================================
-
 export function appendSIXFLTextSignature(body: string) {
   const trimmedBody = stripTrailingSIXFLSignature(body);
-
-  if (!trimmedBody) {
-    return SIXFL_EMAIL_SIGNATURE_TEXT;
-  }
-
+  if (!trimmedBody) return SIXFL_EMAIL_SIGNATURE_TEXT;
   return `${trimmedBody}\n\n${SIXFL_EMAIL_SIGNATURE_TEXT}`.trim();
 }
 
@@ -706,7 +453,9 @@ export function buildSIXFLEmailHtml(input: {
   branding?: SIXFLEmailBranding;
   payment?: SIXFLPaymentSummary;
 }) {
-  const bodyHtml = buildBodyHtmlWithOptionalCta(input.body, input.cta);
+  const brandDetails = extractEmailBrand(input.body);
+  const logo = getLogoDetails(brandDetails.brand);
+  const bodyHtml = buildBodyHtmlWithOptionalCta(brandDetails.body, input.cta);
   const brandingHtml = buildBrandingBlockHtml(input.branding);
   const paymentHtml = buildPaymentSummaryHtml(input.payment);
   const showPaymentProviderNote = Boolean(input.payment);
@@ -714,53 +463,20 @@ export function buildSIXFLEmailHtml(input: {
   const contentHtml = `
     <center role="article" aria-roledescription="email" lang="en" style="width:100%;background:#f3f4f6;">
       <div class="sixfl-email-outer" style="background:#f3f4f6;padding:28px 12px;width:100%;box-sizing:border-box;">
-        <table
-          role="presentation"
-          cellpadding="0"
-          cellspacing="0"
-          border="0"
-          width="100%"
-          class="sixfl-email-container"
-          style="
-            width:100%;
-            max-width:640px;
-            margin:0 auto;
-            background:#ffffff;
-            border:1px solid #e5e7eb;
-            border-radius:18px;
-            overflow:hidden;
-            font-family:Arial,Helvetica,sans-serif;
-          "
-        >
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="sixfl-email-container" style="width:100%;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
           <tr>
             <td class="sixfl-email-logo-cell" style="padding:34px 32px 20px 32px;">
-              <img
-                src="${SIXFL_LOGO_URL}"
-                alt="SIXFL"
-                width="180"
-                class="sixfl-email-logo"
-                style="display:block;width:180px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;"
-              />
+              <img src="${logo.src}" alt="${logo.alt}" width="${logo.width}" class="sixfl-email-logo" style="display:block;width:${logo.width}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
-
           <tr>
             <td class="sixfl-email-content-cell" style="padding:0 32px 30px 32px;">
               ${brandingHtml}
               ${paymentHtml}
               ${bodyHtml}
-              ${
-                showPaymentProviderNote
-                  ? `
-                <div style="margin-top:12px;color:#6b7280;font-size:12px;line-height:1.6;">
-                  Secure payment powered by Stripe.
-                </div>
-              `.trim()
-                  : ""
-              }
+              ${showPaymentProviderNote ? `<div style="margin-top:12px;color:#6b7280;font-size:12px;line-height:1.6;">Secure payment powered by Stripe.</div>` : ""}
             </td>
           </tr>
-
           <tr>
             <td class="sixfl-email-footer-cell" style="padding:0 32px 32px 32px;">
               ${buildSIXFLFooterHtml()}
