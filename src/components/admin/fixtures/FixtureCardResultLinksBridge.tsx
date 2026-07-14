@@ -16,6 +16,12 @@ type ResultLabel = {
   isDisputed: boolean;
 };
 
+type PublishStatus = {
+  id: string;
+  published: boolean;
+  publishedAt: string | null;
+};
+
 function getFixtureIdFromEditHref(href: string | null) {
   if (!href) return null;
   const match = href.match(/\/admin\/fixtures\/([^/?#]+)\/edit/);
@@ -58,12 +64,104 @@ function resultBadgeClass(result: ResultLabel) {
     : "inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100";
 }
 
-function enhanceFixtureCards(labelsById: Map<string, ResultLabel>) {
+function publishButtonClass() {
+  return "inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+}
+
+async function publishFixture(fixtureId: string) {
+  const response = await fetch("/api/admin/fixtures/publish-one", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fixtureId }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    error?: string;
+    published?: boolean;
+    alreadyPublished?: boolean;
+  } | null;
+
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error || "This fixture could not be published.");
+  }
+
+  return payload;
+}
+
+function setCardDraftBadgesPublished(container: HTMLElement | null) {
+  if (!container) return;
+  const candidates = Array.from(container.querySelectorAll<HTMLElement>("span, div"));
+
+  for (const element of candidates) {
+    if ((element.textContent ?? "").trim().toLowerCase() !== "draft") continue;
+    element.textContent = "Published";
+    element.className = "inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100";
+  }
+}
+
+function addPublishButton(input: {
+  fixtureId: string;
+  actionRow: HTMLElement;
+  editLink: HTMLAnchorElement;
+  status: PublishStatus | undefined;
+}) {
+  if (input.status?.published) {
+    input.actionRow.querySelector(`[data-publish-fixture-for="${input.fixtureId}"]`)?.remove();
+    return;
+  }
+
+  if (input.actionRow.querySelector(`[data-publish-fixture-for="${input.fixtureId}"]`)) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.publishFixtureFor = input.fixtureId;
+  button.className = publishButtonClass();
+  button.textContent = "Publish match";
+  button.title = "Publish this individual fixture and queue the related team/payment notifications.";
+
+  button.addEventListener("click", async () => {
+    const confirmed = window.confirm(
+      "Publish this individual match? This will make it live, create/update team payment charges, and queue the related team emails/reminders.",
+    );
+
+    if (!confirmed) return;
+
+    button.disabled = true;
+    button.textContent = "Publishing...";
+
+    try {
+      const result = await publishFixture(input.fixtureId);
+      button.textContent = result.alreadyPublished ? "Already published" : "Published";
+      button.className = "inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100";
+      setCardDraftBadgesPublished(input.actionRow.closest("article") ?? input.actionRow.closest("tr") ?? input.actionRow.parentElement);
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "Publish match";
+      window.alert(error instanceof Error ? error.message : "This fixture could not be published.");
+    }
+  });
+
+  input.actionRow.insertBefore(button, input.editLink);
+}
+
+function enhanceFixtureCards(
+  labelsById: Map<string, ResultLabel>,
+  publishStatusById: Map<string, PublishStatus>,
+) {
   for (const editLink of getEditLinks()) {
     const fixtureId = getFixtureIdFromEditHref(editLink.getAttribute("href"));
     const actionRow = editLink.closest("div");
 
     if (!fixtureId || !actionRow) continue;
+
+    addPublishButton({
+      fixtureId,
+      actionRow,
+      editLink,
+      status: publishStatusById.get(fixtureId),
+    });
 
     let resultLink = actionRow.querySelector<HTMLAnchorElement>(`[data-enter-result-for="${fixtureId}"]`);
 
@@ -110,6 +208,20 @@ async function loadResultLabels() {
   return new Map((payload?.results ?? []).map((result) => [result.fixtureId, result]));
 }
 
+async function loadPublishStatuses() {
+  const ids = getFixtureIds();
+  if (ids.length === 0) return new Map<string, PublishStatus>();
+
+  const response = await fetch(`/api/admin/fixtures/publish-one?ids=${encodeURIComponent(ids.join(","))}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) return new Map<string, PublishStatus>();
+
+  const payload = (await response.json().catch(() => null)) as { fixtures?: PublishStatus[] } | null;
+  return new Map((payload?.fixtures ?? []).map((fixture) => [fixture.id, fixture]));
+}
+
 export default function FixtureCardResultLinksBridge() {
   const pathname = usePathname();
 
@@ -119,8 +231,11 @@ export default function FixtureCardResultLinksBridge() {
     let cancelled = false;
 
     const run = async () => {
-      const labels = await loadResultLabels();
-      if (!cancelled) enhanceFixtureCards(labels);
+      const [labels, publishStatuses] = await Promise.all([
+        loadResultLabels(),
+        loadPublishStatuses(),
+      ]);
+      if (!cancelled) enhanceFixtureCards(labels, publishStatuses);
     };
 
     const frame = window.requestAnimationFrame(() => {
