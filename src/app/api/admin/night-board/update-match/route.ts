@@ -4,7 +4,7 @@
 
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { FixtureStatus, NotificationDispatchStatus } from "@prisma/client";
+import { FixtureStatus, NotificationDispatchStatus, UserRole } from "@prisma/client";
 
 import { parseLondonDateTime, toLondonDateInputValue } from "@/lib/datetime/london";
 import {
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
 
   const referee = refereeId
     ? await prisma.user.findFirst({
-        where: { id: refereeId, role: { in: ["REFEREE", "ADMIN"] } },
+        where: { id: refereeId, role: { in: [UserRole.REFEREE, UserRole.ADMIN] } },
         select: { id: true },
       })
     : null;
