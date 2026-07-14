@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { deleteFixtureAction } from "@/app/(admin)/admin/fixtures/actions";
 import { FixtureConfirmationChaseButton } from "@/components/admin/fixtures/FixtureConfirmationChaseButton";
 
 type LeagueOption = { id: string; name: string; season: string | null; isActive: boolean };
@@ -78,7 +79,12 @@ type MatchupGridData = {
   teams: TeamOption[];
   cells: GridRow[];
   fixtures: GridFixture[];
-  summary: { scheduledPairs: number; oneWayPairs: number; completedPairs: number; missingPairs: number };
+  summary: {
+    scheduledPairs: number;
+    oneWayPairs: number;
+    completedPairs: number;
+    missingPairs: number;
+  };
 };
 
 const VISIBILITY_OPTIONS: VisibilityFilter[] = ["all", "published", "draft"];
@@ -92,21 +98,6 @@ function parseVisibility(value: string | null): VisibilityFilter {
 function parseStatus(value: string | null): StatusFilter {
   if (value === "postponed" || value === "cancelled" || value === "all") return value;
   return "active";
-}
-
-function getCellTone(cell: GridCell) {
-  if (cell.isSelf) return "border-white/5 bg-white/[0.02] text-white/15";
-  if (cell.totalCount === 0) return "border-red-400/15 bg-red-500/[0.06] text-red-100/70";
-  if (cell.homeCount > 0 && cell.awayCount > 0) return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-  return "border-amber-400/20 bg-amber-500/10 text-amber-100";
-}
-
-function getCellHelper(cell: GridCell) {
-  if (cell.isSelf) return "";
-  if (cell.totalCount === 0) return "Not scheduled";
-  if (cell.homeCount > 0 && cell.awayCount > 0) return "Both ways";
-  if (cell.homeCount > 0) return "Only as team 1";
-  return "Only as team 2";
 }
 
 function formatLeagueLabel(league: LeagueOption) {
@@ -150,10 +141,23 @@ function buildFixtureEditHref(input: {
 }) {
   const returnTo = buildGridHref(input.leagueId, input.divisionId || null, input.visibility, input.status);
   const params = new URLSearchParams({ returnTo });
-
   if (input.divisionId) params.set("divisionId", input.divisionId);
-
   return `/admin/fixtures/${input.fixtureId}/edit?${params.toString()}`;
+}
+
+function getCellTone(cell: GridCell) {
+  if (cell.isSelf) return "border-white/5 bg-white/[0.02] text-white/15";
+  if (cell.totalCount === 0) return "border-red-400/15 bg-red-500/[0.06] text-red-100/70";
+  if (cell.homeCount > 0 && cell.awayCount > 0) return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+  return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+}
+
+function getCellHelper(cell: GridCell) {
+  if (cell.isSelf) return "";
+  if (cell.totalCount === 0) return "Not scheduled";
+  if (cell.homeCount > 0 && cell.awayCount > 0) return "Both ways";
+  if (cell.homeCount > 0) return "Only as team 1";
+  return "Only as team 2";
 }
 
 function formatFixtureDate(value: string) {
@@ -169,7 +173,6 @@ function formatFixtureDate(value: string) {
 
 function formatShortDateTime(value: string | null) {
   if (!value) return null;
-
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
@@ -253,7 +256,6 @@ function FeePanel({
       <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${labelTone}`}>{label}</div>
       <div className="mt-1 font-semibold">{formatMoney(amountPence)}</div>
       <div className={`mt-0.5 truncate text-[11px] ${mutedTone}`} title={teamName}>{teamName}</div>
-
       {hasPaymentCharge ? (
         <div className="mt-1 text-[11px] text-white/50">
           Paid {formatMoney(paidPence ?? 0)} · Outstanding {formatMoney(outstandingPence ?? 0)}
@@ -304,11 +306,9 @@ function ConfirmationPanel({
         </div>
         <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${confirmationTone(status)}`}>{confirmationLabel(status)}</span>
       </div>
-
       {confirmedLabel ? <div className="mt-2 text-xs text-emerald-100/70">Confirmed {confirmedLabel}</div> : null}
       {issueLabel ? <div className="mt-2 text-xs text-amber-100/80">Issue raised {issueLabel}</div> : null}
       {note ? <div className="mt-2 rounded-xl border border-amber-400/15 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-100/85">{note}</div> : null}
-
       {canChase(status) ? (
         <div className="mt-3">
           <FixtureConfirmationChaseButton fixtureId={fixtureId} teamId={teamId} leagueId={leagueId} />
@@ -349,7 +349,6 @@ export default function FixtureMatchupGrid({
 
     async function loadGrid() {
       setIsLoading(true);
-
       try {
         const params = new URLSearchParams();
         if (selectedLeagueId) params.set("leagueId", selectedLeagueId);
@@ -359,10 +358,8 @@ export default function FixtureMatchupGrid({
 
         const response = await fetch(`/api/admin/fixtures/matchup-grid?${params.toString()}`, { cache: "no-store" });
         if (!response.ok) throw new Error("Could not load fixture grid.");
-
         const result = (await response.json()) as MatchupGridData;
         if (cancelled) return;
-
         setData(result);
         if (!selectedLeagueId && result.selectedLeagueId) setSelectedLeagueId(result.selectedLeagueId);
         if (result.selectedVisibility) setSelectedVisibility(result.selectedVisibility);
@@ -375,7 +372,6 @@ export default function FixtureMatchupGrid({
     }
 
     loadGrid();
-
     return () => {
       cancelled = true;
     };
@@ -389,12 +385,10 @@ export default function FixtureMatchupGrid({
 
   const fixturesByRound = useMemo(() => {
     const grouped = new Map<string, GridFixture[]>();
-
     for (const fixture of fixtures) {
       const key = getWeekLabel(fixture.round);
       grouped.set(key, [...(grouped.get(key) ?? []), fixture]);
     }
-
     return Array.from(grouped.entries()).sort(([a], [b]) => {
       const aNumber = Number(a.replace("Week ", ""));
       const bNumber = Number(b.replace("Week ", ""));
@@ -410,7 +404,7 @@ export default function FixtureMatchupGrid({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture selector</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Choose league and division</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick the league, division, visibility and status. Postponed fixtures can be isolated here and then opened from the fixture cards to rearrange them.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Pick the league, division, visibility and status. Use the fixture cards below to edit or delete duplicate draft fixtures.</p>
           </div>
 
           <div className="space-y-3">
@@ -435,9 +429,7 @@ export default function FixtureMatchupGrid({
                   <Link href={buildGridHref(selectedLeagueId, null, selectedVisibility, selectedStatus)} className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${!selectedDivisionId ? "border-sky-400/30 bg-sky-500/15 text-sky-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}>All divisions</Link>
                   {divisions.map((division) => {
                     const isActive = selectedDivisionId === division.id;
-                    return (
-                      <Link key={division.id} href={buildGridHref(selectedLeagueId, division.id, selectedVisibility, selectedStatus)} className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-sky-400/30 bg-sky-500/15 text-sky-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}>{division.name}</Link>
-                    );
+                    return <Link key={division.id} href={buildGridHref(selectedLeagueId, division.id, selectedVisibility, selectedStatus)} className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${isActive ? "border-sky-400/30 bg-sky-500/15 text-sky-50" : "border-white/10 bg-black/25 text-white/65 hover:bg-white/[0.06] hover:text-white"}`}>{division.name}</Link>;
                   })}
                 </div>
               </div>
@@ -538,38 +530,55 @@ export default function FixtureMatchupGrid({
                       </div>
 
                       <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-                        {roundFixtures.map((fixture) => (
-                          <article key={fixture.id} className="rounded-3xl border border-white/10 bg-black/25 p-4 transition hover:border-white/20 hover:bg-white/[0.04]">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <div className="text-sm font-semibold leading-6 text-white">{fixture.homeTeamName} <span className="text-white/35">vs</span> {fixture.awayTeamName}</div>
-                                <div className="mt-1 text-xs text-white/45">{fixture.pitch || "Pitch not set"}{fixture.position !== null ? ` · Game ${fixture.position}` : ""}</div>
-                              </div>
-                              <div className="flex shrink-0 flex-wrap gap-2">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fixtureStatusTone(fixture.status)}`}>{fixture.status}</span>
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fixture.publishedAt ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>{fixture.publishedAt ? "Live" : "Draft"}</span>
-                              </div>
-                            </div>
+                        {roundFixtures.map((fixture) => {
+                          const isPublished = Boolean(fixture.publishedAt);
+                          const showCaptainConfirmations = isPublished && fixture.status === "SCHEDULED";
 
-                            <div className="mt-4 grid gap-2 text-sm text-white/65 sm:grid-cols-2">
-                              <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Kickoff</div><div className="mt-1 font-medium text-white/80">{formatFixtureDate(fixture.kickoffAt)}</div></div>
-                              <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Venue</div><div className="mt-1 font-medium text-white/80">{fixture.venueName || "No venue"}</div></div>
-                              <FeePanel label="Team 1 fee" teamName={fixture.homeTeamName} amountPence={fixture.homeMatchFeePence} paidPence={fixture.homePaidPence} outstandingPence={fixture.homeOutstandingPence} hasPaymentCharge={fixture.homeHasPaymentCharge} paymentStatus={fixture.homePaymentStatus} tone="emerald" />
-                              <FeePanel label="Team 2 fee" teamName={fixture.awayTeamName} amountPence={fixture.awayMatchFeePence} paidPence={fixture.awayPaidPence} outstandingPence={fixture.awayOutstandingPence} hasPaymentCharge={fixture.awayHasPaymentCharge} paymentStatus={fixture.awayPaymentStatus} tone="sky" />
-                            </div>
-
-                            {fixture.status === "SCHEDULED" ? (
-                              <div className="mt-4 grid gap-2 lg:grid-cols-2">
-                                <ConfirmationPanel fixtureId={fixture.id} leagueId={fixture.leagueId} teamId={fixture.homeTeamId} teamName={fixture.homeTeamName} status={fixture.homeConfirmationStatus} confirmedAt={fixture.homeConfirmedAt} issueRaisedAt={fixture.homeIssueRaisedAt} lastChasedAt={fixture.homeLastChasedAt} note={fixture.homeConfirmationNote} />
-                                <ConfirmationPanel fixtureId={fixture.id} leagueId={fixture.leagueId} teamId={fixture.awayTeamId} teamName={fixture.awayTeamName} status={fixture.awayConfirmationStatus} confirmedAt={fixture.awayConfirmedAt} issueRaisedAt={fixture.awayIssueRaisedAt} lastChasedAt={fixture.awayLastChasedAt} note={fixture.awayConfirmationNote} />
+                          return (
+                            <article key={fixture.id} className="rounded-3xl border border-white/10 bg-black/25 p-4 transition hover:border-white/20 hover:bg-white/[0.04]">
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold leading-6 text-white">{fixture.homeTeamName} <span className="text-white/35">vs</span> {fixture.awayTeamName}</div>
+                                  <div className="mt-1 text-xs text-white/45">{fixture.pitch || "Pitch not set"}{fixture.position !== null ? ` · Game ${fixture.position}` : ""}</div>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fixtureStatusTone(fixture.status)}`}>{fixture.status}</span>
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${isPublished ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>{isPublished ? "Live" : "Draft"}</span>
+                                </div>
                               </div>
-                            ) : null}
 
-                            <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
-                              <Link href={buildFixtureEditHref({ fixtureId: fixture.id, leagueId: selectedLeagueId, divisionId: selectedDivisionId, visibility: selectedVisibility, status: selectedStatus })} className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15">Edit fixture</Link>
-                            </div>
-                          </article>
-                        ))}
+                              <div className="mt-4 grid gap-2 text-sm text-white/65 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Kickoff</div><div className="mt-1 font-medium text-white/80">{formatFixtureDate(fixture.kickoffAt)}</div></div>
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Venue</div><div className="mt-1 font-medium text-white/80">{fixture.venueName || "No venue"}</div></div>
+                                <FeePanel label="Team 1 fee" teamName={fixture.homeTeamName} amountPence={fixture.homeMatchFeePence} paidPence={fixture.homePaidPence} outstandingPence={fixture.homeOutstandingPence} hasPaymentCharge={fixture.homeHasPaymentCharge} paymentStatus={fixture.homePaymentStatus} tone="emerald" />
+                                <FeePanel label="Team 2 fee" teamName={fixture.awayTeamName} amountPence={fixture.awayMatchFeePence} paidPence={fixture.awayPaidPence} outstandingPence={fixture.awayOutstandingPence} hasPaymentCharge={fixture.awayHasPaymentCharge} paymentStatus={fixture.awayPaymentStatus} tone="sky" />
+                              </div>
+
+                              {showCaptainConfirmations ? (
+                                <div className="mt-4 grid gap-2 lg:grid-cols-2">
+                                  <ConfirmationPanel fixtureId={fixture.id} leagueId={fixture.leagueId} teamId={fixture.homeTeamId} teamName={fixture.homeTeamName} status={fixture.homeConfirmationStatus} confirmedAt={fixture.homeConfirmedAt} issueRaisedAt={fixture.homeIssueRaisedAt} lastChasedAt={fixture.homeLastChasedAt} note={fixture.homeConfirmationNote} />
+                                  <ConfirmationPanel fixtureId={fixture.id} leagueId={fixture.leagueId} teamId={fixture.awayTeamId} teamName={fixture.awayTeamName} status={fixture.awayConfirmationStatus} confirmedAt={fixture.awayConfirmedAt} issueRaisedAt={fixture.awayIssueRaisedAt} lastChasedAt={fixture.awayLastChasedAt} note={fixture.awayConfirmationNote} />
+                                </div>
+                              ) : null}
+
+                              <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                                <Link href={buildFixtureEditHref({ fixtureId: fixture.id, leagueId: selectedLeagueId, divisionId: selectedDivisionId, visibility: selectedVisibility, status: selectedStatus })} className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15">Edit fixture</Link>
+                                <form
+                                  action={deleteFixtureAction}
+                                  onSubmit={(event) => {
+                                    const confirmed = window.confirm(`Delete ${fixture.homeTeamName} vs ${fixture.awayTeamName}? This cannot be undone.`);
+                                    if (!confirmed) event.preventDefault();
+                                  }}
+                                >
+                                  <input type="hidden" name="id" value={fixture.id} />
+                                  <button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-4 text-xs font-semibold text-red-100 transition hover:border-red-300/40 hover:bg-red-500/15">
+                                    Delete fixture
+                                  </button>
+                                </form>
+                              </div>
+                            </article>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
