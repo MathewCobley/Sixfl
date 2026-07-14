@@ -4,7 +4,7 @@
 
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { FixtureStatus, NotificationDispatchStatus, UserRole } from "@prisma/client";
+import { FixtureStatus, NotificationDispatchStatus, Prisma, UserRole } from "@prisma/client";
 
 import { parseLondonDateTime, toLondonDateInputValue } from "@/lib/datetime/london";
 import {
@@ -14,8 +14,22 @@ import {
 } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { recalculateRefereeNightCashup } from "@/lib/referee-nights";
 
 export const dynamic = "force-dynamic";
+
+const STALE_REFEREE_NIGHT_SOURCE_TYPES = [
+  "REFEREE_NIGHT_BOOKED",
+  "REFEREE_NIGHT_REMINDER_24H",
+  "REFEREE_NIGHT_CONFIRMATION_MANUAL",
+  "REFEREE_NIGHT_CONFIRMATION_AUTO72H",
+  "REFEREE_NIGHT_CONFIRMATION_AUTO24H",
+] as const;
+
+type RefereeNightAssignmentRow = {
+  refereeNightId: string;
+  refereeId: string;
+};
 
 function parseFixtureStatus(value: string) {
   return Object.values(FixtureStatus).includes(value as FixtureStatus)
@@ -44,6 +58,58 @@ function getExistingTeamFee(input: {
   );
 
   return existing?.amountPence ?? input.fixtureMatchFeePence ?? null;
+}
+
+async function clearStaleRefereeNightAssignment(input: {
+  fixtureId: string;
+  nextRefereeId: string | null;
+}) {
+  const rows = await prisma.$queryRaw<RefereeNightAssignmentRow[]>(Prisma.sql`
+    SELECT rnf."refereeNightId", rn."refereeId"
+    FROM "RefereeNightFixture" rnf
+    JOIN "RefereeNight" rn ON rn."id" = rnf."refereeNightId"
+    WHERE rnf."fixtureId" = ${input.fixtureId}
+  `);
+
+  const staleNightIds = rows
+    .filter((row) => !input.nextRefereeId || row.refereeId !== input.nextRefereeId)
+    .map((row) => row.refereeNightId);
+
+  if (staleNightIds.length === 0) return [] as string[];
+
+  await prisma.$transaction([
+    prisma.$executeRaw(Prisma.sql`
+      DELETE FROM "RefereeNightFixture"
+      WHERE "fixtureId" = ${input.fixtureId}
+        AND "refereeNightId" IN (${Prisma.join(staleNightIds)})
+    `),
+    prisma.$executeRaw(Prisma.sql`
+      UPDATE "NotificationDispatch"
+      SET
+        "status" = 'CANCELLED'::"NotificationDispatchStatus",
+        "cancelledAt" = NOW(),
+        "failureReason" = COALESCE(
+          "failureReason",
+          'Cancelled because the referee assignment was changed on the Night Board before this queued referee message was sent.'
+        )
+      WHERE "sourceType" IN (${Prisma.join(STALE_REFEREE_NIGHT_SOURCE_TYPES)})
+        AND "sourceId" IN (${Prisma.join(staleNightIds)})
+        AND "status" IN ('QUEUED'::"NotificationDispatchStatus", 'PROCESSING'::"NotificationDispatchStatus")
+    `),
+    prisma.$executeRaw(Prisma.sql`
+      UPDATE "RefereeNight"
+      SET
+        "confirmationStatus" = 'PENDING',
+        "confirmationTokenHash" = NULL,
+        "confirmationLastChasedAt" = NULL,
+        "confirmationResponseNote" = 'Referee assignment changed on the Night Board. Previous confirmation links were invalidated.',
+        "updatedAt" = NOW()
+      WHERE "id" IN (${Prisma.join(staleNightIds)})
+    `),
+  ]);
+
+  await Promise.all(staleNightIds.map((nightId) => recalculateRefereeNightCashup(nightId)));
+  return staleNightIds;
 }
 
 async function resyncMatchFeeMessages(input: {
@@ -156,6 +222,7 @@ export async function POST(request: Request) {
       leagueId: true,
       kickoffAt: true,
       matchFeePence: true,
+      refereeId: true,
       league: { select: { name: true, season: true, slug: true } },
       homeTeam: { select: { id: true, name: true, logoUrl: true } },
       awayTeam: { select: { id: true, name: true, logoUrl: true } },
@@ -181,13 +248,18 @@ export async function POST(request: Request) {
       })
     : null;
 
+  const nextRefereeId = referee?.id ?? null;
+  const changedRefereeNightIds = fixture.refereeId !== nextRefereeId
+    ? await clearStaleRefereeNightAssignment({ fixtureId: fixture.id, nextRefereeId })
+    : [];
+
   await prisma.fixture.update({
     where: { id: fixture.id },
     data: {
       kickoffAt,
       pitch: pitch || null,
       venueId,
-      refereeId: referee?.id ?? null,
+      refereeId: nextRefereeId,
       status,
     },
   });
@@ -222,10 +294,14 @@ export async function POST(request: Request) {
   revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
   revalidatePath(`/admin/leagues/${fixture.leagueId}`);
 
+  for (const refereeNightId of changedRefereeNightIds) {
+    revalidatePath(`/admin/referee-nights/${refereeNightId}`);
+  }
+
   if (fixture.league.slug) {
     revalidatePath(`/leagues/${fixture.league.slug}`);
     revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
   }
 
-  return NextResponse.json({ ok: true, returnTo, ...sync });
+  return NextResponse.json({ ok: true, returnTo, staleRefereeNightMessagesCleared: changedRefereeNightIds.length, ...sync });
 }
