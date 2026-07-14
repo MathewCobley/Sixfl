@@ -31,12 +31,7 @@ const AVAILABILITY_RESET_SOURCE_TYPES = [
 
 function getResponseValue(value: FormDataEntryValue | null): AvailabilityResponse {
   const parsed = String(value ?? "").trim().toUpperCase();
-
-  if (ALLOWED_RESPONSES.includes(parsed as AvailabilityResponse)) {
-    return parsed as AvailabilityResponse;
-  }
-
-  return "NO_RESPONSE";
+  return ALLOWED_RESPONSES.includes(parsed as AvailabilityResponse) ? (parsed as AvailabilityResponse) : "NO_RESPONSE";
 }
 
 function normaliseNullableString(value: FormDataEntryValue | null) {
@@ -92,7 +87,7 @@ function getSmsSavedMessage(status: string) {
     case "SENT":
       return "Availability SMS chase sent.";
     case "SKIPPED":
-      return "Availability SMS chase skipped — check phone/preferences.";
+      return "Availability SMS chase skipped - check phone/preferences.";
     default:
       return "Availability SMS chase logged.";
   }
@@ -129,28 +124,17 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
       select: { id: true },
     }),
     prisma.teamMember.findFirst({
-      where: {
-        id: teamMemberId,
-        teamId: teamid,
-      },
+      where: { id: teamMemberId, teamId: teamid },
       select: { id: true },
     }),
   ]);
 
-  if (!fixture) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found."));
-  }
-
-  if (!membership) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=Team%20member%20not%20found."));
-  }
+  if (!fixture) redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found."));
+  if (!membership) redirect(buildAvailabilityRedirect(teamid, "?error=Team%20member%20not%20found."));
 
   await prisma.fixtureAvailability.upsert({
     where: {
-      fixtureId_teamMemberId: {
-        fixtureId,
-        teamMemberId,
-      },
+      fixtureId_teamMemberId: { fixtureId, teamMemberId },
     },
     update: {
       response,
@@ -175,11 +159,8 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
 export async function resetFixtureAvailabilityAction(formData: FormData) {
   const teamid = String(formData.get("teamid") ?? "").trim();
   const fixtureId = String(formData.get("fixtureId") ?? "").trim();
-  const access = await requireCaptain(teamid);
 
-  if (!access.isAdmin) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=Only%20admin%20can%20reset%20fixture%20availability."));
-  }
+  await requireCaptain(teamid);
 
   if (!teamid || !fixtureId) {
     redirect("/captain");
@@ -210,10 +191,7 @@ export async function resetFixtureAvailabilityAction(formData: FormData) {
 
   await prisma.$transaction([
     prisma.fixtureAvailability.deleteMany({
-      where: {
-        fixtureId,
-        teamMemberId: { in: teamMemberIds },
-      },
+      where: { fixtureId, teamMemberId: { in: teamMemberIds } },
     }),
     sourceIds.length > 0
       ? prisma.$executeRaw(Prisma.sql`
@@ -271,19 +249,10 @@ export async function sendAvailabilitySmsChaseAction(formData: FormData) {
   });
 
   const member = await prisma.teamMember.findFirst({
-    where: {
-      id: teamMemberId,
-      teamId: teamid,
-    },
+    where: { id: teamMemberId, teamId: teamid },
     select: {
       id: true,
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
+      user: { select: { id: true, name: true, email: true } },
     },
   });
 
@@ -305,7 +274,7 @@ export async function sendAvailabilitySmsChaseAction(formData: FormData) {
   const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
   const playerName = getPlayerDisplayName(member.user);
   const availabilityUrl = getAvailabilityUrl(teamid, fixture.id);
-  const fixtureLabel = `${team.name} vs ${opponent.name} · ${formatFixtureDate(fixture.kickoffAt)}`;
+  const fixtureLabel = `${team.name} vs ${opponent.name} - ${formatFixtureDate(fixture.kickoffAt)}`;
 
   const recipient = await upsertNotificationRecipient({
     sourceType: NotificationRecipientSourceType.GENERAL,
