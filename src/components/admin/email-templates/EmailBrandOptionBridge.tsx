@@ -100,10 +100,11 @@ function buttonClasses(active: boolean, tone: "sixfl" | "tv") {
 }
 
 function injectBrandControl() {
-  const form = getBuilderForm();
-  const textarea = form?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
-  if (!form || !textarea || form.querySelector(`[${CONTROL_ATTR}]`)) return;
+  const maybeForm = getBuilderForm();
+  const textarea = maybeForm?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+  if (!maybeForm || !textarea || maybeForm.querySelector(`[${CONTROL_ATTR}]`)) return;
 
+  const form: HTMLFormElement = maybeForm;
   let brand: BrandKey = hasTvMarker(textarea.value) ? "sixfl-tv" : "sixfl";
   const hiddenInput = ensureHiddenBrandInput(form, brand);
 
