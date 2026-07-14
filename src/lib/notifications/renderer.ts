@@ -15,6 +15,22 @@ function normalizeValue(value: NotificationTemplateVariables[string]) {
   return String(value);
 }
 
+function isTeamNameFirstNameFallback(input: {
+  key: string;
+  value: string;
+  variables: NotificationTemplateVariables;
+}) {
+  if (input.key !== "firstName") return false;
+
+  const firstName = input.value.trim().toLowerCase();
+  const teamName = normalizeValue(input.variables.teamName).trim().toLowerCase();
+
+  if (!firstName || !teamName) return false;
+  if (firstName === teamName) return true;
+
+  return teamName.startsWith(`${firstName} `);
+}
+
 function stripSafeEmptyPlaceholders(value: string) {
   let output = value;
 
@@ -33,7 +49,10 @@ export function renderNotificationText(
   let output = template;
 
   for (const [key, rawValue] of Object.entries(variables)) {
-    const value = normalizeValue(rawValue);
+    const rawNormalised = normalizeValue(rawValue);
+    const value = isTeamNameFirstNameFallback({ key, value: rawNormalised, variables })
+      ? "there"
+      : rawNormalised;
     const pattern = new RegExp(`\\{\\{\\s*${key.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*\\}\\}`, "g");
     output = output.replace(pattern, value);
   }
