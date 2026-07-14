@@ -265,8 +265,15 @@ function textMatchesFixture(text: string, fixture: CaptainTvFixture) {
   );
 }
 
+function getFixtureCard(container: HTMLElement) {
+  return container.closest<HTMLElement>('article, section, [class*="rounded-3xl"]') ?? container;
+}
+
 function appendBadge(container: HTMLElement, fixture: CaptainTvFixture) {
+  const card = getFixtureCard(container);
+  if (card.querySelector(`[data-sixfl-tv-fixture="${fixture.id}"]`)) return true;
   if (container.querySelector(`[data-sixfl-tv-fixture="${fixture.id}"]`)) return true;
+
   container.classList.add("flex", "flex-wrap", "items-center", "gap-2");
   container.appendChild(createTvBadge(fixture));
   return true;
