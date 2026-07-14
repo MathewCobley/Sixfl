@@ -37,7 +37,6 @@ export async function GET(
     JOIN "Team" home ON home."id" = f."homeTeamId"
     JOIN "Team" away ON away."id" = f."awayTeamId"
     WHERE f."sixflTvRecorded" = true
-      AND f."sixflTvUrl" IS NOT NULL
       AND f."publishedAt" IS NOT NULL
       AND (
         f."homeTeamId" IN (${Prisma.join(context.relatedTeamIds)})
