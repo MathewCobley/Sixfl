@@ -8,7 +8,7 @@ import {
 } from "@/lib/email/footer";
 
 const SIXFL_LOGO_URL = "https://www.sixfl.co.uk/sixfl-email.png";
-const SIXFL_TV_LOGO_URL = "https://www.sixfl.co.uk/sixfl-tv.png";
+const SIXFL_TV_LOGO_URL = "https://www.sixfl.co.uk/Sixfl-tv.png";
 
 export const SIXFL_TV_EMAIL_BRAND_MARKER = "{{emailBrand:sixfl-tv}}";
 
@@ -242,6 +242,7 @@ function convertTextToHtml(text: string) {
           listItems.push(listLine);
           continue;
         }
+
         flushList();
         paragraphLines.push(line.trim());
       }
@@ -256,7 +257,10 @@ function convertTextToHtml(text: string) {
 function buildCtaHtml(cta?: SIXFLEmailCta) {
   const safeCta =
     cta?.label?.trim() && cta?.url?.trim()
-      ? { label: cta.label.trim(), url: cta.url.trim() }
+      ? {
+          label: cta.label.trim(),
+          url: cta.url.trim(),
+        }
       : undefined;
 
   if (!safeCta) return "";
@@ -279,11 +283,15 @@ function buildPlayerResponseButtonsHtml(input: { yesUrl: string; noUrl: string }
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0 0;border-collapse:separate;">
       <tr>
         <td bgcolor="#1E5A43" style="border-radius:12px;background:#1E5A43;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
-          <a href="${escapeHtml(input.yesUrl)}" target="_blank" style="display:inline-block;background:#1E5A43;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">YES, I still want to play</a>
+          <a href="${escapeHtml(input.yesUrl)}" target="_blank" style="display:inline-block;background:#1E5A43;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">
+            YES, I still want to play
+          </a>
         </td>
         <td width="12" style="width:12px;font-size:1px;line-height:1px;">&nbsp;</td>
         <td bgcolor="#7f1d1d" style="border-radius:12px;background:#7f1d1d;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.10);">
-          <a href="${escapeHtml(input.noUrl)}" target="_blank" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">NO, remove me</a>
+          <a href="${escapeHtml(input.noUrl)}" target="_blank" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;line-height:1.1;letter-spacing:0.01em;mso-padding-alt:0;">
+            NO, remove me
+          </a>
         </td>
       </tr>
     </table>
@@ -292,7 +300,10 @@ function buildPlayerResponseButtonsHtml(input: { yesUrl: string; noUrl: string }
 
 function extractPlayerResponseButtons(body: string) {
   const match = body.match(RESPONSE_BUTTONS_PATTERN);
-  if (!match?.[1] || !match?.[2]) return { body, buttonsHtml: "" };
+  if (!match?.[1] || !match?.[2]) {
+    return { body, buttonsHtml: "" };
+  }
+
   return {
     body: body.replace(RESPONSE_BUTTONS_PATTERN, "\n").replace(/\n{3,}/g, "\n\n").trim(),
     buttonsHtml: buildPlayerResponseButtonsHtml({ yesUrl: match[1], noUrl: match[2] }),
@@ -313,6 +324,7 @@ function parsePollButtons(rawBlock: string): PollButton[] {
 
 function buildPollButtonsHtml(buttons: PollButton[]) {
   if (buttons.length === 0) return "";
+
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:12px 0 0 0;border-collapse:separate;">
       ${buttons
@@ -335,7 +347,10 @@ function buildPollButtonsHtml(buttons: PollButton[]) {
 
 function extractPollButtons(body: string) {
   const match = body.match(POLL_BUTTONS_PATTERN);
-  if (!match?.[1]) return { body, buttonsHtml: "" };
+  if (!match?.[1]) {
+    return { body, buttonsHtml: "" };
+  }
+
   const buttons = parsePollButtons(match[1]);
   return {
     body: body.replace(POLL_BUTTONS_PATTERN, "\n").replace(/\n{3,}/g, "\n\n").trim(),
@@ -369,6 +384,7 @@ function buildPaymentSummaryHtml(payment?: SIXFLPaymentSummary) {
   const amount = payment?.amount?.trim();
   const reason = payment?.reason?.trim();
   if (!amount && !reason) return "";
+
   return `
     <div style="margin:0 0 24px 0;padding:16px 18px;border:1px solid #d1fae5;border-radius:16px;background:#ecfdf5;">
       <div style="margin:0 0 10px 0;color:#065f46;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">Payment request</div>
@@ -390,21 +406,25 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
     .join("");
 
   if (!ctaHtml) {
-    return `${convertTextToHtml(stripCtaPlaceholder(bodyWithoutResponseButtons))}${extraButtonsHtml}`;
+    const bodyHtml = convertTextToHtml(stripCtaPlaceholder(bodyWithoutResponseButtons));
+    return `${bodyHtml}${extraButtonsHtml}`;
   }
 
   if (bodyWithoutResponseButtons.includes(CTA_PLACEHOLDER)) {
     const parts = bodyWithoutResponseButtons.split(CTA_PLACEHOLDER);
-    return `${parts
+    const html = parts
       .map((part, index) => {
-        const partHtml = part.trim() ? convertTextToHtml(part.trim()) : "";
-        const buttonHtml = index < parts.length - 1 ? `<div style="margin:24px 0 28px 0;">${ctaHtml}</div>` : "";
-        return `${partHtml}${buttonHtml}`;
+        const trimmedPart = part.trim();
+        const partHtml = trimmedPart ? convertTextToHtml(trimmedPart) : "";
+        const shouldInsertCta = index < parts.length - 1;
+        return `${partHtml}${shouldInsertCta ? `<div style="margin:24px 0 28px 0;">${ctaHtml}</div>` : ""}`;
       })
-      .join("")}${extraButtonsHtml}`;
+      .join("");
+    return `${html}${extraButtonsHtml}`;
   }
 
-  return `${convertTextToHtml(bodyWithoutResponseButtons)}<div style="margin:28px 0 8px 0;">${ctaHtml}</div>${extraButtonsHtml}`;
+  const bodyHtml = convertTextToHtml(bodyWithoutResponseButtons);
+  return `${bodyHtml}<div style="margin:28px 0 8px 0;">${ctaHtml}</div>${extraButtonsHtml}`.trim();
 }
 
 function buildResponsiveEmailDocument(contentHtml: string) {
@@ -417,20 +437,22 @@ function buildResponsiveEmailDocument(contentHtml: string) {
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
     <title>SIXFL</title>
     <style>
-      html, body { margin:0 !important; padding:0 !important; width:100% !important; height:100% !important; }
-      * { -ms-text-size-adjust:100%; -webkit-text-size-adjust:100%; }
-      table, td { mso-table-lspace:0pt !important; mso-table-rspace:0pt !important; }
-      table { border-spacing:0 !important; border-collapse:collapse !important; table-layout:fixed !important; margin:0 auto !important; }
-      img { -ms-interpolation-mode:bicubic; }
-      a { text-decoration:none; }
-      .sixfl-list-marker { width:32px !important; min-width:32px !important; max-width:32px !important; }
-      @media screen and (max-width:680px) {
-        .sixfl-email-outer { padding:14px 10px !important; }
-        .sixfl-email-container { width:100% !important; max-width:100% !important; border-radius:16px !important; }
-        .sixfl-email-logo-cell { padding:24px 22px 18px 22px !important; }
-        .sixfl-email-content-cell { padding:0 22px 26px 22px !important; }
-        .sixfl-email-footer-cell { padding:0 22px 26px 22px !important; }
-        .sixfl-email-logo { width:150px !important; max-width:150px !important; }
+      html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; }
+      * { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+      table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+      table { border-spacing: 0 !important; border-collapse: collapse !important; table-layout: fixed !important; margin: 0 auto !important; }
+      .sixfl-list-row { margin-right: 0 !important; margin-left: 0 !important; table-layout: fixed !important; }
+      .sixfl-list-marker { width: 32px !important; min-width: 32px !important; max-width: 32px !important; }
+      .sixfl-list-text { width: auto !important; }
+      img { -ms-interpolation-mode: bicubic; }
+      a { text-decoration: none; }
+      @media screen and (max-width: 680px) {
+        .sixfl-email-outer { padding: 14px 10px !important; }
+        .sixfl-email-container { width: 100% !important; max-width: 100% !important; border-radius: 16px !important; }
+        .sixfl-email-logo-cell { padding: 24px 22px 18px 22px !important; }
+        .sixfl-email-content-cell { padding: 0 22px 26px 22px !important; }
+        .sixfl-email-footer-cell { padding: 0 22px 26px 22px !important; }
+        .sixfl-email-logo { width: 150px !important; max-width: 150px !important; }
       }
     </style>
   </head>
@@ -453,9 +475,9 @@ export function buildSIXFLEmailHtml(input: {
   branding?: SIXFLEmailBranding;
   payment?: SIXFLPaymentSummary;
 }) {
-  const brandDetails = extractEmailBrand(input.body);
-  const logo = getLogoDetails(brandDetails.brand);
-  const bodyHtml = buildBodyHtmlWithOptionalCta(brandDetails.body, input.cta);
+  const brandResult = extractEmailBrand(input.body);
+  const logo = getLogoDetails(brandResult.brand);
+  const bodyHtml = buildBodyHtmlWithOptionalCta(brandResult.body, input.cta);
   const brandingHtml = buildBrandingBlockHtml(input.branding);
   const paymentHtml = buildPaymentSummaryHtml(input.payment);
   const showPaymentProviderNote = Boolean(input.payment);
