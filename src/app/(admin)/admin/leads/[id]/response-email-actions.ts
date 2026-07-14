@@ -119,7 +119,7 @@ function buildLeagueStartLine(startDate: Date | null) {
   const formattedDate = formatLongDate(startDate);
 
   if (isDateInPast(startDate)) {
-    return `The original proposed start date was ${formattedDate}. We’re now confirming the remaining teams before fixtures are finalised.`;
+    return `This league is already underway and started on ${formattedDate}. We’re currently confirming teams for the remaining available places.`;
   }
 
   return `Proposed start date: ${formattedDate}.`;
@@ -136,7 +136,7 @@ function buildLeagueDetailsBlock(input: {
     `League: ${input.leagueName}`,
     input.venueName?.trim() ? `Venue: ${input.venueName.trim()}` : null,
     input.details?.proposedStartDate
-      ? `${isDateInPast(input.details.proposedStartDate) ? "Original proposed start date" : "Proposed start date"}: ${formatLongDate(input.details.proposedStartDate)}`
+      ? `${isDateInPast(input.details.proposedStartDate) ? "Started" : "Proposed start date"}: ${formatLongDate(input.details.proposedStartDate)}`
       : null,
     input.kickoffInfo?.trim() ? `Kick-off: ${input.kickoffInfo.trim()}` : null,
     input.details?.minutesPerGame
