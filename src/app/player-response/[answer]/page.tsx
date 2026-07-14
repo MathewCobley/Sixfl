@@ -55,7 +55,7 @@ function responseNote(input: {
   const line =
     input.answer === "YES"
       ? `Player confirmed they still want to play${teamSuffix} on ${stamp}.`
-      : `Player replied NO${teamSuffix} — remove from active player pool / follow up before selecting on ${stamp}.`;
+      : `Player replied NO${teamSuffix} — moved to dead prospects / do not promote unless revived on ${stamp}.`;
 
   const existing = input.existingNotes?.trim();
   if (!existing) return line;
@@ -155,11 +155,13 @@ async function saveProspectResponse(input: {
   if (input.teamId && !team) return null;
 
   const now = new Date();
+  const noLongerInterested = input.answer === "NO";
 
   await prisma.teamPlayerProspect.update({
     where: { id: prospect.id },
     data: {
-      status: input.answer === "YES" ? "QUALIFIED" : "CLOSED",
+      status: noLongerInterested ? "DECLINED" : "QUALIFIED",
+      teamId: noLongerInterested ? null : prospect.teamId,
       notes: responseNote({
         answer: input.answer,
         date: now,
