@@ -137,6 +137,12 @@ const navigationGroups = [
         description: "Refs/cashup",
       },
       {
+        name: "SIXFL TV",
+        href: "/admin/sixfl-tv",
+        icon: PhotoIcon,
+        description: "Recordings",
+      },
+      {
         name: "Fixtures",
         href: "/admin/fixtures",
         icon: CalendarDaysIcon,
