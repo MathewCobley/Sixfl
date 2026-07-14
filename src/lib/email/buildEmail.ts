@@ -56,6 +56,12 @@ type PollButton = {
 
 type EmailBrand = "sixfl" | "sixfl-tv";
 
+type LogoDetails = {
+  src: string;
+  alt: string;
+  width: number;
+};
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -90,7 +96,7 @@ function extractEmailBrand(body: string): { body: string; brand: EmailBrand } {
   return { body: bodyWithoutMarkers, brand };
 }
 
-function getLogoDetails(brand: EmailBrand) {
+function getLogoDetails(brand: EmailBrand): LogoDetails {
   if (brand === "sixfl-tv") {
     return {
       src: SIXFL_TV_LOGO_URL,
@@ -140,6 +146,7 @@ function renderListGroupHtml(items: EmailListLine[]) {
       ${items
         .map((item) => {
           const marginLeft = item.depth * 18;
+
           return `
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="sixfl-list-row" style="width:100% !important;margin:0 0 8px ${marginLeft}px !important;border-collapse:collapse !important;table-layout:fixed !important;">
               <tr>
@@ -175,6 +182,7 @@ function resolveEmailAssetUrl(value: string | null | undefined) {
   const raw = value?.trim();
   if (!raw) return null;
   if (/^https?:\/\//i.test(raw)) return raw;
+
   if (raw.startsWith("/")) {
     try {
       return new URL(raw, `${getSiteUrl()}/`).toString();
@@ -182,6 +190,7 @@ function resolveEmailAssetUrl(value: string | null | undefined) {
       return `${getSiteUrl()}${raw}`;
     }
   }
+
   return raw;
 }
 
@@ -427,7 +436,9 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
   return `${bodyHtml}<div style="margin:28px 0 8px 0;">${ctaHtml}</div>${extraButtonsHtml}`.trim();
 }
 
-function buildResponsiveEmailDocument(contentHtml: string) {
+function buildResponsiveEmailDocument(contentHtml: string, brand: EmailBrand) {
+  const outerBackground = brand === "sixfl-tv" ? "#050505" : "#f3f4f6";
+
   return `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
   <head>
@@ -456,7 +467,7 @@ function buildResponsiveEmailDocument(contentHtml: string) {
       }
     </style>
   </head>
-  <body style="margin:0;padding:0;background:#f3f4f6;word-spacing:normal;">
+  <body style="margin:0;padding:0;background:${outerBackground};word-spacing:normal;">
     <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">SIXFL message</div>
     ${contentHtml}
   </body>
@@ -481,18 +492,23 @@ export function buildSIXFLEmailHtml(input: {
   const brandingHtml = buildBrandingBlockHtml(input.branding);
   const paymentHtml = buildPaymentSummaryHtml(input.payment);
   const showPaymentProviderNote = Boolean(input.payment);
+  const isSixflTv = brandResult.brand === "sixfl-tv";
+  const outerBackground = isSixflTv ? "#050505" : "#f3f4f6";
+  const containerBorder = isSixflTv ? "#111827" : "#e5e7eb";
+  const logoBackground = isSixflTv ? "#050505" : "#ffffff";
+  const logoPadding = isSixflTv ? "30px 32px 28px 32px" : "34px 32px 20px 32px";
 
   const contentHtml = `
-    <center role="article" aria-roledescription="email" lang="en" style="width:100%;background:#f3f4f6;">
-      <div class="sixfl-email-outer" style="background:#f3f4f6;padding:28px 12px;width:100%;box-sizing:border-box;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="sixfl-email-container" style="width:100%;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
+    <center role="article" aria-roledescription="email" lang="en" style="width:100%;background:${outerBackground};">
+      <div class="sixfl-email-outer" style="background:${outerBackground};padding:28px 12px;width:100%;box-sizing:border-box;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="sixfl-email-container" style="width:100%;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid ${containerBorder};border-radius:18px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
           <tr>
-            <td class="sixfl-email-logo-cell" style="padding:34px 32px 20px 32px;">
+            <td class="sixfl-email-logo-cell" bgcolor="${logoBackground}" style="padding:${logoPadding};background:${logoBackground};">
               <img src="${logo.src}" alt="${logo.alt}" width="${logo.width}" class="sixfl-email-logo" style="display:block;width:${logo.width}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
           <tr>
-            <td class="sixfl-email-content-cell" style="padding:0 32px 30px 32px;">
+            <td class="sixfl-email-content-cell" style="padding:30px 32px 30px 32px;">
               ${brandingHtml}
               ${paymentHtml}
               ${bodyHtml}
@@ -509,5 +525,5 @@ export function buildSIXFLEmailHtml(input: {
     </center>
   `.trim();
 
-  return buildResponsiveEmailDocument(contentHtml);
+  return buildResponsiveEmailDocument(contentHtml, brandResult.brand);
 }
