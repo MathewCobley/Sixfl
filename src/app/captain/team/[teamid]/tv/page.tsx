@@ -96,9 +96,9 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
       <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/80">SIXFL TV</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Match videos & clips</h1>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Match videos & highlights</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
-            Open saved Veo/SIXFL TV links for {team.name}. Full matches and timestamped clips appear here once SIXFL has saved a link against the fixture.
+            Watch match videos and highlights for {team.name}. When a video is available, it will appear below.
           </p>
         </div>
       </section>
@@ -107,11 +107,11 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
         <div className="border-b border-white/10 px-6 py-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Past and saved fixtures</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Team videos</p>
               <h2 className="mt-2 text-xl font-semibold text-white">Available videos</h2>
             </div>
             <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1 text-sm font-medium text-fuchsia-100">
-              {fixtures.length} link{fixtures.length === 1 ? "" : "s"}
+              {fixtures.length} video{fixtures.length === 1 ? "" : "s"}
             </span>
           </div>
         </div>
@@ -119,7 +119,7 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
         <div className="divide-y divide-white/10">
           {fixtures.length === 0 ? (
             <div className="px-6 py-10 text-sm leading-6 text-white/60">
-              No SIXFL TV links have been saved for this team yet. Add a Veo link from the admin Night Board and it will appear here for the captain.
+              No match videos are available for your team yet. When SIXFL adds a match video or highlight, it will appear here.
             </div>
           ) : (
             fixtures.map((fixture) => (
