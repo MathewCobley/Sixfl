@@ -145,8 +145,7 @@ export async function GET(request: Request) {
   const statusFilter = parseStatusFilter(url.searchParams.get("status"));
 
   const leagues = await getCurrentLeagueOptions(requestedLeagueId);
-  const league =
-    leagues.find((item) => item.id === requestedLeagueId) ?? leagues[0] ?? null;
+  const league = leagues.find((item) => item.id === requestedLeagueId) ?? leagues[0] ?? null;
 
   if (!league) {
     return NextResponse.json({
@@ -352,6 +351,8 @@ export async function GET(request: Request) {
       const awayFee = getFeeInfo(awayCharge);
       const homeConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.homeTeamId) ?? null;
       const awayConfirmation = fixture.captainConfirmations.find((item) => item.teamId === fixture.awayTeamId) ?? null;
+      const shouldShowCaptainConfirmations = Boolean(fixture.publishedAt) && fixture.status === FixtureStatus.SCHEDULED;
+      const displayStatus = fixture.publishedAt ? fixture.status : "DRAFT";
 
       return {
         id: fixture.id,
@@ -365,7 +366,7 @@ export async function GET(request: Request) {
         position: fixture.position,
         pitch: fixture.pitch,
         venueName: fixture.venue?.name ?? null,
-        status: fixture.status,
+        status: displayStatus,
         publishedAt: fixture.publishedAt?.toISOString() ?? null,
         homeMatchFeePence: homeFee.amountPence,
         homePaidPence: homeFee.paidPence,
@@ -377,16 +378,20 @@ export async function GET(request: Request) {
         awayOutstandingPence: awayFee.outstandingPence,
         awayPaymentStatus: awayFee.status,
         awayHasPaymentCharge: awayFee.hasPaymentCharge,
-        homeConfirmationStatus: homeConfirmation?.status ?? getFallbackConfirmationStatus({ fixtureStatus: fixture.status, kickoffAt: fixture.kickoffAt }),
-        homeConfirmationNote: homeConfirmation?.note ?? null,
-        homeConfirmedAt: homeConfirmation?.confirmedAt?.toISOString() ?? null,
-        homeIssueRaisedAt: homeConfirmation?.issueRaisedAt?.toISOString() ?? null,
-        homeLastChasedAt: homeConfirmation?.lastChasedAt?.toISOString() ?? null,
-        awayConfirmationStatus: awayConfirmation?.status ?? getFallbackConfirmationStatus({ fixtureStatus: fixture.status, kickoffAt: fixture.kickoffAt }),
-        awayConfirmationNote: awayConfirmation?.note ?? null,
-        awayConfirmedAt: awayConfirmation?.confirmedAt?.toISOString() ?? null,
-        awayIssueRaisedAt: awayConfirmation?.issueRaisedAt?.toISOString() ?? null,
-        awayLastChasedAt: awayConfirmation?.lastChasedAt?.toISOString() ?? null,
+        homeConfirmationStatus: shouldShowCaptainConfirmations
+          ? homeConfirmation?.status ?? getFallbackConfirmationStatus({ fixtureStatus: fixture.status, kickoffAt: fixture.kickoffAt })
+          : null,
+        homeConfirmationNote: shouldShowCaptainConfirmations ? homeConfirmation?.note ?? null : null,
+        homeConfirmedAt: shouldShowCaptainConfirmations ? homeConfirmation?.confirmedAt?.toISOString() ?? null : null,
+        homeIssueRaisedAt: shouldShowCaptainConfirmations ? homeConfirmation?.issueRaisedAt?.toISOString() ?? null : null,
+        homeLastChasedAt: shouldShowCaptainConfirmations ? homeConfirmation?.lastChasedAt?.toISOString() ?? null : null,
+        awayConfirmationStatus: shouldShowCaptainConfirmations
+          ? awayConfirmation?.status ?? getFallbackConfirmationStatus({ fixtureStatus: fixture.status, kickoffAt: fixture.kickoffAt })
+          : null,
+        awayConfirmationNote: shouldShowCaptainConfirmations ? awayConfirmation?.note ?? null : null,
+        awayConfirmedAt: shouldShowCaptainConfirmations ? awayConfirmation?.confirmedAt?.toISOString() ?? null : null,
+        awayIssueRaisedAt: shouldShowCaptainConfirmations ? awayConfirmation?.issueRaisedAt?.toISOString() ?? null : null,
+        awayLastChasedAt: shouldShowCaptainConfirmations ? awayConfirmation?.lastChasedAt?.toISOString() ?? null : null,
       };
     }),
     summary: {
