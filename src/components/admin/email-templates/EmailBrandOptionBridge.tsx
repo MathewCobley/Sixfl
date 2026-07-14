@@ -7,6 +7,8 @@ import { SIXFL_TV_EMAIL_BRAND_MARKER } from "@/lib/email/buildEmail";
 
 const CONTROL_ATTR = "data-sixfl-email-brand-control";
 const HIDDEN_NAME = "emailBrandKey";
+const SIXFL_EMAIL_LOGO_URL = "https://www.sixfl.co.uk/sixfl-email.png";
+const SIXFL_TV_LOGO_URL = "https://www.sixfl.co.uk/Sixfl-tv.png";
 
 type BrandKey = "sixfl" | "sixfl-tv";
 
@@ -56,18 +58,20 @@ function updatePreviewLogo(form: HTMLFormElement, brand: BrandKey) {
   const previewRoot = getPreviewRoot(form);
   const logo = Array.from(previewRoot.querySelectorAll<HTMLImageElement>("img"))
     .find((image) =>
-      image.src.includes("sixfl-email.png") || image.src.includes("sixfl-tv.png"),
+      image.src.includes("sixfl-email.png") ||
+      image.src.includes("sixfl-tv.png") ||
+      image.src.includes("Sixfl-tv.png"),
     );
 
   if (!logo) return;
 
   if (brand === "sixfl-tv") {
-    logo.src = "https://www.sixfl.co.uk/sixfl-tv.png";
+    logo.src = SIXFL_TV_LOGO_URL;
     logo.alt = "SIXFL TV";
     logo.style.width = "220px";
     logo.width = 220;
   } else {
-    logo.src = "https://www.sixfl.co.uk/sixfl-email.png";
+    logo.src = SIXFL_EMAIL_LOGO_URL;
     logo.alt = "SIXFL";
     logo.style.width = "180px";
     logo.width = 180;
