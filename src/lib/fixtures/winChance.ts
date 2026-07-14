@@ -46,6 +46,8 @@ export type FixtureWinChance = {
   explanation: string;
 };
 
+type UsableResultFixture = WinChanceFixture & { result: FixtureResult };
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -54,6 +56,10 @@ function getFixtureTime(value?: Date | string | null) {
   if (!value) return 0;
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasUsableResult(fixture: WinChanceFixture): fixture is UsableResultFixture {
+  return Boolean(fixture.result);
 }
 
 function emptyStats(teamId: string): TeamWinChanceStats {
@@ -116,12 +122,10 @@ function buildStats(fixtures: WinChanceFixture[]) {
   const statsByTeamId = new Map<string, TeamWinChanceStats>();
 
   const completedFixtures = fixtures
-    .filter((fixture) => fixture.status === "COMPLETED" && fixture.result)
+    .filter(hasUsableResult)
     .sort((a, b) => getFixtureTime(a.kickoffAt) - getFixtureTime(b.kickoffAt));
 
   for (const fixture of completedFixtures) {
-    if (!fixture.result) continue;
-
     const home = getOrCreateStats(statsByTeamId, fixture.homeTeam.id);
     const away = getOrCreateStats(statsByTeamId, fixture.awayTeam.id);
 
@@ -271,7 +275,7 @@ function getHeadToHeadAdjustment(input: {
   let games = 0;
 
   for (const fixture of input.fixtures) {
-    if (fixture.status !== "COMPLETED" || !fixture.result) continue;
+    if (!hasUsableResult(fixture)) continue;
 
     const homeIsCurrentHome = fixture.homeTeam.id === input.homeTeamId;
     const awayIsCurrentHome = fixture.awayTeam.id === input.homeTeamId;
