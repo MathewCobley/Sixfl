@@ -113,6 +113,12 @@ const navigationGroups = [
         description: "Captains",
       },
       {
+        name: "SIXFL TV",
+        href: "/admin/sixfl-tv",
+        icon: PhotoIcon,
+        description: "Recordings",
+      },
+      {
         name: "Social posts",
         href: "/admin/social",
         icon: PhotoIcon,
@@ -135,12 +141,6 @@ const navigationGroups = [
         href: "/admin/night-board",
         icon: CalendarDaysIcon,
         description: "Refs/cashup",
-      },
-      {
-        name: "SIXFL TV",
-        href: "/admin/sixfl-tv",
-        icon: PhotoIcon,
-        description: "Recordings",
       },
       {
         name: "Fixtures",
