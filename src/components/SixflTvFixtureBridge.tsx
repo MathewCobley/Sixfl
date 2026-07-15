@@ -82,7 +82,6 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     if (!fixtureId) continue;
 
     const savedFixture = fixtures.get(fixtureId) ?? null;
-    const initialUrls = getVideoUrls(savedFixture?.sixflTvUrl);
 
     const wrapper = document.createElement("div");
     wrapper.dataset.sixflTvControl = "true";
@@ -317,6 +316,10 @@ function injectCaptainBadges(fixtures: CaptainTvFixture[]) {
   }
 }
 
+function shouldInjectCaptainBadges(pathname: string, teamId: string) {
+  return pathname === `/captain/team/${teamId}` || pathname === `/captain/team/${teamId}/fixtures`;
+}
+
 export default function SixflTvFixtureBridge() {
   const pathname = usePathname();
 
@@ -336,7 +339,7 @@ export default function SixflTvFixtureBridge() {
 
     const captainMatch = pathname.match(/^\/captain\/team\/([^/]+)(?:\/|$)/);
     const teamId = captainMatch?.[1];
-    if (teamId) {
+    if (teamId && shouldInjectCaptainBadges(pathname, teamId)) {
       void loadCaptainFixtures(teamId).then((fixtures) => {
         if (cancelled) return;
         const run = () => injectCaptainBadges(fixtures);
