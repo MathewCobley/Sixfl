@@ -8,7 +8,6 @@ import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
-import { getMatchFeePaymentUnavailableReason } from "@/lib/payments/match-day-billing";
 import { prisma } from "@/lib/prisma";
 import { getPublicSiteUrl, getStripeServerClient } from "@/lib/stripe/client";
 
@@ -88,9 +87,8 @@ export async function POST(
 
   if (charge.fixtureId) {
     const fixtureStillPayable = charge.fixture?.status === "SCHEDULED" || charge.fixture?.status === "COMPLETED";
-    const unavailableReason = getMatchFeePaymentUnavailableReason(charge.dueDate);
 
-    if (!fixtureStillPayable || unavailableReason) {
+    if (!fixtureStillPayable) {
       return NextResponse.redirect(
         buildReturnPath({
           leagueSlug: charge.fixture?.league?.slug ?? null,
