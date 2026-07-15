@@ -20,6 +20,13 @@ function normalise(value: string | null | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function getVideoUrls(value: string | null | undefined) {
+  return (value ?? "")
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 async function loadAdminFixtures() {
   const response = await fetch("/api/admin/fixtures/sixfl-tv", { cache: "no-store" });
   if (!response.ok) return new Map<string, AdminTvFixture>();
@@ -75,6 +82,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     if (!fixtureId) continue;
 
     const savedFixture = fixtures.get(fixtureId) ?? null;
+    const initialUrls = getVideoUrls(savedFixture?.sixflTvUrl);
 
     const wrapper = document.createElement("div");
     wrapper.dataset.sixflTvControl = "true";
@@ -84,7 +92,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     topRow.className = "flex items-center justify-between gap-3 font-semibold";
 
     const text = document.createElement("span");
-    text.textContent = "SIXFL TV / Veo link";
+    text.textContent = "SIXFL TV / Veo links";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -93,17 +101,16 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
 
     const status = document.createElement("div");
     status.className = "text-[10px] font-normal text-fuchsia-100/60";
-    status.textContent = savedFixture?.sixflTvUrl
-      ? "Link saved and shown"
-      : checkbox.checked
-        ? "Shown, but no link saved"
-        : "Not shown";
 
-    const urlInput = document.createElement("input");
-    urlInput.type = "url";
-    urlInput.placeholder = "Paste Veo share link…";
+    const urlInput = document.createElement("textarea");
+    urlInput.rows = 3;
+    urlInput.placeholder = "Paste one Veo/YouTube link per line…";
     urlInput.value = savedFixture?.sixflTvUrl ?? "";
-    urlInput.className = "h-9 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/60";
+    urlInput.className = "min-h-[5.5rem] w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/60";
+
+    const helper = document.createElement("div");
+    helper.className = "text-[10px] leading-4 text-fuchsia-100/55";
+    helper.textContent = "Use one line per clip. First line is treated as the main/full match link.";
 
     const actions = document.createElement("div");
     actions.className = "flex flex-wrap gap-2";
@@ -111,23 +118,29 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "rounded-lg border border-fuchsia-300/30 bg-fuchsia-400/15 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-50 transition hover:bg-fuchsia-400/20";
-    saveButton.textContent = "Save TV link";
+    saveButton.textContent = "Save TV links";
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";
     removeButton.className = "rounded-lg border border-red-300/30 bg-red-500/10 px-3 py-1.5 text-[11px] font-semibold text-red-100 transition hover:bg-red-500/15";
-    removeButton.textContent = "Remove TV link";
+    removeButton.textContent = "Remove TV links";
 
     const openLink = document.createElement("a");
     openLink.target = "_blank";
     openLink.rel = "noopener noreferrer";
     openLink.className = "rounded-lg border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:bg-black/30";
-    openLink.textContent = "Open link";
+    openLink.textContent = "Open first link";
 
-    function refreshOpenLink() {
-      const url = urlInput.value.trim();
-      if (url) {
-        openLink.href = url;
+    function refreshStatus() {
+      const urls = getVideoUrls(urlInput.value);
+      status.textContent = urls.length
+        ? `${urls.length} link${urls.length === 1 ? "" : "s"} saved and shown`
+        : checkbox.checked
+          ? "Shown, but no link saved"
+          : "Not shown";
+
+      if (urls[0]) {
+        openLink.href = urls[0];
         openLink.style.display = "inline-flex";
       } else {
         openLink.removeAttribute("href");
@@ -146,27 +159,22 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
       setDisabled(true);
       status.textContent = "Saving…";
 
-      const url = urlInput.value.trim();
+      const urls = getVideoUrls(urlInput.value);
       const ok = await saveAdminFixture({
         fixtureId,
-        sixflTvRecorded: checkbox.checked || Boolean(url),
-        sixflTvUrl: url,
+        sixflTvRecorded: checkbox.checked || urls.length > 0,
+        sixflTvUrl: urls.join("\n"),
       });
 
       setDisabled(false);
 
       if (!ok) {
-        status.textContent = "Could not save — check the URL";
+        status.textContent = "Could not save — check every URL is valid";
         return;
       }
 
-      if (url && !checkbox.checked) checkbox.checked = true;
-      status.textContent = url
-        ? "Link saved and shown"
-        : checkbox.checked
-          ? "Shown, but no link saved"
-          : "Not shown";
-      refreshOpenLink();
+      if (urls.length > 0 && !checkbox.checked) checkbox.checked = true;
+      refreshStatus();
     }
 
     async function remove() {
@@ -185,14 +193,14 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
       setDisabled(false);
 
       if (!ok) {
-        status.textContent = "Could not remove TV link";
+        status.textContent = "Could not remove TV links";
         return;
       }
 
       checkbox.checked = false;
       urlInput.value = "";
       status.textContent = "Removed from SIXFL TV";
-      refreshOpenLink();
+      refreshStatus();
     }
 
     checkbox.addEventListener("change", () => {
@@ -204,9 +212,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     removeButton.addEventListener("click", () => {
       void remove();
     });
-    urlInput.addEventListener("change", () => {
-      refreshOpenLink();
-    });
+    urlInput.addEventListener("input", refreshStatus);
 
     topRow.appendChild(text);
     topRow.appendChild(checkbox);
@@ -215,9 +221,10 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     actions.appendChild(openLink);
     wrapper.appendChild(topRow);
     wrapper.appendChild(status);
+    wrapper.appendChild(helper);
     wrapper.appendChild(urlInput);
     wrapper.appendChild(actions);
-    refreshOpenLink();
+    refreshStatus();
 
     form.querySelector('button[type="submit"]')?.insertAdjacentElement("beforebegin", wrapper);
   }
@@ -235,7 +242,7 @@ async function loadCaptainFixtures(teamId: string) {
 }
 
 function createTvBadge(fixture: CaptainTvFixture) {
-  const url = fixture.sixflTvUrl?.trim();
+  const url = getVideoUrls(fixture.sixflTvUrl)[0];
   const element = url ? document.createElement("a") : document.createElement("span");
 
   element.dataset.sixflTvFixture = fixture.id;
