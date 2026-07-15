@@ -32,8 +32,8 @@ function formatKickoff(value: Date) {
   }).format(value);
 }
 
-function normaliseVideoUrl(value: unknown) {
-  const raw = String(value ?? "").trim();
+function normaliseVideoUrl(value: string) {
+  const raw = value.trim();
   if (!raw) return null;
 
   try {
@@ -43,6 +43,34 @@ function normaliseVideoUrl(value: unknown) {
   } catch {
     return null;
   }
+}
+
+function parseVideoLinks(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return { ok: true as const, value: null, count: 0, links: [] as string[] };
+
+  const parts = raw
+    .split(/[\n,]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const normalised: string[] = [];
+  for (const part of parts) {
+    const url = normaliseVideoUrl(part);
+    if (!url) return { ok: false as const, value: null, count: 0, links: [] as string[] };
+    if (!normalised.includes(url)) normalised.push(url);
+  }
+
+  return {
+    ok: true as const,
+    value: normalised.length ? normalised.join("\n") : null,
+    count: normalised.length,
+    links: normalised,
+  };
+}
+
+function getSavedLinks(value: string | null) {
+  return parseVideoLinks(value).links;
 }
 
 async function getSixflTvFixtures() {
@@ -90,17 +118,17 @@ async function saveSixflTvFixtureAction(formData: FormData) {
       WHERE "id" = ${fixtureId}
     `);
   } else {
-    const url = normaliseVideoUrl(rawUrl);
+    const parsed = parseVideoLinks(rawUrl);
 
-    if (rawUrl && !url) {
+    if (!parsed.ok) {
       redirect("/admin/sixfl-tv?error=invalid-url");
     }
 
     await prisma.$executeRaw(Prisma.sql`
       UPDATE "Fixture"
       SET
-        "sixflTvRecorded" = ${markedRecorded || Boolean(url)},
-        "sixflTvUrl" = ${url},
+        "sixflTvRecorded" = ${markedRecorded || parsed.count > 0},
+        "sixflTvUrl" = ${parsed.value},
         "updatedAt" = NOW()
       WHERE "id" = ${fixtureId}
     `);
@@ -120,6 +148,7 @@ export default async function AdminSixflTvPage({
 
   const sp = (await searchParams) ?? {};
   const fixtures = await getSixflTvFixtures();
+  const totalLinks = fixtures.reduce((sum, fixture) => sum + getSavedLinks(fixture.sixflTvUrl).length, 0);
 
   return (
     <div className="space-y-6">
@@ -129,7 +158,7 @@ export default async function AdminSixflTvPage({
         </p>
         <h1 className="mt-2 text-3xl font-black text-white">Recorded fixture dashboard</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-fuchsia-50/75">
-          View, edit, open, or remove SIXFL TV/Veo links. Removing a link clears the captain dashboard badge and removes the fixture from this list.
+          View, edit, open, or remove SIXFL TV/Veo links. Use one line per clip. The first line is treated as the main/full-match link.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
@@ -149,7 +178,7 @@ export default async function AdminSixflTvPage({
 
       {sp.error === "invalid-url" ? (
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
-          Enter a valid http or https video link.
+          Enter valid http or https video links, one per line.
         </div>
       ) : null}
 
@@ -157,7 +186,7 @@ export default async function AdminSixflTvPage({
         <div className="border-b border-white/10 px-6 py-5">
           <h2 className="text-xl font-semibold text-white">SIXFL TV fixtures</h2>
           <p className="mt-2 text-sm text-white/55">
-            {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"} currently marked for SIXFL TV.
+            {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"} currently marked for SIXFL TV · {totalLinks} saved video link{totalLinks === 1 ? "" : "s"}.
           </p>
         </div>
 
@@ -174,6 +203,7 @@ export default async function AdminSixflTvPage({
                 fixture.leagueSeason,
                 fixture.venueName,
               ].filter(Boolean).join(" · ");
+              const links = getSavedLinks(fixture.sixflTvUrl);
 
               return (
                 <div key={fixture.id} className="px-6 py-5">
@@ -182,20 +212,25 @@ export default async function AdminSixflTvPage({
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-semibold text-white">{fixtureLabel}</h3>
                         <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-fuchsia-100">
-                          SIXFL TV
+                          {links.length} video{links.length === 1 ? "" : "s"}
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-white/55">{formatKickoff(fixture.kickoffAt)}</p>
                       <p className="mt-1 text-sm text-white/45">{context}</p>
-                      {fixture.sixflTvUrl ? (
-                        <a
-                          href={fixture.sixflTvUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-3 inline-flex text-sm font-semibold text-fuchsia-100 underline-offset-4 hover:underline"
-                        >
-                          Open current video link
-                        </a>
+                      {links.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {links.map((link, index) => (
+                            <a
+                              key={`${fixture.id}-${link}`}
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex rounded-xl border border-fuchsia-300/30 bg-fuchsia-400/15 px-3 py-1.5 text-xs font-semibold text-fuchsia-50 transition hover:bg-fuchsia-400/20"
+                            >
+                              {index === 0 ? "Open main link" : `Open clip ${index + 1}`}
+                            </a>
+                          ))}
+                        </div>
                       ) : (
                         <p className="mt-3 text-sm text-amber-100/80">Marked as recorded, but no video link has been saved.</p>
                       )}
@@ -213,15 +248,16 @@ export default async function AdminSixflTvPage({
                         />
                       </label>
                       <label className="block space-y-1.5 text-sm font-semibold text-white/80">
-                        <span>Veo / video link</span>
-                        <input
-                          type="url"
+                        <span>Veo / video links</span>
+                        <textarea
                           name="sixflTvUrl"
+                          rows={4}
                           defaultValue={fixture.sixflTvUrl ?? ""}
-                          placeholder="Paste Veo share link…"
-                          className="h-11 w-full rounded-xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/50"
+                          placeholder="Paste one Veo or YouTube link per line…"
+                          className="min-h-[6.5rem] w-full resize-y rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/50"
                         />
                       </label>
+                      <p className="text-xs leading-5 text-white/45">One line per clip. First line is the main/full-match link shown on fixture cards.</p>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"
@@ -237,7 +273,7 @@ export default async function AdminSixflTvPage({
                           value="remove"
                           className="rounded-xl border border-red-300/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/15"
                         >
-                          Remove TV link
+                          Remove TV links
                         </button>
                       </div>
                     </form>
