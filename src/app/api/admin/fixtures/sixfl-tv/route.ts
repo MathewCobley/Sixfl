@@ -13,8 +13,8 @@ type FlagRow = {
   sixflTvUrl: string | null;
 };
 
-function normaliseVideoUrl(value: unknown) {
-  const raw = String(value ?? "").trim();
+function normaliseVideoUrl(value: string) {
+  const raw = value.trim();
   if (!raw) return null;
 
   try {
@@ -24,6 +24,31 @@ function normaliseVideoUrl(value: unknown) {
   } catch {
     return null;
   }
+}
+
+function parseVideoLinks(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return { ok: true as const, value: null, count: 0 };
+
+  const parts = raw
+    .split(/[\n,]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const normalised: string[] = [];
+  for (const part of parts) {
+    const url = normaliseVideoUrl(part);
+    if (!url) {
+      return { ok: false as const, value: null, count: 0 };
+    }
+    if (!normalised.includes(url)) normalised.push(url);
+  }
+
+  return {
+    ok: true as const,
+    value: normalised.length ? normalised.join("\n") : null,
+    count: normalised.length,
+  };
 }
 
 export async function GET() {
@@ -60,16 +85,17 @@ export async function POST(request: Request) {
   }
 
   const suppliedUrl = typeof body?.sixflTvUrl === "string" ? body.sixflTvUrl : undefined;
-  const normalisedUrl = suppliedUrl === undefined ? undefined : normaliseVideoUrl(suppliedUrl);
+  const parsedLinks = suppliedUrl === undefined ? undefined : parseVideoLinks(suppliedUrl);
 
-  if (suppliedUrl !== undefined && suppliedUrl.trim() && !normalisedUrl) {
-    return NextResponse.json({ error: "Enter a valid video URL." }, { status: 400 });
+  if (parsedLinks && !parsedLinks.ok) {
+    return NextResponse.json({ error: "Enter valid http or https video links, one per line." }, { status: 400 });
   }
 
-  const sixflTvRecorded = body?.sixflTvRecorded ?? Boolean(normalisedUrl);
-  const urlSql = normalisedUrl === undefined
+  const storedLinks = parsedLinks?.value;
+  const sixflTvRecorded = body?.sixflTvRecorded ?? Boolean(storedLinks);
+  const urlSql = parsedLinks === undefined
     ? Prisma.empty
-    : Prisma.sql`, "sixflTvUrl" = ${normalisedUrl}`;
+    : Prisma.sql`, "sixflTvUrl" = ${storedLinks}`;
 
   const rows = await prisma.$queryRaw<FlagRow[]>(Prisma.sql`
     UPDATE "Fixture"
