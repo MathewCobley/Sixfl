@@ -39,6 +39,19 @@ function formatDateTime(value: Date) {
   });
 }
 
+function getVideoUrls(value: string | null | undefined) {
+  return (value ?? "")
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getVideoLabel(index: number, total: number) {
+  if (total === 1) return "Watch SIXFL TV ▶";
+  if (index === 0) return "Full match / main clip ▶";
+  return `Clip ${index + 1} ▶`;
+}
+
 function getFixtureTitle(row: TvFixtureRow) {
   if (row.homeScore !== null && row.awayScore !== null) {
     return `${row.homeTeamName} ${row.homeScore}-${row.awayScore} ${row.awayTeamName}`;
@@ -91,6 +104,8 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
     LIMIT 80
   `);
 
+  const totalVideos = fixtures.reduce((sum, fixture) => sum + getVideoUrls(fixture.sixflTvUrl).length, 0);
+
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
@@ -111,7 +126,7 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
               <h2 className="mt-2 text-xl font-semibold text-white">Available videos</h2>
             </div>
             <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1 text-sm font-medium text-fuchsia-100">
-              {fixtures.length} video{fixtures.length === 1 ? "" : "s"}
+              {totalVideos} video{totalVideos === 1 ? "" : "s"}
             </span>
           </div>
         </div>
@@ -122,33 +137,41 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
               No match videos are available for your team yet. When SIXFL adds a match video or highlight, it will appear here.
             </div>
           ) : (
-            fixtures.map((fixture) => (
-              <article key={fixture.id} className="px-6 py-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-white">{getFixtureTitle(fixture)}</h3>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-white/55">
-                        {fixture.status.toLowerCase()}
-                      </span>
+            fixtures.map((fixture) => {
+              const urls = getVideoUrls(fixture.sixflTvUrl);
+              return (
+                <article key={fixture.id} className="px-6 py-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-semibold text-white">{getFixtureTitle(fixture)}</h3>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-white/55">
+                          {fixture.status.toLowerCase()}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-white/60">Opponent: {getOpponent(fixture, team.id)}</p>
+                      <p className="mt-1 text-sm text-white/50">
+                        {formatDateTime(fixture.kickoffAt)} · {fixture.venueName ?? fixture.leagueVenueName ?? "Venue TBC"}
+                      </p>
                     </div>
-                    <p className="mt-1 text-sm text-white/60">Opponent: {getOpponent(fixture, team.id)}</p>
-                    <p className="mt-1 text-sm text-white/50">
-                      {formatDateTime(fixture.kickoffAt)} · {fixture.venueName ?? fixture.leagueVenueName ?? "Venue TBC"}
-                    </p>
-                  </div>
 
-                  <a
-                    href={fixture.sixflTvUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
-                  >
-                    Watch SIXFL TV ▶
-                  </a>
-                </div>
-              </article>
-            ))
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      {urls.map((url, index) => (
+                        <a
+                          key={`${fixture.id}-${url}`}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
+                        >
+                          {getVideoLabel(index, urls.length)}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              );
+            })
           )}
         </div>
       </section>
