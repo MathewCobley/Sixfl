@@ -10,7 +10,6 @@ import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
-import { getMatchFeePaymentUnavailableReason } from "@/lib/payments/match-day-billing";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -100,13 +99,9 @@ export default async function PayChargePage({
     ? `/leagues/${charge.fixture.league.slug}/fixtures`
     : "/";
   const fixtureStillPayable = !charge.fixture || charge.fixture.status === "SCHEDULED" || charge.fixture.status === "COMPLETED";
-  const unavailableReason = charge.fixture
-    ? getMatchFeePaymentUnavailableReason(charge.dueDate)
-    : null;
   const canPay =
     charge.status !== "VOID" &&
     fixtureStillPayable &&
-    !unavailableReason &&
     outstandingPence > 0 &&
     Boolean(charge.paymentToken);
 
@@ -121,7 +116,7 @@ export default async function PayChargePage({
             Match fee payment
           </h1>
           <p className="mx-auto max-w-2xl text-sm leading-6 text-white/60">
-            Match fees are only payable on the actual matchday.
+            Pay this open match-fee charge securely online.
           </p>
         </div>
 
@@ -182,16 +177,12 @@ export default async function PayChargePage({
                   Continue to secure payment
                 </button>
                 <p className="text-sm text-white/50">
-                  Secure payment powered by Stripe. This match fee is due today.
+                  Secure payment powered by Stripe.
                 </p>
               </form>
             ) : charge.status === "VOID" || !fixtureStillPayable ? (
               <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
                 This payment request is no longer active.
-              </div>
-            ) : unavailableReason ? (
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
-                {unavailableReason}
               </div>
             ) : (
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-100">
