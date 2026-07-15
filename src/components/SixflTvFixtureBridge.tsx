@@ -229,6 +229,56 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
   }
 }
 
+function createAdminTvBadge(fixture: AdminTvFixture) {
+  const urls = getVideoUrls(fixture.sixflTvUrl);
+  const url = urls[0];
+  const element = url ? document.createElement("a") : document.createElement("span");
+
+  element.dataset.sixflTvAdminFixture = fixture.id;
+  element.className =
+    "inline-flex rounded-full border border-fuchsia-400/30 bg-fuchsia-500/12 px-2.5 py-1 text-[11px] font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/20";
+  element.textContent = urls.length > 1 ? `SIXFL TV · ${urls.length}` : "SIXFL TV";
+  element.title = url
+    ? "This exact fixture has a saved SIXFL TV/Veo link"
+    : "This exact fixture is marked for SIXFL TV";
+
+  if (url && element instanceof HTMLAnchorElement) {
+    element.href = url;
+    element.target = "_blank";
+    element.rel = "noopener noreferrer";
+  }
+
+  return element;
+}
+
+function hasTvFixtureData(fixture: AdminTvFixture | null | undefined) {
+  return Boolean(fixture && (fixture.sixflTvRecorded || getVideoUrls(fixture.sixflTvUrl).length > 0));
+}
+
+function injectAdminFixtureCardBadges(fixtures: Map<string, AdminTvFixture>) {
+  const deleteInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('article form input[name="id"]'),
+  );
+
+  for (const input of deleteInputs) {
+    const fixtureId = input.value.trim();
+    if (!fixtureId) continue;
+
+    const fixture = fixtures.get(fixtureId) ?? null;
+    if (!hasTvFixtureData(fixture)) continue;
+
+    const card = input.closest<HTMLElement>("article");
+    if (!card || card.querySelector(`[data-sixfl-tv-admin-fixture="${fixtureId}"]`)) continue;
+
+    const badgeRow = Array.from(card.querySelectorAll<HTMLElement>("div")).find((element) => {
+      const className = String(element.getAttribute("class") ?? "");
+      return className.includes("shrink-0") && className.includes("flex-wrap") && className.includes("gap-2");
+    });
+
+    (badgeRow ?? card).appendChild(createAdminTvBadge(fixture!));
+  }
+}
+
 async function loadCaptainFixtures(teamId: string) {
   const response = await fetch(`/api/captain/team/${teamId}/sixfl-tv-fixtures`, {
     cache: "no-store",
@@ -327,10 +377,13 @@ export default function SixflTvFixtureBridge() {
     let cancelled = false;
     let observer: MutationObserver | null = null;
 
-    if (pathname === "/admin/night-board") {
+    if (pathname === "/admin/night-board" || pathname === "/admin/fixtures") {
       void loadAdminFixtures().then((fixtures) => {
         if (cancelled) return;
-        const run = () => injectNightBoardControls(fixtures);
+        const run = () => {
+          if (pathname === "/admin/night-board") injectNightBoardControls(fixtures);
+          if (pathname === "/admin/fixtures") injectAdminFixtureCardBadges(fixtures);
+        };
         run();
         observer = new MutationObserver(run);
         observer.observe(document.body, { childList: true, subtree: true });
