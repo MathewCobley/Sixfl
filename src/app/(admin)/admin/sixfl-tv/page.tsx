@@ -141,7 +141,11 @@ async function saveSixflTvFixtureAction(formData: FormData) {
     `);
 
     if (parsed.count > 0) {
-      await queueSixflTvFixtureUploadedEmailsOnce(fixtureId);
+      try {
+        await queueSixflTvFixtureUploadedEmailsOnce(fixtureId);
+      } catch (error) {
+        console.error("Failed to queue SIXFL TV fixture emails", error);
+      }
     }
   }
 
