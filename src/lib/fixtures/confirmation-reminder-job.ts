@@ -48,9 +48,14 @@ function incrementModeCount(
 
 function getSkippedConfirmationNote(input: {
   reason: FixtureConfirmationSkipReason;
-  mode: AutoFixtureConfirmationReminderMode;
+  mode: AutoFixtureConfirmationReminderMode | "manual";
 }) {
-  const prefix = input.mode === "auto24h" ? "Automatic 24h confirmation chase" : "Automatic 72h confirmation chase";
+  const prefix =
+    input.mode === "manual"
+      ? "Initial fixture confirmation request"
+      : input.mode === "auto24h"
+        ? "Automatic 24h confirmation chase"
+        : "Automatic 72h confirmation chase";
 
   switch (input.reason) {
     case "no_phone":
@@ -76,7 +81,7 @@ async function recordSkippedConfirmationReason(input: {
   fixtureId: string;
   teamId: string;
   reason: FixtureConfirmationSkipReason;
-  mode: AutoFixtureConfirmationReminderMode;
+  mode: AutoFixtureConfirmationReminderMode | "manual";
 }) {
   if (input.reason === "confirmed" || input.reason === "issue_raised") return;
 
@@ -103,6 +108,73 @@ export async function runFixtureConfirmationReminderJob() {
   const now = new Date();
   const urgentCutoff = addMinutes(addHours(now, 24), 30);
   const standardCutoff = addMinutes(addHours(now, 72), 30);
+
+  // Every published future fixture should request confirmation immediately.
+  // This also backfills fixtures that were published before this behaviour existed.
+  const publishedFixtures = await prisma.fixture.findMany({
+    where: {
+      publishedAt: { not: null },
+      status: "SCHEDULED",
+      kickoffAt: { gt: now },
+    },
+    select: {
+      id: true,
+      homeTeamId: true,
+      awayTeamId: true,
+      captainConfirmations: {
+        select: {
+          teamId: true,
+          status: true,
+        },
+      },
+    },
+    orderBy: { kickoffAt: "asc" },
+    take: 5000,
+  });
+
+  const newlyRequested = new Set<string>();
+  let initialQueued = 0;
+  let initialAlreadySent = 0;
+  let initialSkipped = 0;
+  const initialSkippedByReason: Record<string, number> = {};
+
+  for (const fixture of publishedFixtures) {
+    for (const teamId of [fixture.homeTeamId, fixture.awayTeamId]) {
+      const existing = fixture.captainConfirmations.find((item) => item.teamId === teamId);
+      if (existing) continue;
+
+      const result = await queueFixtureConfirmationSmsReminder({
+        fixtureId: fixture.id,
+        teamId,
+        mode: "manual",
+      });
+
+      const key = `${fixture.id}:${teamId}`;
+      if (result.ok && result.status === "queued") {
+        initialQueued += 1;
+        newlyRequested.add(key);
+        continue;
+      }
+
+      if (result.ok && result.status === "already_sent") {
+        initialAlreadySent += 1;
+        newlyRequested.add(key);
+        continue;
+      }
+
+      if (!result.ok) {
+        initialSkipped += 1;
+        initialSkippedByReason[result.status] =
+          (initialSkippedByReason[result.status] ?? 0) + 1;
+        await recordSkippedConfirmationReason({
+          fixtureId: fixture.id,
+          teamId,
+          reason: result.status,
+          mode: "manual",
+        });
+      }
+    }
+  }
 
   const fixtures = await prisma.fixture.findMany({
     where: {
@@ -138,6 +210,11 @@ export async function runFixtureConfirmationReminderJob() {
     auto24h: 0,
   };
   const summary = {
+    scannedPublishedFixtures: publishedFixtures.length,
+    initialQueued,
+    initialAlreadySent,
+    initialSkipped,
+    initialSkippedByReason,
     scannedFixtures: fixtures.length,
     scannedTeamFixtures: 0,
     queued: 0,
@@ -153,6 +230,8 @@ export async function runFixtureConfirmationReminderJob() {
     for (const teamId of [fixture.homeTeamId, fixture.awayTeamId]) {
       summary.scannedTeamFixtures += 1;
 
+      if (newlyRequested.has(`${fixture.id}:${teamId}`)) continue;
+
       const confirmation =
         fixture.captainConfirmations.find((item) => item.teamId === teamId) ??
         null;
@@ -162,7 +241,8 @@ export async function runFixtureConfirmationReminderJob() {
         confirmation?.status === FixtureCaptainConfirmationStatus.ISSUE_RAISED
       ) {
         summary.skipped += 1;
-        skippedByReason[confirmation.status] = (skippedByReason[confirmation.status] ?? 0) + 1;
+        skippedByReason[confirmation.status] =
+          (skippedByReason[confirmation.status] ?? 0) + 1;
         continue;
       }
 
