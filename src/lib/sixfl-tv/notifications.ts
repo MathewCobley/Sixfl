@@ -13,6 +13,22 @@ import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 const SIXFL_TV_UPLOAD_SOURCE_TYPE = "FIXTURE_SIXFL_TV_UPLOAD";
 
+type SixflTvFixtureEmailRow = {
+  id: string;
+  kickoffAt: Date;
+  publishedAt: Date | null;
+  sixflTvUrl: string | null;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  leagueName: string;
+  leagueSeason: string | null;
+  venueName: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+};
+
 function getVideoUrls(value: string | null | undefined) {
   return (value ?? "")
     .split(/\n+/)
@@ -31,16 +47,12 @@ function formatFixtureDate(value: Date) {
   });
 }
 
-function getFixtureTitle(fixture: {
-  homeTeam: { name: string };
-  awayTeam: { name: string };
-  result: { homeScore: number | null; awayScore: number | null } | null;
-}) {
-  if (fixture.result?.homeScore !== null && fixture.result?.homeScore !== undefined && fixture.result?.awayScore !== null && fixture.result?.awayScore !== undefined) {
-    return `${fixture.homeTeam.name} ${fixture.result.homeScore}-${fixture.result.awayScore} ${fixture.awayTeam.name}`;
+function getFixtureTitle(fixture: SixflTvFixtureEmailRow) {
+  if (fixture.homeScore !== null && fixture.awayScore !== null) {
+    return `${fixture.homeTeamName} ${fixture.homeScore}-${fixture.awayScore} ${fixture.awayTeamName}`;
   }
 
-  return `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`;
+  return `${fixture.homeTeamName} vs ${fixture.awayTeamName}`;
 }
 
 function getCaptainTvUrl(teamId: string) {
@@ -53,23 +65,37 @@ function getVideoSummary(videoCount: number) {
   return `match highlights, the full match and ${videoCount - 2} extra clip${videoCount - 2 === 1 ? "" : "s"}`;
 }
 
+async function getFixtureEmailRow(fixtureId: string) {
+  const rows = await prisma.$queryRaw<SixflTvFixtureEmailRow[]>(Prisma.sql`
+    SELECT
+      f."id",
+      f."kickoffAt",
+      f."publishedAt",
+      f."sixflTvUrl",
+      f."homeTeamId",
+      f."awayTeamId",
+      home."name" AS "homeTeamName",
+      away."name" AS "awayTeamName",
+      league."name" AS "leagueName",
+      league."season" AS "leagueSeason",
+      COALESCE(venue."name", league."venueName") AS "venueName",
+      result."homeScore" AS "homeScore",
+      result."awayScore" AS "awayScore"
+    FROM "Fixture" f
+    JOIN "Team" home ON home."id" = f."homeTeamId"
+    JOIN "Team" away ON away."id" = f."awayTeamId"
+    JOIN "League" league ON league."id" = f."leagueId"
+    LEFT JOIN "Venue" venue ON venue."id" = f."venueId"
+    LEFT JOIN "MatchResult" result ON result."fixtureId" = f."id"
+    WHERE f."id" = ${fixtureId}
+    LIMIT 1
+  `);
+
+  return rows[0] ?? null;
+}
+
 export async function queueSixflTvFixtureUploadedEmailsOnce(fixtureId: string) {
-  const fixture = await prisma.fixture.findUnique({
-    where: { id: fixtureId },
-    select: {
-      id: true,
-      kickoffAt: true,
-      publishedAt: true,
-      sixflTvUrl: true,
-      homeTeamId: true,
-      awayTeamId: true,
-      homeTeam: { select: { id: true, name: true } },
-      awayTeam: { select: { id: true, name: true } },
-      league: { select: { name: true, season: true } },
-      venue: { select: { name: true } },
-      result: { select: { homeScore: true, awayScore: true } },
-    },
-  });
+  const fixture = await getFixtureEmailRow(fixtureId);
 
   if (!fixture || !fixture.publishedAt) {
     return { queued: 0, skipped: true, reason: "fixture_not_published" };
@@ -93,13 +119,14 @@ export async function queueSixflTvFixtureUploadedEmailsOnce(fixtureId: string) {
   }
 
   const fixtureTitle = getFixtureTitle(fixture);
-  const leagueLabel = [fixture.league.name, fixture.league.season].filter(Boolean).join(" · ");
+  const leagueLabel = [fixture.leagueName, fixture.leagueSeason].filter(Boolean).join(" · ");
   const fixtureDate = formatFixtureDate(fixture.kickoffAt);
-  const venueLabel = fixture.venue?.name ?? "Venue TBC";
+  const venueLabel = fixture.venueName ?? "Venue TBC";
   const videoSummary = getVideoSummary(videoUrls.length);
-  const teams = [fixture.homeTeam, fixture.awayTeam].filter(
-    (team, index, all) => all.findIndex((item) => item.id === team.id) === index,
-  );
+  const teams = [
+    { id: fixture.homeTeamId, name: fixture.homeTeamName },
+    { id: fixture.awayTeamId, name: fixture.awayTeamName },
+  ].filter((team, index, all) => all.findIndex((item) => item.id === team.id) === index);
 
   let queued = 0;
 
@@ -126,7 +153,9 @@ export async function queueSixflTvFixtureUploadedEmailsOnce(fixtureId: string) {
         teamId: team.id,
         teamName: team.name,
         videoCount: videoUrls.length,
-        videoLabels: videoUrls.map((_, index) => (index === 0 ? "Match highlights" : index === 1 ? "Full match" : `Extra clip ${index - 1}`)),
+        videoLabels: videoUrls.map((_, index) =>
+          index === 0 ? "Match highlights" : index === 1 ? "Full match" : `Extra clip ${index - 1}`,
+        ),
       } satisfies Prisma.InputJsonValue,
     });
 
