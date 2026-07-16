@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -109,6 +110,10 @@ export async function POST(request: Request) {
 
   if (!rows[0]) {
     return NextResponse.json({ error: "Fixture not found." }, { status: 404 });
+  }
+
+  if (parsedLinks?.count && parsedLinks.count > 0) {
+    await queueSixflTvFixtureUploadedEmailsOnce(fixtureId);
   }
 
   return NextResponse.json(rows[0]);
