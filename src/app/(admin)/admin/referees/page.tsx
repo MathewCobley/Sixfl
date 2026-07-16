@@ -229,11 +229,16 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
   const leadMap = new Map(leads.map((lead) => [lead.id, lead]));
   const welcomeMap = new Map(welcomeRows.map((row) => [row.refereeId, row]));
   const accessMap = new Map(accessRows.map((row) => [row.userId, row]));
+  const now = new Date();
   const totalReferees = referees.length;
   const activeReferees = referees.filter((referee) => profileMap.get(referee.id)?.isActive !== false).length;
   const withFeeCount = referees.filter((referee) => (profileMap.get(referee.id)?.standardNightFeePence ?? 0) > 0).length;
   const activeAssignments = referees.reduce(
-    (sum, referee) => sum + referee.refereedFixtures.filter((fixture) => fixture.status === "SCHEDULED").length,
+    (sum, referee) =>
+      sum +
+      referee.refereedFixtures.filter(
+        (fixture) => fixture.status === "SCHEDULED" && fixture.kickoffAt.getTime() >= now.getTime(),
+      ).length,
     0,
   );
 
@@ -241,7 +246,7 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
     { label: "Total referees", value: totalReferees, helper: "Live referee users" },
     { label: "Active", value: activeReferees, helper: "Marked active for admin" },
     { label: "Fee saved", value: withFeeCount, helper: "With a standard night fee" },
-    { label: "Published scheduled", value: activeAssignments, helper: "Published upcoming appointments" },
+    { label: "Upcoming assigned", value: activeAssignments, helper: "Published future appointments" },
   ];
 
   return (
@@ -255,7 +260,7 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
             Manage referee users
           </h1>
           <p className="max-w-3xl text-sm leading-7 text-white/60 sm:text-base">
-            Edit referee contact details, record their standard night fee and manage referee communications from the central comms area. Fixture counts on this page only include published fixtures.
+            Edit referee contact details, record their standard night fee and manage referee communications from the central comms area. Fixture counts on this page include published fixtures, and the assignment panel only shows future fixtures.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -324,7 +329,9 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
             const profile = profileMap.get(referee.id) ?? null;
             const sourceLead = referee.createdFromLeadId ? leadMap.get(referee.createdFromLeadId) ?? null : null;
             const publishedFixtures = referee.refereedFixtures;
-            const nextFixture = publishedFixtures.find((fixture) => fixture.status === "SCHEDULED") ?? publishedFixtures[0] ?? null;
+            const nextFixture = publishedFixtures.find(
+              (fixture) => fixture.status === "SCHEDULED" && fixture.kickoffAt.getTime() >= now.getTime(),
+            ) ?? null;
             const contactEmail = referee.email || sourceLead?.email || null;
             const contactPhone = profile?.phone || sourceLead?.phone || null;
             const isActive = profile?.isActive !== false;
@@ -378,8 +385,8 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
                     </div>
                   </div>
                   <div className="border-t border-white/10 bg-white/[0.02] p-5 xl:border-l xl:border-t-0">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Next published assignment</div>
-                    <div className="mt-1 text-sm text-white/60">Earliest published linked fixture for this referee.</div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Next upcoming assignment</div>
+                    <div className="mt-1 text-sm text-white/60">Earliest future published scheduled fixture for this referee.</div>
                     {nextFixture ? (
                       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
                         <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{nextFixture.status}</span>{nextFixture.league ? <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">{nextFixture.league.name}{nextFixture.league.season ? ` • ${nextFixture.league.season}` : ""}</span> : null}</div>
@@ -388,7 +395,7 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
                         <div className="mt-4"><Link href="/admin/fixtures" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10">Manage fixtures</Link></div>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-4"><div className="text-sm font-semibold text-white">No published fixtures assigned yet</div><p className="mt-2 text-sm leading-6 text-white/60">This referee may have draft assignments, but they are not shown here until fixtures are published.</p></div>
+                      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-4"><div className="text-sm font-semibold text-white">No upcoming published fixtures assigned</div><p className="mt-2 text-sm leading-6 text-white/60">This referee may have past or draft assignments, but only future published fixtures are shown here.</p></div>
                     )}
                   </div>
                 </div>
