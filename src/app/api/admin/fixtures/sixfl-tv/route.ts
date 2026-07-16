@@ -113,7 +113,11 @@ export async function POST(request: Request) {
   }
 
   if (parsedLinks?.count && parsedLinks.count > 0) {
-    await queueSixflTvFixtureUploadedEmailsOnce(fixtureId);
+    try {
+      await queueSixflTvFixtureUploadedEmailsOnce(fixtureId);
+    } catch (error) {
+      console.error("Failed to queue SIXFL TV fixture emails", error);
+    }
   }
 
   return NextResponse.json(rows[0]);
