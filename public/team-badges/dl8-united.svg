@@ -1,55 +1,102 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-labelledby="title desc">
-  <title id="title">DL8 United football club badge</title>
-  <desc id="desc">A navy, gold and white shield featuring DL8, a Yorkshire rose, hills and a football.</desc>
+  <title id="title">DL8 United football club crest</title>
+  <desc id="desc">A navy, gold and white circular football crest with the DL8 United badge contained inside the crest.</desc>
   <defs>
+    <radialGradient id="navyRadial" cx="50%" cy="38%" r="66%">
+      <stop offset="0" stop-color="#123866"/>
+      <stop offset="0.58" stop-color="#0a2445"/>
+      <stop offset="1" stop-color="#041326"/>
+    </radialGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f8dc7a"/>
-      <stop offset="0.48" stop-color="#d7a92f"/>
-      <stop offset="1" stop-color="#9f7114"/>
+      <stop offset="0" stop-color="#fff0a8"/>
+      <stop offset="0.48" stop-color="#d8aa35"/>
+      <stop offset="1" stop-color="#9a6a12"/>
     </linearGradient>
-    <linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#102b52"/>
-      <stop offset="1" stop-color="#07182f"/>
+    <linearGradient id="badgeNavy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#113760"/>
+      <stop offset="1" stop-color="#06172d"/>
     </linearGradient>
-    <clipPath id="shieldClip">
-      <path d="M500 45 850 165v310c0 230-133 398-350 480C283 873 150 705 150 475V165Z"/>
-    </clipPath>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity=".32"/>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity=".32"/>
     </filter>
+    <path id="topTextPath" d="M190 492a310 310 0 0 1 620 0"/>
+    <path id="bottomTextPath" d="M813 585a330 330 0 0 1-626 0"/>
+    <clipPath id="outerCrestClip">
+      <circle cx="500" cy="500" r="472"/>
+    </clipPath>
+    <clipPath id="innerBadgeClip">
+      <path d="M500 250 742 335v214c0 174-89 296-242 363-153-67-242-189-242-363V335Z"/>
+    </clipPath>
   </defs>
 
-  <path d="M500 35 870 162v318c0 245-145 426-370 510C275 906 130 725 130 480V162Z" fill="url(#gold)" stroke="#06162d" stroke-width="22" filter="url(#shadow)"/>
-  <path d="M500 76 828 188v282c0 211-120 365-328 447-208-82-328-236-328-447V188Z" fill="url(#navy)" stroke="#f4d56d" stroke-width="12"/>
-
-  <g clip-path="url(#shieldClip)">
-    <path d="M115 620C255 525 370 560 492 625c136 72 245 65 395-26v420H115Z" fill="#ffffff" opacity=".98"/>
-    <path d="M116 675c152-111 282-77 399-17 117 59 227 53 371-39v400H116Z" fill="#d8ad38"/>
-    <path d="M116 735c155-88 268-62 390-8 126 56 232 41 380-50v342H116Z" fill="#102b52"/>
+  <!-- Outer crest. Everything sits inside this circular crest. -->
+  <g filter="url(#softShadow)">
+    <circle cx="500" cy="500" r="485" fill="url(#gold)"/>
+    <circle cx="500" cy="500" r="454" fill="#06162d"/>
+    <circle cx="500" cy="500" r="426" fill="url(#navyRadial)" stroke="url(#gold)" stroke-width="10"/>
+    <circle cx="500" cy="500" r="330" fill="#06162d" opacity=".72" stroke="url(#gold)" stroke-width="8"/>
   </g>
 
-  <text x="500" y="302" text-anchor="middle" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="205" font-weight="900" letter-spacing="-10">DL8</text>
-  <path d="M266 350H734" stroke="#d8ad38" stroke-width="14" stroke-linecap="round"/>
-  <text x="500" y="438" text-anchor="middle" fill="#f5d66f" font-family="Arial, Helvetica, sans-serif" font-size="82" font-weight="800" letter-spacing="10">UNITED</text>
-
-  <g transform="translate(500 557)" stroke="#07182f" stroke-width="8" stroke-linejoin="round">
-    <g fill="#fff">
-      <path d="M0-100C35-78 50-45 36-12 17-27-6-36-28-30-29-58-18-83 0-100Z"/>
-      <path d="M95-31C83 7 56 29 20 27 30 6 30-18 18-38 47-47 75-44 95-31Z"/>
-      <path d="M59 81C20 87-13 72-27 39-4 42 19 34 34 17 54 38 63 61 59 81Z"/>
-      <path d="M-59 81C-63 44-47 14-15-1-11 23 0 44 19 56-3 75-31 84-59 81Z"/>
-      <path d="M-95-31C-70-49-38-51-11-32-30-17-41 5-38 28-66 24-88 5-95-31Z"/>
+  <!-- Subtle decorative rose pattern inside the crest ring. -->
+  <g clip-path="url(#outerCrestClip)" fill="none" stroke="#25486f" stroke-width="7" opacity=".32" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(171 505) scale(.82)">
+      <path d="M0-60C28-33 30-5 0 23-30-5-28-33 0-60Z"/>
+      <path d="M58-17C37 21 8 31-28 12-14-27 12-43 58-17Z"/>
+      <path d="M37 53C-5 52-28 32-31-8 11-16 39 3 37 53Z"/>
+      <path d="M-37 53C-39 3-11-16 31-8 28 32 5 52-37 53Z"/>
+      <path d="M-58-17C-12-43 14-27 28 12-8 31-37 21-58-17Z"/>
+      <circle r="16"/>
     </g>
-    <circle r="35" fill="#d8ad38"/>
-    <circle r="13" fill="#07182f" stroke="none"/>
+    <g transform="translate(829 505) scale(.82)">
+      <path d="M0-60C28-33 30-5 0 23-30-5-28-33 0-60Z"/>
+      <path d="M58-17C37 21 8 31-28 12-14-27 12-43 58-17Z"/>
+      <path d="M37 53C-5 52-28 32-31-8 11-16 39 3 37 53Z"/>
+      <path d="M-37 53C-39 3-11-16 31-8 28 32 5 52-37 53Z"/>
+      <path d="M-58-17C-12-43 14-27 28 12-8 31-37 21-58-17Z"/>
+      <circle r="16"/>
+    </g>
   </g>
 
-  <g transform="translate(500 790)" stroke="#fff" stroke-width="8" fill="none" opacity=".98">
-    <circle r="88" fill="#07182f"/>
-    <path d="m0-32 31 23-12 37h-38L-31-9Z" fill="#d8ad38" stroke="#d8ad38"/>
-    <path d="M0-88 0-32M84-27 31-9M52 71 19 28M-52 71-19 28M-84-27-31-9"/>
-    <path d="M0-88 39-70 84-27 78 20 52 71 0 88-52 71-78 20-84-27-39-70Z"/>
-  </g>
+  <!-- Crest lettering stays within the crest ring. -->
+  <text fill="url(#gold)" font-family="Arial, Helvetica, sans-serif" font-size="77" font-weight="900" letter-spacing="7">
+    <textPath href="#topTextPath" startOffset="50%" text-anchor="middle">DL8 UNITED</textPath>
+  </text>
+  <text fill="url(#gold)" font-family="Arial, Helvetica, sans-serif" font-size="51" font-weight="800" letter-spacing="6">
+    <textPath href="#bottomTextPath" startOffset="50%" text-anchor="middle">NORTH YORKSHIRE</textPath>
+  </text>
 
-  <text x="500" y="921" text-anchor="middle" fill="#f6d873" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" letter-spacing="7">NORTH YORKSHIRE</text>
+  <!-- The DL8 United badge sits inside the outer crest. -->
+  <g>
+    <path d="M500 228 770 324v238c0 196-102 334-270 407-168-73-270-211-270-407V324Z" fill="url(#gold)" stroke="#06162d" stroke-width="13"/>
+    <path d="M500 258 735 342v207c0 163-84 280-235 346-151-66-235-183-235-346V342Z" fill="url(#badgeNavy)" stroke="#f8dc7a" stroke-width="7"/>
+
+    <g clip-path="url(#innerBadgeClip)">
+      <path d="M232 648c104-73 200-79 296-22 95 56 188 55 284-10v354H232Z" fill="#fff"/>
+      <path d="M232 706c113-80 205-68 300-14 91 51 182 49 280-19v297H232Z" fill="#d8aa35"/>
+      <path d="M232 765c111-58 201-50 294-7 94 44 184 37 286-32v244H232Z" fill="#0a2445"/>
+    </g>
+
+    <text x="500" y="428" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="165" font-weight="900" letter-spacing="-8">DL8</text>
+    <path d="M340 466H660" stroke="#d8aa35" stroke-width="11" stroke-linecap="round"/>
+    <text x="500" y="548" text-anchor="middle" fill="#f8dc7a" font-family="Arial, Helvetica, sans-serif" font-size="62" font-weight="900" letter-spacing="9">UNITED</text>
+
+    <g transform="translate(500 637)" stroke="#06162d" stroke-width="6" stroke-linejoin="round">
+      <g fill="#fff">
+        <path d="M0-67C22-50 31-28 22-8 9-17-5-22-20-18-19-38-12-55 0-67Z"/>
+        <path d="M63-19C54 6 35 20 13 19 20 5 20-11 12-25 32-31 51-28 63-19Z"/>
+        <path d="M40 54C15 57-8 48-18 26-4 28 12 23 23 12 36 27 42 42 40 54Z"/>
+        <path d="M-40 54C-42 30-31 9-10-1-7 16 2 31 14 38-1 51-20 57-40 54Z"/>
+        <path d="M-63-19C-45-32-24-33-7-21-20-11-27 3-25 18-44 16-59 4-63-19Z"/>
+      </g>
+      <circle r="23" fill="#d8aa35"/>
+      <circle r="8" fill="#06162d" stroke="none"/>
+    </g>
+
+    <g transform="translate(500 785)" stroke="#fff" stroke-width="7" fill="none">
+      <circle r="70" fill="#07182f"/>
+      <path d="m0-25 25 18-10 30h-30L-25-7Z" fill="#d8aa35" stroke="#d8aa35"/>
+      <path d="M0-70 0-25M67-22 25-7M41 57 15 23M-41 57-15 23M-67-22-25-7"/>
+      <path d="M0-70 31-56 67-22 62 16 41 57 0 70-41 57-62 16-67-22-31-56Z"/>
+    </g>
+  </g>
 </svg>
