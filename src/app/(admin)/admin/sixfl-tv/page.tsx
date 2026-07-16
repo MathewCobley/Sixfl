@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -138,6 +139,10 @@ async function saveSixflTvFixtureAction(formData: FormData) {
         "updatedAt" = NOW()
       WHERE "id" = ${fixtureId}
     `);
+
+    if (parsed.count > 0) {
+      await queueSixflTvFixtureUploadedEmailsOnce(fixtureId);
+    }
   }
 
   revalidatePath("/admin/sixfl-tv");
