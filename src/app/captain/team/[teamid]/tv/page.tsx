@@ -46,10 +46,10 @@ function getVideoUrls(value: string | null | undefined) {
     .filter(Boolean);
 }
 
-function getVideoLabel(index: number, total: number) {
-  if (total === 1) return "Watch SIXFL TV ▶";
-  if (index === 0) return "Full match / main clip ▶";
-  return `Clip ${index + 1} ▶`;
+function getVideoLabel(index: number) {
+  if (index === 0) return "Match highlights ▶";
+  if (index === 1) return "Full match ▶";
+  return `Extra clip ${index - 1} ▶`;
 }
 
 function getFixtureTitle(row: TvFixtureRow) {
@@ -111,9 +111,9 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
       <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/80">SIXFL TV</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Match videos & highlights</h1>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Match highlights & full matches</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
-            Watch match videos and highlights for {team.name}. When a video is available, it will appear below.
+            Watch match highlights, full matches and extra clips for {team.name}. When a video is available, it will appear below.
           </p>
         </div>
       </section>
@@ -134,7 +134,7 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
         <div className="divide-y divide-white/10">
           {fixtures.length === 0 ? (
             <div className="px-6 py-10 text-sm leading-6 text-white/60">
-              No match videos are available for your team yet. When SIXFL adds a match video or highlight, it will appear here.
+              No match videos are available for your team yet. When SIXFL adds match highlights, a full match or another clip, it will appear here.
             </div>
           ) : (
             fixtures.map((fixture) => {
@@ -164,7 +164,7 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
                           rel="noopener noreferrer"
                           className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
                         >
-                          {getVideoLabel(index, urls.length)}
+                          {getVideoLabel(index)}
                         </a>
                       ))}
                     </div>
