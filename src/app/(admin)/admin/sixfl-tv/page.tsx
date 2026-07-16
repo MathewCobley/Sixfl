@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -73,6 +74,12 @@ function getSavedLinks(value: string | null) {
   return parseVideoLinks(value).links;
 }
 
+function getVideoLinkLabel(index: number) {
+  if (index === 0) return "Open match highlights";
+  if (index === 1) return "Open full match";
+  return `Open extra clip ${index - 1}`;
+}
+
 async function getSixflTvFixtures() {
   return prisma.$queryRaw<TvFixtureRow[]>(Prisma.sql`
     SELECT
@@ -132,6 +139,14 @@ async function saveSixflTvFixtureAction(formData: FormData) {
         "updatedAt" = NOW()
       WHERE "id" = ${fixtureId}
     `);
+
+    if (parsed.count > 0) {
+      try {
+        await queueSixflTvFixtureUploadedEmailsOnce(fixtureId);
+      } catch (error) {
+        console.error("Failed to queue SIXFL TV fixture emails", error);
+      }
+    }
   }
 
   revalidatePath("/admin/sixfl-tv");
@@ -158,7 +173,7 @@ export default async function AdminSixflTvPage({
         </p>
         <h1 className="mt-2 text-3xl font-black text-white">Recorded fixture dashboard</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-fuchsia-50/75">
-          View, edit, open, or remove SIXFL TV/Veo links. Use one line per clip. The first line is treated as the main/full-match link.
+          View, edit, open, or remove SIXFL TV/Veo links. Use one line per clip: line 1 is Match Highlights, line 2 is Full Match, and line 3 onwards are extra clips.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
@@ -227,7 +242,7 @@ export default async function AdminSixflTvPage({
                               rel="noopener noreferrer"
                               className="inline-flex rounded-xl border border-fuchsia-300/30 bg-fuchsia-400/15 px-3 py-1.5 text-xs font-semibold text-fuchsia-50 transition hover:bg-fuchsia-400/20"
                             >
-                              {index === 0 ? "Open main link" : `Open clip ${index + 1}`}
+                              {getVideoLinkLabel(index)}
                             </a>
                           ))}
                         </div>
@@ -253,11 +268,11 @@ export default async function AdminSixflTvPage({
                           name="sixflTvUrl"
                           rows={4}
                           defaultValue={fixture.sixflTvUrl ?? ""}
-                          placeholder="Paste one Veo or YouTube link per line…"
+                          placeholder="Line 1 highlights, line 2 full match, line 3+ extra clips…"
                           className="min-h-[6.5rem] w-full resize-y rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/50"
                         />
                       </label>
-                      <p className="text-xs leading-5 text-white/45">One line per clip. First line is the main/full-match link shown on fixture cards.</p>
+                      <p className="text-xs leading-5 text-white/45">Line 1 = Match Highlights. Line 2 = Full Match. Line 3 onwards = extra clips.</p>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"
@@ -265,7 +280,7 @@ export default async function AdminSixflTvPage({
                           value="save"
                           className="rounded-xl border border-fuchsia-300/30 bg-fuchsia-400/15 px-4 py-2 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-400/20"
                         >
-                          Save
+                          Save links
                         </button>
                         <button
                           type="submit"
@@ -273,7 +288,7 @@ export default async function AdminSixflTvPage({
                           value="remove"
                           className="rounded-xl border border-red-300/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/15"
                         >
-                          Remove TV links
+                          Remove all links
                         </button>
                       </div>
                     </form>

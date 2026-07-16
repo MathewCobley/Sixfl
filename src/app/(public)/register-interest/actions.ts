@@ -13,6 +13,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { getLeagueEntryStatus } from "@/lib/leagues/entry-status";
 import { resolveProspectiveLeagueId } from "@/lib/leads/prospectiveLeague";
 import { queueLeadWelcomeNotifications } from "@/lib/notifications/transactional";
 
@@ -86,6 +87,12 @@ function formatPreferredNights(
 
 function formatYesNo(value: boolean) {
   return value ? "Yes" : "No";
+}
+
+function formatTeamEntryStatus(value: string | null | undefined) {
+  if (value === "WAITING_LIST") return "Waiting list only";
+  if (value === "CLOSED") return "Closed";
+  return "Open";
 }
 
 function buildRegisterInterestPath(input: {
@@ -250,7 +257,21 @@ export async function submitRegisterInterest(formData: FormData) {
     preferredNights: normalizedPreferredNights,
   });
 
+  const prospectiveEntryStatus = prospectiveLeagueId
+    ? await getLeagueEntryStatus(prospectiveLeagueId)
+    : null;
+  const teamEntryStatus = interestType === "TEAM"
+    ? prospectiveEntryStatus?.teamEntryStatus ?? "OPEN"
+    : "OPEN";
+  const teamWaitingListNote =
+    interestType === "TEAM" && teamEntryStatus === "WAITING_LIST"
+      ? "Team entry status at signup: waiting list only. Current league is full for team places, but players can still register."
+      : interestType === "TEAM" && teamEntryStatus === "CLOSED"
+        ? "Team entry status at signup: closed. Current league is not accepting team entries, but players may still be open depending on league settings."
+        : "";
+
   const combinedMessage = [
+    teamWaitingListNote,
     experienceLevel ? `Experience: ${experienceLevel}` : "",
     message,
   ]
@@ -312,6 +333,7 @@ export async function submitRegisterInterest(formData: FormData) {
         marketingConsent: createdLead.marketingConsent,
       },
       signupUrl: "https://www.sixfl.co.uk/register-interest",
+      teamEntryStatus,
     });
   } catch (error) {
     console.error("Lead welcome queue failed:", error);
@@ -333,6 +355,7 @@ export async function submitRegisterInterest(formData: FormData) {
         `League type: ${formatLeagueType(createdLead.leagueType)}`,
         `Preferred nights: ${preferredNightsText}`,
         `Prospective league: ${prospectiveLeagueText}`,
+        `Team entry status: ${formatTeamEntryStatus(teamEntryStatus)}`,
         `Source: ${createdLead.source ?? "—"}`,
         `Free kit interest: ${formatYesNo(createdLead.wantsFreeKit)}`,
         `Marketing consent: ${formatYesNo(createdLead.marketingConsent)}`,
@@ -368,6 +391,7 @@ export async function submitRegisterInterest(formData: FormData) {
               )}</p>
               <p style="margin:0 0 8px;"><strong>Preferred nights:</strong> ${preferredNightsText}</p>
               <p style="margin:0 0 8px;"><strong>Prospective league:</strong> ${prospectiveLeagueText}</p>
+              <p style="margin:0 0 8px;"><strong>Team entry status:</strong> ${formatTeamEntryStatus(teamEntryStatus)}</p>
               <p style="margin:0 0 8px;"><strong>Source:</strong> ${createdLead.source ?? "—"}</p>
               <p style="margin:0 0 8px;"><strong>Free kit interest:</strong> ${formatYesNo(
                 createdLead.wantsFreeKit

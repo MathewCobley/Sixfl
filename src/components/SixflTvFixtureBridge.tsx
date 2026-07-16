@@ -109,7 +109,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
 
     const helper = document.createElement("div");
     helper.className = "text-[10px] leading-4 text-fuchsia-100/55";
-    helper.textContent = "Use one line per clip. First line is treated as the main/full match link.";
+    helper.textContent = "Line 1 = match highlights. Line 2 = full match. Line 3+ = extra clips.";
 
     const actions = document.createElement("div");
     actions.className = "flex flex-wrap gap-2";
@@ -128,7 +128,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     openLink.target = "_blank";
     openLink.rel = "noopener noreferrer";
     openLink.className = "rounded-lg border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:bg-black/30";
-    openLink.textContent = "Open first link";
+    openLink.textContent = "Open highlights";
 
     function refreshStatus() {
       const urls = getVideoUrls(urlInput.value);
