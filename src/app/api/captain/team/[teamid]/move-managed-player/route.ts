@@ -3,7 +3,7 @@
 // ========================================
 
 import { NextResponse } from "next/server";
-import { Prisma, TeamRole } from "@prisma/client";
+import { TeamRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -19,7 +19,10 @@ type MoveBody = {
   targetTeamId?: unknown;
 };
 
-type PrismaClientLike = typeof prisma | Prisma.TransactionClient;
+type MoveLinkedProspectClient = Pick<
+  typeof prisma,
+  "$queryRaw" | "teamPlayerProspect"
+>;
 
 function getString(value: unknown) {
   const parsed = String(value ?? "").trim();
@@ -67,7 +70,7 @@ async function getTargetTeams(sourceTeamId: string) {
 }
 
 async function getLinkedSourceProspectId(input: {
-  client: PrismaClientLike;
+  client: MoveLinkedProspectClient;
   membershipId: string;
 }) {
   try {
@@ -85,7 +88,7 @@ async function getLinkedSourceProspectId(input: {
 }
 
 async function moveLinkedProspectForSquadMember(input: {
-  client: PrismaClientLike;
+  client: MoveLinkedProspectClient;
   membershipId: string;
   sourceTeamId: string;
   targetTeamId: string;
