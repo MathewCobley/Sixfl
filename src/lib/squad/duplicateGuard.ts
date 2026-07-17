@@ -2,12 +2,13 @@
 // File: src/lib/squad/duplicateGuard.ts
 // ========================================
 
-import { Prisma } from "@prisma/client";
-
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { prisma } from "@/lib/prisma";
 
-type DbClient = typeof prisma | Prisma.TransactionClient;
+type DbClient = {
+  $queryRaw: typeof prisma.$queryRaw;
+  teamMember: Pick<typeof prisma.teamMember, "delete">;
+};
 
 type SquadContactRow = {
   memberId: string;
@@ -114,7 +115,7 @@ async function getTeamMemberContacts(client: DbClient, teamId: string) {
   }
 }
 
-async function getTeamProspectContacts(client: DbClient, teamId: string) {
+async function getTeamProspectContacts(client: Pick<DbClient, "$queryRaw">, teamId: string) {
   return client.$queryRaw<ProspectContactRow[]>`
     SELECT
       "id",
@@ -130,7 +131,7 @@ async function getTeamProspectContacts(client: DbClient, teamId: string) {
 }
 
 export async function findSquadDuplicateMatches(input: {
-  client?: DbClient;
+  client?: Pick<DbClient, "$queryRaw">;
   teamId: string;
   candidate: DuplicateCandidate;
   excludeMemberId?: string | null;
@@ -143,7 +144,7 @@ export async function findSquadDuplicateMatches(input: {
   const candidateNameKey = getDuplicateNameKey(input.candidate);
 
   const [members, prospects] = await Promise.all([
-    getTeamMemberContacts(client, input.teamId),
+    getTeamMemberContacts(client as DbClient, input.teamId),
     getTeamProspectContacts(client, input.teamId),
   ]);
 
