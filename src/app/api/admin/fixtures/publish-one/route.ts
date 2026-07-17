@@ -53,20 +53,12 @@ function formatKickoff(date: Date) {
   });
 }
 
-function buildFixtureLine(fixture: PublishFixtureRecord) {
-  return `${formatKickoff(fixture.kickoffAt)} — ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} — ${fixture.pitch ?? "Pitch TBC"} — ${fixture.venue?.name ?? "Venue TBC"}`;
-}
-
 function getLeagueDisplayName(league: { name: string; season: string | null }) {
   return league.season ? `${league.name} — ${league.season}` : league.name;
 }
 
 function getTeamDetailsForFixture(fixture: PublishFixtureRecord, teamId: string) {
   return fixture.homeTeam.id === teamId ? fixture.homeTeam : fixture.awayTeam;
-}
-
-function buildDigestSourceId(input: { leagueId: string; teamId: string; fixtureIds: string[] }) {
-  return `${input.leagueId}:${input.teamId}:${input.fixtureIds.slice().sort().join(",")}`;
 }
 
 function buildReminderSourceId(input: { fixtureId: string; teamId: string; scheduledFor: Date }) {
@@ -216,40 +208,9 @@ async function queueEverythingForPublishedFixture(input: {
   let reminderSkipped = 0;
 
   for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
-    const { snapshot, recipient } = await upsertTeamNotificationRecipient(teamId);
+    const { recipient } = await upsertTeamNotificationRecipient(teamId);
     const teamDetails = getTeamDetailsForFixture(fixture, teamId);
     const fixtureName = `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`;
-
-    const digestDispatch = await queueTemplateNotificationOnce({
-      recipientId: recipient.id,
-      templateKey: "fixture-publish-digest-email",
-      sourceType: "LEAGUE_FIXTURE_DIGEST",
-      sourceId: buildDigestSourceId({ leagueId: league.id, teamId, fixtureIds: [fixture.id] }),
-      metadata: {
-        kind: "fixture_publish_digest",
-        teamId,
-        teamName: snapshot.teamName || teamDetails.name,
-        leagueId: league.id,
-        leagueName: leagueDisplayName,
-        fixtureIds: [fixture.id],
-        individualPublish: true,
-      },
-      variables: {
-        firstName: snapshot.primaryContact.name ?? snapshot.teamName,
-        leagueName: league.name,
-        leagueDisplayName,
-        fixturesList: buildFixtureLine(fixture),
-        fixturesUrl,
-      },
-      emailBranding: {
-        teamName: snapshot.teamName || teamDetails.name,
-        teamLogoUrl: teamDetails.logoUrl ?? null,
-        leagueName: leagueDisplayName,
-      },
-    });
-
-    if (isQueuedDispatch(digestDispatch.status)) digestQueued += 1;
-    else digestSkipped += 1;
 
     const reminderTimes = [
       new Date(fixture.kickoffAt.getTime() - 48 * 60 * 60 * 1000),
