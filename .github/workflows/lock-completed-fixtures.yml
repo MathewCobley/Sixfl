@@ -1,0 +1,178 @@
+name: Lock completed fixtures
+
+on:
+  push:
+    paths:
+      - .github/workflows/lock-completed-fixtures.yml
+
+permissions:
+  contents: write
+
+jobs:
+  lock-completed-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Patch completed fixture locks
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str):
+              text = path.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected block not found in {path}:\n{old[:500]}")
+              path.write_text(text.replace(old, new, 1))
+
+          actions = Path("src/app/(admin)/admin/fixtures/actions.ts")
+          text = actions.read_text()
+          marker = '''function parseFixtureStatus(value: FormDataEntryValue | null) {
+  const str = String(value ?? "").trim();
+
+  if (!str) return FixtureStatus.SCHEDULED;
+
+  if (!Object.values(FixtureStatus).includes(str as FixtureStatus)) {
+    throw new Error("Invalid fixture status.");
+  }
+
+  return str as FixtureStatus;
+}
+'''
+          helper = marker + '''
+function assertFixtureIsNotCompleted(fixture: { status: FixtureStatus }) {
+  if (fixture.status === FixtureStatus.COMPLETED) {
+    throw new Error(
+      "This fixture has been completed and is locked. Completed fixtures cannot be edited, deleted, or have their result changed.",
+    );
+  }
+}
+'''
+          if "function assertFixtureIsNotCompleted" not in text:
+              text = text.replace(marker, helper, 1)
+          text = text.replace('''      id: true,
+      leagueId: true,
+      league: {
+''', '''      id: true,
+      leagueId: true,
+      status: true,
+      league: {
+''', 1)
+          text = text.replace('''  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  await prisma.$transaction([
+''', '''  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  assertFixtureIsNotCompleted(fixture);
+
+  await prisma.$transaction([
+''', 1)
+          text = text.replace('''  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  if (!league) {
+''', '''  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  assertFixtureIsNotCompleted(fixture);
+
+  if (!league) {
+''', 1)
+          text = text.replace('''    where: { id },
+    select: { leagueId: true, league: { select: { slug: true } } },
+  });
+
+  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+''', '''    where: { id },
+    select: { leagueId: true, status: true, league: { select: { slug: true } } },
+  });
+
+  if (!fixture) {
+    throw new Error("Fixture not found.");
+  }
+
+  assertFixtureIsNotCompleted(fixture);
+
+  await prisma.$transaction(async (tx) => {
+''', 1)
+          actions.write_text(text)
+
+          edit = Path("src/app/(admin)/admin/fixtures/[id]/edit/page.tsx")
+          text = edit.read_text()
+          text = text.replace('''        id: true,
+        leagueId: true,
+        league: { select: { slug: true } },
+''', '''        id: true,
+        leagueId: true,
+        status: true,
+        league: { select: { slug: true } },
+''', 1)
+          text = text.replace('''  if (!fixture) throw new Error("Fixture not found.");
+  if (!league) throw new Error("Selected league was not found.");
+''', '''  if (!fixture) throw new Error("Fixture not found.");
+  if (fixture.status === FixtureStatus.COMPLETED) {
+    throw new Error("This fixture has been completed and is locked. Completed fixtures cannot be edited.");
+  }
+  if (!league) throw new Error("Selected league was not found.");
+''', 1)
+          text = text.replace('''  const activeCharges = fixture.paymentCharges.filter((charge) => charge.status !== "VOID");
+''', '''  const isCompletedFixture = fixture.status === FixtureStatus.COMPLETED;
+  const activeCharges = fixture.paymentCharges.filter((charge) => charge.status !== "VOID");
+''', 1)
+          text = text.replace('''      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
+        <form action={updateFixtureFromEditPageAction} className="space-y-8">
+''', '''      {isCompletedFixture ? (
+        <AdminCard className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">
+          This fixture has been completed and is locked to prevent accidental changes. Results and fixture details can no longer be edited from this page.
+        </AdminCard>
+      ) : null}
+
+      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
+        <form action={updateFixtureFromEditPageAction} className="space-y-8">
+''', 1)
+          text = text.replace('''            <button
+              type="submit"
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"
+            >
+              Save fixture changes
+            </button>
+''', '''            <button
+              type="submit"
+              disabled={isCompletedFixture}
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
+            >
+              {isCompletedFixture ? "Fixture locked" : "Save fixture changes"}
+            </button>
+''', 1)
+          edit.write_text(text)
+
+          night = Path("src/app/(admin)/admin/night-board/page.tsx")
+          text = night.read_text()
+          text = text.replace('''  const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { id: true, kickoffAt: true } });
+  if (!fixture) redirect(returnTo);
+''', '''  const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { id: true, kickoffAt: true, status: true } });
+  if (!fixture) redirect(returnTo);
+  if (fixture.status === FixtureStatus.COMPLETED) redirect(returnTo);
+''', 1)
+          night.write_text(text)
+
+      - name: Commit lock and remove one-time workflow
+        run: |
+          rm .github/workflows/lock-completed-fixtures.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/(admin)/admin/fixtures/actions.ts src/app/(admin)/admin/fixtures/[id]/edit/page.tsx src/app/(admin)/admin/night-board/page.tsx .github/workflows/lock-completed-fixtures.yml
+          git commit -m "Lock completed fixtures against edits"
+          git push origin main
