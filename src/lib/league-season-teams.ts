@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-type PrismaClientLike = typeof prisma | Prisma.TransactionClient;
+type RawDbClient = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
 
 export type LeagueSeasonTeamRow = {
   id: string;
@@ -30,7 +30,7 @@ export type CompetitionOption = {
 
 export async function ensureSeasonTeamRowsForLeague(
   leagueId: string,
-  client: PrismaClientLike = prisma,
+  client: RawDbClient = prisma,
 ) {
   await client.$executeRaw(Prisma.sql`
     INSERT INTO "LeagueSeasonTeam" (
@@ -258,72 +258,56 @@ export async function updateTeamCompetition(input: {
       `);
 
       await tx.$executeRaw(Prisma.sql`
-        UPDATE "LeagueSeasonTeam"
-        SET "isActive" = false, "updatedAt" = NOW()
+        DELETE FROM "LeagueSeasonTeam"
         WHERE "teamId" = ${input.teamId}
       `);
     });
     return;
   }
 
-  const competitions = await prisma.$queryRaw<Array<{
-    id: string;
+  const rows = await prisma.$queryRaw<Array<{
+    competitionId: string;
     currentLeagueId: string | null;
   }>>(Prisma.sql`
-    SELECT "id", "currentLeagueId"
+    SELECT "id" AS "competitionId", "currentLeagueId"
     FROM "LeagueCompetition"
     WHERE "id" = ${input.competitionId}
     LIMIT 1
   `);
 
-  const competition = competitions[0];
-  if (!competition) {
-    throw new Error("Competition not found.");
-  }
+  const competition = rows[0];
+  if (!competition) throw new Error("Competition not found.");
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`
       UPDATE "Team"
       SET
-        "competitionId" = ${competition.id},
+        "competitionId" = ${competition.competitionId},
         "leagueId" = ${competition.currentLeagueId},
-        "divisionId" = NULL,
         "updatedAt" = NOW()
       WHERE "id" = ${input.teamId}
     `);
 
     if (competition.currentLeagueId) {
       await tx.$executeRaw(Prisma.sql`
-        UPDATE "LeagueSeasonTeam"
-        SET "isActive" = false, "updatedAt" = NOW()
-        WHERE "teamId" = ${input.teamId}
-          AND "leagueId" <> ${competition.currentLeagueId}
-      `);
-
-      await tx.$executeRaw(Prisma.sql`
         INSERT INTO "LeagueSeasonTeam" (
           "id",
           "leagueId",
           "teamId",
-          "divisionId",
           "isActive",
           "createdAt",
           "updatedAt"
         )
         VALUES (
-          ${"lst_"} || md5(${competition.currentLeagueId} || ':' || ${input.teamId}),
+          ${randomUUID()},
           ${competition.currentLeagueId},
           ${input.teamId},
-          NULL,
           true,
           NOW(),
           NOW()
         )
         ON CONFLICT ("leagueId", "teamId") DO UPDATE
-        SET
-          "divisionId" = NULL,
-          "isActive" = true,
-          "updatedAt" = NOW()
+        SET "isActive" = true, "updatedAt" = NOW()
       `);
     }
   });
