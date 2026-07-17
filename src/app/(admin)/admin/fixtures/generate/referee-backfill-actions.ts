@@ -23,6 +23,8 @@ import { requireAdmin } from "@/lib/requireAdmin";
 
 const MAX_PITCHES = 6;
 
+type RefereeNightDbClient = Pick<typeof prisma, "$queryRaw" | "$executeRaw">;
+
 type RefereeEmailGroup = {
   nightId: string;
   refereeId: string;
@@ -156,7 +158,7 @@ async function upsertRefereeRecipient(input: {
 }
 
 async function findOrCreateRefereeNight(input: {
-  tx: Prisma.TransactionClient;
+  tx: RefereeNightDbClient;
   refereeId: string;
   leagueId: string;
   venueId: string | null;
@@ -389,66 +391,50 @@ export async function backfillRefereeAssignmentsAction(formData: FormData) {
     }
   });
 
-  let queuedRefereeEmails = 0;
+  let sentEmailCount = 0;
 
   if (sendRefereeEmails) {
     for (const group of emailGroupsByNightId.values()) {
-      const existingDispatch = await prisma.notificationDispatch.findFirst({
-        where: {
-          sourceType: "REFEREE_NIGHT_ASSIGNMENT",
-          sourceId: group.nightId,
-          status: { not: NotificationDispatchStatus.CANCELLED },
-        },
-        select: { id: true },
-      });
-
-      if (existingDispatch) continue;
+      if (!group.refereeEmail) continue;
 
       const recipient = await upsertRefereeRecipient({
         refereeId: group.refereeId,
         name: group.refereeName,
         email: group.refereeEmail,
       });
-      const nightUrl = `${getBaseUrl()}/referee/night/${group.nightId}`;
+
       const dispatch = await queueDirectNotification({
         recipientId: recipient.id,
         channel: NotificationChannel.EMAIL,
         audience: NotificationAudience.REFEREE,
-        subject: `SIXFL referee fixtures — ${formatNightDateLabel(group.nightDate)}`,
+        subject: `SIXFL referee assignment: ${group.leagueName}${group.leagueSeason ? ` — ${group.leagueSeason}` : ""} · ${formatNightDateLabel(group.nightDate)}`,
         body: buildRefereeEmailBody(group),
         isTransactional: true,
-        sourceType: "REFEREE_NIGHT_ASSIGNMENT",
+        sourceType: "REFEREE_ASSIGNMENT_BACKFILL",
         sourceId: group.nightId,
-        metadata: {
-          kind: "referee_night_assignment_backfill",
-          refereeNightId: group.nightId,
-          refereeId: group.refereeId,
-          leagueId,
-          fixtureIds: group.fixtures.map((fixture) => fixture.id),
-          triggeredFrom: "fixture_generator_referee_backfill",
-        },
         emailCta: {
           label: "Open referee night",
-          url: nightUrl,
+          url: `${getBaseUrl()}/referee/night/${group.nightId}`,
         },
-        emailBranding: {
-          leagueName: group.leagueSeason ? `${group.leagueName} — ${group.leagueSeason}` : group.leagueName,
+        metadata: {
+          kind: "referee_assignment_backfill",
+          refereeNightId: group.nightId,
+          refereeId: group.refereeId,
+          fixtureIds: group.fixtures.map((fixture) => fixture.id),
         },
-        createdByUserId: user?.id ?? null,
       });
 
       if (dispatch.status === NotificationDispatchStatus.QUEUED) {
-        queuedRefereeEmails += 1;
+        sentEmailCount += 1;
       }
     }
   }
 
-  revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/generate");
   revalidatePath("/admin/referee-nights");
-  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  revalidatePath("/admin/night-board");
 
   redirect(
-    `/admin/fixtures/generate?refBackfilled=${linkedFixtureCount}&refAssigned=${assignedFixtureCount}&refEmails=${queuedRefereeEmails}`,
+    `/admin/fixtures/generate?refBackfilled=${linkedFixtureCount}&refAssigned=${assignedFixtureCount}&refEmails=${sentEmailCount}`,
   );
 }
