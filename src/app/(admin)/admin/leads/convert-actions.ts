@@ -8,7 +8,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import {
   appendSIXFLTextSignature,
@@ -19,6 +19,8 @@ import { queueManagedSquadJoinConfirmationEmail } from "@/lib/managed-squad/pros
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import type { ConvertLeadToTeamState } from "./convert-action-state";
+
+type ClaimCodeDb = Pick<typeof prisma, "team">;
 
 function getSafeTeamName(input: {
   manualTeamName?: string;
@@ -62,11 +64,11 @@ function splitLeadName(fullName: string | null | undefined) {
   };
 }
 
-async function generateUniqueClaimCode(tx: Prisma.TransactionClient) {
+async function generateUniqueClaimCode(db: ClaimCodeDb) {
   for (let i = 0; i < 10; i += 1) {
     const claimCode = crypto.randomBytes(4).toString("hex").toUpperCase();
 
-    const existing = await tx.team.findUnique({
+    const existing = await db.team.findUnique({
       where: { claimCode },
       select: { id: true },
     });
@@ -379,17 +381,11 @@ export async function convertLeadToTeamAction(
 
 export async function convertLeadToManagedSquadPlayerAction(formData: FormData) {
   const { user } = await requireAdmin();
-
   const leadId = String(formData.get("leadId") ?? "").trim();
   const teamId = String(formData.get("teamId") ?? "").trim();
-  const notes = String(formData.get("notes") ?? "").trim();
 
-  if (!leadId) {
-    throw new Error("Lead ID is required.");
-  }
-
-  if (!teamId) {
-    throw new Error("Managed team is required.");
+  if (!leadId || !teamId) {
+    throw new Error("Lead and team are required.");
   }
 
   const lead = await prisma.interestLead.findUnique({
@@ -397,20 +393,10 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
     select: {
       id: true,
       interestType: true,
-      status: true,
       contactName: true,
       email: true,
-      phone: true,
-      area: true,
-      leagueType: true,
-      message: true,
-      source: true,
-      preferredNights: {
-        orderBy: { createdAt: "asc" },
-        select: {
-          night: true,
-        },
-      },
+      convertedAt: true,
+      convertedTeamId: true,
     },
   });
 
@@ -419,152 +405,53 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
   }
 
   if (lead.interestType !== "PLAYER") {
-    throw new Error("Only PLAYER leads can be added into a managed squad.");
+    throw new Error("Only PLAYER leads can be converted into managed squad players.");
+  }
+
+  if (lead.convertedAt || lead.convertedTeamId) {
+    redirect(`/admin/leads/${lead.id}?converted=existing`);
   }
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: {
-      id: true,
-      name: true,
-      teamMode: true,
-    },
+    select: { id: true },
   });
 
   if (!team) {
-    throw new Error("Managed team not found.");
+    throw new Error("Selected team not found.");
   }
 
-  if (team.teamMode !== "MANAGED") {
-    throw new Error("Only managed teams can receive player leads.");
-  }
-
-  const { firstName, lastName } = splitLeadName(lead.contactName);
-
-  const preferredNightSummary =
-    lead.preferredNights.length > 0
-      ? lead.preferredNights.map((entry) => entry.night).join(", ")
-      : null;
-
-  const sourceParts = ["LEAD_CONVERSION", lead.source?.trim() || null].filter(
-    (value): value is string => Boolean(value),
-  );
-
-  const generatedNotes = [
-    notes || null,
-    lead.message?.trim() ? `Lead message: ${lead.message.trim()}` : null,
-    lead.area?.trim() ? `Area: ${lead.area.trim()}` : null,
-    lead.leagueType ? `League type: ${lead.leagueType}` : null,
-    preferredNightSummary ? `Preferred nights: ${preferredNightSummary}` : null,
-    `Source lead ID: ${lead.id}`,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join("\n\n");
-
-  const duplicateWhere = [
-    ...(lead.email?.trim()
-      ? [
-          {
-            email: {
-              equals: lead.email.trim(),
-              mode: "insensitive" as const,
-            },
-          },
-        ]
-      : []),
-    ...(lead.phone?.trim()
-      ? [
-          {
-            phone: lead.phone.trim(),
-          },
-        ]
-      : []),
-  ];
-
-  const duplicate = duplicateWhere.length
-    ? await prisma.teamPlayerProspect.findFirst({
-        where: {
-          teamId: team.id,
-          OR: duplicateWhere,
-        },
-        select: {
-          id: true,
-        },
-      })
-    : null;
-
-  if (duplicate) {
-    await prisma.interestLead.update({
-      where: { id: lead.id },
-      data: {
-        status: "CLOSED",
-        contactedAt: lead.status === "NEW" ? new Date() : undefined,
-        closedAt: new Date(),
-      },
-    });
-
-    const joinEmailStatus = await queueJoinConfirmationSafely({
-      prospectId: duplicate.id,
+  const nameParts = splitLeadName(lead.contactName);
+  const prospect = await prisma.teamPlayerProspect.create({
+    data: {
+      teamId,
+      firstName: nameParts.firstName,
+      lastName: nameParts.lastName,
+      email: lead.email?.trim().toLowerCase() || null,
+      source: "LEAD",
       createdByUserId: user?.id ?? null,
-    });
-
-    revalidatePath("/admin/leads");
-    revalidatePath(`/admin/leads/${lead.id}`);
-    revalidatePath("/admin/teams");
-    revalidatePath(`/admin/teams/${team.id}`);
-    revalidatePath(`/admin/teams/${team.id}/prospects/${duplicate.id}/communications`);
-    revalidatePath("/admin/messaging");
-
-    redirect(
-      `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&existingProspect=1&prospect=${duplicate.id}&joinEmail=${joinEmailStatus}`,
-    );
-  }
-
-  const prospect = await prisma.$transaction(async (tx) => {
-    const createdProspect = await tx.teamPlayerProspect.create({
-      data: {
-        teamId: team.id,
-        firstName,
-        lastName,
-        email: lead.email?.trim() || null,
-        phone: lead.phone?.trim() || null,
-        preferredPositions: null,
-        experienceSummary: null,
-        availabilitySummary: preferredNightSummary,
-        source: sourceParts.join(" • "),
-        status: "NEW",
-        notes: generatedNotes || null,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    await tx.interestLead.update({
-      where: { id: lead.id },
-      data: {
-        status: "CLOSED",
-        contactedAt: lead.status === "NEW" ? new Date() : undefined,
-        closedAt: new Date(),
-      },
-    });
-
-    return createdProspect;
+    },
+    select: { id: true },
   });
 
-  const joinEmailStatus = await queueJoinConfirmationSafely({
+  await prisma.interestLead.update({
+    where: { id: lead.id },
+    data: {
+      status: "CLOSED",
+      convertedAt: new Date(),
+      closedAt: new Date(),
+      convertedTeamId: teamId,
+    },
+  });
+
+  await queueJoinConfirmationSafely({
     prospectId: prospect.id,
     createdByUserId: user?.id ?? null,
   });
 
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${lead.id}`);
-  revalidatePath("/admin/teams");
-  revalidatePath(`/admin/teams/${team.id}`);
-  revalidatePath(`/admin/teams/${team.id}/prospects/${prospect.id}/communications`);
-  revalidatePath("/admin/messaging");
+  revalidatePath(`/admin/teams/${teamId}`);
 
-  redirect(
-    `/admin/leads/${lead.id}?managedSquadAdded=1&managedTeamId=${team.id}&prospect=${prospect.id}&joinEmail=${joinEmailStatus}`,
-  );
+  redirect(`/admin/leads/${lead.id}?converted=player`);
 }
