@@ -2,11 +2,15 @@
 // File: src/lib/managed-squad/movePlayerToProspect.ts
 // ========================================
 
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-type DbClient = typeof prisma | Prisma.TransactionClient;
+type DbClient = {
+  $queryRaw: typeof prisma.$queryRaw;
+  $executeRaw: typeof prisma.$executeRaw;
+  teamPlayerProspect: Pick<typeof prisma.teamPlayerProspect, "findFirst" | "update" | "create">;
+};
 
 type ProspectMoveStatus = "BACKUP" | "DECLINED" | "DUPLICATE";
 
