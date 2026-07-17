@@ -29,7 +29,26 @@ const mergePairs = [
 ] as const;
 
 type MergePair = (typeof mergePairs)[number];
-type Tx = Prisma.TransactionClient;
+// The app exports an extended Prisma client, so the interactive transaction
+// client type does not exactly match Prisma.TransactionClient during build.
+// Keep this merge helper scoped to the delegates it uses without forcing the
+// wider generated TransactionClient shape.
+type Tx = Pick<
+  typeof prisma,
+  | "$queryRaw"
+  | "$executeRaw"
+  | "teamMember"
+  | "team"
+  | "teamPlayerProspect"
+  | "fixture"
+  | "paymentCharge"
+  | "paymentTransaction"
+  | "playerMatchFee"
+  | "fixtureCaptainConfirmation"
+  | "messageThread"
+  | "matchResultTeamMeta"
+  | "resultDispute"
+>;
 
 type CountRow = { count: number };
 
