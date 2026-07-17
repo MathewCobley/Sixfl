@@ -118,14 +118,6 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function buildFixtureLine(fixture: PublishFixtureRecord) {
-  return `${formatKickoff(fixture.kickoffAt)} — ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} — ${fixture.pitch ?? "Pitch TBC"} — ${fixture.venue?.name ?? "Venue TBC"}`;
-}
-
-function isQueuedDispatch(status: NotificationDispatchStatus) {
-  return status === NotificationDispatchStatus.QUEUED;
-}
-
 function getLeagueDisplayName(league: { name: string; season: string | null }) {
   return league.season ? `${league.name} — ${league.season}` : league.name;
 }
@@ -134,12 +126,12 @@ function getTeamDetailsForFixture(fixture: PublishFixtureRecord, teamId: string)
   return fixture.homeTeam.id === teamId ? fixture.homeTeam : fixture.awayTeam;
 }
 
-function buildDigestSourceId(input: { leagueId: string; teamId: string; fixtureIds: string[] }) {
-  return `${input.leagueId}:${input.teamId}:${input.fixtureIds.slice().sort().join(",")}`;
-}
-
 function buildReminderSourceId(input: { fixtureId: string; teamId: string; scheduledFor: Date }) {
   return `${input.fixtureId}:${input.teamId}:${input.scheduledFor.toISOString()}`;
+}
+
+function isQueuedDispatch(status: NotificationDispatchStatus) {
+  return status === NotificationDispatchStatus.QUEUED;
 }
 
 function isRetryablePublishError(error: unknown) {
@@ -288,7 +280,7 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   }
 
   const teamIds = unique(unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]));
-  const fixturesUrl = buildAbsoluteUrl(`/leagues/${league.slug}/fixtures`);
+  const fixturesUrl = league.slug ? buildAbsoluteUrl(`/leagues/${league.slug}/fixtures`) : buildAbsoluteUrl("/leagues");
   const leagueDisplayName = getLeagueDisplayName(league);
   let digestQueued = 0;
   let digestSkipped = 0;
@@ -329,39 +321,6 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
 
     paymentMessagesQueued += messageResult.queued;
     paymentMessagesSkipped += messageResult.skipped;
-  }
-
-  for (const teamId of teamIds) {
-    const { snapshot, recipient } = await upsertTeamNotificationRecipient(teamId);
-    const teamFixtures = unpublishedFixtures.filter((fixture) => fixture.homeTeam.id === teamId || fixture.awayTeam.id === teamId);
-    if (teamFixtures.length === 0) continue;
-    const teamDetails = getTeamDetailsForFixture(teamFixtures[0], teamId);
-    const digestDispatch = await queueTemplateNotificationOnce({
-      recipientId: recipient.id,
-      templateKey: "fixture-publish-digest-email",
-      sourceType: "LEAGUE_FIXTURE_DIGEST",
-      sourceId: buildDigestSourceId({ leagueId: league.id, teamId, fixtureIds: teamFixtures.map((fixture) => fixture.id) }),
-      metadata: {
-        kind: "fixture_publish_digest",
-        teamId,
-        teamName: snapshot.teamName || teamDetails.name,
-        leagueId: league.id,
-        leagueName: leagueDisplayName,
-        publishRound: input.round ?? null,
-        divisionId: input.divisionId ?? null,
-        fixtureIds: teamFixtures.map((fixture) => fixture.id),
-      },
-      variables: {
-        firstName: snapshot.primaryContact.name ?? snapshot.teamName,
-        leagueName: league.name,
-        leagueDisplayName,
-        fixturesList: teamFixtures.map((fixture) => buildFixtureLine(fixture)).join("\n"),
-        fixturesUrl,
-      },
-      emailBranding: { teamName: snapshot.teamName || teamDetails.name, teamLogoUrl: teamDetails.logoUrl ?? null, leagueName: leagueDisplayName },
-    });
-    if (isQueuedDispatch(digestDispatch.status)) digestQueued += 1;
-    else digestSkipped += 1;
   }
 
   for (const fixture of unpublishedFixtures) {
