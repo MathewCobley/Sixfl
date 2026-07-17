@@ -8,7 +8,6 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { Prisma } from "@prisma/client";
 
 import {
   appendSIXFLTextSignature,
@@ -19,8 +18,6 @@ import { queueManagedSquadJoinConfirmationEmail } from "@/lib/managed-squad/pros
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import type { ConvertLeadToTeamState } from "./convert-action-state";
-
-type ClaimCodeDb = Pick<typeof prisma, "team">;
 
 function getSafeTeamName(input: {
   manualTeamName?: string;
@@ -64,11 +61,11 @@ function splitLeadName(fullName: string | null | undefined) {
   };
 }
 
-async function generateUniqueClaimCode(db: ClaimCodeDb) {
+async function generateUniqueClaimCode() {
   for (let i = 0; i < 10; i += 1) {
     const claimCode = crypto.randomBytes(4).toString("hex").toUpperCase();
 
-    const existing = await db.team.findUnique({
+    const existing = await prisma.team.findUnique({
       where: { claimCode },
       select: { id: true },
     });
@@ -269,6 +266,8 @@ export async function convertLeadToTeamAction(
     | { teamId: string; alreadyConverted: true };
 
   try {
+    const claimCode = await generateUniqueClaimCode();
+
     result = await prisma.$transaction(async (tx) => {
       const freshLead = await tx.interestLead.findUnique({
         where: { id: leadId },
@@ -309,8 +308,6 @@ export async function convertLeadToTeamAction(
       if (!email) {
         throw new Error("This lead needs an email address before it can be converted.");
       }
-
-      const claimCode = await generateUniqueClaimCode(tx);
 
       const team = await tx.team.create({
         data: {
@@ -429,7 +426,6 @@ export async function convertLeadToManagedSquadPlayerAction(formData: FormData) 
       lastName: nameParts.lastName,
       email: lead.email?.trim().toLowerCase() || null,
       source: "LEAD",
-      createdByUserId: user?.id ?? null,
     },
     select: { id: true },
   });
