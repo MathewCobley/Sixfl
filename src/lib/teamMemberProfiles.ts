@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-type PrismaClientLike = typeof prisma | Prisma.TransactionClient;
+type PrismaRawClientLike = Pick<typeof prisma, "$executeRawUnsafe" | "$queryRaw">;
 
 export type TeamMemberProfile = {
   id: string;
@@ -48,7 +48,7 @@ function serializeJsonNullable(value: Prisma.JsonValue | null | undefined) {
   return JSON.stringify(value);
 }
 
-async function ensureTeamMemberProfileTable(client: PrismaClientLike) {
+async function ensureTeamMemberProfileTable(client: PrismaRawClientLike) {
   await client.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "TeamMemberProfile" (
       "id" TEXT NOT NULL,
@@ -128,7 +128,7 @@ async function ensureTeamMemberProfileTable(client: PrismaClientLike) {
 }
 
 async function getSafeSourceProspectId(input: {
-  client: PrismaClientLike;
+  client: PrismaRawClientLike;
   teamMemberId: string;
   sourceProspectId: string;
 }) {
@@ -153,7 +153,7 @@ async function getSafeSourceProspectId(input: {
 }
 
 export async function upsertTeamMemberProfileFromProspect(input: {
-  client: PrismaClientLike;
+  client: PrismaRawClientLike;
   teamMemberId: string;
   prospect: ProspectProfileInput;
 }) {
