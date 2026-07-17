@@ -1,0 +1,71 @@
+name: Fix automated message label
+
+on:
+  push:
+    paths:
+      - .github/workflows/fix-automated-message-label.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Correct automated message source labels
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/components/admin/messages/AdminMessageThread.tsx")
+          text = path.read_text()
+          old = '''  if (message.channel === "EMAIL") {
+    return {
+      label: "Manual email",
+      key: null,
+    };
+  }
+
+  if (message.channel === "SMS") {
+    return {
+      label: "Manual SMS",
+      key: null,
+    };
+  }
+'''
+          new = '''  if (message.channel === "EMAIL") {
+    return {
+      label:
+        message.participantRole === "SYSTEM"
+          ? "Automated email"
+          : "Manual email",
+      key: null,
+    };
+  }
+
+  if (message.channel === "SMS") {
+    return {
+      label:
+        message.participantRole === "SYSTEM"
+          ? "Automated SMS"
+          : "Manual SMS",
+      key: null,
+    };
+  }
+'''
+          if old not in text:
+              raise SystemExit("Expected source-label block was not found")
+          path.write_text(text.replace(old, new, 1))
+
+      - name: Commit fix and remove one-time workflow
+        run: |
+          rm .github/workflows/fix-automated-message-label.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/admin/messages/AdminMessageThread.tsx .github/workflows/fix-automated-message-label.yml
+          git commit -m "Fix automated message labels"
+          git push origin main
