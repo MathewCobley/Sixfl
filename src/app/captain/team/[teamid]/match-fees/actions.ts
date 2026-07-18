@@ -10,6 +10,10 @@ import type { PlayerMatchFeeStatus } from "@prisma/client";
 
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
+import {
+  addPlayerMatchFeeCreditFromFee,
+  applyAvailablePlayerMatchFeeCreditToFee,
+} from "@/lib/payments/player-match-fee-credits";
 import { queuePlayerMatchFeeReminder } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -84,7 +88,7 @@ function getOverrideNote(amountPence: number) {
 
 function getRemovedFromCurrentSelectionNote(wasPaid: boolean) {
   return wasPaid
-    ? "Removed from current/rescheduled matchday squad after prior payment. Credit/refund decision required."
+    ? "Removed from current/rescheduled matchday squad after prior payment. Player credit created; refund decision still available if needed."
     : "Voided: Removed from matchday squad selection";
 }
 
@@ -113,6 +117,19 @@ function redirectIfNotAdmin(input: {
 
 function isClosedPlayerFee(status: PlayerMatchFeeStatus) {
   return status === "PAID";
+}
+
+async function applyCreditToFeeIfOpen(feeId: string, status: PlayerMatchFeeStatus) {
+  if (status !== "OPEN") return;
+  await applyAvailablePlayerMatchFeeCreditToFee({ feeId });
+}
+
+async function creditCancelledPaidFee(input: { feeId: string; wasPaid: boolean; reason: string }) {
+  if (!input.wasPaid) return;
+  await addPlayerMatchFeeCreditFromFee({
+    feeId: input.feeId,
+    description: input.reason,
+  });
 }
 
 export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
@@ -177,7 +194,6 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
         select: { id: true, status: true },
       });
 
-      // Paid rows that remain ticked stay paid. They should not be reset to OPEN.
       if (existing && isClosedPlayerFee(existing.status)) {
         continue;
       }
@@ -194,24 +210,26 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
         paymentToken: amountPence === 0 ? null : undefined,
       };
 
-      if (existing) {
-        await prisma.playerMatchFee.update({
-          where: { id: existing.id },
-          data,
-        });
-      } else {
-        await prisma.playerMatchFee.create({
-          data: {
-            fixtureId,
-            teamId,
-            teamMemberId: player.id,
-            amountPence,
-            note,
-            status,
-            waivedAt: amountPence === 0 ? now : null,
-          },
-        });
-      }
+      const fee = existing
+        ? await prisma.playerMatchFee.update({
+            where: { id: existing.id },
+            data,
+            select: { id: true },
+          })
+        : await prisma.playerMatchFee.create({
+            data: {
+              fixtureId,
+              teamId,
+              teamMemberId: player.id,
+              amountPence,
+              note,
+              status,
+              waivedAt: amountPence === 0 ? now : null,
+            },
+            select: { id: true },
+          });
+
+      await applyCreditToFeeIfOpen(fee.id, status);
     }
 
     if (player.type === "prospect") {
@@ -231,30 +249,32 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
         continue;
       }
 
-      if (existing) {
-        await prisma.playerMatchFee.update({
-          where: { id: existing.id },
-          data: {
-            amountPence: defaultAmountPence,
-            teamId,
-            note: baseNote,
-            status: "OPEN",
-            paidAt: null,
-            waivedAt: null,
-            cancelledAt: null,
-          },
-        });
-      } else {
-        await prisma.playerMatchFee.create({
-          data: {
-            fixtureId,
-            teamId,
-            prospectId: player.id,
-            amountPence: defaultAmountPence,
-            note: baseNote,
-          },
-        });
-      }
+      const fee = existing
+        ? await prisma.playerMatchFee.update({
+            where: { id: existing.id },
+            data: {
+              amountPence: defaultAmountPence,
+              teamId,
+              note: baseNote,
+              status: "OPEN",
+              paidAt: null,
+              waivedAt: null,
+              cancelledAt: null,
+            },
+            select: { id: true },
+          })
+        : await prisma.playerMatchFee.create({
+            data: {
+              fixtureId,
+              teamId,
+              prospectId: player.id,
+              amountPence: defaultAmountPence,
+              note: baseNote,
+            },
+            select: { id: true },
+          });
+
+      await applyAvailablePlayerMatchFeeCreditToFee({ feeId: fee.id });
     }
   }
 
@@ -287,12 +307,16 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
     if (isSelectedMember || isSelectedProspect) continue;
 
     const wasPaid = fee.status === "PAID";
+    await creditCancelledPaidFee({
+      feeId: fee.id,
+      wasPaid,
+      reason: "Credit from paid player removed from current/rescheduled matchday selection.",
+    });
 
     await prisma.playerMatchFee.update({
       where: { id: fee.id },
       data: {
         status: "CANCELLED",
-        // If this was already paid for a postponed/previous version, preserve paidAt as audit.
         paidAt: wasPaid ? undefined : null,
         waivedAt: null,
         cancelledAt: new Date(),
@@ -387,6 +411,14 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
 
   const now = new Date();
   const wasPaid = existingFee.status === "PAID";
+
+  if (status === "CANCELLED") {
+    await creditCancelledPaidFee({
+      feeId: existingFee.id,
+      wasPaid,
+      reason: "Credit from paid player fee cancelled by admin.",
+    });
+  }
 
   await prisma.playerMatchFee.update({
     where: { id: existingFee.id },
@@ -491,6 +523,11 @@ export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData
 
   for (const fee of fees) {
     const wasPaid = fee.status === "PAID";
+    await creditCancelledPaidFee({
+      feeId: fee.id,
+      wasPaid,
+      reason: `Credit from paid player fee voided: ${reason}`,
+    });
 
     await prisma.playerMatchFee.update({
       where: { id: fee.id },
@@ -504,7 +541,7 @@ export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData
         note: appendNote({
           existingNote: fee.note,
           note: wasPaid
-            ? `Voided: ${reason}. Previous payment kept for audit; credit/refund decision required.`
+            ? `Voided: ${reason}. Previous payment kept for audit; player credit created.`
             : `Voided: ${reason}`,
         }),
       },
@@ -554,6 +591,8 @@ export async function updateCaptainPlayerMatchFeeAmountAction(formData: FormData
     where: { id: existingFee.id },
     data: { amountPence },
   });
+
+  await applyAvailablePlayerMatchFeeCreditToFee({ feeId: existingFee.id });
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
