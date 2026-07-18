@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
+import { sendDashboardLoginEmail } from "@/lib/auth/sendDashboardLoginEmail";
 import { moveTeamMemberToProspect } from "@/lib/managed-squad/movePlayerToProspect";
 import { setTeamMemberSquadStatus, type TeamMemberSquadStatus } from "@/lib/managed-squad/squadStatus";
 import { prisma } from "@/lib/prisma";
@@ -58,6 +59,10 @@ function cleanEmail(value: FormDataEntryValue | null) {
   return cleanText(value).toLowerCase();
 }
 
+function getPlayerDisplayName(input: { name: string | null; email: string | null }) {
+  return input.name?.trim() || input.email?.trim() || "Player";
+}
+
 export async function addAdminSquadMemberAction(formData: FormData) {
   await requireAdmin();
 
@@ -73,10 +78,21 @@ export async function addAdminSquadMemberAction(formData: FormData) {
     redirect(buildRedirect(teamId, "?error=Email%20is%20required."));
   }
 
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { id: true, name: true },
+  });
+
+  if (!team) {
+    redirect("/admin/teams");
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     select: {
       id: true,
+      name: true,
+      email: true,
     },
   });
 
@@ -113,9 +129,16 @@ export async function addAdminSquadMemberAction(formData: FormData) {
     },
   });
 
+  await sendDashboardLoginEmail({
+    email: user.email?.trim().toLowerCase() || email,
+    displayName: getPlayerDisplayName(user),
+    teamName: team.name,
+    callbackPath: `/player/team/${teamId}`,
+  });
+
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath(`/admin/teams/${teamId}/squad`);
-  redirect(buildRedirect(teamId, "?saved=member-added"));
+  redirect(buildRedirect(teamId, "?saved=member-added-login-email"));
 }
 
 export async function grantAdminCaptainAccessAction(formData: FormData) {
