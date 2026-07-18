@@ -30,6 +30,18 @@ type ActiveKickoffWarning = {
   summaryMessage: string;
 };
 
+type ActivePotentialIssue = {
+  warningKey: string;
+  summaryMessage: string;
+};
+
+type TeamFixtureAppearance = {
+  fixtureId: string;
+  kickoffTime: string;
+  homeTeamName: string;
+  awayTeamName: string;
+};
+
 function isNightBoardForm(form: HTMLFormElement) {
   return Boolean(
     form.querySelector<HTMLInputElement>('input[name="fixtureId"]') &&
@@ -67,12 +79,16 @@ function displayTime(value: string) {
   return `${match[1].padStart(2, "0")}:${match[2]}`;
 }
 
+function isActiveFixtureForm(form: HTMLFormElement) {
+  const status = form.querySelector<HTMLSelectElement>('select[name="status"]')?.value ?? "SCHEDULED";
+  return status === "SCHEDULED" || status === "COMPLETED";
+}
+
 function buildKickoffWarning(form: HTMLFormElement, rule: FixtureKickoffRule): ActiveKickoffWarning | null {
   const fixtureId = form.querySelector<HTMLInputElement>('input[name="fixtureId"]')?.value.trim() ?? "";
   const kickoffInput = form.querySelector<HTMLInputElement>('input[name="kickoffTime"]');
-  const status = form.querySelector<HTMLSelectElement>('select[name="status"]')?.value ?? "SCHEDULED";
 
-  if (!fixtureId || !kickoffInput || !["SCHEDULED", "COMPLETED"].includes(status)) return null;
+  if (!fixtureId || !kickoffInput || !isActiveFixtureForm(form)) return null;
 
   const kickoffMinutes = timeToMinutes(kickoffInput.value);
   if (kickoffMinutes === null) return null;
@@ -101,6 +117,60 @@ function buildKickoffWarning(form: HTMLFormElement, rule: FixtureKickoffRule): A
     inlineMessage: `⚠ Latest preferred kick-off exceeded: ${limits}. This fixture is scheduled for ${scheduledTime}.`,
     summaryMessage: `Potential issue – late kick-off: ${rule.homeTeam.name} v ${rule.awayTeam.name} is scheduled for ${scheduledTime}. ${statedLimitSentence}`,
   };
+}
+
+function buildDuplicateTeamWarnings(
+  forms: HTMLFormElement[],
+  rulesByFixtureId: Map<string, FixtureKickoffRule>,
+): ActivePotentialIssue[] {
+  const appearancesByTeam = new Map<string, { teamName: string; fixtures: TeamFixtureAppearance[] }>();
+
+  for (const form of forms) {
+    if (!isActiveFixtureForm(form)) continue;
+
+    const fixtureId = form.querySelector<HTMLInputElement>('input[name="fixtureId"]')?.value.trim() ?? "";
+    const kickoffTime = form.querySelector<HTMLInputElement>('input[name="kickoffTime"]')?.value.trim() ?? "";
+    const fixture = rulesByFixtureId.get(fixtureId);
+    if (!fixtureId || !fixture || timeToMinutes(kickoffTime) === null) continue;
+
+    for (const team of [fixture.homeTeam, fixture.awayTeam]) {
+      const existing = appearancesByTeam.get(team.id) ?? { teamName: team.name, fixtures: [] };
+      existing.fixtures.push({
+        fixtureId,
+        kickoffTime: displayTime(kickoffTime),
+        homeTeamName: fixture.homeTeam.name,
+        awayTeamName: fixture.awayTeam.name,
+      });
+      appearancesByTeam.set(team.id, existing);
+    }
+  }
+
+  const warnings: ActivePotentialIssue[] = [];
+
+  for (const [teamId, appearance] of appearancesByTeam) {
+    const uniqueFixtures = Array.from(
+      new Map(appearance.fixtures.map((fixture) => [fixture.fixtureId, fixture])).values(),
+    );
+
+    if (uniqueFixtures.length < 2) continue;
+
+    uniqueFixtures.sort(
+      (left, right) =>
+        (timeToMinutes(left.kickoffTime) ?? Number.MAX_SAFE_INTEGER) -
+        (timeToMinutes(right.kickoffTime) ?? Number.MAX_SAFE_INTEGER),
+    );
+
+    const fixtureList = uniqueFixtures
+      .map((fixture) => `${fixture.kickoffTime} ${fixture.homeTeamName} v ${fixture.awayTeamName}`)
+      .join("; ");
+
+    warnings.push({
+      warningKey: `duplicate-team:${teamId}`,
+      summaryMessage: `Potential issue – team scheduled more than once: ${appearance.teamName} appears in ${uniqueFixtures.length} fixtures on this night: ${fixtureList}.`,
+    });
+  }
+
+  return warnings.sort((left, right) => left.summaryMessage.localeCompare(right.summaryMessage));
 }
 
 function renderInlineWarning(form: HTMLFormElement, warning: ActiveKickoffWarning | null) {
@@ -142,25 +212,28 @@ function findWarningsPanel() {
   return { heading, card, list };
 }
 
-function renderBottomWarnings(warnings: ActiveKickoffWarning[]) {
+function renderBottomWarnings(warnings: ActivePotentialIssue[]) {
   const panel = findWarningsPanel();
   if (!panel) return;
 
   panel.heading.textContent = "Warnings and potential issues";
-  panel.list.querySelectorAll("[data-latest-ko-summary]").forEach((element) => element.remove());
+  panel.list
+    .querySelectorAll("[data-night-board-potential-summary], [data-latest-ko-summary]")
+    .forEach((element) => element.remove());
 
   const emptyNotice = Array.from(panel.list.children).find(
     (child) => child instanceof HTMLElement && child.textContent?.trim().startsWith("No obvious pitch"),
   );
 
   if (emptyNotice instanceof HTMLElement) {
-    emptyNotice.textContent = "No obvious pitch, referee, venue, clash or latest kick-off preference warnings.";
+    emptyNotice.textContent =
+      "No obvious pitch, referee, venue, clash, repeated-team or latest kick-off preference warnings.";
     emptyNotice.hidden = warnings.length > 0;
   }
 
   for (const warning of warnings) {
     const notice = document.createElement("div");
-    notice.setAttribute("data-latest-ko-summary", warning.fixtureId);
+    notice.setAttribute("data-night-board-potential-summary", warning.warningKey);
     notice.className = "rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100";
     notice.textContent = warning.summaryMessage;
     panel.list.appendChild(notice);
@@ -175,7 +248,7 @@ function renderBottomWarnings(warnings: ActiveKickoffWarning[]) {
   }
 
   footer.textContent =
-    "Latest kick-off times are team preferences. A breach is shown as a potential issue, but it does not stop the match being saved.";
+    "Latest kick-off preferences and teams appearing more than once are shown as potential issues. These warnings do not stop a match being saved.";
 }
 
 async function installKickoffWarnings(signal: AbortSignal) {
@@ -198,22 +271,29 @@ async function installKickoffWarnings(signal: AbortSignal) {
 
   const payload = (await response.json().catch(() => null)) as KickoffRulesResponse | null;
   if (!response.ok) {
-    throw new Error(payload?.error || "Latest kick-off preferences could not be checked.");
+    throw new Error(payload?.error || "Night Board potential issues could not be checked.");
   }
 
   const rulesByFixtureId = new Map((payload?.fixtures ?? []).map((fixture) => [fixture.id, fixture]));
 
   function renderAll() {
-    const warnings: ActiveKickoffWarning[] = [];
+    const warnings: ActivePotentialIssue[] = [];
 
     for (const form of forms) {
       const fixtureId = form.querySelector<HTMLInputElement>('input[name="fixtureId"]')?.value.trim() ?? "";
       const rule = rulesByFixtureId.get(fixtureId);
       const warning = rule ? buildKickoffWarning(form, rule) : null;
       renderInlineWarning(form, warning);
-      if (warning) warnings.push(warning);
+
+      if (warning) {
+        warnings.push({
+          warningKey: `latest-ko:${warning.fixtureId}`,
+          summaryMessage: warning.summaryMessage,
+        });
+      }
     }
 
+    warnings.push(...buildDuplicateTeamWarnings(forms, rulesByFixtureId));
     renderBottomWarnings(warnings);
   }
 
@@ -307,7 +387,7 @@ export default function NightBoardMatchFeeSyncBridge() {
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
-        console.error("Night Board latest kick-off warning check failed", error);
+        console.error("Night Board potential issue check failed", error);
       });
 
     return () => {
