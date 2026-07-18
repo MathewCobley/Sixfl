@@ -8,7 +8,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Listbox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
-import { convertLeadToManagedSquadPlayerAction } from "@/app/(admin)/admin/leads/convert-actions";
+import { convertLeadToManagedSquadPlayerAction } from "@/app/(admin)/admin/leads/managed-squad-actions";
 import { convertLeadToStandardSquadPlayerAction } from "@/app/(admin)/admin/leads/standard-squad-actions";
 
 type TeamOption = {
