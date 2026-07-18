@@ -253,7 +253,7 @@ export default function NightBoardMatchFeeSyncBridge() {
     if (pathname !== "/admin/night-board") return;
 
     const controller = new AbortController();
-    let removeKickoffListeners = () => undefined;
+    let removeKickoffListeners: () => void = () => undefined;
     let disposed = false;
 
     function onSubmit(event: SubmitEvent) {
