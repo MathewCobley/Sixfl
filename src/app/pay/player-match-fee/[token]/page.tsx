@@ -62,6 +62,8 @@ export default async function PayPlayerMatchFeePage({
       amountPence: true,
       status: true,
       paymentToken: true,
+      teamMemberId: true,
+      prospectId: true,
       team: {
         select: {
           id: true,
@@ -107,11 +109,41 @@ export default async function PayPlayerMatchFeePage({
     notFound();
   }
 
+  const outstandingFees = fee.teamMemberId
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          teamId: fee.team.id,
+          teamMemberId: fee.teamMemberId,
+          status: PlayerMatchFeeStatus.OPEN,
+          fixture: { publishedAt: { not: null } },
+        },
+        select: { id: true, amountPence: true },
+      })
+    : fee.prospectId
+      ? await prisma.playerMatchFee.findMany({
+          where: {
+            teamId: fee.team.id,
+            prospectId: fee.prospectId,
+            status: PlayerMatchFeeStatus.OPEN,
+            fixture: { publishedAt: { not: null } },
+          },
+          select: { id: true, amountPence: true },
+        })
+      : fee.status === PlayerMatchFeeStatus.OPEN
+        ? [{ id: fee.id, amountPence: fee.amountPence }]
+        : [];
+
   const playerName = getPlayerName({
     teamMember: fee.teamMember,
     prospect: fee.prospect,
   });
   const canPay = fee.status === PlayerMatchFeeStatus.OPEN && Boolean(fee.paymentToken);
+  const totalOutstandingPence = outstandingFees.reduce(
+    (sum, outstandingFee) => sum + outstandingFee.amountPence,
+    0,
+  );
+  const remainingAfterThisFeePence = Math.max(totalOutstandingPence - fee.amountPence, 0);
+  const hasMultipleOutstandingFees = canPay && outstandingFees.length > 1;
   const playerDashboardHref = `/player/team/${fee.team.id}`;
 
   return (
@@ -125,11 +157,22 @@ export default async function PayPlayerMatchFeePage({
             Player match fee
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">
-            Review your player match fee below and continue to Stripe to complete payment securely.
+            Review this individual match fee below and continue to Stripe to complete payment securely.
           </p>
         </section>
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] md:p-8">
+          {hasMultipleOutstandingFees ? (
+            <div className="mb-6 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-5 py-4 text-amber-50">
+              <div className="text-base font-semibold">
+                You have {outstandingFees.length} unpaid match fees totalling {formatMoney(totalOutstandingPence)}.
+              </div>
+              <p className="mt-2 text-sm leading-6 text-amber-100/75">
+                This page pays one {formatMoney(fee.amountPence)} fee only. After this payment, {formatMoney(remainingAfterThisFeePence)} will remain across your other match fees.
+              </p>
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
@@ -154,7 +197,7 @@ export default async function PayPlayerMatchFeePage({
 
             <div className="min-w-[220px] rounded-2xl border border-amber-400/20 bg-amber-500/10 px-5 py-5 text-left lg:text-right">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-                Player match fee
+                This match fee
               </div>
               <div className="mt-3 text-3xl font-semibold text-white">
                 {formatMoney(fee.amountPence)}
@@ -172,9 +215,13 @@ export default async function PayPlayerMatchFeePage({
                   type="submit"
                   className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"
                 >
-                  Pay player match fee
+                  Pay this {formatMoney(fee.amountPence)} fee
                 </button>
-                <p className="text-sm text-white/50">Secure payment powered by Stripe.</p>
+                <p className="text-sm text-white/50">
+                  {hasMultipleOutstandingFees
+                    ? "This payment covers this fixture only. Your other match fees remain available from your player dashboard."
+                    : "Secure payment powered by Stripe."}
+                </p>
               </form>
             ) : fee.status === PlayerMatchFeeStatus.PAID ? (
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-100">
