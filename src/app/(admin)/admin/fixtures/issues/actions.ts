@@ -27,11 +27,40 @@ function getIssueSourceId(input: { fixtureId: string; teamId: string }) {
   return `${input.fixtureId}:${input.teamId}`;
 }
 
+function buildNightBoardRedirect(input: {
+  returnTo?: string | null;
+  notice?: string;
+  teamName?: string | null;
+}) {
+  const rawReturnTo = input.returnTo?.trim();
+  if (!rawReturnTo?.startsWith("/admin/night-board")) return null;
+
+  try {
+    const url = new URL(rawReturnTo, "https://sixfl.local");
+    if (url.pathname !== "/admin/night-board") return null;
+
+    if (input.notice) url.searchParams.set("issueReply", input.notice);
+    else url.searchParams.delete("issueReply");
+
+    if (input.teamName) url.searchParams.set("issueTeam", input.teamName);
+    else url.searchParams.delete("issueTeam");
+
+    const query = url.searchParams.toString();
+    return `${url.pathname}${query ? `?${query}` : ""}`;
+  } catch {
+    return null;
+  }
+}
+
 function buildRedirect(input: {
   leagueId?: string | null;
   notice?: string;
   teamName?: string | null;
+  returnTo?: string | null;
 }) {
+  const nightBoardRedirect = buildNightBoardRedirect(input);
+  if (nightBoardRedirect) return nightBoardRedirect;
+
   const searchParams = new URLSearchParams();
 
   if (input.leagueId) {
@@ -70,13 +99,14 @@ export async function replyToFixtureIssueAction(formData: FormData) {
   const teamId = getString(formData.get("teamId"));
   const leagueId = getString(formData.get("leagueId"));
   const reply = getString(formData.get("reply"));
+  const returnTo = getString(formData.get("returnTo"));
 
   if (!fixtureId || !teamId) {
-    redirect(buildRedirect({ leagueId, notice: "missing_issue" }));
+    redirect(buildRedirect({ leagueId, notice: "missing_issue", returnTo }));
   }
 
   if (reply.length < 5) {
-    redirect(buildRedirect({ leagueId, notice: "reply_too_short" }));
+    redirect(buildRedirect({ leagueId, notice: "reply_too_short", returnTo }));
   }
 
   const confirmation = await prisma.fixtureCaptainConfirmation.findUnique({
@@ -109,7 +139,7 @@ export async function replyToFixtureIssueAction(formData: FormData) {
   });
 
   if (!confirmation || confirmation.status !== "ISSUE_RAISED") {
-    redirect(buildRedirect({ leagueId, notice: "issue_not_found" }));
+    redirect(buildRedirect({ leagueId, notice: "issue_not_found", returnTo }));
   }
 
   const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
@@ -166,6 +196,7 @@ export async function replyToFixtureIssueAction(formData: FormData) {
 
     revalidatePath("/admin/fixtures");
     revalidatePath("/admin/fixtures/issues");
+    revalidatePath("/admin/night-board");
     revalidatePath(`/captain/team/${teamId}`);
     revalidatePath(`/captain/team/${teamId}/fixtures`);
 
@@ -182,6 +213,7 @@ export async function replyToFixtureIssueAction(formData: FormData) {
       leagueId: confirmation.fixture.leagueId,
       notice,
       teamName: confirmation.team.name,
+      returnTo,
     }),
   );
 }
