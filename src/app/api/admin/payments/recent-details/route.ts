@@ -198,7 +198,9 @@ export async function GET(request: Request) {
         ? getPlayerFeeContact({ teamMember: playerFee.teamMember, prospect: playerFee.prospect })
         : null;
       const recurring = isRecurringTeamPayment({ notes: payment.notes, reference: payment.reference });
-      const playerPayment = Boolean(playerFee) || isPlayerFeePaymentNotes(payment.notes);
+      const hasPlayerFeeMarker = Boolean(playerFee) || isPlayerFeePaymentNotes(payment.notes);
+      const isSinglePlayerFeePayment = Boolean(playerFee) && payment.amountPence <= playerFee!.amountPence;
+      const isCaptainPaidTeamFeeViaPlayerRoute = Boolean(playerFee) && payment.amountPence > playerFee!.amountPence;
 
       let typeLabel = "Unlinked / manual payment";
       let title = `${payment.team.name} payment`;
@@ -207,10 +209,17 @@ export async function GET(request: Request) {
         ? `${payment.team.league.name}${payment.team.league.season ? ` · ${payment.team.league.season}` : ""}`
         : "No league on team record";
 
-      if (playerPayment) {
+      if (isSinglePlayerFeePayment || (hasPlayerFeeMarker && !isCaptainPaidTeamFeeViaPlayerRoute && !playerFee)) {
         typeLabel = "Player match fee";
         title = `${playerName ?? "Player"} paid ${formatMoney(payment.amountPence)}`;
         line1 = [fixtureLabel, playerContact].filter(Boolean).join(" · ") || "Player match fee payment";
+        line2 = `Team: ${playerFee?.team.name ?? payment.team.name}${fixtureDateLabel ? ` · ${fixtureDateLabel}` : ""}`;
+      } else if (isCaptainPaidTeamFeeViaPlayerRoute) {
+        typeLabel = "Team fixture payment";
+        title = `${payment.team.name} paid ${formatMoney(payment.amountPence)}`;
+        line1 = [fixtureLabel, playerContact ? `Paid by ${playerName ?? "captain/player"} · ${playerContact}` : `Paid by ${playerName ?? "captain/player"}`]
+          .filter(Boolean)
+          .join(" · ") || "Team fixture payment";
         line2 = `Team: ${playerFee?.team.name ?? payment.team.name}${fixtureDateLabel ? ` · ${fixtureDateLabel}` : ""}`;
       } else if (payment.charge) {
         typeLabel = payment.charge.fixture ? "Team fixture payment" : "Team charge payment";
