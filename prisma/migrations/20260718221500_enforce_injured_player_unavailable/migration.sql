@@ -130,9 +130,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS "FixtureSelection_prevent_injured_player_insert" ON "FixtureSelection";
+DROP TRIGGER IF EXISTS "FixtureSelection_prevent_injured_player_update" ON "FixtureSelection";
 DROP TRIGGER IF EXISTS "FixtureSelection_prevent_injured_player" ON "FixtureSelection";
-CREATE TRIGGER "FixtureSelection_prevent_injured_player"
-BEFORE INSERT OR UPDATE OF "selectionStatus" ON "FixtureSelection"
+
+CREATE TRIGGER "FixtureSelection_prevent_injured_player_insert"
+BEFORE INSERT ON "FixtureSelection"
+FOR EACH ROW
+EXECUTE FUNCTION prevent_injured_fixture_selection();
+
+CREATE TRIGGER "FixtureSelection_prevent_injured_player_update"
+BEFORE UPDATE OF "selectionStatus" ON "FixtureSelection"
 FOR EACH ROW
 EXECUTE FUNCTION prevent_injured_fixture_selection();
 
@@ -189,5 +197,56 @@ FROM "TeamMember" tm, "Fixture" f
 WHERE fs."teamMemberId" = tm."id"
   AND fs."fixtureId" = f."id"
   AND tm."squadStatus" = 'INJURED'
+  AND f."kickoffAt" >= NOW()
+  AND f."status" IN ('SCHEDULED'::"FixtureStatus", 'POSTPONED'::"FixtureStatus");
+
+UPDATE "NotificationDispatch" nd
+SET
+  "status" = 'CANCELLED'::"NotificationDispatchStatus",
+  "cancelledAt" = NOW(),
+  "failureReason" = 'Player is injured and unavailable for the future fixture.'
+WHERE nd."sourceType" IN ('FIXTURE_SELECTION_SELECTED', 'FIXTURE_SELECTION_MATCHDAY_REMINDER')
+  AND nd."status" IN ('QUEUED'::"NotificationDispatchStatus", 'PROCESSING'::"NotificationDispatchStatus")
+  AND EXISTS (
+    SELECT 1
+    FROM "TeamMember" tm
+    WHERE tm."squadStatus" = 'INJURED'
+      AND nd."sourceId" LIKE '%:' || tm."id" || ':%'
+  );
+
+UPDATE "NotificationDispatch" nd
+SET
+  "status" = 'CANCELLED'::"NotificationDispatchStatus",
+  "cancelledAt" = NOW(),
+  "failureReason" = 'Player is injured; future player match fee message cancelled.'
+WHERE nd."sourceType" IN ('PLAYER_MATCH_FEE_REQUEST', 'PLAYER_MATCH_FEE_CHASE_24H', 'PLAYER_MATCH_FEE_CHASE_72H')
+  AND nd."status" IN ('QUEUED'::"NotificationDispatchStatus", 'PROCESSING'::"NotificationDispatchStatus")
+  AND nd."sourceId" IN (
+    SELECT pmf."id"
+    FROM "PlayerMatchFee" pmf
+    JOIN "TeamMember" tm ON tm."id" = pmf."teamMemberId"
+    JOIN "Fixture" f ON f."id" = pmf."fixtureId"
+    WHERE tm."squadStatus" = 'INJURED'
+      AND pmf."status" = 'OPEN'::"PlayerMatchFeeStatus"
+      AND f."kickoffAt" >= NOW()
+      AND f."status" IN ('SCHEDULED'::"FixtureStatus", 'POSTPONED'::"FixtureStatus")
+  );
+
+UPDATE "PlayerMatchFee" pmf
+SET
+  "status" = 'CANCELLED'::"PlayerMatchFeeStatus",
+  "cancelledAt" = NOW(),
+  "note" = CASE
+    WHEN pmf."note" IS NULL OR TRIM(pmf."note") = '' THEN 'Cancelled because player is injured.'
+    WHEN pmf."note" NOT LIKE '%Cancelled because player is injured.%'
+      THEN pmf."note" || E'\nCancelled because player is injured.'
+    ELSE pmf."note"
+  END,
+  "updatedAt" = NOW()
+FROM "TeamMember" tm, "Fixture" f
+WHERE pmf."teamMemberId" = tm."id"
+  AND pmf."fixtureId" = f."id"
+  AND tm."squadStatus" = 'INJURED'
+  AND pmf."status" = 'OPEN'::"PlayerMatchFeeStatus"
   AND f."kickoffAt" >= NOW()
   AND f."status" IN ('SCHEDULED'::"FixtureStatus", 'POSTPONED'::"FixtureStatus");
