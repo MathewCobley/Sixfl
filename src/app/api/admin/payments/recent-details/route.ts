@@ -208,7 +208,7 @@ export async function GET(request: Request) {
         : "No league on team record";
 
       if (playerPayment) {
-        typeLabel = "Player / squad payment";
+        typeLabel = "Player match fee";
         title = `${playerName ?? "Player"} paid ${formatMoney(payment.amountPence)}`;
         line1 = [fixtureLabel, playerContact].filter(Boolean).join(" · ") || "Player match fee payment";
         line2 = `Team: ${playerFee?.team.name ?? payment.team.name}${fixtureDateLabel ? ` · ${fixtureDateLabel}` : ""}`;
