@@ -10,6 +10,7 @@ import { Suspense, type ReactNode } from "react";
 import NightBoardFixtureIssuesLink from "@/components/admin/night-board/NightBoardFixtureIssuesLink";
 import NightBoardMatchFeeSyncBridge from "@/components/admin/night-board/NightBoardMatchFeeSyncBridge";
 import NightBoardTeamIssuesPanel from "@/components/admin/night-board/NightBoardTeamIssuesPanel";
+import NightBoardWarningsPositionBridge from "@/components/admin/night-board/NightBoardWarningsPositionBridge";
 import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
 import CaptainFixturesDeduplicateBridge from "@/components/captain/CaptainFixturesDeduplicateBridge";
 import CaptainHeaderLeaguePositionBridge from "@/components/captain/CaptainHeaderLeaguePositionBridge";
@@ -112,6 +113,7 @@ export default function RootLayout({
             <NightBoardMatchFeeSyncBridge />
             <NightBoardTeamIssuesPanel />
             <NightBoardFixtureIssuesLink />
+            <NightBoardWarningsPositionBridge />
             <AdminPaymentsPageBridge />
             <CaptainFixturesDeduplicateBridge />
             <CaptainHeaderLeaguePositionBridge />
