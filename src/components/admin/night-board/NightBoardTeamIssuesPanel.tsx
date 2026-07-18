@@ -89,8 +89,9 @@ function getNoticeMessage(notice: string, teamName: string) {
 
 export default function NightBoardTeamIssuesPanel() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const searchKey = searchParams.toString();
+  const rawSearchParams = useSearchParams();
+  const searchKey = rawSearchParams.toString();
+  const parsedSearchParams = useMemo(() => new URLSearchParams(searchKey), [searchKey]);
   const [data, setData] = useState<IssuesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -104,18 +105,19 @@ export default function NightBoardTeamIssuesPanel() {
     return `${pathname}${query ? `?${query}` : ""}`;
   }, [pathname, searchKey]);
 
-  const notice = searchParams.get("issueReply") ?? "";
-  const noticeTeam = searchParams.get("issueTeam") ?? "";
+  const notice = parsedSearchParams.get("issueReply") ?? "";
+  const noticeTeam = parsedSearchParams.get("issueTeam") ?? "";
   const noticeMessage = getNoticeMessage(notice, noticeTeam);
 
   useEffect(() => {
     if (pathname !== "/admin/night-board") return;
 
     const controller = new AbortController();
+    const current = new URLSearchParams(searchKey);
     const query = new URLSearchParams();
-    const date = searchParams.get("date");
-    const leagueId = searchParams.get("leagueId");
-    const venueId = searchParams.get("venueId");
+    const date = current.get("date");
+    const leagueId = current.get("leagueId");
+    const venueId = current.get("venueId");
     if (date) query.set("date", date);
     if (leagueId) query.set("leagueId", leagueId);
     if (venueId) query.set("venueId", venueId);
@@ -147,7 +149,7 @@ export default function NightBoardTeamIssuesPanel() {
       });
 
     return () => controller.abort();
-  }, [pathname, searchKey, searchParams, noticeMessage]);
+  }, [pathname, searchKey, noticeMessage]);
 
   if (pathname !== "/admin/night-board") return null;
 
@@ -167,7 +169,7 @@ export default function NightBoardTeamIssuesPanel() {
         ].join(" ")}
         aria-label={`Open team-raised fixture issues${hasIssues ? ` (${issueCount})` : ""}`}
       >
-        <span>{loading ? "Checking team issues…" : hasIssues ? "Team fixture issues" : "Team fixture issues"}</span>
+        <span>{loading ? "Checking team issues…" : "Team fixture issues"}</span>
         <span
           className={[
             "inline-flex min-w-7 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-black",
@@ -203,12 +205,13 @@ export default function NightBoardTeamIssuesPanel() {
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
               {noticeMessage ? (
-                <div className={[
-                  "mb-4 rounded-2xl border px-4 py-3 text-sm",
-                  notice === "reply_queued"
-                    ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
-                    : "border-amber-400/25 bg-amber-500/10 text-amber-100",
-                ].join(" ")}
+                <div
+                  className={[
+                    "mb-4 rounded-2xl border px-4 py-3 text-sm",
+                    notice === "reply_queued"
+                      ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                      : "border-amber-400/25 bg-amber-500/10 text-amber-100",
+                  ].join(" ")}
                 >
                   {noticeMessage}
                 </div>
