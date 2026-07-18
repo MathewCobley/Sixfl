@@ -82,6 +82,12 @@ function getOverrideNote(amountPence: number) {
     : `Player match fee override: £${(amountPence / 100).toFixed(2)}`;
 }
 
+function getRemovedFromCurrentSelectionNote(wasPaid: boolean) {
+  return wasPaid
+    ? "Removed from current/rescheduled matchday squad after prior payment. Credit/refund decision required."
+    : "Voided: Removed from matchday squad selection";
+}
+
 async function assertFixtureBelongsToTeam(input: { fixtureId: string; teamId: string }) {
   const fixture = await prisma.fixture.findFirst({
     where: {
@@ -171,6 +177,7 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
         select: { id: true, status: true },
       });
 
+      // Paid rows that remain ticked stay paid. They should not be reset to OPEN.
       if (existing && isClosedPlayerFee(existing.status)) {
         continue;
       }
@@ -255,16 +262,19 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
     where: {
       teamId,
       fixtureId,
-      status: { not: "PAID" },
+      status: { not: "CANCELLED" },
       OR: [{ teamMemberId: { not: null } }, { prospectId: { not: null } }],
     },
     select: {
       id: true,
       note: true,
+      status: true,
       teamMemberId: true,
       prospectId: true,
     },
   });
+
+  const removedFeeIds: string[] = [];
 
   for (const fee of removableFees) {
     const isSelectedMember = fee.teamMemberId
@@ -276,19 +286,33 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
 
     if (isSelectedMember || isSelectedProspect) continue;
 
+    const wasPaid = fee.status === "PAID";
+
     await prisma.playerMatchFee.update({
       where: { id: fee.id },
       data: {
         status: "CANCELLED",
-        paidAt: null,
+        // If this was already paid for a postponed/previous version, preserve paidAt as audit.
+        paidAt: wasPaid ? undefined : null,
         waivedAt: null,
         cancelledAt: new Date(),
+        paymentUrl: null,
+        paymentToken: null,
         note: appendNote({
           existingNote: fee.note,
-          note: "Voided: Removed from matchday squad selection",
+          note: getRemovedFromCurrentSelectionNote(wasPaid),
         }),
       },
     });
+
+    removedFeeIds.push(fee.id);
+  }
+
+  if (removedFeeIds.length > 0) {
+    await cancelQueuedPlayerMatchFeeNotificationDispatches(
+      removedFeeIds,
+      "Player removed from current matchday selection.",
+    );
   }
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
@@ -352,17 +376,34 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=invalid_status"));
   }
 
-  const now = new Date();
-
-  await prisma.playerMatchFee.updateMany({
+  const existingFee = await prisma.playerMatchFee.findFirst({
     where: { id: feeId, teamId, fixtureId },
+    select: { id: true, status: true, note: true },
+  });
+
+  if (!existingFee) {
+    redirect(getMatchFeesPath(teamId, fixtureId, "&error=missing_fee"));
+  }
+
+  const now = new Date();
+  const wasPaid = existingFee.status === "PAID";
+
+  await prisma.playerMatchFee.update({
+    where: { id: existingFee.id },
     data: {
       status,
-      paidAt: status === "PAID" ? now : null,
+      paidAt: status === "PAID" ? now : status === "CANCELLED" && wasPaid ? undefined : null,
       waivedAt: status === "WAIVED" ? now : null,
       cancelledAt: status === "CANCELLED" ? now : null,
       paymentUrl: status === "WAIVED" || status === "CANCELLED" ? null : undefined,
       paymentToken: status === "WAIVED" || status === "CANCELLED" ? null : undefined,
+      note:
+        status === "CANCELLED" && wasPaid
+          ? appendNote({
+              existingNote: existingFee.note,
+              note: getRemovedFromCurrentSelectionNote(true),
+            })
+          : undefined,
     },
   });
 
@@ -443,22 +484,29 @@ export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData
     where: {
       teamId,
       fixtureId,
-      status: { in: ["OPEN", "WAIVED", "CANCELLED"] },
+      status: { in: ["OPEN", "WAIVED", "CANCELLED", "PAID"] },
     },
-    select: { id: true, note: true },
+    select: { id: true, note: true, status: true },
   });
 
   for (const fee of fees) {
+    const wasPaid = fee.status === "PAID";
+
     await prisma.playerMatchFee.update({
       where: { id: fee.id },
       data: {
         status: "CANCELLED",
-        paidAt: null,
+        paidAt: wasPaid ? undefined : null,
         waivedAt: null,
         cancelledAt: new Date(),
         paymentUrl: null,
         paymentToken: null,
-        note: appendNote({ existingNote: fee.note, note: `Voided: ${reason}` }),
+        note: appendNote({
+          existingNote: fee.note,
+          note: wasPaid
+            ? `Voided: ${reason}. Previous payment kept for audit; credit/refund decision required.`
+            : `Voided: ${reason}`,
+        }),
       },
     });
   }
