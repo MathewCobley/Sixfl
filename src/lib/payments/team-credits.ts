@@ -11,7 +11,8 @@ import {
 } from "@/lib/payments/charge-summary";
 import { prisma } from "@/lib/prisma";
 
-type CreditDb = typeof prisma | Prisma.TransactionClient;
+type CreditDb = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
+type ChargeSummaryDb = CreditDb & Pick<typeof prisma, "paymentCharge" | "playerMatchFee">;
 
 export type TeamCreditLedgerEntryType = "CREDIT_ADDED" | "CREDIT_USED" | "CREDIT_REVERSED";
 
@@ -285,7 +286,7 @@ export async function addTeamCredit(input: {
   return { id, amountPence };
 }
 
-async function getChargeSummary(chargeId: string, db: CreditDb) {
+async function getChargeSummary(chargeId: string, db: ChargeSummaryDb) {
   const charge = await db.paymentCharge.findUnique({
     where: { id: chargeId },
     include: {
