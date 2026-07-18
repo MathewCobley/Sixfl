@@ -28,32 +28,22 @@ function formatKickoff(value: Date) {
   });
 }
 
-function getPayerName(input: {
+function getPlayerName(input: {
   teamMember: { user: { name: string | null; email: string | null } } | null;
   prospect: { firstName: string; lastName: string | null; email: string | null } | null;
 }) {
   if (input.teamMember) {
-    return input.teamMember.user.name || input.teamMember.user.email || "Payer";
+    return input.teamMember.user.name || input.teamMember.user.email || "Player";
   }
 
   if (input.prospect) {
     return [input.prospect.firstName, input.prospect.lastName]
       .filter(Boolean)
       .join(" ")
-      .trim() || input.prospect.email || "Payer";
+      .trim() || input.prospect.email || "Player";
   }
 
-  return "Payer";
-}
-
-function getDisplayNote(note: string | null) {
-  if (!note) return null;
-
-  return note
-    .replace(/SIXFL player payment link:/gi, "SIXFL team match fee payment link:")
-    .replace(/for this player\.?/gi, "for this team match fee.")
-    .replace(/player match fee/gi, "team match fee")
-    .replace(/player fee/gi, "team fee");
+  return "Player";
 }
 
 export default async function PayPlayerMatchFeePage({
@@ -72,7 +62,6 @@ export default async function PayPlayerMatchFeePage({
       amountPence: true,
       status: true,
       paymentToken: true,
-      note: true,
       team: {
         select: {
           id: true,
@@ -118,11 +107,10 @@ export default async function PayPlayerMatchFeePage({
     notFound();
   }
 
-  const payerName = getPayerName({
+  const playerName = getPlayerName({
     teamMember: fee.teamMember,
     prospect: fee.prospect,
   });
-  const displayNote = getDisplayNote(fee.note);
   const canPay = fee.status === PlayerMatchFeeStatus.OPEN && Boolean(fee.paymentToken);
   const playerDashboardHref = `/player/team/${fee.team.id}`;
 
@@ -131,13 +119,13 @@ export default async function PayPlayerMatchFeePage({
       <div className="mx-auto max-w-3xl space-y-8">
         <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] md:p-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-            Secure team payment
+            Secure player payment
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Team match fee
+            Player match fee
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">
-            Review the full team match fee below and continue to Stripe to complete payment securely.
+            Review your player match fee below and continue to Stripe to complete payment securely.
           </p>
         </section>
 
@@ -145,10 +133,10 @@ export default async function PayPlayerMatchFeePage({
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Paid by
+                Player
               </div>
-              <h2 className="mt-2 text-2xl font-semibold text-white">{payerName}</h2>
-              <p className="mt-1 text-sm text-white/55">For {fee.team.name}</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">{playerName}</h2>
+              <p className="mt-1 text-sm text-white/55">{fee.team.name}</p>
 
               <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-white/70">
                 <div className="font-semibold text-white">
@@ -162,17 +150,11 @@ export default async function PayPlayerMatchFeePage({
                   {fee.fixture.league.season ? ` · ${fee.fixture.league.season}` : ""}
                 </div>
               </div>
-
-              {displayNote ? (
-                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/55">
-                  {displayNote}
-                </div>
-              ) : null}
             </div>
 
             <div className="min-w-[220px] rounded-2xl border border-amber-400/20 bg-amber-500/10 px-5 py-5 text-left lg:text-right">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-                Team match fee
+                Player match fee
               </div>
               <div className="mt-3 text-3xl font-semibold text-white">
                 {formatMoney(fee.amountPence)}
@@ -190,17 +172,17 @@ export default async function PayPlayerMatchFeePage({
                   type="submit"
                   className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"
                 >
-                  Pay team match fee
+                  Pay player match fee
                 </button>
                 <p className="text-sm text-white/50">Secure payment powered by Stripe.</p>
               </form>
             ) : fee.status === PlayerMatchFeeStatus.PAID ? (
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-100">
-                This team match fee has already been paid.
+                This player match fee has already been paid.
               </div>
             ) : (
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-white/60">
-                This team match fee is no longer available for online payment.
+                This player match fee is no longer available for online payment.
               </div>
             )}
           </div>
