@@ -8,7 +8,6 @@ import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import { Suspense, type ReactNode } from "react";
 import NightBoardMatchFeeSyncBridge from "@/components/admin/night-board/NightBoardMatchFeeSyncBridge";
-import NightBoardWarningsPositionBridge from "@/components/admin/night-board/NightBoardWarningsPositionBridge";
 import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
 import CaptainFixturesDeduplicateBridge from "@/components/captain/CaptainFixturesDeduplicateBridge";
 import CaptainHeaderLeaguePositionBridge from "@/components/captain/CaptainHeaderLeaguePositionBridge";
@@ -109,7 +108,6 @@ export default function RootLayout({
         <Providers>
           <Suspense fallback={null}>
             <NightBoardMatchFeeSyncBridge />
-            <NightBoardWarningsPositionBridge />
             <AdminPaymentsPageBridge />
             <CaptainFixturesDeduplicateBridge />
             <CaptainHeaderLeaguePositionBridge />
