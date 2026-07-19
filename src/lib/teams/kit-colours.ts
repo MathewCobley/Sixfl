@@ -38,7 +38,9 @@ export async function getTeamKitColours(teamIds: string[]) {
   });
 
   const colours = new Map<string, string | null>(
-    uniqueIds.map((teamId) => [teamId, null]),
+    uniqueIds.map(
+      (teamId): [string, string | null] => [teamId, null],
+    ),
   );
 
   for (const recipient of recipients) {
