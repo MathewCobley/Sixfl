@@ -4,6 +4,7 @@
 
 import { Suspense, type ReactNode } from "react";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
+import PlayerPerformancePanel from "@/components/player/PlayerPerformancePanel";
 import PlayerPreviewLinkPersistence from "@/components/player/PlayerPreviewLinkPersistence";
 
 export default async function PlayerTeamLayout({
@@ -21,6 +22,7 @@ export default async function PlayerTeamLayout({
         <PlayerPreviewLinkPersistence teamId={teamid} />
       </Suspense>
       {children}
+      <PlayerPerformancePanel teamId={teamid} />
       <PlayerMessageBox teamId={teamid} />
     </>
   );
