@@ -1,4 +1,7 @@
-import { DEFAULT_TEAM_KIT_COLOUR, normaliseTeamKitColour } from "@/lib/teams/kit-colours";
+import {
+  DEFAULT_TEAM_KIT_COLOUR,
+  normaliseTeamKitColour,
+} from "@/lib/teams/kit-colour-values";
 
 type TeamShirtProps = {
   colour?: string | null;
