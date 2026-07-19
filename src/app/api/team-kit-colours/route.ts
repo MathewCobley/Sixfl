@@ -5,41 +5,72 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type TeamKitColourRow = {
-  id: string;
-  name: string;
-  kitPrimaryColour: string | null;
-  updatedAt: Date;
-};
-
-function normaliseColour(value: string | null) {
-  const trimmed = value?.trim() ?? "";
+function normaliseColour(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
   return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed.toUpperCase() : null;
 }
 
+function getMetadataColour(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  return normaliseColour(
+    (metadata as Record<string, unknown>).kitPrimaryColour,
+  );
+}
+
 export async function GET() {
-  const rows = await prisma.$queryRaw<TeamKitColourRow[]>`
-    SELECT "id", "name", "kitPrimaryColour", "updatedAt"
-    FROM "Team"
-    ORDER BY "updatedAt" DESC
-  `;
+  const teams = await prisma.team.findMany({
+    orderBy: [{ updatedAt: "desc" }],
+    select: {
+      id: true,
+      name: true,
+      updatedAt: true,
+    },
+  });
+
+  const recipients = teams.length
+    ? await prisma.notificationRecipient.findMany({
+        where: {
+          sourceType: "TEAM",
+          sourceId: {
+            in: teams.map((team) => team.id),
+          },
+        },
+        select: {
+          sourceId: true,
+          metadata: true,
+        },
+      })
+    : [];
+
+  const colourByTeamId = new Map(
+    recipients
+      .filter((recipient) => Boolean(recipient.sourceId))
+      .map((recipient) => [
+        recipient.sourceId as string,
+        getMetadataColour(recipient.metadata),
+      ]),
+  );
 
   const teamsByName = new Map<
     string,
     { id: string; name: string; colour: string | null }
   >();
 
-  for (const row of rows) {
-    const key = row.name.trim().toLowerCase();
+  for (const team of teams) {
+    const key = team.name.trim().toLowerCase();
     if (!key) continue;
 
-    const colour = normaliseColour(row.kitPrimaryColour);
+    const colour = colourByTeamId.get(team.id) ?? null;
     const existing = teamsByName.get(key);
 
     if (!existing || (!existing.colour && colour)) {
       teamsByName.set(key, {
-        id: row.id,
-        name: row.name.trim(),
+        id: team.id,
+        name: team.name.trim(),
         colour,
       });
     }
