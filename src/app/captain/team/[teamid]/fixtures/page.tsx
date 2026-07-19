@@ -7,11 +7,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
-import TeamShirt from "@/components/fixtures/TeamShirt";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { getTeamKitColours } from "@/lib/teams/kit-colours";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -32,50 +30,6 @@ type ConfirmationSummary = {
   helper: string;
 };
 
-type FixtureTeam = {
-  id: string;
-  name: string;
-};
-
-function TeamNameWithShirt({
-  team,
-  colour,
-}: {
-  team: FixtureTeam;
-  colour: string | null;
-}) {
-  return (
-    <span className="inline-flex min-w-0 items-center gap-2">
-      <TeamShirt colour={colour} teamName={team.name} />
-      <span className="truncate">{team.name}</span>
-    </span>
-  );
-}
-
-function FixtureTeamPair({
-  homeTeam,
-  awayTeam,
-  colours,
-}: {
-  homeTeam: FixtureTeam;
-  awayTeam: FixtureTeam;
-  colours: Map<string, string | null>;
-}) {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-      <TeamNameWithShirt
-        team={homeTeam}
-        colour={colours.get(homeTeam.id) ?? null}
-      />
-      <span className="text-white/45">vs</span>
-      <TeamNameWithShirt
-        team={awayTeam}
-        colour={colours.get(awayTeam.id) ?? null}
-      />
-    </span>
-  );
-}
-
 function formatDateTime(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
@@ -93,6 +47,18 @@ function formatShortDateTime(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getFixtureSummary(input: { homeTeamName: string; awayTeamName: string }) {
+  return `${input.homeTeamName} vs ${input.awayTeamName}`;
+}
+
+function getCaptainFixtureLabel(input: {
+  homeTeamName: string;
+  awayTeamName: string;
+  isHome: boolean;
+}) {
+  return input.isHome ? `vs ${input.awayTeamName}` : `vs ${input.homeTeamName}`;
 }
 
 function getResultLabel(goalsFor: number, goalsAgainst: number) {
@@ -394,13 +360,6 @@ export default async function CaptainFixturesPage({
 
   if (!team) notFound();
 
-  const fixtureTeamIds = [
-    team.id,
-    ...upcomingFixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId]),
-    ...recentResults.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId]),
-  ];
-  const kitColours = await getTeamKitColours(fixtureTeamIds);
-
   const requestedFixture = requestedFixtureId
     ? upcomingFixtures.find((fixture) => fixture.id === requestedFixtureId) ?? null
     : null;
@@ -419,15 +378,9 @@ export default async function CaptainFixturesPage({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Fixture confirmation</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-              {selectedFixture ? (
-                <FixtureTeamPair
-                  homeTeam={selectedFixture.homeTeam}
-                  awayTeam={selectedFixture.awayTeam}
-                  colours={kitColours}
-                />
-              ) : (
-                "No upcoming published fixture"
-              )}
+              {selectedFixture
+                ? getFixtureSummary({ homeTeamName: selectedFixture.homeTeam.name, awayTeamName: selectedFixture.awayTeam.name })
+                : "No upcoming published fixture"}
             </h2>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
               {selectedFixture
@@ -528,6 +481,7 @@ export default async function CaptainFixturesPage({
               <div className="px-6 py-10 text-sm text-white/55">No published upcoming fixtures yet.</div>
             ) : (
               upcomingFixtures.map((fixture, index) => {
+                const isHome = fixture.homeTeamId === teamid;
                 const confirmation = fixture.captainConfirmations[0] ?? null;
                 const status = getFixtureConfirmationSummary({ confirmation, kickoffAt: fixture.kickoffAt });
                 const isSelected = selectedFixture?.id === fixture.id;
@@ -537,11 +491,7 @@ export default async function CaptainFixturesPage({
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="text-base font-semibold text-white">
-                          <FixtureTeamPair
-                            homeTeam={fixture.homeTeam}
-                            awayTeam={fixture.awayTeam}
-                            colours={kitColours}
-                          />
+                          {getCaptainFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name, isHome })}
                         </div>
                         {isSelected ? (
                           <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Selected</span>
@@ -586,6 +536,7 @@ export default async function CaptainFixturesPage({
             ) : (
               recentResults.map((fixture) => {
                 const isHome = fixture.homeTeamId === teamid;
+                const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
                 const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
                 const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
 
@@ -593,13 +544,7 @@ export default async function CaptainFixturesPage({
                   <div key={fixture.id} className="px-6 py-5">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <div className="text-base font-semibold text-white">
-                          <FixtureTeamPair
-                            homeTeam={fixture.homeTeam}
-                            awayTeam={fixture.awayTeam}
-                            colours={kitColours}
-                          />
-                        </div>
+                        <div className="text-base font-semibold text-white">{opponent}</div>
                         <div className="mt-1 text-sm text-white/60">{formatDateTime(fixture.kickoffAt)}</div>
                       </div>
                       <div className="text-right">
