@@ -45,6 +45,8 @@ type Props = {
   applyPersonalization?: boolean;
 };
 
+const SQUAD_ACTIVATION_EMAIL_KEY = "squad-activation-email";
+
 function isEmailTemplate(template: ProspectTemplate): template is EmailTemplate {
   return "subject" in template && typeof template.subject === "string";
 }
@@ -70,6 +72,45 @@ function getTemplateButtonClasses(isSelected: boolean) {
   ].join(" ");
 }
 
+function getHiddenFieldValue(hiddenFields: HiddenField[], name: string) {
+  return hiddenFields.find((field) => field.name === name)?.value.trim() ?? "";
+}
+
+function replacePreviewVariables(
+  value: string,
+  variables: {
+    teamName: string;
+    joinUrl: string;
+  },
+) {
+  return value
+    .replace(/{{\s*teamName\s*}}/gi, variables.teamName || "the selected team")
+    .replace(/{{\s*joinUrl\s*}}/gi, variables.joinUrl || "{{joinUrl}}")
+    .replace(/{{\s*teamJoinUrl\s*}}/gi, variables.joinUrl || "{{teamJoinUrl}}");
+}
+
+function getSquadActivationDraft(teamName: string) {
+  const displayedTeamName = teamName || "the selected team";
+
+  return {
+    subject: `You've been added to the ${displayedTeamName} squad`,
+    body: [
+      "Hi {{firstName}},",
+      "",
+      `You've been added to the ${displayedTeamName} squad.`,
+      "",
+      "Please complete your squad signup using this email address so we can activate your player profile and keep you updated with fixtures, team messages and league information.",
+      "",
+      "Activate your squad place here:",
+      "",
+      "{{cta}}",
+      "",
+      "Thanks,",
+      "SIXFL",
+    ].join("\n"),
+  };
+}
+
 export default function ProspectTemplateMessageForm({
   channel,
   title,
@@ -92,6 +133,14 @@ export default function ProspectTemplateMessageForm({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
 
+  const previewVariables = useMemo(
+    () => ({
+      teamName: getHiddenFieldValue(hiddenFields, "teamName"),
+      joinUrl: getHiddenFieldValue(hiddenFields, "joinUrl"),
+    }),
+    [hiddenFields],
+  );
+
   function applyTemplate(templateId: string) {
     const template = templates.find((item) => item.id === templateId);
 
@@ -101,11 +150,22 @@ export default function ProspectTemplateMessageForm({
 
     setSelectedTemplateId(template.id);
 
-    if (channel === "EMAIL" && isEmailTemplate(template)) {
-      setSubject(template.subject);
+    if (
+      channel === "EMAIL" &&
+      isEmailTemplate(template) &&
+      template.key === SQUAD_ACTIVATION_EMAIL_KEY
+    ) {
+      const draft = getSquadActivationDraft(previewVariables.teamName);
+      setSubject(draft.subject);
+      setBody(draft.body);
+      return;
     }
 
-    setBody(template.body);
+    if (channel === "EMAIL" && isEmailTemplate(template)) {
+      setSubject(replacePreviewVariables(template.subject, previewVariables));
+    }
+
+    setBody(replacePreviewVariables(template.body, previewVariables));
   }
 
   return (
@@ -159,6 +219,12 @@ export default function ProspectTemplateMessageForm({
           />
         ))}
 
+        <input
+          type="hidden"
+          name="templateKey"
+          value={templates.find((template) => template.id === selectedTemplateId)?.key ?? ""}
+        />
+
         {channel === "EMAIL" ? (
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
@@ -191,7 +257,7 @@ export default function ProspectTemplateMessageForm({
         <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/55">
           {applyPersonalization
             ? "You can use {{firstName}}, {{name}}, {{teamName}} and {{joinUrl}}. These are filled in when the message is queued."
-            : "For bulk messages, placeholders are filled separately for each prospect when the message is queued."}
+            : "For bulk messages, each prospect's name is filled separately and the managed team shown above is taken from this page."}
         </div>
 
         <button
