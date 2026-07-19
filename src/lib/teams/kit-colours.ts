@@ -1,53 +1,43 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { normaliseTeamKitColour } from "@/lib/teams/kit-colour-values";
 
-function metadataRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
+type TeamKitColourRow = {
+  id: string;
+  kitPrimaryColour: string | null;
+};
 
 export async function getTeamKitColour(teamId: string): Promise<string | null> {
-  const recipient = await prisma.notificationRecipient.findFirst({
-    where: {
-      sourceType: "TEAM",
-      sourceId: teamId,
-    },
-    select: { metadata: true },
-  });
+  const rows = await prisma.$queryRaw<TeamKitColourRow[]>`
+    SELECT "id", "kitPrimaryColour"
+    FROM "Team"
+    WHERE "id" = ${teamId}
+    LIMIT 1
+  `;
 
-  return normaliseTeamKitColour(
-    metadataRecord(recipient?.metadata)?.kitPrimaryColour,
-  );
+  return normaliseTeamKitColour(rows[0]?.kitPrimaryColour);
 }
 
 export async function getTeamKitColours(
   teamIds: string[],
 ): Promise<Map<string, string | null>> {
   const uniqueIds = Array.from(new Set(teamIds.filter(Boolean)));
-  if (uniqueIds.length === 0) return new Map<string, string | null>();
-
-  const recipients = await prisma.notificationRecipient.findMany({
-    where: {
-      sourceType: "TEAM",
-      sourceId: { in: uniqueIds },
-    },
-    select: {
-      sourceId: true,
-      metadata: true,
-    },
-  });
-
   const colours = new Map<string, string | null>();
-  for (const teamId of uniqueIds) colours.set(teamId, null);
 
-  for (const recipient of recipients) {
-    if (!recipient.sourceId) continue;
-    colours.set(
-      recipient.sourceId,
-      normaliseTeamKitColour(
-        metadataRecord(recipient.metadata)?.kitPrimaryColour,
-      ),
-    );
+  for (const teamId of uniqueIds) colours.set(teamId, null);
+  if (uniqueIds.length === 0) return colours;
+
+  const rows = await prisma.$queryRaw<TeamKitColourRow[]>(
+    Prisma.sql`
+      SELECT "id", "kitPrimaryColour"
+      FROM "Team"
+      WHERE "id" IN (${Prisma.join(uniqueIds)})
+    `,
+  );
+
+  for (const row of rows) {
+    colours.set(row.id, normaliseTeamKitColour(row.kitPrimaryColour));
   }
 
   return colours;
