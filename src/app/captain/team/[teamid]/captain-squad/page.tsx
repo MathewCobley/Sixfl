@@ -10,7 +10,6 @@ import { TeamRole } from "@prisma/client";
 
 import { sendDashboardLoginEmail } from "@/lib/auth/sendDashboardLoginEmail";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
-import { getTeamPlayerPerformanceSummaries } from "@/lib/playerMatchPerformances";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
@@ -51,32 +50,34 @@ function pluralise(value: number, singular: string, plural: string) {
 
 function getRoleLabel(role: TeamRole) {
   switch (role) {
-    case TeamRole.CAPTAIN:
+    case "CAPTAIN":
       return "Captain";
-    case TeamRole.MANAGER:
+    case "MANAGER":
       return "Manager";
-    case TeamRole.VICE_CAPTAIN:
+    case "VICE_CAPTAIN":
       return "Vice captain";
-    case TeamRole.BACKUP_PLAYER:
+    case "BACKUP_PLAYER":
       return "Backup player";
-    case TeamRole.COACH:
+    case "COACH":
       return "Coach";
-    default:
+    case "PLAYER":
       return "Player";
+    default:
+      return role;
   }
 }
 
 function getRoleBadgeClasses(role: TeamRole) {
   switch (role) {
-    case TeamRole.CAPTAIN:
+    case "CAPTAIN":
       return "border-amber-400/25 bg-amber-500/10 text-amber-100";
-    case TeamRole.MANAGER:
+    case "MANAGER":
       return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-    case TeamRole.VICE_CAPTAIN:
+    case "VICE_CAPTAIN":
       return "border-violet-400/25 bg-violet-500/10 text-violet-100";
-    case TeamRole.BACKUP_PLAYER:
+    case "BACKUP_PLAYER":
       return "border-sky-400/25 bg-sky-500/10 text-sky-100";
-    case TeamRole.COACH:
+    case "COACH":
       return "border-white/15 bg-white/5 text-white/80";
     default:
       return "border-white/10 bg-white/5 text-white/75";
@@ -86,9 +87,7 @@ function getRoleBadgeClasses(role: TeamRole) {
 function getInitials(name: string | null | undefined) {
   const base = (name || "?").trim();
   const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.length
-    ? parts.map((part) => part[0]?.toUpperCase() ?? "").join("")
-    : "?";
+  return parts.length ? parts.map((part) => part[0]?.toUpperCase() ?? "").join("") : "?";
 }
 
 function formatUkDate(value: Date) {
@@ -193,13 +192,7 @@ function getSavedMessage(saved?: string) {
   }
 }
 
-function DetailPill({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null | undefined;
-}) {
+function DetailPill({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value?.trim()) return null;
 
   return (
@@ -210,26 +203,11 @@ function DetailPill({
   );
 }
 
-function StatPill({
-  label,
-  value,
-  tone = "emerald",
-}: {
-  label: string;
-  value: string | number;
-  tone?: "emerald" | "sky";
-}) {
-  const classes =
-    tone === "sky"
-      ? "border-sky-400/20 bg-sky-500/10 text-sky-100/85"
-      : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/85";
-  const valueClasses = tone === "sky" ? "text-sky-100" : "text-emerald-100";
-  const labelClasses = tone === "sky" ? "text-sky-100/65" : "text-emerald-100/65";
-
+function StatPill({ label, value }: { label: string; value: number }) {
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${classes}`}>
-      <span className={`font-semibold ${valueClasses}`}>{value}</span>
-      <span className={`ml-1 ${labelClasses}`}>{label}</span>
+    <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-100/85">
+      <span className="font-semibold text-emerald-100">{value}</span>
+      <span className="ml-1 text-emerald-100/65">{label}</span>
     </span>
   );
 }
@@ -293,9 +271,7 @@ async function addCaptainPlayerAction(formData: FormData) {
 
   if (!teamid) redirect("/captain");
   if (!displayName) {
-    redirect(
-      `/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`,
-    );
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`);
   }
 
   const team = await prisma.team.findUnique({
@@ -304,15 +280,11 @@ async function addCaptainPlayerAction(formData: FormData) {
   });
 
   if (!team) {
-    redirect(
-      `/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Team not found.")}`,
-    );
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Team not found.")}`);
   }
 
   if (team.teamMode === "MANAGED") {
-    redirect(
-      `/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("SIXFL manages player additions for managed teams.")}`,
-    );
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("SIXFL manages player additions for managed teams.")}`);
   }
 
   let user = email
@@ -326,9 +298,7 @@ async function addCaptainPlayerAction(formData: FormData) {
     });
 
     if (existingMember) {
-      redirect(
-        `/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("That player is already in your squad.")}`,
-      );
+      redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("That player is already in your squad.")}`);
     }
   }
 
@@ -397,17 +367,13 @@ async function sendCaptainPlayerDashboardLoginEmailAction(formData: FormData) {
   });
 
   if (!membership) {
-    redirect(
-      `/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Player not found.")}`,
-    );
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Player not found.")}`);
   }
 
   const email = membership.user.email?.trim().toLowerCase();
 
   if (!email) {
-    redirect(
-      `/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("This player does not have an email address saved.")}`,
-    );
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("This player does not have an email address saved.")}`);
   }
 
   await sendDashboardLoginEmail({
@@ -430,7 +396,9 @@ function DashboardLoginEmailButton({
   membershipId: string;
   email: string | null;
 }) {
-  if (!email?.trim()) {
+  const hasEmail = Boolean(email?.trim());
+
+  if (!hasEmail) {
     return (
       <span className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-center text-sm font-medium text-white/40">
         No email saved
@@ -494,28 +462,23 @@ export default async function CaptainSquadViewPage({
   const canCaptainAddPlayers = team.teamMode !== "MANAGED";
   const userIds = team.members.map((member) => member.user.id);
 
-  const [profileByMemberId, whatsappRows, matchDetails, performanceSummaries] =
-    await Promise.all([
-      getTeamMemberProfilesByTeamMemberIds(team.members.map((member) => member.id)),
-      userIds.length > 0
-        ? prisma.$queryRaw<WhatsappPreferenceRow[]>`
-            SELECT id, "usesWhatsapp"
-            FROM "User"
-            WHERE id = ANY(${userIds})
-          `
-        : Promise.resolve([] as WhatsappPreferenceRow[]),
-      prisma.matchResultTeamMeta.findMany({
-        where: { teamId: teamid },
-        select: { scorers: true, playerOfMatchName: true },
-      }),
-      getTeamPlayerPerformanceSummaries(teamid),
-    ]);
+  const [profileByMemberId, whatsappRows, matchDetails] = await Promise.all([
+    getTeamMemberProfilesByTeamMemberIds(team.members.map((member) => member.id)),
+    userIds.length > 0
+      ? prisma.$queryRaw<WhatsappPreferenceRow[]>`
+          SELECT id, "usesWhatsapp"
+          FROM "User"
+          WHERE id = ANY(${userIds})
+        `
+      : Promise.resolve([] as WhatsappPreferenceRow[]),
+    prisma.matchResultTeamMeta.findMany({
+      where: { teamId: teamid },
+      select: { scorers: true, playerOfMatchName: true },
+    }),
+  ]);
 
   const usesWhatsappByUserId = new Map(
     whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
-  );
-  const performanceByMemberId = new Map(
-    performanceSummaries.map((summary) => [summary.teamMemberId, summary]),
   );
   const memberIdByPlayerName = new Map(
     team.members.map((member) => [normalisePlayerName(member.user.name), member.id]),
@@ -526,9 +489,7 @@ export default async function CaptainSquadViewPage({
 
   matchDetails.forEach((details) => {
     parseStoredContributions(details.scorers).forEach((contribution) => {
-      const memberId =
-        contribution.teamMemberId ||
-        memberIdByPlayerName.get(normalisePlayerName(contribution.name));
+      const memberId = contribution.teamMemberId || memberIdByPlayerName.get(normalisePlayerName(contribution.name));
       if (!memberId) return;
 
       const stats = statsByMemberId.get(memberId) ?? emptyPlayerStats();
@@ -549,12 +510,10 @@ export default async function CaptainSquadViewPage({
   });
 
   const organiserCount = team.members.filter((member) =>
-    [TeamRole.CAPTAIN, TeamRole.MANAGER, TeamRole.VICE_CAPTAIN].includes(member.role),
+    ["CAPTAIN", "MANAGER", "VICE_CAPTAIN"].includes(member.role),
   ).length;
-  const playerCount = team.members.filter((member) => member.role === TeamRole.PLAYER).length;
-  const backupCount = team.members.filter(
-    (member) => member.role === TeamRole.BACKUP_PLAYER,
-  ).length;
+  const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
+  const backupCount = team.members.filter((member) => member.role === "BACKUP_PLAYER").length;
   const totalSquadCount = team.members.length;
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
@@ -571,7 +530,7 @@ export default async function CaptainSquadViewPage({
               Your squad
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              View players, contact details, appearances, average ratings and match statistics.
+              View your players, update contact details and quickly open the tools you need for matchdays.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
@@ -604,39 +563,13 @@ export default async function CaptainSquadViewPage({
               >
                 Open availability
               </Link>
-              <Link
-                href={`/captain/team/${teamid}/results`}
-                className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-500/10 px-5 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
-              >
-                Update match details
-              </Link>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <MetricCard
-              label="Your squad"
-              value={totalSquadCount}
-              copy="Players currently attached to your team."
-              tone="emerald"
-            />
-            <MetricCard
-              label="Organisers"
-              value={organiserCount}
-              copy="Captain and support roles for your team."
-              tone="amber"
-            />
-            <MetricCard
-              label="Players"
-              value={playerCount}
-              copy="Regular players in your squad."
-              tone="white"
-            />
-            <MetricCard
-              label="Backups"
-              value={backupCount}
-              copy="Backup players available if needed."
-              tone="sky"
-            />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+            <MetricCard label="Your squad" value={totalSquadCount} copy="Players currently attached to your team." tone="emerald" />
+            <MetricCard label="Organisers" value={organiserCount} copy="Captain and support roles for your team." tone="amber" />
+            <MetricCard label="Players" value={playerCount} copy="Regular players in your squad." tone="white" />
+            <MetricCard label="Backups" value={backupCount} copy="Backup players available if needed." tone="sky" />
           </div>
         </div>
       </section>
@@ -666,7 +599,6 @@ export default async function CaptainSquadViewPage({
               {team.members.length} player{team.members.length === 1 ? "" : "s"}
             </div>
           </div>
-
           <div className="divide-y divide-white/10">
             {team.members.length === 0 ? (
               <div className="px-6 py-10 text-sm text-white/55">
@@ -677,22 +609,11 @@ export default async function CaptainSquadViewPage({
             {team.members.map((member) => {
               const profile = profileByMemberId.get(member.id);
               const preferredNights = formatPreferredNights(profile?.preferredNights);
-              const availabilitySummary = formatAvailabilitySummary(
-                profile?.availabilitySummary,
-              );
-              const playerUsesWhatsapp =
-                usesWhatsappByUserId.get(member.user.id) === true;
-              const whatsAppUrl = playerUsesWhatsapp
-                ? getWhatsAppUrl(profile?.phone)
-                : null;
+              const availabilitySummary = formatAvailabilitySummary(profile?.availabilitySummary);
+              const playerUsesWhatsapp = usesWhatsappByUserId.get(member.user.id) === true;
+              const whatsAppUrl = playerUsesWhatsapp ? getWhatsAppUrl(profile?.phone) : null;
               const playerName = member.user.name || "player";
               const playerStats = statsByMemberId.get(member.id) ?? emptyPlayerStats();
-              const performance = performanceByMemberId.get(member.id);
-              const averageRating =
-                performance?.averageRating == null
-                  ? "—"
-                  : `${Number(performance.averageRating).toFixed(1)}/10`;
-              const appearances = performance?.appearances ?? 0;
               const hasPublicProfileDetails = Boolean(
                 profile?.ageBand ||
                   profile?.preferredPositions ||
@@ -703,10 +624,7 @@ export default async function CaptainSquadViewPage({
               );
 
               return (
-                <div
-                  key={member.id}
-                  className="flex flex-col gap-4 px-6 py-5 xl:flex-row xl:items-start xl:justify-between"
-                >
+                <div key={member.id} className="flex flex-col gap-4 px-6 py-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="flex min-w-0 items-start gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
                       {getInitials(member.user.name)}
@@ -716,68 +634,32 @@ export default async function CaptainSquadViewPage({
                         <div className="truncate text-base font-semibold text-white">
                           {member.user.name || "Unnamed player"}
                         </div>
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}
-                        >
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
-                        {whatsAppUrl ? (
-                          <WhatsAppLink href={whatsAppUrl} playerName={playerName} />
-                        ) : null}
+                        {whatsAppUrl ? <WhatsAppLink href={whatsAppUrl} playerName={playerName} /> : null}
                       </div>
-
                       <div className="mt-1 text-xs text-white/45">
                         Added {formatUkDate(member.createdAt)}
-                        {member.user.email
-                          ? ` · ${member.user.email}`
-                          : " · No email saved"}
+                        {member.user.email ? ` · ${member.user.email}` : " · No email saved"}
                       </div>
-
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <StatPill
-                          label={pluralise(appearances, "appearance", "appearances")}
-                          value={appearances}
-                          tone="sky"
-                        />
-                        <StatPill label="average rating" value={averageRating} tone="sky" />
-                        <StatPill
-                          label={pluralise(playerStats.goals, "goal", "goals")}
-                          value={playerStats.goals}
-                        />
-                        <StatPill
-                          label={pluralise(playerStats.assists, "assist", "assists")}
-                          value={playerStats.assists}
-                        />
-                        <StatPill
-                          label="Player of the Match"
-                          value={playerStats.playerOfMatchAwards}
-                        />
+                        <StatPill label={pluralise(playerStats.goals, "goal", "goals")} value={playerStats.goals} />
+                        <StatPill label={pluralise(playerStats.assists, "assist", "assists")} value={playerStats.assists} />
+                        <StatPill label="Player of the Match" value={playerStats.playerOfMatchAwards} />
                       </div>
-
                       {hasPublicProfileDetails ? (
                         <div className="mt-3 space-y-3">
                           <div className="flex flex-wrap gap-2">
                             <DetailPill label="Age" value={profile?.ageBand} />
-                            <DetailPill
-                              label="Position"
-                              value={profile?.preferredPositions}
-                            />
-                            <DetailPill
-                              label="Level"
-                              value={profile?.experienceSummary}
-                            />
-                            <DetailPill
-                              label="Availability"
-                              value={profile?.availabilityLevel}
-                            />
+                            <DetailPill label="Position" value={profile?.preferredPositions} />
+                            <DetailPill label="Level" value={profile?.experienceSummary} />
+                            <DetailPill label="Availability" value={profile?.availabilityLevel} />
                             <DetailPill label="Nights" value={preferredNights} />
                           </div>
                           {availabilitySummary ? (
                             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/60">
-                              <span className="font-semibold text-white/70">
-                                Availability notes:
-                              </span>{" "}
-                              {availabilitySummary}
+                              <span className="font-semibold text-white/70">Availability notes:</span> {availabilitySummary}
                             </div>
                           ) : null}
                         </div>
@@ -788,7 +670,6 @@ export default async function CaptainSquadViewPage({
                       )}
                     </div>
                   </div>
-
                   <div className="grid gap-2 sm:grid-cols-2 xl:w-72 xl:justify-end">
                     <Link
                       href={`/captain/team/${teamid}/captain-squad/${member.id}/edit`}
@@ -814,11 +695,9 @@ export default async function CaptainSquadViewPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/70">
                 Add player
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                Add a player to your squad
-              </h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">Add a player to your squad</h2>
               <p className="mt-2 text-sm text-white/60">
-                Add a basic player record so they can be selected for appearances, ratings, goals, assists and Player of the Match.
+                Add a basic player record now so they can be picked for goals, assists and Player of the Match. Add an email if you want to send a dashboard login link.
               </p>
               <form action={addCaptainPlayerAction} className="mt-5 space-y-4">
                 <input type="hidden" name="teamid" value={teamid} />
@@ -851,19 +730,11 @@ export default async function CaptainSquadViewPage({
                 <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 transition hover:border-emerald-400/30 hover:bg-emerald-500/[0.06]">
                   <span className="flex items-center gap-3 text-sm font-medium text-white/75">
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10">
-                      <img
-                        src="/WhatsApp-Logo.png"
-                        alt=""
-                        className="h-5 w-5 object-contain"
-                      />
+                      <img src="/WhatsApp-Logo.png" alt="" className="h-5 w-5 object-contain" />
                     </span>
                     Player uses WhatsApp
                   </span>
-                  <input
-                    type="checkbox"
-                    name="usesWhatsapp"
-                    className="h-4 w-4 accent-emerald-400"
-                  />
+                  <input type="checkbox" name="usesWhatsapp" className="h-4 w-4 accent-emerald-400" />
                 </label>
                 <button
                   type="submit"
@@ -878,9 +749,7 @@ export default async function CaptainSquadViewPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
                 SIXFL-managed team
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                Player additions are managed by SIXFL
-              </h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">Player additions are managed by SIXFL</h2>
               <p className="mt-2 leading-6">
                 Contact SIXFL if a player needs to be added to this squad. You can still edit saved details for the players already shown.
               </p>
