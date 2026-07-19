@@ -6,6 +6,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
+import TeamKitColourPicker from "@/components/admin/teams/TeamKitColourPicker";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -210,6 +211,8 @@ export default async function AdminTeamDetailLayout({
           </div>
         </div>
       </section>
+
+      <TeamKitColourPicker teamId={team.id} />
 
       <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 shadow-[0_14px_50px_rgba(0,0,0,0.22)]">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
