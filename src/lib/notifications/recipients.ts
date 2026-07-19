@@ -48,9 +48,8 @@ function mergeRecipientMetadata(
   incoming: Prisma.InputJsonValue | undefined,
 ): Prisma.InputJsonValue | undefined {
   if (incoming === undefined) {
-    return existing && existing !== Prisma.JsonNull
-      ? (existing as Prisma.InputJsonValue)
-      : undefined;
+    if (existing === null || existing === undefined) return undefined;
+    return existing as Prisma.InputJsonValue;
   }
 
   if (isJsonObject(existing) && isInputJsonObject(incoming)) {
