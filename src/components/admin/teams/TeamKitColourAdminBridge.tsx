@@ -32,23 +32,23 @@ function getTeamId(pathname: string) {
   return pathname.match(/^\/admin\/teams\/([^/]+)\/?$/)?.[1] ?? null;
 }
 
-function findSettingsCard() {
-  const heading = Array.from(document.querySelectorAll("h2")).find(
-    (item) => item.textContent?.trim() === "Team settings",
+function findTeamSettingsForm(teamId: string) {
+  return (
+    Array.from(document.querySelectorAll<HTMLFormElement>("form")).find((form) => {
+      const idInput = form.querySelector<HTMLInputElement>('input[name="id"]');
+      const nameInput = form.querySelector<HTMLInputElement>('input[name="name"]');
+
+      return idInput?.value === teamId && Boolean(nameInput);
+    }) ?? null
   );
+}
 
-  let current = heading?.parentElement ?? null;
-  while (current && current.tagName !== "MAIN") {
-    if (
-      current.classList.contains("rounded-3xl") &&
-      current.querySelector("form")
-    ) {
-      return current;
-    }
-    current = current.parentElement;
-  }
-
-  return null;
+function findExistingHost(teamId: string) {
+  return (
+    Array.from(
+      document.querySelectorAll<HTMLElement>("[data-sixfl-kit-colour-host]"),
+    ).find((element) => element.dataset.sixflKitColourHost === teamId) ?? null
+  );
 }
 
 function ShirtPreview({ colour }: { colour: string }) {
@@ -60,6 +60,11 @@ function ShirtPreview({ colour }: { colour: string }) {
         backgroundColor: colour,
         clipPath:
           "polygon(20% 0,34% 0,40% 13%,60% 13%,66% 0,80% 0,100% 24%,84% 42%,77% 33%,77% 100%,23% 100%,23% 33%,16% 42%,0 24%)",
+        outline:
+          colour.toUpperCase() === "#FFFFFF"
+            ? "1px solid rgba(148,163,184,0.85)"
+            : undefined,
+        outlineOffset: colour.toUpperCase() === "#FFFFFF" ? "-1px" : undefined,
       }}
     />
   );
@@ -82,26 +87,23 @@ export default function TeamKitColourAdminBridge() {
     }
 
     let mounted = true;
-    let createdHost: HTMLElement | null = null;
+    let installedHost: HTMLElement | null = null;
 
     const install = () => {
       if (!mounted) return true;
 
-      const card = findSettingsCard();
-      const form = card?.querySelector("form");
-      if (!card || !form) return false;
+      const form = findTeamSettingsForm(teamId);
+      if (!form) return false;
 
-      const existing = card.querySelector<HTMLElement>(
-        `[data-sixfl-kit-colour-host="${CSS.escape(teamId)}"]`,
-      );
-      createdHost = existing ?? document.createElement("div");
-      createdHost.dataset.sixflKitColourHost = teamId;
+      installedHost = findExistingHost(teamId) ?? document.createElement("div");
+      installedHost.dataset.sixflKitColourHost = teamId;
+      installedHost.classList.add("w-full");
 
-      if (!existing) {
-        form.parentElement?.insertBefore(createdHost, form);
+      if (!installedHost.isConnected) {
+        form.insertBefore(installedHost, form.firstChild);
       }
 
-      setHost(createdHost);
+      setHost(installedHost);
       return true;
     };
 
@@ -114,13 +116,13 @@ export default function TeamKitColourAdminBridge() {
       return () => {
         mounted = false;
         observer.disconnect();
-        createdHost?.remove();
+        installedHost?.remove();
       };
     }
 
     return () => {
       mounted = false;
-      createdHost?.remove();
+      installedHost?.remove();
     };
   }, [teamId]);
 
