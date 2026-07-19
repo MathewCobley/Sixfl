@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -12,10 +13,6 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-type StoredKitColourRow = {
-  kitPrimaryColour: string | null;
-};
-
 function normaliseColour(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value !== "string") return undefined;
@@ -24,15 +21,37 @@ function normaliseColour(value: unknown) {
   return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed.toUpperCase() : undefined;
 }
 
-async function getStoredColour(teamId: string) {
-  const rows = await prisma.$queryRaw<StoredKitColourRow[]>`
-    SELECT "kitPrimaryColour"
-    FROM "Team"
-    WHERE "id" = ${teamId}
-    LIMIT 1
-  `;
+function getMetadataRecord(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {} as Record<string, Prisma.InputJsonValue | null>;
+  }
 
-  return rows[0]?.kitPrimaryColour ?? null;
+  return {
+    ...(metadata as Record<string, Prisma.InputJsonValue | null>),
+  };
+}
+
+function getStoredColour(metadata: unknown) {
+  const value = getMetadataRecord(metadata).kitPrimaryColour;
+  return normaliseColour(value) ?? null;
+}
+
+async function storeTeamColour(teamId: string, colour: string | null) {
+  const { recipient } = await upsertTeamNotificationRecipient(teamId);
+  const metadata = getMetadataRecord(recipient.metadata);
+
+  if (colour) {
+    metadata.kitPrimaryColour = colour;
+  } else {
+    delete metadata.kitPrimaryColour;
+  }
+
+  await prisma.notificationRecipient.update({
+    where: { id: recipient.id },
+    data: {
+      metadata: metadata as Prisma.InputJsonObject,
+    },
+  });
 }
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -44,10 +63,21 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Team not found." }, { status: 404 });
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { id: true, name: true },
-  });
+  const [team, recipient] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamId },
+      select: { id: true, name: true },
+    }),
+    prisma.notificationRecipient.findFirst({
+      where: {
+        sourceType: "TEAM",
+        sourceId: teamId,
+      },
+      select: {
+        metadata: true,
+      },
+    }),
+  ]);
 
   if (!team) {
     return NextResponse.json({ error: "Team not found." }, { status: 404 });
@@ -56,7 +86,7 @@ export async function GET(_request: Request, context: RouteContext) {
   return NextResponse.json({
     teamId: team.id,
     teamName: team.name,
-    colour: normaliseColour(await getStoredColour(team.id)) ?? null,
+    colour: getStoredColour(recipient?.metadata),
   });
 }
 
@@ -129,12 +159,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     new Set([team.id, ...relatedTeams.map((item) => item.id)]),
   );
 
-  await prisma.$executeRaw(
-    Prisma.sql`
-      UPDATE "Team"
-      SET "kitPrimaryColour" = ${colour}, "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "id" IN (${Prisma.join(affectedTeamIds)})
-    `,
+  await Promise.all(
+    affectedTeamIds.map((affectedTeamId) =>
+      storeTeamColour(affectedTeamId, colour),
+    ),
   );
 
   revalidatePath("/admin/teams");
