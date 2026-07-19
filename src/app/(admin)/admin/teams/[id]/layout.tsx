@@ -6,8 +6,10 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
+import TeamKitColourPicker from "@/components/admin/teams/TeamKitColourPicker";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getTeamKitColour } from "@/lib/teams/kit-colours";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -151,6 +153,8 @@ export default async function AdminTeamDetailLayout({
     notFound();
   }
 
+  const kitColour = await getTeamKitColour(team.id);
+
   return (
     <div className="space-y-5">
       <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 shadow-[0_14px_50px_rgba(0,0,0,0.25)]">
@@ -210,6 +214,12 @@ export default async function AdminTeamDetailLayout({
           </div>
         </div>
       </section>
+
+      <TeamKitColourPicker
+        teamId={team.id}
+        teamName={team.name}
+        initialColour={kitColour}
+      />
 
       <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 shadow-[0_14px_50px_rgba(0,0,0,0.22)]">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
