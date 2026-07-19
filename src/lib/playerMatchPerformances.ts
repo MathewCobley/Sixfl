@@ -19,6 +19,13 @@ export type PlayerPerformanceHistory = MatchPerformance & {
   awayScore: number;
 };
 
+export type PlayerPerformanceSummary = {
+  teamMemberId: string;
+  appearances: number;
+  ratedAppearances: number;
+  averageRating: number | null;
+};
+
 let tableReady: Promise<void> | null = null;
 
 export function ensurePlayerMatchPerformanceTable() {
@@ -74,6 +81,22 @@ export async function getMatchPerformances(teamId: string, matchResultIds: strin
     FROM "PlayerMatchPerformance"
     WHERE "teamId" = ${teamId}
       AND "matchResultId" IN (${Prisma.join(matchResultIds)})
+  `);
+}
+
+export async function getTeamPlayerPerformanceSummaries(teamId: string) {
+  await ensurePlayerMatchPerformanceTable();
+
+  return prisma.$queryRaw<PlayerPerformanceSummary[]>(Prisma.sql`
+    SELECT
+      "teamMemberId",
+      COUNT(*)::int AS "appearances",
+      COUNT("rating")::int AS "ratedAppearances",
+      AVG("rating")::double precision AS "averageRating"
+    FROM "PlayerMatchPerformance"
+    WHERE "teamId" = ${teamId}
+      AND "played" = TRUE
+    GROUP BY "teamMemberId"
   `);
 }
 
