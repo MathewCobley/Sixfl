@@ -33,6 +33,35 @@ function normalizePhone(phone?: string | null) {
   return normalizePhoneNumber(phone);
 }
 
+function isJsonObject(value: unknown): value is Record<string, Prisma.JsonValue> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isInputJsonObject(
+  value: Prisma.InputJsonValue | undefined,
+): value is Prisma.InputJsonObject {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function mergeRecipientMetadata(
+  existing: Prisma.JsonValue | null | undefined,
+  incoming: Prisma.InputJsonValue | undefined,
+): Prisma.InputJsonValue | undefined {
+  if (incoming === undefined) {
+    if (existing === null || existing === undefined) return undefined;
+    return existing as Prisma.InputJsonValue;
+  }
+
+  if (isJsonObject(existing) && isInputJsonObject(incoming)) {
+    return {
+      ...existing,
+      ...incoming,
+    } as Prisma.InputJsonObject;
+  }
+
+  return incoming;
+}
+
 export async function upsertNotificationRecipient(
   input: UpsertNotificationRecipientInput,
 ) {
@@ -49,6 +78,7 @@ export async function upsertNotificationRecipient(
     },
     select: {
       id: true,
+      metadata: true,
     },
   });
 
@@ -63,7 +93,7 @@ export async function upsertNotificationRecipient(
     marketingSmsOptIn: input.marketingSmsOptIn ?? false,
     transactionalEmailOptIn: input.transactionalEmailOptIn ?? true,
     transactionalSmsOptIn: input.transactionalSmsOptIn ?? true,
-    metadata: input.metadata,
+    metadata: mergeRecipientMetadata(existing?.metadata, input.metadata),
     lastSyncedAt: new Date(),
   };
 
