@@ -5,10 +5,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
+import TeamShirt from "@/components/fixtures/TeamShirt";
 import { getFallbackFixtureAiPreview, type FixtureAiPreview } from "@/lib/fixtures/aiPredictor";
 import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
 import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
+import { getTeamKitColours } from "@/lib/teams/kit-colours";
 
 function formatKickoffTime(value: Date | null) {
   if (!value) return "TBC";
@@ -82,10 +85,12 @@ function getPredictionFixturePool<TFixture extends FixtureForPrediction>(
 function TeamBadge({
   name,
   logoUrl,
+  kitColour,
   align = "left",
 }: {
   name: string;
   logoUrl: string | null;
+  kitColour: string | null;
   align?: "left" | "right";
 }) {
   return (
@@ -115,8 +120,13 @@ function TeamBadge({
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
           {align === "right" ? "Away" : "Home"}
         </div>
-        <div className="mt-1 text-lg font-black leading-tight text-white sm:text-2xl">
-          {name}
+        <div
+          className={`mt-1 flex items-center gap-2 text-lg font-black leading-tight text-white sm:text-2xl ${
+            align === "right" ? "justify-end" : ""
+          }`}
+        >
+          <TeamShirt colour={kitColour} teamName={name} size="md" />
+          <span>{name}</span>
         </div>
       </div>
     </div>
@@ -238,6 +248,10 @@ export default async function LeagueFixturesPublic({
     notFound();
   }
 
+  const kitColours = await getTeamKitColours(
+    league.fixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId]),
+  );
+
   const scheduledFixtures = league.fixtures.filter((fixture) => fixture.status === "SCHEDULED");
   const storedPreviews = await getStoredAiPreviewsByFixtureIds(
     scheduledFixtures.map((fixture) => fixture.id),
@@ -304,7 +318,7 @@ export default async function LeagueFixturesPublic({
                   {league.name}
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-white/60 sm:text-base">
-                  Published fixtures with team badges, kick-off details and the SIXFL AI Predictor.
+                  Published fixtures with team badges, shirt colours, kick-off details and the SIXFL AI Predictor.
                 </p>
               </div>
 
@@ -358,7 +372,11 @@ export default async function LeagueFixturesPublic({
                     className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] shadow-[0_18px_48px_rgba(0,0,0,0.28)]"
                   >
                     <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center lg:p-7">
-                      <TeamBadge name={fixture.homeTeam.name} logoUrl={homeLogoUrl} />
+                      <TeamBadge
+                        name={fixture.homeTeam.name}
+                        logoUrl={homeLogoUrl}
+                        kitColour={kitColours.get(fixture.homeTeamId) ?? null}
+                      />
 
                       <div className="flex flex-col items-center justify-center gap-3 text-center">
                         {fixture.result ? (
@@ -384,7 +402,12 @@ export default async function LeagueFixturesPublic({
                         </div>
                       </div>
 
-                      <TeamBadge name={fixture.awayTeam.name} logoUrl={awayLogoUrl} align="right" />
+                      <TeamBadge
+                        name={fixture.awayTeam.name}
+                        logoUrl={awayLogoUrl}
+                        kitColour={kitColours.get(fixture.awayTeamId) ?? null}
+                        align="right"
+                      />
                     </div>
 
                     {winChance ? (
