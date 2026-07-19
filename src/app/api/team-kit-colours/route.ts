@@ -27,7 +27,6 @@ export async function GET() {
     select: {
       id: true,
       name: true,
-      updatedAt: true,
     },
   });
 
@@ -46,14 +45,14 @@ export async function GET() {
       })
     : [];
 
-  const colourByTeamId = new Map(
-    recipients
-      .filter((recipient) => Boolean(recipient.sourceId))
-      .map((recipient) => [
-        recipient.sourceId as string,
-        getMetadataColour(recipient.metadata),
-      ]),
-  );
+  const colourByTeamId = new Map<string, string | null>();
+  for (const recipient of recipients) {
+    if (!recipient.sourceId) continue;
+    colourByTeamId.set(
+      recipient.sourceId,
+      getMetadataColour(recipient.metadata),
+    );
+  }
 
   const teamsByName = new Map<
     string,
