@@ -1,14 +1,7 @@
 import { NotificationRecipientSourceType, type Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-
-export const DEFAULT_TEAM_KIT_COLOUR = "#64748B";
-
-export function normaliseTeamKitColour(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed.toUpperCase() : null;
-}
+import { normaliseTeamKitColour } from "@/lib/teams/kit-colour-values";
 
 function metadataRecord(value: Prisma.JsonValue | null): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -24,7 +17,9 @@ export async function getTeamKitColour(teamId: string): Promise<string | null> {
     select: { metadata: true },
   });
 
-  return normaliseTeamKitColour(metadataRecord(recipient?.metadata ?? null)?.kitPrimaryColour);
+  return normaliseTeamKitColour(
+    metadataRecord(recipient?.metadata ?? null)?.kitPrimaryColour,
+  );
 }
 
 export async function getTeamKitColours(teamIds: string[]) {
