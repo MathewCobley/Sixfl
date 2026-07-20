@@ -29,7 +29,7 @@ function Shirt({ colour }: { colour: string }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-block h-12 w-14 shrink-0 drop-shadow-[0_4px_8px_rgba(0,0,0,0.35)]"
+      className="inline-block h-8 w-9 shrink-0 drop-shadow-[0_3px_6px_rgba(0,0,0,0.35)]"
       style={{
         backgroundColor: colour,
         clipPath:
@@ -119,82 +119,80 @@ export default function TeamKitColourPicker({ teamId }: { teamId: string }) {
   const previewColour = savedColour ?? selectedColour;
 
   return (
-    <section className="rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] px-5 py-5 shadow-[0_14px_50px_rgba(0,0,0,0.22)] sm:px-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-black/25">
+    <section className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 shadow-[0_10px_34px_rgba(0,0,0,0.18)]">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/25">
             <Shirt colour={previewColour} />
           </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-200/75">
-              Match kit
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-white">
-              Primary shirt colour
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-white/60">
-              Choose the top colour {teamName} normally wears. Captains will see it beside fixture details.
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h2 className="text-sm font-semibold text-white">Primary shirt colour</h2>
+              <span className="font-mono text-[11px] text-white/40">
+                {savedColour || "Not set"}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-white/50">
+              Shown beside {teamName} on fixture and result screens.
             </p>
           </div>
         </div>
 
-        <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70 lg:min-w-56">
-          Custom colour
-          <input
-            aria-label="Choose custom shirt colour"
-            type="color"
-            value={selectedColour}
-            onChange={(event) => setSelectedColour(event.target.value.toUpperCase())}
-            disabled={loading || saving}
-            className="h-10 w-14 cursor-pointer rounded border-0 bg-transparent p-0 disabled:cursor-not-allowed disabled:opacity-50"
-          />
-        </label>
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5" aria-label="Preset shirt colours">
+            {PRESET_COLOURS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => setSelectedColour(preset.value)}
+                disabled={loading || saving}
+                title={preset.label}
+                aria-label={`Choose ${preset.label}`}
+                className={`h-7 w-7 rounded-full border-2 transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  selectedColour === preset.value
+                    ? "scale-110 border-sky-200"
+                    : "border-white/20 hover:scale-105 hover:border-white/55"
+                }`}
+                style={{ backgroundColor: preset.value }}
+              />
+            ))}
+          </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        {PRESET_COLOURS.map((preset) => (
+          <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-2.5 text-xs text-white/60">
+            Custom
+            <input
+              aria-label="Choose custom shirt colour"
+              type="color"
+              value={selectedColour}
+              onChange={(event) => setSelectedColour(event.target.value.toUpperCase())}
+              disabled={loading || saving}
+              className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </label>
+
           <button
-            key={preset.value}
             type="button"
-            onClick={() => setSelectedColour(preset.value)}
+            onClick={() => save(selectedColour)}
             disabled={loading || saving}
-            title={preset.label}
-            aria-label={`Choose ${preset.label}`}
-            className={`h-9 w-9 rounded-full border-2 transition disabled:cursor-not-allowed disabled:opacity-50 ${
-              selectedColour === preset.value
-                ? "scale-110 border-sky-200"
-                : "border-white/20 hover:scale-105 hover:border-white/55"
-            }`}
-            style={{ backgroundColor: preset.value }}
-          />
-        ))}
-      </div>
+            className="inline-flex h-9 items-center justify-center rounded-lg bg-sky-400 px-3 text-xs font-semibold text-black transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Saving…" : loading ? "Loading…" : "Save"}
+          </button>
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => save(selectedColour)}
-          disabled={loading || saving}
-          className="inline-flex items-center justify-center rounded-xl bg-sky-400 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {saving ? "Saving…" : loading ? "Loading…" : "Save shirt colour"}
-        </button>
-        <button
-          type="button"
-          onClick={() => save(null)}
-          disabled={loading || saving || savedColour === null}
-          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Clear colour
-        </button>
-        <span className="font-mono text-xs text-white/45">
-          {savedColour || "Not set"}
-        </span>
+          <button
+            type="button"
+            onClick={() => save(null)}
+            disabled={loading || saving || savedColour === null}
+            className="inline-flex h-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-white/65 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Clear
+          </button>
+        </div>
       </div>
 
       {message ? (
         <p
-          className={`mt-3 text-sm ${
+          className={`mt-2 text-xs ${
             message.toLowerCase().includes("could not") ||
             message.toLowerCase().includes("valid")
               ? "text-red-200"
