@@ -17,6 +17,64 @@ type Props = {
   thread: SelectedThread;
 };
 
+type DispatchMetadata = {
+  origin?: unknown;
+  originLabel?: unknown;
+  mode?: unknown;
+};
+
+function getMetadataRecord(value: unknown): DispatchMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as DispatchMetadata;
+}
+
+function getAutomatedDispatchLabel(input: {
+  participantRole: "ADMIN" | "CAPTAIN" | "CONTACT" | "SYSTEM";
+  dispatch: NonNullable<NonNullable<SelectedThread>["messages"][number]["dispatch"]>;
+}) {
+  if (input.dispatch.template) return input.dispatch;
+
+  const metadata = getMetadataRecord(input.dispatch.metadata);
+  const origin = typeof metadata.origin === "string" ? metadata.origin.trim() : "";
+  const originLabel =
+    typeof metadata.originLabel === "string" ? metadata.originLabel.trim() : "";
+  const mode = typeof metadata.mode === "string" ? metadata.mode.trim() : "";
+  const looksAutomated =
+    input.participantRole === "SYSTEM" ||
+    origin.toLowerCase().includes("automation") ||
+    origin.toLowerCase().includes("automated");
+
+  if (!looksAutomated) return input.dispatch;
+
+  return {
+    ...input.dispatch,
+    template: {
+      id: input.dispatch.id,
+      name: originLabel || "Automated notification",
+      key: origin || mode || "automated",
+    },
+  };
+}
+
+function normaliseAutomatedMessageLabels(thread: SelectedThread): SelectedThread {
+  if (!thread) return thread;
+
+  return {
+    ...thread,
+    messages: thread.messages.map((message) => {
+      if (!message.dispatch) return message;
+
+      return {
+        ...message,
+        dispatch: getAutomatedDispatchLabel({
+          participantRole: message.participantRole,
+          dispatch: message.dispatch,
+        }),
+      };
+    }),
+  };
+}
+
 function ReplyButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
@@ -32,15 +90,23 @@ function ReplyButton({ disabled }: { disabled: boolean }) {
 }
 
 export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }: Props) {
-  const replyEmail = thread
-    ? (thread.contactEmail || thread.recipient?.email || thread.emailNormalized || "").trim()
+  const labelledThread = normaliseAutomatedMessageLabels(thread);
+  const replyEmail = labelledThread
+    ? (
+        labelledThread.contactEmail ||
+        labelledThread.recipient?.email ||
+        labelledThread.emailNormalized ||
+        ""
+      ).trim()
     : "";
-  const showEmailReply = Boolean(thread && thread.channel === "EMAIL");
-  const canReply = Boolean(showEmailReply && replyEmail && thread?.status === "OPEN");
+  const showEmailReply = Boolean(labelledThread && labelledThread.channel === "EMAIL");
+  const canReply = Boolean(
+    showEmailReply && replyEmail && labelledThread?.status === "OPEN",
+  );
 
   return (
     <div className="space-y-4">
-      {thread ? (
+      {labelledThread ? (
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.06] p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -55,7 +121,7 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
               </p>
             </div>
             <Link
-              href={`/admin/messaging/reassign/${thread.id}?filter=${selectedFilter}`}
+              href={`/admin/messaging/reassign/${labelledThread.id}?filter=${selectedFilter}`}
               className="inline-flex items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
             >
               Reassign / unlink thread
@@ -72,10 +138,12 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
           </p>
 
           <form action={sendAdminEmailReplyAction} className="mt-4 space-y-4">
-            <input type="hidden" name="threadId" value={thread?.id ?? ""} />
+            <input type="hidden" name="threadId" value={labelledThread?.id ?? ""} />
             <input type="hidden" name="filter" value={selectedFilter} />
             <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
-              {canReply ? `Replying to ${replyEmail}` : "Email reply unavailable for this thread."}
+              {canReply
+                ? `Replying to ${replyEmail}`
+                : "Email reply unavailable for this thread."}
             </div>
             <textarea
               name="body"
@@ -90,7 +158,7 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
         </div>
       ) : null}
 
-      <AdminMessageThread selectedFilter={selectedFilter} thread={thread} />
+      <AdminMessageThread selectedFilter={selectedFilter} thread={labelledThread} />
     </div>
   );
 }
