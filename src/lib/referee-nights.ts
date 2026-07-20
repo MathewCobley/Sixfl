@@ -170,6 +170,7 @@ const visibleFixtureUnionSql = Prisma.sql`
   JOIN "Fixture" f ON f.id = rnf."fixtureId"
   WHERE rnf."refereeNightId" = rn.id
     AND f.status IN ('SCHEDULED', 'COMPLETED')
+    AND f."publishedAt" IS NOT NULL
     AND (f."refereeId" IS NULL OR f."refereeId" = rn."refereeId")
 
   UNION
@@ -179,6 +180,7 @@ const visibleFixtureUnionSql = Prisma.sql`
   WHERE f."refereeId" = rn."refereeId"
     AND f."leagueId" = rn."leagueId"
     AND f.status IN ('SCHEDULED', 'COMPLETED')
+    AND f."publishedAt" IS NOT NULL
     AND (rn."venueId" IS NULL OR f."venueId" = rn."venueId")
     AND (f."kickoffAt" AT TIME ZONE 'Europe/London')::date = rn."nightDate"
 `;
@@ -271,6 +273,7 @@ async function getFixturesByIds(fixtureIds: string[]) {
       status: {
         in: ACTIVE_REFEREE_FIXTURE_STATUSES,
       },
+      publishedAt: { not: null },
     },
     orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
     select: {
@@ -343,6 +346,7 @@ export async function getAssignableFixturesForRefereeNight(refereeNightId: strin
       JOIN "User" u ON u.id = rn."refereeId"
       WHERE rnf."fixtureId" IN (${Prisma.join(matchingFixtureIds)})
         AND f.status IN ('SCHEDULED', 'COMPLETED')
+        AND f."publishedAt" IS NOT NULL
     `),
   ]);
 
@@ -424,6 +428,7 @@ export async function findFixturesForNight(input: {
       status: {
         in: ACTIVE_REFEREE_FIXTURE_STATUSES,
       },
+      publishedAt: { not: null },
     },
     orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
     select: {
