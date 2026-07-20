@@ -9,8 +9,6 @@ export type SmsShortLink = {
   url: string;
 };
 
-export const SHORT_TOKEN_DISPATCH_PREFIX_LENGTH = 10;
-
 const SMS_URL_PATTERN = /https?:\/\/[^\s<>()"']+/gi;
 
 export function trimTrailingUrlPunctuation(url: string) {
@@ -26,7 +24,9 @@ function getCompactShortLinkUrl(token: string) {
 }
 
 function buildShortToken(input: { dispatchId: string; index: number }) {
-  return `${input.dispatchId.slice(0, SHORT_TOKEN_DISPATCH_PREFIX_LENGTH)}${input.index.toString(36)}`;
+  // Use the complete dispatch id so links created together can never share the
+  // same short token. The redirect route already supports this exact-id format.
+  return `${input.dispatchId}-${input.index.toString(36)}`;
 }
 
 export function shortenSmsBodyLinks(input: {
