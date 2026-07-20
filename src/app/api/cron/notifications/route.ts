@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
 import { runFixtureConfirmationEmailJob } from "@/lib/fixtures/confirmation-emails";
 import { runFixtureConfirmationReminderJob } from "@/lib/fixtures/confirmation-reminder-job";
+import { backfillUpcomingFixtureConfirmationWarningEmails } from "@/lib/fixtures/confirmation-warning-emails";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { queueDueRefereeNightConfirmationChasers } from "@/lib/referee-night-confirmations";
 import { queueDueRefereeNightReminderEmails } from "@/lib/referee-night-emails";
@@ -63,6 +64,8 @@ export async function GET(request: NextRequest) {
     const onboarding = await runCaptainOnboardingEmailJob();
     const fixtureConfirmations = await runFixtureConfirmationReminderJob();
     const fixtureConfirmationEmails = await runFixtureConfirmationEmailJob();
+    const fixtureConfirmationWarnings =
+      await backfillUpcomingFixtureConfirmationWarningEmails();
     const refereeAssignmentSync = await syncUpcomingRefereeAssignmentsForConfirmations();
     const refereeNights = await queueDueRefereeNightReminderEmails();
     const refereeConfirmations = await queueDueRefereeNightConfirmationChasers();
@@ -70,6 +73,7 @@ export async function GET(request: NextRequest) {
       onboarding.queuedDispatches +
       fixtureConfirmations.queued +
       fixtureConfirmationEmails.queued +
+      fixtureConfirmationWarnings.queued +
       refereeNights.queued +
       refereeConfirmations.queued;
     const result = await processNotificationQueue(
@@ -81,6 +85,7 @@ export async function GET(request: NextRequest) {
       onboarding,
       fixtureConfirmations,
       fixtureConfirmationEmails,
+      fixtureConfirmationWarnings,
       refereeAssignmentSync,
       refereeNights,
       refereeConfirmations,
