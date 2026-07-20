@@ -6,7 +6,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 
-const SHORT_TOKEN_DISPATCH_PREFIX_LENGTH = 10;
+const LEGACY_SHORT_TOKEN_DISPATCH_PREFIX_LENGTH = 10;
 
 type SmsShortLink = {
   token?: unknown;
@@ -37,22 +37,36 @@ function isSafeRedirectUrl(value: string) {
 }
 
 async function findDispatchForShortToken(token: string) {
+  // New links contain the full notification dispatch id and are unambiguous.
   if (token.includes("-")) {
-    const dispatchId = token.split("-")[0];
+    const separatorIndex = token.lastIndexOf("-");
+    const dispatchId = token.slice(0, separatorIndex);
 
     if (!dispatchId) return null;
 
-    return prisma.notificationDispatch.findUnique({
+    const dispatch = await prisma.notificationDispatch.findUnique({
       where: { id: dispatchId },
-      select: {
-        metadata: true,
-      },
+      select: { metadata: true },
     });
+
+    if (!dispatch) return null;
+
+    return getShortLinksFromMetadata(dispatch.metadata).some(
+      (link) => link.token === token,
+    )
+      ? dispatch
+      : null;
   }
 
-  const dispatchIdPrefix = token.slice(0, SHORT_TOKEN_DISPATCH_PREFIX_LENGTH);
+  // Legacy links used only the first ten characters of a dispatch id. Several
+  // dispatches created in one batch can share that prefix and therefore share
+  // the same short token. Never guess which payment link was intended.
+  const dispatchIdPrefix = token.slice(
+    0,
+    LEGACY_SHORT_TOKEN_DISPATCH_PREFIX_LENGTH,
+  );
 
-  if (dispatchIdPrefix.length < SHORT_TOKEN_DISPATCH_PREFIX_LENGTH) {
+  if (dispatchIdPrefix.length < LEGACY_SHORT_TOKEN_DISPATCH_PREFIX_LENGTH) {
     return null;
   }
 
@@ -68,16 +82,15 @@ async function findDispatchForShortToken(token: string) {
     orderBy: {
       createdAt: "desc",
     },
-    take: 10,
   });
 
-  return (
-    candidates.find((candidate) =>
-      getShortLinksFromMetadata(candidate.metadata).some(
-        (link) => link.token === token,
-      ),
-    ) ?? null
+  const matchingCandidates = candidates.filter((candidate) =>
+    getShortLinksFromMetadata(candidate.metadata).some(
+      (link) => link.token === token,
+    ),
   );
+
+  return matchingCandidates.length === 1 ? matchingCandidates[0] : null;
 }
 
 export const dynamic = "force-dynamic";
