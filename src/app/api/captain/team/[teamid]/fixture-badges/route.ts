@@ -140,6 +140,18 @@ export async function GET(
       relatedTeamIds: context.relatedTeamIds,
       fixtures: fixtures.map((fixture) => {
         const isHomeTeam = relatedTeamIdSet.has(fixture.homeTeamId);
+        const storedPreview = storedPreviews.get(fixture.id) ?? null;
+        const storedPrediction =
+          storedPreview?.predictedHomeScore !== null &&
+          storedPreview?.predictedHomeScore !== undefined &&
+          storedPreview?.predictedAwayScore !== null &&
+          storedPreview?.predictedAwayScore !== undefined
+            ? {
+                homeScore: storedPreview.predictedHomeScore,
+                awayScore: storedPreview.predictedAwayScore,
+                generatedAt: storedPreview.generatedAt.toISOString(),
+              }
+            : null;
         const base = {
           id: fixture.id,
           kickoffAt: fixture.kickoffAt.toISOString(),
@@ -152,6 +164,7 @@ export async function GET(
           captainLabel: isHomeTeam
             ? `vs ${fixture.awayTeam.name}`
             : `vs ${fixture.homeTeam.name}`,
+          storedPrediction,
         };
 
         if (fixture.status !== "SCHEDULED") {
@@ -166,7 +179,6 @@ export async function GET(
           awayTeamId: fixture.awayTeamId,
           fixtures: predictionHistory,
         });
-        const storedPreview = storedPreviews.get(fixture.id) ?? null;
         const fallbackPreview = getFallbackFixtureAiPreview({
           homeTeamName: fixture.homeTeam.name,
           awayTeamName: fixture.awayTeam.name,
