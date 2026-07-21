@@ -18,7 +18,7 @@ import FormListboxField, {
   type FormListboxOption,
 } from "@/components/ui/FormListboxField";
 
-type NightBoardFixtureStatus =
+export type NightBoardFixtureStatus =
   | "SCHEDULED"
   | "POSTPONED"
   | "CANCELLED"
@@ -78,6 +78,7 @@ type FixtureEditorProps = {
   refereeOptions: FormListboxOption[];
   venueOptions: FormListboxOption[];
   statusOptions: FormListboxOption[];
+  locked?: boolean;
 };
 
 const NightBoardOperationsContext =
@@ -85,14 +86,12 @@ const NightBoardOperationsContext =
 
 function timeToMinutes(value: string | null | undefined) {
   if (!value) return null;
-
   const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value.trim());
   if (!match) return null;
 
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-
   return hours * 60 + minutes;
 }
 
@@ -110,7 +109,6 @@ function buildLatestKickoffWarning(
   fixture: NightBoardFixtureDraft,
 ): LatestKickoffWarning | null {
   if (!isOperationalStatus(fixture.status)) return null;
-
   const kickoffMinutes = timeToMinutes(fixture.kickoffTime);
   if (kickoffMinutes === null) return null;
 
@@ -118,15 +116,11 @@ function buildLatestKickoffWarning(
     const latestMinutes = timeToMinutes(team.latestKickoffTime);
     return latestMinutes !== null && kickoffMinutes > latestMinutes;
   });
-
   if (breachedTeams.length === 0) return null;
 
   const scheduledTime = displayTime(fixture.kickoffTime);
   const limits = breachedTeams
-    .map(
-      (team) =>
-        `${team.name} ${displayTime(team.latestKickoffTime ?? "")}`,
-    )
+    .map((team) => `${team.name} ${displayTime(team.latestKickoffTime ?? "")}`)
     .join(" · ");
   const statedLimitSentence =
     breachedTeams.length === 1
@@ -172,7 +166,6 @@ function buildRepeatedTeamWarnings(
         teamName: team.name,
         fixtures: [],
       };
-
       existing.fixtures.push({
         fixtureId: fixture.id,
         kickoffTime: displayTime(fixture.kickoffTime),
@@ -184,14 +177,12 @@ function buildRepeatedTeamWarnings(
   }
 
   const warnings: PotentialIssue[] = [];
-
   for (const [teamId, appearance] of appearancesByTeam) {
     const uniqueFixtures = Array.from(
       new Map(
         appearance.fixtures.map((fixture) => [fixture.fixtureId, fixture]),
       ).values(),
     );
-
     if (uniqueFixtures.length < 2) continue;
 
     uniqueFixtures.sort(
@@ -199,7 +190,6 @@ function buildRepeatedTeamWarnings(
         (timeToMinutes(left.kickoffTime) ?? Number.MAX_SAFE_INTEGER) -
         (timeToMinutes(right.kickoffTime) ?? Number.MAX_SAFE_INTEGER),
     );
-
     const fixtureList = uniqueFixtures
       .map(
         (fixture) =>
@@ -235,13 +225,9 @@ export function NightBoardOperationsProvider({
       setDraftsByFixtureId((current) => {
         const existing = current[fixtureId];
         if (!existing) return current;
-
         return {
           ...current,
-          [fixtureId]: {
-            ...existing,
-            ...patch,
-          },
+          [fixtureId]: { ...existing, ...patch },
         };
       });
     },
@@ -253,18 +239,15 @@ export function NightBoardOperationsProvider({
     const latestWarnings = drafts
       .map(buildLatestKickoffWarning)
       .filter((warning): warning is LatestKickoffWarning => Boolean(warning));
-    const latestWarningMap = new Map(
-      latestWarnings.map((warning) => [warning.fixtureId, warning]),
-    );
-    const latestSummaryIssues = latestWarnings.map((warning) => ({
-      key: `latest-ko:${warning.fixtureId}`,
-      message: warning.summaryMessage,
-    }));
-
     return {
-      latestKickoffWarningsByFixtureId: latestWarningMap,
+      latestKickoffWarningsByFixtureId: new Map(
+        latestWarnings.map((warning) => [warning.fixtureId, warning]),
+      ),
       potentialIssues: [
-        ...latestSummaryIssues,
+        ...latestWarnings.map((warning) => ({
+          key: `latest-ko:${warning.fixtureId}`,
+          message: warning.summaryMessage,
+        })),
         ...buildRepeatedTeamWarnings(drafts),
       ],
     };
@@ -276,11 +259,7 @@ export function NightBoardOperationsProvider({
       latestKickoffWarningsByFixtureId,
       potentialIssues,
     }),
-    [
-      latestKickoffWarningsByFixtureId,
-      potentialIssues,
-      updateFixtureDraft,
-    ],
+    [updateFixtureDraft, latestKickoffWarningsByFixtureId, potentialIssues],
   );
 
   return (
@@ -292,13 +271,11 @@ export function NightBoardOperationsProvider({
 
 function useNightBoardOperations() {
   const value = useContext(NightBoardOperationsContext);
-
   if (!value) {
     throw new Error(
       "Night Board operation controls must be inside NightBoardOperationsProvider.",
     );
   }
-
   return value;
 }
 
@@ -308,11 +285,10 @@ export function NightBoardFixtureEditor({
   refereeOptions,
   venueOptions,
   statusOptions,
+  locked = false,
 }: FixtureEditorProps) {
-  const {
-    updateFixtureDraft,
-    latestKickoffWarningsByFixtureId,
-  } = useNightBoardOperations();
+  const { updateFixtureDraft, latestKickoffWarningsByFixtureId } =
+    useNightBoardOperations();
   const [kickoffTime, setKickoffTime] = useState(fixture.kickoffTime);
   const [pitch, setPitch] = useState(fixture.pitch);
   const [refereeId, setRefereeId] = useState(fixture.refereeId);
@@ -335,11 +311,10 @@ export function NightBoardFixtureEditor({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
+    if (saving || locked) return;
 
     setSaving(true);
     setError("");
-
     try {
       const response = await fetch("/api/admin/night-board/update-match", {
         method: "POST",
@@ -349,11 +324,9 @@ export function NightBoardFixtureEditor({
         returnTo?: string;
         error?: string;
       } | null;
-
       if (!response.ok) {
         throw new Error(payload?.error || "The match could not be saved.");
       }
-
       window.location.assign(payload?.returnTo || returnTo);
     } catch (saveError) {
       setError(
@@ -373,6 +346,12 @@ export function NightBoardFixtureEditor({
       <input type="hidden" name="fixtureId" value={fixture.id} />
       <input type="hidden" name="returnTo" value={returnTo} />
 
+      {locked ? (
+        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs font-medium leading-5 text-amber-100">
+          Completed fixture locked. Its time, pitch, referee, venue and status cannot be changed.
+        </div>
+      ) : null}
+
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
           KO time
@@ -380,8 +359,9 @@ export function NightBoardFixtureEditor({
             name="kickoffTime"
             type="time"
             value={kickoffTime}
+            disabled={locked}
             onChange={(event) => updateKickoffTime(event.target.value)}
-            className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-emerald-400/40"
+            className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-emerald-400/40 disabled:cursor-not-allowed disabled:opacity-50"
           />
           {kickoffWarning ? (
             <span className="block rounded-lg border border-amber-400/25 bg-amber-500/10 px-2.5 py-2 text-[11px] font-medium normal-case tracking-normal text-amber-100">
@@ -395,9 +375,10 @@ export function NightBoardFixtureEditor({
           <input
             name="pitch"
             value={pitch}
+            disabled={locked}
             onChange={(event) => setPitch(event.target.value)}
             placeholder="Pitch"
-            className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40"
+            className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </label>
       </div>
@@ -412,10 +393,10 @@ export function NightBoardFixtureEditor({
             value={refereeId}
             options={refereeOptions}
             placeholder="No referee"
+            disabled={locked}
             onValueChange={setRefereeId}
           />
         </div>
-
         <div>
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
             Venue
@@ -425,10 +406,10 @@ export function NightBoardFixtureEditor({
             value={venueId}
             options={venueOptions}
             placeholder="No venue"
+            disabled={locked}
             onValueChange={setVenueId}
           />
         </div>
-
         <div>
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
             Status
@@ -438,6 +419,7 @@ export function NightBoardFixtureEditor({
             value={status}
             options={statusOptions}
             placeholder="Select status"
+            disabled={locked}
             onValueChange={updateStatus}
           />
         </div>
@@ -451,10 +433,10 @@ export function NightBoardFixtureEditor({
 
       <button
         type="submit"
-        disabled={saving}
-        className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={saving || locked}
+        className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {saving ? "Saving…" : "Save match"}
+        {locked ? "Fixture locked" : saving ? "Saving…" : "Save match"}
       </button>
     </form>
   );
@@ -473,14 +455,12 @@ export function NightBoardPotentialIssuesPanel({
       <h2 className="text-xl font-semibold text-white">
         Warnings and potential issues
       </h2>
-
       <div className="mt-4 space-y-3">
         {!hasWarnings ? (
           <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
             No obvious pitch, referee, venue, clash, repeated-team or latest kick-off preference warnings.
           </div>
         ) : null}
-
         {baseWarnings.map((warning, index) => (
           <div
             key={`${warning.message}-${index}`}
@@ -493,7 +473,6 @@ export function NightBoardPotentialIssuesPanel({
             {warning.message}
           </div>
         ))}
-
         {potentialIssues.map((warning) => (
           <div
             key={warning.key}
@@ -503,7 +482,6 @@ export function NightBoardPotentialIssuesPanel({
           </div>
         ))}
       </div>
-
       <p className="mt-4 text-xs leading-5 text-white/45">
         Latest kick-off preferences and teams appearing more than once are shown as potential issues. These warnings do not stop a match being saved.
       </p>
