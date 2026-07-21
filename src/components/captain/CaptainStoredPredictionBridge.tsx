@@ -114,6 +114,7 @@ function applyPredictions(payload: PredictionPayload) {
     if (!opponentName) continue;
 
     const fixture = fixtures.find((item) => {
+      if (section.querySelector(`[data-sixfl-stored-prediction="${item.id}"]`)) return false;
       const isHome = relatedTeamIds.has(item.homeTeamId);
       const opponent = isHome ? item.awayTeam.name : item.homeTeam.name;
       return opponent === opponentName;
