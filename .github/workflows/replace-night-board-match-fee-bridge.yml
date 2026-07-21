@@ -1,5 +1,6 @@
 name: Replace Night Board match fee bridge
 
+# Second commit deliberately triggers this one-time workflow after it exists on main.
 on:
   push:
     paths:
