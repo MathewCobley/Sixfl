@@ -24,14 +24,8 @@ type StatusPayload = {
   error?: string;
 };
 
-function getTeamId(pathname: string) {
-  const adminMatch = pathname.match(/^\/admin\/teams\/([^/]+)\/squad\/?$/);
-  if (adminMatch?.[1]) return adminMatch[1];
-
-  const captainMatch = pathname.match(/^\/captain\/team\/([^/]+)\/squad\/?$/);
-  if (captainMatch?.[1]) return captainMatch[1];
-
-  return "";
+function getAdminTeamId(pathname: string) {
+  return pathname.match(/^\/admin\/teams\/([^/]+)\/squad\/?$/)?.[1] ?? "";
 }
 
 function getMemberName(member: MemberStatus) {
@@ -41,7 +35,7 @@ function getMemberName(member: MemberStatus) {
 export default function ManagedSquadInjuryBridge() {
   const pathname = usePathname();
   const router = useRouter();
-  const teamId = useMemo(() => getTeamId(pathname), [pathname]);
+  const teamId = useMemo(() => getAdminTeamId(pathname), [pathname]);
   const [members, setMembers] = useState<MemberStatus[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
