@@ -150,6 +150,11 @@ function getTeamInitials(name: string) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "S";
 }
 
+function normaliseEmail(value: string | null | undefined) {
+  const email = value?.trim().toLowerCase();
+  return email || null;
+}
+
 export default async function PlayerTeamPage({ params, searchParams }: PageProps) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
@@ -173,6 +178,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         select: {
           id: true,
           role: true,
+          user: { select: { email: true, name: true } },
           team: { select: teamSelect },
         },
         take: 1,
@@ -193,6 +199,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         select: {
           id: true,
           role: true,
+          user: { select: { email: true, name: true } },
           team: { select: teamSelect },
         },
       })
@@ -212,6 +219,26 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   const now = new Date();
   const publishedFixtureFilter = { publishedAt: { not: null } };
+  const feeLookupEmails = Array.from(
+    new Set(
+      [normaliseEmail(email), normaliseEmail(membership?.user.email)]
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const feeOwnerWhere = membership
+    ? [
+        { teamMemberId: membership.id },
+        ...feeLookupEmails.map((lookupEmail) => ({
+          prospect: {
+            teamId,
+            email: {
+              equals: lookupEmail,
+              mode: "insensitive" as const,
+            },
+          },
+        })),
+      ]
+    : [];
 
   const [upcomingFixtures, recentFixtures, squadMembers, playerFees] = await Promise.all([
     prisma.fixture.findMany({
@@ -265,7 +292,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       ? prisma.playerMatchFee.findMany({
           where: {
             teamId: teamid,
-            teamMemberId: membership.id,
+            OR: feeOwnerWhere,
             fixture: publishedFixtureFilter,
             status: {
               in: [
@@ -281,11 +308,20 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           select: {
             id: true,
             fixtureId: true,
+            teamMemberId: true,
+            prospectId: true,
             amountPence: true,
             status: true,
             paymentUrl: true,
             createdAt: true,
             paidAt: true,
+            prospect: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
             fixture: {
               select: {
                 kickoffAt: true,
@@ -304,6 +340,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   const waivedFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.WAIVED);
   const outstandingPence = openFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const paidPence = paidFees.reduce((sum, fee) => sum + fee.amountPence, 0);
+  const waivedPence = waivedFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const nextOpenFee = openFees
     .slice()
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
@@ -409,7 +446,9 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
             <p className="mt-2 text-sm leading-6 text-amber-100/70">
               {outstandingPence > 0
                 ? `${openFees.length} match fee${openFees.length === 1 ? "" : "s"} waiting for you.`
-                : "No match fees are waiting for you right now."}
+                : paidPence > 0
+                  ? `${formatMoney(paidPence)} already paid against linked player match fees.`
+                  : "No match fees are waiting for you right now."}
             </p>
             {nextOpenFee?.paymentUrl ? (
               <Link href={nextOpenFee.paymentUrl} target="_blank" className="mt-4 inline-flex items-center rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300">
@@ -431,24 +470,24 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Payments</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Payments history</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Player match fees</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-100/70">
-                See your open, paid and waived player match fees for this team.
+                See what is due now, what has already been paid, and any waived player match fees linked to this player.
               </p>
             </div>
 
             <div className="grid gap-2 text-sm sm:grid-cols-3 lg:min-w-[28rem]">
               <div className="rounded-2xl border border-amber-400/20 bg-black/20 px-4 py-3">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100/55">Outstanding</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100/55">Due now</div>
                 <div className="mt-1 text-lg font-black text-white">{formatMoney(outstandingPence)}</div>
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100/60">Paid</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100/60">Paid already</div>
                 <div className="mt-1 text-lg font-black text-white">{formatMoney(paidPence)}</div>
               </div>
               <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100/60">Waived</div>
-                <div className="mt-1 text-lg font-black text-white">{waivedFees.length}</div>
+                <div className="mt-1 text-lg font-black text-white">{formatMoney(waivedPence)}</div>
               </div>
             </div>
           </div>
@@ -456,7 +495,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           <div className="mt-5 space-y-3">
             {playerFees.length === 0 ? (
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/60">
-                No player match fees have been linked to this player yet.
+                No payments are due and no player payment history has been recorded against this player yet.
               </div>
             ) : (
               playerFees.map((fee) => (
@@ -476,6 +515,11 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                       </h3>
                       <p className="mt-1 text-xs text-white/45">Fixture: {formatFixtureDate(fee.fixture.kickoffAt)}</p>
                       <p className="mt-1 text-xs text-white/45">Added: {formatPaymentDate(fee.createdAt)} · Paid: {formatPaymentDate(fee.paidAt)}</p>
+                      {!fee.teamMemberId && fee.prospect?.email ? (
+                        <p className="mt-1 text-xs text-emerald-100/55">
+                          Matched from previous signup/payment email: {fee.prospect.email}
+                        </p>
+                      ) : null}
                     </div>
 
                     {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
