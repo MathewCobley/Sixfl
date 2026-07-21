@@ -5,9 +5,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import InjuredPlayerState, {
+  InjuredPlayerBadge,
+} from "@/components/captain/InjuredPlayerState";
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
+import { getTeamMemberSquadStatusMap } from "@/lib/managed-squad/squadStatus";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { updateFixtureSelectionAction } from "./actions";
@@ -148,6 +152,7 @@ export default async function CaptainFixtureSelectionPage({
     notFound();
   }
 
+  const squadStatusByMemberId = await getTeamMemberSquadStatusMap(teamid);
   const availabilityByMemberId = new Map(
     fixture.availabilities.map((item) => [item.teamMemberId, item]),
   );
@@ -156,10 +161,14 @@ export default async function CaptainFixtureSelectionPage({
   );
 
   const selectedCount = fixture.selections.filter(
-    (item) => item.selectionStatus === "SELECTED",
+    (item) =>
+      item.selectionStatus === "SELECTED" &&
+      squadStatusByMemberId.get(item.teamMemberId)?.squadStatus !== "INJURED",
   ).length;
   const backupCount = fixture.selections.filter(
-    (item) => item.selectionStatus === "BACKUP",
+    (item) =>
+      item.selectionStatus === "BACKUP" &&
+      squadStatusByMemberId.get(item.teamMemberId)?.squadStatus !== "INJURED",
   ).length;
 
   const savedMessage = getSavedMessage(filters.saved);
@@ -217,7 +226,9 @@ export default async function CaptainFixtureSelectionPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
                 Squad pool
               </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{team.members.length}</p>
+              <p className="mt-3 text-3xl font-semibold text-white">
+                {team.members.length}
+              </p>
             </div>
           </div>
         </div>
@@ -240,19 +251,32 @@ export default async function CaptainFixtureSelectionPage({
           {team.members.map((member) => {
             const availability = availabilityByMemberId.get(member.id);
             const selection = selectionByMemberId.get(member.id);
-
-            const response = availability?.response ?? "NO_RESPONSE";
-            const selectionStatus = selection?.selectionStatus ?? "NOT_SELECTED";
+            const squadStatus = squadStatusByMemberId.get(member.id);
+            const isInjured = squadStatus?.squadStatus === "INJURED";
+            const response = isInjured
+              ? "UNAVAILABLE"
+              : availability?.response ?? "NO_RESPONSE";
+            const selectionStatus = isInjured
+              ? "NOT_SELECTED"
+              : selection?.selectionStatus ?? "NOT_SELECTED";
             const memberName = member.user.name || member.user.email || "Unnamed user";
 
             return (
               <div
                 key={member.id}
-                className="grid gap-5 px-6 py-5 xl:grid-cols-[1fr_360px]"
+                className={`grid gap-5 px-6 py-5 xl:grid-cols-[1fr_360px] ${
+                  isInjured
+                    ? "border-l-4 border-l-red-400 bg-red-500/[0.06]"
+                    : ""
+                }`}
               >
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-base font-semibold text-white">{memberName}</div>
+
+                    {isInjured ? (
+                      <InjuredPlayerBadge note={squadStatus?.squadStatusNote} />
+                    ) : null}
 
                     <span
                       className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(
@@ -270,13 +294,13 @@ export default async function CaptainFixtureSelectionPage({
                       {selectionStatus.replace("_", " ")}
                     </span>
 
-                    {selection?.isCaptain ? (
+                    {!isInjured && selection?.isCaptain ? (
                       <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">
                         Captain
                       </span>
                     ) : null}
 
-                    {selection?.isGoalkeeper ? (
+                    {!isInjured && selection?.isGoalkeeper ? (
                       <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">
                         Goalkeeper
                       </span>
@@ -300,53 +324,60 @@ export default async function CaptainFixtureSelectionPage({
                   ) : null}
                 </div>
 
-                <form action={updateFixtureSelectionAction} className="space-y-3">
-                  <input type="hidden" name="teamid" value={teamid} />
-                  <input type="hidden" name="fixtureId" value={fixtureId} />
-                  <input type="hidden" name="teamMemberId" value={member.id} />
-
-                  <FormListboxField
-                    name="selectionStatus"
-                    value={selectionStatus}
-                    options={selectionOptions}
-                    placeholder="Select status"
+                {isInjured ? (
+                  <InjuredPlayerState
+                    context="selection"
+                    note={squadStatus?.squadStatusNote}
                   />
+                ) : (
+                  <form action={updateFixtureSelectionAction} className="space-y-3">
+                    <input type="hidden" name="teamid" value={teamid} />
+                    <input type="hidden" name="fixtureId" value={fixtureId} />
+                    <input type="hidden" name="teamMemberId" value={member.id} />
 
-                  <input
-                    name="note"
-                    type="text"
-                    defaultValue={selection?.note ?? ""}
-                    placeholder="Optional note"
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500/60"
-                  />
+                    <FormListboxField
+                      name="selectionStatus"
+                      value={selectionStatus}
+                      options={selectionOptions}
+                      placeholder="Select status"
+                    />
 
-                  <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center gap-2 text-sm text-white/75">
-                      <input
-                        type="checkbox"
-                        name="isCaptain"
-                        defaultChecked={Boolean(selection?.isCaptain)}
-                      />
-                      Captain
-                    </label>
+                    <input
+                      name="note"
+                      type="text"
+                      defaultValue={selection?.note ?? ""}
+                      placeholder="Optional note"
+                      className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500/60"
+                    />
 
-                    <label className="flex items-center gap-2 text-sm text-white/75">
-                      <input
-                        type="checkbox"
-                        name="isGoalkeeper"
-                        defaultChecked={Boolean(selection?.isGoalkeeper)}
-                      />
-                      Goalkeeper
-                    </label>
-                  </div>
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center gap-2 text-sm text-white/75">
+                        <input
+                          type="checkbox"
+                          name="isCaptain"
+                          defaultChecked={Boolean(selection?.isCaptain)}
+                        />
+                        Captain
+                      </label>
 
-                  <button
-                    type="submit"
-                    className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
-                  >
-                    Save selection
-                  </button>
-                </form>
+                      <label className="flex items-center gap-2 text-sm text-white/75">
+                        <input
+                          type="checkbox"
+                          name="isGoalkeeper"
+                          defaultChecked={Boolean(selection?.isGoalkeeper)}
+                        />
+                        Goalkeeper
+                      </label>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                    >
+                      Save selection
+                    </button>
+                  </form>
+                )}
               </div>
             );
           })}
