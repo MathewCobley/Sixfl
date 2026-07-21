@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
+import MatchdaySquadSelectionForm from "@/components/captain/MatchdaySquadSelectionForm";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
@@ -105,14 +106,58 @@ function getAvailabilityClasses(response?: string | null) {
   }
 }
 
+function getUnavailableFeeWarning(input: {
+  status: PlayerMatchFeeStatus;
+  amountPence: number;
+}) {
+  switch (input.status) {
+    case "PAID":
+      return `${formatMoney(input.amountPence)} paid. Unticking and saving will cancel this fixture fee, retain the payment for audit and create player credit.`;
+    case "OPEN":
+      return `${formatMoney(input.amountPence)} unpaid. Unticking and saving will cancel the fee; no payment or credit will be due.`;
+    case "WAIVED":
+      return "Fee waived. Untick and save if this player will not take part.";
+    default:
+      return null;
+  }
+}
+
+function getFeeOutcomeSummary(fee: {
+  status: PlayerMatchFeeStatus;
+  paidAt: Date | null;
+}) {
+  if (fee.status === "CANCELLED") {
+    return fee.paidAt
+      ? "Not selected · payment retained for audit · player credit created"
+      : "Not selected · unpaid fee cancelled · no payment or credit due";
+  }
+
+  if (fee.status === "PAID") return "Selected · payment received";
+  if (fee.status === "WAIVED") return "Selected · fee waived";
+  return "Selected · payment outstanding";
+}
+
+function getFriendlyFeeNote(note: string | null, fee: { status: PlayerMatchFeeStatus; paidAt: Date | null }) {
+  if (!note?.trim()) return null;
+
+  return note
+    .replace(
+      /Voided: Removed from matchday squad selection/gi,
+      fee.paidAt
+        ? "Paid fee cancelled because the player was removed from the matchday squad. Payment retained for audit and player credit created."
+        : "Unpaid fee cancelled because the player was removed from the matchday squad. No payment was taken and no credit is due.",
+    )
+    .replace(/Voided:/gi, "Fixture fee cancelled:");
+}
+
 function getSavedMessage(saved: string | undefined, isAdmin: boolean) {
   switch (saved) {
     case "fees_created":
       return isAdmin
-        ? "Matchday squad and player fee rows refreshed."
+        ? "Matchday squad saved. Players removed with unpaid fees were cancelled with no credit due; players removed after payment were retained for audit and given player credit."
         : "Matchday squad submitted to SIXFL.";
     case "fee_updated":
-      return "Player match fee updated.";
+      return "Player match fee updated. The fee outcome is shown clearly on the player row below.";
     case "fee_sms_queued":
       return "Player match fee reminder queued.";
     case "fee_sms_already_sent":
@@ -152,7 +197,12 @@ function getErrorMessage(error?: string) {
 
 function getPlayerName(fee: {
   teamMember: { user: { name: string | null; email: string | null } } | null;
-  prospect: { firstName: string | null; lastName: string | null; email: string | null; phone: string | null } | null;
+  prospect: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
 }) {
   if (fee.teamMember) {
     return fee.teamMember.user.name || fee.teamMember.user.email || "Unnamed member";
@@ -175,7 +225,9 @@ function getPlayerContact(fee: {
   prospect: { email: string | null; phone: string | null } | null;
 }) {
   if (fee.teamMember) return fee.teamMember.user.email || "No email";
-  if (fee.prospect) return [fee.prospect.email, fee.prospect.phone].filter(Boolean).join(" · ") || "No contact";
+  if (fee.prospect) {
+    return [fee.prospect.email, fee.prospect.phone].filter(Boolean).join(" · ") || "No contact";
+  }
   return "No contact";
 }
 
@@ -241,31 +293,45 @@ export default async function CaptainManagedPlayerMatchFeesPage({
   const submittedFixtureRows = await prisma.playerMatchFee.findMany({
     where: {
       teamId: teamid,
-      status: {
-        not: "CANCELLED",
-      },
+      status: { not: "CANCELLED" },
       fixture: publishedFixtureWhere,
     },
     distinct: ["fixtureId"],
-    select: {
-      fixtureId: true,
-    },
+    select: { fixtureId: true },
   });
 
-  const submittedFixtureIds = new Set(submittedFixtureRows.map((row) => row.fixtureId));
+  const submittedFixtureIds = new Set(
+    submittedFixtureRows.map((row) => row.fixtureId),
+  );
   const now = new Date();
   const visibleFixtures = isAdmin
     ? fixtures
-    : fixtures.filter((fixture) => fixture.kickoffAt >= now || !submittedFixtureIds.has(fixture.id));
+    : fixtures.filter(
+        (fixture) =>
+          fixture.kickoffAt >= now || !submittedFixtureIds.has(fixture.id),
+      );
 
   const linkedMemberKeys = new Set(
-    members.flatMap((member) => [member.user.email?.trim().toLowerCase(), member.user.name?.trim().toLowerCase()].filter(Boolean) as string[]),
+    members.flatMap(
+      (member) =>
+        [
+          member.user.email?.trim().toLowerCase(),
+          member.user.name?.trim().toLowerCase(),
+        ].filter(Boolean) as string[],
+    ),
   );
 
   const selectableProspects = prospects.filter((prospect) => {
-    const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+    const fullName = [prospect.firstName, prospect.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim()
+      .toLowerCase();
     const email = prospect.email?.trim().toLowerCase();
-    return !((email && linkedMemberKeys.has(email)) || (fullName && linkedMemberKeys.has(fullName)));
+    return !(
+      (email && linkedMemberKeys.has(email)) ||
+      (fullName && linkedMemberKeys.has(fullName))
+    );
   });
 
   const selectedFixture =
@@ -284,16 +350,19 @@ export default async function CaptainManagedPlayerMatchFeesPage({
               include: { user: { select: { name: true, email: true } } },
             },
             prospect: {
-              select: { firstName: true, lastName: true, email: true, phone: true },
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
             },
           },
         }),
         prisma.fixtureAvailability.findMany({
           where: {
             fixtureId: selectedFixture.id,
-            teamMember: {
-              teamId: teamid,
-            },
+            teamMember: { teamId: teamid },
           },
           select: {
             teamMemberId: true,
@@ -306,22 +375,41 @@ export default async function CaptainManagedPlayerMatchFeesPage({
     : [[], []];
 
   const availabilityByMemberId = new Map(
-    selectedFixtureAvailabilities.map((availability) => [availability.teamMemberId, availability]),
+    selectedFixtureAvailabilities.map((availability) => [
+      availability.teamMemberId,
+      availability,
+    ]),
   );
 
   const availabilityCounts = {
-    available: selectedFixtureAvailabilities.filter((item) => item.response === "AVAILABLE").length,
-    maybe: selectedFixtureAvailabilities.filter((item) => item.response === "MAYBE").length,
-    unavailable: selectedFixtureAvailabilities.filter((item) => item.response === "UNAVAILABLE").length,
+    available: selectedFixtureAvailabilities.filter(
+      (item) => item.response === "AVAILABLE",
+    ).length,
+    maybe: selectedFixtureAvailabilities.filter(
+      (item) => item.response === "MAYBE",
+    ).length,
+    unavailable: selectedFixtureAvailabilities.filter(
+      (item) => item.response === "UNAVAILABLE",
+    ).length,
   };
-  const noResponseCount = Math.max(members.length - selectedFixtureAvailabilities.filter((item) => item.response !== "NO_RESPONSE").length, 0);
+  const noResponseCount = Math.max(
+    members.length -
+      selectedFixtureAvailabilities.filter(
+        (item) => item.response !== "NO_RESPONSE",
+      ).length,
+    0,
+  );
 
   const activeFees = fees.filter((fee) => fee.status !== "CANCELLED");
   const feeByMemberId = new Map(
-    activeFees.filter((fee) => Boolean(fee.teamMemberId)).map((fee) => [fee.teamMemberId as string, fee]),
+    activeFees
+      .filter((fee) => Boolean(fee.teamMemberId))
+      .map((fee) => [fee.teamMemberId as string, fee]),
   );
   const feeByProspectId = new Map(
-    activeFees.filter((fee) => Boolean(fee.prospectId)).map((fee) => [fee.prospectId as string, fee]),
+    activeFees
+      .filter((fee) => Boolean(fee.prospectId))
+      .map((fee) => [fee.prospectId as string, fee]),
   );
 
   const totals = activeFees.reduce(
@@ -336,11 +424,19 @@ export default async function CaptainManagedPlayerMatchFeesPage({
   );
 
   const cashTotal = activeFees.reduce(
-    (sum, fee) => sum + (fee.status === "PAID" && fee.note?.includes("Paid cash") ? fee.amountPence : 0),
+    (sum, fee) =>
+      sum +
+      (fee.status === "PAID" && fee.note?.includes("Paid cash")
+        ? fee.amountPence
+        : 0),
     0,
   );
   const onlineTotal = activeFees.reduce(
-    (sum, fee) => sum + (fee.status === "PAID" && fee.note?.includes("Paid online") ? fee.amountPence : 0),
+    (sum, fee) =>
+      sum +
+      (fee.status === "PAID" && fee.note?.includes("Paid online")
+        ? fee.amountPence
+        : 0),
     0,
   );
   const paidCount = activeFees.filter((fee) => fee.status === "PAID").length;
@@ -350,9 +446,11 @@ export default async function CaptainManagedPlayerMatchFeesPage({
   const selectedCount = activeFees.length;
   const targetSize = team.matchdayTargetSize ?? 0;
   const hasSelection = selectedCount > 0;
-  const isShortOfTarget = targetSize > 0 && selectedCount > 0 && selectedCount < targetSize;
+  const isShortOfTarget =
+    targetSize > 0 && selectedCount > 0 && selectedCount < targetSize;
   const isOverTarget = targetSize > 0 && selectedCount > targetSize;
-  const hasAmountMismatch = activeFees.length > 0 && totals.total !== expectedTotal;
+  const hasAmountMismatch =
+    activeFees.length > 0 && totals.total !== expectedTotal;
   const savedMessage = getSavedMessage(sp.saved, isAdmin);
   const errorMessage = getErrorMessage(sp.error);
 
@@ -383,15 +481,27 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           </h2>
           <p className="mt-3 max-w-3xl text-sm text-white/65 sm:text-base">
             {isAdmin
-              ? "Admin view: check who has been selected for the fixture, review the expected £6 player fee total and reconcile payments."
+              ? "Admin view: availability, squad selection and player fee outcomes are shown together so each player can be reconciled safely."
               : "Select the players who actually played in this fixture. SIXFL will use this to manage match fees and records."}
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link href={`/captain/team/${team.id}`} className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white">
+            <Link
+              href={`/captain/team/${team.id}`}
+              className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+            >
               Back to captain hub
             </Link>
-            <Link href={`/captain/team/${team.id}/squad`} className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20">
+            <Link
+              href={`/captain/team/${team.id}/squad`}
+              className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
+            >
               Open squad
+            </Link>
+            <Link
+              href={`/captain/team/${team.id}/availability`}
+              className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-500/10 px-5 py-3 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+            >
+              Open availability
             </Link>
           </div>
         </div>
@@ -402,20 +512,62 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           This team is currently set as a standard team. Matchday player selection is intended for managed SIXFL squads.
         </div>
       ) : null}
-      {savedMessage ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">{savedMessage}</div> : null}
-      {errorMessage ? <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</div> : null}
+      {savedMessage ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          {savedMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
+          {errorMessage}
+        </div>
+      ) : null}
+
+      <section className="rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] p-5 text-sm text-sky-50/80">
+        <p className="font-semibold text-white">How availability and fees work together</p>
+        <p className="mt-2 leading-6">
+          Unavailable does not silently alter money. Remove the player from this matchday squad to cancel an unpaid fee. If they have already paid, SIXFL will ask for confirmation, retain the payment for audit and create player credit.
+        </p>
+      </section>
 
       {isAdmin ? (
         <>
           <section className="grid gap-4 md:grid-cols-4">
             {[
-              { label: "Selected", value: selectedCount, text: targetSize > 0 ? `Target squad size: ${targetSize}` : "Players selected for this fixture.", classes: "border-white/10 bg-white/[0.04] text-white/45" },
-              { label: "Expected", value: formatMoney(expectedTotal), text: "Selected players × £6.00.", classes: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70" },
-              { label: "Outstanding", value: openCount, text: formatMoney(totals.open), classes: "border-amber-400/20 bg-amber-500/10 text-amber-100/70" },
-              { label: "Waived", value: waivedCount, text: formatMoney(totals.waived), classes: "border-sky-400/20 bg-sky-500/10 text-sky-100/70" },
+              {
+                label: "Selected",
+                value: selectedCount,
+                text:
+                  targetSize > 0
+                    ? `Target squad size: ${targetSize}`
+                    : "Players selected for this fixture.",
+                classes: "border-white/10 bg-white/[0.04] text-white/45",
+              },
+              {
+                label: "Expected",
+                value: formatMoney(expectedTotal),
+                text: "Selected players × £6.00.",
+                classes:
+                  "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70",
+              },
+              {
+                label: "Outstanding",
+                value: openCount,
+                text: formatMoney(totals.open),
+                classes:
+                  "border-amber-400/20 bg-amber-500/10 text-amber-100/70",
+              },
+              {
+                label: "Waived",
+                value: waivedCount,
+                text: formatMoney(totals.waived),
+                classes: "border-sky-400/20 bg-sky-500/10 text-sky-100/70",
+              },
             ].map((item) => (
               <div key={item.label} className={`rounded-3xl border p-5 ${item.classes}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{item.label}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                  {item.label}
+                </p>
                 <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
                 <p className="mt-2 text-sm text-white/55">{item.text}</p>
               </div>
@@ -427,7 +579,9 @@ export default async function CaptainManagedPlayerMatchFeesPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
                 Reconciliation warning
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Check this fixture before taking payment action</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Check this fixture before taking payment action
+              </h2>
               <div className="mt-4 space-y-2 text-sm text-amber-100/80">
                 {adminWarnings.map((warning) => (
                   <p key={warning}>{warning}</p>
@@ -443,19 +597,33 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           {activeFees.length > 0 ? (
             <section className="grid gap-4 md:grid-cols-3">
               <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Paid</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Paid
+                </p>
                 <p className="mt-3 text-2xl font-semibold text-white">{paidCount}</p>
                 <p className="mt-2 text-sm text-white/50">{formatMoney(totals.paid)}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Cash collected</p>
-                <p className="mt-3 text-2xl font-semibold text-white">{formatMoney(cashTotal)}</p>
-                <p className="mt-2 text-sm text-white/50">Marked using the Paid cash button.</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Cash collected
+                </p>
+                <p className="mt-3 text-2xl font-semibold text-white">
+                  {formatMoney(cashTotal)}
+                </p>
+                <p className="mt-2 text-sm text-white/50">
+                  Marked using the Paid cash button.
+                </p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Online/manual collected</p>
-                <p className="mt-3 text-2xl font-semibold text-white">{formatMoney(onlineTotal)}</p>
-                <p className="mt-2 text-sm text-white/50">Marked using the Paid online button.</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Online/manual collected
+                </p>
+                <p className="mt-3 text-2xl font-semibold text-white">
+                  {formatMoney(onlineTotal)}
+                </p>
+                <p className="mt-2 text-sm text-white/50">
+                  Marked using the Paid online button.
+                </p>
               </div>
             </section>
           ) : null}
@@ -471,7 +639,11 @@ export default async function CaptainManagedPlayerMatchFeesPage({
               : "Past fixtures already submitted to SIXFL are hidden from this captain view."}
           </p>
           <div className="mt-5 space-y-2">
-            {visibleFixtures.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">No editable published fixtures are available for this team.</div> : null}
+            {visibleFixtures.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+                No editable published fixtures are available for this team.
+              </div>
+            ) : null}
             {visibleFixtures.map((fixture) => {
               const isSelected = selectedFixture?.id === fixture.id;
               const isPast = fixture.kickoffAt < now;
@@ -479,14 +651,28 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                 <Link
                   key={fixture.id}
                   href={`/captain/team/${team.id}/match-fees?fixtureId=${fixture.id}`}
-                  className={`block rounded-2xl border p-4 transition ${isSelected ? "border-emerald-400/30 bg-emerald-500/10 text-white" : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.06]"}`}
+                  className={`block rounded-2xl border p-4 transition ${
+                    isSelected
+                      ? "border-emerald-400/30 bg-emerald-500/10 text-white"
+                      : "border-white/10 bg-black/20 text-white/70 hover:bg-white/[0.06]"
+                  }`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-sm font-semibold">{getFixtureLabel({ homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name })}</div>
-                    {isPast ? <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100">Past fixture</span> : null}
+                    <div className="text-sm font-semibold">
+                      {getFixtureLabel({
+                        homeTeamName: fixture.homeTeam.name,
+                        awayTeamName: fixture.awayTeam.name,
+                      })}
+                    </div>
+                    {isPast ? (
+                      <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-100">
+                        Past fixture
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-1 text-xs text-white/50">
-                    {formatUkDateTime(fixture.kickoffAt)}{fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
+                    {formatUkDateTime(fixture.kickoffAt)}
+                    {fixture.venue?.name ? ` · ${fixture.venue.name}` : ""}
                   </div>
                   {selectedFixture?.id === fixture.id && activeFees.length > 0 ? (
                     <div className="mt-2 text-xs text-emerald-100/75">
@@ -503,7 +689,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           <h2 className="text-lg font-semibold text-white">Select players</h2>
           <p className="mt-1 text-sm text-white/55">
             {isAdmin
-              ? "Select who played. Fee rows are created at £6 per selected player unless you change the admin amount below."
+              ? "Availability and fee status are shown on each player. Untick anyone who will not play, then save once."
               : "Tick every player who actually played. Availability responses are shown to help you pick the squad."}
           </p>
           {selectedFixture ? (
@@ -522,7 +708,11 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                   No response {noResponseCount}
                 </span>
               </div>
-              <form action={createCaptainPlayerMatchFeesAction} className="mt-5 space-y-5">
+
+              <MatchdaySquadSelectionForm
+                action={createCaptainPlayerMatchFeesAction}
+                className="mt-5 space-y-5"
+              >
                 <input type="hidden" name="teamId" value={team.id} />
                 <input type="hidden" name="fixtureId" value={selectedFixture.id} />
                 {!isAdmin ? <input type="hidden" name="amount" value="6.00" /> : null}
@@ -530,39 +720,113 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                 {isAdmin ? (
                   <div className="grid gap-4 md:grid-cols-[180px_1fr]">
                     <div className="space-y-2">
-                      <label htmlFor="amount" className="text-sm text-white/60">Fee per player</label>
-                      <input id="amount" name="amount" type="text" inputMode="decimal" defaultValue="6.00" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60" />
+                      <label htmlFor="amount" className="text-sm text-white/60">
+                        Fee per player
+                      </label>
+                      <input
+                        id="amount"
+                        name="amount"
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue="6.00"
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
+                      />
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="note" className="text-sm text-white/60">Admin note</label>
-                      <input id="note" name="note" type="text" placeholder="Optional internal note" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60" />
+                      <label htmlFor="note" className="text-sm text-white/60">
+                        Admin note
+                      </label>
+                      <input
+                        id="note"
+                        name="note"
+                        type="text"
+                        placeholder="Optional internal note"
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                      />
                     </div>
                   </div>
                 ) : null}
 
-                <div className={`grid gap-4 ${selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
+                <div
+                  className={`grid gap-4 ${
+                    selectableProspects.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"
+                  }`}
+                >
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <h3 className="font-semibold text-white">Linked squad members</h3>
                     <div className="mt-3 space-y-2">
-                      {members.length === 0 ? <div className="text-sm text-white/45">No linked members yet.</div> : null}
+                      {members.length === 0 ? (
+                        <div className="text-sm text-white/45">No linked members yet.</div>
+                      ) : null}
                       {members.map((member) => {
                         const existingFee = feeByMemberId.get(member.id);
                         const availability = availabilityByMemberId.get(member.id);
+                        const playerName =
+                          member.user.name || member.user.email || "Unnamed member";
+                        const unavailableWarning =
+                          availability?.response === "UNAVAILABLE" && existingFee
+                            ? getUnavailableFeeWarning({
+                                status: existingFee.status,
+                                amountPence: existingFee.amountPence,
+                              })
+                            : null;
+
                         return (
-                          <label key={member.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                            <input type="checkbox" name="player" value={`member:${member.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
+                          <label
+                            key={member.id}
+                            className={`flex items-start gap-3 rounded-xl border p-3 text-sm text-white/75 ${
+                              availability?.response === "UNAVAILABLE"
+                                ? "border-red-400/25 bg-red-500/[0.06]"
+                                : "border-white/10 bg-white/[0.03]"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              name="player"
+                              value={`member:${member.id}`}
+                              defaultChecked={Boolean(existingFee)}
+                              data-paid-selected={
+                                existingFee?.status === "PAID" ? "true" : undefined
+                              }
+                              data-player-name={playerName}
+                              className="mt-1"
+                            />
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-2">
-                                <span className="block font-medium text-white">{member.user.name || member.user.email || "Unnamed member"}</span>
-                                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(availability?.response)}`}>
+                                <span className="block font-medium text-white">
+                                  {playerName}
+                                </span>
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAvailabilityClasses(
+                                    availability?.response,
+                                  )}`}
+                                >
                                   {getAvailabilityLabel(availability?.response)}
                                 </span>
+                                {existingFee ? (
+                                  <span
+                                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getFeeStatusClasses(
+                                      existingFee.status,
+                                    )}`}
+                                  >
+                                    Fee {getFeeStatusLabel(existingFee.status)}
+                                  </span>
+                                ) : null}
                               </span>
                               <span className="mt-1 block text-xs text-white/45">
-                                {isAdmin ? member.user.email || "No email" : "Squad player"}{existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
+                                {isAdmin
+                                  ? member.user.email || "No email"
+                                  : "Squad player"}
                               </span>
+                              {unavailableWarning ? (
+                                <span className="mt-2 block rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-100">
+                                  {unavailableWarning}
+                                </span>
+                              ) : null}
                               {availability?.note ? (
-                                <span className="mt-1 block text-xs text-white/45">Note: {availability.note}</span>
+                                <span className="mt-1 block text-xs text-white/45">
+                                  Note: {availability.note}
+                                </span>
                               ) : null}
                             </span>
                           </label>
@@ -574,21 +838,50 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                   {selectableProspects.length > 0 ? (
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                       <h3 className="font-semibold text-white">Unlinked extra players</h3>
-                      <p className="mt-1 text-xs text-white/45">Only use this for someone who played but is not yet in the linked squad list.</p>
+                      <p className="mt-1 text-xs text-white/45">
+                        Only use this for someone who played but is not yet in the linked squad list.
+                      </p>
                       <div className="mt-3 space-y-2">
                         {selectableProspects.map((prospect) => {
-                          const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+                          const fullName = [prospect.firstName, prospect.lastName]
+                            .filter(Boolean)
+                            .join(" ")
+                            .trim();
                           const existingFee = feeByProspectId.get(prospect.id);
+                          const playerName =
+                            fullName ||
+                            prospect.email ||
+                            prospect.phone ||
+                            "Unnamed prospect";
                           return (
-                            <label key={prospect.id} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">
-                              <input type="checkbox" name="player" value={`prospect:${prospect.id}`} defaultChecked={Boolean(existingFee)} className="mt-1" />
+                            <label
+                              key={prospect.id}
+                              className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75"
+                            >
+                              <input
+                                type="checkbox"
+                                name="player"
+                                value={`prospect:${prospect.id}`}
+                                defaultChecked={Boolean(existingFee)}
+                                data-paid-selected={
+                                  existingFee?.status === "PAID" ? "true" : undefined
+                                }
+                                data-player-name={playerName}
+                                className="mt-1"
+                              />
                               <span>
-                                <span className="block font-medium text-white">{fullName || prospect.email || prospect.phone || "Unnamed prospect"}</span>
+                                <span className="block font-medium text-white">
+                                  {playerName}
+                                </span>
                                 <span className="block text-xs text-white/45">
                                   {isAdmin
-                                    ? `${prospect.email || "No email"}${prospect.phone ? ` · ${prospect.phone}` : ""}`
+                                    ? `${prospect.email || "No email"}${
+                                        prospect.phone ? ` · ${prospect.phone}` : ""
+                                      }`
                                     : "Not yet linked to the squad"}
-                                  {existingFee && isAdmin ? ` · ${getFeeStatusLabel(existingFee.status)}` : ""}
+                                  {existingFee && isAdmin
+                                    ? ` · ${getFeeStatusLabel(existingFee.status)}`
+                                    : ""}
                                 </span>
                               </span>
                             </label>
@@ -599,13 +892,18 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                   ) : null}
                 </div>
 
-                <button type="submit" className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400">
-                  {isAdmin ? "Create / refresh fee rows" : "Submit matchday squad"}
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400"
+                >
+                  {isAdmin ? "Save squad and reconcile fees" : "Submit matchday squad"}
                 </button>
-              </form>
+              </MatchdaySquadSelectionForm>
             </>
           ) : (
-            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">Create or select a published fixture before selecting players.</div>
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+              Create or select a published fixture before selecting players.
+            </div>
           )}
         </div>
       </section>
@@ -615,31 +913,78 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Admin fee tracker</h2>
-              <p className="mt-1 text-sm text-white/55">Admin-only reconciliation for the selected fixture. Use Paid cash or Paid online so the night can be reconciled properly.</p>
+              <p className="mt-1 text-sm text-white/55">
+                Each row now states whether the player is selected, whether payment was taken and whether credit is due.
+              </p>
             </div>
-            {selectedFixture ? <div className="text-sm text-white/55">{getFixtureLabel({ homeTeamName: selectedFixture.homeTeam.name, awayTeamName: selectedFixture.awayTeam.name })}</div> : null}
+            {selectedFixture ? (
+              <div className="text-sm text-white/55">
+                {getFixtureLabel({
+                  homeTeamName: selectedFixture.homeTeam.name,
+                  awayTeamName: selectedFixture.awayTeam.name,
+                })}
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-5 space-y-3">
-            {fees.length === 0 ? <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">No players have been selected for this fixture yet.</div> : null}
+            {fees.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/55">
+                No players have been selected for this fixture yet.
+              </div>
+            ) : null}
             {fees.map((fee) => {
               const playerName = getPlayerName(fee);
               const playerContact = getPlayerContact(fee);
-              const statusButtons = ["OPEN", "WAIVED", "CANCELLED"] as PlayerMatchFeeStatus[];
+              const statusButtons = [
+                "OPEN",
+                "WAIVED",
+                "CANCELLED",
+              ] as PlayerMatchFeeStatus[];
+              const friendlyNote = getFriendlyFeeNote(fee.note, fee);
 
               return (
-                <div key={fee.id} className={`grid gap-4 rounded-2xl border border-white/10 p-4 lg:grid-cols-[1fr_auto] lg:items-center ${fee.status === "CANCELLED" ? "bg-red-500/[0.04] opacity-70" : "bg-black/20"}`}>
+                <div
+                  key={fee.id}
+                  className={`grid gap-4 rounded-2xl border border-white/10 p-4 lg:grid-cols-[1fr_auto] lg:items-center ${
+                    fee.status === "CANCELLED"
+                      ? "bg-red-500/[0.04]"
+                      : "bg-black/20"
+                  }`}
+                >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="font-semibold text-white">{playerName}</div>
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${getFeeStatusClasses(fee.status)}`}>{getFeeStatusLabel(fee.status)}</span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/60">{formatMoney(fee.amountPence)}</span>
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium ${getFeeStatusClasses(
+                          fee.status,
+                        )}`}
+                      >
+                        {getFeeStatusLabel(fee.status)}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/60">
+                        {formatMoney(fee.amountPence)}
+                      </span>
                     </div>
                     <div className="mt-1 text-sm text-white/50">{playerContact}</div>
-                    <div className="mt-1 text-xs text-white/35">
-                      Created {formatUkDateTime(fee.createdAt)}{fee.paidAt ? ` · Paid ${formatUkDateTime(fee.paidAt)}` : ""}{fee.waivedAt ? ` · Waived ${formatUkDateTime(fee.waivedAt)}` : ""}{fee.cancelledAt ? ` · Cancelled ${formatUkDateTime(fee.cancelledAt)}` : ""}
+                    <div className="mt-2 rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-100">
+                      {getFeeOutcomeSummary(fee)}
                     </div>
-                    {fee.note ? <div className="mt-2 whitespace-pre-line rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/55">{fee.note}</div> : null}
+                    <div className="mt-2 text-xs text-white/35">
+                      Created {formatUkDateTime(fee.createdAt)}
+                      {fee.paidAt ? ` · Paid ${formatUkDateTime(fee.paidAt)}` : ""}
+                      {fee.waivedAt
+                        ? ` · Waived ${formatUkDateTime(fee.waivedAt)}`
+                        : ""}
+                      {fee.cancelledAt
+                        ? ` · Cancelled ${formatUkDateTime(fee.cancelledAt)}`
+                        : ""}
+                    </div>
+                    {friendlyNote ? (
+                      <div className="mt-2 whitespace-pre-line rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/60">
+                        {friendlyNote}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -647,8 +992,19 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                       <input type="hidden" name="teamId" value={team.id} />
                       <input type="hidden" name="fixtureId" value={fee.fixtureId} />
                       <input type="hidden" name="feeId" value={fee.id} />
-                      <input name="amount" type="text" inputMode="decimal" defaultValue={(fee.amountPence / 100).toFixed(2)} className="w-24 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60" />
-                      <button type="submit" className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10">Update</button>
+                      <input
+                        name="amount"
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue={(fee.amountPence / 100).toFixed(2)}
+                        className="w-24 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-500/60"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10"
+                      >
+                        Update
+                      </button>
                     </form>
 
                     <form action={markCaptainPlayerMatchFeePaidAction}>
@@ -656,7 +1012,15 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                       <input type="hidden" name="fixtureId" value={fee.fixtureId} />
                       <input type="hidden" name="feeId" value={fee.id} />
                       <input type="hidden" name="method" value="CASH" />
-                      <button type="submit" disabled={fee.status === "PAID" && fee.note?.includes("Paid cash")} className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40">Paid cash</button>
+                      <button
+                        type="submit"
+                        disabled={
+                          fee.status === "PAID" && fee.note?.includes("Paid cash")
+                        }
+                        className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Paid cash
+                      </button>
                     </form>
 
                     <form action={markCaptainPlayerMatchFeePaidAction}>
@@ -664,14 +1028,28 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                       <input type="hidden" name="fixtureId" value={fee.fixtureId} />
                       <input type="hidden" name="feeId" value={fee.id} />
                       <input type="hidden" name="method" value="ONLINE" />
-                      <button type="submit" disabled={fee.status === "PAID" && fee.note?.includes("Paid online")} className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-40">Paid online</button>
+                      <button
+                        type="submit"
+                        disabled={
+                          fee.status === "PAID" && fee.note?.includes("Paid online")
+                        }
+                        className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Paid online
+                      </button>
                     </form>
 
                     <form action={sendCaptainPlayerMatchFeeReminderAction}>
                       <input type="hidden" name="teamId" value={team.id} />
                       <input type="hidden" name="fixtureId" value={fee.fixtureId} />
                       <input type="hidden" name="feeId" value={fee.id} />
-                      <button type="submit" disabled={fee.status !== "OPEN"} className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-40">Send reminder</button>
+                      <button
+                        type="submit"
+                        disabled={fee.status !== "OPEN"}
+                        className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Send reminder
+                      </button>
                     </form>
 
                     {statusButtons.map((status) => (
@@ -680,7 +1058,11 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                         <input type="hidden" name="fixtureId" value={fee.fixtureId} />
                         <input type="hidden" name="feeId" value={fee.id} />
                         <input type="hidden" name="status" value={status} />
-                        <button type="submit" disabled={fee.status === status} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40">
+                        <button
+                          type="submit"
+                          disabled={fee.status === status}
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
                           {getFeeStatusLabel(status)}
                         </button>
                       </form>
