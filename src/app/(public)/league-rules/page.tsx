@@ -6,10 +6,10 @@ import Link from "next/link";
 
 const documentDetails = [
   { label: "Document", value: "League Rules" },
-  { label: "Version", value: "1.0" },
+  { label: "Version", value: "1.1" },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "2 July 2026" },
-  { label: "Next review", value: "2 July 2027" },
+  { label: "Last updated", value: "21 July 2026" },
+  { label: "Next review", value: "21 July 2027" },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "All SIXFL teams, players and league fixtures" },
 ];
@@ -79,27 +79,32 @@ export default function LeagueRulesPage() {
         />
 
         <RulesSection
-          title="4. Respect and Conduct"
+          title="4. Squad and Substitute Limits"
+          text="A team may register a maximum active squad of nine players. A maximum of nine players may be named for any fixture, consisting of six starting players and no more than three rolling substitutes. Any guest players used for a fixture count within this nine-player matchday limit. Exceptions require prior approval from SIXFL."
+        />
+
+        <RulesSection
+          title="5. Respect and Conduct"
           text="Players, captains and spectators must behave respectfully towards referees, opponents and league staff. Abuse, threatening behaviour and serious misconduct may result in suspension or removal from the league."
         />
 
         <RulesSection
-          title="5. Results and League Table"
+          title="6. Results and League Table"
           text="Match results are recorded by the referee or league administrator and used to update the standings. SIXFL reserves the right to amend results where errors or rule breaches are identified."
         />
 
         <RulesSection
-          title="6. Discipline"
+          title="7. Discipline"
           text="SIXFL may take disciplinary action in response to misconduct, dangerous play, abusive language, repeated non-attendance or any behaviour that brings the league into disrepute."
         />
 
         <RulesSection
-          title="7. Fixtures and Cancellations"
+          title="8. Fixtures and Cancellations"
           text="Fixtures are scheduled by SIXFL and may be changed where necessary due to venue issues, weather, operational requirements or exceptional circumstances."
         />
 
         <RulesSection
-          title="8. League Decisions"
+          title="9. League Decisions"
           text="SIXFL reserves the right to interpret and apply league rules in the interests of fairness, safety and good league management. League decisions are final unless otherwise stated."
         />
       </div>
