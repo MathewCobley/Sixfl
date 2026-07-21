@@ -8,6 +8,7 @@ import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import { Suspense, type ReactNode } from "react";
 import NightBoardFixtureIssuesLink from "@/components/admin/night-board/NightBoardFixtureIssuesLink";
+import NightBoardPitchSheetsLink from "@/components/admin/night-board/NightBoardPitchSheetsLink";
 import NightBoardTeamIssuesPanel from "@/components/admin/night-board/NightBoardTeamIssuesPanel";
 import NightBoardWarningsPositionBridge from "@/components/admin/night-board/NightBoardWarningsPositionBridge";
 import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
@@ -111,6 +112,7 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <NightBoardTeamIssuesPanel />
             <NightBoardFixtureIssuesLink />
+            <NightBoardPitchSheetsLink />
             <NightBoardWarningsPositionBridge />
             <AdminPaymentsPageBridge />
             <CaptainFixturesDeduplicateBridge />
