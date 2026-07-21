@@ -24,12 +24,12 @@ type StatusPayload = {
   error?: string;
 };
 
-function getPageContext(pathname: string) {
+function getTeamId(pathname: string) {
   const adminMatch = pathname.match(/^\/admin\/teams\/([^/]+)\/squad\/?$/);
-  if (adminMatch?.[1]) return { teamId: adminMatch[1] };
+  if (adminMatch?.[1]) return adminMatch[1];
 
   const captainMatch = pathname.match(/^\/captain\/team\/([^/]+)\/squad\/?$/);
-  if (captainMatch?.[1]) return { teamId: captainMatch[1] };
+  if (captainMatch?.[1]) return captainMatch[1];
 
   return null;
 }
@@ -41,7 +41,7 @@ function getMemberName(member: MemberStatus) {
 export default function ManagedSquadInjuryBridge() {
   const pathname = usePathname();
   const router = useRouter();
-  const context = useMemo(() => getPageContext(pathname), [pathname]);
+  const teamId = useMemo(() => getTeamId(pathname), [pathname]);
   const [members, setMembers] = useState<MemberStatus[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -49,7 +49,7 @@ export default function ManagedSquadInjuryBridge() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!context) {
+    if (!teamId) {
       setMembers([]);
       setNotes({});
       setError("");
@@ -61,7 +61,7 @@ export default function ManagedSquadInjuryBridge() {
     setError("");
 
     void fetch(
-      `/api/admin/managed-squad-status?teamId=${encodeURIComponent(context.teamId)}`,
+      `/api/admin/managed-squad-status?teamId=${encodeURIComponent(teamId)}`,
       {
         cache: "no-store",
         signal: controller.signal,
@@ -96,11 +96,13 @@ export default function ManagedSquadInjuryBridge() {
       });
 
     return () => controller.abort();
-  }, [context]);
+  }, [teamId]);
 
-  if (!context) return null;
-
-  async function updateStatus(member: MemberStatus, squadStatus: SquadStatus) {
+  async function updateStatus(
+    activeTeamId: string,
+    member: MemberStatus,
+    squadStatus: SquadStatus,
+  ) {
     setUpdatingId(member.id);
     setError("");
 
@@ -110,7 +112,7 @@ export default function ManagedSquadInjuryBridge() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          teamId: context.teamId,
+          teamId: activeTeamId,
           membershipId: member.id,
           squadStatus,
           note,
@@ -148,6 +150,8 @@ export default function ManagedSquadInjuryBridge() {
       setUpdatingId(null);
     }
   }
+
+  if (!teamId) return null;
 
   return (
     <section className="mb-6 overflow-hidden rounded-3xl border border-red-400/20 bg-red-500/[0.05] shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
@@ -230,7 +234,11 @@ export default function ManagedSquadInjuryBridge() {
                     type="button"
                     disabled={isUpdating}
                     onClick={() =>
-                      void updateStatus(member, isInjured ? "ACTIVE" : "INJURED")
+                      void updateStatus(
+                        teamId,
+                        member,
+                        isInjured ? "ACTIVE" : "INJURED",
+                      )
                     }
                     className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                       isInjured
