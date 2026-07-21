@@ -230,7 +230,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         { teamMemberId: membership.id },
         ...feeLookupEmails.map((lookupEmail) => ({
           prospect: {
-            teamId,
+            teamId: teamid,
             email: {
               equals: lookupEmail,
               mode: "insensitive" as const,
