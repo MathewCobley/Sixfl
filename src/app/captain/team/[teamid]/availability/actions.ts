@@ -31,7 +31,9 @@ const AVAILABILITY_RESET_SOURCE_TYPES = [
 
 function getResponseValue(value: FormDataEntryValue | null): AvailabilityResponse {
   const parsed = String(value ?? "").trim().toUpperCase();
-  return ALLOWED_RESPONSES.includes(parsed as AvailabilityResponse) ? (parsed as AvailabilityResponse) : "NO_RESPONSE";
+  return ALLOWED_RESPONSES.includes(parsed as AvailabilityResponse)
+    ? (parsed as AvailabilityResponse)
+    : "NO_RESPONSE";
 }
 
 function normaliseNullableString(value: FormDataEntryValue | null) {
@@ -41,6 +43,55 @@ function normaliseNullableString(value: FormDataEntryValue | null) {
 
 function buildAvailabilityRedirect(teamid: string, query: string) {
   return `/captain/team/${teamid}/availability${query}`;
+}
+
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
+}
+
+function getAvailabilitySavedMessage(input: {
+  response: AvailabilityResponse;
+  fee: {
+    status: "OPEN" | "PAID" | "WAIVED" | "CANCELLED";
+    amountPence: number;
+    paidAt: Date | null;
+  } | null;
+}) {
+  const { response, fee } = input;
+
+  if (response === "UNAVAILABLE") {
+    if (!fee) {
+      return "Availability updated. This player is unavailable and has no match fee for this fixture.";
+    }
+
+    if (fee.status === "OPEN") {
+      return `Availability updated. This player has an unpaid ${formatMoney(fee.amountPence)} fee and is still in the matchday squad. Remove them from Matchday Squad if they are no longer playing; the unpaid fee will then be cancelled.`;
+    }
+
+    if (fee.status === "PAID") {
+      return `Availability updated. This player has already paid ${formatMoney(fee.amountPence)}. Review Matchday Squad before removing them; removal will keep the payment for audit and create player credit.`;
+    }
+
+    if (fee.status === "WAIVED") {
+      return "Availability updated. This player is unavailable and their fee is waived. Remove them from Matchday Squad if they are no longer playing.";
+    }
+
+    return fee.paidAt
+      ? `Availability updated. This player is unavailable, not selected, and their previous ${formatMoney(fee.amountPence)} payment has been retained for audit with player credit created.`
+      : "Availability updated. This player is unavailable, not selected, and their unpaid fee is already cancelled. No payment or credit is due.";
+  }
+
+  if (
+    (response === "AVAILABLE" || response === "MAYBE") &&
+    fee?.status === "CANCELLED"
+  ) {
+    return "Availability updated. Their previous fee remains cancelled. Re-select them in Matchday Squad if they will play in this fixture.";
+  }
+
+  return "Availability updated.";
 }
 
 function getSiteUrl() {
@@ -114,7 +165,7 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
     redirect("/captain");
   }
 
-  const [fixture, membership] = await Promise.all([
+  const [fixture, membership, fee] = await Promise.all([
     prisma.fixture.findFirst({
       where: {
         id: fixtureId,
@@ -127,10 +178,22 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
       where: { id: teamMemberId, teamId: teamid },
       select: { id: true },
     }),
+    prisma.playerMatchFee.findFirst({
+      where: { fixtureId, teamMemberId, teamId: teamid },
+      select: {
+        status: true,
+        amountPence: true,
+        paidAt: true,
+      },
+    }),
   ]);
 
-  if (!fixture) redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found."));
-  if (!membership) redirect(buildAvailabilityRedirect(teamid, "?error=Team%20member%20not%20found."));
+  if (!fixture) {
+    redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found."));
+  }
+  if (!membership) {
+    redirect(buildAvailabilityRedirect(teamid, "?error=Team%20member%20not%20found."));
+  }
 
   await prisma.fixtureAvailability.upsert({
     where: {
@@ -153,7 +216,15 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
   revalidatePath(`/captain/team/${teamid}/availability`);
   revalidatePath(`/captain/team/${teamid}/fixtures`);
   revalidatePath(`/captain/team/${teamid}/fixtures/${fixtureId}/selection`);
-  redirect(buildAvailabilityRedirect(teamid, "?saved=availability-updated"));
+  revalidatePath(`/captain/team/${teamid}/match-fees`);
+
+  const savedMessage = getAvailabilitySavedMessage({ response, fee });
+  redirect(
+    buildAvailabilityRedirect(
+      teamid,
+      `?saved=${encodeURIComponent(savedMessage)}#fixture-${fixtureId}`,
+    ),
+  );
 }
 
 export async function resetFixtureAvailabilityAction(formData: FormData) {
@@ -182,11 +253,18 @@ export async function resetFixtureAvailabilityAction(formData: FormData) {
   ]);
 
   if (!team || !fixture) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found%20for%20this%20team."));
+    redirect(
+      buildAvailabilityRedirect(
+        teamid,
+        "?error=Fixture%20not%20found%20for%20this%20team.",
+      ),
+    );
   }
 
   const teamMemberIds = team.members.map((member) => member.id);
-  const sourceIds = teamMemberIds.map((teamMemberId) => getSmsSourceId({ fixtureId, teamMemberId }));
+  const sourceIds = teamMemberIds.map((teamMemberId) =>
+    getSmsSourceId({ fixtureId, teamMemberId }),
+  );
   const archivedPrefix = `reset-${Date.now()}`;
 
   await prisma.$transaction([
@@ -217,7 +295,12 @@ export async function resetFixtureAvailabilityAction(formData: FormData) {
   revalidatePath(`/captain/team/${teamid}/availability/reset`);
   revalidatePath(`/captain/team/${teamid}/fixtures/${fixtureId}/selection`);
 
-  redirect(buildAvailabilityRedirect(teamid, `?saved=fixture-availability-reset#fixture-${fixtureId}`));
+  redirect(
+    buildAvailabilityRedirect(
+      teamid,
+      `?saved=fixture-availability-reset#fixture-${fixtureId}`,
+    ),
+  );
 }
 
 export async function sendAvailabilitySmsChaseAction(formData: FormData) {
@@ -257,7 +340,12 @@ export async function sendAvailabilitySmsChaseAction(formData: FormData) {
   });
 
   if (!fixture || !member) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20or%20player%20not%20found."));
+    redirect(
+      buildAvailabilityRedirect(
+        teamid,
+        "?error=Fixture%20or%20player%20not%20found.",
+      ),
+    );
   }
 
   const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);
@@ -266,7 +354,12 @@ export async function sendAvailabilitySmsChaseAction(formData: FormData) {
   const normalizedPhone = normalizePhoneNumber(phone);
 
   if (!phone || !normalizedPhone) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=This%20player%20does%20not%20have%20a%20valid%20phone%20number."));
+    redirect(
+      buildAvailabilityRedirect(
+        teamid,
+        "?error=This%20player%20does%20not%20have%20a%20valid%20phone%20number.",
+      ),
+    );
   }
 
   const isHome = fixture.homeTeamId === teamid;
