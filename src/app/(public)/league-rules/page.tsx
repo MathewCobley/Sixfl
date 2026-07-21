@@ -80,7 +80,7 @@ export default function LeagueRulesPage() {
 
         <RulesSection
           title="4. Squad and Substitute Limits"
-          text="A team may register a maximum active squad of nine players. A maximum of nine players may be named for any fixture, consisting of six starting players and no more than three rolling substitutes. Any guest players used for a fixture count within this nine-player matchday limit. Exceptions require prior approval from SIXFL."
+          text="A team may register a maximum active squad of 15 players. A maximum of nine players may be named for any fixture, consisting of six starting players and no more than three rolling substitutes. Any guest players used for a fixture count within this nine-player matchday limit. Exceptions require prior approval from SIXFL."
         />
 
         <RulesSection
