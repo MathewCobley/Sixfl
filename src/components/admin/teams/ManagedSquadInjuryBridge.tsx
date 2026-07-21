@@ -31,7 +31,7 @@ function getTeamId(pathname: string) {
   const captainMatch = pathname.match(/^\/captain\/team\/([^/]+)\/squad\/?$/);
   if (captainMatch?.[1]) return captainMatch[1];
 
-  return null;
+  return "";
 }
 
 function getMemberName(member: MemberStatus) {
@@ -98,11 +98,9 @@ export default function ManagedSquadInjuryBridge() {
     return () => controller.abort();
   }, [teamId]);
 
-  async function updateStatus(
-    activeTeamId: string,
-    member: MemberStatus,
-    squadStatus: SquadStatus,
-  ) {
+  async function updateStatus(member: MemberStatus, squadStatus: SquadStatus) {
+    if (!teamId) return;
+
     setUpdatingId(member.id);
     setError("");
 
@@ -112,7 +110,7 @@ export default function ManagedSquadInjuryBridge() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          teamId: activeTeamId,
+          teamId,
           membershipId: member.id,
           squadStatus,
           note,
@@ -234,11 +232,7 @@ export default function ManagedSquadInjuryBridge() {
                     type="button"
                     disabled={isUpdating}
                     onClick={() =>
-                      void updateStatus(
-                        teamId,
-                        member,
-                        isInjured ? "ACTIVE" : "INJURED",
-                      )
+                      void updateStatus(member, isInjured ? "ACTIVE" : "INJURED")
                     }
                     className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                       isInjured
