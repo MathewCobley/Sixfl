@@ -21,6 +21,8 @@ type StoredPredictionRow = {
   source: string;
   inputHash: string;
   generatedAt: Date;
+  predictedHomeScore: number | null;
+  predictedAwayScore: number | null;
 };
 
 type PredictionFixture = {
@@ -34,7 +36,29 @@ type PredictionFixture = {
 export type StoredFixtureAiPreview = FixtureAiPreview & {
   inputHash: string;
   generatedAt: Date;
+  predictedHomeScore: number | null;
+  predictedAwayScore: number | null;
 };
+
+let scoreColumnsReady: Promise<void> | null = null;
+
+function ensurePredictionScoreColumns() {
+  if (!scoreColumnsReady) {
+    scoreColumnsReady = (async () => {
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "FixtureAiPrediction" ADD COLUMN IF NOT EXISTS "predictedHomeScore" INTEGER',
+      );
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "FixtureAiPrediction" ADD COLUMN IF NOT EXISTS "predictedAwayScore" INTEGER',
+      );
+    })().catch((error) => {
+      scoreColumnsReady = null;
+      throw error;
+    });
+  }
+
+  return scoreColumnsReady;
+}
 
 function toStoredPreview(row: StoredPredictionRow): StoredFixtureAiPreview {
   const preview = cleanFixtureAiPreviewForDisplay({
@@ -47,6 +71,8 @@ function toStoredPreview(row: StoredPredictionRow): StoredFixtureAiPreview {
     ...preview,
     inputHash: row.inputHash,
     generatedAt: row.generatedAt,
+    predictedHomeScore: row.predictedHomeScore,
+    predictedAwayScore: row.predictedAwayScore,
   };
 }
 
@@ -96,6 +122,7 @@ function canReuseExistingPrediction(input: {
   if (input.force || !input.existing) return false;
   if (input.existing.inputHash !== input.inputHash) return false;
   if (looksCorruptedPrediction(input.existing)) return false;
+  if (input.existing.predictedHomeScore === null || input.existing.predictedAwayScore === null) return false;
 
   const existingSource = input.existing.source === "openai" ? "openai" : "fallback";
 
@@ -111,8 +138,18 @@ export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
 
   if (ids.length === 0) return new Map<string, StoredFixtureAiPreview>();
 
+  await ensurePredictionScoreColumns();
+
   const rows = await prisma.$queryRaw<StoredPredictionRow[]>`
-    SELECT "fixtureId", "headline", "summary", "source", "inputHash", "generatedAt"
+    SELECT
+      "fixtureId",
+      "headline",
+      "summary",
+      "source",
+      "inputHash",
+      "generatedAt",
+      "predictedHomeScore",
+      "predictedAwayScore"
     FROM "FixtureAiPrediction"
     WHERE "fixtureId" IN (${Prisma.join(ids)})
   `;
@@ -121,8 +158,18 @@ export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
 }
 
 async function getExistingPrediction(fixtureId: string) {
+  await ensurePredictionScoreColumns();
+
   const rows = await prisma.$queryRaw<StoredPredictionRow[]>`
-    SELECT "fixtureId", "headline", "summary", "source", "inputHash", "generatedAt"
+    SELECT
+      "fixtureId",
+      "headline",
+      "summary",
+      "source",
+      "inputHash",
+      "generatedAt",
+      "predictedHomeScore",
+      "predictedAwayScore"
     FROM "FixtureAiPrediction"
     WHERE "fixtureId" = ${fixtureId}
     LIMIT 1
@@ -135,20 +182,47 @@ async function savePrediction(input: {
   fixtureId: string;
   preview: FixtureAiPreview;
   inputHash: string;
+  winChance: FixtureWinChance;
 }) {
+  await ensurePredictionScoreColumns();
+
   const preview = cleanFixtureAiPreviewForDisplay(input.preview);
+  const predictedHomeScore = input.winChance.predictedResult.homeScore;
+  const predictedAwayScore = input.winChance.predictedResult.awayScore;
 
   await prisma.$executeRaw`
     INSERT INTO "FixtureAiPrediction"
-      ("fixtureId", "headline", "summary", "source", "inputHash", "generatedAt", "updatedAt")
+      (
+        "fixtureId",
+        "headline",
+        "summary",
+        "source",
+        "inputHash",
+        "generatedAt",
+        "updatedAt",
+        "predictedHomeScore",
+        "predictedAwayScore"
+      )
     VALUES
-      (${input.fixtureId}, ${preview.headline}, ${preview.summary}, ${preview.source}, ${input.inputHash}, NOW(), NOW())
+      (
+        ${input.fixtureId},
+        ${preview.headline},
+        ${preview.summary},
+        ${preview.source},
+        ${input.inputHash},
+        NOW(),
+        NOW(),
+        ${predictedHomeScore},
+        ${predictedAwayScore}
+      )
     ON CONFLICT ("fixtureId") DO UPDATE SET
       "headline" = EXCLUDED."headline",
       "summary" = EXCLUDED."summary",
       "source" = EXCLUDED."source",
       "inputHash" = EXCLUDED."inputHash",
       "generatedAt" = EXCLUDED."generatedAt",
+      "predictedHomeScore" = EXCLUDED."predictedHomeScore",
+      "predictedAwayScore" = EXCLUDED."predictedAwayScore",
       "updatedAt" = NOW()
   `;
 }
@@ -180,9 +254,15 @@ async function generateAndSave(input: {
     }),
   );
 
-  await savePrediction({ fixtureId: input.fixture.id, preview, inputHash });
+  await savePrediction({ fixtureId: input.fixture.id, preview, inputHash, winChance });
 
-  return { ...preview, inputHash, generatedAt: new Date() };
+  return {
+    ...preview,
+    inputHash,
+    generatedAt: new Date(),
+    predictedHomeScore: winChance.predictedResult.homeScore,
+    predictedAwayScore: winChance.predictedResult.awayScore,
+  };
 }
 
 export async function refreshStoredAiPreviewForFixture(fixtureId: string, options?: { force?: boolean }) {
