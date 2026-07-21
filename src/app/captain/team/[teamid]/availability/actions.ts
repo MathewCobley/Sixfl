@@ -6,7 +6,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { NotificationAudience, NotificationRecipientSourceType, Prisma } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationRecipientSourceType,
+  Prisma,
+} from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
@@ -14,11 +18,17 @@ import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
+import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
-const ALLOWED_RESPONSES = ["AVAILABLE", "UNAVAILABLE", "MAYBE", "NO_RESPONSE"] as const;
+const ALLOWED_RESPONSES = [
+  "AVAILABLE",
+  "UNAVAILABLE",
+  "MAYBE",
+  "NO_RESPONSE",
+] as const;
 type AvailabilityResponse = (typeof ALLOWED_RESPONSES)[number];
 
 const AVAILABILITY_SMS_CHASE_SOURCE_TYPE = "CAPTAIN_AVAILABILITY_SMS_CHASE";
@@ -29,8 +39,12 @@ const AVAILABILITY_RESET_SOURCE_TYPES = [
   "MANAGED_SQUAD_AVAILABILITY_CHASE_72H",
 ] as const;
 
-function getResponseValue(value: FormDataEntryValue | null): AvailabilityResponse {
-  const parsed = String(value ?? "").trim().toUpperCase();
+function getResponseValue(
+  value: FormDataEntryValue | null,
+): AvailabilityResponse {
+  const parsed = String(value ?? "")
+    .trim()
+    .toUpperCase();
   return ALLOWED_RESPONSES.includes(parsed as AvailabilityResponse)
     ? (parsed as AvailabilityResponse)
     : "NO_RESPONSE";
@@ -52,46 +66,74 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
+function getResponseLabel(response: AvailabilityResponse) {
+  switch (response) {
+    case "AVAILABLE":
+      return "Available";
+    case "MAYBE":
+      return "Maybe";
+    case "UNAVAILABLE":
+      return "Unavailable";
+    default:
+      return "No response";
+  }
+}
+
+function appendNote(input: { existingNote: string | null; note: string }) {
+  const existingNote = input.existingNote?.trim();
+  if (!existingNote) return input.note;
+  if (existingNote.includes(input.note)) return existingNote;
+  return `${existingNote}\n${input.note}`;
+}
+
+function getAutomaticFeeCancellationNote(response: AvailabilityResponse) {
+  return `Unpaid fee cancelled automatically because the player's availability changed to ${getResponseLabel(response)} before kickoff. No payment was taken and no credit is due.`;
+}
+
 function getAvailabilitySavedMessage(input: {
   response: AvailabilityResponse;
+  fixtureStarted: boolean;
+  autoCancelled: boolean;
   fee: {
     status: "OPEN" | "PAID" | "WAIVED" | "CANCELLED";
     amountPence: number;
     paidAt: Date | null;
   } | null;
 }) {
-  const { response, fee } = input;
+  const { response, fixtureStarted, autoCancelled, fee } = input;
+  const responseLabel = getResponseLabel(response);
 
-  if (response === "UNAVAILABLE") {
-    if (!fee) {
-      return "Availability updated. This player is unavailable and has no match fee for this fixture.";
+  if (response === "AVAILABLE") {
+    if (fee?.status === "CANCELLED") {
+      return "Availability updated to Available. Their previous fee remains cancelled; select them again in Matchday Squad if they will play.";
     }
 
-    if (fee.status === "OPEN") {
-      return `Availability updated. This player has an unpaid ${formatMoney(fee.amountPence)} fee and is still in the matchday squad. Remove them from Matchday Squad if they are no longer playing; the unpaid fee will then be cancelled.`;
-    }
+    return "Availability updated to Available.";
+  }
 
-    if (fee.status === "PAID") {
-      return `Availability updated. This player has already paid ${formatMoney(fee.amountPence)}. Review Matchday Squad before removing them; removal will keep the payment for audit and create player credit.`;
-    }
+  if (!fee) {
+    return `Availability updated to ${responseLabel}. The player is not in the confirmed matchday squad and has no fee open.`;
+  }
 
-    if (fee.status === "WAIVED") {
-      return "Availability updated. This player is unavailable and their fee is waived. Remove them from Matchday Squad if they are no longer playing.";
-    }
+  if (autoCancelled) {
+    return `Availability updated to ${responseLabel}. Their unpaid fee was cancelled automatically, so no payment or credit is due.`;
+  }
 
+  if (fee.status === "PAID") {
+    return `Availability updated to ${responseLabel}. This player has already paid ${formatMoney(fee.amountPence)}. Their payment has not been changed automatically; review Matchday Squad and confirm whether to retain the charge or remove them and create player credit.`;
+  }
+
+  if (fee.status === "CANCELLED") {
     return fee.paidAt
-      ? `Availability updated. This player is unavailable, not selected, and their previous ${formatMoney(fee.amountPence)} payment has been retained for audit with player credit created.`
-      : "Availability updated. This player is unavailable, not selected, and their unpaid fee is already cancelled. No payment or credit is due.";
+      ? `Availability updated to ${responseLabel}. The player is not selected; their previous payment is retained for audit and player credit has been created.`
+      : `Availability updated to ${responseLabel}. The player is not selected and their unpaid fee is cancelled. No payment or credit is due.`;
   }
 
-  if (
-    (response === "AVAILABLE" || response === "MAYBE") &&
-    fee?.status === "CANCELLED"
-  ) {
-    return "Availability updated. Their previous fee remains cancelled. Re-select them in Matchday Squad if they will play in this fixture.";
+  if (fixtureStarted) {
+    return `Availability updated to ${responseLabel}. The fixture has already started, so the existing fee was left unchanged for reconciliation.`;
   }
 
-  return "Availability updated.";
+  return `Availability updated to ${responseLabel}. Review Matchday Squad before collecting payment.`;
 }
 
 function getSiteUrl() {
@@ -123,11 +165,17 @@ function getFirstName(value: string) {
   return value.trim().split(/\s+/)[0] || "there";
 }
 
-function getPlayerDisplayName(input: { name: string | null; email: string | null }) {
+function getPlayerDisplayName(input: {
+  name: string | null;
+  email: string | null;
+}) {
   return input.name?.trim() || input.email?.trim() || "Player";
 }
 
-function getSmsSourceId(input: { fixtureId: string; teamMemberId: string }) {
+function getSmsSourceId(input: {
+  fixtureId: string;
+  teamMemberId: string;
+}) {
   return `${input.fixtureId}:${input.teamMemberId}`;
 }
 
@@ -172,7 +220,7 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
         ...publishedFixtureWhere,
         OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
       },
-      select: { id: true },
+      select: { id: true, kickoffAt: true },
     }),
     prisma.teamMember.findFirst({
       where: { id: teamMemberId, teamId: teamid },
@@ -181,18 +229,27 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
     prisma.playerMatchFee.findFirst({
       where: { fixtureId, teamMemberId, teamId: teamid },
       select: {
+        id: true,
         status: true,
         amountPence: true,
         paidAt: true,
+        note: true,
       },
     }),
   ]);
 
   if (!fixture) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found."));
+    redirect(
+      buildAvailabilityRedirect(teamid, "?error=Fixture%20not%20found."),
+    );
   }
   if (!membership) {
-    redirect(buildAvailabilityRedirect(teamid, "?error=Team%20member%20not%20found."));
+    redirect(
+      buildAvailabilityRedirect(
+        teamid,
+        "?error=Team%20member%20not%20found.",
+      ),
+    );
   }
 
   await prisma.fixtureAvailability.upsert({
@@ -213,12 +270,58 @@ export async function updateFixtureAvailabilityAction(formData: FormData) {
     },
   });
 
+  const fixtureStarted = fixture.kickoffAt.getTime() <= Date.now();
+  let resultingFee = fee;
+  let autoCancelled = false;
+
+  if (
+    !fixtureStarted &&
+    response !== "AVAILABLE" &&
+    fee &&
+    (fee.status === "OPEN" || fee.status === "WAIVED")
+  ) {
+    resultingFee = await prisma.playerMatchFee.update({
+      where: { id: fee.id },
+      data: {
+        status: "CANCELLED",
+        paidAt: null,
+        waivedAt: null,
+        cancelledAt: new Date(),
+        paymentUrl: null,
+        paymentToken: null,
+        note: appendNote({
+          existingNote: fee.note,
+          note: getAutomaticFeeCancellationNote(response),
+        }),
+      },
+      select: {
+        id: true,
+        status: true,
+        amountPence: true,
+        paidAt: true,
+        note: true,
+      },
+    });
+
+    autoCancelled = true;
+    await cancelQueuedPlayerMatchFeeNotificationDispatches(
+      [fee.id],
+      `Player availability changed to ${getResponseLabel(response)} before kickoff.`,
+    );
+  }
+
   revalidatePath(`/captain/team/${teamid}/availability`);
   revalidatePath(`/captain/team/${teamid}/fixtures`);
   revalidatePath(`/captain/team/${teamid}/fixtures/${fixtureId}/selection`);
   revalidatePath(`/captain/team/${teamid}/match-fees`);
 
-  const savedMessage = getAvailabilitySavedMessage({ response, fee });
+  const savedMessage = getAvailabilitySavedMessage({
+    response,
+    fixtureStarted,
+    autoCancelled,
+    fee: resultingFee,
+  });
+
   redirect(
     buildAvailabilityRedirect(
       teamid,
@@ -405,7 +508,10 @@ export async function sendAvailabilitySmsChaseAction(formData: FormData) {
     audience: NotificationAudience.PLAYER,
     body: `SIXFL reminder: Hi ${getFirstName(playerName)}, please confirm your availability for ${fixtureLabel}. Update here: ${availabilityUrl}`,
     sourceType: AVAILABILITY_SMS_CHASE_SOURCE_TYPE,
-    sourceId: getSmsSourceId({ fixtureId: fixture.id, teamMemberId: member.id }),
+    sourceId: getSmsSourceId({
+      fixtureId: fixture.id,
+      teamMemberId: member.id,
+    }),
     metadata: {
       origin: "captain_availability_sms_chase",
       originLabel: "Availability SMS chase sent from captain availability page",
