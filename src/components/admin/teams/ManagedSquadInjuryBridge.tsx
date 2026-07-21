@@ -4,13 +4,16 @@
 
 "use client";
 
-import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 type SquadStatus = "ACTIVE" | "INJURED";
 
 type MemberStatus = {
   id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
   squadStatus: SquadStatus;
   squadStatusUpdatedAt: string | null;
   squadStatusNote: string | null;
@@ -18,190 +21,235 @@ type MemberStatus = {
 
 type StatusPayload = {
   members?: MemberStatus[];
+  error?: string;
 };
 
 function getPageContext(pathname: string) {
   const adminMatch = pathname.match(/^\/admin\/teams\/([^/]+)\/squad\/?$/);
-  if (adminMatch?.[1]) return { teamId: adminMatch[1], mode: "admin" as const };
+  if (adminMatch?.[1]) return { teamId: adminMatch[1] };
 
   const captainMatch = pathname.match(/^\/captain\/team\/([^/]+)\/squad\/?$/);
-  if (captainMatch?.[1]) return { teamId: captainMatch[1], mode: "captain" as const };
+  if (captainMatch?.[1]) return { teamId: captainMatch[1] };
 
   return null;
 }
 
-function getMembershipIdFromHref(href: string, teamId: string) {
-  const adminMatch = href.match(new RegExp(`/admin/teams/${teamId}/players/([^/]+)/(?:preview|communications)`));
-  if (adminMatch?.[1]) return adminMatch[1];
-
-  const captainMatch = href.match(new RegExp(`/captain/team/${teamId}/squad/([^/]+)/edit`));
-  if (captainMatch?.[1]) return captainMatch[1];
-
-  return null;
-}
-
-async function loadStatuses(teamId: string) {
-  const response = await fetch(`/api/admin/managed-squad-status?teamId=${encodeURIComponent(teamId)}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) return new Map<string, MemberStatus>();
-  const payload = (await response.json().catch(() => null)) as StatusPayload | null;
-  return new Map((payload?.members ?? []).map((member) => [member.id, member]));
-}
-
-async function updateStatus(input: {
-  teamId: string;
-  membershipId: string;
-  squadStatus: SquadStatus;
-  note?: string | null;
-}) {
-  const response = await fetch("/api/admin/managed-squad-status", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error || "Could not update injury status.");
-  }
-}
-
-function findActionContainer(link: HTMLAnchorElement) {
-  let current: HTMLElement | null = link.parentElement;
-
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    const linkCount = current.querySelectorAll("a[href], button").length;
-    if (linkCount >= 2) return current;
-    current = current.parentElement;
-  }
-
-  return link.parentElement;
-}
-
-function createStatusButton(input: {
-  teamId: string;
-  membershipId: string;
-  currentStatus: SquadStatus;
-}) {
-  const isInjured = input.currentStatus === "INJURED";
-  const button = document.createElement("button");
-  button.type = "button";
-  button.dataset.managedSquadInjuryButton = "true";
-  button.className = [
-    "inline-flex w-full items-center justify-center rounded-xl border px-4 py-2.5 text-center text-sm font-medium transition sm:w-auto",
-    isInjured
-      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
-      : "border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/15",
-  ].join(" ");
-  button.textContent = isInjured ? "Mark available" : "Injured";
-  button.title = isInjured
-    ? "Mark this player available for future availability chases."
-    : "Mark this player injured so future availability chases stop.";
-
-  button.addEventListener("click", async () => {
-    const nextStatus: SquadStatus = isInjured ? "ACTIVE" : "INJURED";
-    const note = nextStatus === "INJURED" ? window.prompt("Optional injury note", "") : null;
-
-    button.disabled = true;
-    button.textContent = nextStatus === "INJURED" ? "Marking injured..." : "Marking available...";
-
-    try {
-      await updateStatus({
-        teamId: input.teamId,
-        membershipId: input.membershipId,
-        squadStatus: nextStatus,
-        note,
-      });
-      window.location.reload();
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not update injury status.");
-      button.disabled = false;
-      button.textContent = isInjured ? "Mark available" : "Injured";
-    }
-  });
-
-  return button;
-}
-
-function addStatusBadge(link: HTMLAnchorElement, status: MemberStatus | undefined) {
-  if (status?.squadStatus !== "INJURED") return;
-
-  const card = link.closest("div.flex.flex-col.gap-5") ?? link.closest("div.px-6.py-5");
-  if (!card || card.querySelector("[data-managed-squad-injury-badge='true']")) return;
-
-  const nameRow = card.querySelector("div.flex.flex-wrap.items-center.gap-2");
-  if (!nameRow) return;
-
-  const badge = document.createElement("span");
-  badge.dataset.managedSquadInjuryBadge = "true";
-  badge.className = "rounded-full border border-red-400/25 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-100";
-  badge.textContent = "Injured — no chases";
-  if (status.squadStatusNote) badge.title = status.squadStatusNote;
-  nameRow.appendChild(badge);
-}
-
-function injectButtons(teamId: string, statuses: Map<string, MemberStatus>) {
-  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]")).filter((link) =>
-    Boolean(getMembershipIdFromHref(link.getAttribute("href") ?? "", teamId)),
-  );
-
-  const handled = new Set<string>();
-
-  for (const link of links) {
-    const membershipId = getMembershipIdFromHref(link.getAttribute("href") ?? "", teamId);
-    if (!membershipId || handled.has(membershipId)) continue;
-    handled.add(membershipId);
-
-    const status = statuses.get(membershipId);
-    const actionContainer = findActionContainer(link);
-    if (!actionContainer || actionContainer.querySelector(`[data-managed-squad-injury-member='${membershipId}']`)) {
-      addStatusBadge(link, status);
-      continue;
-    }
-
-    const wrapper = document.createElement("div");
-    wrapper.dataset.managedSquadInjuryMember = membershipId;
-    wrapper.className = "w-full sm:w-auto";
-    wrapper.appendChild(createStatusButton({
-      teamId,
-      membershipId,
-      currentStatus: status?.squadStatus ?? "ACTIVE",
-    }));
-
-    actionContainer.appendChild(wrapper);
-    addStatusBadge(link, status);
-  }
+function getMemberName(member: MemberStatus) {
+  return member.name?.trim() || member.email?.trim() || "Unnamed player";
 }
 
 export default function ManagedSquadInjuryBridge() {
   const pathname = usePathname();
+  const router = useRouter();
+  const context = useMemo(() => getPageContext(pathname), [pathname]);
+  const [members, setMembers] = useState<MemberStatus[]>([]);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const context = getPageContext(pathname);
-    if (!context) return;
+    if (!context) {
+      setMembers([]);
+      setNotes({});
+      setError("");
+      return;
+    }
 
-    let cancelled = false;
-    let statusMap = new Map<string, MemberStatus>();
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
 
-    void loadStatuses(context.teamId).then((loadedStatuses) => {
-      if (cancelled) return;
-      statusMap = loadedStatuses;
-      injectButtons(context.teamId, statusMap);
-    });
+    void fetch(
+      `/api/admin/managed-squad-status?teamId=${encodeURIComponent(context.teamId)}`,
+      {
+        cache: "no-store",
+        signal: controller.signal,
+      },
+    )
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as StatusPayload | null;
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not load squad injury status.");
+        }
+        return payload;
+      })
+      .then((payload) => {
+        const nextMembers = payload?.members ?? [];
+        setMembers(nextMembers);
+        setNotes(
+          Object.fromEntries(
+            nextMembers.map((member) => [member.id, member.squadStatusNote ?? ""]),
+          ),
+        );
+      })
+      .catch((loadError) => {
+        if (controller.signal.aborted) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Could not load squad injury status.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
 
-    const observer = new MutationObserver(() => {
-      if (!cancelled) injectButtons(context.teamId, statusMap);
-    });
+    return () => controller.abort();
+  }, [context]);
 
-    observer.observe(document.body, { childList: true, subtree: true });
+  if (!context) return null;
 
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-    };
-  }, [pathname]);
+  async function updateStatus(member: MemberStatus, squadStatus: SquadStatus) {
+    setUpdatingId(member.id);
+    setError("");
 
-  return null;
+    try {
+      const note = squadStatus === "INJURED" ? notes[member.id]?.trim() || null : null;
+      const response = await fetch("/api/admin/managed-squad-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamId: context.teamId,
+          membershipId: member.id,
+          squadStatus,
+          note,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as StatusPayload | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not update injury status.");
+      }
+
+      setMembers((current) =>
+        current.map((item) =>
+          item.id === member.id
+            ? {
+                ...item,
+                squadStatus,
+                squadStatusNote: note,
+                squadStatusUpdatedAt: new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+      if (squadStatus === "ACTIVE") {
+        setNotes((current) => ({ ...current, [member.id]: "" }));
+      }
+      router.refresh();
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Could not update injury status.",
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  return (
+    <section className="mb-6 overflow-hidden rounded-3xl border border-red-400/20 bg-red-500/[0.05] shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+      <div className="border-b border-white/10 px-5 py-4 sm:px-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-red-200/70">
+          Player availability status
+        </p>
+        <h2 className="mt-1 text-lg font-semibold text-white">Injuries</h2>
+        <p className="mt-1 text-sm text-white/60">
+          Marking a player injured removes them from future selections and disables availability chases until they are made available again.
+        </p>
+      </div>
+
+      {error ? (
+        <div className="border-b border-red-400/20 bg-red-500/10 px-5 py-3 text-sm text-red-100 sm:px-6">
+          {error}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="px-5 py-5 text-sm text-white/55 sm:px-6">Loading squad status…</div>
+      ) : members.length === 0 ? (
+        <div className="px-5 py-5 text-sm text-white/55 sm:px-6">No squad members found.</div>
+      ) : (
+        <div className="divide-y divide-white/10">
+          {members.map((member) => {
+            const isInjured = member.squadStatus === "INJURED";
+            const isUpdating = updatingId === member.id;
+
+            return (
+              <div
+                key={member.id}
+                className={`grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] ${
+                  isInjured ? "bg-red-500/[0.06]" : ""
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate font-semibold text-white">
+                      {getMemberName(member)}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/60">
+                      {member.role.replaceAll("_", " ")}
+                    </span>
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        isInjured
+                          ? "border-red-400/35 bg-red-500/15 text-red-100"
+                          : "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                      }`}
+                    >
+                      {isInjured ? "Injured — unavailable" : "Available"}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-sm text-white/45">
+                    {member.email || "No email on account"}
+                  </div>
+                  {isInjured && member.squadStatusNote ? (
+                    <div className="mt-2 text-sm text-red-100/70">
+                      Injury note: {member.squadStatusNote}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  {!isInjured ? (
+                    <input
+                      value={notes[member.id] ?? ""}
+                      onChange={(event) =>
+                        setNotes((current) => ({
+                          ...current,
+                          [member.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Optional injury note"
+                      className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-red-400/50"
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={isUpdating}
+                    onClick={() =>
+                      void updateStatus(member, isInjured ? "ACTIVE" : "INJURED")
+                    }
+                    className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isInjured
+                        ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
+                        : "border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/15"
+                    }`}
+                  >
+                    {isUpdating
+                      ? "Saving…"
+                      : isInjured
+                        ? "Mark available"
+                        : "Mark injured"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
