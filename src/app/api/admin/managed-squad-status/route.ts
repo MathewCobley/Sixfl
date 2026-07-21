@@ -10,6 +10,7 @@ import {
   setTeamMemberSquadStatus,
   type TeamMemberSquadStatus,
 } from "@/lib/managed-squad/squadStatus";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 export const runtime = "nodejs";
@@ -24,7 +25,9 @@ function parseStatus(value: unknown): TeamMemberSquadStatus {
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error && error.message ? error.message : "Could not update squad status.";
+  return error instanceof Error && error.message
+    ? error.message
+    : "Could not update squad status.";
 }
 
 export async function GET(request: NextRequest) {
@@ -36,15 +39,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "teamId is required" }, { status: 400 });
     }
 
-    const statusMap = await getTeamMemberSquadStatusMap(teamId);
+    const [statusMap, members] = await Promise.all([
+      getTeamMemberSquadStatusMap(teamId),
+      prisma.teamMember.findMany({
+        where: { teamId },
+        orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          role: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+    ]);
 
     return NextResponse.json({
-      members: Array.from(statusMap.values()).map((row) => ({
-        id: row.id,
-        squadStatus: row.squadStatus,
-        squadStatusUpdatedAt: row.squadStatusUpdatedAt?.toISOString() ?? null,
-        squadStatusNote: row.squadStatusNote,
-      })),
+      members: members.map((member) => {
+        const status = statusMap.get(member.id);
+
+        return {
+          id: member.id,
+          name: member.user.name,
+          email: member.user.email,
+          role: member.role,
+          squadStatus: status?.squadStatus ?? "ACTIVE",
+          squadStatusUpdatedAt:
+            status?.squadStatusUpdatedAt?.toISOString() ?? null,
+          squadStatusNote: status?.squadStatusNote ?? null,
+        };
+      }),
     });
   } catch (error) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
@@ -68,7 +95,10 @@ export async function POST(request: NextRequest) {
     const note = clean(body?.note) || null;
 
     if (!teamId || !membershipId) {
-      return NextResponse.json({ error: "teamId and membershipId are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "teamId and membershipId are required" },
+        { status: 400 },
+      );
     }
 
     const updated = await setTeamMemberSquadStatus({
@@ -79,7 +109,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!updated) {
-      return NextResponse.json({ error: "Squad member was not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Squad member was not found" },
+        { status: 404 },
+      );
     }
 
     revalidatePath(`/admin/teams/${teamId}`);
@@ -87,6 +120,8 @@ export async function POST(request: NextRequest) {
     revalidatePath(`/captain/team/${teamId}`);
     revalidatePath(`/captain/team/${teamId}/squad`);
     revalidatePath(`/captain/team/${teamId}/captain-squad`);
+    revalidatePath(`/captain/team/${teamId}/availability`);
+    revalidatePath(`/admin/teams/${teamId}/availability`);
 
     return NextResponse.json({ ok: true, squadStatus });
   } catch (error) {
