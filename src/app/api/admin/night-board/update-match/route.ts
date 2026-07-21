@@ -221,6 +221,7 @@ export async function POST(request: Request) {
       id: true,
       leagueId: true,
       kickoffAt: true,
+      status: true,
       matchFeePence: true,
       refereeId: true,
       league: { select: { name: true, season: true, slug: true } },
@@ -232,6 +233,17 @@ export async function POST(request: Request) {
 
   if (!fixture) {
     return NextResponse.json({ ok: false, error: "Fixture not found.", returnTo }, { status: 404 });
+  }
+
+  if (fixture.status === FixtureStatus.COMPLETED) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "This completed fixture is locked and cannot be changed.",
+        returnTo,
+      },
+      { status: 409 },
+    );
   }
 
   const pitch = String(formData.get("pitch") ?? "").trim();
