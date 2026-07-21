@@ -21,6 +21,9 @@ The audit reports suspicious DOM queries, element creation, mutation observers, 
 - Match-selection rows now load injury state server-side and omit selection controls for injured players.
 - Rebuilt `ManagedSquadInjuryBridge.tsx` as a normal React injury-management panel. Despite the legacy filename, it no longer queries or mutates page HTML.
 - Added a database trigger preventing injured players from being marked available through a stale or crafted form submission.
+- Replaced `NightBoardMatchFeeSyncBridge.tsx` with direct React fixture editors and live potential-issue calculations.
+- Preserved the existing operational API path so fixture changes still synchronise match-fee charges/messages, cancel stale referee-night links and invalidate obsolete referee confirmations.
+- Added both UI and API protection for completed fixtures while retaining the fixture form identity needed by the separate team-issue navigation feature.
 
 ## Highest-risk remaining areas
 
@@ -28,7 +31,6 @@ The audit reports suspicious DOM queries, element creation, mutation observers, 
 
 These components are mounted from broad layouts and can therefore affect many pages when markup changes:
 
-- `src/components/admin/night-board/NightBoardMatchFeeSyncBridge.tsx`
 - `src/components/admin/night-board/NightBoardWarningsPositionBridge.tsx`
 - `src/components/admin/payments/AdminPaymentsPageBridge.tsx`
 - `src/components/captain/CaptainFixturesDeduplicateBridge.tsx`
