@@ -58,9 +58,23 @@ export default function MatchdaySquadSelectionForm({
       const availability = getAvailabilityState(checkbox);
       const isPaid = checkbox.dataset.paidSelected === "true";
 
-      if (checkbox.checked && availability && !isPaid) {
+      if (!availability) {
+        checkbox.disabled = false;
+        checkbox.removeAttribute("title");
+        continue;
+      }
+
+      if (checkbox.checked && !isPaid) {
         checkbox.checked = false;
         removed.push(`${getPlayerName(checkbox)} (${getAvailabilityLabel(availability)})`);
+      }
+
+      // A paid player remains visible for review so removing them can create the
+      // correct credit, but no unconfirmed player can be newly selected.
+      if (!isPaid) {
+        checkbox.disabled = true;
+        checkbox.title = `Change ${getPlayerName(checkbox)} to Available before selecting them.`;
+        checkbox.setAttribute("aria-label", `${getPlayerName(checkbox)} cannot be selected while ${getAvailabilityLabel(availability)}`);
       }
     }
 
@@ -93,7 +107,7 @@ export default function MatchdaySquadSelectionForm({
         .join(", ");
 
       window.alert(
-        `${playerList} cannot remain in the confirmed matchday squad. Change their availability to Available first, or untick them before saving. No match fee should stay open while a player is Maybe, Unavailable or has not responded.`,
+        `${playerList} cannot remain in the confirmed matchday squad. Change their availability to Available first, or remove them before saving.`,
       );
       event.preventDefault();
       return;
@@ -126,6 +140,12 @@ export default function MatchdaySquadSelectionForm({
       onSubmit={handleSubmit}
       className={className}
     >
+      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+        <span className="font-semibold">Selection rule:</span> only players marked
+        Available can be selected. Maybe, Unavailable and No response players are
+        locked until their availability is resolved.
+      </div>
+
       {autoRemovedPlayers.length > 0 ? (
         <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-50">
           <span className="font-semibold">Unconfirmed players unticked:</span>{" "}
