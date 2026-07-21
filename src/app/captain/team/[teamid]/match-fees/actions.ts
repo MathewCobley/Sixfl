@@ -88,8 +88,14 @@ function getOverrideNote(amountPence: number) {
 
 function getRemovedFromCurrentSelectionNote(wasPaid: boolean) {
   return wasPaid
-    ? "Removed from current/rescheduled matchday squad after prior payment. Player credit created; refund decision still available if needed."
-    : "Voided: Removed from matchday squad selection";
+    ? "Paid fee cancelled because the player was removed from the matchday squad. Payment retained for audit and player credit created."
+    : "Unpaid fee cancelled because the player was removed from the matchday squad. No payment was taken and no credit is due.";
+}
+
+function getAdminCancelledNote(wasPaid: boolean) {
+  return wasPaid
+    ? "Fee cancelled by SIXFL admin. Payment retained for audit and player credit created."
+    : "Unpaid fee cancelled by SIXFL admin. No payment was taken and no credit is due.";
 }
 
 async function assertFixtureBelongsToTeam(input: { fixtureId: string; teamId: string }) {
@@ -124,7 +130,11 @@ async function applyCreditToFeeIfOpen(feeId: string, status: PlayerMatchFeeStatu
   await applyAvailablePlayerMatchFeeCreditToFee({ feeId });
 }
 
-async function creditCancelledPaidFee(input: { feeId: string; wasPaid: boolean; reason: string }) {
+async function creditCancelledPaidFee(input: {
+  feeId: string;
+  wasPaid: boolean;
+  reason: string;
+}) {
   if (!input.wasPaid) return;
   await addPlayerMatchFeeCreditFromFee({
     feeId: input.feeId,
@@ -340,6 +350,7 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
   }
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
+  revalidatePath(`/captain/team/${teamId}/availability`);
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fees_created"));
 }
 
@@ -380,6 +391,7 @@ export async function markCaptainPlayerMatchFeePaidAction(formData: FormData) {
   });
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
+  revalidatePath(`/captain/team/${teamId}/availability`);
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
 }
 
@@ -424,16 +436,23 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
     where: { id: existingFee.id },
     data: {
       status,
-      paidAt: status === "PAID" ? now : status === "CANCELLED" && wasPaid ? undefined : null,
+      paidAt:
+        status === "PAID"
+          ? now
+          : status === "CANCELLED" && wasPaid
+            ? undefined
+            : null,
       waivedAt: status === "WAIVED" ? now : null,
       cancelledAt: status === "CANCELLED" ? now : null,
-      paymentUrl: status === "WAIVED" || status === "CANCELLED" ? null : undefined,
-      paymentToken: status === "WAIVED" || status === "CANCELLED" ? null : undefined,
+      paymentUrl:
+        status === "WAIVED" || status === "CANCELLED" ? null : undefined,
+      paymentToken:
+        status === "WAIVED" || status === "CANCELLED" ? null : undefined,
       note:
-        status === "CANCELLED" && wasPaid
+        status === "CANCELLED"
           ? appendNote({
               existingNote: existingFee.note,
-              note: getRemovedFromCurrentSelectionNote(true),
+              note: getAdminCancelledNote(wasPaid),
             })
           : undefined,
     },
@@ -444,6 +463,7 @@ export async function updateCaptainPlayerMatchFeeStatusAction(formData: FormData
   }
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
+  revalidatePath(`/captain/team/${teamId}/availability`);
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
 }
 
@@ -497,7 +517,8 @@ export async function sendCaptainPlayerMatchFeeReminderAction(formData: FormData
 export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
-  const reason = getString(formData, "reason") || "Game conceded / fixture not played";
+  const reason =
+    getString(formData, "reason") || "Game conceded / fixture not played";
 
   const access = teamId ? await requireCaptain(teamId) : null;
   redirectIfNotAdmin({ isAdmin: Boolean(access?.isAdmin), teamId, fixtureId });
@@ -526,7 +547,7 @@ export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData
     await creditCancelledPaidFee({
       feeId: fee.id,
       wasPaid,
-      reason: `Credit from paid player fee voided: ${reason}`,
+      reason: `Credit from paid player fee cancelled: ${reason}`,
     });
 
     await prisma.playerMatchFee.update({
@@ -541,8 +562,8 @@ export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData
         note: appendNote({
           existingNote: fee.note,
           note: wasPaid
-            ? `Voided: ${reason}. Previous payment kept for audit; player credit created.`
-            : `Voided: ${reason}`,
+            ? `Fixture fee cancelled: ${reason}. Previous payment retained for audit and player credit created.`
+            : `Fixture fee cancelled: ${reason}. No payment was taken and no credit is due.`,
         }),
       },
     });
@@ -550,10 +571,11 @@ export async function voidCaptainFixturePlayerMatchFeesAction(formData: FormData
 
   await cancelQueuedPlayerMatchFeeNotificationDispatches(
     fees.map((fee) => fee.id),
-    `Player match fees voided: ${reason}`,
+    `Player match fees cancelled: ${reason}`,
   );
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
+  revalidatePath(`/captain/team/${teamId}/availability`);
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
 }
 
@@ -595,5 +617,6 @@ export async function updateCaptainPlayerMatchFeeAmountAction(formData: FormData
   await applyAvailablePlayerMatchFeeCreditToFee({ feeId: existingFee.id });
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
+  revalidatePath(`/captain/team/${teamId}/availability`);
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fee_updated"));
 }
