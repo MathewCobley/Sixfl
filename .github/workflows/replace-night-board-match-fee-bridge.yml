@@ -1,0 +1,216 @@
+name: Replace Night Board match fee bridge
+
+on:
+  push:
+    paths:
+      - .github/workflows/replace-night-board-match-fee-bridge.yml
+
+permissions:
+  contents: write
+
+jobs:
+  replace-night-board-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Replace DOM bridge with direct React ownership
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise SystemExit(f"Expected block not found for {label}:\n{old[:800]}")
+              return text.replace(old, new, 1)
+
+          page = Path("src/app/(admin)/admin/night-board/page.tsx")
+          text = page.read_text()
+
+          text = replace_once(
+              text,
+              'import AdminCard from "@/components/admin/AdminCard";\n',
+              'import AdminCard from "@/components/admin/AdminCard";\nimport {\n  NightBoardFixtureEditor,\n  NightBoardOperationsProvider,\n  NightBoardPotentialIssuesPanel,\n} from "@/components/admin/night-board/NightBoardOperations";\n',
+              "Night Board operation imports",
+          )
+
+          action_start = text.find("async function updateNightBoardFixtureMatchAction")
+          action_end = text.find("async function getUpcomingLeagueOptions", action_start)
+          if action_start < 0 or action_end < 0:
+              raise SystemExit("Could not locate the legacy inline Night Board update action.")
+          text = text[:action_start] + text[action_end:]
+
+          text = replace_once(
+              text,
+              '      homeTeam: { select: { id: true, name: true } },\n      awayTeam: { select: { id: true, name: true } },\n',
+              '      homeTeam: { select: { id: true, name: true, latestKickoffTime: true } },\n      awayTeam: { select: { id: true, name: true, latestKickoffTime: true } },\n',
+              "team latest kick-off fields",
+          )
+
+          text = replace_once(
+              text,
+              '  const hasMissingCharges = finance.missingChargeCount > 0;\n\n  return (\n    <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">\n',
+              '''  const hasMissingCharges = finance.missingChargeCount > 0;
+  const operationFixtures = fixtures.map((fixture) => ({
+    id: fixture.id,
+    kickoffTime: toLondonTimeInputValue(fixture.kickoffAt),
+    status: fixture.status,
+    homeTeam: {
+      id: fixture.homeTeam.id,
+      name: fixture.homeTeam.name,
+      latestKickoffTime: fixture.homeTeam.latestKickoffTime,
+    },
+    awayTeam: {
+      id: fixture.awayTeam.id,
+      name: fixture.awayTeam.name,
+      latestKickoffTime: fixture.awayTeam.latestKickoffTime,
+    },
+  }));
+
+  return (
+    <NightBoardOperationsProvider fixtures={operationFixtures}>
+      <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+''',
+              "Night Board provider wrapper",
+          )
+
+          form_pattern = re.compile(
+              r'<form action=\{updateNightBoardFixtureMatchAction\} className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-black/20 p-3">.*?</form>',
+              re.DOTALL,
+          )
+          form_replacement = '''{fixture.status === FixtureStatus.COMPLETED ? (
+            <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-xs font-medium leading-5 text-amber-100">
+              Completed fixture locked. Its time, pitch, referee, venue and status can no longer be changed.
+            </div>
+          ) : (
+            <NightBoardFixtureEditor
+              fixture={{
+                id: fixture.id,
+                kickoffTime: toLondonTimeInputValue(fixture.kickoffAt),
+                pitch: fixture.pitch ?? "",
+                refereeId: fixture.referee?.id ?? "",
+                venueId: fixture.venue?.id ?? fixture.venueId ?? "",
+                status: fixture.status,
+              }}
+              returnTo={returnTo}
+              refereeOptions={refereeOptions}
+              venueOptions={[
+                { value: "", label: "No venue" },
+                ...venues.map((venue) => ({ value: venue.id, label: venue.name })),
+              ]}
+              statusOptions={FIXTURE_STATUS_OPTIONS.map((statusOption) => ({
+                value: statusOption,
+                label: statusOption,
+              }))}
+            />
+          )}'''
+          text, form_count = form_pattern.subn(form_replacement, text, count=1)
+          if form_count != 1:
+              raise SystemExit(f"Expected to replace one Night Board fixture form, replaced {form_count}.")
+
+          warning_pattern = re.compile(
+              r'<AdminCard className="rounded-3xl border border-white/10 bg-white/\[0\.03\] p-6"><h2 className="text-xl font-semibold text-white">Warnings</h2>.*?</AdminCard>',
+              re.DOTALL,
+          )
+          text, warning_count = warning_pattern.subn(
+              '<NightBoardPotentialIssuesPanel baseWarnings={warnings} />',
+              text,
+              count=1,
+          )
+          if warning_count != 1:
+              raise SystemExit(f"Expected to replace one warnings card, replaced {warning_count}.")
+
+          end_marker = '    </div>\n  );\n}\n'
+          if not text.endswith(end_marker):
+              raise SystemExit("Night Board page ending did not match the expected provider wrapper location.")
+          text = text[:-len(end_marker)] + '      </div>\n    </NightBoardOperationsProvider>\n  );\n}\n'
+          page.write_text(text)
+
+          layout = Path("src/app/layout.tsx")
+          text = layout.read_text()
+          text = replace_once(
+              text,
+              'import NightBoardMatchFeeSyncBridge from "@/components/admin/night-board/NightBoardMatchFeeSyncBridge";\n',
+              '',
+              "global Night Board bridge import",
+          )
+          text = replace_once(
+              text,
+              '            <NightBoardMatchFeeSyncBridge />\n',
+              '',
+              "global Night Board bridge mount",
+          )
+          layout.write_text(text)
+
+          route = Path("src/app/api/admin/night-board/update-match/route.ts")
+          text = route.read_text()
+          text = replace_once(
+              text,
+              '      kickoffAt: true,\n      matchFeePence: true,\n',
+              '      kickoffAt: true,\n      status: true,\n      matchFeePence: true,\n',
+              "completed status selection",
+          )
+          text = replace_once(
+              text,
+              '''  if (!fixture) {
+    return NextResponse.json({ ok: false, error: "Fixture not found.", returnTo }, { status: 404 });
+  }
+
+  const pitch = String(formData.get("pitch") ?? "").trim();
+''',
+              '''  if (!fixture) {
+    return NextResponse.json({ ok: false, error: "Fixture not found.", returnTo }, { status: 404 });
+  }
+
+  if (fixture.status === FixtureStatus.COMPLETED) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "This completed fixture is locked and cannot be changed.",
+        returnTo,
+      },
+      { status: 409 },
+    );
+  }
+
+  const pitch = String(formData.get("pitch") ?? "").trim();
+''',
+              "completed fixture API lock",
+          )
+          route.write_text(text)
+
+          audit = Path("docs/dom-bridge-audit.md")
+          if audit.exists():
+              text = audit.read_text()
+              text = text.replace(
+                  '- `src/components/admin/night-board/NightBoardMatchFeeSyncBridge.tsx`\n',
+                  '',
+                  1,
+              )
+              completed_marker = '- Added a database trigger preventing injured players from being marked available through a stale or crafted form submission.\n'
+              completed_line = '- Replaced `NightBoardMatchFeeSyncBridge.tsx` with direct React fixture editors and live potential-issue calculations while preserving charge/message and referee-night synchronisation through the existing API.\n'
+              if completed_line not in text:
+                  if completed_marker not in text:
+                      raise SystemExit("DOM audit completion marker was not found.")
+                  text = text.replace(completed_marker, completed_marker + completed_line, 1)
+              audit.write_text(text)
+
+          for obsolete_path in [
+              Path("src/components/admin/night-board/NightBoardMatchFeeSyncBridge.tsx"),
+              Path("src/app/api/admin/night-board/kickoff-warnings/route.ts"),
+          ]:
+              if not obsolete_path.exists():
+                  raise SystemExit(f"Expected obsolete file was not found: {obsolete_path}")
+              obsolete_path.unlink()
+
+      - name: Commit direct React Night Board replacement
+        run: |
+          rm .github/workflows/replace-night-board-match-fee-bridge.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Replace Night Board DOM save bridge"
+          git push origin main
