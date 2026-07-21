@@ -20,6 +20,7 @@ type Props = {
   options: FormListboxOption[];
   placeholder?: string;
   disabled?: boolean;
+  onValueChange?: (value: string) => void;
 };
 
 export default function FormListboxField({
@@ -29,6 +30,7 @@ export default function FormListboxField({
   options,
   placeholder = "Select option",
   disabled = false,
+  onValueChange,
 }: Props) {
   const [selectedValue, setSelectedValue] = useState(value);
   const [openDirection, setOpenDirection] = useState<"up" | "down">("down");
@@ -56,6 +58,11 @@ export default function FormListboxField({
     );
   }
 
+  function handleValueChange(nextValue: string) {
+    setSelectedValue(nextValue);
+    onValueChange?.(nextValue);
+  }
+
   const selected = useMemo(
     () => options.find((option) => option.value === selectedValue) ?? null,
     [options, selectedValue],
@@ -69,7 +76,7 @@ export default function FormListboxField({
 
       <input type="hidden" name={name} value={selectedValue} />
 
-      <Listbox value={selectedValue} onChange={setSelectedValue} disabled={disabled}>
+      <Listbox value={selectedValue} onChange={handleValueChange} disabled={disabled}>
         {({ open }) => {
           if (open) {
             window.requestAnimationFrame(updateOpenDirection);
