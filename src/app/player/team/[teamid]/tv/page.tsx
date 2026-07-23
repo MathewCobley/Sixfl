@@ -7,6 +7,7 @@ import { notFound, redirect } from "next/navigation";
 import { Prisma, UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
+import SixflTvFixtureMatchup from "@/components/sixfl-tv/SixflTvFixtureMatchup";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 
@@ -21,6 +22,8 @@ type TvFixtureRow = {
   awayTeamId: string;
   homeTeamName: string;
   awayTeamName: string;
+  homeTeamLogoUrl: string | null;
+  awayTeamLogoUrl: string | null;
   homeScore: number | null;
   awayScore: number | null;
   sixflTvUrl: string;
@@ -41,7 +44,10 @@ function formatDateTime(value: Date) {
 }
 
 function getVideoUrls(value: string | null | undefined) {
-  return (value ?? "").split(/\n+/).map((item) => item.trim()).filter(Boolean);
+  return (value ?? "")
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function getVideoLabel(index: number) {
@@ -62,33 +68,57 @@ function SixflTvWordmark() {
   );
 }
 
-export default async function PlayerSixflTvPage({ params }: { params: Promise<{ teamid: string }> }) {
+export default async function PlayerSixflTvPage({
+  params,
+}: {
+  params: Promise<{ teamid: string }>;
+}) {
   const { teamid } = await params;
   const session = await getServerSession(authOptions);
   const email = session?.user?.email?.trim().toLowerCase();
 
-  if (!email) redirect(`/login?callbackUrl=${encodeURIComponent(`/player/team/${teamid}/tv`)}`);
+  if (!email) {
+    redirect(`/login?callbackUrl=${encodeURIComponent(`/player/team/${teamid}/tv`)}`);
+  }
 
   const user = await prisma.user.findUnique({
     where: { email },
     select: {
       role: true,
-      teamMembers: { where: { teamId: teamid }, select: { id: true }, take: 1 },
+      teamMembers: {
+        where: { teamId: teamid },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
 
-  if (!user || (user.role !== UserRole.ADMIN && user.teamMembers.length === 0)) notFound();
+  if (!user || (user.role !== UserRole.ADMIN && user.teamMembers.length === 0)) {
+    notFound();
+  }
 
-  const team = await prisma.team.findUnique({ where: { id: teamid }, select: { id: true, name: true } });
+  const team = await prisma.team.findUnique({
+    where: { id: teamid },
+    select: { id: true, name: true },
+  });
   if (!team) notFound();
 
   const fixtures = await prisma.$queryRaw<TvFixtureRow[]>(Prisma.sql`
     SELECT
-      f."id", f."kickoffAt", f."homeTeamId", f."awayTeamId",
-      home."name" AS "homeTeamName", away."name" AS "awayTeamName",
-      result."homeScore" AS "homeScore", result."awayScore" AS "awayScore",
-      f."sixflTvUrl" AS "sixflTvUrl", venue."name" AS "venueName",
-      league."venueName" AS "leagueVenueName", f."status"::text AS "status"
+      f."id",
+      f."kickoffAt",
+      f."homeTeamId",
+      f."awayTeamId",
+      home."name" AS "homeTeamName",
+      away."name" AS "awayTeamName",
+      home."logoUrl" AS "homeTeamLogoUrl",
+      away."logoUrl" AS "awayTeamLogoUrl",
+      result."homeScore" AS "homeScore",
+      result."awayScore" AS "awayScore",
+      f."sixflTvUrl" AS "sixflTvUrl",
+      venue."name" AS "venueName",
+      league."venueName" AS "leagueVenueName",
+      f."status"::text AS "status"
     FROM "Fixture" f
     JOIN "Team" home ON home."id" = f."homeTeamId"
     JOIN "Team" away ON away."id" = f."awayTeamId"
@@ -111,13 +141,24 @@ export default async function PlayerSixflTvPage({ params }: { params: Promise<{ 
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <SixflTvWordmark />
-              <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">{team.name} videos</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">Watch match highlights, full matches and extra clips from your player dashboard.</p>
-              <a href={`/player/team/${teamid}`} className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/5">Back to player dashboard</a>
+              <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
+                {team.name} videos
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
+                Watch match highlights, full matches and extra clips from your player dashboard.
+              </p>
+              <a
+                href={`/player/team/${teamid}`}
+                className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/5"
+              >
+                Back to player dashboard
+              </a>
             </div>
             <div className="rounded-3xl border border-white/10 bg-black/20 px-6 py-5 text-center lg:min-w-44">
               <div className="text-4xl font-black text-white">{fixtures.length}</div>
-              <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-200/65">Recorded matches</div>
+              <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-200/65">
+                Recorded matches
+              </div>
             </div>
           </div>
         </section>
@@ -125,30 +166,57 @@ export default async function PlayerSixflTvPage({ params }: { params: Promise<{ 
         <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="divide-y divide-white/10">
             {fixtures.length === 0 ? (
-              <div className="px-6 py-10 text-sm text-white/60">No match videos are available for your team yet.</div>
-            ) : fixtures.map((fixture) => {
-              const urls = getVideoUrls(fixture.sixflTvUrl);
-              const title = fixture.homeScore !== null && fixture.awayScore !== null
-                ? `${fixture.homeTeamName} ${fixture.homeScore}-${fixture.awayScore} ${fixture.awayTeamName}`
-                : `${fixture.homeTeamName} vs ${fixture.awayTeamName}`;
-              return (
-                <article key={fixture.id} className="px-6 py-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold">{title}</h2>
-                      <p className="mt-1 text-sm text-white/50">{formatDateTime(fixture.kickoffAt)} · {fixture.venueName ?? fixture.leagueVenueName ?? "Venue TBC"}</p>
+              <div className="px-6 py-10 text-sm text-white/60">
+                No match videos are available for your team yet.
+              </div>
+            ) : (
+              fixtures.map((fixture) => {
+                const urls = getVideoUrls(fixture.sixflTvUrl);
+                const accessibleTitle =
+                  fixture.homeScore !== null && fixture.awayScore !== null
+                    ? `${fixture.homeTeamName} ${fixture.homeScore}-${fixture.awayScore} ${fixture.awayTeamName}`
+                    : `${fixture.homeTeamName} versus ${fixture.awayTeamName}`;
+
+                return (
+                  <article key={fixture.id} className="px-5 py-5 sm:px-6">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="sr-only">{accessibleTitle}</h2>
+                        <SixflTvFixtureMatchup
+                          homeTeam={{
+                            name: fixture.homeTeamName,
+                            logoUrl: fixture.homeTeamLogoUrl,
+                          }}
+                          awayTeam={{
+                            name: fixture.awayTeamName,
+                            logoUrl: fixture.awayTeamLogoUrl,
+                          }}
+                          homeScore={fixture.homeScore}
+                          awayScore={fixture.awayScore}
+                        />
+                        <p className="mt-3 text-sm text-white/50">
+                          {formatDateTime(fixture.kickoffAt)} · {fixture.venueName ?? fixture.leagueVenueName ?? "Venue TBC"}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                        {urls.map((url, index) => (
+                          <a
+                            key={`${fixture.id}-${url}`}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
+                          >
+                            {getVideoLabel(index)}
+                          </a>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      {urls.map((url, index) => (
-                        <a key={`${fixture.id}-${url}`} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25">
-                          {getVideoLabel(index)}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
+                  </article>
+                );
+              })
+            )}
           </div>
         </section>
       </div>
