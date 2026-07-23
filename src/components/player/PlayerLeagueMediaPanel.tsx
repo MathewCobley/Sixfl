@@ -123,6 +123,11 @@ export default async function PlayerLeagueMediaPanel({ teamId }: { teamId: strin
     prediction = await refreshStoredAiPreviewForFixture(nextFixture.id);
   }
 
+  const hasScorePrediction =
+    prediction !== null &&
+    prediction.predictedHomeScore !== null &&
+    prediction.predictedAwayScore !== null;
+
   const tvSummary = tvSummaryRows[0] ?? { fixtureCount: BigInt(0), videoCount: BigInt(0) };
 
   return (
@@ -193,7 +198,7 @@ export default async function PlayerLeagueMediaPanel({ teamId }: { teamId: strin
                 {nextFixture.homeTeam.name} vs {nextFixture.awayTeam.name}
               </h2>
               <p className="mt-1 text-sm text-white/55">{formatDateTime(nextFixture.kickoffAt)}</p>
-              {prediction?.predictedHomeScore !== null && prediction?.predictedAwayScore !== null ? (
+              {hasScorePrediction ? (
                 <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-black/25 p-4">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70">Predicted score</div>
                   <div className="mt-2 text-3xl font-black text-white">{prediction.predictedHomeScore} - {prediction.predictedAwayScore}</div>
