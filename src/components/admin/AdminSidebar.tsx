@@ -71,6 +71,12 @@ const navigationGroups = [
         description: "Setup",
       },
       {
+        name: "Tables",
+        href: "/admin/league-tables",
+        icon: TrophyIcon,
+        description: "Standings",
+      },
+      {
         name: "League audit",
         href: "/admin/audits/league-structure",
         icon: WrenchScrewdriverIcon,
