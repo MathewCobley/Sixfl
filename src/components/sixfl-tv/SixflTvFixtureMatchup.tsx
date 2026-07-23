@@ -9,6 +9,21 @@ type FixtureTeam = {
   logoUrl: string | null;
 };
 
+function normaliseLogoUrl(value: string | null) {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return null;
+
+  if (
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://")
+  ) {
+    return trimmed;
+  }
+
+  return `/${trimmed}`;
+}
+
 export default function SixflTvFixtureMatchup({
   homeTeam,
   awayTeam,
@@ -25,7 +40,11 @@ export default function SixflTvFixtureMatchup({
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:gap-4">
       <div className="flex min-w-0 items-center gap-3">
-        <TeamBadge name={homeTeam.name} logoUrl={homeTeam.logoUrl} size="sm" />
+        <TeamBadge
+          name={homeTeam.name}
+          logoUrl={normaliseLogoUrl(homeTeam.logoUrl)}
+          size="sm"
+        />
         <span className="min-w-0 truncate text-base font-semibold text-white sm:text-lg">
           {homeTeam.name}
         </span>
@@ -39,7 +58,11 @@ export default function SixflTvFixtureMatchup({
         <span className="min-w-0 truncate text-base font-semibold text-white sm:text-lg">
           {awayTeam.name}
         </span>
-        <TeamBadge name={awayTeam.name} logoUrl={awayTeam.logoUrl} size="sm" />
+        <TeamBadge
+          name={awayTeam.name}
+          logoUrl={normaliseLogoUrl(awayTeam.logoUrl)}
+          size="sm"
+        />
       </div>
     </div>
   );
