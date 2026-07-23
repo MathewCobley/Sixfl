@@ -1,6 +1,6 @@
-// ========================================
-// File: src/components/admin/TeamBadge.tsx
-// ========================================
+"use client";
+
+import { useState } from "react";
 
 type TeamBadgeProps = {
   name: string;
@@ -91,11 +91,13 @@ export default function TeamBadge({
   logoUrl,
   size = "md",
 }: TeamBadgeProps) {
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
   const initials = getInitials(name);
   const sizeClasses = getSizeClasses(size);
   const style = getTeamStyle(name);
+  const hasUsableLogo = Boolean(logoUrl && failedLogoUrl !== logoUrl);
 
-  if (logoUrl) {
+  if (hasUsableLogo) {
     return (
       <div
         className={`flex shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-black/70 shadow-sm ring-1 ring-white/5 ${sizeClasses.outer} ${sizeClasses.logoPadding}`}
@@ -104,9 +106,10 @@ export default function TeamBadge({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={logoUrl}
+          src={logoUrl ?? undefined}
           alt={`${name} badge`}
           className="h-full w-full object-contain"
+          onError={() => setFailedLogoUrl(logoUrl ?? null)}
         />
       </div>
     );
