@@ -5,6 +5,7 @@
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
+import SixflTvFixtureMatchup from "@/components/sixfl-tv/SixflTvFixtureMatchup";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -20,6 +21,8 @@ type TvFixtureRow = {
   awayTeamId: string;
   homeTeamName: string;
   awayTeamName: string;
+  homeTeamLogoUrl: string | null;
+  awayTeamLogoUrl: string | null;
   homeScore: number | null;
   awayScore: number | null;
   sixflTvUrl: string;
@@ -52,19 +55,15 @@ function getVideoLabel(index: number) {
   return `Extra clip ${index - 1} ▶`;
 }
 
-function getFixtureTitle(row: TvFixtureRow) {
-  if (row.homeScore !== null && row.awayScore !== null) {
-    return `${row.homeTeamName} ${row.homeScore}-${row.awayScore} ${row.awayTeamName}`;
-  }
-
-  return `${row.homeTeamName} vs ${row.awayTeamName}`;
-}
-
 function getOpponent(row: TvFixtureRow, teamId: string) {
   return row.homeTeamId === teamId ? row.awayTeamName : row.homeTeamName;
 }
 
-export default async function CaptainSixflTvPage({ params }: { params: Promise<{ teamid: string }> }) {
+export default async function CaptainSixflTvPage({
+  params,
+}: {
+  params: Promise<{ teamid: string }>;
+}) {
   const { teamid } = await params;
   await requireCaptain(teamid);
 
@@ -83,6 +82,8 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
       f."awayTeamId",
       home."name" AS "homeTeamName",
       away."name" AS "awayTeamName",
+      home."logoUrl" AS "homeTeamLogoUrl",
+      away."logoUrl" AS "awayTeamLogoUrl",
       result."homeScore" AS "homeScore",
       result."awayScore" AS "awayScore",
       f."sixflTvUrl" AS "sixflTvUrl",
@@ -104,14 +105,21 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
     LIMIT 80
   `);
 
-  const totalVideos = fixtures.reduce((sum, fixture) => sum + getVideoUrls(fixture.sixflTvUrl).length, 0);
+  const totalVideos = fixtures.reduce(
+    (sum, fixture) => sum + getVideoUrls(fixture.sixflTvUrl).length,
+    0,
+  );
 
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/80">SIXFL TV</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Match highlights & full matches</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/80">
+            SIXFL TV
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            Match highlights & full matches
+          </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
             Watch match highlights, full matches and extra clips for {team.name}. When a video is available, it will appear below.
           </p>
@@ -122,7 +130,9 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
         <div className="border-b border-white/10 px-6 py-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Team videos</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Team videos
+              </p>
               <h2 className="mt-2 text-xl font-semibold text-white">Available videos</h2>
             </div>
             <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1 text-sm font-medium text-fuchsia-100">
@@ -139,23 +149,43 @@ export default async function CaptainSixflTvPage({ params }: { params: Promise<{
           ) : (
             fixtures.map((fixture) => {
               const urls = getVideoUrls(fixture.sixflTvUrl);
+              const accessibleTitle =
+                fixture.homeScore !== null && fixture.awayScore !== null
+                  ? `${fixture.homeTeamName} ${fixture.homeScore}-${fixture.awayScore} ${fixture.awayTeamName}`
+                  : `${fixture.homeTeamName} versus ${fixture.awayTeamName}`;
+
               return (
-                <article key={fixture.id} className="px-6 py-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-white">{getFixtureTitle(fixture)}</h3>
+                <article key={fixture.id} className="px-5 py-5 sm:px-6">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="sr-only">{accessibleTitle}</h3>
+                      <SixflTvFixtureMatchup
+                        homeTeam={{
+                          name: fixture.homeTeamName,
+                          logoUrl: fixture.homeTeamLogoUrl,
+                        }}
+                        awayTeam={{
+                          name: fixture.awayTeamName,
+                          logoUrl: fixture.awayTeamLogoUrl,
+                        }}
+                        homeScore={fixture.homeScore}
+                        awayScore={fixture.awayScore}
+                      />
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                        <span className="text-white/60">
+                          Opponent: {getOpponent(fixture, team.id)}
+                        </span>
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-white/55">
                           {fixture.status.toLowerCase()}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-white/60">Opponent: {getOpponent(fixture, team.id)}</p>
-                      <p className="mt-1 text-sm text-white/50">
+                      <p className="mt-2 text-sm text-white/50">
                         {formatDateTime(fixture.kickoffAt)} · {fixture.venueName ?? fixture.leagueVenueName ?? "Venue TBC"}
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
                       {urls.map((url, index) => (
                         <a
                           key={`${fixture.id}-${url}`}
