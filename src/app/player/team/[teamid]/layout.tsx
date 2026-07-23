@@ -3,6 +3,7 @@
 // ========================================
 
 import { Suspense, type ReactNode } from "react";
+import PlayerDashboardOnly from "@/components/player/PlayerDashboardOnly";
 import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 import PlayerPerformancePanel from "@/components/player/PlayerPerformancePanel";
@@ -23,7 +24,9 @@ export default async function PlayerTeamLayout({
         <PlayerPreviewLinkPersistence teamId={teamid} />
       </Suspense>
       {children}
-      <PlayerLeagueMediaPanel teamId={teamid} />
+      <PlayerDashboardOnly teamId={teamid}>
+        <PlayerLeagueMediaPanel teamId={teamid} />
+      </PlayerDashboardOnly>
       <PlayerPerformancePanel teamId={teamid} />
       <PlayerMessageBox teamId={teamid} />
     </>
