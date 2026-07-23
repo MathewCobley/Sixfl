@@ -2,6 +2,7 @@
 // File: src/components/player/PlayerLeagueMediaPanel.tsx
 // ========================================
 
+import Image from "next/image";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { FixtureStatus, Prisma, UserRole } from "@prisma/client";
@@ -228,10 +229,14 @@ export default async function PlayerLeagueMediaPanel({ teamId }: { teamId: strin
 
       <div className="space-y-6">
         <div className="rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.16),transparent_40%),rgba(255,255,255,0.04)] p-6 text-white">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200/75">
-            SIXFL TV
-          </p>
-          <h2 className="mt-2 text-xl font-semibold">Watch your team</h2>
+          <Image
+            src="/Sixfl-tv.png"
+            alt="SIXFL TV"
+            width={2172}
+            height={725}
+            className="h-auto w-44 max-w-full"
+          />
+          <h2 className="mt-4 text-xl font-semibold">Watch your team</h2>
           <p className="mt-2 text-sm leading-6 text-white/60">
             Match highlights, full matches and extra clips are all available from your
             player area.
