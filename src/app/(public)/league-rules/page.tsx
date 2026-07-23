@@ -6,10 +6,10 @@ import Link from "next/link";
 
 const documentDetails = [
   { label: "Document", value: "League Rules" },
-  { label: "Version", value: "1.1" },
+  { label: "Version", value: "1.2" },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "21 July 2026" },
-  { label: "Next review", value: "21 July 2027" },
+  { label: "Last updated", value: "23 July 2026" },
+  { label: "Next review", value: "23 July 2027" },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "All SIXFL teams, players and league fixtures" },
 ];
@@ -90,7 +90,7 @@ export default function LeagueRulesPage() {
 
         <RulesSection
           title="6. Results and League Table"
-          text="Match results are recorded by the referee or league administrator and used to update the standings. SIXFL reserves the right to amend results where errors or rule breaches are identified."
+          text="Match results are recorded by the referee or league administrator and used to update the standings. SIXFL may correct administrative recording errors or amend results where an ineligible player, serious misconduct, cheating or another significant rule breach is established. Ordinary refereeing decisions made during play will not normally be reconsidered retrospectively."
         />
 
         <RulesSection
@@ -104,7 +104,12 @@ export default function LeagueRulesPage() {
         />
 
         <RulesSection
-          title="9. League Decisions"
+          title="9. Video Footage and Post-Match Review"
+          text="Referee decisions regarding facts connected with play are final. Video footage may be reviewed for disciplinary, safeguarding, administrative and referee-development purposes, including serious misconduct, violence, abuse, mistaken identity, suspected cheating, use of an ineligible player or an incorrectly entered score. Unless SIXFL has announced a formal competition-specific video-review process in advance, footage will not normally be used to re-referee a match, overturn an on-field decision or change a result arising from that decision. There is no automatic right to a video review, and footage may not be available or of equal quality for every match."
+        />
+
+        <RulesSection
+          title="10. League Decisions"
           text="SIXFL reserves the right to interpret and apply league rules in the interests of fairness, safety and good league management. League decisions are final unless otherwise stated."
         />
       </div>
