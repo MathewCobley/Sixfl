@@ -2,6 +2,7 @@
 // File: src/app/player/team/[teamid]/tv/page.tsx
 // ========================================
 
+import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { Prisma, UserRole } from "@prisma/client";
@@ -128,10 +129,15 @@ export default async function PlayerSixflTvPage({
         <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.2),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/80">
-                SIXFL TV
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <Image
+                src="/Sixfl-tv.png"
+                alt="SIXFL TV"
+                width={2172}
+                height={725}
+                priority
+                className="h-auto w-52 max-w-full sm:w-64"
+              />
+              <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
                 {team.name} videos
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
