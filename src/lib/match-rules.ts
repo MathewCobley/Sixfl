@@ -2,7 +2,7 @@
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 1.1 — June 2026";
+export const MATCH_RULES_VERSION = "Version 1.2 — July 2026";
 
 export type MatchRuleSection = {
   title: string;
@@ -14,6 +14,19 @@ export const matchRuleSections: MatchRuleSection[] = [
     title: "Referee Decisions",
     points: [
       "Decisions of the referee regarding facts connected with play are final.",
+      "An ordinary on-field decision will not be overturned merely because later video footage suggests that a different decision may have been made.",
+      "Goals and match results will not normally be changed because of a retrospective disagreement with a refereeing decision made during play.",
+      "There is no automatic right to a video review, and the availability or quality of footage may differ between matches.",
+    ],
+  },
+  {
+    title: "Use of Video Footage",
+    points: [
+      "Video footage may be reviewed for disciplinary, safeguarding, administrative and referee-development purposes.",
+      "SIXFL may use footage to investigate serious misconduct, violence, abuse, mistaken identity, suspected cheating, the use of an ineligible player or another significant rule breach.",
+      "Footage may also be used to correct an administrative error, such as an incorrectly entered score, where the referee's actual decision or the agreed final score is clear.",
+      "Unless SIXFL has announced a formal competition-specific video-review process in advance, footage will not normally be used to re-referee a match, overturn an on-field decision or amend a result arising from that decision.",
+      "SIXFL may still use footage privately to support referee feedback, training and performance review without changing the match result.",
     ],
   },
   {
