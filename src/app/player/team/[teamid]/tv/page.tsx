@@ -56,18 +56,6 @@ function getVideoLabel(index: number) {
   return `Extra clip ${index - 1} ▶`;
 }
 
-function SixflTvWordmark() {
-  return (
-    <div className="inline-flex items-center gap-3 rounded-2xl border border-fuchsia-300/20 bg-black/30 px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.3)]">
-      <span className="relative inline-flex h-9 w-12 items-center justify-center overflow-hidden rounded-lg bg-black text-xl font-black italic tracking-[-0.16em] text-white">
-        <span className="absolute left-1 top-1/2 h-1 w-10 -translate-y-1/2 -rotate-[34deg] rounded-full bg-emerald-400" />
-        <span className="relative pr-1">XFL</span>
-      </span>
-      <span className="text-lg font-black tracking-[0.24em] text-white">TV</span>
-    </div>
-  );
-}
-
 export default async function PlayerSixflTvPage({
   params,
 }: {
@@ -140,8 +128,10 @@ export default async function PlayerSixflTvPage({
         <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.2),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <SixflTvWordmark />
-              <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/80">
+                SIXFL TV
+              </p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
                 {team.name} videos
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
