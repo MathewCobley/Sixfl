@@ -119,30 +119,54 @@ export default async function PlayerLeagueMediaPanel({ teamId }: { teamId: strin
     ? (await getStoredAiPreviewsByFixtureIds([nextFixture.id])).get(nextFixture.id) ?? null
     : null;
 
-  if (nextFixture && (!prediction || prediction.predictedHomeScore === null || prediction.predictedAwayScore === null)) {
+  if (
+    nextFixture &&
+    (!prediction ||
+      prediction.predictedHomeScore === null ||
+      prediction.predictedAwayScore === null)
+  ) {
     prediction = await refreshStoredAiPreviewForFixture(nextFixture.id);
   }
 
-  const hasScorePrediction =
-    prediction !== null &&
+  const scorePrediction =
+    prediction &&
     prediction.predictedHomeScore !== null &&
-    prediction.predictedAwayScore !== null;
+    prediction.predictedAwayScore !== null
+      ? {
+          home: prediction.predictedHomeScore,
+          away: prediction.predictedAwayScore,
+          headline: prediction.headline,
+          summary: prediction.summary,
+        }
+      : null;
 
-  const tvSummary = tvSummaryRows[0] ?? { fixtureCount: BigInt(0), videoCount: BigInt(0) };
+  const tvSummary = tvSummaryRows[0] ?? {
+    fixtureCount: BigInt(0),
+    videoCount: BigInt(0),
+  };
 
   return (
     <section className="mx-auto mt-8 grid w-full max-w-6xl gap-6 px-4 lg:grid-cols-[1.05fr_0.95fr]">
       <div className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-white/[0.04] text-white">
         <div className="flex flex-col gap-4 border-b border-white/10 px-6 py-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">League & form</p>
-            <h2 className="mt-2 text-xl font-semibold">{team.league?.name ?? "Your SIXFL league"}</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">
+              League & form
+            </p>
+            <h2 className="mt-2 text-xl font-semibold">
+              {team.league?.name ?? "Your SIXFL league"}
+            </h2>
             <p className="mt-1 text-sm text-white/55">
-              {[team.league?.season, team.league?.venueName].filter(Boolean).join(" · ") || "League details will appear here."}
+              {[team.league?.season, team.league?.venueName]
+                .filter(Boolean)
+                .join(" · ") || "League details will appear here."}
             </p>
           </div>
           {team.league?.slug ? (
-            <Link href={`/leagues/${team.league.slug}`} className="inline-flex items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
+            <Link
+              href={`/leagues/${team.league.slug}`}
+              className="inline-flex items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+            >
               Open league
             </Link>
           ) : null}
@@ -150,23 +174,50 @@ export default async function PlayerLeagueMediaPanel({ teamId }: { teamId: strin
 
         <div className="divide-y divide-white/10">
           {recentResults.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-white/55">No completed results are available yet.</div>
+            <div className="px-6 py-8 text-sm text-white/55">
+              No completed results are available yet.
+            </div>
           ) : (
             recentResults.map((fixture) => {
               const isHome = fixture.homeTeamId === teamId;
-              const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
-              const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
-              const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
-              const outcome = goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
+              const opponent = isHome
+                ? fixture.awayTeam.name
+                : fixture.homeTeam.name;
+              const goalsFor = isHome
+                ? fixture.result!.homeScore
+                : fixture.result!.awayScore;
+              const goalsAgainst = isHome
+                ? fixture.result!.awayScore
+                : fixture.result!.homeScore;
+              const outcome =
+                goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
+
               return (
-                <div key={fixture.id} className="flex items-center justify-between gap-4 px-6 py-4">
+                <div
+                  key={fixture.id}
+                  className="flex items-center justify-between gap-4 px-6 py-4"
+                >
                   <div>
                     <div className="font-semibold text-white">{opponent}</div>
-                    <div className="mt-1 text-sm text-white/50">{formatDateTime(fixture.kickoffAt)}</div>
+                    <div className="mt-1 text-sm text-white/50">
+                      {formatDateTime(fixture.kickoffAt)}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${outcome === "W" ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100" : outcome === "L" ? "border-red-400/25 bg-red-500/10 text-red-100" : "border-white/10 bg-white/5 text-white/65"}`}>{outcome}</span>
-                    <span className="text-lg font-black text-white">{goalsFor} - {goalsAgainst}</span>
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
+                        outcome === "W"
+                          ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                          : outcome === "L"
+                            ? "border-red-400/25 bg-red-500/10 text-red-100"
+                            : "border-white/10 bg-white/5 text-white/65"
+                      }`}
+                    >
+                      {outcome}
+                    </span>
+                    <span className="text-lg font-black text-white">
+                      {goalsFor} - {goalsAgainst}
+                    </span>
                   </div>
                 </div>
               );
@@ -177,40 +228,65 @@ export default async function PlayerLeagueMediaPanel({ teamId }: { teamId: strin
 
       <div className="space-y-6">
         <div className="rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.16),transparent_40%),rgba(255,255,255,0.04)] p-6 text-white">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200/75">SIXFL TV</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200/75">
+            SIXFL TV
+          </p>
           <h2 className="mt-2 text-xl font-semibold">Watch your team</h2>
           <p className="mt-2 text-sm leading-6 text-white/60">
-            Match highlights, full matches and extra clips are all available from your player area.
+            Match highlights, full matches and extra clips are all available from your
+            player area.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Link href={`/player/team/${teamId}/tv`} className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25">
+            <Link
+              href={`/player/team/${teamId}/tv`}
+              className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
+            >
               Open SIXFL TV
             </Link>
-            <span className="text-sm text-white/50">{Number(tvSummary.videoCount)} video{Number(tvSummary.videoCount) === 1 ? "" : "s"}</span>
+            <span className="text-sm text-white/50">
+              {Number(tvSummary.videoCount)} video
+              {Number(tvSummary.videoCount) === 1 ? "" : "s"}
+            </span>
           </div>
         </div>
 
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.07] p-6 text-white">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">SIXFL AI Predictor</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+            SIXFL AI Predictor
+          </p>
           {nextFixture ? (
             <>
               <h2 className="mt-2 text-xl font-semibold">
                 {nextFixture.homeTeam.name} vs {nextFixture.awayTeam.name}
               </h2>
-              <p className="mt-1 text-sm text-white/55">{formatDateTime(nextFixture.kickoffAt)}</p>
-              {hasScorePrediction ? (
+              <p className="mt-1 text-sm text-white/55">
+                {formatDateTime(nextFixture.kickoffAt)}
+              </p>
+              {scorePrediction ? (
                 <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-black/25 p-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70">Predicted score</div>
-                  <div className="mt-2 text-3xl font-black text-white">{prediction.predictedHomeScore} - {prediction.predictedAwayScore}</div>
-                  <div className="mt-3 text-sm font-semibold text-white">{prediction.headline}</div>
-                  <p className="mt-1 text-sm leading-6 text-white/55">{prediction.summary}</p>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/70">
+                    Predicted score
+                  </div>
+                  <div className="mt-2 text-3xl font-black text-white">
+                    {scorePrediction.home} - {scorePrediction.away}
+                  </div>
+                  <div className="mt-3 text-sm font-semibold text-white">
+                    {scorePrediction.headline}
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-white/55">
+                    {scorePrediction.summary}
+                  </p>
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-white/55">The next prediction is being prepared.</p>
+                <p className="mt-4 text-sm text-white/55">
+                  The next prediction is being prepared.
+                </p>
               )}
             </>
           ) : (
-            <p className="mt-3 text-sm text-white/55">No upcoming published fixture is available yet.</p>
+            <p className="mt-3 text-sm text-white/55">
+              No upcoming published fixture is available yet.
+            </p>
           )}
         </div>
       </div>
