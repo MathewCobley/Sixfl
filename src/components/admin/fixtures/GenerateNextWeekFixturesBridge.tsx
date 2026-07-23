@@ -7,6 +7,13 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+type GenerateFixturesResponse = {
+  created?: number;
+  round?: number;
+  error?: string;
+  requestId?: string;
+};
+
 function getSelectedLeagueId() {
   const leagueSelects = Array.from(
     document.querySelectorAll<HTMLSelectElement>('select[name="leagueId"]'),
@@ -36,7 +43,7 @@ function getTargetContainer() {
 function getResponseError(input: {
   response: Response;
   responseText: string;
-  payload: { error?: string; requestId?: string } | null;
+  payload: GenerateFixturesResponse | null;
 }) {
   const requestSuffix = input.payload?.requestId
     ? ` Reference: ${input.payload.requestId}.`
@@ -89,16 +96,11 @@ async function generateNextWeek(button: HTMLButtonElement, status: HTMLElement) 
     });
 
     const responseText = await response.text();
-    let payload: {
-      created?: number;
-      round?: number;
-      error?: string;
-      requestId?: string;
-    } | null = null;
+    let payload: GenerateFixturesResponse | null = null;
 
     if (responseText) {
       try {
-        payload = JSON.parse(responseText) as typeof payload;
+        payload = JSON.parse(responseText) as GenerateFixturesResponse;
       } catch {
         payload = null;
       }
