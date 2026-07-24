@@ -7,23 +7,13 @@ const SIXFL_TV_CHANNEL_URL =
 
 function SixflTvLogo() {
   return (
-    <div className="inline-flex items-center gap-3" aria-label="SIXFL TV">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-red-400/25 bg-red-500/15 shadow-[0_16px_45px_rgba(239,68,68,0.2)] sm:h-16 sm:w-16">
-        <svg
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          className="h-7 w-7 fill-white sm:h-8 sm:w-8"
-        >
-          <path d="M8 5.5v13l10-6.5-10-6.5Z" />
-        </svg>
-      </div>
-
-      <div className="flex items-center gap-2 text-3xl font-black tracking-[-0.06em] text-white sm:text-5xl">
-        <span>SIXFL</span>
-        <span className="rounded-xl border border-fuchsia-300/25 bg-gradient-to-br from-violet-500/45 to-fuchsia-500/35 px-2.5 py-1 text-2xl tracking-[-0.04em] text-white shadow-[0_12px_38px_rgba(168,85,247,0.24)] sm:text-4xl">
-          TV
-        </span>
-      </div>
+    <div className="flex w-full items-center justify-center" aria-label="SIXFL TV">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/Sixfl-tv.png"
+        alt="SIXFL TV"
+        className="h-auto w-full max-w-[420px] object-contain"
+      />
     </div>
   );
 }
@@ -43,15 +33,13 @@ export default function SixflTvHomepageSection() {
             href={SIXFL_TV_CHANNEL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex w-fit rounded-3xl border border-white/10 bg-black/35 p-5 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/45 sm:p-6"
+            className="group block w-full rounded-3xl border border-white/10 bg-black/55 p-5 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/65 sm:p-6"
             aria-label="Open the SIXFL TV YouTube channel"
           >
-            <div>
-              <SixflTvLogo />
-              <div className="mt-4 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/55 transition group-hover:text-white/75">
-                <span>Watch on YouTube</span>
-                <span aria-hidden="true">↗</span>
-              </div>
+            <SixflTvLogo />
+            <div className="mt-4 flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/55 transition group-hover:text-white/75">
+              <span>Watch on YouTube</span>
+              <span aria-hidden="true">↗</span>
             </div>
           </a>
 
