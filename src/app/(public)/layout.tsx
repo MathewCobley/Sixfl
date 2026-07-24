@@ -5,6 +5,7 @@
 import { Suspense, type ReactNode } from "react";
 import AppHeader from "@/components/layout/AppHeader";
 import HomepageAiPredictorCopyBridge from "@/components/home/HomepageAiPredictorCopyBridge";
+import HomepageLeagueTypeFocusBridge from "@/components/home/HomepageLeagueTypeFocusBridge";
 import HomepageSixflTvBridge from "@/components/home/HomepageSixflTvBridge";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
@@ -27,6 +28,7 @@ export default function PublicLayout({
       <PublicLeagueLandingSpacingBridge />
       <PublicFixtureWinChanceBridge />
       <HomepageAiPredictorCopyBridge />
+      <HomepageLeagueTypeFocusBridge />
       <RefereeDashboardCopyBridge />
       <RefereeNightPickerBridge />
       <RefereeOnsiteColleaguesBridge />
