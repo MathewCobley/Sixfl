@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
 import TeamKitColourPicker from "@/components/admin/teams/TeamKitColourPicker";
+import TeamOverviewOnly from "@/components/admin/teams/TeamOverviewOnly";
 import TeamShinPadWarningPanel from "@/components/admin/teams/TeamShinPadWarningPanel";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -217,61 +218,63 @@ export default async function AdminTeamDetailLayout({
         </div>
       </section>
 
-      <TeamShinPadWarningPanel teamId={team.id} />
+      <TeamOverviewOnly teamId={team.id}>
+        <TeamShinPadWarningPanel teamId={team.id} />
 
-      <TeamKitColourPicker teamId={team.id} />
+        <TeamKitColourPicker teamId={team.id} />
 
-      <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 shadow-[0_14px_50px_rgba(0,0,0,0.22)]">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
-              Kick-off rules
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-white">
-              Earliest and latest kick-off times
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-amber-50/70">
-              {getRestrictionSummary(team)} Fixture creation and generation will
-              block matches outside this window.
-            </p>
-          </div>
+        <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 shadow-[0_14px_50px_rgba(0,0,0,0.22)]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,640px)] xl:items-end">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
+                Kick-off rules
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-white">
+                Earliest and latest kick-off times
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-amber-50/70">
+                {getRestrictionSummary(team)} Fixture creation and generation will
+                block matches outside this window.
+              </p>
+            </div>
 
-          <form
-            action={updateTeamKickoffRulesAction}
-            className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-2xl xl:grid-cols-[1fr_1fr_auto]"
-          >
-            <input type="hidden" name="teamId" value={team.id} />
-            <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                Earliest kick-off
-              </span>
-              <input
-                name="earliestKickoffTime"
-                type="time"
-                defaultValue={team.earliestKickoffTime ?? ""}
-                className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
-              />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                Latest kick-off
-              </span>
-              <input
-                name="latestKickoffTime"
-                type="time"
-                defaultValue={team.latestKickoffTime ?? ""}
-                className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
-              />
-            </label>
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:col-span-2 xl:col-span-1 xl:self-end"
+            <form
+              action={updateTeamKickoffRulesAction}
+              className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
             >
-              Save rules
-            </button>
-          </form>
-        </div>
-      </section>
+              <input type="hidden" name="teamId" value={team.id} />
+              <label className="space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                  Earliest kick-off
+                </span>
+                <input
+                  name="earliestKickoffTime"
+                  type="time"
+                  defaultValue={team.earliestKickoffTime ?? ""}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                  Latest kick-off
+                </span>
+                <input
+                  name="latestKickoffTime"
+                  type="time"
+                  defaultValue={team.latestKickoffTime ?? ""}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                />
+              </label>
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:col-span-2 xl:col-span-1 xl:self-end"
+              >
+                Save rules
+              </button>
+            </form>
+          </div>
+        </section>
+      </TeamOverviewOnly>
 
       {children}
     </div>
