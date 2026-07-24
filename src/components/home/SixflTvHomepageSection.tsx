@@ -30,7 +30,7 @@ function SixflTvLogo() {
 
 export default function SixflTvHomepageSection() {
   return (
-    <section className="mt-12 lg:mt-16" aria-labelledby="sixfl-tv-heading">
+    <section aria-labelledby="sixfl-tv-heading">
       <div className="relative overflow-hidden rounded-[1.5rem] border border-violet-400/20 bg-[radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.22),transparent_28%),radial-gradient(circle_at_15%_85%,rgba(139,92,246,0.2),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.065),rgba(255,255,255,0.025))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
         <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] opacity-15 lg:block">
           <div className="absolute right-10 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full border border-white/20" />
