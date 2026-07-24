@@ -10,9 +10,9 @@ function SixflTvLogo() {
     <div className="flex w-full items-center justify-center" aria-label="SIXFL TV">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/Sixfl-tv.png"
-        alt="SIXFL TV"
-        className="h-auto w-full max-w-[420px] object-contain"
+        src="/logos/you-tube.png"
+        alt="SIXFL TV YouTube"
+        className="h-auto w-full max-w-[520px] object-contain"
       />
     </div>
   );
