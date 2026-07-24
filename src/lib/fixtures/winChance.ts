@@ -231,7 +231,7 @@ function buildPredictedResult(input: {
   );
 
   const homeExpected = clamp(
-    homeAttack * 0.58 + awayDefenceConceded * 0.42 + input.strengthDifference * 0.025 + 0.12,
+    homeAttack * 0.58 + awayDefenceConceded * 0.42 + input.strengthDifference * 0.025,
     0.4,
     8.5,
   );
@@ -355,9 +355,8 @@ export function calculateFixtureWinChance(input: {
   const homeStrength = getStrength(homeStats);
   const awayStrength = getStrength(awayStats);
   const headToHeadAdjustment = getHeadToHeadAdjustment(input);
-  const homeAdvantage = 2;
   const strengthDifference =
-    homeStrength - awayStrength + headToHeadAdjustment + homeAdvantage;
+    homeStrength - awayStrength + headToHeadAdjustment;
 
   const homeShare = 1 / (1 + Math.exp(-strengthDifference / 18));
   const draw = clamp(28 - Math.abs(strengthDifference) * 0.45, 12, 30);
