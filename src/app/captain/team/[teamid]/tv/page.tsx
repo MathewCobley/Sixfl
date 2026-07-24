@@ -114,10 +114,13 @@ export default async function CaptainSixflTvPage({
     <div className="space-y-6">
       <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200/80">
-            SIXFL TV
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/Sixfl-tv.png"
+            alt="SIXFL TV"
+            className="h-auto w-52 max-w-full object-contain sm:w-64"
+          />
+          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             Match highlights & full matches
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
