@@ -59,6 +59,13 @@ function preserveRegisterInterestContext(request: NextRequest) {
   return NextResponse.redirect(redirectUrl);
 }
 
+function isHarrogateTuesdaySignup(request: NextRequest) {
+  const area = request.nextUrl.searchParams.get("area")?.trim().toLowerCase();
+  const night = request.nextUrl.searchParams.get("night")?.trim().toLowerCase();
+
+  return area === "harrogate" && night === "tuesday";
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -71,6 +78,15 @@ export function middleware(request: NextRequest) {
   if (pathname === "/register-interest") {
     const redirect = preserveRegisterInterestContext(request);
     if (redirect) return redirect;
+
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      isHarrogateTuesdaySignup(request)
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/register-interest/harrogate";
+      return NextResponse.rewrite(url);
+    }
   }
 
   return NextResponse.next();
