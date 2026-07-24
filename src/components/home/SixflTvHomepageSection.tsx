@@ -7,13 +7,28 @@ const SIXFL_TV_CHANNEL_URL =
 
 function SixflTvLogo() {
   return (
-    <div className="flex w-full items-center justify-center" aria-label="SIXFL TV">
+    <div className="flex w-full flex-col items-center justify-center" aria-label="SIXFL TV">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/logos/you-tube.png"
-        alt="SIXFL TV YouTube"
-        className="h-auto w-full max-w-[520px] object-contain"
+        src="/Sixfl-tv.png"
+        alt="SIXFL TV"
+        className="h-auto w-full max-w-[430px] object-contain"
       />
+
+      <div className="mt-6 flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logos/you-tube.png"
+          alt="YouTube"
+          className="h-auto w-28 object-contain sm:w-32"
+        />
+        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/55">
+          Watch on YouTube
+        </span>
+        <span aria-hidden="true" className="text-white/55">
+          ↗
+        </span>
+      </div>
     </div>
   );
 }
@@ -33,14 +48,10 @@ export default function SixflTvHomepageSection() {
             href={SIXFL_TV_CHANNEL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="group block w-full rounded-3xl border border-white/10 bg-black/55 p-5 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/65 sm:p-6"
+            className="group block w-full rounded-3xl border border-white/10 bg-black/55 p-6 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/65 sm:p-8"
             aria-label="Open the SIXFL TV YouTube channel"
           >
             <SixflTvLogo />
-            <div className="mt-4 flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/55 transition group-hover:text-white/75">
-              <span>Watch on YouTube</span>
-              <span aria-hidden="true">↗</span>
-            </div>
           </a>
 
           <div>
@@ -76,8 +87,15 @@ export default function SixflTvHomepageSection() {
               href={SIXFL_TV_CHANNEL_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-white/90 sm:w-auto"
+              className="mt-7 inline-flex h-12 w-full items-center justify-center gap-3 rounded-full bg-white px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-white/90 sm:w-auto"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logos/you-tube.png"
+                alt=""
+                aria-hidden="true"
+                className="h-5 w-auto object-contain"
+              />
               WATCH SIXFL TV
               <span aria-hidden="true">↗</span>
             </a>
