@@ -31,6 +31,15 @@ type TeamWinChanceStats = {
   recent: number[];
 };
 
+type LeagueBaselines = {
+  pointsPerGame: number;
+  winRate: number;
+  goalDifferencePerGame: number;
+  goalsForPerGame: number;
+  goalsAgainstPerGame: number;
+  recentAverage: number;
+};
+
 export type PredictedResult = {
   homeScore: number;
   awayScore: number;
@@ -47,6 +56,8 @@ export type FixtureWinChance = {
 };
 
 type UsableResultFixture = WinChanceFixture & { result: FixtureResult };
+
+const EARLY_SEASON_PRIOR_GAMES = 2;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -145,21 +156,94 @@ function buildStats(fixtures: WinChanceFixture[]) {
   return statsByTeamId;
 }
 
-function getStrength(stats: TeamWinChanceStats | undefined) {
-  if (!stats || stats.played === 0) {
-    return 50;
+function getLeagueBaselines(
+  statsByTeamId: Map<string, TeamWinChanceStats>,
+): LeagueBaselines {
+  let played = 0;
+  let wins = 0;
+  let points = 0;
+  let goalsFor = 0;
+  let goalsAgainst = 0;
+  let recentTotal = 0;
+  let recentCount = 0;
+
+  for (const stats of statsByTeamId.values()) {
+    played += stats.played;
+    wins += stats.wins;
+    points += stats.points;
+    goalsFor += stats.goalsFor;
+    goalsAgainst += stats.goalsAgainst;
+    recentTotal += stats.recent.reduce((sum, value) => sum + value, 0);
+    recentCount += stats.recent.length;
   }
 
-  const played = Math.max(stats.played, 1);
-  const pointsPerGame = stats.points / played;
-  const winRate = stats.wins / played;
-  const goalDifferencePerGame = (stats.goalsFor - stats.goalsAgainst) / played;
-  const goalsForPerGame = stats.goalsFor / played;
-  const goalsAgainstPerGame = stats.goalsAgainst / played;
-  const recent = stats.recent.slice(-5);
-  const recentAverage = recent.length
-    ? recent.reduce((sum, value) => sum + value, 0) / recent.length
-    : 0.5;
+  if (played === 0) {
+    return {
+      pointsPerGame: 1.5,
+      winRate: 0.4,
+      goalDifferencePerGame: 0,
+      goalsForPerGame: 2.5,
+      goalsAgainstPerGame: 2.5,
+      recentAverage: 0.5,
+    };
+  }
+
+  return {
+    pointsPerGame: points / played,
+    winRate: wins / played,
+    goalDifferencePerGame: (goalsFor - goalsAgainst) / played,
+    goalsForPerGame: clamp(goalsFor / played, 0.5, 7),
+    goalsAgainstPerGame: clamp(goalsAgainst / played, 0.5, 7),
+    recentAverage: recentCount > 0 ? recentTotal / recentCount : 0.5,
+  };
+}
+
+function getSmoothedPerGame(
+  total: number,
+  played: number,
+  leagueAverage: number,
+) {
+  return (
+    (total + leagueAverage * EARLY_SEASON_PRIOR_GAMES) /
+    (played + EARLY_SEASON_PRIOR_GAMES)
+  );
+}
+
+function getStrength(
+  stats: TeamWinChanceStats | undefined,
+  baselines: LeagueBaselines,
+) {
+  const played = stats?.played ?? 0;
+  const pointsPerGame = getSmoothedPerGame(
+    stats?.points ?? 0,
+    played,
+    baselines.pointsPerGame,
+  );
+  const winRate = getSmoothedPerGame(
+    stats?.wins ?? 0,
+    played,
+    baselines.winRate,
+  );
+  const goalDifferencePerGame = getSmoothedPerGame(
+    (stats?.goalsFor ?? 0) - (stats?.goalsAgainst ?? 0),
+    played,
+    baselines.goalDifferencePerGame,
+  );
+  const goalsForPerGame = getSmoothedPerGame(
+    stats?.goalsFor ?? 0,
+    played,
+    baselines.goalsForPerGame,
+  );
+  const goalsAgainstPerGame = getSmoothedPerGame(
+    stats?.goalsAgainst ?? 0,
+    played,
+    baselines.goalsAgainstPerGame,
+  );
+  const recent = stats?.recent.slice(-5) ?? [];
+  const recentAverage =
+    (recent.reduce((sum, value) => sum + value, 0) +
+      baselines.recentAverage * EARLY_SEASON_PRIOR_GAMES) /
+    (recent.length + EARLY_SEASON_PRIOR_GAMES);
 
   return (
     50 +
@@ -172,34 +256,26 @@ function getStrength(stats: TeamWinChanceStats | undefined) {
   );
 }
 
-function getLeagueAverageGoals(statsByTeamId: Map<string, TeamWinChanceStats>) {
-  let goalsFor = 0;
-  let played = 0;
-
-  for (const stats of statsByTeamId.values()) {
-    goalsFor += stats.goalsFor;
-    played += stats.played;
-  }
-
-  if (played === 0) return 2.5;
-
-  return clamp(goalsFor / played, 0.5, 7);
-}
-
 function getGoalsForPerGame(
   stats: TeamWinChanceStats | undefined,
-  fallback: number,
+  leagueAverage: number,
 ) {
-  if (!stats || stats.played === 0) return fallback;
-  return stats.goalsFor / stats.played;
+  return getSmoothedPerGame(
+    stats?.goalsFor ?? 0,
+    stats?.played ?? 0,
+    leagueAverage,
+  );
 }
 
 function getGoalsAgainstPerGame(
   stats: TeamWinChanceStats | undefined,
-  fallback: number,
+  leagueAverage: number,
 ) {
-  if (!stats || stats.played === 0) return fallback;
-  return stats.goalsAgainst / stats.played;
+  return getSmoothedPerGame(
+    stats?.goalsAgainst ?? 0,
+    stats?.played ?? 0,
+    leagueAverage,
+  );
 }
 
 function getPredictedOutcome(input: {
@@ -215,28 +291,38 @@ function getPredictedOutcome(input: {
 function buildPredictedResult(input: {
   homeStats: TeamWinChanceStats | undefined;
   awayStats: TeamWinChanceStats | undefined;
-  leagueAverageGoals: number;
+  baselines: LeagueBaselines;
   strengthDifference: number;
   percentages: { home: number; draw: number; away: number };
 }): PredictedResult {
-  const homeAttack = getGoalsForPerGame(input.homeStats, input.leagueAverageGoals);
-  const awayAttack = getGoalsForPerGame(input.awayStats, input.leagueAverageGoals);
+  const homeAttack = getGoalsForPerGame(
+    input.homeStats,
+    input.baselines.goalsForPerGame,
+  );
+  const awayAttack = getGoalsForPerGame(
+    input.awayStats,
+    input.baselines.goalsForPerGame,
+  );
   const homeDefenceConceded = getGoalsAgainstPerGame(
     input.homeStats,
-    input.leagueAverageGoals,
+    input.baselines.goalsAgainstPerGame,
   );
   const awayDefenceConceded = getGoalsAgainstPerGame(
     input.awayStats,
-    input.leagueAverageGoals,
+    input.baselines.goalsAgainstPerGame,
   );
 
   const homeExpected = clamp(
-    homeAttack * 0.58 + awayDefenceConceded * 0.42 + input.strengthDifference * 0.025,
+    homeAttack * 0.58 +
+      awayDefenceConceded * 0.42 +
+      input.strengthDifference * 0.025,
     0.4,
     8.5,
   );
   const awayExpected = clamp(
-    awayAttack * 0.58 + homeDefenceConceded * 0.42 - input.strengthDifference * 0.025,
+    awayAttack * 0.58 +
+      homeDefenceConceded * 0.42 -
+      input.strengthDifference * 0.025,
     0.4,
     8.5,
   );
@@ -254,7 +340,11 @@ function buildPredictedResult(input: {
   }
 
   if (outcome === "draw") {
-    const drawScore = clamp(Math.round((homeExpected + awayExpected) / 2), 0, 8);
+    const drawScore = clamp(
+      Math.round((homeExpected + awayExpected) / 2),
+      0,
+      8,
+    );
     homeScore = drawScore;
     awayScore = drawScore;
   }
@@ -280,8 +370,10 @@ function getHeadToHeadAdjustment(input: {
     const homeIsCurrentHome = fixture.homeTeam.id === input.homeTeamId;
     const awayIsCurrentHome = fixture.awayTeam.id === input.homeTeamId;
     const isSamePair =
-      (fixture.homeTeam.id === input.homeTeamId && fixture.awayTeam.id === input.awayTeamId) ||
-      (fixture.homeTeam.id === input.awayTeamId && fixture.awayTeam.id === input.homeTeamId);
+      (fixture.homeTeam.id === input.homeTeamId &&
+        fixture.awayTeam.id === input.awayTeamId) ||
+      (fixture.homeTeam.id === input.awayTeamId &&
+        fixture.awayTeam.id === input.homeTeamId);
 
     if (!isSamePair) continue;
 
@@ -298,7 +390,12 @@ function getHeadToHeadAdjustment(input: {
 
   if (games === 0) return 0;
 
-  return clamp((goalDifferenceFromHomePerspective / games) * 4, -10, 10);
+  const evidenceWeight = games / (games + EARLY_SEASON_PRIOR_GAMES);
+  return clamp(
+    (goalDifferenceFromHomePerspective / games) * 4 * evidenceWeight,
+    -10,
+    10,
+  );
 }
 
 function roundPercentages(input: { home: number; draw: number; away: number }) {
@@ -321,9 +418,15 @@ function roundPercentages(input: { home: number; draw: number; away: number }) {
   };
 }
 
-function getConfidence(totalGames: number): FixtureWinChance["confidence"] {
-  if (totalGames >= 12) return "High";
-  if (totalGames >= 5) return "Medium";
+function getConfidence(
+  homeGames: number,
+  awayGames: number,
+): FixtureWinChance["confidence"] {
+  const leastExperiencedTeam = Math.min(homeGames, awayGames);
+  const totalGames = homeGames + awayGames;
+
+  if (leastExperiencedTeam >= 6 && totalGames >= 12) return "High";
+  if (leastExperiencedTeam >= 3 && totalGames >= 6) return "Medium";
   return "Low";
 }
 
@@ -333,9 +436,12 @@ export function calculateFixtureWinChance(input: {
   fixtures: WinChanceFixture[];
 }): FixtureWinChance {
   const statsByTeamId = buildStats(input.fixtures);
+  const baselines = getLeagueBaselines(statsByTeamId);
   const homeStats = statsByTeamId.get(input.homeTeamId);
   const awayStats = statsByTeamId.get(input.awayTeamId);
-  const completedGames = (homeStats?.played ?? 0) + (awayStats?.played ?? 0);
+  const homeGames = homeStats?.played ?? 0;
+  const awayGames = awayStats?.played ?? 0;
+  const completedGames = homeGames + awayGames;
 
   if (completedGames === 0) {
     return {
@@ -348,12 +454,13 @@ export function calculateFixtureWinChance(input: {
         label: "Too early",
       },
       confidence: "Low",
-      explanation: "No completed results were found for these teams yet, so a score prediction will appear once there is usable match data.",
+      explanation:
+        "No completed results were found for these teams yet, so a score prediction will appear once there is usable match data.",
     };
   }
 
-  const homeStrength = getStrength(homeStats);
-  const awayStrength = getStrength(awayStats);
+  const homeStrength = getStrength(homeStats, baselines);
+  const awayStrength = getStrength(awayStats, baselines);
   const headToHeadAdjustment = getHeadToHeadAdjustment(input);
   const strengthDifference =
     homeStrength - awayStrength + headToHeadAdjustment;
@@ -371,16 +478,19 @@ export function calculateFixtureWinChance(input: {
   const predictedResult = buildPredictedResult({
     homeStats,
     awayStats,
-    leagueAverageGoals: getLeagueAverageGoals(statsByTeamId),
+    baselines,
     strengthDifference,
     percentages: rounded,
   });
 
+  const isEarlySeason = Math.min(homeGames, awayGames) < 3;
+
   return {
     ...rounded,
     predictedResult,
-    confidence: getConfidence(completedGames),
-    explanation:
-      "Based on completed results for these teams, points per game, goal difference, recent form, scoring record and head-to-head record.",
+    confidence: getConfidence(homeGames, awayGames),
+    explanation: isEarlySeason
+      ? "Early-season estimate: limited team results are blended with league averages, recent form, scoring record and any head-to-head results."
+      : "Based on completed results for these teams, points per game, goal difference, recent form, scoring record and head-to-head record.",
   };
 }
