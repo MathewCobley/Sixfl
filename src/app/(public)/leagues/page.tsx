@@ -7,7 +7,7 @@
 // ========================================
 
 import Image from "next/image";
-import { LeagueType, PreferredNight } from "@prisma/client";
+import { LeagueType, PreferredNight, Prisma } from "@prisma/client";
 import TrackedLink from "@/components/analytics/TrackedLink";
 import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
@@ -39,6 +39,11 @@ type LeagueCard = {
   accent: string;
   button: string;
   border: string;
+};
+
+type LeagueTeamCountRow = {
+  leagueId: string;
+  teamCount: number;
 };
 
 // ========================================
@@ -157,6 +162,31 @@ function sortLeagues(a: LeagueCard, b: LeagueCard) {
   return a.location.localeCompare(b.location);
 }
 
+async function getCurrentSeasonTeamCounts(leagueIds: string[]) {
+  if (leagueIds.length === 0) return new Map<string, number>();
+
+  const rows = await prisma.$queryRaw<LeagueTeamCountRow[]>(Prisma.sql`
+    SELECT
+      membership."leagueId" AS "leagueId",
+      COUNT(DISTINCT membership."teamId")::int AS "teamCount"
+    FROM (
+      SELECT season_team."leagueId", season_team."teamId"
+      FROM "LeagueSeasonTeam" season_team
+      WHERE season_team."isActive" = true
+        AND season_team."leagueId" IN (${Prisma.join(leagueIds)})
+
+      UNION
+
+      SELECT team."leagueId", team."id" AS "teamId"
+      FROM "Team" team
+      WHERE team."leagueId" IN (${Prisma.join(leagueIds)})
+    ) membership
+    GROUP BY membership."leagueId"
+  `);
+
+  return new Map(rows.map((row) => [row.leagueId, Number(row.teamCount)]));
+}
+
 // ========================================
 // Page
 // ========================================
@@ -190,6 +220,8 @@ export default async function LeaguesPage() {
       })
     : [];
 
+  const seasonTeamCounts = await getCurrentSeasonTeamCounts(currentLeagueIds);
+
   const leagues: LeagueCard[] = leaguesFromDb
     .map((league) => {
       const theme = getLeagueTheme(league.leagueType);
@@ -204,7 +236,7 @@ export default async function LeaguesPage() {
         venue: league.venueName || "Venue TBC",
         badge: normaliseImage(league.badgeUrl) || DEFAULT_BADGE,
         hero: normaliseImage(league.heroImageUrl),
-        teams: league._count.teams,
+        teams: seasonTeamCounts.get(league.id) ?? league._count.teams,
         capacity: null,
         href: `/leagues/${league.slug}`,
         accent: theme.accent,
