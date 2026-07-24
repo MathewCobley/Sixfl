@@ -79,32 +79,40 @@ export default async function HarrogateRegisterInterestPage({
   return (
     <div className="min-h-screen bg-black px-4 py-8 text-white sm:py-10">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-5 space-y-4">
           <Link
             href="/"
-            className="text-sm text-white/60 transition hover:text-white"
+            className="inline-flex text-sm text-white/60 transition hover:text-white"
           >
             ← Back to home
           </Link>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-              Register as
-            </span>
-            {(["TEAM", "PLAYER", "REFEREE"] as LeadType[]).map((type) => (
-              <Link
-                key={type}
-                href={typeHref(type)}
-                className={[
-                  "inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-bold tracking-[0.16em] transition",
-                  leadType === type
-                    ? "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-                    : "border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
-                ].join(" ")}
-              >
-                {type === "TEAM" ? "Team" : type === "PLAYER" ? "Player" : "Referee"}
-              </Link>
-            ))}
+          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-3 shadow-[0_16px_44px_rgba(16,185,129,0.10)] sm:flex sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-200">
+                Register as
+              </p>
+              <p className="mt-1 text-xs text-white/55">
+                Choose the option that applies to you
+              </p>
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-0 sm:flex">
+              {(["TEAM", "PLAYER", "REFEREE"] as LeadType[]).map((type) => (
+                <Link
+                  key={type}
+                  href={typeHref(type)}
+                  className={[
+                    "inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black transition sm:min-w-[104px]",
+                    leadType === type
+                      ? "bg-emerald-400 text-black shadow-[0_10px_28px_rgba(16,185,129,0.22)]"
+                      : "border border-white/15 bg-black/35 text-white/80 hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-white",
+                  ].join(" ")}
+                >
+                  {type === "TEAM" ? "Team" : type === "PLAYER" ? "Player" : "Referee"}
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
 
