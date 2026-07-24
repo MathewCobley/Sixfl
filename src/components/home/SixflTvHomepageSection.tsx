@@ -5,37 +5,9 @@
 const SIXFL_TV_CHANNEL_URL =
   "https://youtube.com/@sixfl?si=it2uNcdU3fHIf094";
 
-function SixflTvLogo() {
-  return (
-    <div className="flex w-full flex-col items-center justify-center" aria-label="SIXFL TV">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/Sixfl-tv.png"
-        alt="SIXFL TV"
-        className="h-auto w-full max-w-[430px] object-contain"
-      />
-
-      <div className="mt-6 flex items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logos/you-tube.png"
-          alt="YouTube"
-          className="h-auto w-28 object-contain sm:w-32"
-        />
-        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/55">
-          Watch on YouTube
-        </span>
-        <span aria-hidden="true" className="text-white/55">
-          ↗
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export default function SixflTvHomepageSection() {
   return (
-    <section aria-labelledby="sixfl-tv-heading">
+    <section className="mt-12 lg:mt-16" aria-labelledby="sixfl-tv-heading">
       <div className="relative overflow-hidden rounded-[1.5rem] border border-violet-400/20 bg-[radial-gradient(circle_at_85%_15%,rgba(236,72,153,0.22),transparent_28%),radial-gradient(circle_at_15%_85%,rgba(139,92,246,0.2),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.065),rgba(255,255,255,0.025))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
         <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] opacity-15 lg:block">
           <div className="absolute right-10 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full border border-white/20" />
@@ -48,14 +20,38 @@ export default function SixflTvHomepageSection() {
             href={SIXFL_TV_CHANNEL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="group block w-full rounded-3xl border border-white/10 bg-black/55 p-6 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/65 sm:p-8"
+            className="group flex min-h-[330px] w-full flex-col items-center justify-center rounded-3xl border border-white/10 bg-black/70 p-6 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/80 sm:min-h-[390px] sm:p-8"
             aria-label="Open the SIXFL TV YouTube channel"
           >
-            <SixflTvLogo />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logos/you-tube.png"
+              alt="YouTube"
+              className="h-auto w-full max-w-[340px] object-contain sm:max-w-[400px]"
+            />
+            <div className="mt-8 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/55 transition group-hover:text-white/75">
+              <span>Watch on YouTube</span>
+              <span aria-hidden="true">↗</span>
+            </div>
           </a>
 
           <div>
-            <div className="inline-flex rounded-full border border-violet-300/20 bg-violet-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-violet-200">
+            <a
+              href={SIXFL_TV_CHANNEL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded-2xl border border-white/10 bg-black/35 px-4 py-3 transition hover:border-violet-300/30 hover:bg-black/45"
+              aria-label="Open SIXFL TV on YouTube"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/Sixfl-tv.png"
+                alt="SIXFL TV"
+                className="h-auto w-full max-w-[280px] object-contain sm:max-w-[340px]"
+              />
+            </a>
+
+            <div className="mt-5 inline-flex rounded-full border border-violet-300/20 bg-violet-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-violet-200">
               Matchday on demand
             </div>
             <h2
@@ -87,15 +83,8 @@ export default function SixflTvHomepageSection() {
               href={SIXFL_TV_CHANNEL_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-7 inline-flex h-12 w-full items-center justify-center gap-3 rounded-full bg-white px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-white/90 sm:w-auto"
+              className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-white/90 sm:w-auto"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/logos/you-tube.png"
-                alt=""
-                aria-hidden="true"
-                className="h-5 w-auto object-contain"
-              />
               WATCH SIXFL TV
               <span aria-hidden="true">↗</span>
             </a>
