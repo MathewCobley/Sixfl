@@ -4,7 +4,7 @@
 
 import type { Metadata } from "next";
 import Image from "next/image";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { createHeartlandsInterestLeadAction } from "./actions";
@@ -74,7 +74,11 @@ async function getHeartlandsLeague() {
 
 export default async function HeartlandsLaunchPage() {
   const league = await getHeartlandsLeague();
-  if (!league) notFound();
+  if (!league) {
+    redirect(
+      "/register-interest?type=team&area=North%20Yorkshire%20Heartlands",
+    );
+  }
 
   if (league.fixtures.length > 0 && league.slug !== "heartlands") {
     redirect(`/leagues/${league.slug}`);
