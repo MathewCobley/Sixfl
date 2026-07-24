@@ -4,6 +4,7 @@
 
 import { Suspense, type ReactNode } from "react";
 import AppHeader from "@/components/layout/AppHeader";
+import HomepageSixflTvBridge from "@/components/home/HomepageSixflTvBridge";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
 import PublicLeagueSeasonSwitcherBridge from "@/components/layout/PublicLeagueSeasonSwitcherBridge";
@@ -31,6 +32,7 @@ export default function PublicLayout({
         <RegisterInterestClarityBridge />
       </Suspense>
       <main className="bg-black">{children}</main>
+      <HomepageSixflTvBridge />
       <SiteFooter />
     </div>
   );
