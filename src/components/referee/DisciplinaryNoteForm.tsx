@@ -11,8 +11,8 @@ import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 
 import { recordFixtureDisciplinaryNoteAction } from "@/app/(public)/referee/actions";
 import {
-  INITIAL_SHIN_PAD_WARNING_STATE,
   recordShinPadWarningAction,
+  type ShinPadWarningActionState,
 } from "@/app/(public)/referee/shin-pad-warning-actions";
 
 type Option = {
@@ -30,6 +30,12 @@ type Props = {
   refereeNightId: string;
   fixtureId: string;
   teams: TeamOption[];
+};
+
+const INITIAL_SHIN_PAD_WARNING_STATE: ShinPadWarningActionState = {
+  status: "idle",
+  message: "",
+  warningTeamIds: [],
 };
 
 const INCIDENT_OPTIONS: Option[] = [
