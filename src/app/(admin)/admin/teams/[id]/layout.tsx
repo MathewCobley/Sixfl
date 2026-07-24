@@ -6,6 +6,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
+import TeamDetailRouteLayout from "@/components/admin/teams/TeamDetailRouteLayout";
 import TeamKitColourPicker from "@/components/admin/teams/TeamKitColourPicker";
 import TeamOverviewOnly from "@/components/admin/teams/TeamOverviewOnly";
 import TeamShinPadWarningPanel from "@/components/admin/teams/TeamShinPadWarningPanel";
@@ -158,7 +159,9 @@ export default async function AdminTeamDetailLayout({
   }
 
   return (
-    <div className="space-y-5">
+    <div data-team-detail-shell className="space-y-5">
+      <TeamDetailRouteLayout teamId={team.id} />
+
       <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 shadow-[0_14px_50px_rgba(0,0,0,0.25)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
