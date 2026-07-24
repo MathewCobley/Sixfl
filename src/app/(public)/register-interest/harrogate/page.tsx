@@ -87,7 +87,10 @@ export default async function HarrogateRegisterInterestPage({
             ← Back to home
           </Link>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+              Register as
+            </span>
             {(["TEAM", "PLAYER", "REFEREE"] as LeadType[]).map((type) => (
               <Link
                 key={type}
@@ -108,15 +111,15 @@ export default async function HarrogateRegisterInterestPage({
         <section className="relative isolate overflow-hidden rounded-3xl border border-emerald-500/20 bg-[radial-gradient(circle_at_50%_42%,rgba(16,185,129,0.14),transparent_46%),rgba(255,255,255,0.05)] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.45)] sm:p-8">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 -z-10 w-[360px] -translate-x-1/2 -translate-y-1/2 opacity-[0.13] sm:w-[500px] sm:opacity-[0.26]"
+            className="pointer-events-none absolute inset-7 -z-10 opacity-[0.12] sm:inset-x-20 sm:inset-y-10 sm:opacity-[0.22]"
           >
             <Image
               src={badgeUrl}
               alt=""
-              width={900}
-              height={900}
+              fill
               priority
-              className="h-auto w-full object-contain drop-shadow-[0_24px_70px_rgba(16,185,129,0.22)]"
+              sizes="(min-width: 640px) 610px, calc(100vw - 88px)"
+              className="object-contain drop-shadow-[0_24px_70px_rgba(16,185,129,0.22)]"
             />
           </div>
 
@@ -147,6 +150,22 @@ export default async function HarrogateRegisterInterestPage({
                 </span>
               ))}
             </div>
+
+            {leadType === "TEAM" ? (
+              <Link
+                href={typeHref("PLAYER")}
+                className="mt-5 inline-flex items-center rounded-full border border-white/15 bg-black/35 px-4 py-2.5 text-sm font-semibold text-white/85 transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-white"
+              >
+                Looking for a team? Join as a player →
+              </Link>
+            ) : leadType === "PLAYER" ? (
+              <Link
+                href={typeHref("TEAM")}
+                className="mt-5 inline-flex items-center rounded-full border border-white/15 bg-black/35 px-4 py-2.5 text-sm font-semibold text-white/85 transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-white"
+              >
+                Already have a team? Register the team →
+              </Link>
+            ) : null}
 
             {hasError ? (
               <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
