@@ -19,6 +19,18 @@ function findExactTextElement<T extends HTMLElement>(
   );
 }
 
+function hideElement(
+  element: HTMLElement | null | undefined,
+  cleanup: Array<() => void>,
+) {
+  if (!element) return;
+  const originalDisplay = element.style.display;
+  element.style.display = "none";
+  cleanup.push(() => {
+    element.style.display = originalDisplay;
+  });
+}
+
 export default function HarrogateSignupStyleBridge() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -44,6 +56,7 @@ export default function HarrogateSignupStyleBridge() {
 
     const cleanup: Array<() => void> = [];
     const leadType = (searchParams.get("type") || "team").trim().toLowerCase();
+    const isTeamForm = leadType === "team";
 
     card.dataset.harrogateSignupCard = "true";
     cleanup.push(() => delete card.dataset.harrogateSignupCard);
@@ -59,6 +72,14 @@ export default function HarrogateSignupStyleBridge() {
     const heading = card.querySelector<HTMLHeadingElement>("h1");
     const intro = heading?.nextElementSibling as HTMLElement | null;
 
+    if (heading && isTeamForm) {
+      const original = heading.textContent;
+      heading.textContent = "Register your Harrogate team";
+      cleanup.push(() => {
+        heading.textContent = original;
+      });
+    }
+
     if (intro) {
       const original = intro.textContent;
       intro.textContent =
@@ -66,9 +87,20 @@ export default function HarrogateSignupStyleBridge() {
           ? "Join the player list for the SIXFL Men’s Harrogate West Tuesday Rossett League."
           : leadType === "referee"
             ? "Register referee interest for the SIXFL Harrogate West Tuesday League."
-            : "Register your team for the SIXFL Men’s Harrogate West Tuesday Rossett League.";
+            : "Leave your details for the SIXFL Men’s Harrogate West Tuesday Rossett League. It takes around 30 seconds.";
       cleanup.push(() => {
         intro.textContent = original;
+      });
+    }
+
+    const reassurance = Array.from(card.querySelectorAll<HTMLElement>("p")).find(
+      (element) => element.textContent?.includes("No payment now"),
+    );
+    if (reassurance && isTeamForm) {
+      const original = reassurance.textContent;
+      reassurance.textContent = "No payment now • No commitment • Takes around 30 seconds";
+      cleanup.push(() => {
+        reassurance.textContent = original;
       });
     }
 
@@ -93,13 +125,7 @@ export default function HarrogateSignupStyleBridge() {
 
     for (const labelText of ["Area", "League type"]) {
       const label = findExactTextElement<HTMLLabelElement>(form, "label", labelText);
-      const field = label?.parentElement;
-      if (!field) continue;
-      const originalDisplay = field.style.display;
-      field.style.display = "none";
-      cleanup.push(() => {
-        field.style.display = originalDisplay;
-      });
+      hideElement(label?.parentElement, cleanup);
     }
 
     const nightsTitle = findExactTextElement<HTMLElement>(
@@ -118,11 +144,7 @@ export default function HarrogateSignupStyleBridge() {
     }
 
     if (nightsPanel && nightsPanel !== form) {
-      const originalDisplay = nightsPanel.style.display;
-      nightsPanel.style.display = "none";
-      cleanup.push(() => {
-        nightsPanel.style.display = originalDisplay;
-      });
+      hideElement(nightsPanel, cleanup);
     }
 
     const areaSelect = form.querySelector<HTMLSelectElement>('select[name="area"]');
@@ -149,10 +171,46 @@ export default function HarrogateSignupStyleBridge() {
           ? "Anything useful to know? For example: position, playing standard, whether you are joining alone or with friends, or any questions about the Harrogate Tuesday league."
           : leadType === "referee"
             ? "Tell us anything useful. For example: refereeing experience, qualifications, or availability for Tuesday nights in Harrogate."
-            : "Anything useful to know? For example: likely squad size, playing standard, whether you already have a full squad, or any questions about the Harrogate Tuesday league.";
+            : "Anything useful to know about your team?";
       cleanup.push(() => {
         notes.placeholder = original;
       });
+    }
+
+    if (isTeamForm) {
+      const teamNameInput = form.querySelector<HTMLInputElement>('input[name="teamName"]');
+      if (teamNameInput) {
+        const wasRequired = teamNameInput.required;
+        teamNameInput.required = true;
+        cleanup.push(() => {
+          teamNameInput.required = wasRequired;
+        });
+      }
+
+      const freeKitLabel = Array.from(form.querySelectorAll<HTMLLabelElement>("label")).find(
+        (label) => label.textContent?.includes("founding teams free kit offer"),
+      );
+      hideElement(freeKitLabel?.parentElement, cleanup);
+
+      const notesLabel = findExactTextElement<HTMLLabelElement>(form, "label", "Notes");
+      hideElement(notesLabel?.parentElement, cleanup);
+
+      const marketingLabel = Array.from(
+        form.querySelectorAll<HTMLLabelElement>("label"),
+      ).find((label) => label.textContent?.includes("receive SIXFL launch updates"));
+      hideElement(marketingLabel?.parentElement, cleanup);
+
+      const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (submitButton) {
+        const original = submitButton.textContent;
+        submitButton.textContent = "REGISTER YOUR TEAM";
+        cleanup.push(() => {
+          submitButton.textContent = original;
+        });
+      }
+
+      const backLink = findExactTextElement<HTMLAnchorElement>(form, "a", "BACK TO HOME");
+      hideElement(backLink, cleanup);
     }
 
     const typeLinks: Record<string, string> = {
