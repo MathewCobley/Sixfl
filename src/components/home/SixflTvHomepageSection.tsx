@@ -40,14 +40,14 @@ export default function SixflTvHomepageSection() {
               href={SIXFL_TV_CHANNEL_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex rounded-2xl border border-white/10 bg-black/35 px-4 py-3 transition hover:border-violet-300/30 hover:bg-black/45"
+              className="inline-flex transition hover:scale-[1.02] hover:opacity-90"
               aria-label="Open SIXFL TV on YouTube"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/Sixfl-tv.png"
                 alt="SIXFL TV"
-                className="h-auto w-full max-w-[280px] object-contain sm:max-w-[340px]"
+                className="h-auto w-full max-w-[330px] object-contain drop-shadow-[0_14px_34px_rgba(0,0,0,0.45)] sm:max-w-[400px]"
               />
             </a>
 
