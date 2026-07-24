@@ -7,8 +7,6 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-import CaptainAvailabilityHistoryNudgeBridge from "@/components/captain/CaptainAvailabilityHistoryNudgeBridge";
-
 const REMINDER_ID = "sixfl-captain-contextual-reminder";
 const SIXFL_TV_NAV_LOGO_ATTR = "data-sixfl-tv-nav-logo";
 
@@ -53,7 +51,8 @@ function createReminderElement(config: ReminderConfig) {
     "mb-6 rounded-3xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-emerald-50 shadow-[0_18px_60px_rgba(0,0,0,0.22)]";
 
   const eyebrow = document.createElement("p");
-  eyebrow.className = "text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70";
+  eyebrow.className =
+    "text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70";
   eyebrow.textContent = config.eyebrow;
 
   const title = document.createElement("h2");
@@ -61,7 +60,8 @@ function createReminderElement(config: ReminderConfig) {
   title.textContent = config.title;
 
   const body = document.createElement("p");
-  body.className = "mt-2 max-w-4xl text-sm leading-6 text-emerald-50/78";
+  body.className =
+    "mt-2 max-w-4xl text-sm leading-6 text-emerald-50/78";
   body.textContent = config.body;
 
   wrapper.append(eyebrow, title, body);
@@ -101,7 +101,13 @@ export default function CaptainOnboardingReminderBridge() {
     const frame = window.requestAnimationFrame(decorateSixflTvNav);
     const observer = new MutationObserver(decorateSixflTvNav);
     const header = document.querySelector(".captain-team-header");
-    if (header) observer.observe(header, { childList: true, subtree: true, attributes: true });
+    if (header) {
+      observer.observe(header, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+      });
+    }
 
     const reminder = getReminder(pathname);
     if (reminder) {
@@ -116,5 +122,5 @@ export default function CaptainOnboardingReminderBridge() {
     };
   }, [pathname]);
 
-  return <CaptainAvailabilityHistoryNudgeBridge />;
+  return null;
 }
