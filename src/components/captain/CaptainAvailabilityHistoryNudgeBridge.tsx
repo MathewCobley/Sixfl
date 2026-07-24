@@ -264,11 +264,11 @@ export default function CaptainAvailabilityHistoryNudgeBridge() {
           | null;
         if (!response.ok || !payload?.players || cancelled) return;
 
-        const playersByEmail = new Map(
-          payload.players
-            .filter((player) => player.email)
-            .map((player) => [normaliseEmail(player.email ?? ""), player]),
-        );
+        const playersByEmail = new Map<string, NudgePlayer>();
+        for (const player of payload.players) {
+          if (!player.email) continue;
+          playersByEmail.set(normaliseEmail(player.email), player);
+        }
 
         const decorate = () =>
           decorateHistoryRows({
