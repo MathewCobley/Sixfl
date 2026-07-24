@@ -8,30 +8,36 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 const CURRENT_LABEL = "MEN’S LEAGUES";
-const FUTURE_LABELS = ["WOMEN’S LEAGUES", "YOUTH LEAGUES"];
+const FUTURE_LABELS = new Set(["WOMEN’S LEAGUES", "YOUTH LEAGUES"]);
+
+function getOwnText(element: HTMLElement) {
+  return Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? "")
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function simplifyHomepageLeagueTypes(pathname: string | null) {
   if (pathname !== "/") return;
 
-  const target = Array.from(document.querySelectorAll<HTMLElement>("div")).find(
-    (element) => {
-      const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
-      return (
-        text.includes(CURRENT_LABEL) &&
-        FUTURE_LABELS.every((label) => text.includes(label)) &&
-        element.children.length >= 3
-      );
-    },
-  );
+  const spans = Array.from(document.querySelectorAll<HTMLElement>("span"));
 
-  if (!target || target.dataset.leagueTypeFocusApplied === "true") return;
+  for (const span of spans) {
+    const ownText = getOwnText(span);
 
-  const label = document.createElement("span");
-  label.className = "inline-flex items-center";
-  label.textContent = CURRENT_LABEL;
+    if (FUTURE_LABELS.has(ownText)) {
+      span.remove();
+      continue;
+    }
 
-  target.replaceChildren(label);
-  target.dataset.leagueTypeFocusApplied = "true";
+    if (ownText === CURRENT_LABEL) {
+      for (const child of Array.from(span.children)) {
+        if (child.textContent?.trim() === "•") child.remove();
+      }
+    }
+  }
 }
 
 export default function HomepageLeagueTypeFocusBridge() {
