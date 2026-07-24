@@ -8,6 +8,7 @@ import HomepageAiPredictorCopyBridge from "@/components/home/HomepageAiPredictor
 import HomepageLeagueTypeFocusBridge from "@/components/home/HomepageLeagueTypeFocusBridge";
 import HomepageSixflTvBridge from "@/components/home/HomepageSixflTvBridge";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
+import PublicLeagueBadgeVisibilityBridge from "@/components/layout/PublicLeagueBadgeVisibilityBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
 import PublicLeagueSeasonSwitcherBridge from "@/components/layout/PublicLeagueSeasonSwitcherBridge";
 import RegisterInterestClarityBridge from "@/components/layout/RegisterInterestClarityBridge";
@@ -26,6 +27,7 @@ export default function PublicLayout({
       <AppHeader variant="public" />
       <PublicLeagueSeasonSwitcherBridge />
       <PublicLeagueLandingSpacingBridge />
+      <PublicLeagueBadgeVisibilityBridge />
       <PublicFixtureWinChanceBridge />
       <HomepageAiPredictorCopyBridge />
       <HomepageLeagueTypeFocusBridge />
