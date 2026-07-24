@@ -25,6 +25,7 @@ import {
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { sendEmailWithResend } from "@/lib/notifications/providers/resend";
 import { queueDirectNotification } from "@/lib/notifications/service";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
 
@@ -84,6 +85,66 @@ async function revalidateMessageViews(threadId: string) {
   return thread;
 }
 
+type MessageThreadForReply = NonNullable<
+  Awaited<ReturnType<typeof getMessageThreadById>>
+>;
+
+async function resolveReplyTarget(thread: MessageThreadForReply) {
+  const isManagedSquadMember =
+    thread.sourceType === "TEAM_MEMBER" && Boolean(thread.sourceId);
+
+  let name =
+    thread.contactName?.trim() ||
+    thread.recipient?.displayName?.trim() ||
+    thread.team?.name?.trim() ||
+    null;
+  let email =
+    thread.contactEmail?.trim() ||
+    thread.emailNormalized?.trim() ||
+    thread.recipient?.email?.trim() ||
+    null;
+  let phone = normalizePhoneNumber(
+    thread.phoneNormalized || thread.contactPhone || thread.recipient?.phone,
+  );
+
+  if (isManagedSquadMember && thread.sourceId) {
+    const membership = await prisma.teamMember.findUnique({
+      where: { id: thread.sourceId },
+      select: {
+        id: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (membership) {
+      const profiles = await getTeamMemberProfilesByTeamMemberIds([membership.id]);
+      const profile = profiles.get(membership.id) ?? null;
+
+      name =
+        membership.user.name?.trim() ||
+        membership.user.email?.trim() ||
+        name;
+      email = membership.user.email?.trim() || email;
+      phone = normalizePhoneNumber(profile?.phone ?? null);
+    } else {
+      // Never fall back to the captain/team contact for a member-specific thread.
+      phone = null;
+    }
+  }
+
+  return {
+    isManagedSquadMember,
+    name,
+    email,
+    phone,
+  };
+}
+
 export async function markMessageThreadReadAction(formData: FormData) {
   await requireAdmin();
 
@@ -125,14 +186,9 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
     redirect(buildMessagesHref({ filter, threadId, extras: { error: "thread_not_open" } }));
   }
 
-  const toNumber = normalizePhoneNumber(
-    thread.phoneNormalized || thread.contactPhone || thread.recipient?.phone,
-  );
-  const toEmail =
-    thread.contactEmail?.trim() ||
-    thread.recipient?.email?.trim() ||
-    thread.emailNormalized?.trim() ||
-    null;
+  const target = await resolveReplyTarget(thread);
+  const toNumber = target.phone;
+  const toEmail = target.email;
 
   if (!toNumber && !toEmail) {
     redirect(buildMessagesHref({ filter, threadId, extras: { error: "missing_contact" } }));
@@ -140,14 +196,12 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
 
   try {
     if (toNumber) {
-      const recipient = thread.recipientId
-        ? thread.recipient
-        : await upsertNotificationRecipient({
+      const recipient = target.isManagedSquadMember
+        ? await upsertNotificationRecipient({
             sourceType: NotificationRecipientSourceType.GENERAL,
             sourceId: thread.id,
             audience: NotificationAudience.GENERAL,
-            displayName:
-              thread.contactName ?? thread.team?.name ?? thread.recipient?.displayName ?? null,
+            displayName: target.name,
             email: toEmail,
             phone: toNumber,
             transactionalSmsOptIn: true,
@@ -155,12 +209,33 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
               threadId: thread.id,
               teamId: thread.teamId,
               leagueId: thread.leagueId,
-              contactName: thread.contactName ?? thread.team?.name ?? null,
+              teamMemberId: thread.sourceId,
+              contactName: target.name,
               manualReplyRecipient: true,
             },
-          });
+          })
+        : thread.recipientId
+          ? thread.recipient
+          : await upsertNotificationRecipient({
+              sourceType: NotificationRecipientSourceType.GENERAL,
+              sourceId: thread.id,
+              audience: NotificationAudience.GENERAL,
+              displayName:
+                target.name ?? thread.team?.name ?? thread.recipient?.displayName ?? null,
+              email: toEmail,
+              phone: toNumber,
+              transactionalSmsOptIn: true,
+              metadata: {
+                threadId: thread.id,
+                teamId: thread.teamId,
+                leagueId: thread.leagueId,
+                contactName: target.name ?? thread.team?.name ?? null,
+                manualReplyRecipient: true,
+              },
+            });
 
-      const recipientId = thread.recipientId ?? recipient?.id;
+      const recipientId =
+        target.isManagedSquadMember ? recipient?.id : thread.recipientId ?? recipient?.id;
 
       if (!recipientId) {
         redirect(buildMessagesHref({ filter, threadId, extras: { error: "missing_contact" } }));
@@ -169,6 +244,9 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
       await prisma.notificationRecipient.update({
         where: { id: recipientId },
         data: {
+          displayName: target.name,
+          email: toEmail,
+          emailNormalized: toEmail?.toLowerCase() ?? null,
           phone: toNumber,
           phoneNormalized: toNumber,
           transactionalSmsOptIn: true,
@@ -197,7 +275,8 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
           threadId: thread.id,
           teamId: thread.teamId,
           leagueId: thread.leagueId,
-          contactName: thread.contactName ?? thread.team?.name ?? null,
+          teamMemberId: target.isManagedSquadMember ? thread.sourceId : null,
+          contactName: target.name ?? thread.team?.name ?? null,
           manualSmsReply: true,
         },
         createdByUserId: user?.id ?? null,
@@ -231,8 +310,11 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
           recipientId,
           teamId: thread.teamId,
           leagueId: thread.leagueId,
-          contactPhone: thread.contactPhone ?? toNumber,
-          phoneNormalized: thread.phoneNormalized ?? toNumber,
+          contactName: target.name ?? thread.contactName,
+          contactEmail: toEmail ?? thread.contactEmail,
+          emailNormalized: toEmail?.toLowerCase() ?? thread.emailNormalized,
+          contactPhone: toNumber,
+          phoneNormalized: toNumber,
           latestMessageAt: now,
           latestOutboundAt: now,
           lastOutboundMessageId: entry.id,
@@ -241,7 +323,7 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
       });
     } else if (toEmail) {
       const now = new Date();
-      const subject = `SIXFL reply${thread.team?.name ? ` · ${thread.team.name}` : ""}`;
+      const subject = `SIXFL reply${target.name ? ` · ${target.name}` : thread.team?.name ? ` · ${thread.team.name}` : ""}`;
       const replyTo = thread.replyAddress?.trim() || "hello@sixfl.co.uk";
       const sendResult = await sendEmailWithResend({
         to: toEmail,
@@ -275,6 +357,12 @@ export async function sendAdminMessageReplyAction(formData: FormData) {
         where: { id: thread.id },
         data: {
           channel: "EMAIL",
+          recipientId: target.isManagedSquadMember ? null : thread.recipientId,
+          contactName: target.name ?? thread.contactName,
+          contactEmail: toEmail,
+          emailNormalized: toEmail.toLowerCase(),
+          contactPhone: target.isManagedSquadMember ? null : thread.contactPhone,
+          phoneNormalized: target.isManagedSquadMember ? null : thread.phoneNormalized,
           latestMessageAt: now,
           latestOutboundAt: now,
           lastOutboundMessageId: entry.id,
