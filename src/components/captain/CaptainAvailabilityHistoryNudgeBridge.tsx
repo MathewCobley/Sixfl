@@ -20,6 +20,14 @@ type NudgePayload = {
   error?: string;
 };
 
+type NudgeSendPayload = {
+  error?: string;
+  teamMemberId?: string;
+  lastNudgeAt?: string | null;
+  nudgeStatus?: string | null;
+  nudgeCount?: number;
+};
+
 const DECORATED_ATTR = "data-availability-nudge-decorated";
 const STATUS_ATTR = "data-availability-nudge-status";
 
@@ -148,15 +156,19 @@ function createNudgeButton(input: {
         },
       );
       const payload = (await response.json().catch(() => null)) as
-        | (NudgePlayer & { error?: string })
+        | NudgeSendPayload
         | null;
 
       if (!response.ok || !payload) {
         throw new Error(payload?.error || "The nudge could not be sent.");
       }
 
+      if (!payload.lastNudgeAt || typeof payload.nudgeCount !== "number") {
+        throw new Error("The nudge was queued, but its audit date could not be loaded.");
+      }
+
       input.player.lastNudgeAt = payload.lastNudgeAt;
-      input.player.nudgeStatus = payload.nudgeStatus;
+      input.player.nudgeStatus = payload.nudgeStatus ?? null;
       input.player.nudgeCount = payload.nudgeCount;
       updateStatus(input.cell, input.player);
       button.textContent = "Nudge again";
@@ -237,6 +249,7 @@ export default function CaptainAvailabilityHistoryNudgeBridge() {
 
     let cancelled = false;
     let observer: MutationObserver | null = null;
+    let frame: number | null = null;
 
     async function load() {
       try {
@@ -264,26 +277,21 @@ export default function CaptainAvailabilityHistoryNudgeBridge() {
           });
 
         decorate();
-        const frame = window.requestAnimationFrame(decorate);
+        frame = window.requestAnimationFrame(decorate);
         observer = new MutationObserver(decorate);
         const main = document.querySelector(".captain-team-main");
         if (main) observer.observe(main, { childList: true, subtree: true });
-
-        return () => window.cancelAnimationFrame(frame);
       } catch (error) {
         console.error("Failed to load availability nudge history", error);
       }
     }
 
-    let cancelFrame: (() => void) | undefined;
-    void load().then((cleanup) => {
-      cancelFrame = cleanup;
-    });
+    void load();
 
     return () => {
       cancelled = true;
       observer?.disconnect();
-      cancelFrame?.();
+      if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, [pathname]);
 
