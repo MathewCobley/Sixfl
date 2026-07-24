@@ -15,6 +15,7 @@ import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 export const dynamic = "force-dynamic";
 
@@ -221,6 +222,8 @@ export async function POST(
     );
   }
 
+  const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);
+  const phone = profiles.get(member.id)?.phone?.trim() || null;
   const displayName = getPlayerDisplayName(member.user);
   const firstName = getFirstName(displayName);
   const availabilityUrl = `${getSiteUrl()}/player/team/${team.id}/availability`;
@@ -232,7 +235,7 @@ export async function POST(
     audience: NotificationAudience.PLAYER,
     displayName,
     email,
-    phone: null,
+    phone,
     marketingEmailOptIn: true,
     marketingSmsOptIn: true,
     transactionalEmailOptIn: true,
