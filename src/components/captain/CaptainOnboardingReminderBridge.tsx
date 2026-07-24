@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+import CaptainAvailabilityHistoryNudgeBridge from "@/components/captain/CaptainAvailabilityHistoryNudgeBridge";
+
 const REMINDER_ID = "sixfl-captain-contextual-reminder";
 const SIXFL_TV_NAV_LOGO_ATTR = "data-sixfl-tv-nav-logo";
 
@@ -114,5 +116,5 @@ export default function CaptainOnboardingReminderBridge() {
     };
   }, [pathname]);
 
-  return null;
+  return <CaptainAvailabilityHistoryNudgeBridge />;
 }
