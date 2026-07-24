@@ -7,7 +7,6 @@ import AppHeader from "@/components/layout/AppHeader";
 import HomepageAiPredictorCopyBridge from "@/components/home/HomepageAiPredictorCopyBridge";
 import HomepageLeagueTypeFocusBridge from "@/components/home/HomepageLeagueTypeFocusBridge";
 import HomepageSixflTvBridge from "@/components/home/HomepageSixflTvBridge";
-import HarrogateSignupStyleBridge from "@/components/layout/HarrogateSignupStyleBridge";
 import PublicFixtureWinChanceBridge from "@/components/layout/PublicFixtureWinChanceBridge";
 import PublicLeagueBadgeVisibilityBridge from "@/components/layout/PublicLeagueBadgeVisibilityBridge";
 import PublicLeagueLandingSpacingBridge from "@/components/layout/PublicLeagueLandingSpacingBridge";
@@ -36,7 +35,6 @@ export default function PublicLayout({
       <RefereeNightPickerBridge />
       <RefereeOnsiteColleaguesBridge />
       <Suspense fallback={null}>
-        <HarrogateSignupStyleBridge />
         <RegisterInterestClarityBridge />
       </Suspense>
       <main className="bg-black">{children}</main>
