@@ -119,27 +119,27 @@ export default function TeamKitColourPicker({ teamId }: { teamId: string }) {
   const previewColour = savedColour ?? selectedColour;
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 shadow-[0_10px_34px_rgba(0,0,0,0.18)]">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_10px_34px_rgba(0,0,0,0.18)] sm:p-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)] lg:items-center">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/25">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/25">
             <Shirt colour={previewColour} />
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold text-white">Primary shirt colour</h2>
-              <span className="font-mono text-[11px] text-white/40">
+              <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 font-mono text-[10px] text-white/45">
                 {savedColour || "Not set"}
               </span>
             </div>
-            <p className="mt-0.5 truncate text-xs text-white/50">
+            <p className="mt-1 text-xs leading-5 text-white/50">
               Shown beside {teamName} on fixture and result screens.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1.5" aria-label="Preset shirt colours">
+        <div className="min-w-0 rounded-2xl border border-white/8 bg-black/20 p-3">
+          <div className="flex flex-wrap items-center gap-2" aria-label="Preset shirt colours">
             {PRESET_COLOURS.map((preset) => (
               <button
                 key={preset.value}
@@ -148,9 +148,9 @@ export default function TeamKitColourPicker({ teamId }: { teamId: string }) {
                 disabled={loading || saving}
                 title={preset.label}
                 aria-label={`Choose ${preset.label}`}
-                className={`h-7 w-7 rounded-full border-2 transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`h-7 w-7 shrink-0 rounded-full border-2 transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   selectedColour === preset.value
-                    ? "scale-110 border-sky-200"
+                    ? "scale-110 border-sky-200 ring-2 ring-sky-300/20"
                     : "border-white/20 hover:scale-105 hover:border-white/55"
                 }`}
                 style={{ backgroundColor: preset.value }}
@@ -158,41 +158,43 @@ export default function TeamKitColourPicker({ teamId }: { teamId: string }) {
             ))}
           </div>
 
-          <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-2.5 text-xs text-white/60">
-            Custom
-            <input
-              aria-label="Choose custom shirt colour"
-              type="color"
-              value={selectedColour}
-              onChange={(event) => setSelectedColour(event.target.value.toUpperCase())}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 text-xs text-white/60">
+              Custom
+              <input
+                aria-label="Choose custom shirt colour"
+                type="color"
+                value={selectedColour}
+                onChange={(event) => setSelectedColour(event.target.value.toUpperCase())}
+                disabled={loading || saving}
+                className="h-6 w-9 cursor-pointer rounded border-0 bg-transparent p-0 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={() => save(selectedColour)}
               disabled={loading || saving}
-              className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </label>
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-400 px-4 text-xs font-semibold text-black transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? "Saving…" : loading ? "Loading…" : "Save colour"}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => save(selectedColour)}
-            disabled={loading || saving}
-            className="inline-flex h-9 items-center justify-center rounded-lg bg-sky-400 px-3 text-xs font-semibold text-black transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? "Saving…" : loading ? "Loading…" : "Save"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => save(null)}
-            disabled={loading || saving || savedColour === null}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-white/65 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Clear
-          </button>
+            <button
+              type="button"
+              onClick={() => save(null)}
+              disabled={loading || saving || savedColour === null}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-medium text-white/65 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Clear
+            </button>
+          </div>
         </div>
       </div>
 
       {message ? (
         <p
-          className={`mt-2 text-xs ${
+          className={`mt-3 text-xs ${
             message.toLowerCase().includes("could not") ||
             message.toLowerCase().includes("valid")
               ? "text-red-200"
