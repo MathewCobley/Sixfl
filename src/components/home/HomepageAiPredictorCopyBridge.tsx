@@ -19,6 +19,33 @@ const COPY_REPLACEMENTS = new Map([
   ],
 ]);
 
+function addPredictorLogo(predictorSection: HTMLElement) {
+  if (predictorSection.dataset.predictorLogoApplied === "true") return;
+
+  const heading = Array.from(predictorSection.querySelectorAll("h2")).find(
+    (element) =>
+      element.textContent?.trim() ===
+      "Match predictions, powered by SIXFL AI Predictor.",
+  );
+
+  const currentBadge = heading?.previousElementSibling;
+  if (!(currentBadge instanceof HTMLElement)) return;
+
+  const logoWrap = document.createElement("div");
+  logoWrap.className =
+    "relative h-28 w-full max-w-xl overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/70 shadow-[0_18px_55px_rgba(0,0,0,0.35)] sm:h-36";
+
+  const logo = document.createElement("img");
+  logo.src = "/logos/sixfl-ai-predictor.png";
+  logo.alt = "SIXFL AI Predictor";
+  logo.className = "h-full w-full object-cover object-center";
+  logo.loading = "eager";
+
+  logoWrap.appendChild(logo);
+  currentBadge.replaceWith(logoWrap);
+  predictorSection.dataset.predictorLogoApplied = "true";
+}
+
 export default function HomepageAiPredictorCopyBridge() {
   const pathname = usePathname();
 
@@ -35,7 +62,9 @@ export default function HomepageAiPredictorCopyBridge() {
         ),
     );
 
-    if (!predictorSection) return;
+    if (!(predictorSection instanceof HTMLElement)) return;
+
+    addPredictorLogo(predictorSection);
 
     const walker = document.createTreeWalker(
       predictorSection,
@@ -48,10 +77,8 @@ export default function HomepageAiPredictorCopyBridge() {
       const replacement = COPY_REPLACEMENTS.get(currentText);
 
       if (replacement) {
-        currentNode.textContent = currentNode.textContent?.replace(
-          currentText,
-          replacement,
-        ) ?? replacement;
+        currentNode.textContent =
+          currentNode.textContent?.replace(currentText, replacement) ?? replacement;
       }
 
       currentNode = walker.nextNode();
