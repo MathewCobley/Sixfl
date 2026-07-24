@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 const REMINDER_ID = "sixfl-captain-contextual-reminder";
+const SIXFL_TV_NAV_LOGO_ATTR = "data-sixfl-tv-nav-logo";
 
 type ReminderConfig = {
   eyebrow: string;
@@ -65,6 +66,28 @@ function createReminderElement(config: ReminderConfig) {
   return wrapper;
 }
 
+function decorateSixflTvNav() {
+  const links = document.querySelectorAll<HTMLAnchorElement>(
+    '.captain-team-nav a[href*="/captain/team/"][href*="/tv"]',
+  );
+
+  for (const link of links) {
+    if (link.getAttribute(SIXFL_TV_NAV_LOGO_ATTR) === "true") continue;
+
+    link.textContent = "";
+    link.setAttribute(SIXFL_TV_NAV_LOGO_ATTR, "true");
+    link.setAttribute("aria-label", "SIXFL TV");
+    link.setAttribute("title", "SIXFL TV");
+
+    const image = document.createElement("img");
+    image.src = "/Sixfl-tv.png";
+    image.alt = "SIXFL TV";
+    image.className = "h-5 w-auto max-w-[6.5rem] object-contain";
+
+    link.appendChild(image);
+  }
+}
+
 export default function CaptainOnboardingReminderBridge() {
   const pathname = usePathname();
 
@@ -72,15 +95,21 @@ export default function CaptainOnboardingReminderBridge() {
     const existing = document.getElementById(REMINDER_ID);
     existing?.remove();
 
+    decorateSixflTvNav();
+    const frame = window.requestAnimationFrame(decorateSixflTvNav);
+    const observer = new MutationObserver(decorateSixflTvNav);
+    const header = document.querySelector(".captain-team-header");
+    if (header) observer.observe(header, { childList: true, subtree: true, attributes: true });
+
     const reminder = getReminder(pathname);
-    if (!reminder) return;
-
-    const main = document.querySelector(".captain-team-main");
-    if (!main) return;
-
-    main.prepend(createReminderElement(reminder));
+    if (reminder) {
+      const main = document.querySelector(".captain-team-main");
+      if (main) main.prepend(createReminderElement(reminder));
+    }
 
     return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
       document.getElementById(REMINDER_ID)?.remove();
     };
   }, [pathname]);
