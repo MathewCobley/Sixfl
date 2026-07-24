@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
 import TeamKitColourPicker from "@/components/admin/teams/TeamKitColourPicker";
+import TeamShinPadWarningPanel from "@/components/admin/teams/TeamShinPadWarningPanel";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -20,7 +21,10 @@ type TeamKickoffRuleRow = {
   latestKickoffTime: string | null;
 };
 
-function parseKickoffRestrictionTime(value: FormDataEntryValue | null, label: string) {
+function parseKickoffRestrictionTime(
+  value: FormDataEntryValue | null,
+  label: string,
+) {
   const raw = String(value ?? "").trim();
 
   if (!raw) return null;
@@ -161,7 +165,8 @@ export default async function AdminTeamDetailLayout({
               Admin preview tools
             </p>
             <p className="mt-1 text-sm text-white/60">
-              Open the admin version, true captain-only preview, player view and managed squad tools for this team.
+              Open the admin version, true captain-only preview, player view and
+              managed squad tools for this team.
             </p>
           </div>
 
@@ -212,6 +217,8 @@ export default async function AdminTeamDetailLayout({
         </div>
       </section>
 
+      <TeamShinPadWarningPanel teamId={team.id} />
+
       <TeamKitColourPicker teamId={team.id} />
 
       <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 shadow-[0_14px_50px_rgba(0,0,0,0.22)]">
@@ -224,11 +231,15 @@ export default async function AdminTeamDetailLayout({
               Earliest and latest kick-off times
             </h2>
             <p className="mt-1 text-sm leading-6 text-amber-50/70">
-              {getRestrictionSummary(team)} Fixture creation and generation will block matches outside this window.
+              {getRestrictionSummary(team)} Fixture creation and generation will
+              block matches outside this window.
             </p>
           </div>
 
-          <form action={updateTeamKickoffRulesAction} className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-2xl xl:grid-cols-[1fr_1fr_auto]">
+          <form
+            action={updateTeamKickoffRulesAction}
+            className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-2xl xl:grid-cols-[1fr_1fr_auto]"
+          >
             <input type="hidden" name="teamId" value={team.id} />
             <label className="space-y-1.5">
               <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
