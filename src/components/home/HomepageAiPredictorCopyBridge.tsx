@@ -33,16 +33,24 @@ function addPredictorLogo(predictorSection: HTMLElement) {
 
   const logoWrap = document.createElement("div");
   logoWrap.className =
-    "relative h-28 w-full max-w-xl overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/70 shadow-[0_18px_55px_rgba(0,0,0,0.35)] sm:h-36";
+    "relative -mt-2 h-32 w-full max-w-xl overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/70 shadow-[0_18px_55px_rgba(0,0,0,0.35)] sm:h-40";
 
   const logo = document.createElement("img");
   logo.src = "/logos/sixfl-ai-predictor.png";
   logo.alt = "SIXFL AI Predictor";
-  logo.className = "h-full w-full object-cover object-center";
+  logo.className = "h-full w-full object-cover object-[center_58%]";
   logo.loading = "eager";
 
   logoWrap.appendChild(logo);
   currentBadge.replaceWith(logoWrap);
+
+  const repeatedBadge = Array.from(
+    predictorSection.querySelectorAll<HTMLElement>("span"),
+  ).find(
+    (element) => element.textContent?.trim() === "SIXFL AI Predictor",
+  );
+  repeatedBadge?.remove();
+
   predictorSection.dataset.predictorLogoApplied = "true";
 }
 
