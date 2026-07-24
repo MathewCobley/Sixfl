@@ -30,12 +30,6 @@ export type ShinPadWarningActionState = {
   warningTeamIds: string[];
 };
 
-export const INITIAL_SHIN_PAD_WARNING_STATE: ShinPadWarningActionState = {
-  status: "idle",
-  message: "",
-  warningTeamIds: [],
-};
-
 type NightFixtureRow = {
   refereeNightId: string;
   refereeId: string;
@@ -199,27 +193,39 @@ function buildActionMessage(input: {
   const parts: string[] = [];
 
   if (input.sent > 0) {
-    parts.push(`${input.sent} shin pad warning email${input.sent === 1 ? " was" : "s were"} sent and recorded.`);
+    parts.push(
+      `${input.sent} shin pad warning email${input.sent === 1 ? " was" : "s were"} sent and recorded.`,
+    );
   }
 
   if (input.queued > 0) {
-    parts.push(`${input.queued} warning email${input.queued === 1 ? " is" : "s are"} queued for sending.`);
+    parts.push(
+      `${input.queued} warning email${input.queued === 1 ? " is" : "s are"} queued for sending.`,
+    );
   }
 
   if (input.unavailable > 0) {
-    parts.push(`${input.unavailable} warning${input.unavailable === 1 ? " was" : "s were"} recorded, but no usable team email was available.`);
+    parts.push(
+      `${input.unavailable} warning${input.unavailable === 1 ? " was" : "s were"} recorded, but no usable team email was available.`,
+    );
   }
 
   if (input.failed > 0) {
-    parts.push(`${input.failed} warning email${input.failed === 1 ? " could" : "s could"} not be sent; the warning record remains on the team.`);
+    parts.push(
+      `${input.failed} warning email${input.failed === 1 ? " could" : "s could"} not be sent; the warning record remains on the team.`,
+    );
   }
 
   if (input.existing > 0) {
-    parts.push(`${input.existing} selected team${input.existing === 1 ? " already has" : "s already have"} a shin pad warning for this fixture, so no duplicate was sent.`);
+    parts.push(
+      `${input.existing} selected team${input.existing === 1 ? " already has" : "s already have"} a shin pad warning for this fixture, so no duplicate was sent.`,
+    );
   }
 
   if (parts.length === 0 && input.created > 0) {
-    parts.push(`${input.created} shin pad warning${input.created === 1 ? " was" : "s were"} recorded.`);
+    parts.push(
+      `${input.created} shin pad warning${input.created === 1 ? " was" : "s were"} recorded.`,
+    );
   }
 
   return parts.join(" ") || "No new shin pad warning was created.";
@@ -281,8 +287,14 @@ export async function recordShinPadWarningAction(
     }
 
     const teams = new Map<string, TeamDetails>([
-      [fixture.homeTeamId, { id: fixture.homeTeamId, name: fixture.homeTeamName }],
-      [fixture.awayTeamId, { id: fixture.awayTeamId, name: fixture.awayTeamName }],
+      [
+        fixture.homeTeamId,
+        { id: fixture.homeTeamId, name: fixture.homeTeamName },
+      ],
+      [
+        fixture.awayTeamId,
+        { id: fixture.awayTeamId, name: fixture.awayTeamName },
+      ],
     ]);
     const validTeamIds = selectedTeamIds.filter((teamId) => teams.has(teamId));
 
@@ -322,8 +334,12 @@ export async function recordShinPadWarningAction(
       created += 1;
 
       try {
-        const { recipient, snapshot } = await upsertTeamNotificationRecipient(teamId);
-        const email = recipient.email?.trim() || snapshot.primaryContact.email?.trim() || null;
+        const { recipient, snapshot } =
+          await upsertTeamNotificationRecipient(teamId);
+        const email =
+          recipient.email?.trim() ||
+          snapshot.primaryContact.email?.trim() ||
+          null;
 
         if (!email) {
           unavailable += 1;
@@ -373,10 +389,6 @@ export async function recordShinPadWarningAction(
           email,
           queued: dispatch.status === NotificationDispatchStatus.QUEUED,
         });
-
-        if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
-          queueFailures += 1;
-        }
       } catch (error) {
         queueFailures += 1;
         console.error("Failed to queue shin pad warning email", {
@@ -391,7 +403,10 @@ export async function recordShinPadWarningAction(
       try {
         await processNotificationQueue(100);
       } catch (error) {
-        console.error("Failed to process shin pad warning emails immediately", error);
+        console.error(
+          "Failed to process shin pad warning emails immediately",
+          error,
+        );
       }
     }
 
