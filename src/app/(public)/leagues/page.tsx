@@ -320,18 +320,13 @@ export default async function LeaguesPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-400">
-              Current seasons
-            </p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
-              Leagues open now
-            </h2>
-          </div>
-          <p className="max-w-xl text-sm leading-6 text-white/60">
-            Previous seasons are kept in each league’s season archive so old tables and results can still be viewed.
+        <div className="mb-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-400">
+            Current seasons
           </p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+            Leagues open now
+          </h2>
         </div>
 
         {leagues.length === 0 ? (
