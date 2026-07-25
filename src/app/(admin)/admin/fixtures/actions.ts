@@ -4,3 +4,4 @@
 
 export * from "./actions-legacy";
 export { createFixtureAction } from "./create-fixture-action";
+export { updateFixtureAction } from "./update-fixture-action";
