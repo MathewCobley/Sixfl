@@ -7,6 +7,15 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
+type MissingFixtureWarning = {
+  key: string;
+  message: string;
+};
+
+type MissingFixtureResponse = {
+  warnings?: MissingFixtureWarning[];
+};
+
 function findHeading(texts: string[]) {
   return Array.from(document.querySelectorAll<HTMLHeadingElement>("h2")).find((heading) =>
     texts.includes(heading.textContent?.trim() ?? ""),
@@ -155,6 +164,72 @@ function ensureTeamIssuesButton(issueCards: HTMLElement[], onViewIssue: () => vo
   );
 }
 
+function clearMissingFixtureWarnings() {
+  document
+    .querySelectorAll<HTMLElement>("[data-night-board-missing-fixture-warning]")
+    .forEach((warning) => warning.remove());
+  document
+    .querySelectorAll<HTMLElement>("[data-night-board-missing-fixture-note]")
+    .forEach((note) => note.remove());
+  document
+    .querySelectorAll<HTMLElement>("[data-night-board-hidden-no-warnings]")
+    .forEach((message) => {
+      message.style.display = message.dataset.nightBoardPreviousDisplay ?? "";
+      delete message.dataset.nightBoardPreviousDisplay;
+      delete message.dataset.nightBoardHiddenNoWarnings;
+    });
+}
+
+function renderMissingFixtureWarnings(warnings: MissingFixtureWarning[]) {
+  clearMissingFixtureWarnings();
+  if (warnings.length === 0) return;
+
+  const warningsHeading = findHeading(["Warnings", "Warnings and potential issues"]);
+  const warningsCard = warningsHeading?.closest<HTMLElement>("section");
+  const warningsList = warningsHeading?.nextElementSibling;
+  if (!warningsCard || !(warningsList instanceof HTMLElement)) return;
+
+  const noWarningsMessage = Array.from(warningsList.children).find((element) =>
+    element.textContent?.trim().startsWith("No obvious pitch"),
+  );
+  if (noWarningsMessage instanceof HTMLElement) {
+    noWarningsMessage.dataset.nightBoardPreviousDisplay = noWarningsMessage.style.display;
+    noWarningsMessage.dataset.nightBoardHiddenNoWarnings = "true";
+    noWarningsMessage.style.display = "none";
+  }
+
+  for (const warning of warnings) {
+    const warningElement = document.createElement("div");
+    warningElement.dataset.nightBoardMissingFixtureWarning = warning.key;
+    warningElement.className =
+      "rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100";
+    warningElement.textContent = warning.message;
+    warningsList.appendChild(warningElement);
+  }
+
+  const note = document.createElement("p");
+  note.dataset.nightBoardMissingFixtureNote = "true";
+  note.className = "mt-2 text-xs leading-5 text-white/45";
+  note.textContent =
+    "The missing-fixture check looks across the full Monday-to-Sunday week and ignores venue filters. A bye or planned week off may be intentional.";
+  warningsCard.appendChild(note);
+}
+
+async function loadMissingFixtureWarnings(searchKey: string, signal: AbortSignal) {
+  const query = searchKey ? `?${searchKey}` : "";
+  const response = await fetch(
+    `/api/admin/night-board/missing-team-fixtures${query}`,
+    {
+      cache: "no-store",
+      signal,
+    },
+  );
+  if (!response.ok) throw new Error("Missing fixture warnings could not be loaded.");
+
+  const payload = (await response.json()) as MissingFixtureResponse;
+  return Array.isArray(payload.warnings) ? payload.warnings : [];
+}
+
 export default function NightBoardWarningsPositionBridge() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -163,6 +238,8 @@ export default function NightBoardWarningsPositionBridge() {
   useEffect(() => {
     if (pathname !== "/admin/night-board") return;
 
+    const controller = new AbortController();
+    let disposed = false;
     let issueIndex = 0;
     let frame = 0;
 
@@ -184,10 +261,30 @@ export default function NightBoardWarningsPositionBridge() {
       });
     }
 
-    frame = window.requestAnimationFrame(refreshLayout);
+    async function refreshMissingFixtureWarnings() {
+      try {
+        const warnings = await loadMissingFixtureWarnings(
+          searchKey,
+          controller.signal,
+        );
+        if (!disposed) renderMissingFixtureWarnings(warnings);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        if (!disposed) clearMissingFixtureWarnings();
+      }
+    }
+
+    frame = window.requestAnimationFrame(() => {
+      refreshLayout();
+      void refreshMissingFixtureWarnings();
+    });
 
     return () => {
+      disposed = true;
+      controller.abort();
       window.cancelAnimationFrame(frame);
+      clearMissingFixtureWarnings();
       document.querySelectorAll<HTMLElement>("[data-night-board-team-raised-issue-highlighted]").forEach((card) => {
         delete card.dataset.nightBoardTeamRaisedIssueHighlighted;
         clearIssueHighlight(card);
