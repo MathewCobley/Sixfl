@@ -19,7 +19,7 @@ import {
   upsertTeamWeekUnavailability,
 } from "@/lib/team-week-unavailability";
 
-function redirectToPage(teamId: string, query: string) {
+function redirectToPage(teamId: string, query: string): never {
   redirect(`/captain/team/${teamId}/weeks-unavailable${query}`);
 }
 
