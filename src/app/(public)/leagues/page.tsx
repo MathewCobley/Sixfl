@@ -172,14 +172,17 @@ async function getCurrentSeasonTeamCounts(leagueIds: string[]) {
     FROM (
       SELECT season_team."leagueId", season_team."teamId"
       FROM "LeagueSeasonTeam" season_team
+      JOIN "Team" season_member ON season_member."id" = season_team."teamId"
       WHERE season_team."isActive" = true
         AND season_team."leagueId" IN (${Prisma.join(leagueIds)})
+        AND COALESCE(season_member."isFixturePlaceholder", false) = false
 
       UNION
 
       SELECT team."leagueId", team."id" AS "teamId"
       FROM "Team" team
       WHERE team."leagueId" IN (${Prisma.join(leagueIds)})
+        AND COALESCE(team."isFixturePlaceholder", false) = false
     ) membership
     GROUP BY membership."leagueId"
   `);
