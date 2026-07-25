@@ -11,7 +11,7 @@ export const revalidate = 0;
 export const metadata = {
   title: "SIXFL | North Yorkshire 6-a-side football leagues",
   description:
-    "Find local SIXFL 6-a-side football leagues across North Yorkshire, including Harrogate, Wetherby and the North Yorkshire Heartlands. View fixtures and tables or register as a team, player or referee.",
+    "Find local SIXFL 6-a-side football leagues across North Yorkshire, including Harrogate, Wetherby, Northallerton and the North Yorkshire Heartlands. View fixtures and tables or register as a team, player or referee.",
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
@@ -22,11 +22,16 @@ const generalPlayerLink = "/register-interest?type=player";
 const generalRefereeLink = "/register-interest?type=referee";
 const wetherbyTeamLink = "/register-interest?type=team&area=Wetherby&night=Wednesday";
 const wetherbyPlayerLink = "/register-interest?type=player&area=Wetherby&night=Wednesday";
+const northallertonTeamLink =
+  "/register-interest?type=team&area=Northallerton&night=Wednesday";
+const northallertonPlayerLink =
+  "/register-interest?type=player&area=Northallerton&night=Wednesday";
 
-const leagueTypes = ["MEN’S LEAGUES", "WOMEN’S LEAGUES", "YOUTH LEAGUES"];
+const leagueTypes = ["MEN’S LEAGUES"];
 const launchAreas = [
   "Harrogate",
   "Wetherby",
+  "Northallerton",
   "North Yorkshire Heartlands",
   "Ripon",
   "York",
@@ -59,10 +64,21 @@ const areaCards = [
     featured: false,
   },
   {
+    eyebrow: "NORTHALLERTON LAUNCH",
+    title: "Northallerton Wednesday 6-a-side",
+    status: "Registrations open",
+    body: "Northallerton team entries are open for the upcoming Wednesday night 6-a-side league. Individual players and referees can also register interest.",
+    primaryLabel: "Register team",
+    primaryHref: northallertonTeamLink,
+    secondaryLabel: "Join as player",
+    secondaryHref: northallertonPlayerLink,
+    featured: false,
+  },
+  {
     eyebrow: "NORTH YORKSHIRE HEARTLANDS",
     title: "North Yorkshire Heartlands League",
     status: "New league forming",
-    body: "A new SIXFL league for Northallerton, Bedale, Richmond and the surrounding area. Teams and individual players can view the details and register now.",
+    body: "A new SIXFL league for Bedale, Richmond and the surrounding area. Teams and individual players can view the details and register now.",
     primaryLabel: "View & join",
     primaryHref: heartlandsLeagueLink,
     secondaryLabel: "Join as player",
@@ -167,7 +183,7 @@ export default async function HomePage() {
         <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
           <div className="max-w-5xl text-left">
             <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
-              Harrogate live now • New Heartlands League forming
+              Harrogate live now • New leagues forming
             </div>
 
             <h1 className="mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl sm:leading-[0.95] lg:text-7xl">
@@ -183,12 +199,9 @@ export default async function HomePage() {
             </p>
 
             <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
-              {leagueTypes.map((type, index) => (
+              {leagueTypes.map((type) => (
                 <span key={type} className="inline-flex items-center">
                   {type}
-                  {index < leagueTypes.length - 1 && (
-                    <span className="ml-4 text-white/25">•</span>
-                  )}
                 </span>
               ))}
             </div>
@@ -210,7 +223,11 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+          <div
+            className={`mt-10 grid gap-4 ${
+              areaCards.length === 4 ? "lg:grid-cols-2" : "lg:grid-cols-3"
+            }`}
+          >
             {areaCards.map((area) => (
               <AreaCard key={area.title} {...area} />
             ))}
@@ -254,7 +271,7 @@ export default async function HomePage() {
                   Get involved with SIXFL.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  Teams, individual players and referees can register interest for live leagues and new launch areas. Harrogate is live now, while Wetherby and the North Yorkshire Heartlands are open for registrations.
+                  Teams, individual players and referees can register interest for live leagues and new launch areas. Harrogate is live now, while Wetherby, Northallerton and the North Yorkshire Heartlands are open for registrations.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
