@@ -160,6 +160,10 @@ export async function listUpcomingTeamWeekUnavailability(input: {
 }) {
   await ensureTeamWeekUnavailabilityTable();
   const leagueIds = Array.from(new Set((input.leagueIds ?? []).filter(Boolean)));
+  const leagueFilter =
+    leagueIds.length > 0
+      ? Prisma.sql`AND COALESCE(u."leagueId", t."leagueId") IN (${Prisma.join(leagueIds)})`
+      : Prisma.sql``;
 
   return prisma.$queryRaw<TeamWeekUnavailabilityAdminRow[]>(Prisma.sql`
     SELECT
@@ -184,7 +188,7 @@ export async function listUpcomingTeamWeekUnavailability(input: {
     LEFT JOIN "User" usr ON usr."id" = u."submittedByUserId"
     WHERE u."weekStart" >= ${input.from}
       AND u."weekStart" < ${input.to}
-      ${leagueIds.length > 0 ? Prisma.sql`AND COALESCE(u."leagueId", t."leagueId") IN (${Prisma.join(leagueIds)})` : Prisma.empty}
+      ${leagueFilter}
     ORDER BY u."weekStart" ASC, l."name" ASC, t."name" ASC
   `);
 }
