@@ -5,6 +5,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 export type LeagueFormResult = "W" | "D" | "L";
 
@@ -78,9 +79,24 @@ function getOrCreateRow(
   return created;
 }
 
-async function getLeagueTableTeams(leagueId: string, options: LeagueTableOptions) {
+async function removeFixturePlaceholderTeams(teams: TableTeamRow[]) {
+  if (teams.length === 0) return teams;
+
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds(
+    teams.map((team) => team.id),
+  );
+
+  if (placeholderTeamIds.size === 0) return teams;
+
+  return teams.filter((team) => !placeholderTeamIds.has(team.id));
+}
+
+async function getLeagueTableTeams(
+  leagueId: string,
+  options: LeagueTableOptions,
+) {
   if (options.divisionId) {
-    return prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
+    const divisionTeams = await prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
       SELECT t."id", t."name", t."logoUrl"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
@@ -89,14 +105,18 @@ async function getLeagueTableTeams(leagueId: string, options: LeagueTableOptions
         AND lst."isActive" = true
       ORDER BY t."name" ASC
     `);
+
+    return removeFixturePlaceholderTeams(divisionTeams);
   }
 
   if (options.teamIds?.length) {
-    return prisma.team.findMany({
+    const selectedTeams = await prisma.team.findMany({
       where: { id: { in: options.teamIds } },
       orderBy: { name: "asc" },
       select: { id: true, name: true, logoUrl: true },
     });
+
+    return removeFixturePlaceholderTeams(selectedTeams);
   }
 
   const seasonTeams = await prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
@@ -109,14 +129,16 @@ async function getLeagueTableTeams(leagueId: string, options: LeagueTableOptions
   `);
 
   if (seasonTeams.length > 0) {
-    return seasonTeams;
+    return removeFixturePlaceholderTeams(seasonTeams);
   }
 
-  return prisma.team.findMany({
+  const legacyTeams = await prisma.team.findMany({
     where: { leagueId },
     orderBy: { name: "asc" },
     select: { id: true, name: true, logoUrl: true },
   });
+
+  return removeFixturePlaceholderTeams(legacyTeams);
 }
 
 export async function getLeagueTable(
@@ -156,7 +178,8 @@ export async function getLeagueTable(
     if (!fixture.result) continue;
     if (
       allowedTeamIds &&
-      (!allowedTeamIds.has(fixture.homeTeamId) || !allowedTeamIds.has(fixture.awayTeamId))
+      (!allowedTeamIds.has(fixture.homeTeamId) ||
+        !allowedTeamIds.has(fixture.awayTeamId))
     ) {
       continue;
     }
@@ -203,7 +226,9 @@ export async function getLeagueTable(
 
   rows.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    if (b.goalDifference !== a.goalDifference) {
+      return b.goalDifference - a.goalDifference;
+    }
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
     return a.teamName.localeCompare(b.teamName);
   });
