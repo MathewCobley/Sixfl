@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getTeamWeekUnavailabilityOverview } from "@/lib/team-week-unavailability-overview";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -139,7 +140,7 @@ export async function GET(request: Request) {
   }
 
   const weekRange = weekRangeFromInput(selectedDate);
-  const [leagues, weeklyFixtures] = await Promise.all([
+  const [leagues, weeklyFixtures, advanceNotices] = await Promise.all([
     prisma.league.findMany({
       where: { id: { in: relevantLeagueIds } },
       orderBy: { name: "asc" },
@@ -169,6 +170,11 @@ export async function GET(request: Request) {
         awayTeamId: true,
       },
     }),
+    getTeamWeekUnavailabilityOverview({
+      from: weekRange.start,
+      to: weekRange.end,
+      leagueIds: relevantLeagueIds,
+    }),
   ]);
 
   const scheduledTeamIdsByLeague = new Map<string, Set<string>>();
@@ -179,12 +185,52 @@ export async function GET(request: Request) {
     scheduledTeamIdsByLeague.set(fixture.leagueId, teamIds);
   }
 
+  const noticeByTeamId = new Map(
+    advanceNotices.map((notice) => [notice.teamId, notice]),
+  );
   const weekBeginning = formatWeekBeginning(weekRange.start);
-  const warnings = leagues.flatMap((league) => {
+
+  const advanceWarnings = advanceNotices.map((notice) => {
+    if (notice.status === "PUBLISHED_CONFLICT") {
+      return {
+        key: `advance-unavailability-published-conflict:${notice.id}`,
+        level: "red" as const,
+        leagueId: notice.leagueId,
+        teamId: notice.teamId,
+        teamName: notice.teamName,
+        message: `Advance unavailability conflict: ${notice.teamName} told SIXFL they cannot field a team for the week beginning ${weekBeginning}, but they have a published fixture. Contact the team and review the fixture.`,
+      };
+    }
+
+    if (notice.status === "DRAFT_CONFLICT") {
+      return {
+        key: `advance-unavailability-draft-conflict:${notice.id}`,
+        level: "amber" as const,
+        leagueId: notice.leagueId,
+        teamId: notice.teamId,
+        teamName: notice.teamName,
+        message: `Draft fixture conflict: ${notice.teamName} reported that they cannot field a team for the week beginning ${weekBeginning}, but a draft fixture still includes them. Fix it before publishing.`,
+      };
+    }
+
+    return {
+      key: `advance-unavailability-recorded:${notice.id}`,
+      level: "info" as const,
+      leagueId: notice.leagueId,
+      teamId: notice.teamId,
+      teamName: notice.teamName,
+      message: `Advance notice recorded: ${notice.teamName} cannot field a team for the week beginning ${weekBeginning}. No fixture is expected for them this week.`,
+    };
+  });
+
+  const missingFixtureWarnings = leagues.flatMap((league) => {
     const scheduledTeamIds = scheduledTeamIdsByLeague.get(league.id) ?? new Set<string>();
 
     return league.teams
-      .filter((team) => !scheduledTeamIds.has(team.id))
+      .filter(
+        (team) =>
+          !scheduledTeamIds.has(team.id) && !noticeByTeamId.has(team.id),
+      )
       .map((team) => {
         const leagueLabel = team.division?.name
           ? `${league.name} · ${team.division.name}`
@@ -192,6 +238,7 @@ export async function GET(request: Request) {
 
         return {
           key: `missing-weekly-fixture:${league.id}:${team.id}`,
+          level: "amber" as const,
           leagueId: league.id,
           teamId: team.id,
           teamName: team.name,
@@ -201,7 +248,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json(
-    { selectedDate, warnings },
+    { selectedDate, warnings: [...advanceWarnings, ...missingFixtureWarnings] },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
