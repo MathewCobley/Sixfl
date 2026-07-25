@@ -18,6 +18,7 @@ import HideImpossibleLeaguePositionBridge from "@/components/captain/HideImpossi
 import TeamAutoPayCopyBridge from "@/components/captain/TeamAutoPayCopyBridge";
 import NorthallertonWaitingListCopyBridge from "@/components/public/NorthallertonWaitingListCopyBridge";
 import SixflTvFixtureBridge from "@/components/SixflTvFixtureBridge";
+import TeamWeekUnavailabilityBridge from "@/components/TeamWeekUnavailabilityBridge";
 import Providers from "./providers";
 
 export const metadata = {
@@ -121,6 +122,7 @@ export default function RootLayout({
             <TeamAutoPayCopyBridge />
             <NorthallertonWaitingListCopyBridge />
             <SixflTvFixtureBridge />
+            <TeamWeekUnavailabilityBridge />
           </Suspense>
           {children}
         </Providers>
