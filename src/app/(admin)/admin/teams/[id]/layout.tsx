@@ -10,8 +10,10 @@ import TeamDetailRouteLayout from "@/components/admin/teams/TeamDetailRouteLayou
 import TeamKitColourPicker from "@/components/admin/teams/TeamKitColourPicker";
 import TeamOverviewOnly from "@/components/admin/teams/TeamOverviewOnly";
 import TeamShinPadWarningPanel from "@/components/admin/teams/TeamShinPadWarningPanel";
+import { getCurrentLeagueOptions } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { markTeamAsFixturePlaceholder } from "@/lib/teams/fixture-placeholders";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,8 +21,17 @@ export const revalidate = 0;
 type TeamKickoffRuleRow = {
   id: string;
   name: string;
+  leagueId: string | null;
   earliestKickoffTime: string | null;
   latestKickoffTime: string | null;
+  isFixturePlaceholder: boolean;
+  placeholderLeagueId: string | null;
+  placeholderLeagueName: string | null;
+  placeholderLeagueSeason: string | null;
+};
+
+type OccupiedPlaceholderLeagueRow = {
+  leagueId: string;
 };
 
 function parseKickoffRestrictionTime(
@@ -132,6 +143,68 @@ async function updateTeamKickoffRulesAction(formData: FormData) {
   redirect(`/admin/teams/${teamId}?saved=1`);
 }
 
+async function convertTeamToFixturePlaceholderAction(formData: FormData) {
+  "use server";
+
+  await requireAdmin();
+
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const leagueId = String(formData.get("leagueId") ?? "").trim();
+
+  if (!teamId) {
+    redirect("/admin/teams?error=missing_id");
+  }
+
+  if (!leagueId) {
+    redirect(`/admin/teams/${teamId}?error=placeholder_requires_league`);
+  }
+
+  const [team, league] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamId },
+      select: { id: true },
+    }),
+    prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, slug: true },
+    }),
+  ]);
+
+  if (!team) {
+    notFound();
+  }
+
+  if (!league) {
+    redirect(`/admin/teams/${teamId}?error=placeholder_requires_league`);
+  }
+
+  try {
+    await markTeamAsFixturePlaceholder({
+      teamId,
+      leagueId,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "This league already has a fixture placeholder team."
+    ) {
+      redirect(`/admin/teams/${teamId}?error=placeholder_exists`);
+    }
+
+    throw error;
+  }
+
+  revalidatePath("/admin/teams");
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  revalidatePath(`/leagues/${league.slug}`);
+  revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/fixtures/generate");
+  revalidatePath("/admin/night-board");
+
+  redirect(`/admin/teams/${teamId}?saved=1`);
+}
+
 export default async function AdminTeamDetailLayout({
   children,
   params,
@@ -142,21 +215,60 @@ export default async function AdminTeamDetailLayout({
   await requireAdmin();
 
   const { id } = await params;
-  const rows = await prisma.$queryRaw<TeamKickoffRuleRow[]>`
-    SELECT
-      "id",
-      "name",
-      "earliestKickoffTime",
-      "latestKickoffTime"
-    FROM "Team"
-    WHERE "id" = ${id}
-    LIMIT 1
-  `;
+  const [rows, leagues, occupiedPlaceholderRows] = await Promise.all([
+    prisma.$queryRaw<TeamKickoffRuleRow[]>`
+      SELECT
+        t."id",
+        t."name",
+        t."leagueId",
+        t."earliestKickoffTime",
+        t."latestKickoffTime",
+        COALESCE(t."isFixturePlaceholder", false) AS "isFixturePlaceholder",
+        placeholder_membership."leagueId" AS "placeholderLeagueId",
+        placeholder_membership."leagueName" AS "placeholderLeagueName",
+        placeholder_membership."leagueSeason" AS "placeholderLeagueSeason"
+      FROM "Team" t
+      LEFT JOIN LATERAL (
+        SELECT
+          lst."leagueId",
+          l."name" AS "leagueName",
+          l."season" AS "leagueSeason"
+        FROM "LeagueSeasonTeam" lst
+        JOIN "League" l ON l."id" = lst."leagueId"
+        WHERE lst."teamId" = t."id"
+          AND lst."isActive" = true
+        ORDER BY lst."updatedAt" DESC
+        LIMIT 1
+      ) placeholder_membership ON true
+      WHERE t."id" = ${id}
+      LIMIT 1
+    `,
+    getCurrentLeagueOptions(),
+    prisma.$queryRaw<OccupiedPlaceholderLeagueRow[]>`
+      SELECT DISTINCT lst."leagueId"
+      FROM "LeagueSeasonTeam" lst
+      JOIN "Team" t ON t."id" = lst."teamId"
+      WHERE lst."isActive" = true
+        AND t."isFixturePlaceholder" = true
+    `,
+  ]);
   const team = rows[0] ?? null;
 
   if (!team) {
     notFound();
   }
+
+  const occupiedLeagueIds = new Set(
+    occupiedPlaceholderRows.map((row) => row.leagueId),
+  );
+  const availablePlaceholderLeagues = leagues.filter(
+    (league) => !occupiedLeagueIds.has(league.id),
+  );
+  const placeholderLeagueLabel = team.placeholderLeagueName
+    ? `${team.placeholderLeagueName}${
+        team.placeholderLeagueSeason ? ` — ${team.placeholderLeagueSeason}` : ""
+      }`
+    : "League season not found";
 
   return (
     <div data-team-detail-shell className="space-y-5">
@@ -227,56 +339,142 @@ export default async function AdminTeamDetailLayout({
         <TeamKitColourPicker teamId={team.id} />
 
         <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 shadow-[0_14px_50px_rgba(0,0,0,0.22)]">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,640px)] xl:items-end">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
-                Kick-off rules
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-white">
-                Earliest and latest kick-off times
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-amber-50/70">
-                {getRestrictionSummary(team)} Fixture creation and generation will
-                block matches outside this window.
-              </p>
+          {team.isFixturePlaceholder ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
+                  Fixture placeholder
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-white">
+                  This team is the TBC fixture placeholder
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-amber-50/70">
+                  Assigned to {placeholderLeagueLabel}. It remains available in
+                  Admin fixture selectors but is excluded from public tables,
+                  normal team counts, payments, confirmations and predictions.
+                </p>
+              </div>
+              <span className="inline-flex w-fit rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-amber-100">
+                Placeholder active
+              </span>
             </div>
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,640px)] xl:items-end">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
+                  Fixture placeholder
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-white">
+                  Convert this existing team into TBC
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-amber-50/70">
+                  Use this only for a placeholder team. Conversion clears normal
+                  team contacts, recruitment settings and kick-off restrictions,
+                  and the team will no longer appear in public tables or counts.
+                  Only leagues without an existing placeholder are listed.
+                </p>
+              </div>
 
-            <form
-              action={updateTeamKickoffRulesAction}
-              className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-            >
-              <input type="hidden" name="teamId" value={team.id} />
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                  Earliest kick-off
-                </span>
-                <input
-                  name="earliestKickoffTime"
-                  type="time"
-                  defaultValue={team.earliestKickoffTime ?? ""}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
-                />
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                  Latest kick-off
-                </span>
-                <input
-                  name="latestKickoffTime"
-                  type="time"
-                  defaultValue={team.latestKickoffTime ?? ""}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
-                />
-              </label>
-              <button
-                type="submit"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:col-span-2 xl:col-span-1 xl:self-end"
-              >
-                Save rules
-              </button>
-            </form>
-          </div>
+              {availablePlaceholderLeagues.length > 0 ? (
+                <form
+                  action={convertTeamToFixturePlaceholderAction}
+                  className="grid w-full gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <input type="hidden" name="teamId" value={team.id} />
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                      Placeholder league
+                    </span>
+                    <select
+                      name="leagueId"
+                      required
+                      defaultValue={
+                        availablePlaceholderLeagues.some(
+                          (league) => league.id === team.leagueId,
+                        )
+                          ? team.leagueId ?? ""
+                          : ""
+                      }
+                      className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-amber-300/50"
+                    >
+                      <option value="">Select league season</option>
+                      {availablePlaceholderLeagues.map((league) => (
+                        <option key={league.id} value={league.id}>
+                          {league.name}
+                          {league.season ? ` — ${league.season}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="submit"
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-300 px-4 text-sm font-semibold text-black transition hover:bg-amber-200 sm:self-end"
+                  >
+                    Convert to TBC placeholder
+                  </button>
+                </form>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/60">
+                  Every current league already has a fixture placeholder.
+                </div>
+              )}
+            </div>
+          )}
         </section>
+
+        {!team.isFixturePlaceholder ? (
+          <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 shadow-[0_14px_50px_rgba(0,0,0,0.22)]">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,640px)] xl:items-end">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/75">
+                  Kick-off rules
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-white">
+                  Earliest and latest kick-off times
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-amber-50/70">
+                  {getRestrictionSummary(team)} Fixture creation and generation will
+                  block matches outside this window.
+                </p>
+              </div>
+
+              <form
+                action={updateTeamKickoffRulesAction}
+                className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              >
+                <input type="hidden" name="teamId" value={team.id} />
+                <label className="space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                    Earliest kick-off
+                  </span>
+                  <input
+                    name="earliestKickoffTime"
+                    type="time"
+                    defaultValue={team.earliestKickoffTime ?? ""}
+                    className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                  />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                    Latest kick-off
+                  </span>
+                  <input
+                    name="latestKickoffTime"
+                    type="time"
+                    defaultValue={team.latestKickoffTime ?? ""}
+                    className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300 sm:col-span-2 xl:col-span-1 xl:self-end"
+                >
+                  Save rules
+                </button>
+              </form>
+            </div>
+          </section>
+        ) : null}
       </TeamOverviewOnly>
 
       {children}
