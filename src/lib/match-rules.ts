@@ -40,8 +40,8 @@ export const matchRuleSections: MatchRuleSection[] = [
   {
     title: "Start of Play",
     points: [
-      "The choice of ends is decided by the toss of a coin or by referee instruction where time is limited.",
-      "The losing team takes the kick-off unless the referee instructs otherwise to keep the night on schedule.",
+      "The referee decides which team takes the kick-off, using a coin toss where time allows.",
+      "The other team chooses which end to attack, unless the referee gives different instructions to keep the night on schedule.",
     ],
   },
   {
