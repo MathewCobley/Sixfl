@@ -6,6 +6,7 @@ import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
 import { queueFixtureConfirmationSmsReminder } from "@/lib/fixtures/confirmation-reminders";
 import { prisma } from "@/lib/prisma";
+import { fixtureHasPlaceholderTeam } from "@/lib/teams/fixture-placeholders";
 
 type AutoFixtureConfirmationReminderMode = "auto72h" | "auto24h";
 
@@ -85,6 +86,10 @@ async function recordSkippedConfirmationReason(input: {
 }) {
   if (input.reason === "confirmed" || input.reason === "issue_raised") return;
 
+  // TBC fixtures deliberately have no captain confirmation rows. This avoids
+  // creating a placeholder confirmation record after the reminder helper skips it.
+  if (await fixtureHasPlaceholderTeam(input.fixtureId)) return;
+
   await prisma.fixtureCaptainConfirmation.upsert({
     where: {
       fixtureId_teamId: {
@@ -140,7 +145,9 @@ export async function runFixtureConfirmationReminderJob() {
 
   for (const fixture of publishedFixtures) {
     for (const teamId of [fixture.homeTeamId, fixture.awayTeamId]) {
-      const existing = fixture.captainConfirmations.find((item) => item.teamId === teamId);
+      const existing = fixture.captainConfirmations.find(
+        (item) => item.teamId === teamId,
+      );
       if (existing) continue;
 
       const result = await queueFixtureConfirmationSmsReminder({
@@ -225,7 +232,10 @@ export async function runFixtureConfirmationReminderJob() {
   };
 
   for (const fixture of fixtures) {
-    const mode = getReminderMode({ kickoffAt: fixture.kickoffAt, urgentCutoff });
+    const mode = getReminderMode({
+      kickoffAt: fixture.kickoffAt,
+      urgentCutoff,
+    });
 
     for (const teamId of [fixture.homeTeamId, fixture.awayTeamId]) {
       summary.scannedTeamFixtures += 1;
