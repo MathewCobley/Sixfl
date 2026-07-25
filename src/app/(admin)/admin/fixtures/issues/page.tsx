@@ -322,10 +322,7 @@ export default async function AdminFixtureIssuesPage({
               teamId: issue.teamId,
             });
             const issueReplies = repliesByIssue.get(sourceId) ?? [];
-            const isHomeTeam = issue.fixture.homeTeam.id === issue.teamId;
-            const opponent = isHomeTeam
-              ? issue.fixture.awayTeam.name
-              : issue.fixture.homeTeam.name;
+            const fixtureTitle = `${issue.fixture.homeTeam.name} vs ${issue.fixture.awayTeam.name}`;
             const captainName =
               issue.confirmedByUser?.name ?? issue.confirmedByUser?.email ?? "Captain";
 
@@ -339,8 +336,9 @@ export default async function AdminFixtureIssuesPage({
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-100">
-                            Issue raised
+                          <span className="inline-flex rounded-xl border border-amber-400/30 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-50">
+                            Issue raised by&nbsp;
+                            <span className="font-bold">{issue.team.name}</span>
                           </span>
                           <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/60">
                             {issue.fixture.league.season
@@ -350,7 +348,7 @@ export default async function AdminFixtureIssuesPage({
                         </div>
 
                         <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-                          {issue.team.name} vs {opponent}
+                          {fixtureTitle}
                         </h2>
                         <p className="mt-2 text-sm leading-6 text-white/55">
                           {formatKickoff(issue.fixture.kickoffAt)}
@@ -360,7 +358,7 @@ export default async function AdminFixtureIssuesPage({
                       </div>
 
                       <div className="text-sm text-white/45 md:text-right">
-                        <div>Raised by {captainName}</div>
+                        <div>Submitted by {captainName}</div>
                         <div>
                           {issue.issueRaisedAt
                             ? formatStamp(issue.issueRaisedAt)
@@ -473,11 +471,11 @@ export default async function AdminFixtureIssuesPage({
                         disabled={!emailReplyConfigured}
                         className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Send reply to team
+                        Send reply to {issue.team.name}
                       </button>
 
                       <p className="text-xs leading-5 text-white/45">
-                        This queues a transactional email to the team contact and stores the reply against this fixture issue.
+                        This queues a transactional email to the raising team’s contact and stores the reply against this fixture issue.
                       </p>
                     </form>
                   </div>
