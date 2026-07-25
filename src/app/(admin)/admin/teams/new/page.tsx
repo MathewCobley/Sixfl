@@ -5,12 +5,17 @@
 import Link from "next/link";
 import { getCurrentLeagueOptions } from "@/lib/current-leagues";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { createTeamAction } from "../actions";
+import { createTeamWithPlaceholderAction } from "./actions";
 
-export default async function AdminNewTeamPage() {
+type Props = {
+  searchParams?: Promise<{ error?: string }>;
+};
+
+export default async function AdminNewTeamPage({ searchParams }: Props) {
   await requireAdmin();
 
   const leagues = await getCurrentLeagueOptions();
+  const error = (await searchParams)?.error;
 
   return (
     <div className="space-y-6 p-6">
@@ -25,8 +30,20 @@ export default async function AdminNewTeamPage() {
         </Link>
       </div>
 
+      {error === "placeholder_requires_league" ? (
+        <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
+          A fixture placeholder must be assigned to a league season.
+        </div>
+      ) : null}
+
+      {error === "placeholder_exists" ? (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          That league already has a fixture placeholder team.
+        </div>
+      ) : null}
+
       <div className="rounded-xl border border-white/10 p-6">
-        <form action={createTeamAction} className="space-y-5">
+        <form action={createTeamWithPlaceholderAction} className="space-y-5">
           <div className="space-y-2">
             <label htmlFor="name" className="text-sm text-white/70">
               Team name
@@ -35,7 +52,7 @@ export default async function AdminNewTeamPage() {
               id="name"
               name="name"
               type="text"
-              placeholder="e.g. Ripon Rovers"
+              placeholder="e.g. Ripon Rovers or TBC"
               className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
               required
             />
@@ -63,6 +80,22 @@ export default async function AdminNewTeamPage() {
               Only current competition seasons are shown here. Previous seasons remain available from the season archive.
             </p>
           </div>
+
+          <label className="flex items-start gap-3 rounded-2xl border border-amber-400/25 bg-amber-500/[0.08] p-4">
+            <input
+              type="checkbox"
+              name="isFixturePlaceholder"
+              className="mt-1 h-4 w-4"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-amber-100">
+                Fixture placeholder team
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-amber-100/65">
+                Use this for a TBC fixture slot. It remains selectable in Admin fixtures but is excluded from public tables, team counts and normal team operations. Only one placeholder is allowed per league season.
+              </span>
+            </span>
+          </label>
 
           <div className="space-y-2">
             <label htmlFor="logoUrl" className="text-sm text-white/70">
@@ -189,7 +222,7 @@ export default async function AdminNewTeamPage() {
           </div>
 
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-white/70">
-            Claim code will be generated automatically when the team is created.
+            Claim code will be generated automatically when a normal team is created. Placeholder teams do not use captain or payment features.
           </div>
 
           <button
