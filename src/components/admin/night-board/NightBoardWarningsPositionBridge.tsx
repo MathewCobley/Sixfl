@@ -10,6 +10,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 type MissingFixtureWarning = {
   key: string;
   message: string;
+  level?: "info" | "amber" | "red";
 };
 
 type MissingFixtureResponse = {
@@ -180,6 +181,16 @@ function clearMissingFixtureWarnings() {
     });
 }
 
+function getWarningClasses(level: MissingFixtureWarning["level"]) {
+  if (level === "red") {
+    return "border-red-400/30 bg-red-500/12 text-red-100";
+  }
+  if (level === "info") {
+    return "border-sky-400/25 bg-sky-500/10 text-sky-100";
+  }
+  return "border-amber-400/25 bg-amber-500/10 text-amber-100";
+}
+
 function renderMissingFixtureWarnings(warnings: MissingFixtureWarning[]) {
   clearMissingFixtureWarnings();
   if (warnings.length === 0) return;
@@ -201,8 +212,7 @@ function renderMissingFixtureWarnings(warnings: MissingFixtureWarning[]) {
   for (const warning of warnings) {
     const warningElement = document.createElement("div");
     warningElement.dataset.nightBoardMissingFixtureWarning = warning.key;
-    warningElement.className =
-      "rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100";
+    warningElement.className = `rounded-2xl border px-4 py-3 text-sm ${getWarningClasses(warning.level)}`;
     warningElement.textContent = warning.message;
     warningsList.appendChild(warningElement);
   }
@@ -211,7 +221,7 @@ function renderMissingFixtureWarnings(warnings: MissingFixtureWarning[]) {
   note.dataset.nightBoardMissingFixtureNote = "true";
   note.className = "mt-2 text-xs leading-5 text-white/45";
   note.textContent =
-    "The missing-fixture check looks across the full Monday-to-Sunday week and ignores venue filters. A bye or planned week off may be intentional.";
+    "The weekly check covers Monday to Sunday and ignores venue filters. Advance weeks off are identified separately, while unreported missing fixtures remain potential issues.";
   warningsCard.appendChild(note);
 }
 
