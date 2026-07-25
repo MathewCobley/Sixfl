@@ -13,6 +13,7 @@ import {
 } from "@/lib/fixtures/aiPredictor";
 import { calculateFixtureWinChance, type FixtureWinChance, type WinChanceFixture } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 type StoredPredictionRow = {
   fixtureId: string;
@@ -128,8 +129,6 @@ function canReuseExistingPrediction(input: {
 
   if (existingSource === "openai") return true;
 
-  // If OpenAI is now configured, do not keep reusing an old fallback row.
-  // This is what caused the dashboard to keep showing generic text.
   return !hasOpenAiPredictorConfig();
 }
 
@@ -142,16 +141,21 @@ export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
 
   const rows = await prisma.$queryRaw<StoredPredictionRow[]>`
     SELECT
-      "fixtureId",
-      "headline",
-      "summary",
-      "source",
-      "inputHash",
-      "generatedAt",
-      "predictedHomeScore",
-      "predictedAwayScore"
-    FROM "FixtureAiPrediction"
-    WHERE "fixtureId" IN (${Prisma.join(ids)})
+      prediction."fixtureId",
+      prediction."headline",
+      prediction."summary",
+      prediction."source",
+      prediction."inputHash",
+      prediction."generatedAt",
+      prediction."predictedHomeScore",
+      prediction."predictedAwayScore"
+    FROM "FixtureAiPrediction" prediction
+    JOIN "Fixture" fixture ON fixture."id" = prediction."fixtureId"
+    JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
+    JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
+    WHERE prediction."fixtureId" IN (${Prisma.join(ids)})
+      AND COALESCE(home_team."isFixturePlaceholder", false) = false
+      AND COALESCE(away_team."isFixturePlaceholder", false) = false
   `;
 
   return new Map(rows.map((row) => [row.fixtureId, toStoredPreview(row)]));
@@ -233,6 +237,19 @@ async function generateAndSave(input: {
   force?: boolean;
 }) {
   if (input.fixture.status !== "SCHEDULED") return null;
+
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds([
+    input.fixture.homeTeam.id,
+    input.fixture.awayTeam.id,
+  ]);
+
+  if (placeholderTeamIds.size > 0) {
+    await prisma.$executeRaw`
+      DELETE FROM "FixtureAiPrediction"
+      WHERE "fixtureId" = ${input.fixture.id}
+    `;
+    return null;
+  }
 
   const winChance = calculateFixtureWinChance({
     homeTeamId: input.fixture.homeTeam.id,
