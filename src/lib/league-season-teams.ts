@@ -52,6 +52,7 @@ export async function ensureSeasonTeamRowsForLeague(
       NOW()
     FROM "Team" t
     WHERE t."leagueId" = ${leagueId}
+      AND COALESCE(t."isFixturePlaceholder", false) = false
     ON CONFLICT ("leagueId", "teamId") DO UPDATE
     SET
       "divisionId" = COALESCE("LeagueSeasonTeam"."divisionId", EXCLUDED."divisionId"),
@@ -64,10 +65,12 @@ export async function getLeagueSeasonTeams(input: {
   leagueId: string;
   divisionId?: string | null;
   activeOnly?: boolean;
+  includeFixturePlaceholders?: boolean;
 }) {
   await ensureSeasonTeamRowsForLeague(input.leagueId);
 
   const activeOnly = input.activeOnly ?? true;
+  const includeFixturePlaceholders = input.includeFixturePlaceholders ?? false;
 
   if (input.divisionId) {
     return prisma.$queryRaw<LeagueSeasonTeamRow[]>(Prisma.sql`
@@ -86,6 +89,7 @@ export async function getLeagueSeasonTeams(input: {
       WHERE lst."leagueId" = ${input.leagueId}
         AND lst."divisionId" = ${input.divisionId}
         AND (${activeOnly} = false OR lst."isActive" = true)
+        AND (${includeFixturePlaceholders} = true OR COALESCE(t."isFixturePlaceholder", false) = false)
       ORDER BY t."name" ASC
     `);
   }
@@ -105,6 +109,7 @@ export async function getLeagueSeasonTeams(input: {
     LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
     WHERE lst."leagueId" = ${input.leagueId}
       AND (${activeOnly} = false OR lst."isActive" = true)
+      AND (${includeFixturePlaceholders} = true OR COALESCE(t."isFixturePlaceholder", false) = false)
     ORDER BY t."name" ASC
   `);
 }
@@ -112,6 +117,7 @@ export async function getLeagueSeasonTeams(input: {
 export async function getLeagueSeasonTeamIds(input: {
   leagueId: string;
   divisionId?: string | null;
+  includeFixturePlaceholders?: boolean;
 }) {
   const rows = await getLeagueSeasonTeams(input);
   return rows.map((row) => row.teamId);
