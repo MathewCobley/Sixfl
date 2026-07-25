@@ -17,6 +17,7 @@ import {
 import { syncFixtureMatchFeeCharges } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 const FIXTURE_CONFIRMATION_CHASE_SOURCE_TYPES = [
   "FIXTURE_CONFIRMATION_CHASE_SMS",
@@ -202,16 +203,14 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
     const position = parseOptionalInt(formData.get("position"), "Game position");
     const pitch = parseOptionalString(formData.get("pitch"));
     const status = parseFixtureStatus(formData.get("status"));
-    const homeMatchFeePence = parseOptionalMoneyToPence(
+    const requestedHomeMatchFeePence = parseOptionalMoneyToPence(
       formData.get("homeMatchFeePounds"),
       "Team 1 fee",
     );
-    const awayMatchFeePence = parseOptionalMoneyToPence(
+    const requestedAwayMatchFeePence = parseOptionalMoneyToPence(
       formData.get("awayMatchFeePounds"),
       "Team 2 fee",
     );
-    const fixtureMatchFeePence =
-      Math.max(homeMatchFeePence ?? 0, awayMatchFeePence ?? 0) || null;
 
     if (homeTeamId === awayTeamId) {
       throw new Error("Team 1 and Team 2 cannot be the same team.");
@@ -224,6 +223,7 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
           select: {
             id: true,
             leagueId: true,
+            result: { select: { id: true } },
             league: { select: { slug: true } },
           },
         }),
@@ -275,10 +275,38 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
       throw new Error("Selected referee was not found.");
     }
 
+    const placeholderTeamIds = await getFixturePlaceholderTeamIds([
+      homeTeamId,
+      awayTeamId,
+    ]);
+    const hasFixturePlaceholder = placeholderTeamIds.size > 0;
+
+    if (hasFixturePlaceholder && fixture.result) {
+      throw new Error(
+        "Remove the existing result before changing this fixture to TBC.",
+      );
+    }
+
+    if (hasFixturePlaceholder && status === FixtureStatus.COMPLETED) {
+      throw new Error(
+        "Replace TBC with the confirmed team before completing the fixture.",
+      );
+    }
+
     if (status === FixtureStatus.SCHEDULED || status === FixtureStatus.COMPLETED) {
       assertLatestKickoffAllowed({ kickoffAt, team: homeTeam });
       assertLatestKickoffAllowed({ kickoffAt, team: awayTeam });
     }
+
+    const homeMatchFeePence = hasFixturePlaceholder
+      ? null
+      : requestedHomeMatchFeePence;
+    const awayMatchFeePence = hasFixturePlaceholder
+      ? null
+      : requestedAwayMatchFeePence;
+    const fixtureMatchFeePence = hasFixturePlaceholder
+      ? null
+      : Math.max(homeMatchFeePence ?? 0, awayMatchFeePence ?? 0) || null;
 
     await prisma.$transaction(async (tx) => {
       await tx.fixture.update({
@@ -298,6 +326,16 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
         },
       });
 
+      if (hasFixturePlaceholder) {
+        await tx.fixtureCaptainConfirmation.deleteMany({
+          where: { fixtureId },
+        });
+        await tx.$executeRaw(Prisma.sql`
+          DELETE FROM "FixtureAiPrediction"
+          WHERE "fixtureId" = ${fixtureId}
+        `);
+      }
+
       await syncFixtureMatchFeeCharges({
         db: tx,
         fixtureId,
@@ -312,11 +350,16 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
       });
     });
 
-    if (status === FixtureStatus.POSTPONED || status === FixtureStatus.CANCELLED) {
+    if (
+      hasFixturePlaceholder ||
+      status === FixtureStatus.POSTPONED ||
+      status === FixtureStatus.CANCELLED
+    ) {
       await cancelQueuedFixtureConfirmationChases({
         fixtureId,
-        reason:
-          status === FixtureStatus.POSTPONED
+        reason: hasFixturePlaceholder
+          ? "Fixture contains TBC and does not require team confirmation yet."
+          : status === FixtureStatus.POSTPONED
             ? "Fixture was postponed before queued confirmation SMS was sent."
             : "Fixture was cancelled before queued confirmation SMS was sent.",
       });
