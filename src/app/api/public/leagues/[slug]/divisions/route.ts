@@ -67,7 +67,13 @@ function buildTable(teams: TeamRow[], fixtures: FixtureRow[]): TableRow[] {
   }
 
   for (const fixture of fixtures) {
-    if (fixture.status !== "COMPLETED" || fixture.homeScore === null || fixture.awayScore === null) continue;
+    if (
+      fixture.status !== "COMPLETED" ||
+      fixture.homeScore === null ||
+      fixture.awayScore === null
+    ) {
+      continue;
+    }
 
     const home = rows.get(fixture.homeTeamId);
     const away = rows.get(fixture.awayTeamId);
@@ -97,10 +103,15 @@ function buildTable(teams: TeamRow[], fixtures: FixtureRow[]): TableRow[] {
   }
 
   return Array.from(rows.values())
-    .map((row) => ({ ...row, goalDifference: row.goalsFor - row.goalsAgainst }))
+    .map((row) => ({
+      ...row,
+      goalDifference: row.goalsFor - row.goalsAgainst,
+    }))
     .sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
-      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+      if (b.goalDifference !== a.goalDifference) {
+        return b.goalDifference - a.goalDifference;
+      }
       if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
       return a.team.name.localeCompare(b.team.name);
     });
@@ -111,7 +122,9 @@ function shouldShowDivisionTables(fixtures: FixtureRow[]) {
     return true;
   }
 
-  const hasAnyDivisionFixture = fixtures.some((fixture) => Boolean(fixture.divisionId));
+  const hasAnyDivisionFixture = fixtures.some((fixture) =>
+    Boolean(fixture.divisionId),
+  );
   const hasCompletedLegacyResults = fixtures.some(
     (fixture) =>
       fixture.status === "COMPLETED" &&
@@ -159,6 +172,7 @@ export async function GET(
         JOIN "Team" t ON t."id" = lst."teamId"
         WHERE lst."leagueId" = ${league.id}
           AND lst."isActive" = true
+          AND COALESCE(t."isFixturePlaceholder", false) = false
         ORDER BY t."name" ASC
       `),
       prisma.$queryRaw<FixtureRow[]>(Prisma.sql`
@@ -194,12 +208,17 @@ export async function GET(
     }
 
     const payload = divisions.map((division) => {
-      const divisionTeams = teams.filter((team) => team.divisionId === division.id);
+      const divisionTeams = teams.filter(
+        (team) => team.divisionId === division.id,
+      );
       const divisionTeamIds = new Set(divisionTeams.map((team) => team.id));
       const divisionFixtures = fixtures.filter((fixture) => {
         if (fixture.divisionId === division.id) return true;
         if (fixture.divisionId) return false;
-        return divisionTeamIds.has(fixture.homeTeamId) && divisionTeamIds.has(fixture.awayTeamId);
+        return (
+          divisionTeamIds.has(fixture.homeTeamId) &&
+          divisionTeamIds.has(fixture.awayTeamId)
+        );
       });
       const upcomingFixtures = divisionFixtures
         .filter((fixture) => fixture.status === "SCHEDULED")
@@ -225,7 +244,10 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ league: { id: league.id, name: league.name }, divisions: payload });
+    return NextResponse.json({
+      league: { id: league.id, name: league.name },
+      divisions: payload,
+    });
   } catch {
     return NextResponse.json({ divisions: [] });
   }
