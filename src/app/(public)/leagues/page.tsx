@@ -382,7 +382,10 @@ export default async function LeaguesPage() {
                     {league.name}
                   </h3>
                   <p className="mt-3 text-sm leading-6 text-white/65">
-                    {league.venue} · {league.teams} team{league.teams === 1 ? "" : "s"}
+                    {league.venue} ·{" "}
+                    {league.teams < 3
+                      ? "building"
+                      : `${league.teams} team${league.teams === 1 ? "" : "s"}`}
                   </p>
 
                   <div className={`mt-5 inline-flex rounded-full px-5 py-3 text-sm font-black text-black transition ${league.button}`}>
