@@ -12,13 +12,8 @@ type LeagueVideoRow = {
   advertVideoEnabled: boolean;
 };
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ slug: string }> },
-) {
-  const { slug } = await params;
-
-  const rows = await prisma.$queryRaw<LeagueVideoRow[]>(Prisma.sql`
+async function findLeagueVideo(slug: string) {
+  const exactRows = await prisma.$queryRaw<LeagueVideoRow[]>(Prisma.sql`
     SELECT
       "advertVideoKey",
       "advertVideoFilename",
@@ -28,7 +23,36 @@ export async function GET(
       AND "isActive" = true
     LIMIT 1
   `);
-  const league = rows[0] ?? null;
+
+  if (exactRows[0] || slug.toLowerCase() !== "heartlands") {
+    return exactRows[0] ?? null;
+  }
+
+  const aliasRows = await prisma.$queryRaw<LeagueVideoRow[]>(Prisma.sql`
+    SELECT
+      "advertVideoKey",
+      "advertVideoFilename",
+      COALESCE("advertVideoEnabled", false) AS "advertVideoEnabled"
+    FROM "League"
+    WHERE "isActive" = true
+      AND (
+        LOWER("slug") LIKE '%heartlands%'
+        OR LOWER("name") LIKE '%heartlands%'
+        OR LOWER(COALESCE("area", '')) LIKE '%heartlands%'
+      )
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  `);
+
+  return aliasRows[0] ?? null;
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  const { slug } = await params;
+  const league = await findLeagueVideo(slug);
 
   if (!league?.advertVideoKey || !league.advertVideoEnabled) {
     return new Response("Video not found.", { status: 404 });
