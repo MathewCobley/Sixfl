@@ -142,6 +142,7 @@ export default function CaptainAdditionalCaptainBridge() {
     const teamId = getCaptainSquadTeamId(pathname);
     if (!teamId) return;
 
+    const confirmedTeamId = teamId;
     let frame = 0;
     let attempts = 0;
     let disposed = false;
@@ -150,7 +151,7 @@ export default function CaptainAdditionalCaptainBridge() {
       if (disposed) return;
       attempts += 1;
 
-      const installed = installAdditionalCaptainForm(teamId);
+      const installed = installAdditionalCaptainForm(confirmedTeamId);
       if (!installed && attempts < 30) {
         frame = window.requestAnimationFrame(install);
       }
