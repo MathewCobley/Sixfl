@@ -117,18 +117,15 @@ function createSignedRequest(input: SignedRequestInput) {
     `AWS4-HMAC-SHA256 Credential=${config.accessKeyId}/${credentialScope}, ` +
     `SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-  return {
-    url,
-    headers: {
-      Authorization: authorization,
-      "x-amz-content-sha256": input.payloadHash,
-      "x-amz-date": amzDate,
-      ...(config.sessionToken
-        ? { "x-amz-security-token": config.sessionToken }
-        : {}),
-      ...(input.extraHeaders ?? {}),
-    },
-  };
+  const headers = new Headers(input.extraHeaders);
+  headers.set("Authorization", authorization);
+  headers.set("x-amz-content-sha256", input.payloadHash);
+  headers.set("x-amz-date", amzDate);
+  if (config.sessionToken) {
+    headers.set("x-amz-security-token", config.sessionToken);
+  }
+
+  return { url, headers };
 }
 
 async function assertStorageResponse(response: Response, action: string) {
@@ -158,7 +155,7 @@ export async function uploadRailwayObject(input: {
   const response = await fetch(request.url, {
     method: "PUT",
     headers: request.headers,
-    body: input.body,
+    body: input.body as unknown as BodyInit,
   });
 
   await assertStorageResponse(response, "Video upload");
