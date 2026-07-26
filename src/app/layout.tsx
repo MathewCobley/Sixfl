@@ -12,6 +12,7 @@ import NightBoardPitchSheetsLink from "@/components/admin/night-board/NightBoard
 import NightBoardTeamIssuesPanel from "@/components/admin/night-board/NightBoardTeamIssuesPanel";
 import NightBoardWarningsPositionBridge from "@/components/admin/night-board/NightBoardWarningsPositionBridge";
 import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
+import CaptainAdditionalCaptainBridge from "@/components/captain/CaptainAdditionalCaptainBridge";
 import CaptainFixturesDeduplicateBridge from "@/components/captain/CaptainFixturesDeduplicateBridge";
 import CaptainHeaderLeaguePositionBridge from "@/components/captain/CaptainHeaderLeaguePositionBridge";
 import HideImpossibleLeaguePositionBridge from "@/components/captain/HideImpossibleLeaguePositionBridge";
@@ -115,6 +116,7 @@ export default function RootLayout({
             <NightBoardPitchSheetsLink />
             <NightBoardWarningsPositionBridge />
             <AdminPaymentsPageBridge />
+            <CaptainAdditionalCaptainBridge />
             <CaptainFixturesDeduplicateBridge />
             <CaptainHeaderLeaguePositionBridge />
             <HideImpossibleLeaguePositionBridge />
