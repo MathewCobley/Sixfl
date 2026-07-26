@@ -315,6 +315,10 @@ export default async function CaptainTeamLayout({
     { href: `/captain/team/${teamid}/player-payments`, label: "Squad payments" },
     { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
+    {
+      href: `/captain/team/${teamid}/weeks-unavailable`,
+      label: "Weeks unavailable",
+    },
     { href: `/captain/team/${teamid}/whatsapp`, label: "WhatsApp" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
