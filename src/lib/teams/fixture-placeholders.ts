@@ -101,6 +101,75 @@ export async function getLeagueFixturePlaceholderTeam(
   return rows[0] ?? null;
 }
 
+async function suppressFixturePlaceholderNotifications(
+  teamId: string,
+  client: RawDbClient,
+) {
+  await client.$executeRaw(Prisma.sql`
+    UPDATE "NotificationPreference"
+    SET
+      "emailEnabled" = false,
+      "smsEnabled" = false,
+      "urgentSmsEnabled" = false,
+      "marketingEmailEnabled" = false,
+      "marketingSmsEnabled" = false,
+      "updatedAt" = NOW()
+    WHERE "recipientId" IN (
+      SELECT "id"
+      FROM "NotificationRecipient"
+      WHERE "sourceType" = 'TEAM'
+        AND "sourceId" = ${teamId}
+    )
+  `);
+
+  await client.$executeRaw(Prisma.sql`
+    UPDATE "NotificationDispatch"
+    SET
+      "status" = 'CANCELLED',
+      "cancelledAt" = NOW(),
+      "failureReason" = 'Fixture placeholder teams do not receive notifications.',
+      "updatedAt" = NOW()
+    WHERE "recipientId" IN (
+      SELECT "id"
+      FROM "NotificationRecipient"
+      WHERE "sourceType" = 'TEAM'
+        AND "sourceId" = ${teamId}
+    )
+      AND "status" IN ('QUEUED', 'PROCESSING')
+  `);
+
+  await client.$executeRaw(Prisma.sql`
+    UPDATE "NotificationRecipient"
+    SET
+      "displayName" = 'TBC placeholder',
+      "email" = NULL,
+      "phone" = NULL,
+      "emailNormalized" = NULL,
+      "phoneNormalized" = NULL,
+      "marketingEmailOptIn" = false,
+      "marketingSmsOptIn" = false,
+      "transactionalEmailOptIn" = false,
+      "transactionalSmsOptIn" = false,
+      "isSuppressed" = true,
+      "suppressionReason" = 'Fixture placeholder teams do not receive notifications.',
+      "lastSyncedAt" = NOW(),
+      "updatedAt" = NOW()
+    WHERE "sourceType" = 'TEAM'
+      AND "sourceId" = ${teamId}
+  `);
+
+  await client.$executeRaw(Prisma.sql`
+    UPDATE "MessageThread"
+    SET
+      "teamId" = NULL,
+      "status" = 'ARCHIVED',
+      "unreadForAdminCount" = 0,
+      "unreadForCaptainCount" = 0,
+      "updatedAt" = NOW()
+    WHERE "teamId" = ${teamId}
+  `);
+}
+
 export async function markTeamAsFixturePlaceholder(input: {
   teamId: string;
   leagueId: string;
@@ -113,9 +182,12 @@ export async function markTeamAsFixturePlaceholder(input: {
     throw new Error("This league already has a fixture placeholder team.");
   }
 
+  const placeholderClaimCode = `TBC-${randomUUID().slice(0, 12).toUpperCase()}`;
+
   await client.$executeRaw(Prisma.sql`
     UPDATE "Team"
     SET
+      "claimCode" = ${placeholderClaimCode},
       "isFixturePlaceholder" = true,
       "leagueId" = NULL,
       "divisionId" = NULL,
@@ -130,9 +202,32 @@ export async function markTeamAsFixturePlaceholder(input: {
       "secondaryContactEmail" = NULL,
       "secondaryContactPhone" = NULL,
       "latestKickoffTime" = NULL,
+      "createdByUserId" = NULL,
+      "captainUserId" = NULL,
+      "captainLinkedAt" = NULL,
+      "captainLinkedSource" = NULL,
+      "captainInviteSentAt" = NULL,
+      "captainInviteSentTo" = NULL,
+      "captainClaimedAt" = NULL,
+      "captainClaimSource" = NULL,
       "updatedAt" = NOW()
     WHERE "id" = ${input.teamId}
   `);
+
+  await client.$executeRaw(Prisma.sql`
+    DELETE FROM "TeamMember"
+    WHERE "teamId" = ${input.teamId}
+  `);
+
+  await client.$executeRaw(Prisma.sql`
+    UPDATE "InterestLead"
+    SET
+      "convertedTeamId" = NULL,
+      "updatedAt" = NOW()
+    WHERE "convertedTeamId" = ${input.teamId}
+  `);
+
+  await suppressFixturePlaceholderNotifications(input.teamId, client);
 
   await client.$executeRaw(Prisma.sql`
     INSERT INTO "LeagueSeasonTeam" (
