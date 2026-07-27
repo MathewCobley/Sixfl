@@ -84,7 +84,8 @@ function decorateSixflTvNav() {
     const image = document.createElement("img");
     image.src = "/Sixfl-tv.png";
     image.alt = "SIXFL TV";
-    image.className = "h-5 w-auto max-w-[6.5rem] object-contain";
+    image.className =
+      "h-5 w-auto max-w-[6.5rem] scale-[1.15] object-contain";
 
     link.appendChild(image);
   }
