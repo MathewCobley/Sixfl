@@ -26,6 +26,7 @@ type AdminSidebarProps = {
   name?: string | null;
   email?: string | null;
   unreadMessagingCount?: number;
+  openDisputeCount?: number;
 };
 
 const navigationGroups = [
@@ -323,6 +324,7 @@ export default function AdminSidebar({
   name,
   email,
   unreadMessagingCount = 0,
+  openDisputeCount = 0,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const activeHref = getActiveHref(pathname);
@@ -352,7 +354,10 @@ export default function AdminSidebar({
                   {group.items.map((item) => {
                     const active = activeHref === item.href;
                     const Icon = item.icon;
-                    const showBadge = item.href === "/admin/messaging" && unreadMessagingCount > 0;
+                    const showMessageBadge =
+                      item.href === "/admin/messaging" && unreadMessagingCount > 0;
+                    const showDisputeAlert =
+                      item.href === "/admin/results" && openDisputeCount > 0;
 
                     return (
                       <Link key={item.href} href={item.href} className={navItemClasses(Boolean(active))}>
@@ -370,9 +375,18 @@ export default function AdminSidebar({
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1 truncate text-[10px] font-semibold leading-tight">
                             <span className="truncate">{item.name}</span>
-                            {showBadge ? (
+                            {showMessageBadge ? (
                               <span className="rounded-full bg-red-500 px-1 py-0.5 text-[7px] font-bold text-white">
                                 {unreadMessagingCount}
+                              </span>
+                            ) : null}
+                            {showDisputeAlert ? (
+                              <span
+                                title={`${openDisputeCount} unresolved dispute${openDisputeCount === 1 ? "" : "s"}`}
+                                aria-label={`${openDisputeCount} unresolved dispute${openDisputeCount === 1 ? "" : "s"}`}
+                                className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-red-500 text-[8px] font-black leading-none text-white shadow-[0_0_10px_rgba(239,68,68,0.65)]"
+                              >
+                                !
                               </span>
                             ) : null}
                           </span>
