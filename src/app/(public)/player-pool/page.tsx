@@ -3,6 +3,7 @@
 // ========================================
 
 import type { Metadata } from "next";
+import Image from "next/image";
 
 import PlayerPoolProfileForm from "@/components/player-pool/PlayerPoolProfileForm";
 
@@ -26,7 +27,17 @@ export default async function PlayerPoolPage({
       <div className="mx-auto max-w-5xl">
         <section className="overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] shadow-[0_28px_100px_rgba(0,0,0,0.48)]">
           <div className="border-b border-white/10 px-6 py-8 sm:px-9 sm:py-10">
-            <div className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
+            <div className="relative h-24 w-full max-w-md sm:h-28">
+              <Image
+                src="/logos/sixfl player pool .png"
+                alt="SIXFL PlayerPool"
+                fill
+                priority
+                sizes="(max-width: 640px) 90vw, 448px"
+                className="object-contain object-left"
+              />
+            </div>
+            <div className="mt-5 inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
               SIXFL PlayerPool
             </div>
             <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-5xl">
