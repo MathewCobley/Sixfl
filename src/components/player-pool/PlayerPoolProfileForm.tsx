@@ -94,7 +94,7 @@ function CheckboxCards({
 }: {
   legend: string;
   name: string;
-  options: Array<string | readonly [string, string]>;
+  options: ReadonlyArray<string | readonly [string, string]>;
   defaults?: string[];
 }) {
   const selected = new Set(defaults ?? []);
@@ -104,8 +104,8 @@ function CheckboxCards({
       <legend className="text-sm font-semibold text-white">{legend}</legend>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {options.map((option) => {
-          const value = Array.isArray(option) ? option[0] : option;
-          const label = Array.isArray(option) ? option[1] : option;
+          const value = typeof option === "string" ? option : option[0];
+          const label = typeof option === "string" ? option : option[1];
 
           return (
             <label
