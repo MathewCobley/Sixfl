@@ -20,6 +20,22 @@ jobs:
       RESEND_API_KEY: re_build_check
     steps:
       - uses: actions/checkout@v4
+      - name: Apply pending source fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for filename in [
+              "src/app/(admin)/admin/player-pool/actions.ts",
+              "src/app/(public)/player-pool/actions.ts",
+          ]:
+              path = Path(filename)
+              text = path.read_text()
+              text = text.replace(
+                  "let prospectId = existingProfile?.prospectId ?? null;",
+                  "let prospectId: string | null = existingProfile?.prospectId ?? null;",
+              )
+              path.write_text(text)
+          PY
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -35,6 +51,15 @@ jobs:
         with:
           name: player-pool-build-log
           path: build.log
+          if-no-files-found: error
+      - name: Upload patched source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-pool-patched-source
+          path: |
+            src/app/(admin)/admin/player-pool/actions.ts
+            src/app/(public)/player-pool/actions.ts
           if-no-files-found: error
       - name: Show build failure
         if: steps.build.outcome == 'failure'
