@@ -4,10 +4,15 @@
 
 "use server";
 
-import { Prisma } from "@prisma/client";
+import {
+  NotificationAudience,
+  NotificationRecipientSourceType,
+  Prisma,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { sendEmail } from "@/lib/email";
 import {
   PLAYER_POOL_PROFILE_STATUSES,
@@ -20,8 +25,13 @@ import {
   normalizePlayerPoolEmail,
   splitPlayerPoolName,
 } from "@/lib/player-pool/storage";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+
+const PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY =
+  "player-pool-profile-invite-email";
 
 type ExistingProfileRow = {
   id: string;
@@ -72,7 +82,7 @@ function formatNights(value: unknown) {
 }
 
 export async function sendPlayerPoolProfileInviteAction(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   await ensurePlayerPoolTables();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
@@ -178,24 +188,59 @@ export async function sendPlayerPoolProfileInviteAction(formData: FormData) {
   `;
 
   const profileUrl = `${getPlayerPoolBaseUrl()}/player-pool/profile/${profileToken}`;
-
-  await sendEmail({
-    to: email,
-    subject: "Complete your SIXFL PlayerPool profile",
-    text: `Hi ${firstName},\n\nYou registered as a player with SIXFL. Complete your short PlayerPool profile so relevant teams can see your age group, positions, football experience and availability.\n\nYour name and contact details remain private until you agree to an introduction.\n\nComplete your profile: ${profileUrl}\n\nSIXFL\n6-a-side. Done properly.`,
-    html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111">
-        <h2>Join SIXFL PlayerPool</h2>
-        <p>Hi ${firstName},</p>
-        <p>You registered as a player with SIXFL. Complete your short PlayerPool profile so relevant teams can see your age group, positions, football experience and availability.</p>
-        <p><strong>Your name, email address and mobile number remain private</strong> until you agree to an introduction.</p>
-        <p><a href="${profileUrl}" style="display:inline-block;background:#10b981;color:#000;padding:12px 20px;border-radius:999px;text-decoration:none;font-weight:700">Complete my PlayerPool profile</a></p>
-        <p>SIXFL<br>6-a-side. Done properly.</p>
-      </div>
-    `,
+  const displayName = lead.contactName?.trim() || fullName(firstName, lastName) || email;
+  const recipient = await upsertNotificationRecipient({
+    sourceType: NotificationRecipientSourceType.GENERAL,
+    sourceId: `player-pool-profile:${profileId}`,
+    audience: NotificationAudience.PLAYER,
+    displayName,
+    email,
+    phone: lead.phone,
+    transactionalEmailOptIn: true,
+    transactionalSmsOptIn: true,
+    marketingEmailOptIn: false,
+    marketingSmsOptIn: false,
+    metadata: {
+      entityType: "PLAYER_POOL_PROFILE",
+      profileId,
+      prospectId,
+      leadId: lead.id,
+      publicCode,
+      leagueId: lead.leagueId,
+    },
   });
 
+  const dispatch = await queueNotificationFromTemplate({
+    templateKey: PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY,
+    recipientId: recipient.id,
+    variables: {
+      firstName: firstName || "there",
+      fullName: displayName,
+      profileUrl,
+      publicCode,
+      area: lead.area || "",
+      leagueName: lead.league?.name || "SIXFL PlayerPool",
+    },
+    sourceType: "PLAYER_POOL_PROFILE_INVITE",
+    sourceId: profileId,
+    metadata: {
+      origin: "player_pool_profile_invite",
+      originLabel: "PlayerPool profile invitation email",
+      profileId,
+      prospectId,
+      leadId: lead.id,
+      publicCode,
+      leagueId: lead.leagueId,
+      ctaUrl: profileUrl,
+    },
+    createdByUserId: user?.id ?? null,
+  });
+
+  await logNotificationDispatchToThread({ dispatch, recipient });
+
   revalidatePath("/admin/player-pool");
+  revalidatePath("/admin/templates");
+  revalidatePath("/admin/messaging");
   redirect(adminPath("?saved=invite-sent"));
 }
 
