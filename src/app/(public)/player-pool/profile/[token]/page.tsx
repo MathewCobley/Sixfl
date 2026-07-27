@@ -47,7 +47,8 @@ export default async function PlayerPoolProfilePage({
 }) {
   await ensurePlayerPoolTables();
 
-  const [{ token }, query] = await Promise.all([params, searchParams ?? Promise.resolve({})]);
+  const { token } = await params;
+  const query: { error?: string } = searchParams ? await searchParams : {};
 
   const rows = await prisma.$queryRaw<ProfileRow[]>`
     SELECT
