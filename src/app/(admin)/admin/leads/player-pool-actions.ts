@@ -28,9 +28,9 @@ function splitLeadName(fullName: string | null | undefined) {
   };
 }
 
-function buildLeadRedirect(leadId: string, error: string) {
-  const query = new URLSearchParams({ playerPoolError: error });
-  return `/admin/leads/${leadId}?${query.toString()}`;
+function buildPlayerPoolErrorRedirect(error: string) {
+  const query = new URLSearchParams({ error });
+  return `/admin/player-prospects?${query.toString()}`;
 }
 
 export async function convertLeadToPlayerPoolAction(formData: FormData) {
@@ -69,7 +69,7 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
     });
 
     if (!lead) {
-      redirect("/admin/leads");
+      throw new Error("Player lead not found.");
     }
 
     if (lead.interestType !== "PLAYER") {
@@ -189,7 +189,7 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
         : "The player could not be added to the player pool.";
 
     console.error("Player-pool lead conversion failed", { leadId, error });
-    redirect(buildLeadRedirect(leadId, message));
+    redirect(buildPlayerPoolErrorRedirect(message));
   }
 
   revalidatePath("/admin/leads");
