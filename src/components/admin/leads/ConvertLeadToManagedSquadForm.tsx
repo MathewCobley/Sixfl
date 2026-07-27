@@ -9,6 +9,7 @@ import { useFormStatus } from "react-dom";
 import { Listbox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import { convertLeadToManagedSquadPlayerAction } from "@/app/(admin)/admin/leads/managed-squad-actions";
+import { convertLeadToPlayerPoolAction } from "@/app/(admin)/admin/leads/player-pool-actions";
 import { convertLeadToStandardSquadPlayerAction } from "@/app/(admin)/admin/leads/standard-squad-actions";
 
 type TeamOption = {
@@ -134,6 +135,7 @@ export default function ConvertLeadToManagedSquadForm({
   const [standardTeams, setStandardTeams] = useState<TeamOption[]>([]);
   const [standardTeamsLoaded, setStandardTeamsLoaded] = useState(false);
   const [notes, setNotes] = useState("");
+  const [poolNotes, setPoolNotes] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +171,38 @@ export default function ConvertLeadToManagedSquadForm({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4">
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-white">Add to player pool</h3>
+          <p className="mt-1 text-xs leading-5 text-white/50">
+            Keep this player available for any suitable SIXFL team without assigning them to a squad yet. Their lead details and preferred nights are copied into the pool record.
+          </p>
+        </div>
+
+        <form action={convertLeadToPlayerPoolAction} className="space-y-4">
+          <input type="hidden" name="leadId" value={leadId} />
+
+          <div className="space-y-2">
+            <label htmlFor="player-pool-notes" className="block text-sm text-white/70">
+              Player pool notes
+            </label>
+            <textarea
+              id="player-pool-notes"
+              name="notes"
+              value={poolNotes}
+              onChange={(event) => setPoolNotes(event.target.value)}
+              rows={3}
+              placeholder="Optional note, e.g. best suited to Leeds Wednesday or happy to travel."
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-violet-400/60"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <SubmitButton pendingLabel="Adding to pool..." label="Add to player pool" variant="secondary" />
+          </div>
+        </form>
+      </div>
+
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-white">Add to managed squad</h3>
