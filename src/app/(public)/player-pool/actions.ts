@@ -133,7 +133,7 @@ export async function submitPlayerPoolProfileAction(formData: FormData) {
   const existingProfile = await findProfile({ token, emailNormalized: email });
   const { firstName, lastName } = splitPlayerPoolName(fullName);
 
-  let prospectId = existingProfile?.prospectId ?? null;
+  let prospectId: string | null = existingProfile?.prospectId ?? null;
 
   if (!prospectId) {
     const existingProspect = await prisma.teamPlayerProspect.findFirst({
