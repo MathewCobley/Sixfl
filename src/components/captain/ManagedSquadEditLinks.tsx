@@ -274,12 +274,12 @@ async function movePlayerToProspects(input: {
   button: HTMLButtonElement;
 }) {
   const confirmed = window.confirm(
-    `Move ${input.playerName} to the Player Prospects list? This removes them from the active squad but keeps their details as a prospective player.`,
+    `Move ${input.playerName} to the player pool? This removes them from the active squad but keeps their details available for another suitable team.`,
   );
 
   if (!confirmed) return;
 
-  const originalText = input.button.textContent ?? "Move to prospects";
+  const originalText = input.button.textContent ?? "Move to player pool";
   input.button.disabled = true;
   input.button.textContent = "Moving…";
 
@@ -298,14 +298,14 @@ async function movePlayerToProspects(input: {
     } | null;
 
     if (!response.ok) {
-      throw new Error(payload?.error ?? "Player could not be moved to prospects.");
+      throw new Error(payload?.error ?? "Player could not be moved to the player pool.");
     }
 
     window.location.href = "/admin/player-prospects";
   } catch (error) {
     input.button.disabled = false;
     input.button.textContent = originalText;
-    window.alert(error instanceof Error ? error.message : "Player could not be moved to prospects.");
+    window.alert(error instanceof Error ? error.message : "Player could not be moved to the player pool.");
   }
 }
 
@@ -483,7 +483,7 @@ function addManagedSquadEditLinks(pathname: string) {
     if (!existingMoveToProspectsButton) {
       const moveButton = document.createElement("button");
       moveButton.type = "button";
-      moveButton.textContent = "Move to prospects";
+      moveButton.textContent = "Move to player pool";
       moveButton.dataset.managedSquadMoveToProspectsLink = membershipId;
       moveButton.className = moveToProspectsClassName;
       moveButton.addEventListener("click", () => {
