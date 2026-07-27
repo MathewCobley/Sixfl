@@ -86,8 +86,11 @@ export default async function CaptainPlayerPoolPage({
   await requireCaptain(teamid);
   await ensurePlayerPoolTables();
 
-  const [query, team, rows] = await Promise.all([
-    searchParams ?? Promise.resolve({}),
+  const query: { saved?: string; error?: string } = searchParams
+    ? await searchParams
+    : {};
+
+  const [team, rows] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
       select: {
