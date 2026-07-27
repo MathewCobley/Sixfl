@@ -3,8 +3,11 @@
 // ========================================
 
 import type { ReactNode } from "react";
+import { ResultDisputeStatus } from "@prisma/client";
+
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
+import { prisma } from "@/lib/prisma";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminSidebarDesktopColumnsBridge from "@/components/admin/AdminSidebarDesktopColumnsBridge";
 import RemoveUnusedSettingsNavBridge from "@/components/admin/RemoveUnusedSettingsNavBridge";
@@ -42,9 +45,16 @@ export default async function AdminLayout({
 }: {
   children: ReactNode;
 }) {
-  const [{ session, user }, inboxSummary] = await Promise.all([
+  const [{ session, user }, inboxSummary, openDisputeCount] = await Promise.all([
     requireAdmin(),
     getAdminInboxSummary(),
+    prisma.resultDispute.count({
+      where: {
+        status: {
+          in: [ResultDisputeStatus.OPEN, ResultDisputeStatus.REVIEW],
+        },
+      },
+    }),
   ]);
 
   const email = user?.email ?? session?.user?.email ?? "Admin";
@@ -89,6 +99,7 @@ export default async function AdminLayout({
             name={name}
             email={email}
             unreadMessagingCount={inboxSummary.unreadThreads}
+            openDisputeCount={openDisputeCount}
           />
         </aside>
 
