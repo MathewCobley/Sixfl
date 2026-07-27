@@ -4,7 +4,7 @@
 
 import type { Metadata } from "next";
 import Image from "next/image";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { createHeartlandsInterestLeadAction } from "./actions";
@@ -15,18 +15,23 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   title: "North Yorkshire Heartlands 6-a-side League | SIXFL",
   description:
-    "Join the new North Yorkshire Heartlands 6-a-side league. Register a team or join as an individual player for properly organised weekly football.",
+    "Join the new North Yorkshire Heartlands Wednesday 6-a-side league at Queen Mary's School near Thirsk. Teams and individual players can register now.",
+};
+
+type SearchParams = {
+  type?: string;
 };
 
 function formatPreferredNight(value?: string | null) {
-  if (!value) return "To be confirmed";
-  if (value === "ANY") return "Night to be confirmed";
+  if (!value) return "Wednesday";
+  if (value === "ANY") return "Wednesday";
   return value.charAt(0) + value.slice(1).toLowerCase();
 }
 
 function normaliseImage(value?: string | null) {
   if (!value?.trim()) return null;
   const trimmed = value.trim();
+
   if (
     trimmed.startsWith("/") ||
     trimmed.startsWith("https://") ||
@@ -34,13 +39,13 @@ function normaliseImage(value?: string | null) {
   ) {
     return trimmed;
   }
+
   return `/${trimmed}`;
 }
 
 async function getHeartlandsLeague() {
   return prisma.league.findFirst({
     where: {
-      isActive: true,
       OR: [
         { slug: { contains: "heartlands", mode: "insensitive" } },
         { name: { contains: "heartlands", mode: "insensitive" } },
@@ -51,7 +56,6 @@ async function getHeartlandsLeague() {
     select: {
       id: true,
       name: true,
-      slug: true,
       season: true,
       area: true,
       dayOfWeek: true,
@@ -59,45 +63,40 @@ async function getHeartlandsLeague() {
       kickoffInfo: true,
       format: true,
       surface: true,
-      description: true,
       heroImageUrl: true,
       badgeUrl: true,
       ctaText: true,
-      fixtures: {
-        where: { publishedAt: { not: null } },
-        select: { id: true },
-        take: 1,
-      },
     },
   });
 }
 
-export default async function HeartlandsLaunchPage() {
-  const league = await getHeartlandsLeague();
-  if (!league) {
-    redirect(
-      "/register-interest?type=team&area=North%20Yorkshire%20Heartlands",
-    );
-  }
+export default async function HeartlandsLaunchPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const [league, params] = await Promise.all([
+    getHeartlandsLeague(),
+    searchParams,
+  ]);
 
-  if (league.fixtures.length > 0 && league.slug !== "heartlands") {
-    redirect(`/leagues/${league.slug}`);
-  }
+  if (!league) notFound();
 
+  const selectedType =
+    params.type?.trim().toLowerCase() === "player" ? "PLAYER" : "TEAM";
   const nightLabel = formatPreferredNight(league.dayOfWeek);
-  const venueLabel = league.venueName || "North Yorkshire venue";
+  const venueLabel = league.venueName || "Queen Mary's School, near Thirsk";
   const heroImage =
     normaliseImage(league.heroImageUrl) ||
     "/venues/north-yorkshire-heartlands-hero.jpg";
   const badgeImage = normaliseImage(league.badgeUrl) || "/sixfl-badge.png";
   const intro =
-    league.description?.trim() ||
-    "A new SIXFL league for teams and players across Northallerton, Bedale, Richmond and the surrounding area. Proper weekly fixtures, qualified referees and a league that is easy to follow.";
+    "A new SIXFL league for teams and individual players across Richmond, Thirsk, Catterick, Bedale and the surrounding area. Proper weekly fixtures, qualified referees and a league that is easy to follow.";
 
   const details = [
     { label: "Match night", value: nightLabel },
+    { label: "Time", value: league.kickoffInfo || "7pm–9pm" },
     { label: "Venue", value: venueLabel },
-    { label: "Season", value: league.season || "Founding season" },
     { label: "Team fee", value: "£40 per week" },
   ];
 
@@ -118,7 +117,7 @@ export default async function HeartlandsLaunchPage() {
         </div>
 
         <div className="relative mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
-          <div className="max-w-4xl rounded-[2rem] border border-white/10 bg-black/35 p-6 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-sm sm:p-9 lg:p-11">
+          <div className="max-w-4xl rounded-[2rem] border border-white/10 bg-black/40 p-6 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-sm sm:p-9 lg:p-11">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
               <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-3xl border border-emerald-400/25 bg-black/60 p-3 shadow-2xl sm:h-28 sm:w-28">
                 <Image
@@ -137,11 +136,11 @@ export default async function HeartlandsLaunchPage() {
                     Founding season
                   </span>
                   <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-white/80">
-                    Teams now registering
+                    Teams and players registering
                   </span>
                 </div>
-                <p className="mt-4 text-sm font-bold uppercase tracking-[0.2em] text-emerald-300">
-                  Northallerton • Bedale • Richmond
+                <p className="mt-4 text-sm font-bold uppercase tracking-[0.16em] text-emerald-300">
+                  Richmond • Thirsk • Catterick • Bedale
                 </p>
               </div>
             </div>
@@ -156,13 +155,13 @@ export default async function HeartlandsLaunchPage() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <a
-                href="#register"
+                href="/leagues/heartlands?type=team#register"
                 className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-6 text-sm font-extrabold text-black transition hover:bg-emerald-400"
               >
                 Enter a team
               </a>
               <a
-                href="#register"
+                href="/leagues/heartlands?type=player#register"
                 className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/10 px-6 text-sm font-extrabold text-white transition hover:bg-white/15"
               >
                 Join as a player
@@ -199,7 +198,7 @@ export default async function HeartlandsLaunchPage() {
                 A better local league experience.
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-8 text-white/65">
-                Built for teams who want reliable weekly football without the usual confusion. Everything important is kept together and updated throughout the season.
+                Built for teams who want reliable weekly football without the usual confusion. Fixtures, results, tables and match-night information are kept together throughout the season.
               </p>
 
               <div className="mt-7 grid gap-4 sm:grid-cols-3">
@@ -225,7 +224,7 @@ export default async function HeartlandsLaunchPage() {
                 {[
                   league.format || "6-a-side football",
                   league.surface || "3G playing surface",
-                  league.kickoffInfo || "Weekly evening kick-offs",
+                  "Wednesday evenings, 7pm–9pm",
                   "Live fixtures, results and league table",
                 ].map((item) => (
                   <div
@@ -241,16 +240,16 @@ export default async function HeartlandsLaunchPage() {
 
           <aside
             id="register"
-            className="scroll-mt-24 rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.4)] sm:p-8"
+            className="scroll-mt-24 rounded-[2rem] border border-emerald-400/25 bg-white/[0.06] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.4)] sm:p-8"
           >
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-300">
               Join the league
             </p>
             <h2 className="mt-3 text-3xl font-black tracking-tight">
-              Register your interest
+              Register now
             </h2>
             <p className="mt-3 text-sm leading-6 text-white/65">
-              No payment is taken now. Tell us whether you have a team or want to join as an individual player.
+              No payment is taken now. Register a full team or join as an individual player.
             </p>
 
             <form
@@ -274,22 +273,35 @@ export default async function HeartlandsLaunchPage() {
                   What are you registering?
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm font-bold text-white">
+                  <label
+                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 text-sm font-bold text-white ${
+                      selectedType === "TEAM"
+                        ? "border-emerald-400/30 bg-emerald-500/10"
+                        : "border-white/10 bg-black/25"
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="interestType"
                       value="TEAM"
-                      defaultChecked
+                      defaultChecked={selectedType === "TEAM"}
                       required
                       className="accent-emerald-500"
                     />
                     I have a team
                   </label>
-                  <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm font-bold text-white">
+                  <label
+                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 text-sm font-bold text-white ${
+                      selectedType === "PLAYER"
+                        ? "border-emerald-400/30 bg-emerald-500/10"
+                        : "border-white/10 bg-black/25"
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="interestType"
                       value="PLAYER"
+                      defaultChecked={selectedType === "PLAYER"}
                       required
                       className="accent-emerald-500"
                     />
@@ -361,7 +373,7 @@ export default async function HeartlandsLaunchPage() {
                 type="submit"
                 className="w-full rounded-xl bg-emerald-500 px-5 py-3.5 text-sm font-extrabold text-black transition hover:bg-emerald-400"
               >
-                {league.ctaText?.trim() || "Join the Heartlands League"}
+                {league.ctaText?.trim() || "Register for Heartlands"}
               </button>
             </form>
 
