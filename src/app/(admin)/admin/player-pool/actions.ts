@@ -102,7 +102,7 @@ export async function sendPlayerPoolProfileInviteAction(formData: FormData) {
   `;
   const existingProfile = existingRows[0] ?? null;
 
-  let prospectId = existingProfile?.prospectId ?? null;
+  let prospectId: string | null = existingProfile?.prospectId ?? null;
 
   if (!prospectId) {
     const existingProspect = await prisma.teamPlayerProspect.findFirst({
