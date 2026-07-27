@@ -25,4 +25,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: npm run build > build.log 2>&1
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-pool-build-log
+          path: build.log
+          if-no-files-found: error
+      - name: Show build failure
+        if: steps.build.outcome == 'failure'
+        run: |
+          tail -n 120 build.log
+          exit 1
