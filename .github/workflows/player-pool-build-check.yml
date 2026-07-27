@@ -1,0 +1,25 @@
+name: PlayerPool build check
+
+on:
+  push:
+    branches:
+      - agent/sixfl-player-pool
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: build-check-secret
+      RESEND_API_KEY: re_build_check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
