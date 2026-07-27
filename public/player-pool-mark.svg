@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">SIXFL PlayerPool mark</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#25d58f"/>
+      <stop offset="1" stop-color="#08764a"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#050807" stroke="#0bbf78" stroke-width="4"/>
+  <path d="M42 208H214" stroke="#0bbf78" stroke-width="5" stroke-linecap="round" opacity=".9"/>
+  <circle cx="128" cy="82" r="28" fill="url(#g)"/>
+  <circle cx="72" cy="104" r="22" fill="#f5f5f5"/>
+  <circle cx="184" cy="104" r="22" fill="#f5f5f5"/>
+  <rect x="91" y="119" width="74" height="68" rx="33" fill="url(#g)"/>
+  <rect x="35" y="139" width="64" height="48" rx="24" fill="#f5f5f5"/>
+  <rect x="157" y="139" width="64" height="48" rx="24" fill="#f5f5f5"/>
+  <path d="M74 205L184 51" stroke="url(#g)" stroke-width="15" stroke-linecap="square" opacity=".92"/>
+</svg>
