@@ -171,7 +171,7 @@ export default function ConvertLeadToManagedSquadForm({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4">
+      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-4">
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-white">Add to player pool</h3>
           <p className="mt-1 text-xs leading-5 text-white/50">
@@ -193,12 +193,13 @@ export default function ConvertLeadToManagedSquadForm({
               onChange={(event) => setPoolNotes(event.target.value)}
               rows={3}
               placeholder="Optional note, e.g. best suited to Leeds Wednesday or happy to travel."
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-violet-400/60"
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
             />
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <SubmitButton pendingLabel="Adding to pool..." label="Add to player pool" variant="secondary" />
+          <div className="flex flex-wrap items-center gap-3">
+            <SubmitButton pendingLabel="Adding to pool..." label="Add to player pool" />
+            <p className="text-xs text-white/45">This does not send the player an email.</p>
           </div>
         </form>
       </div>
