@@ -78,11 +78,19 @@ function TeamListbox({
       <Listbox value={selectedTeamId} onChange={setSelectedTeamId}>
         <div className="relative">
           <Listbox.Button className="relative flex h-12 w-full items-center justify-between rounded-xl border border-white/10 bg-[#0d1428] px-4 text-left text-sm text-white outline-none transition hover:border-white/20 focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20">
-            <span className={cx("block truncate", selectedTeam ? "text-white" : "text-white/45")}>
+            <span
+              className={cx(
+                "block truncate",
+                selectedTeam ? "text-white" : "text-white/45",
+              )}
+            >
               {selectedTeam ? selectedTeam.label : placeholder}
             </span>
 
-            <ChevronUpDownIcon className="ml-3 h-5 w-5 shrink-0 text-white/50" aria-hidden="true" />
+            <ChevronUpDownIcon
+              className="ml-3 h-5 w-5 shrink-0 text-white/50"
+              aria-hidden="true"
+            />
           </Listbox.Button>
 
           <Transition
@@ -105,13 +113,21 @@ function TeamListbox({
                 >
                   {({ selected }) => (
                     <>
-                      <span className={cx("block truncate", selected ? "font-medium text-emerald-300" : "")}>
+                      <span
+                        className={cx(
+                          "block truncate",
+                          selected ? "font-medium text-emerald-300" : "",
+                        )}
+                      >
                         {team.label}
                       </span>
 
                       {selected ? (
                         <span className="absolute inset-y-0 right-3 flex items-center text-emerald-400">
-                          <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                          <CheckIcon
+                            className="h-5 w-5"
+                            aria-hidden="true"
+                          />
                         </span>
                       ) : null}
                     </>
@@ -130,7 +146,9 @@ export default function ConvertLeadToManagedSquadForm({
   leadId,
   teams,
 }: Props) {
-  const [selectedManagedTeamId, setSelectedManagedTeamId] = useState(teams[0]?.value ?? "");
+  const [selectedManagedTeamId, setSelectedManagedTeamId] = useState(
+    teams[0]?.value ?? "",
+  );
   const [selectedStandardTeamId, setSelectedStandardTeamId] = useState("");
   const [standardTeams, setStandardTeams] = useState<TeamOption[]>([]);
   const [standardTeamsLoaded, setStandardTeamsLoaded] = useState(false);
@@ -148,13 +166,17 @@ export default function ConvertLeadToManagedSquadForm({
 
         if (!response.ok) return;
 
-        const payload = (await response.json().catch(() => null)) as { teams?: TeamOption[] } | null;
+        const payload = (await response.json().catch(() => null)) as {
+          teams?: TeamOption[];
+        } | null;
         const loadedTeams = payload?.teams ?? [];
 
         if (cancelled) return;
 
         setStandardTeams(loadedTeams);
-        setSelectedStandardTeamId((current) => current || loadedTeams[0]?.value || "");
+        setSelectedStandardTeamId(
+          (current) => current || loadedTeams[0]?.value || "",
+        );
       } finally {
         if (!cancelled) {
           setStandardTeamsLoaded(true);
@@ -173,9 +195,14 @@ export default function ConvertLeadToManagedSquadForm({
     <div className="space-y-4">
       <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-4">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-white">Add to player pool</h3>
+          <h3 className="text-sm font-semibold text-white">
+            Add to player pool
+          </h3>
           <p className="mt-1 text-xs leading-5 text-white/50">
-            Keep this player available for any suitable SIXFL team without assigning them to a squad yet. Their lead details and preferred nights are copied into the pool record.
+            Keep this player available for any suitable SIXFL team without
+            assigning them to a squad yet. Their lead details and preferred
+            nights are copied into the pool, and they are emailed a secure link
+            to complete their PlayerPool profile.
           </p>
         </div>
 
@@ -183,7 +210,10 @@ export default function ConvertLeadToManagedSquadForm({
           <input type="hidden" name="leadId" value={leadId} />
 
           <div className="space-y-2">
-            <label htmlFor="player-pool-notes" className="block text-sm text-white/70">
+            <label
+              htmlFor="player-pool-notes"
+              className="block text-sm text-white/70"
+            >
               Player pool notes
             </label>
             <textarea
@@ -198,28 +228,42 @@ export default function ConvertLeadToManagedSquadForm({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton pendingLabel="Adding to pool..." label="Add to player pool" />
-            <p className="text-xs text-white/45">This does not send the player an email.</p>
+            <SubmitButton
+              pendingLabel="Adding and sending..."
+              label="Add to player pool & send email"
+            />
+            <p className="text-xs text-emerald-100/65">
+              Sends the PlayerPool profile invitation email.
+            </p>
           </div>
         </form>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-white">Add to managed squad</h3>
+          <h3 className="text-sm font-semibold text-white">
+            Add to managed squad
+          </h3>
           <p className="mt-1 text-xs leading-5 text-white/50">
-            Use this for organiser-managed teams where players are held as prospects before joining the matchday squad.
+            Use this for organiser-managed teams where players are held as
+            prospects before joining the matchday squad.
           </p>
         </div>
 
         {teams.length === 0 ? (
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100/85">
-            No managed squads are available yet. Set a team to <strong>Managed</strong> first, then come back and add this player lead into that squad.
+            No managed squads are available yet. Set a team to{" "}
+            <strong>Managed</strong> first, then come back and add this player
+            lead into that squad.
           </div>
         ) : (
           <form action={convertLeadToManagedSquadPlayerAction}>
             <input type="hidden" name="leadId" value={leadId} />
-            <input type="hidden" name="teamId" value={selectedManagedTeamId} />
+            <input
+              type="hidden"
+              name="teamId"
+              value={selectedManagedTeamId}
+            />
 
             <div className="space-y-4">
               <TeamListbox
@@ -231,7 +275,10 @@ export default function ConvertLeadToManagedSquadForm({
               />
 
               <div className="space-y-2">
-                <label htmlFor="managed-squad-notes" className="block text-sm text-white/70">
+                <label
+                  htmlFor="managed-squad-notes"
+                  className="block text-sm text-white/70"
+                >
                   Squad notes
                 </label>
                 <textarea
@@ -244,12 +291,17 @@ export default function ConvertLeadToManagedSquadForm({
                   className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
                 />
                 <p className="text-xs text-white/45">
-                  The original lead message, area, league type, and preferred nights will also be copied into the prospect notes automatically.
+                  The original lead message, area, league type, and preferred
+                  nights will also be copied into the prospect notes
+                  automatically.
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <SubmitButton pendingLabel="Adding to squad..." label="Add to managed squad" />
+                <SubmitButton
+                  pendingLabel="Adding to squad..."
+                  label="Add to managed squad"
+                />
               </div>
             </div>
           </form>
@@ -258,9 +310,13 @@ export default function ConvertLeadToManagedSquadForm({
 
       <div className="rounded-2xl border border-sky-400/20 bg-sky-500/5 p-4">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-white">Add to standard squad</h3>
+          <h3 className="text-sm font-semibold text-white">
+            Add to standard squad
+          </h3>
           <p className="mt-1 text-xs leading-5 text-white/50">
-            Use this when the player is joining an existing captain-led team. This creates or links the player account and adds them to the team roster.
+            Use this when the player is joining an existing captain-led team.
+            This creates or links the player account and adds them to the team
+            roster.
           </p>
         </div>
 
@@ -273,9 +329,16 @@ export default function ConvertLeadToManagedSquadForm({
             No standard squads are available yet.
           </div>
         ) : (
-          <form action={convertLeadToStandardSquadPlayerAction} className="space-y-4">
+          <form
+            action={convertLeadToStandardSquadPlayerAction}
+            className="space-y-4"
+          >
             <input type="hidden" name="leadId" value={leadId} />
-            <input type="hidden" name="teamId" value={selectedStandardTeamId} />
+            <input
+              type="hidden"
+              name="teamId"
+              value={selectedStandardTeamId}
+            />
 
             <TeamListbox
               label="Standard squad"
@@ -286,11 +349,16 @@ export default function ConvertLeadToManagedSquadForm({
             />
 
             <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs leading-5 text-white/50">
-              This requires an email address because standard squads use real player accounts.
+              This requires an email address because standard squads use real
+              player accounts.
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <SubmitButton pendingLabel="Adding player..." label="Add to standard squad" variant="secondary" />
+              <SubmitButton
+                pendingLabel="Adding player..."
+                label="Add to standard squad"
+                variant="secondary"
+              />
             </div>
           </form>
         )}
