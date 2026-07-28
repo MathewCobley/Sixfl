@@ -374,15 +374,28 @@ function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {
 
   if (!teamName && !teamLogoUrl && !leagueName) return "";
 
+  const isPlayerPool = teamName?.toLowerCase() === "sixfl playerpool";
+
+  if (isPlayerPool) {
+    return `
+      <div style="margin:0 0 24px 0;padding:22px 24px;border:1px solid #17483a;border-radius:16px;background:#07130f;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+${teamLogoUrl ? `<tr><td style="padding:0 0 14px 0;"><img src="${escapeHtml(teamLogoUrl)}" alt="SIXFL Player Pool" width="260" style="display:block;width:260px;max-width:100%;height:auto;object-fit:contain;border:0;outline:none;text-decoration:none;" /></td></tr>` : ""}
+${leagueName ? `<tr><td style="color:#c4d4ce;font-size:14px;line-height:1.4;letter-spacing:0.03em;">${escapeHtml(leagueName)}</td></tr>` : ""}
+        </table>
+      </div>
+    `.trim();
+  }
+
   return `
     <div style="margin:0 0 24px 0;padding:16px 18px;border:1px solid #e5e7eb;border-radius:16px;background:#f9fafb;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
         <tr>
-          ${teamLogoUrl ? `<td width="60" valign="middle" style="padding-right:14px;"><img src="${escapeHtml(teamLogoUrl)}" alt="${escapeHtml(teamName || "Team logo")}" width="48" height="48" style="display:block;width:48px;height:48px;object-fit:contain;border:0;outline:none;text-decoration:none;" /></td>` : ""}
-          <td valign="middle">
-            ${teamName ? `<div style="color:#111827;font-size:16px;font-weight:700;line-height:1.3;">${escapeHtml(teamName)}</div>` : ""}
-            ${leagueName ? `<div style="margin-top:4px;color:#6b7280;font-size:13px;line-height:1.4;">${escapeHtml(leagueName)}</div>` : ""}
-          </td>
+${teamLogoUrl ? `<td width="60" valign="middle" style="padding-right:14px;"><img src="${escapeHtml(teamLogoUrl)}" alt="${escapeHtml(teamName || "Team logo")}" width="48" height="48" style="display:block;width:48px;height:48px;object-fit:contain;border:0;outline:none;text-decoration:none;" /></td>` : ""}
+<td valign="middle">
+  ${teamName ? `<div style="color:#111827;font-size:16px;font-weight:700;line-height:1.3;">${escapeHtml(teamName)}</div>` : ""}
+  ${leagueName ? `<div style="margin-top:4px;color:#6b7280;font-size:13px;line-height:1.4;">${escapeHtml(leagueName)}</div>` : ""}
+</td>
         </tr>
       </table>
     </div>
