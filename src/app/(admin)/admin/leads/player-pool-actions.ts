@@ -4,11 +4,47 @@
 
 "use server";
 
+import {
+  NotificationAudience,
+  NotificationRecipientSourceType,
+  Prisma,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
+import {
+  PLAYER_POOL_PROFILE_STATUSES,
+  createPlayerPoolId,
+  createPlayerPoolPublicCode,
+  createPlayerPoolToken,
+  ensurePlayerPoolTables,
+  getPlayerPoolBaseUrl,
+  normalizePlayerPoolEmail,
+} from "@/lib/player-pool/storage";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+
+const PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY =
+  "player-pool-profile-invite-email";
+const PLAYER_POOL_LOGO_PATH = "/logos/sixfl player pool .png";
+
+type ExistingProfileRow = {
+  id: string;
+  prospectId: string;
+  profileToken: string;
+  publicCode: string;
+  status: string;
+};
+
+type MatchingProspect = {
+  id: string;
+  teamId: string | null;
+  status: string;
+  team: { name: string } | null;
+};
 
 function splitLeadName(fullName: string | null | undefined) {
   const raw = fullName?.trim() ?? "";
@@ -28,13 +64,18 @@ function splitLeadName(fullName: string | null | undefined) {
   };
 }
 
+function fullName(firstName: string, lastName: string | null) {
+  return [firstName, lastName].filter(Boolean).join(" ").trim();
+}
+
 function buildPlayerPoolErrorRedirect(error: string) {
   const query = new URLSearchParams({ error });
-  return `/admin/player-prospects?${query.toString()}`;
+  return `/admin/player-pool?${query.toString()}`;
 }
 
 export async function convertLeadToPlayerPoolAction(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
+  await ensurePlayerPoolTables();
 
   const leadId = String(formData.get("leadId") ?? "").trim();
   const extraNotes = String(formData.get("notes") ?? "").trim();
@@ -42,9 +83,6 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
   if (!leadId) {
     redirect("/admin/leads");
   }
-
-  let prospectId = "";
-  let existingProspect = false;
 
   try {
     const lead = await prisma.interestLead.findUnique({
@@ -57,10 +95,16 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
         email: true,
         phone: true,
         area: true,
+        leagueId: true,
         leagueType: true,
         message: true,
         source: true,
         convertedAt: true,
+        league: {
+          select: {
+            name: true,
+          },
+        },
         preferredNights: {
           orderBy: { createdAt: "asc" },
           select: { night: true },
@@ -76,34 +120,63 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
       throw new Error("Only player leads can be added to the player pool.");
     }
 
-    const email = lead.email?.trim().toLowerCase() || null;
-    const phone = lead.phone?.trim() || null;
-    const duplicateWhere = [
-      ...(email
-        ? [
-            {
-              email: {
-                equals: email,
-                mode: "insensitive" as const,
-              },
-            },
-          ]
-        : []),
-      ...(phone ? [{ phone }] : []),
-    ];
+    if (!lead.email?.trim()) {
+      throw new Error(
+        "This player needs an email address before they can be added to the PlayerPool and sent a profile invitation.",
+      );
+    }
 
-    const matchingProspect = duplicateWhere.length
-      ? await prisma.teamPlayerProspect.findFirst({
-          where: { OR: duplicateWhere },
-          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-          select: {
-            id: true,
-            teamId: true,
-            status: true,
-            team: { select: { name: true } },
+    const email = normalizePlayerPoolEmail(lead.email);
+    const phone = lead.phone?.trim() || null;
+    const { firstName, lastName } = splitLeadName(lead.contactName);
+    const preferredNights = lead.preferredNights.map((entry) => entry.night);
+    const preferredNightSummary =
+      preferredNights.length > 0 ? preferredNights.join(", ") : null;
+
+    const existingProfileRows = await prisma.$queryRaw<ExistingProfileRow[]>`
+      SELECT "id", "prospectId", "profileToken", "publicCode", "status"
+      FROM "PlayerPoolProfile"
+      WHERE "emailNormalized" = ${email}
+      LIMIT 1
+    `;
+    const existingProfile = existingProfileRows[0] ?? null;
+
+    let matchingProspect: MatchingProspect | null = null;
+
+    if (existingProfile?.prospectId) {
+      matchingProspect = await prisma.teamPlayerProspect.findUnique({
+        where: { id: existingProfile.prospectId },
+        select: {
+          id: true,
+          teamId: true,
+          status: true,
+          team: { select: { name: true } },
+        },
+      });
+    }
+
+    if (!matchingProspect) {
+      const duplicateWhere = [
+        {
+          email: {
+            equals: email,
+            mode: "insensitive" as const,
           },
-        })
-      : null;
+        },
+        ...(phone ? [{ phone }] : []),
+      ];
+
+      matchingProspect = await prisma.teamPlayerProspect.findFirst({
+        where: { OR: duplicateWhere },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          teamId: true,
+          status: true,
+          team: { select: { name: true } },
+        },
+      });
+    }
 
     if (matchingProspect?.teamId || matchingProspect?.status === "ACTIVE_SQUAD") {
       throw new Error(
@@ -113,12 +186,7 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
       );
     }
 
-    const preferredNightSummary =
-      lead.preferredNights.length > 0
-        ? lead.preferredNights.map((entry) => entry.night).join(", ")
-        : null;
-    const { firstName, lastName } = splitLeadName(lead.contactName);
-    const source = ["LEAD_PLAYER_POOL", lead.source?.trim() || null]
+    const source = ["SIXFL PlayerPool", lead.source?.trim() || null]
       .filter((value): value is string => Boolean(value))
       .join(" • ");
     const generatedNotes = [
@@ -126,11 +194,23 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
       lead.message?.trim() ? `Lead message: ${lead.message.trim()}` : null,
       lead.area?.trim() ? `Area: ${lead.area.trim()}` : null,
       lead.leagueType ? `League type: ${lead.leagueType}` : null,
-      preferredNightSummary ? `Preferred nights: ${preferredNightSummary}` : null,
+      preferredNightSummary
+        ? `Preferred nights: ${preferredNightSummary}`
+        : null,
       `Source lead ID: ${lead.id}`,
     ]
       .filter((value): value is string => Boolean(value))
       .join("\n\n");
+
+    const profileId = existingProfile?.id ?? createPlayerPoolId();
+    const profileToken =
+      existingProfile?.profileToken ?? createPlayerPoolToken();
+    const publicCode =
+      existingProfile?.publicCode ?? createPlayerPoolPublicCode();
+    const nextProfileStatus =
+      existingProfile?.status === PLAYER_POOL_PROFILE_STATUSES.AVAILABLE
+        ? PLAYER_POOL_PROFILE_STATUSES.AVAILABLE
+        : PLAYER_POOL_PROFILE_STATUSES.INVITED;
 
     const result = await prisma.$transaction(async (tx) => {
       const prospect = matchingProspect
@@ -142,12 +222,15 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
               lastName,
               email,
               phone,
+              preferredNights: preferredNights.length
+                ? (preferredNights as Prisma.InputJsonValue)
+                : undefined,
               availabilitySummary: preferredNightSummary,
               source,
               status:
-                matchingProspect.status === "DECLINED" || matchingProspect.status === "DUPLICATE"
-                  ? "NEW"
-                  : matchingProspect.status,
+                nextProfileStatus === PLAYER_POOL_PROFILE_STATUSES.AVAILABLE
+                  ? matchingProspect.status
+                  : PLAYER_POOL_PROFILE_STATUSES.INVITED,
               notes: generatedNotes || null,
             },
             select: { id: true },
@@ -159,47 +242,126 @@ export async function convertLeadToPlayerPoolAction(formData: FormData) {
               lastName,
               email,
               phone,
+              preferredNights: preferredNights.length
+                ? (preferredNights as Prisma.InputJsonValue)
+                : undefined,
               availabilitySummary: preferredNightSummary,
               source,
-              status: "NEW",
+              status: PLAYER_POOL_PROFILE_STATUSES.INVITED,
               notes: generatedNotes || null,
             },
             select: { id: true },
           });
 
-      await tx.interestLead.update({
-        where: { id: lead.id },
-        data: {
-          status: "CLOSED",
-          contactedAt: lead.status === "NEW" ? new Date() : undefined,
-          convertedAt: lead.convertedAt ?? new Date(),
-          closedAt: new Date(),
-        },
-      });
+      await tx.$executeRaw`
+        INSERT INTO "PlayerPoolProfile" (
+          "id", "prospectId", "leadId", "profileToken", "publicCode",
+          "emailNormalized", "area", "leagueId", "status",
+          "invitedAt", "createdAt", "updatedAt"
+        ) VALUES (
+          ${profileId}, ${prospect.id}, ${lead.id}, ${profileToken}, ${publicCode},
+          ${email}, ${lead.area}, ${lead.leagueId}, ${nextProfileStatus},
+          NOW(), NOW(), NOW()
+        )
+        ON CONFLICT ("prospectId") DO UPDATE SET
+          "leadId" = EXCLUDED."leadId",
+          "emailNormalized" = EXCLUDED."emailNormalized",
+          "area" = COALESCE(EXCLUDED."area", "PlayerPoolProfile"."area"),
+          "leagueId" = COALESCE(EXCLUDED."leagueId", "PlayerPoolProfile"."leagueId"),
+          "status" = CASE
+            WHEN "PlayerPoolProfile"."status" = ${PLAYER_POOL_PROFILE_STATUSES.AVAILABLE}
+              THEN "PlayerPoolProfile"."status"
+            ELSE ${PLAYER_POOL_PROFILE_STATUSES.INVITED}
+          END,
+          "invitedAt" = NOW(),
+          "updatedAt" = NOW()
+      `;
 
       return prospect;
     });
 
-    prospectId = result.id;
-    existingProspect = Boolean(matchingProspect);
+    const profileUrl = `${getPlayerPoolBaseUrl()}/player-pool/profile/${profileToken}`;
+    const displayName =
+      lead.contactName?.trim() || fullName(firstName, lastName) || email;
+    const recipient = await upsertNotificationRecipient({
+      sourceType: NotificationRecipientSourceType.GENERAL,
+      sourceId: `player-pool-profile:${profileId}`,
+      audience: NotificationAudience.PLAYER,
+      displayName,
+      email,
+      phone,
+      transactionalEmailOptIn: true,
+      transactionalSmsOptIn: true,
+      marketingEmailOptIn: false,
+      marketingSmsOptIn: false,
+      metadata: {
+        entityType: "PLAYER_POOL_PROFILE",
+        profileId,
+        prospectId: result.id,
+        leadId: lead.id,
+        publicCode,
+        leagueId: lead.leagueId,
+      },
+    });
+
+    const dispatch = await queueNotificationFromTemplate({
+      templateKey: PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY,
+      recipientId: recipient.id,
+      variables: {
+        firstName: firstName || "there",
+        fullName: displayName,
+        profileUrl,
+        publicCode,
+        area: lead.area || "",
+        leagueName: lead.league?.name || "SIXFL PlayerPool",
+      },
+      emailBranding: {
+        teamName: "SIXFL PlayerPool",
+        teamLogoUrl: PLAYER_POOL_LOGO_PATH,
+        leagueName: "Private player matching",
+      },
+      sourceType: "PLAYER_POOL_PROFILE_INVITE",
+      sourceId: profileId,
+      metadata: {
+        origin: "lead_to_player_pool",
+        originLabel: "Player lead added to PlayerPool and invitation sent",
+        profileId,
+        prospectId: result.id,
+        leadId: lead.id,
+        publicCode,
+        leagueId: lead.leagueId,
+        ctaUrl: profileUrl,
+      },
+      createdByUserId: user?.id ?? null,
+    });
+
+    await logNotificationDispatchToThread({ dispatch, recipient });
+
+    await prisma.interestLead.update({
+      where: { id: lead.id },
+      data: {
+        status: "CLOSED",
+        contactedAt: lead.status === "NEW" ? new Date() : undefined,
+        convertedAt: lead.convertedAt ?? new Date(),
+        closedAt: new Date(),
+      },
+    });
+
+    revalidatePath("/admin/leads");
+    revalidatePath(`/admin/leads/${lead.id}`);
+    revalidatePath("/admin/player-prospects");
+    revalidatePath("/admin/player-pool");
+    revalidatePath("/admin/templates");
+    revalidatePath("/admin/messaging");
   } catch (error) {
     const message =
       error instanceof Error && error.message
         ? error.message
-        : "The player could not be added to the player pool.";
+        : "The player could not be added to the PlayerPool or sent their invitation email.";
 
     console.error("Player-pool lead conversion failed", { leadId, error });
     redirect(buildPlayerPoolErrorRedirect(message));
   }
 
-  revalidatePath("/admin/leads");
-  revalidatePath(`/admin/leads/${leadId}`);
-  revalidatePath("/admin/player-prospects");
-
-  const query = new URLSearchParams({
-    saved: existingProspect ? "lead-pool-reused" : "lead-pool-added",
-    prospect: prospectId,
-  });
-
-  redirect(`/admin/player-prospects?${query.toString()}`);
+  redirect("/admin/player-pool?saved=invite-sent");
 }
