@@ -5,12 +5,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const SIXFL_TV_LOGO_PATH = "/Sixfl-tv.png";
 
 export default function CaptainPlayerPoolNavBridge() {
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     const match = pathname?.match(/^\/captain\/team\/([^/]+)/);
@@ -20,9 +21,29 @@ export default function CaptainPlayerPoolNavBridge() {
     const playerPoolHref = `/captain/team/${teamId}/player-pool`;
     const tvHref = `/captain/team/${teamId}/tv`;
 
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+
+    function openPlayerPool(event: MouseEvent) {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      router.push(playerPoolHref);
+    }
+
     function ensureCaptainTabs() {
       const nav = document.querySelector(".captain-team-nav");
-      if (!(nav instanceof HTMLElement)) return;
+      if (!(nav instanceof HTMLElement)) return false;
 
       let playerPoolLink = nav.querySelector<HTMLAnchorElement>(
         `a[href="${playerPoolHref}"]`,
@@ -47,6 +68,7 @@ export default function CaptainPlayerPoolNavBridge() {
           const squadLink = Array.from(nav.querySelectorAll("a")).find(
             (item) => item.textContent?.trim() === "Squad",
           );
+
           if (squadLink?.nextSibling) {
             nav.insertBefore(playerPoolLink, squadLink.nextSibling);
           } else {
@@ -58,6 +80,7 @@ export default function CaptainPlayerPoolNavBridge() {
       playerPoolLink.textContent = "PlayerPool";
       playerPoolLink.setAttribute("aria-label", "PlayerPool");
       playerPoolLink.title = "PlayerPool";
+      playerPoolLink.onclick = openPlayerPool;
 
       const tvLink = nav.querySelector<HTMLAnchorElement>(`a[href="${tvHref}"]`);
       if (tvLink && !tvLink.querySelector('img[data-sixfl-tv-nav-logo="true"]')) {
@@ -70,16 +93,29 @@ export default function CaptainPlayerPoolNavBridge() {
         tvLink.setAttribute("aria-label", "SIXFL TV");
         tvLink.title = "SIXFL TV";
       }
+
+      return true;
     }
 
-    ensureCaptainTabs();
-    const observer = new MutationObserver(ensureCaptainTabs);
-    observer.observe(document.body, { childList: true, subtree: true });
+    function run() {
+      if (cancelled) return;
+
+      attempts += 1;
+      const ready = ensureCaptainTabs();
+
+      if (!ready && attempts < 8) {
+        retryTimer = setTimeout(run, 75);
+      }
+    }
+
+    const frame = window.requestAnimationFrame(run);
 
     return () => {
-      observer.disconnect();
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [pathname]);
+  }, [pathname, router]);
 
   return null;
 }
