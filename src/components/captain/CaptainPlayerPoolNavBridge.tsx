@@ -7,6 +7,27 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+const PLAYER_POOL_LOGO_URL = "/logos/sixfl%20player%20pool%20.png";
+
+function applyPlayerPoolLogo(link: HTMLAnchorElement) {
+  link.setAttribute("aria-label", "SIXFL PlayerPool");
+  link.title = "SIXFL PlayerPool";
+
+  let logo = link.querySelector<HTMLImageElement>(
+    'img[data-sixfl-player-pool-logo="true"]',
+  );
+
+  if (!logo) {
+    link.textContent = "";
+    logo = document.createElement("img");
+    logo.src = PLAYER_POOL_LOGO_URL;
+    logo.alt = "SIXFL PlayerPool";
+    logo.dataset.sixflPlayerPoolLogo = "true";
+    logo.className = "h-6 w-auto max-w-[7.5rem] object-contain";
+    link.appendChild(logo);
+  }
+}
+
 export default function CaptainPlayerPoolNavBridge() {
   const pathname = usePathname();
 
@@ -27,15 +48,16 @@ export default function CaptainPlayerPoolNavBridge() {
 
       if (existing) {
         existing.href = href;
+        applyPlayerPoolLogo(existing);
         return;
       }
 
       const link = document.createElement("a");
       link.href = href;
-      link.textContent = "PlayerPool";
       link.dataset.sixflPlayerPoolNav = "true";
       link.className =
-        "rounded-full border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400/40 hover:bg-emerald-500/15";
+        "inline-flex min-h-10 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5 transition hover:border-emerald-400/40 hover:bg-emerald-500/15";
+      applyPlayerPoolLogo(link);
 
       const squadLink = Array.from(nav.querySelectorAll("a")).find(
         (item) => item.textContent?.trim() === "Squad",
