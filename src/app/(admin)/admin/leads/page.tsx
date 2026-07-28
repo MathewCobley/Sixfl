@@ -21,6 +21,7 @@ import {
   sendBulkLeadEmailAction,
   sendBulkLeadSmsAction,
 } from "./guarded-bulk-actions";
+import { sendPlayerPoolProfileInviteAction } from "../player-pool/actions";
 
 type SearchParams = Promise<{
   type?: string;
@@ -466,6 +467,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                   const confirmation = confirmationByLeadId.get(lead.id) ?? null;
                   const confirmationMeta = getConfirmationMeta(confirmation);
                   const canSendConfirmation = lead.interestType === "TEAM" && Boolean(lead.email?.trim()) && Boolean(lead.league);
+                  const canSendPlayerPoolInvite = lead.interestType === "PLAYER" && Boolean(lead.email?.trim());
 
                   return (
                     <tr key={lead.id} className="align-top transition hover:bg-white/[0.035]">
@@ -515,6 +517,19 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                                 </div>
                               ) : null}
                             </>
+                          ) : null}
+                          {lead.interestType === "PLAYER" ? (
+                            <form action={sendPlayerPoolProfileInviteAction}>
+                              <input type="hidden" name="leadId" value={lead.id} />
+                              <button
+                                type="submit"
+                                disabled={!canSendPlayerPoolInvite}
+                                title={canSendPlayerPoolInvite ? "Create or update the PlayerPool profile and send the invitation email" : "Add an email address before sending a PlayerPool invitation"}
+                                className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/30"
+                              >
+                                Send to PlayerPool
+                              </button>
+                            </form>
                           ) : null}
                           <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
                             Open
