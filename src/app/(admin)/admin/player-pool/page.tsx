@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 
+import DeletePlayerPoolProfileButton from "@/components/admin/player-pool/DeletePlayerPoolProfileButton";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { ensurePlayerPoolTables, readPlayerPoolStringArray } from "@/lib/player-pool/storage";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +15,7 @@ import {
   sendPlayerPoolProfileInviteAction,
   setPlayerPoolProfileStatusAction,
 } from "./actions";
+import { deletePlayerPoolProfileAction } from "./delete-actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -118,6 +120,8 @@ function getSavedMessage(saved?: string) {
       return "Player returned to the available pool.";
     case "status-updated":
       return "PlayerPool status updated.";
+    case "deleted":
+      return "Player removed from PlayerPool. Their original lead and player record were kept.";
     default:
       return null;
   }
@@ -315,77 +319,89 @@ export default async function AdminPlayerPoolPage({
               No PlayerPool profiles have been created yet.
             </div>
           ) : null}
-          {profiles.map((profile) => (
-            <article key={profile.id} className="rounded-3xl border border-white/10 bg-black/25 p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-emerald-200">{profile.publicCode}</span>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusClasses(profile.status)}`}>
-                      {profile.status.replaceAll("_", " ")}
-                    </span>
+          {profiles.map((profile) => {
+            const playerName = nameOf(profile.firstName, profile.lastName) || profile.email || "this player";
+
+            return (
+              <article key={profile.id} className="rounded-3xl border border-white/10 bg-black/25 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-bold text-emerald-200">{profile.publicCode}</span>
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusClasses(profile.status)}`}>
+                        {profile.status.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    <h3 className="mt-3 text-lg font-bold text-white">{playerName}</h3>
+                    <div className="mt-1 text-sm text-white/55">
+                      {profile.email || "No email"}{profile.phone ? ` · ${profile.phone}` : ""}
+                    </div>
                   </div>
-                  <h3 className="mt-3 text-lg font-bold text-white">{nameOf(profile.firstName, profile.lastName)}</h3>
-                  <div className="mt-1 text-sm text-white/55">
-                    {profile.email || "No email"}{profile.phone ? ` · ${profile.phone}` : ""}
-                  </div>
+                  <Link
+                    href={`/player-pool/profile/${profile.profileToken}`}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/10"
+                  >
+                    Open form
+                  </Link>
                 </div>
-                <Link
-                  href={`/player-pool/profile/${profile.profileToken}`}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/10"
-                >
-                  Open form
-                </Link>
-              </div>
 
-              <div className="mt-5 grid gap-2 text-sm sm:grid-cols-2">
-                {[
-                  ["Age", profile.ageBand],
-                  ["Positions", profile.preferredPositions],
-                  ["Preferred", profile.preferredPosition],
-                  ["Experience", profile.experienceSummary],
-                  ["Availability", profile.availabilityLevel],
-                  ["Nights", formatNights(profile.preferredNights)],
-                  ["Area", profile.area],
-                  ["League", profile.leagueName],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">{label}</div>
-                    <div className="mt-1 text-white/75">{value || "—"}</div>
-                  </div>
-                ))}
-              </div>
+                <div className="mt-5 grid gap-2 text-sm sm:grid-cols-2">
+                  {[
+                    ["Age", profile.ageBand],
+                    ["Positions", profile.preferredPositions],
+                    ["Preferred", profile.preferredPosition],
+                    ["Experience", profile.experienceSummary],
+                    ["Availability", profile.availabilityLevel],
+                    ["Nights", formatNights(profile.preferredNights)],
+                    ["Area", profile.area],
+                    ["League", profile.leagueName],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">{label}</div>
+                      <div className="mt-1 text-white/75">{value || "—"}</div>
+                    </div>
+                  ))}
+                </div>
 
-              {profile.availabilitySummary ? (
-                <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-white/65">
-                  {profile.availabilitySummary}
-                </p>
-              ) : null}
+                {profile.availabilitySummary ? (
+                  <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-white/65">
+                    {profile.availabilitySummary}
+                  </p>
+                ) : null}
 
-              <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/45">
-                <span>Invited: {formatDate(profile.invitedAt)}</span>
-                <span>·</span>
-                <span>Profile: {formatDate(profile.profileSubmittedAt)}</span>
-              </div>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/45">
+                  <span>Invited: {formatDate(profile.invitedAt)}</span>
+                  <span>·</span>
+                  <span>Profile: {formatDate(profile.profileSubmittedAt)}</span>
+                </div>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-4">
-                {[
-                  ["AVAILABLE", "Available"],
-                  ["PAUSED", "Pause"],
-                  ["JOINED", "Joined"],
-                  ["NOT_LOOKING", "Not looking"],
-                ].map(([status, label]) => (
-                  <form key={status} action={setPlayerPoolProfileStatusAction}>
-                    <input type="hidden" name="profileId" value={profile.id} />
-                    <input type="hidden" name="status" value={status} />
-                    <button className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/65 transition hover:bg-white/10 hover:text-white">
-                      {label}
-                    </button>
-                  </form>
-                ))}
-              </div>
-            </article>
-          ))}
+                <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                  {[
+                    ["AVAILABLE", "Available"],
+                    ["PAUSED", "Pause"],
+                    ["JOINED", "Joined"],
+                    ["NOT_LOOKING", "Not looking"],
+                  ].map(([status, label]) => (
+                    <form key={status} action={setPlayerPoolProfileStatusAction}>
+                      <input type="hidden" name="profileId" value={profile.id} />
+                      <input type="hidden" name="status" value={status} />
+                      <button className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/65 transition hover:bg-white/10 hover:text-white">
+                        {label}
+                      </button>
+                    </form>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex justify-end border-t border-white/10 pt-4">
+                  <DeletePlayerPoolProfileButton
+                    profileId={profile.id}
+                    playerName={playerName}
+                    action={deletePlayerPoolProfileAction}
+                  />
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
 
