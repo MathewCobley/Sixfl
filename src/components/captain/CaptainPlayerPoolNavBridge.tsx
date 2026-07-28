@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-const PLAYER_POOL_LOGO_PATH = "/logos/sixfl player pool .png";
+const SIXFL_TV_LOGO_PATH = "/Sixfl-tv.png";
 
 export default function CaptainPlayerPoolNavBridge() {
   const pathname = usePathname();
@@ -17,64 +17,67 @@ export default function CaptainPlayerPoolNavBridge() {
     if (!match) return;
 
     const teamId = match[1];
-    const href = `/captain/team/${teamId}/player-pool`;
-    let observer: MutationObserver | null = null;
+    const playerPoolHref = `/captain/team/${teamId}/player-pool`;
+    const tvHref = `/captain/team/${teamId}/tv`;
 
-    function installLink() {
+    function ensureCaptainTabs() {
       const nav = document.querySelector(".captain-team-nav");
-      if (!(nav instanceof HTMLElement)) return false;
+      if (!(nav instanceof HTMLElement)) return;
 
-      let link = nav.querySelector<HTMLAnchorElement>(
-        'a[data-sixfl-player-pool-nav="true"]',
+      let playerPoolLink = nav.querySelector<HTMLAnchorElement>(
+        `a[href="${playerPoolHref}"]`,
       );
 
-      if (!link) {
-        link = document.createElement("a");
-        link.dataset.sixflPlayerPoolNav = "true";
-        link.className =
-          "inline-flex min-h-10 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 transition hover:border-emerald-400/40 hover:bg-emerald-500/15";
+      if (!playerPoolLink) {
+        playerPoolLink = document.createElement("a");
+        playerPoolLink.href = playerPoolHref;
+        playerPoolLink.dataset.sixflPlayerPoolNav = "true";
+        playerPoolLink.className =
+          "rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100";
 
         const prospectsLink = Array.from(nav.querySelectorAll("a")).find(
           (item) => item.textContent?.trim() === "Prospects",
         );
 
-        if (prospectsLink) {
-          nav.insertBefore(link, prospectsLink);
+        if (prospectsLink?.nextSibling) {
+          nav.insertBefore(playerPoolLink, prospectsLink.nextSibling);
+        } else if (prospectsLink) {
+          nav.appendChild(playerPoolLink);
         } else {
-          nav.appendChild(link);
+          const squadLink = Array.from(nav.querySelectorAll("a")).find(
+            (item) => item.textContent?.trim() === "Squad",
+          );
+          if (squadLink?.nextSibling) {
+            nav.insertBefore(playerPoolLink, squadLink.nextSibling);
+          } else {
+            nav.appendChild(playerPoolLink);
+          }
         }
       }
 
-      link.href = href;
-      link.setAttribute("aria-label", "SIXFL PlayerPool");
-      link.title = "SIXFL PlayerPool";
+      playerPoolLink.textContent = "PlayerPool";
+      playerPoolLink.setAttribute("aria-label", "PlayerPool");
+      playerPoolLink.title = "PlayerPool";
 
-      if (!link.querySelector('img[data-sixfl-player-pool-logo="true"]')) {
+      const tvLink = nav.querySelector<HTMLAnchorElement>(`a[href="${tvHref}"]`);
+      if (tvLink && !tvLink.querySelector('img[data-sixfl-tv-nav-logo="true"]')) {
         const image = document.createElement("img");
-        image.src = PLAYER_POOL_LOGO_PATH;
-        image.alt = "";
-        image.dataset.sixflPlayerPoolLogo = "true";
-        image.className = "h-5 w-[104px] object-contain";
-        link.replaceChildren(image);
+        image.src = SIXFL_TV_LOGO_PATH;
+        image.alt = "SIXFL TV";
+        image.dataset.sixflTvNavLogo = "true";
+        image.className = "h-5 w-auto max-w-[5rem] object-contain";
+        tvLink.replaceChildren(image);
+        tvLink.setAttribute("aria-label", "SIXFL TV");
+        tvLink.title = "SIXFL TV";
       }
-
-      observer?.disconnect();
-      observer = null;
-      return true;
     }
 
-    if (!installLink()) {
-      observer = new MutationObserver(() => {
-        installLink();
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
+    ensureCaptainTabs();
+    const observer = new MutationObserver(ensureCaptainTabs);
+    observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
-      observer?.disconnect();
-      document
-        .querySelectorAll('a[data-sixfl-player-pool-nav="true"]')
-        .forEach((item) => item.remove());
+      observer.disconnect();
     };
   }, [pathname]);
 
