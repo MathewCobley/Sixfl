@@ -15,14 +15,20 @@ export default function CaptainPlayerPoolPageLogoBridge() {
   useEffect(() => {
     if (!pathname?.match(/^\/captain\/team\/[^/]+\/player-pool(?:\/|$)/)) return;
 
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+
     function ensureLogo() {
-      if (document.querySelector('[data-sixfl-player-pool-page-logo="true"]')) return;
+      if (document.querySelector('[data-sixfl-player-pool-page-logo="true"]')) {
+        return true;
+      }
 
       const heading = Array.from(document.querySelectorAll("h1")).find((item) =>
         item.textContent?.includes("Available players for"),
       );
       const hero = heading?.closest("section");
-      if (!(hero instanceof HTMLElement)) return;
+      if (!(hero instanceof HTMLElement)) return false;
 
       const wrapper = document.createElement("div");
       wrapper.dataset.sixflPlayerPoolPageLogo = "true";
@@ -35,14 +41,27 @@ export default function CaptainPlayerPoolPageLogoBridge() {
 
       wrapper.appendChild(image);
       hero.insertBefore(wrapper, hero.firstChild);
+      return true;
     }
 
-    ensureLogo();
-    const observer = new MutationObserver(ensureLogo);
-    observer.observe(document.body, { childList: true, subtree: true });
+    function run() {
+      if (cancelled) return;
+
+      attempts += 1;
+      const ready = ensureLogo();
+
+      if (!ready && attempts < 8) {
+        retryTimer = setTimeout(run, 75);
+      }
+    }
+
+    const frame = window.requestAnimationFrame(run);
 
     return () => {
-      observer.disconnect();
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      if (retryTimer) clearTimeout(retryTimer);
+
       document
         .querySelectorAll('[data-sixfl-player-pool-page-logo="true"]')
         .forEach((item) => item.remove());
