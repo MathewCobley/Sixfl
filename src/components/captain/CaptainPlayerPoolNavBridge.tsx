@@ -7,27 +7,6 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-const PLAYER_POOL_LOGO_URL = "/logos/sixfl%20player%20pool%20.png";
-
-function applyPlayerPoolLogo(link: HTMLAnchorElement) {
-  link.setAttribute("aria-label", "SIXFL PlayerPool");
-  link.title = "SIXFL PlayerPool";
-
-  let logo = link.querySelector<HTMLImageElement>(
-    'img[data-sixfl-player-pool-logo="true"]',
-  );
-
-  if (!logo) {
-    link.textContent = "";
-    logo = document.createElement("img");
-    logo.src = PLAYER_POOL_LOGO_URL;
-    logo.alt = "SIXFL PlayerPool";
-    logo.dataset.sixflPlayerPoolLogo = "true";
-    logo.className = "h-6 w-auto max-w-[7.5rem] object-contain";
-    link.appendChild(logo);
-  }
-}
-
 export default function CaptainPlayerPoolNavBridge() {
   const pathname = usePathname();
 
@@ -48,23 +27,27 @@ export default function CaptainPlayerPoolNavBridge() {
 
       if (existing) {
         existing.href = href;
-        applyPlayerPoolLogo(existing);
+        existing.textContent = "PlayerPool";
+        existing.setAttribute("aria-label", "PlayerPool");
+        existing.title = "PlayerPool";
         return;
       }
 
       const link = document.createElement("a");
       link.href = href;
+      link.textContent = "PlayerPool";
       link.dataset.sixflPlayerPoolNav = "true";
+      link.setAttribute("aria-label", "PlayerPool");
+      link.title = "PlayerPool";
       link.className =
-        "inline-flex min-h-10 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5 transition hover:border-emerald-400/40 hover:bg-emerald-500/15";
-      applyPlayerPoolLogo(link);
+        "inline-flex min-h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.035] px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/20 hover:bg-white/[0.07] hover:text-white";
 
-      const squadLink = Array.from(nav.querySelectorAll("a")).find(
-        (item) => item.textContent?.trim() === "Squad",
+      const prospectsLink = Array.from(nav.querySelectorAll("a")).find(
+        (item) => item.textContent?.trim() === "Prospects",
       );
 
-      if (squadLink?.nextSibling) {
-        nav.insertBefore(link, squadLink.nextSibling);
+      if (prospectsLink) {
+        nav.insertBefore(link, prospectsLink);
       } else {
         nav.appendChild(link);
       }
