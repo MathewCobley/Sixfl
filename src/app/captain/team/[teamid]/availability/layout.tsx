@@ -47,7 +47,7 @@ export default async function CaptainAvailabilityLayout({
           href={`/captain/team/${teamid}/availability`}
           className="inline-flex items-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/[0.06] hover:text-white"
         >
-          Availability
+          Player availability
         </Link>
         <Link
           href={`/captain/team/${teamid}/availability/requests`}
