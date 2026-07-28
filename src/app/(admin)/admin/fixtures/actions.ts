@@ -5,6 +5,8 @@
 export {
   deleteLeagueFixturesAction,
   generateFixtures,
+} from "./actions-with-kickoff-rules";
+export {
   submitResultAction,
   updateFixtureAction,
 } from "./actions-legacy";
