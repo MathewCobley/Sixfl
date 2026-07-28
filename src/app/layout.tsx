@@ -17,6 +17,7 @@ import CaptainAdditionalCaptainBridge from "@/components/captain/CaptainAddition
 import CaptainFixturesDeduplicateBridge from "@/components/captain/CaptainFixturesDeduplicateBridge";
 import CaptainHeaderLeaguePositionBridge from "@/components/captain/CaptainHeaderLeaguePositionBridge";
 import CaptainPlayerPoolNavBridge from "@/components/captain/CaptainPlayerPoolNavBridge";
+import CaptainPlayerPoolPageLogoBridge from "@/components/captain/CaptainPlayerPoolPageLogoBridge";
 import HideImpossibleLeaguePositionBridge from "@/components/captain/HideImpossibleLeaguePositionBridge";
 import TeamAutoPayCopyBridge from "@/components/captain/TeamAutoPayCopyBridge";
 import NorthallertonWaitingListCopyBridge from "@/components/public/NorthallertonWaitingListCopyBridge";
@@ -123,6 +124,7 @@ export default function RootLayout({
             <CaptainFixturesDeduplicateBridge />
             <CaptainHeaderLeaguePositionBridge />
             <CaptainPlayerPoolNavBridge />
+            <CaptainPlayerPoolPageLogoBridge />
             <HideImpossibleLeaguePositionBridge />
             <TeamAutoPayCopyBridge />
             <NorthallertonWaitingListCopyBridge />
