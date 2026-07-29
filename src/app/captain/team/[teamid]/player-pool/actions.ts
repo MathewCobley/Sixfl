@@ -61,6 +61,23 @@ export async function requestPlayerPoolIntroductionAction(formData: FormData) {
     CROSS JOIN "Team" team
     WHERE profile."id" = ${profileId}
       AND team."id" = ${teamid}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "TeamPlayerProspect" squad_prospect
+        WHERE squad_prospect."teamId" = ${teamid}
+          AND squad_prospect."email" IS NOT NULL
+          AND prospect."email" IS NOT NULL
+          AND LOWER(TRIM(squad_prospect."email")) = LOWER(TRIM(prospect."email"))
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "TeamMember" squad_member
+        JOIN "User" squad_user ON squad_user."id" = squad_member."userId"
+        WHERE squad_member."teamId" = ${teamid}
+          AND squad_user."email" IS NOT NULL
+          AND prospect."email" IS NOT NULL
+          AND LOWER(TRIM(squad_user."email")) = LOWER(TRIM(prospect."email"))
+      )
     LIMIT 1
   `;
 
