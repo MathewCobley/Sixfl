@@ -7,6 +7,12 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+type PlayerPoolResponse = {
+  ok?: boolean;
+  message?: string;
+  error?: string;
+};
+
 function teamId(pathname: string) {
   return pathname.match(/\/captain\/team\/([^/]+)\/(?:squad|prospects)(?:\/)?$/)?.[1] ?? null;
 }
@@ -82,6 +88,66 @@ function getProspectActionArea(card: HTMLElement, id: string) {
   return null;
 }
 
+function getProspectName(card: HTMLElement) {
+  return (
+    card.querySelector<HTMLElement>(".text-base.font-semibold.text-white")?.textContent?.trim() ||
+    "this player"
+  );
+}
+
+function getProspectEmail(card: HTMLElement) {
+  return card.querySelector<HTMLInputElement>('input[name="email"]')?.value.trim() || "";
+}
+
+function createPlayerPoolButton(card: HTMLElement, id: string) {
+  const button = document.createElement("button");
+  const email = getProspectEmail(card);
+
+  button.type = "button";
+  button.dataset.sendTeamProspectToPlayerPool = id;
+  button.textContent = email ? "Send to PlayerPool" : "Add email to send to PlayerPool";
+  button.disabled = !email;
+  button.className =
+    "inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/35";
+
+  if (!email) {
+    button.title = "Save an email address first.";
+    return button;
+  }
+
+  button.addEventListener("click", async () => {
+    const playerName = getProspectName(card);
+    const confirmed = window.confirm(
+      `Send ${playerName} a SIXFL PlayerPool profile form? They will stay in their current squad.`,
+    );
+
+    if (!confirmed) return;
+
+    const originalText = button.textContent || "Send to PlayerPool";
+    button.disabled = true;
+    button.textContent = "Sending…";
+
+    const response = await fetch(`/api/admin/player-prospects/${id}/player-pool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const payload = (await response.json().catch(() => null)) as PlayerPoolResponse | null;
+
+    if (!response.ok || !payload?.ok) {
+      window.alert(payload?.error || "The PlayerPool form could not be sent.");
+      button.disabled = false;
+      button.textContent = originalText;
+      return;
+    }
+
+    window.alert(payload.message || "PlayerPool profile form sent.");
+    window.location.reload();
+  });
+
+  return button;
+}
+
 function addTeamProspectPoolButtons(pathname: string) {
   const currentTeamId = teamId(pathname);
   if (!currentTeamId) return;
@@ -94,10 +160,16 @@ function addTeamProspectPoolButtons(pathname: string) {
 
   for (const id of ids) {
     const card = getProspectCard(id);
-    if (!card || card.querySelector(`[data-move-team-prospect-to-pool="${id}"]`)) continue;
+    if (!card) continue;
 
     const actions = getProspectActionArea(card, id);
     if (!actions) continue;
+
+    if (!card.querySelector(`[data-send-team-prospect-to-player-pool="${id}"]`)) {
+      actions.appendChild(createPlayerPoolButton(card, id));
+    }
+
+    if (card.querySelector(`[data-move-team-prospect-to-pool="${id}"]`)) continue;
 
     const button = document.createElement("button");
     button.type = "button";
