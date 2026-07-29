@@ -37,9 +37,6 @@ export default async function PlayerPoolPage({
                 className="object-contain object-left"
               />
             </div>
-            <div className="mt-5 inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
-              SIXFL PlayerPool
-            </div>
             <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-5xl">
               Find a team without sharing your contact details publicly.
             </h1>
