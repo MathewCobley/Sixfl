@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma } from "@prisma/client";
+import { Prisma, TeamMode } from "@prisma/client";
 
 import AdminCard from "@/components/admin/AdminCard";
 import { addTeamCredit, syncTeamCreditLedgerSources } from "@/lib/payments/team-credits";
@@ -15,9 +15,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export const metadata = {
-  title: "Team Credits | SIXFL Admin",
-};
+export const metadata = { title: "Team Credits | SIXFL Admin" };
 
 type PageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -45,7 +43,10 @@ function getSearchParam(value: string | string[] | undefined) {
 }
 
 function formatMoney(pence: number) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(pence / 100);
 }
 
 function formatDate(value: Date) {
@@ -83,7 +84,6 @@ function SummaryCard({ title, value }: { title: string; value: string | number }
 
 async function getRequiredAdminUserId() {
   const { user, session } = await requireAdmin();
-
   if (user?.id) return user.id;
 
   const email = session?.user?.email?.trim().toLowerCase();
@@ -94,7 +94,9 @@ async function getRequiredAdminUserId() {
     select: { id: true },
   });
 
-  if (!fallbackUser?.id) redirect("/admin/payments/team-credits?error=admin_user_missing");
+  if (!fallbackUser?.id) {
+    redirect("/admin/payments/team-credits?error=admin_user_missing");
+  }
 
   return fallbackUser.id;
 }
@@ -103,7 +105,6 @@ async function addTeamCreditAction(formData: FormData) {
   "use server";
 
   const adminUserId = await getRequiredAdminUserId();
-
   const teamId = String(formData.get("teamId") ?? "").trim();
   const amountPounds = Number(formData.get("amountPounds") ?? "0");
   const description = String(formData.get("description") ?? "").trim();
@@ -114,10 +115,13 @@ async function addTeamCreditAction(formData: FormData) {
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: { id: true },
+    select: { id: true, teamMode: true },
   });
 
   if (!team) redirect("/admin/payments/team-credits?error=missing_team");
+  if (team.teamMode === TeamMode.MANAGED) {
+    redirect("/admin/payments/team-credits?error=managed_team");
+  }
 
   await addTeamCredit({
     teamId,
@@ -129,7 +133,6 @@ async function addTeamCreditAction(formData: FormData) {
   revalidatePath("/admin/payments/team-credits");
   revalidatePath("/admin/payments");
   revalidatePath(`/captain/team/${teamId}/payments`);
-
   redirect("/admin/payments/team-credits?saved=credit_added");
 }
 
@@ -147,6 +150,7 @@ async function getRecentCredits() {
     FROM "TeamCreditLedgerEntry" c
     JOIN "Team" t ON t."id" = c."teamId"
     LEFT JOIN "PaymentCharge" pc ON pc."id" = c."chargeId"
+    WHERE t."teamMode"::text = 'STANDARD'
     ORDER BY c."createdAt" DESC, c."id" DESC
     LIMIT 80
   `);
@@ -165,6 +169,7 @@ async function getCreditBalances() {
       ), 0)::int AS "balancePence"
     FROM "TeamCreditLedgerEntry" c
     JOIN "Team" t ON t."id" = c."teamId"
+    WHERE t."teamMode"::text = 'STANDARD'
     GROUP BY t."id", t."name"
     HAVING COALESCE(SUM(
       CASE
@@ -184,8 +189,11 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
   const error = getSearchParam(params.error);
 
   const teams = await prisma.team.findMany({
-    where: { leagueId: { not: null } },
-    orderBy: [{ name: "asc" }],
+    where: {
+      leagueId: { not: null },
+      teamMode: TeamMode.STANDARD,
+    },
+    orderBy: { name: "asc" },
     select: {
       id: true,
       name: true,
@@ -200,7 +208,10 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
     getCreditBalances(),
   ]);
 
-  const totalCreditPence = balances.reduce((sum, row) => sum + Math.max(row.balancePence, 0), 0);
+  const totalCreditPence = balances.reduce(
+    (sum, row) => sum + Math.max(row.balancePence, 0),
+    0,
+  );
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -215,7 +226,7 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
           Team credit ledger
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Add manual team credit, review credit balances, and track credit used against match fees.
+          Add manual team credit, review credit balances, and track credit used against match fees. Managed teams are excluded because their player payments are administered separately.
         </p>
       </div>
 
@@ -229,9 +240,11 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
           {error === "missing_team"
             ? "The selected team could not be found."
-            : error === "admin_user_missing"
-              ? "Admin user could not be confirmed."
-              : "Check the credit details and try again."}
+            : error === "managed_team"
+              ? "Managed teams do not use the team credit ledger."
+              : error === "admin_user_missing"
+                ? "Admin user could not be confirmed."
+                : "Check the credit details and try again."}
         </div>
       ) : null}
 
@@ -244,17 +257,13 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
         <h2 className="text-xl font-semibold text-white">Add manual team credit</h2>
         <p className="mt-2 text-sm text-white/55">
-          Use this when SIXFL owes a team credit that should reduce a future match-fee balance.
+          Use this when SIXFL owes a standard team credit that should reduce a future match-fee balance.
         </p>
 
         <form action={addTeamCreditAction} className="mt-5 grid gap-4 lg:grid-cols-[1.25fr_0.5fr_1.5fr_auto]">
           <label className="space-y-2 text-sm font-semibold text-white">
             Team
-            <select
-              name="teamId"
-              required
-              className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/50"
-            >
+            <select name="teamId" required className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/50">
               <option value="">Choose team</option>
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
@@ -266,30 +275,15 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
 
           <label className="space-y-2 text-sm font-semibold text-white">
             Amount
-            <input
-              name="amountPounds"
-              type="number"
-              min="0.01"
-              step="0.01"
-              required
-              placeholder="10.00"
-              className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
-            />
+            <input name="amountPounds" type="number" min="0.01" step="0.01" required placeholder="10.00" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50" />
           </label>
 
           <label className="space-y-2 text-sm font-semibold text-white">
             Reason
-            <input
-              name="description"
-              placeholder="For example: refund for abandoned fixture"
-              className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
-            />
+            <input name="description" placeholder="For example: refund for abandoned fixture" className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50" />
           </label>
 
-          <button
-            type="submit"
-            className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 lg:self-end"
-          >
+          <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300 lg:self-end">
             Add credit
           </button>
         </form>
@@ -299,7 +293,7 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
         <h2 className="text-xl font-semibold text-white">Current balances</h2>
         <div className="mt-4 divide-y divide-white/10">
           {balances.length === 0 ? (
-            <div className="py-6 text-sm text-white/55">No team credit balances yet.</div>
+            <div className="py-6 text-sm text-white/55">No standard-team credit balances yet.</div>
           ) : (
             balances.map((row) => (
               <div key={row.teamId} className="flex items-center justify-between gap-4 py-4">
@@ -318,7 +312,7 @@ export default async function TeamCreditsAdminPage({ searchParams }: PageProps) 
         <h2 className="text-xl font-semibold text-white">Recent ledger entries</h2>
         <div className="mt-4 divide-y divide-white/10">
           {recentCredits.length === 0 ? (
-            <div className="py-6 text-sm text-white/55">No credit ledger entries yet.</div>
+            <div className="py-6 text-sm text-white/55">No standard-team credit ledger entries yet.</div>
           ) : (
             recentCredits.map((entry) => {
               const signed = signedAmount(entry.entryType, entry.amountPence);
