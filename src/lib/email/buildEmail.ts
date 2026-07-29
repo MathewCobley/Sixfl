@@ -9,8 +9,11 @@ import {
 
 const SIXFL_LOGO_URL = "https://www.sixfl.co.uk/sixfl-email.png";
 const SIXFL_TV_LOGO_URL = "https://www.sixfl.co.uk/Sixfl-tv.png";
+const PLAYER_POOL_LOGO_URL =
+  "https://www.sixfl.co.uk/logos/sixfl%20player%20pool%20.png";
 
 export const SIXFL_TV_EMAIL_BRAND_MARKER = "{{emailBrand:sixfl-tv}}";
+export const PLAYER_POOL_EMAIL_BRAND_MARKER = "{{emailBrand:player-pool}}";
 
 const SIXFL_SIGNATURE_LINES = [
   "—",
@@ -25,7 +28,8 @@ const CTA_PLACEHOLDER = "{{cta}}";
 const RESPONSE_BUTTONS_PATTERN =
   /(?:^|\n)\s*YES,\s*I still want to play:\s*(https?:\/\/\S+)\s*\n\s*NO,\s*remove me from the squad list:\s*(https?:\/\/\S+)\s*(?:\n|$)/i;
 const POLL_BUTTONS_PATTERN = /(?:^|\n)\s*SIXFL_POLL_OPTIONS_START\s*\n([\s\S]*?)\n\s*SIXFL_POLL_OPTIONS_END\s*(?:\n|$)/i;
-const EMAIL_BRAND_MARKER_PATTERN = /(?:^|\n)\s*(?:\{\{\s*emailBrand\s*:\s*sixfl-tv\s*\}\}|SIXFL_EMAIL_BRAND\s*:\s*sixfl-tv)\s*(?:\n|$)/gi;
+const EMAIL_BRAND_MARKER_PATTERN =
+  /(?:^|\n)\s*(?:\{\{\s*emailBrand\s*:\s*(sixfl-tv|player-pool)\s*\}\}|SIXFL_EMAIL_BRAND\s*:\s*(sixfl-tv|player-pool))\s*(?:\n|$)/gi;
 
 export type SIXFLEmailCta = {
   label: string;
@@ -54,7 +58,7 @@ type PollButton = {
   url: string;
 };
 
-type EmailBrand = "sixfl" | "sixfl-tv";
+type EmailBrand = "sixfl" | "sixfl-tv" | "player-pool";
 
 type LogoDetails = {
   src: string;
@@ -86,10 +90,16 @@ function extractEmailBrand(body: string): { body: string; brand: EmailBrand } {
   const normalised = normalizeLineEndings(body);
 
   const bodyWithoutMarkers = normalised
-    .replace(EMAIL_BRAND_MARKER_PATTERN, (match) => {
-      brand = "sixfl-tv";
-      return match.startsWith("\n") ? "\n" : "";
-    })
+    .replace(
+      EMAIL_BRAND_MARKER_PATTERN,
+      (match, mustacheBrand: string | undefined, legacyBrand: string | undefined) => {
+        const selectedBrand = mustacheBrand || legacyBrand;
+        if (selectedBrand === "sixfl-tv" || selectedBrand === "player-pool") {
+          brand = selectedBrand;
+        }
+        return match.startsWith("\n") ? "\n" : "";
+      },
+    )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
@@ -102,6 +112,14 @@ function getLogoDetails(brand: EmailBrand): LogoDetails {
       src: SIXFL_TV_LOGO_URL,
       alt: "SIXFL TV",
       width: 220,
+    };
+  }
+
+  if (brand === "player-pool") {
+    return {
+      src: PLAYER_POOL_LOGO_URL,
+      alt: "SIXFL Player Pool",
+      width: 300,
     };
   }
 
@@ -449,8 +467,14 @@ function buildBodyHtmlWithOptionalCta(body: string, cta?: SIXFLEmailCta) {
   return `${bodyHtml}<div style="margin:28px 0 8px 0;">${ctaHtml}</div>${extraButtonsHtml}`.trim();
 }
 
+function getOuterBackground(brand: EmailBrand) {
+  if (brand === "sixfl-tv") return "#050505";
+  if (brand === "player-pool") return "#07130f";
+  return "#f3f4f6";
+}
+
 function buildResponsiveEmailDocument(contentHtml: string, brand: EmailBrand) {
-  const outerBackground = brand === "sixfl-tv" ? "#050505" : "#f3f4f6";
+  const outerBackground = getOuterBackground(brand);
 
   return `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -506,10 +530,15 @@ export function buildSIXFLEmailHtml(input: {
   const paymentHtml = buildPaymentSummaryHtml(input.payment);
   const showPaymentProviderNote = Boolean(input.payment);
   const isSixflTv = brandResult.brand === "sixfl-tv";
-  const outerBackground = isSixflTv ? "#050505" : "#f3f4f6";
-  const containerBorder = isSixflTv ? "#111827" : "#e5e7eb";
-  const logoBackground = isSixflTv ? "#050505" : "#ffffff";
-  const logoPadding = isSixflTv ? "30px 32px 28px 32px" : "34px 32px 20px 32px";
+  const isPlayerPool = brandResult.brand === "player-pool";
+  const outerBackground = getOuterBackground(brandResult.brand);
+  const containerBorder = isSixflTv ? "#111827" : isPlayerPool ? "#17483a" : "#e5e7eb";
+  const logoBackground = isSixflTv ? "#050505" : isPlayerPool ? "#07130f" : "#ffffff";
+  const logoPadding = isSixflTv
+    ? "30px 32px 28px 32px"
+    : isPlayerPool
+      ? "28px 32px 24px 32px"
+      : "34px 32px 20px 32px";
 
   const contentHtml = `
     <center role="article" aria-roledescription="email" lang="en" style="width:100%;background:${outerBackground};">
