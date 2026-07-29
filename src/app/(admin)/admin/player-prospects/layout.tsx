@@ -3,6 +3,7 @@
 // ========================================
 
 import ProspectChaseBridge from "@/components/admin/player-prospects/ProspectChaseBridge";
+import ProspectPlayerPoolBridge from "@/components/admin/player-prospects/ProspectPlayerPoolBridge";
 
 export default function PlayerProspectsLayout({
   children,
@@ -12,6 +13,7 @@ export default function PlayerProspectsLayout({
   return (
     <>
       <ProspectChaseBridge />
+      <ProspectPlayerPoolBridge />
       {children}
     </>
   );
