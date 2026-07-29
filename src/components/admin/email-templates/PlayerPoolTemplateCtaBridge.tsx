@@ -15,6 +15,11 @@ function getPlayerPoolUrl() {
   return `${origin}/player-pool`;
 }
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  if (input.value !== value) input.value = value;
+  if (input.getAttribute("value") !== value) input.setAttribute("value", value);
+}
+
 function syncCommunicationForms() {
   const playerPoolUrl = getPlayerPoolUrl();
 
@@ -27,15 +32,13 @@ function syncCommunicationForms() {
     if (!templateKeyInput || !ctaUrlInput) return;
     if (templateKeyInput.value !== PLAYER_POOL_TEMPLATE_KEY) return;
 
-    ctaUrlInput.value = playerPoolUrl;
-    ctaUrlInput.setAttribute("value", playerPoolUrl);
+    setInputValue(ctaUrlInput, playerPoolUrl);
 
     const ctaLabelInput = form.querySelector<HTMLInputElement>(
       'input[name="ctaLabel"]',
     );
     if (ctaLabelInput && !ctaLabelInput.value.trim()) {
-      ctaLabelInput.value = PLAYER_POOL_CTA_LABEL;
-      ctaLabelInput.setAttribute("value", PLAYER_POOL_CTA_LABEL);
+      setInputValue(ctaLabelInput, PLAYER_POOL_CTA_LABEL);
     }
   });
 }
@@ -47,10 +50,7 @@ function syncTemplateEditor() {
   const ctaUrlKeyInput = document.querySelector<HTMLInputElement>(
     'input[name="ctaUrlKey"]',
   );
-  if (ctaUrlKeyInput) {
-    ctaUrlKeyInput.value = "signupUrl";
-    ctaUrlKeyInput.setAttribute("value", "signupUrl");
-  }
+  if (ctaUrlKeyInput) setInputValue(ctaUrlKeyInput, "signupUrl");
 
   const callToActionHeading = Array.from(
     document.querySelectorAll<HTMLHeadingElement>("h2"),
@@ -60,18 +60,27 @@ function syncTemplateEditor() {
 
   const registerButton = Array.from(
     section.querySelectorAll<HTMLButtonElement>('button[type="button"]'),
-  ).find((button) => button.textContent?.includes("Register interest"));
+  ).find((button) =>
+    button.textContent?.includes("Register interest") ||
+    button.textContent?.includes("PlayerPool profile"),
+  );
 
   if (registerButton) {
     const label = registerButton.querySelector<HTMLElement>("div:first-child");
-    if (label) label.textContent = "PlayerPool profile";
+    if (label?.textContent !== "PlayerPool profile") {
+      if (label) label.textContent = "PlayerPool profile";
+    }
 
     const preview = registerButton.querySelector<HTMLElement>("div:nth-child(2)");
-    if (preview) preview.textContent = getPlayerPoolUrl();
+    const playerPoolUrl = getPlayerPoolUrl();
+    if (preview && preview.textContent !== playerPoolUrl) {
+      preview.textContent = playerPoolUrl;
+    }
   }
 
+  const playerPoolUrl = getPlayerPoolUrl();
   section.querySelectorAll<HTMLAnchorElement>('a[href*="/register-interest"]').forEach((link) => {
-    link.href = getPlayerPoolUrl();
+    if (link.href !== playerPoolUrl) link.href = playerPoolUrl;
   });
 }
 
@@ -96,8 +105,6 @@ export default function PlayerPoolTemplateCtaBridge() {
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true,
-      attributeFilter: ["value"],
     });
 
     const interval = window.setInterval(sync, 250);
