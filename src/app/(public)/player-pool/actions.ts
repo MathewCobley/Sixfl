@@ -25,6 +25,8 @@ type ProfileLookupRow = {
   profileToken: string;
   publicCode: string;
   leadId: string | null;
+  prospectTeamId: string | null;
+  prospectStatus: string;
 };
 
 const ALLOWED_AGE_BANDS = ["16–17", "18–20", "21–24", "25–29", "30–39", "40+"];
@@ -68,18 +70,34 @@ function buildFormPath(token: string, error: string) {
 async function findProfile(input: { token: string; emailNormalized: string }) {
   if (input.token) {
     const byToken = await prisma.$queryRaw<ProfileLookupRow[]>`
-      SELECT "id", "prospectId", "profileToken", "publicCode", "leadId"
-      FROM "PlayerPoolProfile"
-      WHERE "profileToken" = ${input.token}
+      SELECT
+        profile."id",
+        profile."prospectId",
+        profile."profileToken",
+        profile."publicCode",
+        profile."leadId",
+        prospect."teamId" AS "prospectTeamId",
+        prospect."status" AS "prospectStatus"
+      FROM "PlayerPoolProfile" profile
+      JOIN "TeamPlayerProspect" prospect ON prospect."id" = profile."prospectId"
+      WHERE profile."profileToken" = ${input.token}
       LIMIT 1
     `;
     if (byToken[0]) return byToken[0];
   }
 
   const byEmail = await prisma.$queryRaw<ProfileLookupRow[]>`
-    SELECT "id", "prospectId", "profileToken", "publicCode", "leadId"
-    FROM "PlayerPoolProfile"
-    WHERE "emailNormalized" = ${input.emailNormalized}
+    SELECT
+      profile."id",
+      profile."prospectId",
+      profile."profileToken",
+      profile."publicCode",
+      profile."leadId",
+      prospect."teamId" AS "prospectTeamId",
+      prospect."status" AS "prospectStatus"
+    FROM "PlayerPoolProfile" profile
+    JOIN "TeamPlayerProspect" prospect ON prospect."id" = profile."prospectId"
+    WHERE profile."emailNormalized" = ${input.emailNormalized}
     LIMIT 1
   `;
 
@@ -147,10 +165,14 @@ export async function submitPlayerPoolProfileAction(formData: FormData) {
   }
 
   if (prospectId) {
+    const preserveSquadStatus = Boolean(
+      existingProfile?.prospectTeamId ||
+        existingProfile?.prospectStatus === "ACTIVE_SQUAD",
+    );
+
     await prisma.teamPlayerProspect.update({
       where: { id: prospectId },
       data: {
-        teamId: null,
         firstName,
         lastName,
         email,
@@ -162,7 +184,9 @@ export async function submitPlayerPoolProfileAction(formData: FormData) {
         preferredNights: preferredNights as Prisma.InputJsonValue,
         availabilitySummary,
         source: "SIXFL PlayerPool",
-        status: PLAYER_POOL_PROFILE_STATUSES.AVAILABLE,
+        status: preserveSquadStatus
+          ? existingProfile?.prospectStatus
+          : PLAYER_POOL_PROFILE_STATUSES.AVAILABLE,
       },
     });
   } else {
