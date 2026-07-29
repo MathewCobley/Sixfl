@@ -28,6 +28,7 @@ type Payload = {
   league?: { id: string; name: string; season: string | null; slug: string };
   divisions?: Division[];
   teams?: SeasonTeam[];
+  affiliatedTeams?: SeasonTeam[];
 };
 
 function getLeagueIdFromPathname(pathname: string | null) {
@@ -60,6 +61,54 @@ function removeButtonClass() {
   return "rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/15";
 }
 
+function enterButtonClass() {
+  return "rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15";
+}
+
+function createTeamIdentity(team: SeasonTeam) {
+  const link = document.createElement("a");
+  link.href = `/admin/teams/${team.teamId}`;
+  link.className = "flex min-w-0 items-center gap-3 transition hover:text-emerald-300";
+
+  const badge = document.createElement("div");
+  badge.className = "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 text-xs font-black text-white/70";
+  badge.textContent = getInitials(team.teamName);
+
+  const text = document.createElement("div");
+  text.className = "min-w-0";
+  const name = document.createElement("div");
+  name.className = "truncate text-sm font-medium text-white";
+  name.textContent = team.teamName;
+  const contact = document.createElement("div");
+  contact.className = "truncate text-xs text-white/45";
+  contact.textContent = `${team.contactEmail || "No email"} · ${team.contactPhone || "No phone"}`;
+  text.append(name, contact);
+  link.append(badge, text);
+
+  return link;
+}
+
+async function sendSeasonTeamRequest(input: {
+  leagueId: string;
+  teamId: string;
+  method: "POST" | "DELETE";
+  divisionId?: string | null;
+}) {
+  const response = await fetch(`/api/admin/leagues/${input.leagueId}/season-teams`, {
+    method: input.method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      teamId: input.teamId,
+      ...(input.method === "POST" ? { divisionId: input.divisionId ?? null } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error || "The season membership could not be updated.");
+  }
+}
+
 function renderTeamRow(input: {
   leagueId: string;
   team: SeasonTeam;
@@ -70,25 +119,7 @@ function renderTeamRow(input: {
 
   const layout = document.createElement("div");
   layout.className = "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between";
-
-  const link = document.createElement("a");
-  link.href = `/admin/teams/${input.team.teamId}`;
-  link.className = "flex min-w-0 items-center gap-3 transition hover:text-emerald-300";
-
-  const badge = document.createElement("div");
-  badge.className = "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 text-xs font-black text-white/70";
-  badge.textContent = getInitials(input.team.teamName);
-
-  const text = document.createElement("div");
-  text.className = "min-w-0";
-  const name = document.createElement("div");
-  name.className = "truncate text-sm font-medium text-white";
-  name.textContent = input.team.teamName;
-  const contact = document.createElement("div");
-  contact.className = "truncate text-xs text-white/45";
-  contact.textContent = `${input.team.contactEmail || "No email"} · ${input.team.contactPhone || "No phone"}`;
-  text.append(name, contact);
-  link.append(badge, text);
+  const link = createTeamIdentity(input.team);
 
   const controls = document.createElement("div");
   controls.className = "flex flex-wrap gap-2 lg:justify-end";
@@ -101,16 +132,21 @@ function renderTeamRow(input: {
     button.className = divisionButtonClass(active);
     button.textContent = division.name;
     button.addEventListener("click", async () => {
+      button.disabled = true;
       button.textContent = "Saving…";
-      await fetch(`/api/admin/leagues/${input.leagueId}/season-teams`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+
+      try {
+        await sendSeasonTeamRequest({
+          leagueId: input.leagueId,
           teamId: input.team.teamId,
+          method: "POST",
           divisionId: division.id || null,
-        }),
-      });
-      window.location.reload();
+        });
+        window.location.reload();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = error instanceof Error ? error.message : "Could not save";
+      }
     });
     controls.appendChild(button);
   }
@@ -118,25 +154,70 @@ function renderTeamRow(input: {
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = removeButtonClass();
-  removeButton.textContent = "Remove from season";
+  removeButton.textContent = "Make affiliated only";
   removeButton.addEventListener("click", async () => {
     const confirmed = window.confirm(
-      `Remove ${input.team.teamName} from this season? This will not delete the team record.`,
+      `Remove ${input.team.teamName} from this season? The team will remain affiliated, retain its captain account and PlayerPool access, and can still receive league communications.`,
     );
 
     if (!confirmed) return;
 
-    removeButton.textContent = "Removing…";
-    await fetch(`/api/admin/leagues/${input.leagueId}/season-teams`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamId: input.team.teamId }),
-    });
-    window.location.reload();
+    removeButton.disabled = true;
+    removeButton.textContent = "Updating…";
+
+    try {
+      await sendSeasonTeamRequest({
+        leagueId: input.leagueId,
+        teamId: input.team.teamId,
+        method: "DELETE",
+      });
+      window.location.reload();
+    } catch (error) {
+      removeButton.disabled = false;
+      removeButton.textContent = error instanceof Error ? error.message : "Could not update";
+    }
   });
   controls.appendChild(removeButton);
 
   layout.append(link, controls);
+  row.appendChild(layout);
+  return row;
+}
+
+function renderAffiliatedTeamRow(input: {
+  leagueId: string;
+  team: SeasonTeam;
+}) {
+  const row = document.createElement("div");
+  row.className = "rounded-2xl border border-sky-400/15 bg-sky-500/[0.05] p-4";
+
+  const layout = document.createElement("div");
+  layout.className = "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between";
+  const link = createTeamIdentity(input.team);
+
+  const enterButton = document.createElement("button");
+  enterButton.type = "button";
+  enterButton.className = enterButtonClass();
+  enterButton.textContent = "Enter current season";
+  enterButton.addEventListener("click", async () => {
+    enterButton.disabled = true;
+    enterButton.textContent = "Adding…";
+
+    try {
+      await sendSeasonTeamRequest({
+        leagueId: input.leagueId,
+        teamId: input.team.teamId,
+        method: "POST",
+        divisionId: null,
+      });
+      window.location.reload();
+    } catch (error) {
+      enterButton.disabled = false;
+      enterButton.textContent = error instanceof Error ? error.message : "Could not add";
+    }
+  });
+
+  layout.append(link, enterButton);
   row.appendChild(layout);
   return row;
 }
@@ -146,6 +227,7 @@ function renderTeamsCard(card: HTMLElement, leagueId: string, payload: Payload) 
   card.dataset.seasonTeamsRendered = leagueId;
 
   const teams = payload.teams ?? [];
+  const affiliatedTeams = payload.affiliatedTeams ?? [];
   const divisions = payload.divisions ?? [];
 
   card.innerHTML = "";
@@ -159,13 +241,13 @@ function renderTeamsCard(card: HTMLElement, leagueId: string, payload: Payload) 
   title.textContent = "Teams in this season";
   const desc = document.createElement("p");
   desc.className = "mt-1 text-sm text-white/60";
-  desc.textContent = `${teams.length} team${teams.length === 1 ? "" : "s"} entered in ${payload.league?.season || "this season"}. Assign Premiership/Championship here.`;
+  desc.textContent = `${teams.length} active team${teams.length === 1 ? "" : "s"} in ${payload.league?.season || "this season"}. Only these teams appear in fixtures, season counts and the league table.`;
   copy.append(title, desc);
 
   const add = document.createElement("a");
   add.href = "/admin/teams/new";
   add.className = "inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15";
-  add.textContent = "Add team";
+  add.textContent = "Create new team";
 
   header.append(copy, add);
   card.appendChild(header);
@@ -185,6 +267,34 @@ function renderTeamsCard(card: HTMLElement, leagueId: string, payload: Payload) 
   }
 
   card.appendChild(list);
+
+  const affiliatedSection = document.createElement("section");
+  affiliatedSection.className = "mt-7 border-t border-white/10 pt-6";
+
+  const affiliatedTitle = document.createElement("h3");
+  affiliatedTitle.className = "text-base font-semibold text-white";
+  affiliatedTitle.textContent = "Affiliated teams not in this season";
+
+  const affiliatedDesc = document.createElement("p");
+  affiliatedDesc.className = "mt-1 text-sm leading-6 text-white/55";
+  affiliatedDesc.textContent = `${affiliatedTeams.length} affiliated team${affiliatedTeams.length === 1 ? "" : "s"}. They keep captain access, PlayerPool access and league communications, but stay out of fixtures and the table.`;
+
+  const affiliatedList = document.createElement("div");
+  affiliatedList.className = "mt-4 space-y-3";
+
+  if (affiliatedTeams.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/50";
+    empty.textContent = "No affiliated-only teams at the moment.";
+    affiliatedList.appendChild(empty);
+  } else {
+    for (const team of affiliatedTeams) {
+      affiliatedList.appendChild(renderAffiliatedTeamRow({ leagueId, team }));
+    }
+  }
+
+  affiliatedSection.append(affiliatedTitle, affiliatedDesc, affiliatedList);
+  card.appendChild(affiliatedSection);
 }
 
 async function injectSeasonTeams(pathname: string | null) {

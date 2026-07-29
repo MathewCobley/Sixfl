@@ -28,6 +28,16 @@ export type CompetitionOption = {
   currentSeason: string | null;
 };
 
+/**
+ * Backfill legacy Team.leagueId rows without changing an explicit season status.
+ *
+ * The key distinction is:
+ * - Team affiliation is long-lived (Team.competitionId / legacy Team.leagueId).
+ * - LeagueSeasonTeam.isActive controls whether the team is playing this season.
+ *
+ * A read must never reactivate a team that an admin deliberately removed from a
+ * season, so the conflict update intentionally leaves isActive untouched.
+ */
 export async function ensureSeasonTeamRowsForLeague(
   leagueId: string,
   client: RawDbClient = prisma,
@@ -56,7 +66,6 @@ export async function ensureSeasonTeamRowsForLeague(
     ON CONFLICT ("leagueId", "teamId") DO UPDATE
     SET
       "divisionId" = COALESCE("LeagueSeasonTeam"."divisionId", EXCLUDED."divisionId"),
-      "isActive" = true,
       "updatedAt" = NOW()
   `);
 }
@@ -114,6 +123,51 @@ export async function getLeagueSeasonTeams(input: {
   `);
 }
 
+/**
+ * Teams affiliated with the parent competition but not entered in this season.
+ * These teams retain captain access, PlayerPool visibility and league comms,
+ * while staying out of tables, fixtures and season counts.
+ */
+export async function getAffiliatedTeamsOutsideSeason(leagueId: string) {
+  await ensureSeasonTeamRowsForLeague(leagueId);
+
+  return prisma.$queryRaw<LeagueSeasonTeamRow[]>(Prisma.sql`
+    SELECT
+      COALESCE(lst."id", ${"affiliated_"} || md5(t."id" || ':' || target."id")) AS "id",
+      t."id" AS "teamId",
+      t."name" AS "teamName",
+      t."logoUrl",
+      t."contactEmail",
+      t."contactPhone",
+      lst."divisionId",
+      d."name" AS "divisionName"
+    FROM "League" target
+    JOIN "Team" t ON (
+      t."leagueId" = target."id"
+      OR (
+        target."competitionId" IS NOT NULL
+        AND (
+          t."competitionId" = target."competitionId"
+          OR EXISTS (
+            SELECT 1
+            FROM "League" team_league
+            WHERE team_league."id" = t."leagueId"
+              AND team_league."competitionId" = target."competitionId"
+          )
+        )
+      )
+    )
+    LEFT JOIN "LeagueSeasonTeam" lst
+      ON lst."leagueId" = target."id"
+     AND lst."teamId" = t."id"
+    LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
+    WHERE target."id" = ${leagueId}
+      AND COALESCE(lst."isActive", false) = false
+      AND COALESCE(t."isFixturePlaceholder", false) = false
+    ORDER BY t."name" ASC
+  `);
+}
+
 export async function getLeagueSeasonTeamIds(input: {
   leagueId: string;
   divisionId?: string | null;
@@ -144,39 +198,45 @@ export async function setSeasonTeamDivision(input: {
     }
   }
 
-  await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "LeagueSeasonTeam" (
-      "id",
-      "leagueId",
-      "teamId",
-      "divisionId",
-      "isActive",
-      "createdAt",
-      "updatedAt"
-    )
-    VALUES (
-      ${randomUUID()},
-      ${input.leagueId},
-      ${input.teamId},
-      ${input.divisionId},
-      true,
-      NOW(),
-      NOW()
-    )
-    ON CONFLICT ("leagueId", "teamId") DO UPDATE
-    SET
-      "divisionId" = EXCLUDED."divisionId",
-      "isActive" = true,
-      "updatedAt" = NOW()
-  `);
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "LeagueSeasonTeam" (
+        "id",
+        "leagueId",
+        "teamId",
+        "divisionId",
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${randomUUID()},
+        ${input.leagueId},
+        ${input.teamId},
+        ${input.divisionId},
+        true,
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT ("leagueId", "teamId") DO UPDATE
+      SET
+        "divisionId" = EXCLUDED."divisionId",
+        "isActive" = true,
+        "updatedAt" = NOW()
+    `);
 
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "Team"
-    SET
-      "divisionId" = CASE WHEN "leagueId" = ${input.leagueId} THEN ${input.divisionId} ELSE "divisionId" END,
-      "updatedAt" = NOW()
-    WHERE "id" = ${input.teamId}
-  `);
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Team" t
+      SET
+        "leagueId" = l."id",
+        "competitionId" = COALESCE(l."competitionId", t."competitionId"),
+        "divisionId" = ${input.divisionId},
+        "updatedAt" = NOW()
+      FROM "League" l
+      WHERE t."id" = ${input.teamId}
+        AND l."id" = ${input.leagueId}
+    `);
+  });
 }
 
 export async function setTeamCompetitionFromLeague(input: {
@@ -226,6 +286,7 @@ export async function getTeamCompetitionData(teamId: string) {
     competitionName: string | null;
     currentLeagueId: string | null;
     currentSeason: string | null;
+    currentSeasonIsActive: boolean;
   }>>(Prisma.sql`
     SELECT
       t."id",
@@ -235,7 +296,14 @@ export async function getTeamCompetitionData(teamId: string) {
       COALESCE(t."competitionId", l."competitionId") AS "competitionId",
       c."name" AS "competitionName",
       c."currentLeagueId" AS "currentLeagueId",
-      current_l."season" AS "currentSeason"
+      current_l."season" AS "currentSeason",
+      EXISTS (
+        SELECT 1
+        FROM "LeagueSeasonTeam" current_lst
+        WHERE current_lst."teamId" = t."id"
+          AND current_lst."leagueId" = c."currentLeagueId"
+          AND current_lst."isActive" = true
+      ) AS "currentSeasonIsActive"
     FROM "Team" t
     LEFT JOIN "League" l ON l."id" = t."leagueId"
     LEFT JOIN "LeagueCompetition" c ON c."id" = COALESCE(t."competitionId", l."competitionId")
@@ -247,6 +315,11 @@ export async function getTeamCompetitionData(teamId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Change long-term competition affiliation without automatically entering a
+ * season. Existing active entries within the same competition are preserved;
+ * entries from other competitions are deactivated.
+ */
 export async function updateTeamCompetition(input: {
   teamId: string;
   competitionId: string | null;
@@ -264,7 +337,11 @@ export async function updateTeamCompetition(input: {
       `);
 
       await tx.$executeRaw(Prisma.sql`
-        DELETE FROM "LeagueSeasonTeam"
+        UPDATE "LeagueSeasonTeam"
+        SET
+          "isActive" = false,
+          "divisionId" = NULL,
+          "updatedAt" = NOW()
         WHERE "teamId" = ${input.teamId}
       `);
     });
@@ -286,12 +363,15 @@ export async function updateTeamCompetition(input: {
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`
-      UPDATE "Team"
+      UPDATE "LeagueSeasonTeam" lst
       SET
-        "competitionId" = ${competition.competitionId},
-        "leagueId" = ${competition.currentLeagueId},
+        "isActive" = false,
+        "divisionId" = NULL,
         "updatedAt" = NOW()
-      WHERE "id" = ${input.teamId}
+      FROM "League" l
+      WHERE lst."leagueId" = l."id"
+        AND lst."teamId" = ${input.teamId}
+        AND l."competitionId" IS DISTINCT FROM ${competition.competitionId}
     `);
 
     if (competition.currentLeagueId) {
@@ -300,6 +380,7 @@ export async function updateTeamCompetition(input: {
           "id",
           "leagueId",
           "teamId",
+          "divisionId",
           "isActive",
           "createdAt",
           "updatedAt"
@@ -308,13 +389,30 @@ export async function updateTeamCompetition(input: {
           ${randomUUID()},
           ${competition.currentLeagueId},
           ${input.teamId},
-          true,
+          NULL,
+          false,
           NOW(),
           NOW()
         )
-        ON CONFLICT ("leagueId", "teamId") DO UPDATE
-        SET "isActive" = true, "updatedAt" = NOW()
+        ON CONFLICT ("leagueId", "teamId") DO NOTHING
       `);
     }
+
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Team" t
+      SET
+        "competitionId" = ${competition.competitionId},
+        "leagueId" = ${competition.currentLeagueId},
+        "divisionId" = (
+          SELECT lst."divisionId"
+          FROM "LeagueSeasonTeam" lst
+          WHERE lst."teamId" = t."id"
+            AND lst."leagueId" = ${competition.currentLeagueId}
+            AND lst."isActive" = true
+          LIMIT 1
+        ),
+        "updatedAt" = NOW()
+      WHERE t."id" = ${input.teamId}
+    `);
   });
 }

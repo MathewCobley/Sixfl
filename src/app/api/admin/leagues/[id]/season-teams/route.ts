@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 import {
+  getAffiliatedTeamsOutsideSeason,
   getLeagueSeasonTeams,
   setSeasonTeamDivision,
 } from "@/lib/league-season-teams";
@@ -44,6 +45,7 @@ function revalidateLeaguePaths(league: { id: string; slug: string }) {
   revalidatePath(`/admin/leagues/${league.id}`);
   revalidatePath(`/admin/leagues/${league.id}/communications`);
   revalidatePath(`/leagues/${league.slug}`);
+  revalidatePath("/admin/teams");
 }
 
 export async function GET(
@@ -53,17 +55,18 @@ export async function GET(
   await requireAdmin();
 
   const { id } = await params;
-  const [league, divisions, teams] = await Promise.all([
+  const [league, divisions, teams, affiliatedTeams] = await Promise.all([
     getLeague(id),
     getDivisions(id),
     getLeagueSeasonTeams({ leagueId: id }),
+    getAffiliatedTeamsOutsideSeason(id),
   ]);
 
   if (!league) {
     return NextResponse.json({ error: "League not found." }, { status: 404 });
   }
 
-  return NextResponse.json({ league, divisions, teams });
+  return NextResponse.json({ league, divisions, teams, affiliatedTeams });
 }
 
 export async function POST(
@@ -89,6 +92,9 @@ export async function POST(
   await setSeasonTeamDivision({ leagueId: id, teamId, divisionId });
 
   revalidateLeaguePaths(league);
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/player-pool`);
 
   return NextResponse.json({ ok: true });
 }
@@ -123,6 +129,9 @@ export async function DELETE(
   `);
 
   revalidateLeaguePaths(league);
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/player-pool`);
 
   return NextResponse.json({ ok: true });
 }
