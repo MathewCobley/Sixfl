@@ -75,7 +75,7 @@ export async function POST(
     const requestedLeagueId =
       typeof body?.leagueId === "string" ? body.leagueId.trim() : "";
 
-    const [prospect, league] = await Promise.all([
+    const [prospect, requestedLeague] = await Promise.all([
       prisma.teamPlayerProspect.findUnique({
         where: { id: prospectId },
         select: {
@@ -88,6 +88,19 @@ export async function POST(
           status: true,
           notes: true,
           availabilitySummary: true,
+          team: {
+            select: {
+              id: true,
+              name: true,
+              league: {
+                select: {
+                  id: true,
+                  name: true,
+                  area: true,
+                },
+              },
+            },
+          },
         },
       }),
       requestedLeagueId
@@ -102,16 +115,9 @@ export async function POST(
       return NextResponse.json({ error: "Prospect not found." }, { status: 404 });
     }
 
-    if (prospect.teamId) {
+    if (["DECLINED", "DUPLICATE"].includes(prospect.status)) {
       return NextResponse.json(
-        { error: "Move this player out of their team before sending them to PlayerPool." },
-        { status: 409 },
-      );
-    }
-
-    if (["DECLINED", "DUPLICATE", "ACTIVE_SQUAD"].includes(prospect.status)) {
-      return NextResponse.json(
-        { error: "This record is not an open unassigned prospect." },
+        { error: "This record is not currently eligible for PlayerPool." },
         { status: 409 },
       );
     }
@@ -123,11 +129,12 @@ export async function POST(
       );
     }
 
+    const effectiveLeague = requestedLeague ?? prospect.team?.league ?? null;
     const email = normalizePlayerPoolEmail(prospect.email);
     const displayName = fullName(prospect.firstName, prospect.lastName) || email;
     const firstName = prospect.firstName.trim() || "there";
     const area =
-      league?.area?.trim() ||
+      effectiveLeague?.area?.trim() ||
       extractArea(prospect.notes, prospect.availabilitySummary);
 
     const existingRows = await prisma.$queryRaw<ExistingProfileRow[]>`
@@ -151,7 +158,7 @@ export async function POST(
         SET
           "emailNormalized" = ${email},
           "area" = COALESCE("area", ${area}),
-          "leagueId" = COALESCE("leagueId", ${league?.id ?? null}),
+          "leagueId" = COALESCE("leagueId", ${effectiveLeague?.id ?? null}),
           "invitedAt" = NOW(),
           "updatedAt" = NOW()
         WHERE "id" = ${profileId}
@@ -164,14 +171,14 @@ export async function POST(
           "invitedAt", "createdAt", "updatedAt"
         ) VALUES (
           ${profileId}, ${prospect.id}, NULL, ${profileToken}, ${publicCode},
-          ${email}, ${area}, ${league?.id ?? null}, ${PLAYER_POOL_PROFILE_STATUSES.INVITED},
+          ${email}, ${area}, ${effectiveLeague?.id ?? null}, ${PLAYER_POOL_PROFILE_STATUSES.INVITED},
           NOW(), NOW(), NOW()
         )
       `;
     }
 
     const profileUrl = `${getPlayerPoolBaseUrl()}/player-pool/profile/${profileToken}`;
-    const leagueName = league?.name || "SIXFL PlayerPool";
+    const leagueName = effectiveLeague?.name || "SIXFL PlayerPool";
     const recipient = await upsertNotificationRecipient({
       sourceType: NotificationRecipientSourceType.GENERAL,
       sourceId: `player-pool-profile:${profileId}`,
@@ -189,7 +196,9 @@ export async function POST(
         prospectId: profileProspectId,
         requestedProspectId: prospect.id,
         publicCode,
-        leagueId: league?.id ?? null,
+        leagueId: effectiveLeague?.id ?? null,
+        currentTeamId: prospect.teamId,
+        currentTeamName: prospect.team?.name ?? null,
       },
     });
 
@@ -218,7 +227,9 @@ export async function POST(
         prospectId: profileProspectId,
         requestedProspectId: prospect.id,
         publicCode,
-        leagueId: league?.id ?? null,
+        leagueId: effectiveLeague?.id ?? null,
+        currentTeamId: prospect.teamId,
+        currentTeamName: prospect.team?.name ?? null,
         ctaUrl: profileUrl,
       },
       createdByUserId: user?.id ?? null,
@@ -237,13 +248,16 @@ export async function POST(
     revalidatePath(`/admin/player-prospects/${prospect.id}/communications`);
     revalidatePath("/admin/player-pool");
     revalidatePath("/admin/messaging");
+    if (prospect.teamId) {
+      revalidatePath(`/captain/team/${prospect.teamId}/prospects`);
+    }
 
     return NextResponse.json({
       ok: true,
       created: !existingProfile,
       message: existingProfile
-        ? "PlayerPool profile form resent."
-        : "PlayerPool profile created and form sent.",
+        ? `PlayerPool profile form resent.${prospect.teamId ? " Their current squad place has been kept." : ""}`
+        : `PlayerPool profile created and form sent.${prospect.teamId ? " Their current squad place has been kept." : ""}`,
     });
   } catch (error) {
     return NextResponse.json({ error: routeError(error) }, { status: 500 });
