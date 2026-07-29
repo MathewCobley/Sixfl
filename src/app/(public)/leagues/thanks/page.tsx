@@ -2,7 +2,41 @@
 // File: src/app/leagues/thanks/page.tsx
 // ========================================
 
-export default function LeagueThanksPage() {
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function getLeadId(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+export default async function LeagueThanksPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = (await searchParams) ?? {};
+  const leadId = getLeadId(params.lead).trim();
+
+  const lead = leadId
+    ? await prisma.interestLead.findUnique({
+        where: { id: leadId },
+        select: {
+          league: {
+            select: {
+              name: true,
+              season: true,
+            },
+          },
+        },
+      })
+    : null;
+
+  const leagueLabel = lead?.league
+    ? `${lead.league.name}${lead.league.season ? ` · ${lead.league.season}` : ""}`
+    : "your selected SIXFL league";
+
   return (
     <div className="min-h-screen bg-black text-white">
       <section className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6">
@@ -16,8 +50,7 @@ export default function LeagueThanksPage() {
           </h1>
 
           <p className="mt-4 text-white/70">
-            We&apos;ve received your details and will be in touch soon about the
-            Rossett Men&apos;s Tuesday league.
+            We&apos;ve received your details and will be in touch soon about {leagueLabel}.
           </p>
         </div>
       </section>
