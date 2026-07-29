@@ -171,10 +171,7 @@ export default async function CaptainPlayerPoolPage({
   return (
     <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-8">
-        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
-          SIXFL PlayerPool
-        </p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
+        <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
           Available players for {team.name}
         </h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">
