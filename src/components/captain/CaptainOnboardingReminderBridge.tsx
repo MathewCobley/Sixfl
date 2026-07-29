@@ -91,6 +91,19 @@ function decorateSixflTvNav() {
   }
 }
 
+function removeDuplicatePlayerPoolEyebrow(pathname: string) {
+  if (!/\/captain\/team\/[^/]+\/player-pool(?:\/)?$/.test(pathname)) return;
+
+  const main = document.querySelector(".captain-team-main");
+  if (!main) return;
+
+  const duplicateLabel = Array.from(main.querySelectorAll<HTMLParagraphElement>("p")).find(
+    (paragraph) => paragraph.textContent?.trim().toLowerCase() === "sixfl playerpool",
+  );
+
+  duplicateLabel?.remove();
+}
+
 export default function CaptainOnboardingReminderBridge() {
   const pathname = usePathname();
 
@@ -98,12 +111,17 @@ export default function CaptainOnboardingReminderBridge() {
     const existing = document.getElementById(REMINDER_ID);
     existing?.remove();
 
-    decorateSixflTvNav();
-    const frame = window.requestAnimationFrame(decorateSixflTvNav);
-    const observer = new MutationObserver(decorateSixflTvNav);
-    const header = document.querySelector(".captain-team-header");
-    if (header) {
-      observer.observe(header, {
+    const syncCaptainDecorations = () => {
+      decorateSixflTvNav();
+      removeDuplicatePlayerPoolEyebrow(pathname);
+    };
+
+    syncCaptainDecorations();
+    const frame = window.requestAnimationFrame(syncCaptainDecorations);
+    const observer = new MutationObserver(syncCaptainDecorations);
+    const shell = document.querySelector(".captain-team-shell");
+    if (shell) {
+      observer.observe(shell, {
         childList: true,
         subtree: true,
         attributes: true,
