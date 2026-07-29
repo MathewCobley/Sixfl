@@ -51,7 +51,7 @@ function parseOptionalMoneyToPence(value: FormDataEntryValue | null, fieldName: 
   if (!Number.isFinite(amount) || amount < 0) {
     throw new Error(`${fieldName} must be 0 or more.`);
   }
-  return amount === 0 ? null : Math.round(amount * 100);
+  return Math.round(amount * 100);
 }
 
 function parseFixtureStatus(value: FormDataEntryValue | null) {
@@ -304,9 +304,13 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
     const awayMatchFeePence = hasFixturePlaceholder
       ? null
       : requestedAwayMatchFeePence;
+    const hasExplicitMatchFee =
+      homeMatchFeePence !== null || awayMatchFeePence !== null;
     const fixtureMatchFeePence = hasFixturePlaceholder
       ? null
-      : Math.max(homeMatchFeePence ?? 0, awayMatchFeePence ?? 0) || null;
+      : hasExplicitMatchFee
+        ? Math.max(homeMatchFeePence ?? 0, awayMatchFeePence ?? 0)
+        : null;
 
     await prisma.$transaction(async (tx) => {
       await tx.fixture.update({
