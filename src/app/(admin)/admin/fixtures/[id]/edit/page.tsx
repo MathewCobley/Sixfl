@@ -130,8 +130,10 @@ export default async function EditFixturePage({
 
   const homeCharge = charges.find((charge) => charge.teamId === fixture.homeTeamId);
   const awayCharge = charges.find((charge) => charge.teamId === fixture.awayTeamId);
-  const homeFee = homeCharge?.amountPence ?? fixture.matchFeePence ?? null;
-  const awayFee = awayCharge?.amountPence ?? fixture.matchFeePence ?? null;
+  const hasTeamSpecificCharges = charges.length > 0;
+  const legacyFixtureFee = hasTeamSpecificCharges ? null : fixture.matchFeePence ?? null;
+  const homeFee = homeCharge?.amountPence ?? legacyFixtureFee;
+  const awayFee = awayCharge?.amountPence ?? legacyFixtureFee;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
