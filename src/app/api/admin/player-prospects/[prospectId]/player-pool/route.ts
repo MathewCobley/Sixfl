@@ -38,8 +38,21 @@ type ExistingProfileRow = {
   publicCode: string;
 };
 
+type PlayerPoolStateRow = {
+  id: string;
+  publicCode: string;
+  status: string;
+  invitedAt: Date | null;
+  profileSubmittedAt: Date | null;
+  updatedAt: Date;
+};
+
 type RequestBody = {
   leagueId?: unknown;
+};
+
+type RouteContext = {
+  params: Promise<{ prospectId: string }>;
 };
 
 function routeError(error: unknown) {
@@ -61,10 +74,64 @@ function extractArea(...values: Array<string | null | undefined>) {
   return match?.[1]?.trim() || null;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ prospectId: string }> },
-) {
+function noStoreJson(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, max-age=0",
+    },
+  });
+}
+
+export async function GET(_request: Request, { params }: RouteContext) {
+  const { prospectId } = await params;
+
+  try {
+    await requireAdmin();
+    await ensurePlayerPoolTables();
+
+    const prospect = await prisma.teamPlayerProspect.findUnique({
+      where: { id: prospectId },
+      select: { id: true },
+    });
+
+    if (!prospect) {
+      return noStoreJson({ error: "Prospect not found." }, 404);
+    }
+
+    const rows = await prisma.$queryRaw<PlayerPoolStateRow[]>`
+      SELECT
+        "id",
+        "publicCode",
+        "status",
+        "invitedAt",
+        "profileSubmittedAt",
+        "updatedAt"
+      FROM "PlayerPoolProfile"
+      WHERE "prospectId" = ${prospectId}
+      LIMIT 1
+    `;
+    const profile = rows[0] ?? null;
+
+    return noStoreJson({
+      inPlayerPool: Boolean(profile),
+      profile: profile
+        ? {
+            id: profile.id,
+            publicCode: profile.publicCode,
+            status: profile.status,
+            invitedAt: profile.invitedAt,
+            profileSubmittedAt: profile.profileSubmittedAt,
+            updatedAt: profile.updatedAt,
+          }
+        : null,
+    });
+  } catch (error) {
+    return noStoreJson({ error: routeError(error) }, 500);
+  }
+}
+
+export async function POST(request: Request, { params }: RouteContext) {
   const { prospectId } = await params;
 
   try {
