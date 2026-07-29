@@ -35,6 +35,10 @@ type TableTeamRow = {
   logoUrl: string | null;
 };
 
+type SeasonEntryPresenceRow = {
+  hasEntries: boolean;
+};
+
 function createRow(input: {
   id: string;
   name: string;
@@ -119,16 +123,28 @@ async function getLeagueTableTeams(
     return removeFixturePlaceholderTeams(selectedTeams);
   }
 
-  const seasonTeams = await prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
-    SELECT t."id", t."name", t."logoUrl"
-    FROM "LeagueSeasonTeam" lst
-    JOIN "Team" t ON t."id" = lst."teamId"
-    WHERE lst."leagueId" = ${leagueId}
-      AND lst."isActive" = true
-    ORDER BY t."name" ASC
-  `);
+  const [seasonTeams, seasonEntryPresence] = await Promise.all([
+    prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
+      SELECT t."id", t."name", t."logoUrl"
+      FROM "LeagueSeasonTeam" lst
+      JOIN "Team" t ON t."id" = lst."teamId"
+      WHERE lst."leagueId" = ${leagueId}
+        AND lst."isActive" = true
+      ORDER BY t."name" ASC
+    `),
+    prisma.$queryRaw<SeasonEntryPresenceRow[]>(Prisma.sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM "LeagueSeasonTeam"
+        WHERE "leagueId" = ${leagueId}
+      ) AS "hasEntries"
+    `),
+  ]);
 
-  if (seasonTeams.length > 0) {
+  // Once a league uses season-team entries, those entries are authoritative.
+  // An empty active set means the table should be empty, not that affiliated
+  // teams should leak back in through the legacy Team.leagueId fallback.
+  if (seasonTeams.length > 0 || seasonEntryPresence[0]?.hasEntries) {
     return removeFixturePlaceholderTeams(seasonTeams);
   }
 
