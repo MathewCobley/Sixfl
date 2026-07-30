@@ -8,6 +8,18 @@
 - Add new templates through an idempotent database migration so production receives them automatically. Preserve administrator edits when a template key already exists.
 - A hard-coded message is acceptable only for an exceptional one-off diagnostic or security response that is not sent to customers; document the reason in code.
 
+## League tables and standings
+
+`src/lib/standings.ts` is the single authoritative entry point for every SIXFL league table.
+
+- Admin, public, captain, player, API, PDF, social and reporting features must call `getLeagueStandings()` or `getTeamStanding()`.
+- Do not create another table calculator, division query, position calculator or alternative standings API.
+- Do not query `LeagueSeasonTeam`, `LeagueDivision`, completed fixtures or match results directly to build standings outside the central standings service.
+- `src/lib/leagueTable.ts` is the low-level calculator owned by `src/lib/standings.ts`; new product code must not import it directly.
+- Visual components may differ, but rows, divisions, positions and team totals must come from the central service.
+- Active current-season membership is authoritative. Affiliated-only, removed and fixture-placeholder teams must never appear in standings.
+- Change standings rules centrally and verify every consumer rather than patching individual pages.
+
 ## Change-completion standard
 
 Do not report a partial change as complete. Before saying a task is **done**:
