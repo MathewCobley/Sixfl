@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/apply-issue-raised-confirmation-chase-fix.cjs && node scripts/apply-nights-fixtures-branding.cjs && node scripts/apply-nights-fixtures-logo-visibility.cjs && node scripts/apply-player-pool-email-logo-layout.cjs && node scripts/apply-admin-completed-result-correction-fix.cjs",
+    "predev": "node scripts/apply-issue-raised-confirmation-chase-fix.cjs && node scripts/apply-nights-fixtures-branding.cjs && node scripts/apply-nights-fixtures-logo-visibility.cjs && node scripts/apply-player-pool-email-logo-layout.cjs && node scripts/apply-admin-completed-result-correction-fix.cjs && node scripts/apply-division-aware-dashboard-tables.cjs",
     "dev": "next dev",
-    "prebuild": "node scripts/apply-issue-raised-confirmation-chase-fix.cjs && node scripts/apply-nights-fixtures-branding.cjs && node scripts/apply-nights-fixtures-logo-visibility.cjs && node scripts/apply-player-pool-email-logo-layout.cjs && node scripts/apply-admin-completed-result-correction-fix.cjs",
+    "prebuild": "node scripts/apply-issue-raised-confirmation-chase-fix.cjs && node scripts/apply-nights-fixtures-branding.cjs && node scripts/apply-nights-fixtures-logo-visibility.cjs && node scripts/apply-player-pool-email-logo-layout.cjs && node scripts/apply-admin-completed-result-correction-fix.cjs && node scripts/apply-division-aware-dashboard-tables.cjs",
     "build": "prisma generate && next build",
     "start": "prisma migrate deploy && next start",
     "lint": "eslint",
