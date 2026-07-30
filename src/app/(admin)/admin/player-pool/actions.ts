@@ -33,8 +33,6 @@ import { requireAdmin } from "@/lib/requireAdmin";
 const PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY =
   "player-pool-profile-invite-email";
 
-const PLAYER_POOL_LOGO_PATH = "/logos/sixfl player pool .png";
-
 type ExistingProfileRow = {
   id: string;
   prospectId: string;
@@ -222,11 +220,6 @@ export async function sendPlayerPoolProfileInviteAction(formData: FormData) {
       publicCode,
       area: lead.area || "",
       leagueName: lead.league?.name || "SIXFL PlayerPool",
-    },
-    emailBranding: {
-      teamName: "SIXFL PlayerPool",
-      teamLogoUrl: PLAYER_POOL_LOGO_PATH,
-      leagueName: "Private player matching",
     },
     sourceType: "PLAYER_POOL_PROFILE_INVITE",
     sourceId: profileId,
