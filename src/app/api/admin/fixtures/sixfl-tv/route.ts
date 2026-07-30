@@ -12,6 +12,10 @@ type FlagRow = {
   id: string;
   sixflTvRecorded: boolean;
   sixflTvUrl: string | null;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  leagueId?: string;
+  publishedAt?: Date | null;
 };
 
 function normaliseVideoUrl(value: string) {
@@ -59,7 +63,11 @@ export async function GET() {
     SELECT
       "id",
       "sixflTvRecorded",
-      "sixflTvUrl"
+      "sixflTvUrl",
+      "homeTeamId",
+      "awayTeamId",
+      "leagueId",
+      "publishedAt"
     FROM "Fixture"
     WHERE "sixflTvRecorded" = true
        OR "sixflTvUrl" IS NOT NULL
