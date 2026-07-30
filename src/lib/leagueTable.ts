@@ -180,11 +180,11 @@ export async function getLeagueTable(
   ]);
 
   const table = new Map<string, LeagueTableRow>();
-  const allowedTeamIds = teams.length
-    ? new Set(teams.map((team) => team.id))
-    : options.teamIds?.length
-      ? new Set(options.teamIds)
-      : null;
+
+  // The selected/active team list is always authoritative, including when it
+  // is empty. Historic completed fixtures must never recreate a removed or
+  // affiliated-only team in the current league table.
+  const allowedTeamIds = new Set(teams.map((team) => team.id));
 
   for (const team of teams) {
     table.set(team.id, createRow(team));
@@ -193,9 +193,8 @@ export async function getLeagueTable(
   for (const fixture of fixtures) {
     if (!fixture.result) continue;
     if (
-      allowedTeamIds &&
-      (!allowedTeamIds.has(fixture.homeTeamId) ||
-        !allowedTeamIds.has(fixture.awayTeamId))
+      !allowedTeamIds.has(fixture.homeTeamId) ||
+      !allowedTeamIds.has(fixture.awayTeamId)
     ) {
       continue;
     }
