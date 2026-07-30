@@ -2,9 +2,9 @@ ALTER TABLE "Fixture"
   ADD COLUMN IF NOT EXISTS "homeMatchFeePence" INTEGER,
   ADD COLUMN IF NOT EXISTS "awayMatchFeePence" INTEGER;
 
--- Preserve any existing team-specific active charges. Where a fixture has never
--- had charges (for example an unpublished draft), fall back to the legacy
--- fixture-wide amount so existing fixtures continue to behave as before.
+-- Preserve existing team-specific active charges. If a fixture has an active
+-- charge for only one side, the other side was intentionally free and is
+-- backfilled as zero. Fixtures with no charges retain the legacy shared amount.
 UPDATE "Fixture" fixture
 SET
   "homeMatchFeePence" = COALESCE(
@@ -18,7 +18,15 @@ SET
       ORDER BY charge."createdAt" DESC
       LIMIT 1
     ),
-    fixture."matchFeePence"
+    CASE
+      WHEN EXISTS (
+        SELECT 1
+        FROM "PaymentCharge" charge
+        WHERE charge."fixtureId" = fixture."id"
+          AND charge."status" <> 'VOID'
+      ) THEN 0
+      ELSE fixture."matchFeePence"
+    END
   ),
   "awayMatchFeePence" = COALESCE(
     fixture."awayMatchFeePence",
@@ -31,5 +39,13 @@ SET
       ORDER BY charge."createdAt" DESC
       LIMIT 1
     ),
-    fixture."matchFeePence"
+    CASE
+      WHEN EXISTS (
+        SELECT 1
+        FROM "PaymentCharge" charge
+        WHERE charge."fixtureId" = fixture."id"
+          AND charge."status" <> 'VOID'
+      ) THEN 0
+      ELSE fixture."matchFeePence"
+    END
   );
