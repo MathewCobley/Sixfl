@@ -65,37 +65,6 @@ source = source
   .replaceAll(`const outerBackground = getOuterBackground(brandResult.brand);`, `const outerBackground = getOuterBackground(brand);`)
   .replaceAll(`return buildResponsiveEmailDocument(contentHtml, brandResult.brand);`, `return buildResponsiveEmailDocument(contentHtml, brand);`);
 
-fs.writeFileSync(target, source);
-
-const callerFiles = [
-  path.join(process.cwd(), "src", "app", "(admin)", "admin", "player-pool", "actions.ts"),
-  path.join(process.cwd(), "src", "app", "(admin)", "admin", "leads", "player-pool-actions.ts"),
-  path.join(process.cwd(), "src", "app", "api", "admin", "player-prospects", "[prospectId]", "player-pool", "route.ts"),
-];
-
-for (const file of callerFiles) {
-  if (!fs.existsSync(file)) continue;
-  let caller = fs.readFileSync(file, "utf8");
-
-  caller = caller.replaceAll(
-    `emailBranding: {\n        teamName: "SIXFL PlayerPool",`,
-    `emailBranding: {\n        brand: "player-pool",\n        teamName: "SIXFL PlayerPool",`,
-  );
-  caller = caller.replaceAll(
-    `leagueName: "Private player matching",`,
-    `leagueName: null,`,
-  );
-
-  if (caller.includes("Private player matching")) {
-    throw new Error(`PlayerPool subtitle remains in ${file}`);
-  }
-  if (!caller.includes(`brand: "player-pool"`)) {
-    throw new Error(`PlayerPool shared brand is not explicit in ${file}`);
-  }
-
-  fs.writeFileSync(file, caller);
-}
-
 const requiredPostconditions = [
   `brand?: "sixfl-tv" | "player-pool" | null;`,
   `const brand = resolveEmailBrand({`,
@@ -109,6 +78,23 @@ for (const expected of requiredPostconditions) {
     throw new Error(`PlayerPool shared email header postcondition failed: ${expected}`);
   }
 }
+
+const obsoleteSubtitle = "Private player matching";
+const playerPoolCallers = [
+  path.join(process.cwd(), "src", "app", "(admin)", "admin", "player-pool", "actions.ts"),
+  path.join(process.cwd(), "src", "app", "(admin)", "admin", "leads", "player-pool-actions.ts"),
+  path.join(process.cwd(), "src", "app", "api", "admin", "player-prospects", "[prospectId]", "player-pool", "route.ts"),
+];
+
+for (const file of playerPoolCallers) {
+  if (!fs.existsSync(file)) continue;
+  const caller = fs.readFileSync(file, "utf8");
+  if (caller.includes(obsoleteSubtitle)) {
+    throw new Error(`Obsolete PlayerPool subtitle remains in ${file}`);
+  }
+}
+
+fs.writeFileSync(target, source);
 
 console.log(
   "Applied one shared PlayerPool email header: 420px centred logo, no duplicate panel and no subtitle.",
