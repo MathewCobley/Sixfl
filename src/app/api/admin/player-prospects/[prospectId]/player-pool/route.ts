@@ -29,7 +29,6 @@ export const revalidate = 0;
 
 const PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY =
   "player-pool-profile-invite-email";
-const PLAYER_POOL_LOGO_PATH = "/logos/sixfl player pool .png";
 
 type ExistingProfileRow = {
   id: string;
@@ -212,11 +211,6 @@ export async function POST(
         publicCode,
         area: area || "",
         leagueName,
-      },
-      emailBranding: {
-        teamName: "SIXFL PlayerPool",
-        teamLogoUrl: PLAYER_POOL_LOGO_PATH,
-        leagueName: "Private player matching",
       },
       sourceType: "PLAYER_POOL_PROFILE_INVITE",
       sourceId: profileId,
