@@ -1,0 +1,40 @@
+const fs = require("node:fs");
+const path = require("node:path");
+
+const srcRoot = path.join(process.cwd(), "src");
+const violations = [];
+
+function walk(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      walk(fullPath);
+      continue;
+    }
+    if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+
+    const relative = path.relative(process.cwd(), fullPath).replaceAll("\\", "/");
+    if (relative === "src/lib/leagueTable.ts" || relative === "src/lib/standings.ts") continue;
+
+    const source = fs.readFileSync(fullPath, "utf8");
+    const directImports = source
+      .split("\n")
+      .filter((line) => line.includes('from "@/lib/leagueTable"') || line.includes("from '@/lib/leagueTable'"))
+      .filter((line) => !/^\s*import\s+type\b/.test(line));
+
+    if (directImports.length > 0) {
+      violations.push(`${relative}: ${directImports.join(" | ").trim()}`);
+    }
+  }
+}
+
+walk(srcRoot);
+
+if (violations.length > 0) {
+  console.error("Direct league table calculation imports are not allowed.");
+  console.error("Use getLeagueStandings() or getTeamStanding() from src/lib/standings.ts.");
+  for (const violation of violations) console.error(`- ${violation}`);
+  process.exit(1);
+}
+
+console.log("Central standings usage check passed.");
