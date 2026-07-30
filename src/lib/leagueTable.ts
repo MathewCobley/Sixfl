@@ -90,9 +90,11 @@ async function removeFixturePlaceholderTeams(teams: TableTeamRow[]) {
     teams.map((team) => team.id),
   );
 
-  if (placeholderTeamIds.size === 0) return teams;
-
-  return teams.filter((team) => !placeholderTeamIds.has(team.id));
+  return teams.filter(
+    (team) =>
+      !placeholderTeamIds.has(team.id) &&
+      team.name.trim().toUpperCase() !== "TBC",
+  );
 }
 
 async function getLeagueTableTeams(
@@ -107,6 +109,7 @@ async function getLeagueTableTeams(
       WHERE lst."leagueId" = ${leagueId}
         AND lst."divisionId" = ${options.divisionId}
         AND lst."isActive" = true
+        AND t."leagueId" = ${leagueId}
       ORDER BY t."name" ASC
     `);
 
@@ -115,7 +118,10 @@ async function getLeagueTableTeams(
 
   if (options.teamIds?.length) {
     const selectedTeams = await prisma.team.findMany({
-      where: { id: { in: options.teamIds } },
+      where: {
+        id: { in: options.teamIds },
+        leagueId,
+      },
       orderBy: { name: "asc" },
       select: { id: true, name: true, logoUrl: true },
     });
@@ -130,6 +136,7 @@ async function getLeagueTableTeams(
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${leagueId}
         AND lst."isActive" = true
+        AND t."leagueId" = ${leagueId}
       ORDER BY t."name" ASC
     `),
     prisma.$queryRaw<SeasonEntryPresenceRow[]>(Prisma.sql`
