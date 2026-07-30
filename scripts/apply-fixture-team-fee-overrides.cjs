@@ -76,11 +76,16 @@ replaceOnce(
   '  matchFeePence: number | null;\n  homeMatchFeePence: number | null;\n  awayMatchFeePence: number | null;\n  homeTeam:',
 );
 
-replaceAllExact(
+replaceOnce(
   "src/app/api/admin/fixtures/publish-one/route.ts",
   '      pitch: true,\n      matchFeePence: true,\n      publishedAt: true,',
   '      pitch: true,\n      matchFeePence: true,\n      homeMatchFeePence: true,\n      awayMatchFeePence: true,\n      publishedAt: true,',
-  2,
+);
+
+replaceOnce(
+  "src/app/api/admin/fixtures/publish-one/route.ts",
+  '          pitch: true,\n          matchFeePence: true,\n          publishedAt: true,',
+  '          pitch: true,\n          matchFeePence: true,\n          homeMatchFeePence: true,\n          awayMatchFeePence: true,\n          publishedAt: true,',
 );
 
 replaceOnce(
