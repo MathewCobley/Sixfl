@@ -4,43 +4,66 @@ const path = require("node:path");
 const target = path.join(process.cwd(), "src", "lib", "email", "buildEmail.ts");
 let source = fs.readFileSync(target, "utf8");
 
-const replacements = [
-  [
-    `      width: 300,`,
-    `      width: 380,`,
-  ],
-  [
-    `${'${teamLogoUrl ? `<tr><td style="padding:0 0 14px 0;"><img src="${escapeHtml(teamLogoUrl)}" alt="SIXFL Player Pool" width="260" style="display:block;width:260px;max-width:100%;height:auto;object-fit:contain;border:0;outline:none;text-decoration:none;" /></td></tr>` : ""}'}`,
-    `${'${teamLogoUrl ? `<tr><td align="center" style="padding:0;text-align:center;"><img src="${escapeHtml(teamLogoUrl)}" alt="SIXFL Player Pool" width="360" style="display:block;width:360px;max-width:100%;height:auto;margin:0 auto;object-fit:contain;border:0;outline:none;text-decoration:none;" /></td></tr>` : ""}'}`,
-  ],
-  [
-    `        .sixfl-email-logo { width: 150px !important; max-width: 150px !important; }`,
-    `        .sixfl-email-logo { width: 150px !important; max-width: 150px !important; }\n        .sixfl-email-logo-player-pool { width: 270px !important; max-width: 270px !important; margin: 0 auto !important; }`,
-  ],
-  [
-    `<td class="sixfl-email-logo-cell" bgcolor="${'${logoBackground}'}" style="padding:${'${logoPadding}'};background:${'${logoBackground}'};">`,
-    `<td class="sixfl-email-logo-cell" bgcolor="${'${logoBackground}'}" align="${'${isPlayerPool ? "center" : "left"}'}" style="padding:${'${logoPadding}'};background:${'${logoBackground}'};text-align:${'${isPlayerPool ? "center" : "left"}'};">`,
-  ],
-  [
-    `<img src="${'${logo.src}'}" alt="${'${logo.alt}'}" width="${'${logo.width}'}" class="sixfl-email-logo" style="display:block;width:${'${logo.width}'}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;" />`,
-    `<img src="${'${logo.src}'}" alt="${'${logo.alt}'}" width="${'${logo.width}'}" class="sixfl-email-logo${'${isPlayerPool ? " sixfl-email-logo-player-pool" : ""}'}" style="display:block;width:${'${logo.width}'}px;max-width:100%;height:auto;margin:${'${isPlayerPool ? "0 auto" : "0"}'};border:0;outline:none;text-decoration:none;" />`,
-  ],
-];
-
-for (const [before, after] of replacements) {
-  if (source.includes(after)) continue;
+function replaceRequired(before, after, label) {
+  if (source.includes(after)) return;
   if (!source.includes(before)) {
-    throw new Error(`Could not find expected PlayerPool email logo layout snippet:\n${before}`);
+    throw new Error(`Could not apply ${label}. Expected snippet was not found:\n${before}`);
   }
   source = source.replace(before, after);
 }
 
-// The PlayerPool logo already explains the product. Never show a redundant
-// subtitle such as “Private player matching” beneath it.
-source = source.replace(
-  /\n\s*\$\{leagueName \? `<tr><td style="color:#c4d4ce;font-size:14px;line-height:1\.4;letter-spacing:0\.03em;">\$\{escapeHtml\(leagueName\)\}<\/td><\/tr>` : ""\}/,
-  "",
+replaceRequired(
+  `export type SIXFLEmailBranding = {\n  teamName?: string | null;`,
+  `export type SIXFLEmailBranding = {\n  brand?: "sixfl-tv" | "player-pool" | null;\n  teamName?: string | null;`,
+  "PlayerPool email brand type",
 );
+
+source = source.replace(
+  /(if \(brand === "player-pool"\) \{[\s\S]*?alt: "SIXFL Player Pool",\n\s*width:)\s*(?:300|380|420)(,)/,
+  "$1 420$2",
+);
+
+replaceRequired(
+  `  return { body: bodyWithoutMarkers, brand };\n}\n\nfunction getLogoDetails(brand: EmailBrand): LogoDetails {`,
+  `  return { body: bodyWithoutMarkers, brand };\n}\n\nfunction resolveEmailBrand(input: {\n  bodyBrand: EmailBrand;\n  branding?: SIXFLEmailBranding;\n}): EmailBrand {\n  const explicitBrand = input.branding?.brand;\n  if (explicitBrand === "sixfl-tv" || explicitBrand === "player-pool") {\n    return explicitBrand;\n  }\n\n  if (input.bodyBrand !== "sixfl") {\n    return input.bodyBrand;\n  }\n\n  const teamName = input.branding?.teamName?.trim().toLowerCase().replace(/\\s+/g, " ");\n  const teamLogoUrl = input.branding?.teamLogoUrl?.trim().toLowerCase() || "";\n\n  if (\n    teamName === "sixfl playerpool" ||\n    teamName === "sixfl player pool" ||\n    teamLogoUrl.includes("sixfl%20player%20pool") ||\n    teamLogoUrl.includes("sixfl player pool")\n  ) {\n    return "player-pool";\n  }\n\n  return input.bodyBrand;\n}\n\nfunction getLogoDetails(brand: EmailBrand): LogoDetails {`,
+  "shared PlayerPool brand resolution",
+);
+
+replaceRequired(
+  `function buildBrandingBlockHtml(branding?: SIXFLEmailBranding) {\n  const teamName = branding?.teamName?.trim();`,
+  `function buildBrandingBlockHtml(\n  branding?: SIXFLEmailBranding,\n  brand: EmailBrand = "sixfl",\n) {\n  if (brand === "player-pool") return "";\n\n  const teamName = branding?.teamName?.trim();`,
+  "shared PlayerPool header without a duplicate branding panel",
+);
+
+replaceRequired(
+  `        .sixfl-email-logo { width: 150px !important; max-width: 150px !important; }`,
+  `        .sixfl-email-logo { width: 150px !important; max-width: 150px !important; }\n        .sixfl-email-logo-player-pool { width: 300px !important; max-width: 300px !important; margin: 0 auto !important; }`,
+  "responsive PlayerPool logo size",
+);
+
+replaceRequired(
+  `<td class="sixfl-email-logo-cell" bgcolor="${"${logoBackground}"}" style="padding:${"${logoPadding}"};background:${"${logoBackground}"};">`,
+  `<td class="sixfl-email-logo-cell" bgcolor="${"${logoBackground}"}" align="${"${isPlayerPool ? \"center\" : \"left\"}"}" style="padding:${"${logoPadding}"};background:${"${logoBackground}"};text-align:${"${isPlayerPool ? \"center\" : \"left\"}"};">`,
+  "centred shared PlayerPool header",
+);
+
+replaceRequired(
+  `<img src="${"${logo.src}"}" alt="${"${logo.alt}"}" width="${"${logo.width}"}" class="sixfl-email-logo" style="display:block;width:${"${logo.width}"}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;" />`,
+  `<img src="${"${logo.src}"}" alt="${"${logo.alt}"}" width="${"${logo.width}"}" class="sixfl-email-logo${"${isPlayerPool ? \" sixfl-email-logo-player-pool\" : \"\"}"}" style="display:block;width:${"${logo.width}"}px;max-width:100%;height:auto;margin:${"${isPlayerPool ? \"0 auto\" : \"0\"}"};border:0;outline:none;text-decoration:none;" />`,
+  "shared PlayerPool logo class",
+);
+
+replaceRequired(
+  `  const brandResult = extractEmailBrand(input.body);\n  const logo = getLogoDetails(brandResult.brand);\n  const bodyHtml = buildBodyHtmlWithOptionalCta(brandResult.body, input.cta);\n  const brandingHtml = buildBrandingBlockHtml(input.branding);`,
+  `  const brandResult = extractEmailBrand(input.body);\n  const brand = resolveEmailBrand({\n    bodyBrand: brandResult.brand,\n    branding: input.branding,\n  });\n  const logo = getLogoDetails(brand);\n  const bodyHtml = buildBodyHtmlWithOptionalCta(brandResult.body, input.cta);\n  const brandingHtml = buildBrandingBlockHtml(input.branding, brand);`,
+  "shared PlayerPool header selection",
+);
+
+source = source
+  .replaceAll(`const isSixflTv = brandResult.brand === "sixfl-tv";`, `const isSixflTv = brand === "sixfl-tv";`)
+  .replaceAll(`const isPlayerPool = brandResult.brand === "player-pool";`, `const isPlayerPool = brand === "player-pool";`)
+  .replaceAll(`const outerBackground = getOuterBackground(brandResult.brand);`, `const outerBackground = getOuterBackground(brand);`)
+  .replaceAll(`return buildResponsiveEmailDocument(contentHtml, brandResult.brand);`, `return buildResponsiveEmailDocument(contentHtml, brand);`);
 
 fs.writeFileSync(target, source);
 
@@ -52,12 +75,41 @@ const callerFiles = [
 
 for (const file of callerFiles) {
   if (!fs.existsSync(file)) continue;
-  const before = fs.readFileSync(file, "utf8");
-  const after = before.replaceAll(
+  let caller = fs.readFileSync(file, "utf8");
+
+  caller = caller.replaceAll(
+    `emailBranding: {\n        teamName: "SIXFL PlayerPool",`,
+    `emailBranding: {\n        brand: "player-pool",\n        teamName: "SIXFL PlayerPool",`,
+  );
+  caller = caller.replaceAll(
     `leagueName: "Private player matching",`,
     `leagueName: null,`,
   );
-  if (after !== before) fs.writeFileSync(file, after);
+
+  if (caller.includes("Private player matching")) {
+    throw new Error(`PlayerPool subtitle remains in ${file}`);
+  }
+  if (!caller.includes(`brand: "player-pool"`)) {
+    throw new Error(`PlayerPool shared brand is not explicit in ${file}`);
+  }
+
+  fs.writeFileSync(file, caller);
 }
 
-console.log("Applied PlayerPool email logo size, centring and subtitle removal.");
+const requiredPostconditions = [
+  `brand?: "sixfl-tv" | "player-pool" | null;`,
+  `const brand = resolveEmailBrand({`,
+  `const brandingHtml = buildBrandingBlockHtml(input.branding, brand);`,
+  `width: 420,`,
+  `sixfl-email-logo-player-pool`,
+];
+
+for (const expected of requiredPostconditions) {
+  if (!source.includes(expected)) {
+    throw new Error(`PlayerPool shared email header postcondition failed: ${expected}`);
+  }
+}
+
+console.log(
+  "Applied one shared PlayerPool email header: 420px centred logo, no duplicate panel and no subtitle.",
+);
