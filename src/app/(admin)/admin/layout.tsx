@@ -34,6 +34,7 @@ import RefereeNightFixtureSyncBridge from "@/components/admin/referee-nights/Ref
 import AdminRefereeCommsHistoryBridge from "@/components/admin/referees/AdminRefereeCommsHistoryBridge";
 import RefereeWelcomeInviteBridge from "@/components/admin/referees/RefereeWelcomeInviteBridge";
 import AdminSocialResultsGeneratorLinksBridge from "@/components/admin/social/AdminSocialResultsGeneratorLinksBridge";
+import AdminTeamsSixflTvCountBridge from "@/components/admin/teams/AdminTeamsSixflTvCountBridge";
 import FreeKitTeamBadgesBridge from "@/components/admin/teams/FreeKitTeamBadgesBridge";
 import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjuryBridge";
 import RemoveDuplicateLatestKickoffBridge from "@/components/admin/teams/RemoveDuplicateLatestKickoffBridge";
@@ -86,6 +87,7 @@ export default async function AdminLayout({
       <AdminLeagueSeasonsBridge />
       <AdminLeagueSeasonTeamsBridge />
       <AdminDivisionSelectBridge />
+      <AdminTeamsSixflTvCountBridge />
       <FreeKitTeamBadgesBridge />
       <RemoveDuplicateLatestKickoffBridge />
       <TeamCompetitionPickerBridge />
