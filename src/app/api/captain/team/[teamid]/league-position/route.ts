@@ -3,12 +3,9 @@
 // ========================================
 
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
-import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
-import { getLeagueTable } from "@/lib/leagueTable";
-import { prisma } from "@/lib/prisma";
+import { getTeamStanding } from "@/lib/standings";
 import { requireCaptain } from "@/lib/requireCaptain";
 
 export const dynamic = "force-dynamic";
@@ -31,30 +28,6 @@ function getErrorMessage(error: unknown) {
     : "Could not load league position.";
 }
 
-async function getCurrentDivisionId(input: {
-  currentLeagueId: string;
-  relatedTeamIds: string[];
-  fallbackDivisionId?: string | null;
-}) {
-  if (input.relatedTeamIds.length === 0) {
-    return input.fallbackDivisionId ?? null;
-  }
-
-  await ensureSeasonTeamRowsForLeague(input.currentLeagueId);
-
-  const rows = await prisma.$queryRaw<Array<{ divisionId: string | null }>>(Prisma.sql`
-    SELECT "divisionId"
-    FROM "LeagueSeasonTeam"
-    WHERE "leagueId" = ${input.currentLeagueId}
-      AND "teamId" IN (${Prisma.join(input.relatedTeamIds)})
-      AND "isActive" = true
-    ORDER BY "updatedAt" DESC
-    LIMIT 1
-  `);
-
-  return rows[0]?.divisionId ?? input.fallbackDivisionId ?? null;
-}
-
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ teamid: string }> },
@@ -74,35 +47,27 @@ export async function GET(
       });
     }
 
-    const divisionId = await getCurrentDivisionId({
-      currentLeagueId: context.currentLeagueId,
-      relatedTeamIds: context.relatedTeamIds,
-      fallbackDivisionId: context.team.divisionId,
+    const standing = await getTeamStanding({
+      leagueId: context.currentLeagueId,
+      teamIds: context.relatedTeamIds,
     });
 
-    const table = await getLeagueTable(context.currentLeagueId, {
-      divisionId,
-    });
-
-    const positionIndex = table.findIndex((row) =>
-      context.relatedTeamIds.includes(row.teamId),
-    );
-
-    if (positionIndex < 0 || table.length === 0) {
+    if (!standing.position) {
       return NextResponse.json({
         position: null,
-        totalTeams: table.length,
+        totalTeams: standing.totalTeams,
         label: null,
+        divisionId: standing.divisionId,
+        divisionName: standing.divisionName,
       });
     }
 
-    const position = positionIndex + 1;
-
     return NextResponse.json({
-      position,
-      totalTeams: table.length,
-      label: `${formatOrdinal(position)} in table`,
-      divisionId,
+      position: standing.position,
+      totalTeams: standing.totalTeams,
+      label: `${formatOrdinal(standing.position)} in table`,
+      divisionId: standing.divisionId,
+      divisionName: standing.divisionName,
     });
   } catch (error) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
