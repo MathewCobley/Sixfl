@@ -92,6 +92,8 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
       LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
       WHERE lst."leagueId" = ${leagueId}
         AND lst."isActive" = true
+        AND COALESCE(t."isFixturePlaceholder", false) = false
+        AND LOWER(TRIM(t."name")) <> 'tbc'
         AND (t."leagueId" IS NULL OR t."leagueId" <> ${leagueId})
       ORDER BY t."name" ASC
     `),
