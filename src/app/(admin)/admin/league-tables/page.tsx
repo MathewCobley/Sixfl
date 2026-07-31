@@ -61,6 +61,7 @@ export default async function AdminLeagueTablesPage({ searchParams }: PageProps)
 
   const params = searchParams ? await searchParams : {};
   const requestedLeagueId = getParam(params.leagueId).trim();
+  const hasExplicitSelection = Boolean(requestedLeagueId);
 
   const leagues = await prisma.league.findMany({
     orderBy: [{ name: "asc" }, { season: "desc" }],
@@ -114,7 +115,11 @@ export default async function AdminLeagueTablesPage({ searchParams }: PageProps)
         </div>
       </section>
 
-      <AdminLeagueTableSelector leagues={leagueOptions} selectedLeagueId={selectedLeague?.id ?? ""} />
+      <AdminLeagueTableSelector
+        leagues={leagueOptions}
+        selectedLeagueId={selectedLeague?.id ?? ""}
+        hasExplicitSelection={hasExplicitSelection}
+      />
 
       {!selectedLeague || !standings ? (
         <section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.025] p-8 text-sm text-white/55">No leagues have been created yet.</section>
