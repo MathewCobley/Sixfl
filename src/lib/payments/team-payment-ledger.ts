@@ -154,7 +154,6 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     prisma.paymentCharge.findMany({
       where: {
         teamId: { in: relatedTeamIds },
-        status: { not: "VOID" },
       },
       orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
       include: {
@@ -212,7 +211,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     const fixtureLabel = charge.fixture
       ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
       : charge.title;
-    const isPayableNow = isMatchFeeChargePayable(charge.dueDate);
+    const isPayableNow = displayStatus !== "VOID" && isMatchFeeChargePayable(charge.dueDate);
 
     return {
       chargeId: charge.id,
