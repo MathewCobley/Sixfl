@@ -102,7 +102,8 @@ patchFile(redirectFixPath, [
       "}",
       "",
     ].join("\n"),
-    after: "",
+    after:
+      "// Team kit navigation is rendered by the server layout only for eligible teams.\n",
   },
   {
     label: "remove obsolete kit navigation effect",
@@ -121,7 +122,8 @@ patchFile(redirectFixPath, [
       "  }, [pathname]);",
       "",
     ].join("\n"),
-    after: "",
+    after:
+      "  // Team kit navigation eligibility is handled by the server-rendered layout.\n",
   },
 ]);
 
