@@ -5,8 +5,57 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+
+const kitNavBaseClass =
+  "rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100";
+
+function getTeamId(pathname: string) {
+  return pathname.match(/\/captain\/team\/([^/]+)(?:\/|$)/)?.[1] ?? null;
+}
+
+function injectKitNavigation(pathname: string) {
+  const teamId = getTeamId(pathname);
+  if (!teamId) return false;
+
+  const nav = document.querySelector<HTMLElement>(".captain-team-nav");
+  if (!nav) return false;
+
+  let link = nav.querySelector<HTMLAnchorElement>("a[data-team-kit-nav='true']");
+
+  if (!link) {
+    link = document.createElement("a");
+    link.dataset.teamKitNav = "true";
+    link.textContent = "Team kit";
+    nav.appendChild(link);
+  }
+
+  link.href = `/captain/team/${encodeURIComponent(teamId)}/kit`;
+  link.className = [
+    kitNavBaseClass,
+    pathname === `/captain/team/${teamId}/kit` ||
+    pathname.startsWith(`/captain/team/${teamId}/kit/`)
+      ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-100"
+      : "",
+  ].join(" ");
+
+  return true;
+}
 
 export default function CaptainRedirectErrorNoticeFix() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (injectKitNavigation(pathname)) return;
+
+    const observer = new MutationObserver(() => {
+      if (injectKitNavigation(pathname)) observer.disconnect();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [pathname]);
+
   useEffect(() => {
     if (!window.location.pathname.includes("/captain/team/")) return;
     if (!window.location.pathname.endsWith("/results")) return;
