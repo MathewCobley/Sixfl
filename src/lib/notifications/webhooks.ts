@@ -178,7 +178,10 @@ function classifyResendEvent(
         resultStatus: "failed",
         dispatchStatus: NotificationDispatchStatus.FAILED,
         isFailure: true,
-        suppressRecipient: false,
+        // Resend uses delivery_delayed for temporary delays. A bounced event is
+        // treated as a hard failure, so SIXFL must not retry it until the address
+        // has been corrected or an admin has verified and unsuppressed it.
+        suppressRecipient: true,
       };
     case "email.failed":
       return {
@@ -258,10 +261,7 @@ export async function handleResendWebhook(payload: Record<string, unknown>) {
     where: {
       channel: "EMAIL",
       direction: "OUTBOUND",
-      OR: [
-        { providerMessageId },
-        { resendEmailId: providerMessageId },
-      ],
+      OR: [{ providerMessageId }, { resendEmailId: providerMessageId }],
     },
     select: {
       id: true,
@@ -407,7 +407,8 @@ export async function handleResendWebhook(payload: Record<string, unknown>) {
 
 export async function handleTwilioWebhook(payload: Record<string, string>) {
   const providerMessageId = payload.MessageSid?.trim();
-  const messageStatus = payload.MessageStatus?.trim().toLowerCase() || "unknown";
+  const messageStatus =
+    payload.MessageStatus?.trim().toLowerCase() || "unknown";
   const errorMessage = payload.ErrorMessage?.trim() || null;
 
   if (!providerMessageId) {

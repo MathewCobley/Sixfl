@@ -7,8 +7,9 @@ import {
   NotificationRecipientSourceType,
   Prisma,
 } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { normalizeEmailAddress } from "@/lib/notifications/email-health";
 import { normalizePhoneNumber } from "@/lib/notifications/phone";
+import { prisma } from "@/lib/prisma";
 
 export type UpsertNotificationRecipientInput = {
   sourceType: NotificationRecipientSourceType;
@@ -25,8 +26,7 @@ export type UpsertNotificationRecipientInput = {
 };
 
 function normalizeEmail(email?: string | null) {
-  const value = email?.trim().toLowerCase();
-  return value || null;
+  return normalizeEmailAddress(email) || null;
 }
 
 function normalizePhone(phone?: string | null) {
@@ -62,6 +62,46 @@ function mergeRecipientMetadata(
   return incoming;
 }
 
+function asInputJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function addAutomaticEmailChangeResolution(input: {
+  metadata: Prisma.InputJsonValue | undefined;
+  recipientId: string;
+  oldEmail: string | null;
+  newEmail: string;
+  resolvedAt: string;
+}) {
+  const metadata = isInputJsonObject(input.metadata) ? input.metadata : {};
+  const existingHistory = Array.isArray(metadata.deliveryIssueHistory)
+    ? metadata.deliveryIssueHistory.slice(-19)
+    : [];
+  const resolution = {
+    type: "EMAIL_CHANGED_DURING_SYNC",
+    recipientId: input.recipientId,
+    oldEmail: input.oldEmail,
+    newEmail: input.newEmail,
+    resolvedAt: input.resolvedAt,
+    resolvedByUserId: null,
+    sourceLabel: "source record sync",
+    sourceRecordUpdated: true,
+    resendSuppressionConfirmed: false,
+    retryDispatchId: null,
+    retryOfDispatchId: null,
+  };
+
+  return asInputJson({
+    ...metadata,
+    deliveryIssueResolvedAt: input.resolvedAt,
+    deliveryIssueResolvedByUserId: null,
+    deliveryIssueOldEmail: input.oldEmail,
+    deliveryIssueNewEmail: input.newEmail,
+    deliveryIssueResolution: resolution,
+    deliveryIssueHistory: [...existingHistory, resolution],
+  });
+}
+
 export async function upsertNotificationRecipient(
   input: UpsertNotificationRecipientInput,
 ) {
@@ -78,9 +118,37 @@ export async function upsertNotificationRecipient(
     },
     select: {
       id: true,
+      email: true,
+      emailNormalized: true,
+      isSuppressed: true,
+      suppressionReason: true,
       metadata: true,
     },
   });
+
+  const now = new Date();
+  const oldEmailNormalized = normalizeEmail(
+    existing?.emailNormalized ?? existing?.email,
+  );
+  const emailChanged = Boolean(
+    existing &&
+      emailNormalized &&
+      oldEmailNormalized !== emailNormalized,
+  );
+  const mergedMetadata = mergeRecipientMetadata(
+    existing?.metadata,
+    input.metadata,
+  );
+  const metadata =
+    existing && emailChanged && emailNormalized
+      ? addAutomaticEmailChangeResolution({
+          metadata: mergedMetadata,
+          recipientId: existing.id,
+          oldEmail: oldEmailNormalized,
+          newEmail: emailNormalized,
+          resolvedAt: now.toISOString(),
+        })
+      : mergedMetadata;
 
   const recipientData = {
     audience: input.audience,
@@ -93,8 +161,14 @@ export async function upsertNotificationRecipient(
     marketingSmsOptIn: input.marketingSmsOptIn ?? false,
     transactionalEmailOptIn: input.transactionalEmailOptIn ?? true,
     transactionalSmsOptIn: input.transactionalSmsOptIn ?? true,
-    metadata: mergeRecipientMetadata(existing?.metadata, input.metadata),
-    lastSyncedAt: new Date(),
+    metadata,
+    lastSyncedAt: now,
+    ...(emailChanged
+      ? {
+          isSuppressed: false,
+          suppressionReason: null,
+        }
+      : {}),
   };
 
   const recipient = existing

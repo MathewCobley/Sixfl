@@ -8,13 +8,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDaysIcon,
+  Cog6ToothIcon,
   CreditCardIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
   PhotoIcon,
-  Cog6ToothIcon,
   ShieldCheckIcon,
   TrophyIcon,
   UserGroupIcon,
@@ -106,6 +106,12 @@ const navigationGroups = [
         href: "/admin/queue",
         icon: Cog6ToothIcon,
         description: "Dispatches",
+      },
+      {
+        name: "Delivery issues",
+        href: "/admin/delivery-issues",
+        icon: ExclamationTriangleIcon,
+        description: "Bounces",
       },
       {
         name: "Templates",
