@@ -16,6 +16,14 @@ export type StandingDivision = {
   rows: LeagueTableRow[];
 };
 
+export type StandingsMembershipConflict = {
+  teamId: string;
+  teamName: string;
+  divisionId: string | null;
+  divisionName: string | null;
+  teamLeagueId: string | null;
+};
+
 export type LeagueStandings = {
   league: {
     id: string;
@@ -26,6 +34,7 @@ export type LeagueStandings = {
   divisions: StandingDivision[];
   rows: LeagueTableRow[];
   hasDivisions: boolean;
+  membershipConflicts: StandingsMembershipConflict[];
 };
 
 export type TeamStanding = {
@@ -44,6 +53,14 @@ type DivisionRow = {
   sortOrder: number;
 };
 
+type MembershipConflictRow = {
+  teamId: string;
+  teamName: string;
+  divisionId: string | null;
+  divisionName: string | null;
+  teamLeagueId: string | null;
+};
+
 /**
  * The only supported entry point for league standings throughout SIXFL.
  *
@@ -51,7 +68,7 @@ type DivisionRow = {
  * LeagueSeasonTeam, LeagueDivision, Fixture or MatchResult independently.
  */
 export async function getLeagueStandings(leagueId: string): Promise<LeagueStandings> {
-  const [league, divisionRows] = await Promise.all([
+  const [league, divisionRows, membershipConflicts] = await Promise.all([
     prisma.league.findUnique({
       where: { id: leagueId },
       select: { id: true, name: true, season: true, slug: true },
@@ -62,6 +79,21 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
       WHERE "leagueId" = ${leagueId}
         AND "isActive" = true
       ORDER BY "sortOrder" ASC, "name" ASC
+    `),
+    prisma.$queryRaw<MembershipConflictRow[]>(Prisma.sql`
+      SELECT
+        t."id" AS "teamId",
+        t."name" AS "teamName",
+        lst."divisionId" AS "divisionId",
+        d."name" AS "divisionName",
+        t."leagueId" AS "teamLeagueId"
+      FROM "LeagueSeasonTeam" lst
+      JOIN "Team" t ON t."id" = lst."teamId"
+      LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
+      WHERE lst."leagueId" = ${leagueId}
+        AND lst."isActive" = true
+        AND (t."leagueId" IS NULL OR t."leagueId" <> ${leagueId})
+      ORDER BY t."name" ASC
     `),
   ]);
 
@@ -82,6 +114,7 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
       divisions,
       rows: divisions.flatMap((division) => division.rows),
       hasDivisions: true,
+      membershipConflicts,
     };
   }
 
@@ -91,6 +124,7 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
     divisions: [],
     rows,
     hasDivisions: false,
+    membershipConflicts,
   };
 }
 
