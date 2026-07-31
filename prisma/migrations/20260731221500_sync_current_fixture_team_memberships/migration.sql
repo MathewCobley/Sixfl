@@ -55,38 +55,58 @@ FOR EACH ROW
 EXECUTE FUNCTION "sync_fixture_season_memberships"();
 
 -- Backfill all real teams already used in fixtures belonging to a current or
--- active league. This repairs SWAZ and any other team omitted from the season
--- membership records without relying on a team-name guess.
-WITH current_fixture_teams AS (
+-- active league. Rank the fixture rows first so every league/team combination
+-- appears exactly once in the INSERT. PostgreSQL rejects an ON CONFLICT update
+-- when the same target row occurs twice in one statement.
+WITH fixture_team_candidates AS (
   SELECT
     f."leagueId",
     f."divisionId",
-    f."homeTeamId" AS "teamId"
+    f."homeTeamId" AS "teamId",
+    f."kickoffAt",
+    f."updatedAt"
   FROM "Fixture" f
   INNER JOIN "League" l ON l."id" = f."leagueId"
   LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
   WHERE l."isActive" = TRUE OR c."currentLeagueId" = l."id"
 
-  UNION
+  UNION ALL
 
   SELECT
     f."leagueId",
     f."divisionId",
-    f."awayTeamId" AS "teamId"
+    f."awayTeamId" AS "teamId",
+    f."kickoffAt",
+    f."updatedAt"
   FROM "Fixture" f
   INNER JOIN "League" l ON l."id" = f."leagueId"
   LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
   WHERE l."isActive" = TRUE OR c."currentLeagueId" = l."id"
 ),
-eligible_fixture_teams AS (
-  SELECT DISTINCT
-    fixture_team."leagueId",
-    fixture_team."divisionId",
-    fixture_team."teamId"
-  FROM current_fixture_teams fixture_team
-  INNER JOIN "Team" team ON team."id" = fixture_team."teamId"
+ranked_fixture_teams AS (
+  SELECT
+    candidate."leagueId",
+    candidate."divisionId",
+    candidate."teamId",
+    ROW_NUMBER() OVER (
+      PARTITION BY candidate."leagueId", candidate."teamId"
+      ORDER BY
+        candidate."kickoffAt" DESC,
+        candidate."updatedAt" DESC,
+        candidate."divisionId" NULLS LAST
+    ) AS "rowNumber"
+  FROM fixture_team_candidates candidate
+  INNER JOIN "Team" team ON team."id" = candidate."teamId"
   WHERE COALESCE(team."isFixturePlaceholder", FALSE) = FALSE
     AND UPPER(TRIM(team."name")) <> 'TBC'
+),
+eligible_fixture_teams AS (
+  SELECT
+    ranked."leagueId",
+    ranked."divisionId",
+    ranked."teamId"
+  FROM ranked_fixture_teams ranked
+  WHERE ranked."rowNumber" = 1
 )
 INSERT INTO "LeagueSeasonTeam" (
   "id",
@@ -112,9 +132,9 @@ SET
   "isActive" = TRUE,
   "updatedAt" = NOW();
 
--- Also restore a SWAZ-labelled record to the Championship containing the five
--- teams currently visible in the screenshot. This covers the case where SWAZ
--- has not yet been placed into a fixture in the current season.
+-- Restore a SWAZ-labelled record to the Championship containing the teams that
+-- identify the affected table. This is a safe no-op when no matching record is
+-- found, and covers SWAZ even when it has no current fixture yet.
 WITH target_championship AS (
   SELECT
     lst."leagueId",
@@ -149,17 +169,12 @@ swaz_candidate AS (
   SELECT team."id" AS "teamId"
   FROM "Team" team
   CROSS JOIN target_championship target
-  LEFT JOIN "Fixture" fixture
-    ON fixture."leagueId" = target."leagueId"
-   AND fixture."divisionId" = target."divisionId"
-   AND team."id" IN (fixture."homeTeamId", fixture."awayTeamId")
   LEFT JOIN "LeagueSeasonTeam" membership
     ON membership."leagueId" = target."leagueId"
    AND membership."teamId" = team."id"
   WHERE COALESCE(team."isFixturePlaceholder", FALSE) = FALSE
     AND REGEXP_REPLACE(LOWER(TRIM(team."name")), '[^a-z0-9]+', '', 'g') LIKE '%swaz%'
   ORDER BY
-    CASE WHEN fixture."id" IS NOT NULL THEN 0 ELSE 1 END,
     CASE WHEN membership."id" IS NOT NULL THEN 0 ELSE 1 END,
     team."updatedAt" DESC
   LIMIT 1
