@@ -27,6 +27,7 @@ import AdminLeagueSeasonsBridge from "@/components/admin/leagues/AdminLeagueSeas
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
+import PlayerPoolNudgeBridge from "@/components/admin/player-pool/PlayerPoolNudgeBridge";
 import PlayerProspectsNotInterestedBridge from "@/components/admin/player-prospects/PlayerProspectsNotInterestedBridge";
 import PlayerProspectsPlayerPoolBridge from "@/components/admin/player-prospects/PlayerProspectsPlayerPoolBridge";
 import RefereeNightCashDistributionBridge from "@/components/admin/referee-nights/RefereeNightCashDistributionBridge";
@@ -91,6 +92,7 @@ export default async function AdminLayout({
       <EmailTemplateListControlsBridge />
       <EmailBrandOptionBridge />
       <PlayerPoolTemplateCtaBridge />
+      <PlayerPoolNudgeBridge />
       <PlayerProspectsNotInterestedBridge />
       <PlayerProspectsPlayerPoolBridge />
       <GenerateNextWeekFixturesBridge />
