@@ -23,6 +23,11 @@ patch("src/app/captain/team/[teamid]/fixtures/page.tsx", [
     "captain badge import",
   ],
   [
+    '      take: 20,\n      include: {\n        homeTeam: { select: { id: true, name: true } },',
+    '      take: 20,\n      include: {\n        sixflTvRecorded: true,\n        sixflTvUrl: true,\n        homeTeam: { select: { id: true, name: true } },',
+    "captain upcoming tv fields",
+  ],
+  [
     '            </h2>\n            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">',
     '            </h2>\n            {selectedFixture ? (\n              <div className="mt-3">\n                <SixflTvFixtureBadge\n                  recorded={selectedFixture.sixflTvRecorded}\n                  url={selectedFixture.sixflTvUrl}\n                />\n              </div>\n            ) : null}\n            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">',
     "captain selected fixture badge",
