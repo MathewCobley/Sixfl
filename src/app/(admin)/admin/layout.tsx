@@ -64,6 +64,19 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <style>{`
+        button[aria-label^="Open team-raised fixture issues"] {
+          top: 17rem !important;
+          right: 1.25rem !important;
+          bottom: auto !important;
+        }
+
+        @media (min-width: 640px) {
+          button[aria-label^="Open team-raised fixture issues"] {
+            right: 1.5rem !important;
+          }
+        }
+      `}</style>
       <QueuedSmsReasonHints />
       <FixtureChangeNotificationSubmitBridge />
       <FixtureCardResultLinksBridge />
