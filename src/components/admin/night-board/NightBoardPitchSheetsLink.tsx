@@ -39,7 +39,7 @@ export default function NightBoardPitchSheetsLink() {
   if (pathname !== "/admin/night-board") return null;
 
   return (
-    <div className="fixed bottom-36 right-5 z-[79] flex flex-col items-stretch gap-2 sm:right-6">
+    <div className="fixed right-5 top-24 z-[79] flex flex-col items-stretch gap-2 sm:right-6">
       <Link
         href={fixturesHref}
         target="_blank"
