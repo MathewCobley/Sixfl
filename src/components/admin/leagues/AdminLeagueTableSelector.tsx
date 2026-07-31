@@ -5,25 +5,45 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 
 import FormListboxField, {
   type FormListboxOption,
 } from "@/components/ui/FormListboxField";
 
+const LAST_LEAGUE_STORAGE_KEY = "sixfl.admin.leagueTables.lastLeagueId";
+
 export default function AdminLeagueTableSelector({
   leagues,
   selectedLeagueId,
+  hasExplicitSelection,
 }: {
   leagues: FormListboxOption[];
   selectedLeagueId: string;
+  hasExplicitSelection: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
+  useEffect(() => {
+    if (hasExplicitSelection || leagues.length === 0) return;
+
+    const storedLeagueId = window.localStorage.getItem(LAST_LEAGUE_STORAGE_KEY)?.trim();
+    if (!storedLeagueId || storedLeagueId === selectedLeagueId) return;
+    if (!leagues.some((league) => league.value === storedLeagueId)) {
+      window.localStorage.removeItem(LAST_LEAGUE_STORAGE_KEY);
+      return;
+    }
+
+    startTransition(() => {
+      router.replace(`/admin/league-tables?leagueId=${encodeURIComponent(storedLeagueId)}`);
+    });
+  }, [hasExplicitSelection, leagues, router, selectedLeagueId]);
+
   function selectLeague(leagueId: string) {
     if (!leagueId || leagueId === selectedLeagueId) return;
 
+    window.localStorage.setItem(LAST_LEAGUE_STORAGE_KEY, leagueId);
     startTransition(() => {
       router.push(`/admin/league-tables?leagueId=${encodeURIComponent(leagueId)}`);
     });
@@ -38,7 +58,7 @@ export default function AdminLeagueTableSelector({
           </p>
           <h2 className="mt-2 text-xl font-semibold text-white">Select a league table</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
-            Pick any current or previous SIXFL league. The standings below update immediately.
+            Pick any current or previous SIXFL league. Your last selection is remembered on this device.
           </p>
         </div>
 
