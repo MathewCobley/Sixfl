@@ -16,16 +16,19 @@ function patch(file, replacements) {
   fs.writeFileSync(absolute, source, "utf8");
 }
 
+patch("prisma/schema.prisma", [
+  [
+    '  awayMatchFeePence   Int?\n\n  round',
+    '  awayMatchFeePence   Int?\n  sixflTvRecorded      Boolean @default(false)\n  sixflTvUrl           String?\n\n  round',
+    "fixture SIXFL TV schema fields",
+  ],
+]);
+
 patch("src/app/captain/team/[teamid]/fixtures/page.tsx", [
   [
     'import TeamShirt from "@/components/fixtures/TeamShirt";\n',
     'import TeamShirt from "@/components/fixtures/TeamShirt";\nimport SixflTvFixtureBadge from "@/components/sixfl-tv/SixflTvFixtureBadge";\n',
     "captain badge import",
-  ],
-  [
-    '      take: 20,\n      include: {\n        homeTeam: { select: { id: true, name: true } },',
-    '      take: 20,\n      include: {\n        sixflTvRecorded: true,\n        sixflTvUrl: true,\n        homeTeam: { select: { id: true, name: true } },',
-    "captain upcoming tv fields",
   ],
   [
     '            </h2>\n            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">',
