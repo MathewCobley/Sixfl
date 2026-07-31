@@ -109,7 +109,6 @@ async function getLeagueTableTeams(
       WHERE lst."leagueId" = ${leagueId}
         AND lst."divisionId" = ${options.divisionId}
         AND lst."isActive" = true
-        AND t."leagueId" = ${leagueId}
       ORDER BY t."name" ASC
     `);
 
@@ -136,7 +135,6 @@ async function getLeagueTableTeams(
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${leagueId}
         AND lst."isActive" = true
-        AND t."leagueId" = ${leagueId}
       ORDER BY t."name" ASC
     `),
     prisma.$queryRaw<SeasonEntryPresenceRow[]>(Prisma.sql`
@@ -149,6 +147,8 @@ async function getLeagueTableTeams(
   ]);
 
   // Once a league uses season-team entries, those entries are authoritative.
+  // The legacy Team.leagueId can legitimately still point at an older season,
+  // so it must never be used as a second eligibility gate for current standings.
   // An empty active set means the table should be empty, not that affiliated
   // teams should leak back in through the legacy Team.leagueId fallback.
   if (seasonTeams.length > 0 || seasonEntryPresence[0]?.hasEntries) {
