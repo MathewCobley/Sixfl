@@ -156,6 +156,12 @@ const navigationGroups = [
         description: "Schedule/results",
       },
       {
+        name: "Team issues",
+        href: "/admin/fixtures/unavailable",
+        icon: ExclamationTriangleIcon,
+        description: "Availability",
+      },
+      {
         name: "Bulk generator",
         href: "/admin/fixtures/generate",
         icon: CalendarDaysIcon,
