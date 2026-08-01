@@ -6,10 +6,10 @@ import Link from "next/link";
 
 const documentDetails = [
   { label: "Document", value: "League Participation Agreement" },
-  { label: "Version", value: "1.0" },
+  { label: "Version", value: "1.1" },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "2 July 2026" },
-  { label: "Next review", value: "2 July 2027" },
+  { label: "Last updated", value: "1 August 2026" },
+  { label: "Next review", value: "1 August 2027" },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "Registered teams, captains and players" },
 ];
@@ -103,9 +103,26 @@ export default function LeagueAgreementPage() {
           text="Football is a physical sport and participation carries a risk of injury. Players take part at their own risk and are responsible for ensuring they are fit to play."
         />
 
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/[0.07] p-6">
+          <h2 className="text-lg font-bold text-white">9. Founding Team Kit Package</h2>
+          <p className="mt-2 leading-7 text-white/75">
+            Where SIXFL expressly offers a team the Founding Team Kit Package, the package
+            consists of nine complete personalised playing kits for a compulsory total team
+            contribution of £90, equivalent to £10 per shirt. Payment is required before the
+            order is placed. The captain is responsible for checking all sizes, names and
+            numbers before submission.
+          </p>
+          <Link
+            href="/founding-team-kit-terms"
+            className="mt-4 inline-flex min-h-10 items-center rounded-full border border-amber-300/25 bg-amber-500/10 px-4 text-sm font-bold text-amber-100 transition hover:bg-amber-500/15"
+          >
+            Read the full Kit Package Terms
+          </Link>
+        </div>
+
         <AgreementSection
-          title="9. Agreement Acceptance"
-          text="By registering a team, joining a team or participating in a SIXFL match, players acknowledge and agree to these participation terms."
+          title="10. Agreement Acceptance"
+          text="By registering a team, joining a team or participating in a SIXFL match, players acknowledge and agree to these participation terms. A captain who submits a Founding Team Kit Package order also confirms acceptance of the separate Kit Package Terms."
         />
       </div>
 
@@ -115,8 +132,8 @@ export default function LeagueAgreementPage() {
         </h2>
 
         <p className="mt-3 text-white/70">
-          If you have any questions about league participation or team
-          registration, please contact SIXFL.
+          If you have any questions about league participation, team registration or the
+          Founding Team Kit Package, please contact SIXFL.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-4">
@@ -149,6 +166,13 @@ export default function LeagueAgreementPage() {
           className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-white/80 transition hover:border-emerald-400/40 hover:text-white"
         >
           View League Rules
+        </Link>
+
+        <Link
+          href="/founding-team-kit-terms"
+          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-white/80 transition hover:border-emerald-400/40 hover:text-white"
+        >
+          View Kit Package Terms
         </Link>
 
         <Link
