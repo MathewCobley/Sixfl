@@ -6,6 +6,10 @@ import type { Metadata } from "next";
 import Image from "next/image";
 
 import PlayerPoolProfileForm from "@/components/player-pool/PlayerPoolProfileForm";
+import { listPlayerPoolLeagueOptions } from "@/lib/player-pool/leagues";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "SIXFL PlayerPool | Find a 6-a-side team",
@@ -13,7 +17,7 @@ export const metadata: Metadata = {
     "Join SIXFL PlayerPool and let local teams see your anonymised football profile when they need an extra player.",
 };
 
-type SearchParams = Promise<{ error?: string }>;
+type SearchParams = Promise<{ error?: string; leagueId?: string }>;
 
 export default async function PlayerPoolPage({
   searchParams,
@@ -21,6 +25,10 @@ export default async function PlayerPoolPage({
   searchParams?: SearchParams;
 }) {
   const params = (await searchParams) ?? {};
+  const leagues = await listPlayerPoolLeagueOptions();
+  const knownLeague = params.leagueId
+    ? leagues.find((league) => league.id === params.leagueId) ?? null
+    : null;
 
   return (
     <main className="min-h-screen bg-black px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -53,7 +61,9 @@ export default async function PlayerPoolPage({
                   key={item}
                   className="rounded-2xl border border-white/10 bg-black/25 p-4"
                 >
-                  <div className="text-xs font-black text-emerald-300">0{index + 1}</div>
+                  <div className="text-xs font-black text-emerald-300">
+                    0{index + 1}
+                  </div>
                   <div className="mt-2 leading-6">{item}</div>
                 </div>
               ))}
@@ -61,7 +71,18 @@ export default async function PlayerPoolPage({
           </div>
 
           <div className="px-6 py-8 sm:px-9 sm:py-10">
-            <PlayerPoolProfileForm error={params.error ?? null} />
+            <PlayerPoolProfileForm
+              error={params.error ?? null}
+              leagues={leagues}
+              defaults={
+                knownLeague
+                  ? {
+                      leagueId: knownLeague.id,
+                      area: knownLeague.area ?? "",
+                    }
+                  : undefined
+              }
+            />
           </div>
         </section>
       </div>
