@@ -44,17 +44,17 @@ replaceOnce(
   actionsPath,
   [
     "import {",
+    "  TEAM_KIT_FIXED_SOCK_SIZE,",
     "  TEAM_KIT_QUANTITY,",
     "  isTeamKitSize,",
-    "  isTeamKitSockSize,",
     '} from "@/lib/kits/constants";',
   ].join("\n"),
   [
     "import {",
     "  EXTRA_TEAM_KIT_PRICE_PENCE,",
+    "  TEAM_KIT_FIXED_SOCK_SIZE,",
     "  TEAM_KIT_QUANTITY,",
     "  isTeamKitSize,",
-    "  isTeamKitSockSize,",
     '} from "@/lib/kits/constants";',
   ].join("\n"),
   "extra kit price action import",
@@ -142,10 +142,10 @@ export async function createExtraKitPaymentLinksAction(formData: FormData) {
   );
 
   if (!Number.isInteger(extraKitQuantity) || extraKitQuantity < 1 || extraKitQuantity > 10) {
-    redirect(`/captain/team/${teamId}/kit?extras=invalid_quantity`);
+    redirect(\`/captain/team/\${teamId}/kit?extras=invalid_quantity\`);
   }
   if (payerMemberIds.length === 0) {
-    redirect(`/captain/team/${teamId}/kit?extras=no_payers`);
+    redirect(\`/captain/team/\${teamId}/kit?extras=no_payers\`);
   }
 
   const team = await prisma.team.findUnique({
@@ -165,10 +165,10 @@ export async function createExtraKitPaymentLinksAction(formData: FormData) {
   });
 
   if (!team || team.members.length !== payerMemberIds.length) {
-    redirect(`/captain/team/${teamId}/kit?extras=invalid_payers`);
+    redirect(\`/captain/team/\${teamId}/kit?extras=invalid_payers\`);
   }
   if (team.members.some((member) => !member.user.email?.trim())) {
-    redirect(`/captain/team/${teamId}/kit?extras=missing_email`);
+    redirect(\`/captain/team/\${teamId}/kit?extras=missing_email\`);
   }
 
   const existingOpenRequests = await prisma.paymentCharge.count({
@@ -179,7 +179,7 @@ export async function createExtraKitPaymentLinksAction(formData: FormData) {
     },
   });
   if (existingOpenRequests > 0) {
-    redirect(`/captain/team/${teamId}/kit?extras=already_open`);
+    redirect(\`/captain/team/\${teamId}/kit?extras=already_open\`);
   }
 
   const totalPence = extraKitQuantity * EXTRA_TEAM_KIT_PRICE_PENCE;
@@ -195,8 +195,8 @@ export async function createExtraKitPaymentLinksAction(formData: FormData) {
         data: {
           teamId,
           leagueId: team.leagueId,
-          title: `Additional kit contribution • ${payerName}`,
-          description: `${extraKitQuantity} additional complete team kit${extraKitQuantity === 1 ? "" : "s"} for ${team.name} at £20 each. Equal-share payment request ${batchReference}.`,
+          title: \`Additional kit contribution • \${payerName}\`,
+          description: \`\${extraKitQuantity} additional complete team kit\${extraKitQuantity === 1 ? "" : "s"} for \${team.name} at £20 each. Equal-share payment request \${batchReference}.\`,
           amountPence,
           dueDate: new Date(),
           paymentToken: randomBytes(24).toString("hex"),
@@ -205,7 +205,6 @@ export async function createExtraKitPaymentLinksAction(formData: FormData) {
           id: true,
           paymentToken: true,
           amountPence: true,
-          title: true,
         },
       });
     }),
@@ -225,13 +224,17 @@ export async function createExtraKitPaymentLinksAction(formData: FormData) {
       teamName: team.name,
     });
     const paymentUrl = buildChargePaymentUrl(charge.paymentToken);
+    const shareLabel = new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP",
+    }).format(charge.amountPence / 100);
 
     await queueDirectNotification({
       recipientId: recipient.id,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.USER,
-      subject: `${team.name} additional kit contribution`,
-      body: `Hi ${payerName},\n\nYour captain has asked you to contribute ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(charge.amountPence / 100)} towards ${extraKitQuantity} additional SIXFL team kit${extraKitQuantity === 1 ? "" : "s"}.\n\nUse the secure payment link below.`,
+      subject: \`\${team.name} additional kit contribution\`,
+      body: \`Hi \${payerName},\\n\\nYour captain has asked you to contribute \${shareLabel} towards \${extraKitQuantity} additional SIXFL team kit\${extraKitQuantity === 1 ? "" : "s"}.\\n\\nUse the secure payment link below.\`,
       isTransactional: true,
       sourceType: "EXTRA_TEAM_KIT_PAYMENT",
       sourceId: charge.id,
@@ -249,9 +252,9 @@ export async function createExtraKitPaymentLinksAction(formData: FormData) {
     });
   }
 
-  revalidatePath(`/captain/team/${teamId}/kit`);
-  revalidatePath(`/captain/team/${teamId}/payments`);
-  redirect(`/captain/team/${teamId}/kit?extras=sent`);
+  revalidatePath(\`/captain/team/\${teamId}/kit\`);
+  revalidatePath(\`/captain/team/\${teamId}/payments\`);
+  redirect(\`/captain/team/\${teamId}/kit?extras=sent\`);
 }
 
 `;
@@ -342,7 +345,7 @@ replaceOnce(
 const chargeQueryMarker = `  const selectedDesignId = order?.kitDesignId ?? null;`;
 const chargeQuery = `  const extraKitCharges = await prisma.paymentCharge.findMany({
     where: {
-      teamId,
+      teamId: teamid,
       title: { startsWith: "Additional kit contribution •" },
     },
     orderBy: [{ createdAt: "desc" }],
@@ -369,7 +372,7 @@ const panel = `      {sp.extras === "sent" ? (
         </div>
       ) : sp.extras === "already_open" ? (
         <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          This team already has open additional-kit payment requests. Close or complete those requests before creating another set.
+          This team already has open additional-kit payment requests. Complete those requests before creating another set.
         </div>
       ) : sp.extras === "missing_email" ? (
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
