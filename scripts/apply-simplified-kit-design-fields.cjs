@@ -37,13 +37,12 @@ const adminPagePath = "src/app/(admin)/admin/kits/page.tsx";
 const adminActionsPath = "src/app/(admin)/admin/kits/actions.ts";
 const kitDbPath = "src/lib/kits/db.ts";
 
-removeOnce(captainFormPath, "  secondaryColour: string | null;\n");
 removeOnce(captainFormPath, "  style: string | null;\n");
 
 replaceOnce(
   captainFormPath,
   "      [design.code, design.name, design.primaryColour, design.secondaryColour, design.style]",
-  "      [design.code, design.name, design.primaryColour]",
+  "      [design.code, design.name, design.primaryColour, design.secondaryColour]",
   "captain kit search fields",
 );
 
@@ -54,13 +53,7 @@ replaceOnce(
   "captain kit search guidance",
 );
 
-removeOnce(
-  captainPagePath,
-  "            secondaryColour: design.secondaryColour,\n",
-);
 removeOnce(captainPagePath, "            style: design.style,\n");
-
-removeOnce(adminPagePath, "          design.secondaryColour,\n");
 removeOnce(adminPagePath, "          design.style,\n");
 
 replaceOnce(
@@ -70,29 +63,9 @@ replaceOnce(
   "admin kit search placeholder",
 );
 
-replaceOnce(
+removeOnce(
   adminPagePath,
   [
-    '                  <div className="grid gap-3 sm:grid-cols-2">',
-    '                    <label className="space-y-1.5">',
-    '                      <span className="text-xs text-white/45">Primary colour</span>',
-    '                      <input',
-    '                        name="primaryColour"',
-    '                        defaultValue={design.primaryColour ?? ""}',
-    '                        placeholder="Blue or #0057B8"',
-    '                        className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"',
-    '                      />',
-    '                    </label>',
-    '                    <label className="space-y-1.5">',
-    '                      <span className="text-xs text-white/45">Secondary colour</span>',
-    '                      <input',
-    '                        name="secondaryColour"',
-    '                        defaultValue={design.secondaryColour ?? ""}',
-    '                        placeholder="White"',
-    '                        className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"',
-    '                      />',
-    '                    </label>',
-    '                  </div>',
     '',
     '                  <label className="space-y-1.5">',
     '                    <span className="text-xs text-white/45">Style</span>',
@@ -104,66 +77,46 @@ replaceOnce(
     '                    />',
     '                  </label>',
   ].join("\n"),
-  [
-    '                  <label className="space-y-1.5">',
-    '                    <span className="text-xs text-white/45">Primary colour</span>',
-    '                    <input',
-    '                      name="primaryColour"',
-    '                      defaultValue={design.primaryColour ?? ""}',
-    '                      placeholder="Blue or #0057B8"',
-    '                      className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"',
-    '                    />',
-    '                  </label>',
-  ].join("\n"),
-  "admin secondary colour and style fields",
 );
 
-removeOnce(
-  adminActionsPath,
-  '      secondaryColour: readString(formData, "secondaryColour") || null,\n',
-);
 removeOnce(
   adminActionsPath,
   '      style: readString(formData, "style") || null,\n',
 );
 
-removeOnce(kitDbPath, "  secondaryColour?: string | null;\n");
 removeOnce(kitDbPath, "  style?: string | null;\n");
-removeOnce(
-  kitDbPath,
-  '      "secondaryColour" = ${cleanOptional(input.secondaryColour)},\n',
-);
 removeOnce(
   kitDbPath,
   '      "style" = ${cleanOptional(input.style)},\n',
 );
 
-removeOnce(
-  captainActionsPath,
-  "    kitSecondaryColour: input.design.secondaryColour,\n",
-);
 removeOnce(captainActionsPath, "    kitStyle: input.design.style,\n");
 
 const captainForm = read(captainFormPath);
 const adminPage = read(adminPagePath);
 const adminActions = read(adminActionsPath);
+const kitDb = read(kitDbPath);
 
-if (/secondaryColour|\bstyle\b/i.test(captainForm)) {
-  throw new Error("Secondary colour or style remains in the captain kit picker.");
+if (/design\.style|colour or style|\bstyle:\s*string/i.test(captainForm)) {
+  throw new Error("Style remains in the captain kit picker.");
 }
 
-if (
-  /name="secondaryColour"|name="style"|>Secondary colour<|>Style</.test(
-    adminPage,
-  )
-) {
-  throw new Error("Secondary colour or style controls remain in the admin kit catalogue.");
+if (/name="style"|>Style<|design\.style|colour or style/i.test(adminPage)) {
+  throw new Error("Style controls remain in the admin kit catalogue.");
 }
 
-if (/readString\(formData, "secondaryColour"\)|readString\(formData, "style"\)/.test(adminActions)) {
-  throw new Error("Removed kit fields are still processed by the admin action.");
+if (/readString\(formData, "style"\)/.test(adminActions)) {
+  throw new Error("Style is still processed by the admin action.");
+}
+
+if (/style\?:\s*string|input\.style/.test(kitDb)) {
+  throw new Error("Style is still accepted by the kit metadata update function.");
+}
+
+if (!/secondaryColour/.test(captainForm) || !/name="secondaryColour"/.test(adminPage)) {
+  throw new Error("Secondary colour must remain available.");
 }
 
 console.log(
-  "Removed Style and Secondary colour from the captain and admin kit catalogue workflow.",
+  "Removed the Style field while keeping Primary colour and Secondary colour in the kit catalogue.",
 );
