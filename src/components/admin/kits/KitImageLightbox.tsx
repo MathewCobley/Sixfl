@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 type Props = {
   src: string;
+  fullSrc?: string;
   alt: string;
   className?: string;
   imageClassName?: string;
@@ -12,6 +13,7 @@ type Props = {
 
 export default function KitImageLightbox({
   src,
+  fullSrc,
   alt,
   className = "group relative block w-full cursor-zoom-in overflow-hidden",
   imageClassName = "h-full w-full object-contain",
@@ -76,7 +78,7 @@ export default function KitImageLightbox({
               </button>
 
               <img
-                src={src}
+                src={fullSrc ?? src}
                 alt={alt}
                 className="max-h-[86vh] max-w-[94vw] rounded-2xl bg-white object-contain p-2 shadow-2xl sm:max-h-[88vh] sm:max-w-[88vw]"
               />
