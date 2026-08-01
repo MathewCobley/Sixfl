@@ -137,6 +137,8 @@ if (!source.includes("Name-only records are blocked")) {
   throw new Error("The captain duplicate-prevention guidance was not added.");
 }
 
+require("./apply-squad-member-creation-details.cjs");
+
 console.log(
   "Managers cannot create duplicate player records: contact identity is required and checked system-wide.",
 );
