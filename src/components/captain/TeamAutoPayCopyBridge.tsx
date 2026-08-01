@@ -7,6 +7,12 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
+function setText(element: Node | null | undefined, value: string) {
+  if (element && element.textContent !== value) {
+    element.textContent = value;
+  }
+}
+
 function replaceExactText(from: string, to: string) {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];
@@ -20,7 +26,7 @@ function replaceExactText(from: string, to: string) {
   }
 
   for (const textNode of textNodes) {
-    textNode.textContent = to;
+    setText(textNode, to);
   }
 }
 
@@ -37,31 +43,37 @@ function replaceContainingText(from: string, to: string) {
   }
 
   for (const textNode of textNodes) {
-    textNode.textContent = to;
+    setText(textNode, to);
   }
 }
 
 function ensureAutoPayMessage(state: string | null) {
-  document.querySelectorAll("[data-team-autopay-message]").forEach((node) => node.remove());
+  const existing = document.querySelector<HTMLElement>("[data-team-autopay-message]");
 
-  if (!state) return;
+  if (!state) {
+    existing?.remove();
+    return;
+  }
 
-  const message = document.createElement("div");
+  const message = existing ?? document.createElement("div");
   message.dataset.teamAutopayMessage = "true";
   message.className = "rounded-2xl border px-5 py-4 text-sm";
 
   if (state === "success") {
     message.className += " border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
-    message.textContent = "Saved card setup complete. SIXFL will only use it for one-off matchday team fees on the actual fixture day.";
+    setText(message, "Saved card setup complete. SIXFL will only use it for one-off matchday team fees on the actual fixture day.");
   } else if (state === "cancelled") {
     message.className += " border-amber-400/20 bg-amber-500/10 text-amber-100";
-    message.textContent = "Saved card setup was cancelled. No automatic matchday card payment has been enabled.";
+    setText(message, "Saved card setup was cancelled. No automatic matchday card payment has been enabled.");
   } else if (state === "missing_team") {
     message.className += " border-red-400/20 bg-red-500/10 text-red-100";
-    message.textContent = "Saved card setup could not start because this team could not be found.";
+    setText(message, "Saved card setup could not start because this team could not be found.");
   } else {
+    existing?.remove();
     return;
   }
+
+  if (existing) return;
 
   const main = document.querySelector("main") ?? document.body;
   const firstChild = main.firstElementChild;
@@ -119,7 +131,7 @@ function setBadge(
         : "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
 
   badge.className = `rounded-full border px-2 py-0.5 text-[10px] font-medium ${toneClass}`;
-  badge.textContent = label;
+  setText(badge, label);
 }
 
 function setSummaryTone(section: HTMLElement | null, tone: "amber" | "red") {
@@ -159,24 +171,33 @@ function updateSelectedSummary(input: {
   if (!heading || !description) return;
 
   if (input.cancelled) {
-    heading.textContent = "This fixture was cancelled — no fee is due.";
-    description.textContent =
-      "The game was cancelled, so the team charge has been cancelled and no player collection is required.";
+    setText(heading, "This fixture was cancelled — no fee is due.");
+    setText(
+      description,
+      "The game was cancelled, so the team charge has been cancelled and no player collection is required.",
+    );
     setSummaryTone(section, "red");
     return;
   }
 
   if (input.awaitingLabel) {
-    heading.textContent = `Fixture fee covered — ${input.awaitingLabel} still to collect from a player.`;
-    description.textContent =
-      `The SIXFL fixture fee is already covered, but a player payment request for ${input.awaitingLabel} is still open. When it is paid, the excess will be added to the team credit pot.`;
+    setText(
+      heading,
+      `Fixture fee covered — ${input.awaitingLabel} still to collect from a player.`,
+    );
+    setText(
+      description,
+      `The SIXFL fixture fee is already covered, but a player payment request for ${input.awaitingLabel} is still open. When it is paid, the excess will be added to the team credit pot.`,
+    );
     setSummaryTone(section, "amber");
   }
 }
 
 function updateCancelledMetricCards() {
   const labels = Array.from(document.querySelectorAll<HTMLElement>("p"));
-  const fixtureFeeLabel = labels.find((element) => element.textContent?.trim() === "Fixture fee");
+  const fixtureFeeLabel = labels.find((element) =>
+    ["Fixture fee", "Fee due"].includes(element.textContent?.trim() ?? ""),
+  );
   const fixtureFeeCard = fixtureFeeLabel?.closest<HTMLElement>("div.rounded-3xl") ?? null;
   const teamBalanceLabel = labels.find(
     (element) => element.textContent?.trim() === "Team balance remaining",
@@ -184,16 +205,16 @@ function updateCancelledMetricCards() {
   const teamBalanceCard = teamBalanceLabel?.closest<HTMLElement>("div.rounded-3xl") ?? null;
 
   if (fixtureFeeLabel && fixtureFeeCard) {
-    fixtureFeeLabel.textContent = "Fee due";
+    setText(fixtureFeeLabel, "Fee due");
     const value = fixtureFeeCard.querySelector<HTMLElement>("p.text-3xl");
     const helper = Array.from(fixtureFeeCard.querySelectorAll<HTMLParagraphElement>("p")).at(-1);
-    if (value) value.textContent = "£0.00";
-    if (helper) helper.textContent = "Fixture cancelled — no fee due.";
+    setText(value, "£0.00");
+    setText(helper, "Fixture cancelled — no fee due.");
   }
 
   if (teamBalanceCard) {
     const helper = Array.from(teamBalanceCard.querySelectorAll<HTMLParagraphElement>("p")).at(-1);
-    if (helper) helper.textContent = "No balance due — fixture cancelled.";
+    setText(helper, "No balance due — fixture cancelled.");
   }
 }
 
@@ -208,14 +229,17 @@ function updateSquadPaymentClarity(searchParams: URLSearchParams) {
   for (const card of cards) {
     const title = card.querySelector<HTMLElement>("div.text-sm.font-semibold");
     const titleText = title?.textContent?.trim() ?? "";
-    const badge = Array.from(card.querySelectorAll<HTMLElement>("span")).find((element) =>
-      [
-        "Fee covered",
-        "Collection active",
-        "Collection not set up",
-        "Cancelled — no fee due",
-      ].includes(element.textContent?.trim() ?? ""),
-    ) ?? null;
+    const badge = Array.from(card.querySelectorAll<HTMLElement>("span")).find((element) => {
+      const text = element.textContent?.trim() ?? "";
+      return (
+        [
+          "Fee covered",
+          "Collection active",
+          "Collection not set up",
+          "Cancelled — no fee due",
+        ].includes(text) || text.endsWith("still to collect")
+      );
+    }) ?? null;
     const awaitingLine = findLeafLine(card, "Awaiting from players:");
     const awaitingText = awaitingLine?.textContent?.trim() ?? "";
     const awaitingPence = parseMoneyPence(awaitingText);
@@ -223,7 +247,10 @@ function updateSquadPaymentClarity(searchParams: URLSearchParams) {
     const href = card.getAttribute("href") ?? "";
     const isSelected = selectedFixtureId
       ? href.includes(`fixtureId=${encodeURIComponent(selectedFixtureId)}`)
-      : card.classList.contains("border-emerald-400/30");
+      : card.classList.contains("border-emerald-400/30") ||
+        card.dataset.squadPaymentSelected === "true";
+    if (isSelected) card.dataset.squadPaymentSelected = "true";
+
     const isCancelled =
       titleText.toLowerCase().startsWith("cancelled game") ||
       titleText.toLowerCase().includes("fixture cancelled");
@@ -236,9 +263,9 @@ function updateSquadPaymentClarity(searchParams: URLSearchParams) {
       const fixtureFeeLine = findLeafLine(card, "Fixture fee:");
       const collectionLine = findLeafLine(card, "Player collection:");
       const balanceLine = findLeafLine(card, "Team balance remaining:");
-      if (fixtureFeeLine) fixtureFeeLine.textContent = "Fixture cancelled — no fee due";
-      if (collectionLine) collectionLine.textContent = "No player collection required";
-      if (balanceLine) balanceLine.textContent = "Team balance: £0.00 — charge cancelled";
+      setText(fixtureFeeLine, "Fixture cancelled — no fee due");
+      setText(collectionLine, "No player collection required");
+      setText(balanceLine, "Team balance: £0.00 — charge cancelled");
 
       if (isSelected) {
         updateSelectedSummary({ cancelled: true, awaitingLabel: null });
