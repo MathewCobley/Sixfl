@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { reconcileZeroFeePlayerAdjustmentsForTeam } from "@/lib/payments/zero-fee-player-adjustments";
 import { requireCaptain } from "@/lib/requireCaptain";
 
 export const dynamic = "force-dynamic";
@@ -11,20 +10,13 @@ export async function POST(
   { params }: { params: Promise<{ teamid: string }> },
 ) {
   const { teamid } = await params;
-  const access = await requireCaptain(teamid);
-  const result = await reconcileZeroFeePlayerAdjustmentsForTeam(teamid);
+  await requireCaptain(teamid);
 
-  return NextResponse.json({
-    ...result,
-    adjustments: result.adjustments.map((adjustment) => ({
-      ...adjustment,
-      players: adjustment.players.map((player) => ({
-        ...player,
-        editHref: access.isAdmin
-          ? `/captain/team/${teamid}/squad/${player.teamMemberId}/edit`
-          : `/captain/team/${teamid}/captain-squad/${player.teamMemberId}/edit`,
-      })),
-      collectionHref: `/captain/team/${teamid}/player-payments?fixtureId=${encodeURIComponent(adjustment.fixtureId)}`,
-    })),
-  });
+  return NextResponse.json(
+    {
+      error:
+        "Automatic zero-fee reconciliation is disabled. Viewing a payment page must not alter charges.",
+    },
+    { status: 410 },
+  );
 }
