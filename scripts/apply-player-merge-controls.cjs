@@ -40,4 +40,8 @@ if (!source.includes("Merge player")) {
   throw new Error("Player merge control was not added to the admin squad console.");
 }
 
-console.log("Added an admin-only Merge player button to every squad member row.");
+require("./apply-managed-squad-player-merge-control.cjs");
+
+console.log(
+  "Added the full player-account merge workflow to admin and managed squad player cards.",
+);
