@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-type FreeKitPayload = {
+type KitPackagePayload = {
   teamIds: string[];
 };
 
@@ -20,7 +20,7 @@ function addBadge(teamId: string) {
   badge.dataset.freeKitBadge = "true";
   badge.className =
     "rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100";
-  badge.textContent = "Free kit";
+  badge.textContent = "£90 kit package";
   title.insertAdjacentElement("afterend", badge);
 }
 
@@ -29,7 +29,7 @@ async function injectBadges() {
     const response = await fetch("/api/admin/teams/free-kit", { cache: "no-store" });
     if (!response.ok) return;
 
-    const payload = (await response.json()) as FreeKitPayload;
+    const payload = (await response.json()) as KitPackagePayload;
     payload.teamIds.forEach(addBadge);
   } catch {
     // Leave the normal team list untouched if this enhancement cannot load.
