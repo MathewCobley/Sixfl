@@ -23,17 +23,24 @@ export async function getCaptainRelatedTeamContext(teamId: string) {
           id: true,
           name: true,
           season: true,
+          slug: true,
           venueName: true,
+          dayOfWeek: true,
+          isActive: true,
           competitionId: true,
           competition: {
             select: {
               id: true,
+              name: true,
               currentLeague: {
                 select: {
                   id: true,
                   name: true,
                   season: true,
+                  slug: true,
                   venueName: true,
+                  dayOfWeek: true,
+                  isActive: true,
                 },
               },
             },
@@ -78,6 +85,7 @@ export async function getCaptainRelatedTeamContext(teamId: string) {
 
   return {
     team,
+    competitionName: team.league?.competition?.name ?? null,
     currentLeague,
     currentLeagueId,
     relatedTeamIds: [...relatedTeamIds],
