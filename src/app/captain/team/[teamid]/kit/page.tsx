@@ -5,7 +5,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import LegacyFreeKitOfferCopyBridge from "@/components/captain/LegacyFreeKitOfferCopyBridge";
 import TeamKitOrderForm from "@/components/captain/TeamKitOrderForm";
 import {
   TEAM_KIT_QUANTITY,
@@ -23,8 +22,6 @@ export const revalidate = 0;
 export const metadata = {
   title: "Team Kit | SIXFL Captain",
 };
-
-const KIT_PACKAGE_CHANGEOVER_AT = new Date("2026-08-01T10:33:15.000Z");
 
 type SearchParams = {
   saved?: string;
@@ -109,36 +106,6 @@ export default async function CaptainTeamKitPage({
     getTeamKitOrder(teamid),
   ]);
 
-  const legacyOfferRows = await prisma.$queryRaw<
-    Array<{ isLegacyOffer: boolean }>
-  >`
-    SELECT (
-      EXISTS (
-        SELECT 1
-        FROM "InterestLead" lead
-        WHERE lead."convertedTeamId" = ${teamid}
-          AND lead."wantsFreeKit" = TRUE
-          AND lead."createdAt" < ${KIT_PACKAGE_CHANGEOVER_AT}
-      )
-      OR (
-        EXISTS (
-          SELECT 1
-          FROM "Team" legacy_team
-          WHERE legacy_team."id" = ${teamid}
-            AND legacy_team."wantsFreeKit" = TRUE
-            AND legacy_team."createdAt" < ${KIT_PACKAGE_CHANGEOVER_AT}
-        )
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "InterestLead" linked_lead
-          WHERE linked_lead."convertedTeamId" = ${teamid}
-            AND linked_lead."wantsFreeKit" = TRUE
-        )
-      )
-    ) AS "isLegacyOffer"
-  `;
-  const isLegacyFreeKitOffer = Boolean(legacyOfferRows[0]?.isLegacyOffer);
-
   const selectedDesignId = order?.kitDesignId ?? null;
   const designs = allDesigns.filter(
     (design) => design.isActive || design.id === selectedDesignId,
@@ -153,7 +120,7 @@ export default async function CaptainTeamKitPage({
   }
 
   return (
-    <div data-captain-kit-page="true" className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -185,8 +152,6 @@ export default async function CaptainTeamKitPage({
           </span>
         </div>
       </section>
-
-      <LegacyFreeKitOfferCopyBridge active={isLegacyFreeKitOffer} />
 
       {sp.saved === "1" ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
