@@ -72,3 +72,5 @@ patchFile(
   },
   "captain dashboard division tables",
 );
+
+require("./apply-player-current-league-context.cjs");
