@@ -37,6 +37,16 @@ type ExistingProfileRow = {
   publicCode: string;
 };
 
+type PlayerPoolStatusRow = {
+  id: string;
+  prospectId: string;
+  publicCode: string;
+  status: string;
+  invitedAt: Date | null;
+  profileSubmittedAt: Date | null;
+  updatedAt: Date;
+};
+
 type RequestBody = {
   leagueId?: unknown;
 };
@@ -58,6 +68,79 @@ function extractArea(...values: Array<string | null | undefined>) {
   );
 
   return match?.[1]?.trim() || null;
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ prospectId: string }> },
+) {
+  const { prospectId } = await params;
+
+  try {
+    await requireAdmin();
+    await ensurePlayerPoolTables();
+
+    const prospect = await prisma.teamPlayerProspect.findUnique({
+      where: { id: prospectId },
+      select: { id: true, email: true },
+    });
+
+    if (!prospect) {
+      return NextResponse.json({ error: "Prospect not found." }, { status: 404 });
+    }
+
+    const email = normalizePlayerPoolEmail(prospect.email);
+    const rows = email
+      ? await prisma.$queryRaw<PlayerPoolStatusRow[]>`
+          SELECT
+            "id",
+            "prospectId",
+            "publicCode",
+            "status",
+            "invitedAt",
+            "profileSubmittedAt",
+            "updatedAt"
+          FROM "PlayerPoolProfile"
+          WHERE "prospectId" = ${prospect.id}
+             OR "emailNormalized" = ${email}
+          ORDER BY CASE WHEN "prospectId" = ${prospect.id} THEN 0 ELSE 1 END
+          LIMIT 1
+        `
+      : await prisma.$queryRaw<PlayerPoolStatusRow[]>`
+          SELECT
+            "id",
+            "prospectId",
+            "publicCode",
+            "status",
+            "invitedAt",
+            "profileSubmittedAt",
+            "updatedAt"
+          FROM "PlayerPoolProfile"
+          WHERE "prospectId" = ${prospect.id}
+          LIMIT 1
+        `;
+
+    const profile = rows[0] ?? null;
+
+    return NextResponse.json({
+      ok: true,
+      exists: Boolean(profile),
+      profile: profile
+        ? {
+            id: profile.id,
+            prospectId: profile.prospectId,
+            publicCode: profile.publicCode,
+            status: profile.status,
+            invitedAt: profile.invitedAt?.toISOString() ?? null,
+            profileSubmittedAt:
+              profile.profileSubmittedAt?.toISOString() ?? null,
+            updatedAt: profile.updatedAt.toISOString(),
+          }
+        : null,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: routeError(error) }, { status: 500 });
+  }
 }
 
 export async function POST(
