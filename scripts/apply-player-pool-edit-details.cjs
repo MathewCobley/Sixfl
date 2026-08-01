@@ -119,7 +119,9 @@ if (
 }
 
 require("./apply-player-duplicate-guard.cjs");
+require("./apply-player-multi-team-badges.cjs");
+require("./apply-player-merge-controls.cjs");
 
 console.log(
-  "PlayerPool cards and email delivery issues now link directly to a contact details editor, and manager player creation is duplicate-safe.",
+  "PlayerPool contact tools, duplicate-safe creation, multi-team badges and admin player merging are enabled.",
 );
