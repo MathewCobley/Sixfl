@@ -56,11 +56,12 @@ patchFile(deliveryIssuesPagePath, [
     ].join("\n"),
   },
   {
-    label: "Gmail transposition typo detection",
+    label: "common Gmail typo detection",
     before: '    [/@gmal\\.com$/, "@gmail.com"],',
     after: [
       '    [/@gmal\\.com$/, "@gmail.com"],',
       '    [/@gamil\\.com$/, "@gmail.com"],',
+      '    [/@gmail\\.co\\.uk$/, "@gmail.com"],',
     ].join("\n"),
   },
   {
@@ -146,7 +147,8 @@ for (const filePath of [
   if (
     filePath === deliveryIssuesPagePath &&
     (!source.includes("AdminDelayedEmailDeliveryPanel") ||
-      !source.includes("/@gamil\\.com$/"))
+      !source.includes("/@gamil\\.com$/") ||
+      !source.includes("/@gmail\\.co\\.uk$/"))
   ) {
     throw new Error("Delivery issues page enhancements were not applied.");
   }
