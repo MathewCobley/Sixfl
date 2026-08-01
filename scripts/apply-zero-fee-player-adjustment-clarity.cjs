@@ -2,4 +2,6 @@
 // Viewing the team payment ledger must never alter payment charges.
 // The normal squad payment action remains responsible for explicit captain changes only.
 
+require("./apply-admin-only-player-fee-override.cjs");
+
 console.log("Automatic zero-fee payment reconciliation is disabled.");
