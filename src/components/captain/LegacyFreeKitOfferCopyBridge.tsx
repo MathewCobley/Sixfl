@@ -1,20 +1,46 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
-type LegacyFreeKitOfferCopyBridgeProps = {
-  active: boolean;
+type LegacyOfferResponse = {
+  legacyOffer?: boolean;
 };
 
 function normalise(value: string | null | undefined) {
   return value?.replace(/\s+/g, " ").trim() ?? "";
 }
 
+function getKitTeamId(pathname: string) {
+  return pathname.match(/^\/captain\/team\/([^/]+)\/kit(?:\/|$)/)?.[1] ?? null;
+}
+
+function ensureLegacyNotice(root: HTMLElement) {
+  if (root.querySelector('[data-legacy-free-kit-notice="true"]')) return;
+
+  const notice = document.createElement("section");
+  notice.dataset.legacyFreeKitNotice = "true";
+  notice.className =
+    "rounded-3xl border border-emerald-400/25 bg-emerald-500/[0.08] p-5 sm:p-6";
+  notice.innerHTML = [
+    '<p class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-200/75">Original offer protected</p>',
+    '<h2 class="mt-2 text-xl font-semibold text-white">Your free kit offer is being honoured</h2>',
+    '<p class="mt-2 max-w-3xl text-sm leading-6 text-white/65">Your team selected the founding-team free kit offer before the website changed. The new £90 contribution does not apply to this original nine-kit order.</p>',
+  ].join("");
+
+  const firstSection = root.querySelector(":scope > section");
+  if (firstSection?.nextSibling) {
+    root.insertBefore(notice, firstSection.nextSibling);
+  } else {
+    root.prepend(notice);
+  }
+}
+
 function applyLegacyCopy() {
-  const root = document.querySelector<HTMLElement>(
-    '[data-captain-kit-page="true"]',
-  );
+  const root = document.querySelector<HTMLElement>(".captain-team-main > div");
   if (!root) return;
+
+  ensureLegacyNotice(root);
 
   const elements = Array.from(
     root.querySelectorAll<HTMLElement>("div, span, p, h2, button, a"),
@@ -64,9 +90,7 @@ function applyLegacyCopy() {
       continue;
     }
 
-    if (
-      text.startsWith("This is £10 for each of the nine personalised shirts")
-    ) {
+    if (text.startsWith("This is £10 for each of the nine personalised shirts")) {
       element.textContent =
         "Your team selected the free kit offer before it changed. The new compulsory printing contribution does not apply to this original nine-kit order. Please still check every size, name and shirt number carefully before submitting.";
       continue;
@@ -86,39 +110,46 @@ function applyLegacyCopy() {
   }
 }
 
-export default function LegacyFreeKitOfferCopyBridge({
-  active,
-}: LegacyFreeKitOfferCopyBridgeProps) {
+export default function LegacyFreeKitOfferCopyBridge() {
+  const pathname = usePathname();
+
   useEffect(() => {
-    if (!active) return;
+    const teamId = getKitTeamId(pathname);
+    if (!teamId) return;
 
-    applyLegacyCopy();
+    let cancelled = false;
+    let observer: MutationObserver | null = null;
+    let timer: number | null = null;
 
-    const observer = new MutationObserver(() => applyLegacyCopy());
-    observer.observe(document.body, { childList: true, subtree: true });
+    async function loadLegacyStatus() {
+      try {
+        const response = await fetch(
+          `/api/captain/team/${encodeURIComponent(teamId)}/legacy-kit-offer`,
+          { cache: "no-store" },
+        );
+        const payload = (await response.json().catch(() => null)) as
+          | LegacyOfferResponse
+          | null;
 
-    const timer = window.setTimeout(() => observer.disconnect(), 2500);
+        if (cancelled || !response.ok || !payload?.legacyOffer) return;
+
+        applyLegacyCopy();
+        observer = new MutationObserver(() => applyLegacyCopy());
+        observer.observe(document.body, { childList: true, subtree: true });
+        timer = window.setTimeout(() => observer?.disconnect(), 2500);
+      } catch {
+        // Leave the standard package wording in place if eligibility cannot be checked.
+      }
+    }
+
+    void loadLegacyStatus();
 
     return () => {
-      window.clearTimeout(timer);
-      observer.disconnect();
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+      observer?.disconnect();
     };
-  }, [active]);
+  }, [pathname]);
 
-  if (!active) return null;
-
-  return (
-    <section className="rounded-3xl border border-emerald-400/25 bg-emerald-500/[0.08] p-5 sm:p-6">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-200/75">
-        Original offer protected
-      </p>
-      <h2 className="mt-2 text-xl font-semibold text-white">
-        Your free kit offer is being honoured
-      </h2>
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
-        Your team selected the founding-team free kit offer before the website changed.
-        The new £90 contribution does not apply to this original nine-kit order.
-      </p>
-    </section>
-  );
+  return null;
 }
