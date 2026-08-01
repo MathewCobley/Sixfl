@@ -114,6 +114,12 @@ const navigationGroups = [
         description: "Bounces",
       },
       {
+        name: "Email audit",
+        href: "/admin/email-audit",
+        icon: MagnifyingGlassIcon,
+        description: "Address counts",
+      },
+      {
         name: "Templates",
         href: "/admin/templates",
         icon: DocumentTextIcon,
