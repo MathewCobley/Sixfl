@@ -118,6 +118,8 @@ if (
   throw new Error("PlayerPool delivery issue links were not added correctly.");
 }
 
+require("./apply-player-duplicate-guard.cjs");
+
 console.log(
-  "PlayerPool cards and email delivery issues now link directly to a contact details editor.",
+  "PlayerPool cards and email delivery issues now link directly to a contact details editor, and manager player creation is duplicate-safe.",
 );
