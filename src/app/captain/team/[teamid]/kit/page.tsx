@@ -125,7 +125,7 @@ export default async function CaptainTeamKitPage({
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-200">
-              Team kit order
+              £90 Founding Team Kit Package
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
               Choose {team.name}&apos;s kit
@@ -133,6 +133,10 @@ export default async function CaptainTeamKitPage({
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 sm:text-base">
               Your team receives {TEAM_KIT_QUANTITY} complete kits. Choose one design,
               then enter the kit size, sock size, back name and shirt number for each player.
+            </p>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-amber-100/80">
+              The compulsory team contribution is £90 in total — £10 for each of the nine
+              personalised shirts. Payment is required before SIXFL places the supplier order.
             </p>
             {team.league ? (
               <p className="mt-3 text-sm text-white/40">
@@ -142,14 +146,39 @@ export default async function CaptainTeamKitPage({
             ) : null}
           </div>
 
-          <span
-            className={[
-              "inline-flex w-fit rounded-full border px-4 py-2 text-sm font-semibold",
-              statusClasses(order?.status ?? "DRAFT"),
-            ].join(" ")}
-          >
-            {order ? getTeamKitStatusLabel(order.status) : "Not started"}
-          </span>
+          <div className="flex flex-col items-start gap-3 lg:items-end">
+            <span
+              className={[
+                "inline-flex w-fit rounded-full border px-4 py-2 text-sm font-semibold",
+                statusClasses(order?.status ?? "DRAFT"),
+              ].join(" ")}
+            >
+              {order ? getTeamKitStatusLabel(order.status) : "Not started"}
+            </span>
+            <Link
+              href="/founding-team-kit-terms"
+              className="text-sm font-semibold text-emerald-200 underline decoration-emerald-400/40 underline-offset-4 transition hover:text-emerald-100"
+            >
+              Read the Kit Package Terms
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.08] p-5 sm:p-6">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-100/55">Included</div>
+            <div className="mt-2 font-semibold text-white">9 shirts, shorts and socks</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-100/55">Contribution</div>
+            <div className="mt-2 font-semibold text-white">£90 per team</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-100/55">Printing</div>
+            <div className="mt-2 font-semibold text-white">Unique number required · name optional</div>
+          </div>
         </div>
       </section>
 
@@ -162,6 +191,7 @@ export default async function CaptainTeamKitPage({
       {sp.submitted === "1" ? (
         <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
           Your nine-kit order has been submitted to SIXFL. It is now locked while we review it.
+          The £90 contribution must be paid before the supplier order is placed.
         </div>
       ) : null}
 
@@ -175,8 +205,8 @@ export default async function CaptainTeamKitPage({
         <section className="rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-white">Order submitted</h2>
           <p className="mt-2 text-sm leading-6 text-white/55">
-            The details below are read-only while SIXFL checks and places the order.
-            Contact us if anything needs changing.
+            The details below are read-only while SIXFL checks the order and arranges the
+            £90 payment. Contact us if anything needs changing before production begins.
           </p>
         </section>
       ) : null}
