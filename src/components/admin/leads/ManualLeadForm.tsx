@@ -221,13 +221,13 @@ export default function ManualLeadForm() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white">
+          <label className="flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-500/[0.06] px-4 py-3 text-sm text-white">
             <input
               type="checkbox"
               name="wantsFreeKit"
               className="h-4 w-4 rounded border-white/20 bg-black/40 text-emerald-500 focus:ring-emerald-500/20"
             />
-            <span>Interested in free kit offer</span>
+            <span>Interested in £90 Founding Team Kit Package</span>
           </label>
 
           <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white">
