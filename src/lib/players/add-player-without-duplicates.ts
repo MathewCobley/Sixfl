@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Prisma, TeamRole } from "@prisma/client";
+import { TeamRole } from "@prisma/client";
 
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
 import { prisma } from "@/lib/prisma";
@@ -65,6 +65,13 @@ type ProspectRow = {
   status: string;
 };
 
+type DuplicateGuardTransaction = {
+  $executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<number>;
+  $queryRawUnsafe: (query: string, ...values: unknown[]) => Promise<unknown>;
+  user: typeof prisma.user;
+  teamMember: typeof prisma.teamMember;
+};
+
 function normaliseName(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -75,43 +82,43 @@ function normaliseEmail(value: string | null) {
 }
 
 async function recordBlockedAttempt(
-  tx: Prisma.TransactionClient,
+  tx: DuplicateGuardTransaction,
   input: AddPlayerInput,
   result: DuplicateResult,
 ) {
-  await tx.$executeRaw`
-    INSERT INTO "PlayerDuplicateAttempt" (
-      "id",
-      "teamId",
-      "attemptedByUserId",
-      "attemptedByEmail",
-      "displayName",
-      "email",
-      "phone",
-      "matchType",
-      "matchedRecordId",
-      "matchedTeamId",
-      "reason",
-      "createdAt"
-    ) VALUES (
-      ${randomUUID()},
-      ${input.teamId},
-      ${input.attemptedByUserId},
-      ${input.attemptedByEmail},
-      ${input.displayName},
-      ${input.email},
-      ${input.phone},
-      ${result.matchedType ?? result.code},
-      ${result.matchedRecordId ?? null},
-      ${result.matchedTeamId ?? null},
-      ${result.message},
-      NOW()
-    )
-  `;
+  await tx.$executeRawUnsafe(
+    `
+      INSERT INTO "PlayerDuplicateAttempt" (
+        "id",
+        "teamId",
+        "attemptedByUserId",
+        "attemptedByEmail",
+        "displayName",
+        "email",
+        "phone",
+        "matchType",
+        "matchedRecordId",
+        "matchedTeamId",
+        "reason",
+        "createdAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+    `,
+    randomUUID(),
+    input.teamId,
+    input.attemptedByUserId,
+    input.attemptedByEmail,
+    input.displayName,
+    input.email,
+    input.phone,
+    result.matchedType ?? result.code,
+    result.matchedRecordId ?? null,
+    result.matchedTeamId ?? null,
+    result.message,
+  );
 }
 
 async function block(
-  tx: Prisma.TransactionClient,
+  tx: DuplicateGuardTransaction,
   input: AddPlayerInput,
   result: DuplicateResult,
 ): Promise<DuplicateResult> {
@@ -125,11 +132,21 @@ export async function addPlayerToTeamWithoutDuplicates(
   const displayName = input.displayName.trim().replace(/\s+/g, " ");
   const email = normaliseEmail(input.email);
   const phone = normalizePhoneNumber(input.phone);
+  const phoneDigits = phone?.replace(/^\+/, "") ?? null;
   const normalisedPlayerName = normaliseName(displayName);
 
-  return prisma.$transaction(async (tx) => {
-    const lockKey = email ? `player-email:${email}` : phone ? `player-phone:${phone}` : `player-name:${input.teamId}:${normalisedPlayerName}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+  return prisma.$transaction(async (rawTx) => {
+    const tx = rawTx as unknown as DuplicateGuardTransaction;
+    const lockKey = email
+      ? `player-email:${email}`
+      : phone
+        ? `player-phone:${phone}`
+        : `player-name:${input.teamId}:${normalisedPlayerName}`;
+
+    await tx.$executeRawUnsafe(
+      "SELECT pg_advisory_xact_lock(hashtext($1))",
+      lockKey,
+    );
 
     if (!email && !phone) {
       return block(tx, input, {
@@ -140,25 +157,29 @@ export async function addPlayerToTeamWithoutDuplicates(
       });
     }
 
-    const sameTeamNameRows = await tx.$queryRaw<SameTeamNameRow[]>`
-      SELECT
-        member."id" AS "membershipId",
-        player_user."id" AS "userId",
-        player_user."name" AS "userName",
-        player_user."email" AS "userEmail"
-      FROM "TeamMember" member
-      INNER JOIN "User" player_user ON player_user."id" = member."userId"
-      WHERE member."teamId" = ${input.teamId}
-        AND LOWER(
-          REGEXP_REPLACE(
-            BTRIM(COALESCE(player_user."name", '')),
-            '[[:space:]]+',
-            ' ',
-            'g'
-          )
-        ) = ${normalisedPlayerName}
-      LIMIT 1
-    `;
+    const sameTeamNameRows = (await tx.$queryRawUnsafe(
+      `
+        SELECT
+          member."id" AS "membershipId",
+          player_user."id" AS "userId",
+          player_user."name" AS "userName",
+          player_user."email" AS "userEmail"
+        FROM "TeamMember" member
+        INNER JOIN "User" player_user ON player_user."id" = member."userId"
+        WHERE member."teamId" = $1
+          AND LOWER(
+            REGEXP_REPLACE(
+              BTRIM(COALESCE(player_user."name", '')),
+              '[[:space:]]+',
+              ' ',
+              'g'
+            )
+          ) = $2
+        LIMIT 1
+      `,
+      input.teamId,
+      normalisedPlayerName,
+    )) as SameTeamNameRow[];
 
     if (sameTeamNameRows[0]) {
       return block(tx, input, {
@@ -181,39 +202,42 @@ export async function addPlayerToTeamWithoutDuplicates(
         })
       : null;
 
-    const phoneLinkedUsers = phone
-      ? await tx.$queryRaw<PhoneLinkedUserRow[]>`
-          WITH profile_phones AS (
+    const phoneLinkedUsers = phoneDigits
+      ? ((await tx.$queryRawUnsafe(
+          `
+            WITH profile_phones AS (
+              SELECT
+                profile."teamMemberId",
+                profile."phone",
+                CASE
+                  WHEN REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g') LIKE '0%'
+                    THEN '44' || SUBSTRING(
+                      REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g')
+                      FROM 2
+                    )
+                  WHEN REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g') LIKE '44%'
+                    THEN REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g')
+                  ELSE '44' || REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g')
+                END AS "phoneNormalized"
+              FROM "TeamMemberProfile" profile
+              WHERE NULLIF(BTRIM(profile."phone"), '') IS NOT NULL
+            )
             SELECT
-              profile."teamMemberId",
-              profile."phone",
-              CASE
-                WHEN REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g') LIKE '0%'
-                  THEN '44' || SUBSTRING(
-                    REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g')
-                    FROM 2
-                  )
-                WHEN REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g') LIKE '44%'
-                  THEN REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g')
-                ELSE '44' || REGEXP_REPLACE(COALESCE(profile."phone", ''), '[^0-9]', '', 'g')
-              END AS "phoneNormalized"
-            FROM "TeamMemberProfile" profile
-            WHERE NULLIF(BTRIM(profile."phone"), '') IS NOT NULL
-          )
-          SELECT
-            member."id" AS "membershipId",
-            player_user."id" AS "userId",
-            player_user."name" AS "userName",
-            player_user."email" AS "userEmail",
-            team."id" AS "teamId",
-            team."name" AS "teamName",
-            profile_phones."phone" AS "phone"
-          FROM profile_phones
-          INNER JOIN "TeamMember" member ON member."id" = profile_phones."teamMemberId"
-          INNER JOIN "User" player_user ON player_user."id" = member."userId"
-          INNER JOIN "Team" team ON team."id" = member."teamId"
-          WHERE profile_phones."phoneNormalized" = ${phone.replace(/^\+/, "")}
-        `
+              member."id" AS "membershipId",
+              player_user."id" AS "userId",
+              player_user."name" AS "userName",
+              player_user."email" AS "userEmail",
+              team."id" AS "teamId",
+              team."name" AS "teamName",
+              profile_phones."phone" AS "phone"
+            FROM profile_phones
+            INNER JOIN "TeamMember" member ON member."id" = profile_phones."teamMemberId"
+            INNER JOIN "User" player_user ON player_user."id" = member."userId"
+            INNER JOIN "Team" team ON team."id" = member."teamId"
+            WHERE profile_phones."phoneNormalized" = $1
+          `,
+          phoneDigits,
+        )) as PhoneLinkedUserRow[])
       : [];
 
     const currentTeamPhoneMatch = phoneLinkedUsers.find(
@@ -300,46 +324,50 @@ export async function addPlayerToTeamWithoutDuplicates(
     }
 
     if (!existingUserId) {
-      const prospectMatches = await tx.$queryRaw<ProspectRow[]>`
-        WITH prospect_contacts AS (
+      const prospectMatches = (await tx.$queryRawUnsafe(
+        `
+          WITH prospect_contacts AS (
+            SELECT
+              prospect."id",
+              prospect."teamId",
+              team."name" AS "teamName",
+              prospect."firstName",
+              prospect."lastName",
+              prospect."email",
+              prospect."phone",
+              prospect."status",
+              LOWER(BTRIM(COALESCE(prospect."email", ''))) AS "emailNormalized",
+              CASE
+                WHEN REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g') LIKE '0%'
+                  THEN '44' || SUBSTRING(
+                    REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g')
+                    FROM 2
+                  )
+                WHEN REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g') LIKE '44%'
+                  THEN REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g')
+                ELSE '44' || REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g')
+              END AS "phoneNormalized"
+            FROM "TeamPlayerProspect" prospect
+            LEFT JOIN "Team" team ON team."id" = prospect."teamId"
+          )
           SELECT
-            prospect."id",
-            prospect."teamId",
-            team."name" AS "teamName",
-            prospect."firstName",
-            prospect."lastName",
-            prospect."email",
-            prospect."phone",
-            prospect."status",
-            LOWER(BTRIM(COALESCE(prospect."email", ''))) AS "emailNormalized",
-            CASE
-              WHEN REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g') LIKE '0%'
-                THEN '44' || SUBSTRING(
-                  REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g')
-                  FROM 2
-                )
-              WHEN REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g') LIKE '44%'
-                THEN REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g')
-              ELSE '44' || REGEXP_REPLACE(COALESCE(prospect."phone", ''), '[^0-9]', '', 'g')
-            END AS "phoneNormalized"
-          FROM "TeamPlayerProspect" prospect
-          LEFT JOIN "Team" team ON team."id" = prospect."teamId"
-        )
-        SELECT
-          "id",
-          "teamId",
-          "teamName",
-          "firstName",
-          "lastName",
-          "email",
-          "phone",
-          "status"
-        FROM prospect_contacts
-        WHERE (${email}::text IS NOT NULL AND "emailNormalized" = ${email})
-           OR (${phone}::text IS NOT NULL AND "phoneNormalized" = ${phone?.replace(/^\+/, "") ?? null})
-        ORDER BY "teamId" NULLS FIRST, "id"
-        LIMIT 1
-      `;
+            "id",
+            "teamId",
+            "teamName",
+            "firstName",
+            "lastName",
+            "email",
+            "phone",
+            "status"
+          FROM prospect_contacts
+          WHERE ($1::text IS NOT NULL AND "emailNormalized" = $1)
+             OR ($2::text IS NOT NULL AND "phoneNormalized" = $2)
+          ORDER BY "teamId" NULLS FIRST, "id"
+          LIMIT 1
+        `,
+        email,
+        phoneDigits,
+      )) as ProspectRow[];
 
       if (prospectMatches[0]) {
         const match = prospectMatches[0];
@@ -382,11 +410,11 @@ export async function addPlayerToTeamWithoutDuplicates(
       }
     }
 
-    await tx.$executeRaw`
-      UPDATE "User"
-      SET "usesWhatsapp" = ${input.usesWhatsapp}
-      WHERE "id" = ${userId}
-    `;
+    await tx.$executeRawUnsafe(
+      'UPDATE "User" SET "usesWhatsapp" = $1 WHERE "id" = $2',
+      input.usesWhatsapp,
+      userId,
+    );
 
     const member = await tx.teamMember.create({
       data: {
@@ -398,22 +426,22 @@ export async function addPlayerToTeamWithoutDuplicates(
     });
 
     if (phone) {
-      await tx.$executeRaw`
-        INSERT INTO "TeamMemberProfile" (
-          "id",
-          "teamMemberId",
-          "phone",
-          "updatedAt"
-        ) VALUES (
-          ${randomUUID()},
-          ${member.id},
-          ${phone},
-          NOW()
-        )
-        ON CONFLICT ("teamMemberId") DO UPDATE SET
-          "phone" = EXCLUDED."phone",
-          "updatedAt" = NOW()
-      `;
+      await tx.$executeRawUnsafe(
+        `
+          INSERT INTO "TeamMemberProfile" (
+            "id",
+            "teamMemberId",
+            "phone",
+            "updatedAt"
+          ) VALUES ($1, $2, $3, NOW())
+          ON CONFLICT ("teamMemberId") DO UPDATE SET
+            "phone" = EXCLUDED."phone",
+            "updatedAt" = NOW()
+        `,
+        randomUUID(),
+        member.id,
+        phone,
+      );
     }
 
     return {
