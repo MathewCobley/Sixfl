@@ -36,7 +36,7 @@ function applyLegacyWording() {
       "The compulsory team contribution is £90 in total — £10 for each of the nine personalised shirts. Payment is required before SIXFL places the supplier order."
     ) {
       element.textContent =
-        "Your team selected the original founding-team free kit offer before it changed. SIXFL will honour that offer for this nine-kit order, so the new £90 contribution does not apply.";
+        "Your team receives the nine complete kits included in its original founding-team offer. Additional complete kits can be added for £20 each.";
       return;
     }
 
@@ -45,7 +45,7 @@ function applyLegacyWording() {
       "Your nine-kit order has been submitted to SIXFL. It is now locked while we review it. The £90 contribution must be paid before the supplier order is placed."
     ) {
       element.textContent =
-        "Your original free-kit order has been submitted to SIXFL. It is now locked while we review it. No £90 contribution applies to this order.";
+        "Your original nine-kit order has been submitted to SIXFL. It is now locked while we review and place it.";
       return;
     }
 
@@ -54,17 +54,17 @@ function applyLegacyWording() {
       "The details below are read-only while SIXFL checks the order and arranges the £90 payment. Contact us if anything needs changing before production begins."
     ) {
       element.textContent =
-        "The details below are read-only while SIXFL checks and places your original free-kit order. Contact us if anything needs changing before production begins.";
+        "The details below are read-only while SIXFL checks and places your original kit order. Contact us if anything needs changing before production begins.";
       return;
     }
 
     if (text === "Compulsory printing contribution") {
-      element.textContent = "Original free kit offer honoured";
+      element.textContent = "Original free kit allocation";
       return;
     }
 
     if (text === "£90 per team") {
-      element.textContent = "No £90 contribution";
+      element.textContent = "Nine complete kits included";
       return;
     }
 
@@ -73,7 +73,7 @@ function applyLegacyWording() {
       "This is £10 for each of the nine personalised shirts. Submitting confirms that the captain has checked the design, sizes, names and numbers. Payment is required before SIXFL places the supplier order."
     ) {
       element.textContent =
-        "Your team selected the free kit offer before it changed. The new compulsory printing contribution does not apply to this original nine-kit order. Please still check every size, name and shirt number carefully before submitting.";
+        "Please check every size, name and shirt number carefully before submitting. Additional complete kits are available for £20 each using the payment-link section above.";
       return;
     }
 
@@ -142,11 +142,11 @@ export default function LegacyFreeKitOfferCopyBridge() {
         Original offer protected
       </p>
       <h2 className="mt-2 text-xl font-semibold text-white">
-        Your free kit offer is being honoured
+        Your original nine-kit allocation is protected
       </h2>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
-        Your team selected the founding-team free kit offer before the website changed.
-        The new £90 contribution does not apply to this original nine-kit order.
+        Your team receives the nine complete kits included in its original founding-team offer.
+        Additional complete kits can be added for £20 each.
       </p>
     </section>
   );
