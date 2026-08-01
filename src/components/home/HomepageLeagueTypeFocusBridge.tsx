@@ -30,6 +30,58 @@ function getOwnText(element: HTMLElement) {
     .trim();
 }
 
+function findCardByTitle(...titles: string[]) {
+  const heading = Array.from(document.querySelectorAll<HTMLHeadingElement>("h2")).find(
+    (item) => titles.includes(item.textContent?.replace(/\s+/g, " ").trim() ?? ""),
+  );
+
+  return heading?.closest<HTMLElement>("article") ?? null;
+}
+
+function updateLeagueCardActions() {
+  const harrogateCard = findCardByTitle(
+    "Harrogate West Tuesday League",
+    "Harrogate Tuesday 6-a-side",
+  );
+
+  if (harrogateCard) {
+    const links = Array.from(harrogateCard.querySelectorAll<HTMLAnchorElement>("a"));
+    const playerLink = links[1];
+
+    if (playerLink) {
+      playerLink.textContent = "Join as player";
+      playerLink.setAttribute(
+        "href",
+        "/register-interest?type=player&area=Harrogate&night=Tuesday",
+      );
+    }
+  }
+
+  const heartlandsCard = findCardByTitle("North Yorkshire Heartlands League");
+
+  if (heartlandsCard) {
+    const status = Array.from(heartlandsCard.querySelectorAll<HTMLElement>("div")).find(
+      (item) => item.textContent?.replace(/\s+/g, " ").trim() === "New league forming",
+    );
+
+    if (status) status.textContent = "Registrations open";
+
+    const links = Array.from(heartlandsCard.querySelectorAll<HTMLAnchorElement>("a"));
+    const teamLink = links[0];
+    const playerLink = links[1];
+
+    if (teamLink) {
+      teamLink.textContent = "Register team";
+      teamLink.setAttribute("href", "/leagues/heartlands?type=team#register");
+    }
+
+    if (playerLink) {
+      playerLink.textContent = "Join as player";
+      playerLink.setAttribute("href", "/leagues/heartlands?type=player#register");
+    }
+  }
+}
+
 function updateHomepageCopy(pathname: string | null) {
   if (pathname !== "/") return;
 
@@ -62,6 +114,8 @@ function updateHomepageCopy(pathname: string | null) {
       paragraph.textContent = UPDATED_HEARTLANDS_BODY;
     }
   }
+
+  updateLeagueCardActions();
 }
 
 export default function HomepageLeagueTypeFocusBridge() {
