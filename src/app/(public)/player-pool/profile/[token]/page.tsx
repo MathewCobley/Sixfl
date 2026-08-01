@@ -6,6 +6,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import PlayerPoolProfileForm from "@/components/player-pool/PlayerPoolProfileForm";
+import {
+  getPlayerPoolLeaguePreferences,
+  listPlayerPoolLeagueOptions,
+} from "@/lib/player-pool/leagues";
 import { prisma } from "@/lib/prisma";
 import {
   ensurePlayerPoolTables,
@@ -17,12 +21,14 @@ export const metadata: Metadata = {
 };
 
 type ProfileRow = {
+  id: string;
   profileToken: string;
   area: string | null;
   leagueId: string | null;
   preferredPosition: string | null;
   consentShareProfile: boolean;
   consentContact: boolean;
+  profileSubmittedAt: Date | null;
   firstName: string;
   lastName: string | null;
   email: string | null;
@@ -33,7 +39,6 @@ type ProfileRow = {
   availabilityLevel: string | null;
   preferredNights: unknown;
   availabilitySummary: string | null;
-  leagueName: string | null;
 };
 
 type SearchParams = Promise<{ error?: string }>;
@@ -52,12 +57,14 @@ export default async function PlayerPoolProfilePage({
 
   const rows = await prisma.$queryRaw<ProfileRow[]>`
     SELECT
+      pp."id",
       pp."profileToken",
       pp."area",
       pp."leagueId",
       pp."preferredPosition",
       pp."consentShareProfile",
       pp."consentContact",
+      pp."profileSubmittedAt",
       prospect."firstName",
       prospect."lastName",
       prospect."email",
@@ -67,11 +74,9 @@ export default async function PlayerPoolProfilePage({
       prospect."experienceSummary",
       prospect."availabilityLevel",
       prospect."preferredNights",
-      prospect."availabilitySummary",
-      league."name" AS "leagueName"
+      prospect."availabilitySummary"
     FROM "PlayerPoolProfile" pp
     JOIN "TeamPlayerProspect" prospect ON prospect."id" = pp."prospectId"
-    LEFT JOIN "League" league ON league."id" = pp."leagueId"
     WHERE pp."profileToken" = ${token}
     LIMIT 1
   `;
@@ -79,10 +84,25 @@ export default async function PlayerPoolProfilePage({
   const profile = rows[0];
   if (!profile) notFound();
 
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+  const [leagues, leaguePreferences] = await Promise.all([
+    listPlayerPoolLeagueOptions({
+      includeLeagueIds: profile.leagueId ? [profile.leagueId] : [],
+    }),
+    getPlayerPoolLeaguePreferences(profile.id),
+  ]);
+
+  const fullName = [profile.firstName, profile.lastName]
+    .filter(Boolean)
+    .join(" ");
   const positions = profile.preferredPositions
-    ? profile.preferredPositions.split(",").map((value) => value.trim()).filter(Boolean)
+    ? profile.preferredPositions
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
     : [];
+  const knownLeague = profile.leagueId
+    ? leagues.find((league) => league.id === profile.leagueId) ?? null
+    : null;
 
   return (
     <main className="min-h-screen bg-black px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -103,6 +123,7 @@ export default async function PlayerPoolProfilePage({
           <div className="px-6 py-8 sm:px-9 sm:py-10">
             <PlayerPoolProfileForm
               error={query.error ?? null}
+              leagues={leagues}
               defaults={{
                 profileToken: profile.profileToken,
                 fullName,
@@ -114,9 +135,10 @@ export default async function PlayerPoolProfilePage({
                 experienceSummary: profile.experienceSummary ?? undefined,
                 availabilityLevel: profile.availabilityLevel ?? undefined,
                 preferredNights: readPlayerPoolStringArray(profile.preferredNights),
-                area: profile.area ?? "",
-                leagueId: profile.leagueId,
-                leagueName: profile.leagueName,
+                area: profile.area ?? knownLeague?.area ?? "",
+                leagueId: knownLeague?.id ?? null,
+                leaguePreferences,
+                profileSubmitted: Boolean(profile.profileSubmittedAt),
                 availabilitySummary: profile.availabilitySummary ?? "",
                 consentShareProfile: profile.consentShareProfile,
                 consentContact: profile.consentContact,
