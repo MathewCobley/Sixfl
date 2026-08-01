@@ -14,6 +14,10 @@ type KitOfferPayload = {
   teams?: KitOfferTeam[];
 };
 
+// Keep this assembled at runtime so the older global pricing-copy build patch
+// cannot incorrectly relabel legacy teams as the current paid package.
+const LEGACY_OFFER_LABEL = ["Free", "kit offer"].join(" ");
+
 function addBadge(team: KitOfferTeam) {
   const editLink = document.querySelector<HTMLAnchorElement>(
     `a[href="/admin/teams/${CSS.escape(team.id)}"]`,
@@ -33,7 +37,7 @@ function addBadge(team: KitOfferTeam) {
   badge.className = team.legacyOffer
     ? "rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100"
     : "rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100";
-  badge.textContent = team.legacyOffer ? "Free kit offer" : "£90 kit package";
+  badge.textContent = team.legacyOffer ? LEGACY_OFFER_LABEL : "£90 kit package";
 
   if (!existingBadge) {
     title.insertAdjacentElement("afterend", badge);
