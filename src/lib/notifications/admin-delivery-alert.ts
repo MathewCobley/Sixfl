@@ -177,11 +177,11 @@ async function getAdminAlertEmails() {
 
 export async function notifyAdminsOfResendDeliveryEvent(input: {
   event: ResendWebhookEvent;
-  result: Record<string, unknown>;
+  result: unknown;
   deliveryId: string | null;
 }) {
   const eventType = asString(input.event.type)?.toLowerCase() ?? "unknown";
-  const resultStatus = asString(input.result.status);
+  const resultStatus = asString(asRecord(input.result)?.status);
 
   if (
     !ACTIONABLE_RESEND_EVENTS.has(eventType) ||
