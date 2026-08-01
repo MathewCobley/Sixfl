@@ -94,7 +94,7 @@ replaceOnce(
   >();
 
   for (const fee of playerCollectionRows) {
-    const key = \\`\${fee.teamId}:\${fee.fixtureId}\\`;
+    const key = fee.teamId + ":" + fee.fixtureId;
     const rows = playerCollectionsByTeamFixture.get(key) ?? [];
     const paidToCaptain =
       fee.status === "WAIVED" &&
@@ -111,15 +111,15 @@ replaceOnce(
               : "Waived";
     const statusMeta =
       fee.status === "PAID" && fee.paidAt
-        ? \\`Paid \${formatUkDateTime(fee.paidAt)}\\`
+        ? "Paid " + formatUkDateTime(fee.paidAt)
         : paidToCaptain && fee.waivedAt
-          ? \\`Recorded \${formatUkDateTime(fee.waivedAt)}\\`
+          ? "Recorded " + formatUkDateTime(fee.waivedAt)
           : fee.status === "OPEN"
             ? fee.paymentUrl
               ? "Payment link open"
               : "Awaiting payment link"
             : fee.waivedAt
-              ? \\`Recorded \${formatUkDateTime(fee.waivedAt)}\\`
+              ? "Recorded " + formatUkDateTime(fee.waivedAt)
               : "Recorded in player collection";
     const tone =
       fee.status === "PAID" || paidToCaptain
@@ -146,7 +146,7 @@ replaceOnce(
 replaceOnce(
   "src/app/captain/team/[teamid]/payments/page.tsx",
   '              const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]\n                .filter(Boolean)\n                .join(" · ");',
-  '              const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]\n                .filter(Boolean)\n                .join(" · ");\n              const playerCollectionDetails = entry.fixtureId\n                ? playerCollectionsByTeamFixture.get(`${entry.teamId}:${entry.fixtureId}`) ?? []\n                : [];',
+  '              const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]\n                .filter(Boolean)\n                .join(" · ");\n              const playerCollectionDetails = entry.fixtureId\n                ? playerCollectionsByTeamFixture.get(entry.teamId + ":" + entry.fixtureId) ?? []\n                : [];',
 );
 
 replaceOnce(
@@ -154,9 +154,9 @@ replaceOnce(
   '                      <div className="mt-1 text-sm text-white/45">\n                        {entry.dueDate\n                          ? `Due ${formatPaymentFixtureDate(entry.dueDate)}`\n                          : entry.kickoffAt\n                            ? `Fixture ${formatPaymentFixtureDate(entry.kickoffAt)}`\n                            : "No due date set"}\n                      </div>\n                    </div>',
   `                      <div className="mt-1 text-sm text-white/45">
                         {entry.dueDate
-                          ? \\`Due \${formatPaymentFixtureDate(entry.dueDate)}\\`
+                          ? "Due " + formatPaymentFixtureDate(entry.dueDate)
                           : entry.kickoffAt
-                            ? \\`Fixture \${formatPaymentFixtureDate(entry.kickoffAt)}\\`
+                            ? "Fixture " + formatPaymentFixtureDate(entry.kickoffAt)
                             : "No due date set"}
                       </div>
 
