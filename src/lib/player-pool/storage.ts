@@ -82,6 +82,54 @@ async function createPlayerPoolTables() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "PlayerPoolLeaguePreference" (
+      "id" TEXT NOT NULL,
+      "profileId" TEXT NOT NULL,
+      "leagueId" TEXT NOT NULL,
+      "availabilityStatus" TEXT NOT NULL DEFAULT 'AVAILABLE',
+      "isPrimary" BOOLEAN NOT NULL DEFAULT false,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "PlayerPoolLeaguePreference_pkey" PRIMARY KEY ("id"),
+      CONSTRAINT "PlayerPoolLeaguePreference_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "PlayerPoolProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT "PlayerPoolLeaguePreference_leagueId_fkey" FOREIGN KEY ("leagueId") REFERENCES "League"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT "PlayerPoolLeaguePreference_availabilityStatus_check" CHECK (
+        "availabilityStatus" IN ('AVAILABLE', 'MOST_WEEKS', 'SOMETIMES', 'NOT_AVAILABLE')
+      )
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "PlayerPoolLeaguePreference_profile_league_key"
+    ON "PlayerPoolLeaguePreference"("profileId", "leagueId")
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "PlayerPoolLeaguePreference_league_status_idx"
+    ON "PlayerPoolLeaguePreference"("leagueId", "availabilityStatus")
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "PlayerPoolLeaguePreference_profile_primary_idx"
+    ON "PlayerPoolLeaguePreference"("profileId", "isPrimary")
+  `);
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO "PlayerPoolLeaguePreference" (
+      "id", "profileId", "leagueId", "availabilityStatus", "isPrimary", "createdAt", "updatedAt"
+    )
+    SELECT
+      CONCAT(profile."id", ':', profile."leagueId"),
+      profile."id",
+      profile."leagueId",
+      'AVAILABLE',
+      TRUE,
+      COALESCE(profile."profileSubmittedAt", profile."createdAt"),
+      NOW()
+    FROM "PlayerPoolProfile" profile
+    WHERE profile."leagueId" IS NOT NULL
+    ON CONFLICT ("profileId", "leagueId") DO UPDATE SET
+      "isPrimary" = TRUE,
+      "updatedAt" = NOW()
+  `);
+
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "PlayerPoolIntroductionRequest" (
       "id" TEXT NOT NULL,
       "profileId" TEXT NOT NULL,
