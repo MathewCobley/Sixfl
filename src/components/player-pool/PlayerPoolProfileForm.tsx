@@ -2,7 +2,15 @@
 // File: src/components/player-pool/PlayerPoolProfileForm.tsx
 // ========================================
 
+"use client";
+
+import { useMemo, useState } from "react";
+
 import { submitPlayerPoolProfileAction } from "@/app/(public)/player-pool/actions";
+import type {
+  PlayerPoolLeagueOption,
+  PlayerPoolLeaguePreference,
+} from "@/lib/player-pool/leagues";
 
 export type PlayerPoolFormDefaults = {
   profileToken?: string;
@@ -17,15 +25,34 @@ export type PlayerPoolFormDefaults = {
   preferredNights?: string[];
   area?: string;
   leagueId?: string | null;
-  leagueName?: string | null;
+  leaguePreferences?: PlayerPoolLeaguePreference[];
+  profileSubmitted?: boolean;
   availabilitySummary?: string;
   consentShareProfile?: boolean;
   consentContact?: boolean;
 };
 
+type Props = {
+  defaults?: PlayerPoolFormDefaults;
+  leagues: PlayerPoolLeagueOption[];
+  error?: string | null;
+};
+
 const ageBands = ["16–17", "18–20", "21–24", "25–29", "30–39", "40+"];
-const positions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "Happy to play anywhere"];
-const preferredPositions = ["Goalkeeper", "Defender", "Midfielder", "Forward", "No strong preference"];
+const positions = [
+  "Goalkeeper",
+  "Defender",
+  "Midfielder",
+  "Forward",
+  "Happy to play anywhere",
+];
+const preferredPositions = [
+  "Goalkeeper",
+  "Defender",
+  "Midfielder",
+  "Forward",
+  "No strong preference",
+];
 const experienceOptions = [
   "New to organised football or returning after a break",
   "Mainly casual or social football",
@@ -39,14 +66,40 @@ const availabilityOptions = [
   "Two or three times a month",
   "Occasionally or as a backup",
 ];
-const nightOptions = [
-  ["MONDAY", "Monday"],
-  ["TUESDAY", "Tuesday"],
-  ["WEDNESDAY", "Wednesday"],
-  ["THURSDAY", "Thursday"],
-  ["FRIDAY", "Friday"],
-  ["ANY", "Flexible"],
+
+const knownLeagueAvailabilityOptions = [
+  { value: "MOST_WEEKS", label: "Yes, most weeks" },
+  { value: "SOMETIMES", label: "Sometimes" },
+  { value: "NOT_AVAILABLE", label: "No" },
 ] as const;
+
+type KnownLeagueAvailability =
+  (typeof knownLeagueAvailabilityOptions)[number]["value"];
+
+function dayLabel(value: string | null | undefined) {
+  if (!value) return null;
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
+function leagueMeta(league: PlayerPoolLeagueOption) {
+  return [
+    dayLabel(league.dayOfWeek)
+      ? `${dayLabel(league.dayOfWeek)} evenings`
+      : null,
+    league.kickoffInfo,
+    league.venueName,
+    league.area,
+  ].filter((value): value is string => Boolean(value));
+}
+
+function leagueQuestion(league: PlayerPoolLeagueOption) {
+  const day = dayLabel(league.dayOfWeek);
+  if (day && league.kickoffInfo) {
+    return `Are you usually available to play on ${day} evenings (${league.kickoffInfo})?`;
+  }
+  if (day) return `Are you usually available to play on ${day} evenings?`;
+  return `Are you usually available for ${league.name}?`;
+}
 
 function RadioCards({
   legend,
@@ -128,17 +181,147 @@ function CheckboxCards({
   );
 }
 
+function LeagueCards({
+  leagues,
+  selectedLeagueIds,
+}: {
+  leagues: PlayerPoolLeagueOption[];
+  selectedLeagueIds: Set<string>;
+}) {
+  if (leagues.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-white/15 bg-black/20 p-5 text-sm leading-6 text-white/55">
+        There are no other live SIXFL leagues to choose from at the moment. Please add a note below and SIXFL will contact you.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {leagues.map((league) => {
+        const meta = leagueMeta(league);
+
+        return (
+          <label
+            key={league.id}
+            className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-black/25 p-4 transition hover:border-emerald-400/35 hover:bg-emerald-500/[0.06]"
+          >
+            <input
+              type="checkbox"
+              name="leagueIds"
+              value={league.id}
+              defaultChecked={selectedLeagueIds.has(league.id)}
+              className="mt-1 h-4 w-4 shrink-0 accent-emerald-400"
+            />
+            <span className="min-w-0">
+              <span className="block font-semibold text-white">{league.name}</span>
+              {league.season ? (
+                <span className="mt-0.5 block text-xs text-white/40">{league.season}</span>
+              ) : null}
+              {meta.length ? (
+                <span className="mt-2 block text-sm leading-6 text-white/60">
+                  {meta.join(" · ")}
+                </span>
+              ) : null}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+function initialKnownLeagueAvailability(
+  defaults: PlayerPoolFormDefaults,
+  knownLeague: PlayerPoolLeagueOption | null,
+): KnownLeagueAvailability | "" {
+  if (!knownLeague) return "";
+
+  const saved = defaults.leaguePreferences?.find(
+    (preference) => preference.leagueId === knownLeague.id,
+  )?.availabilityStatus;
+
+  if (
+    saved === "MOST_WEEKS" ||
+    saved === "SOMETIMES" ||
+    saved === "NOT_AVAILABLE"
+  ) {
+    return saved;
+  }
+
+  if (!defaults.profileSubmitted) return "";
+
+  return defaults.availabilityLevel === "Occasionally or as a backup"
+    ? "SOMETIMES"
+    : "MOST_WEEKS";
+}
+
 export default function PlayerPoolProfileForm({
   defaults = {},
+  leagues,
   error,
-}: {
-  defaults?: PlayerPoolFormDefaults;
-  error?: string | null;
-}) {
+}: Props) {
+  const knownLeague = defaults.leagueId
+    ? leagues.find((league) => league.id === defaults.leagueId) ?? null
+    : null;
+  const startingAvailability = initialKnownLeagueAvailability(
+    defaults,
+    knownLeague,
+  );
+  const [knownAvailability, setKnownAvailability] = useState<
+    KnownLeagueAvailability | ""
+  >(startingAvailability);
+  const [showLeagueChooser, setShowLeagueChooser] = useState(
+    !knownLeague || startingAvailability === "NOT_AVAILABLE",
+  );
+
+  const selectedLeagueIds = useMemo(
+    () =>
+      new Set(
+        (defaults.leaguePreferences ?? [])
+          .filter(
+            (preference) => preference.availabilityStatus !== "NOT_AVAILABLE",
+          )
+          .map((preference) => preference.leagueId),
+      ),
+    [defaults.leaguePreferences],
+  );
+
+  const alternativeLeagues = useMemo(() => {
+    const knownArea = knownLeague?.area?.trim().toLowerCase() ?? "";
+
+    return leagues
+      .filter((league) => league.id !== knownLeague?.id)
+      .slice()
+      .sort((left, right) => {
+        if (knownArea) {
+          const leftNearby = left.area?.trim().toLowerCase() === knownArea;
+          const rightNearby = right.area?.trim().toLowerCase() === knownArea;
+          if (leftNearby !== rightNearby) return leftNearby ? -1 : 1;
+        }
+
+        return `${left.area ?? ""}-${left.name}`.localeCompare(
+          `${right.area ?? ""}-${right.name}`,
+        );
+      });
+  }, [knownLeague, leagues]);
+
+  const knownLeagueIsAvailable =
+    knownAvailability === "MOST_WEEKS" || knownAvailability === "SOMETIMES";
+  const showAlternatives =
+    !knownLeague || showLeagueChooser || knownAvailability === "NOT_AVAILABLE";
+
   return (
     <form action={submitPlayerPoolProfileAction} className="space-y-8">
       <input type="hidden" name="profileToken" value={defaults.profileToken ?? ""} />
-      <input type="hidden" name="leagueId" value={defaults.leagueId ?? ""} />
+      <input
+        type="hidden"
+        name="contextLeagueId"
+        value={knownLeague?.id ?? ""}
+      />
+      {knownLeague && knownLeagueIsAvailable ? (
+        <input type="hidden" name="leagueIds" value={knownLeague.id} />
+      ) : null}
 
       {error ? (
         <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
@@ -146,13 +329,94 @@ export default function PlayerPoolProfileForm({
         </div>
       ) : null}
 
-      {defaults.leagueName ? (
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-300">
-            Preferred league
+      {knownLeague ? (
+        <section className="space-y-5 rounded-3xl border border-emerald-400/25 bg-emerald-500/[0.08] p-5 sm:p-6">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-300">
+              Your SIXFL league
+            </div>
+            <h2 className="mt-2 text-xl font-black text-white">
+              {knownLeague.name}
+            </h2>
+            {knownLeague.season ? (
+              <p className="mt-1 text-sm text-white/45">{knownLeague.season}</p>
+            ) : null}
+            {leagueMeta(knownLeague).length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {leagueMeta(knownLeague).map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-semibold text-white/65"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <div className="mt-2 font-semibold text-white">{defaults.leagueName}</div>
-        </div>
+
+          <fieldset>
+            <legend className="text-sm font-semibold text-white">
+              {leagueQuestion(knownLeague)}
+            </legend>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {knownLeagueAvailabilityOptions.map((option) => (
+                <label
+                  key={option.value}
+                  className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/75 transition hover:border-emerald-400/35 hover:bg-emerald-500/[0.07]"
+                >
+                  <input
+                    type="radio"
+                    name="knownLeagueAvailability"
+                    value={option.value}
+                    checked={knownAvailability === option.value}
+                    onChange={() => {
+                      setKnownAvailability(option.value);
+                      setShowLeagueChooser(option.value === "NOT_AVAILABLE");
+                    }}
+                    required
+                    className="h-4 w-4 shrink-0 accent-emerald-400"
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <button
+            type="button"
+            onClick={() => {
+              setKnownAvailability("NOT_AVAILABLE");
+              setShowLeagueChooser(true);
+            }}
+            className="text-left text-sm font-semibold text-emerald-200 underline decoration-emerald-400/40 underline-offset-4 transition hover:text-emerald-100"
+          >
+            That isn&apos;t the right league
+          </button>
+        </section>
+      ) : null}
+
+      {showAlternatives ? (
+        <section className="space-y-4 rounded-3xl border border-white/10 bg-white/[0.035] p-5 sm:p-6">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-300">
+              League availability
+            </p>
+            <h2 className="mt-2 text-xl font-black text-white">
+              {knownLeague
+                ? "Would you like to be considered for another SIXFL league?"
+                : "Which SIXFL leagues could you play in?"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Select every league that genuinely works for its location, day and playing time.
+            </p>
+          </div>
+
+          <LeagueCards
+            leagues={knownLeague ? alternativeLeagues : leagues}
+            selectedLeagueIds={selectedLeagueIds}
+          />
+        </section>
       ) : null}
 
       <section className="space-y-5">
@@ -160,7 +424,9 @@ export default function PlayerPoolProfileForm({
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300">
             Your details
           </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-white">Tell us who you are</h2>
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
+            Tell us who you are
+          </h2>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -237,21 +503,13 @@ export default function PlayerPoolProfileForm({
         defaultValue={defaults.availabilityLevel}
       />
 
-      <CheckboxCards
-        legend="Which evenings can you usually play? Select all that apply."
-        name="preferredNights"
-        options={nightOptions}
-        defaults={defaults.preferredNights}
-      />
-
       <section className="space-y-4">
         <label className="block space-y-2 text-sm font-semibold text-white/80">
-          <span>Which area can you play in?</span>
+          <span>Other area or travel limits</span>
           <input
             name="area"
-            required
             defaultValue={defaults.area ?? ""}
-            placeholder="For example Harrogate or North Yorkshire Heartlands"
+            placeholder="Optional — for example Harrogate only, or within 20 minutes of Ripon"
             className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50"
           />
         </label>
@@ -279,7 +537,9 @@ export default function PlayerPoolProfileForm({
             defaultChecked={defaults.consentShareProfile}
             className="mt-1 h-4 w-4 shrink-0 accent-emerald-400"
           />
-          <span>I agree that SIXFL may show my anonymised playing profile to relevant team captains.</span>
+          <span>
+            I agree that SIXFL may show my anonymised playing profile to relevant team captains.
+          </span>
         </label>
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-white/75">
           <input
