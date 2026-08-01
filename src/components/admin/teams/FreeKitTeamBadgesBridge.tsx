@@ -3,25 +3,41 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-type FreeKitPayload = {
-  teamIds: string[];
+type KitOfferTeam = {
+  id: string;
+  legacyOffer: boolean;
+  offerType: "FREE_KIT" | "PAID_PACKAGE";
 };
 
-function addBadge(teamId: string) {
+type KitOfferPayload = {
+  teamIds: string[];
+  teams?: KitOfferTeam[];
+};
+
+function addBadge(team: KitOfferTeam) {
   const editLink = document.querySelector<HTMLAnchorElement>(
-    `a[href="/admin/teams/${CSS.escape(teamId)}"]`,
+    `a[href="/admin/teams/${CSS.escape(team.id)}"]`,
   );
   const row = editLink?.closest("div.grid");
   const title = row?.querySelector<HTMLElement>(".text-base.font-semibold.text-white");
 
-  if (!title || title.parentElement?.querySelector('[data-free-kit-badge="true"]')) return;
+  if (!title) return;
 
-  const badge = document.createElement("span");
+  const existingBadge = title.parentElement?.querySelector<HTMLElement>(
+    '[data-free-kit-badge="true"]',
+  );
+  const badge = existingBadge ?? document.createElement("span");
+
   badge.dataset.freeKitBadge = "true";
-  badge.className =
-    "rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100";
-  badge.textContent = "Free kit";
-  title.insertAdjacentElement("afterend", badge);
+  badge.dataset.kitOfferType = team.offerType;
+  badge.className = team.legacyOffer
+    ? "rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100"
+    : "rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100";
+  badge.textContent = team.legacyOffer ? "Free kit offer" : "£90 kit package";
+
+  if (!existingBadge) {
+    title.insertAdjacentElement("afterend", badge);
+  }
 }
 
 async function injectBadges() {
@@ -29,8 +45,16 @@ async function injectBadges() {
     const response = await fetch("/api/admin/teams/free-kit", { cache: "no-store" });
     if (!response.ok) return;
 
-    const payload = (await response.json()) as FreeKitPayload;
-    payload.teamIds.forEach(addBadge);
+    const payload = (await response.json()) as KitOfferPayload;
+    const teams =
+      payload.teams ??
+      payload.teamIds.map((id) => ({
+        id,
+        legacyOffer: false,
+        offerType: "PAID_PACKAGE" as const,
+      }));
+
+    teams.forEach(addBadge);
   } catch {
     // Leave the normal team list untouched if this enhancement cannot load.
   }
