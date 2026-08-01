@@ -2,8 +2,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
+const OLD_PRICE = ["£", "90"].join("");
+const NEW_PRICE = "£70";
 
-const files = [
+const kitOfferFiles = [
   "src/lib/kits/constants.ts",
   "src/app/captain/team/[teamid]/kit/page.tsx",
   "src/components/captain/TeamKitOrderForm.tsx",
@@ -11,48 +13,73 @@ const files = [
   "src/app/(public)/founding-team-kit-terms/page.tsx",
   "src/app/(public)/founding-teams/page.tsx",
   "src/app/(public)/league-agreement/page.tsx",
-  "src/components/layout/SiteFooter.tsx",
+  "src/app/(public)/register-interest/page.tsx",
+  "src/app/(public)/register-interest/actions.ts",
+  "src/app/(public)/register-team/actions.ts",
+  "src/app/(admin)/admin/leads/[id]/page.tsx",
+  "src/app/(admin)/admin/leads/page.tsx",
+  "src/app/(admin)/admin/leads/actions.ts",
+  "src/app/(admin)/admin/teams/free-kit/page.tsx",
+  "src/app/(admin)/admin/kits/page.tsx",
+  "src/components/admin/leads/ManualLeadForm.tsx",
   "src/components/admin/teams/FreeKitTeamBadgesBridge.tsx",
+  "src/components/layout/SiteFooter.tsx",
   "scripts/apply-founding-kit-package-copy.cjs",
   "scripts/apply-legacy-free-kit-captain-copy.cjs",
   "scripts/apply-legacy-free-kit-linebreak-fix.cjs",
 ];
 
-const replacements = [
+const quantityReplacements = [
   ["export const TEAM_KIT_QUANTITY = 9;", "export const TEAM_KIT_QUANTITY = 7;"],
-  ["£90 Founding Team Kit Package", "£70 Founding Team Kit Package"],
-  ["£90 kit package", "£70 kit package"],
-  ["£90 contribution", "£70 contribution"],
-  ["£90 per team", "£70 per team"],
-  ["£90 payment", "£70 payment"],
-  ["£90 in total", "£70 in total"],
-  ["Submit £90 kit package", "Submit £70 kit package"],
-  ["No £90 contribution", "No £70 contribution"],
-  ["new £90 contribution", "new £70 contribution"],
-  ["nine complete kits", "seven complete kits"],
-  ["nine-kit order", "seven-kit order"],
-  ["nine-kit package", "seven-kit package"],
-  ["nine personalised shirts", "seven personalised shirts"],
-  ["nine shirts", "seven shirts"],
-  ["all nine kits", "all seven kits"],
-  ["Personalise all nine kits", "Personalise all seven kits"],
-  ["One design will be used for all nine kits", "One design will be used for all seven kits"],
-  ["Each of the nine shirts", "Each of the seven shirts"],
-  ["Your nine-kit order", "Your seven-kit order"],
-  ["original nine-kit order", "original seven-kit order"],
-  ["this nine-kit order", "this seven-kit order"],
-  ["package of nine", "package of seven"],
+  [/\bNine\b/g, "Seven"],
+  [/\bnine\b/g, "seven"],
+  [/\b9 complete kits\b/g, "7 complete kits"],
+  [/\b9 shirts\b/g, "7 shirts"],
+  [/\b9 pairs\b/g, "7 pairs"],
 ];
 
-for (const filePath of files) {
+function walk(directory) {
+  if (!fs.existsSync(directory)) return [];
+
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const absolutePath = path.join(directory, entry.name);
+    return entry.isDirectory() ? walk(absolutePath) : [absolutePath];
+  });
+}
+
+function isTextSource(filePath) {
+  return /\.(?:ts|tsx|js|jsx|cjs|mjs|md|json)$/i.test(filePath);
+}
+
+// Price is a single £70 total throughout the whole application. This broad pass
+// prevents an older build-time wording helper from reintroducing £90 on a screen
+// that was not listed in the original seven-kit conversion.
+const priceFiles = [
+  ...walk(path.join(root, "src")),
+  ...walk(path.join(root, "scripts")),
+  ...walk(path.join(root, "docs")),
+].filter(isTextSource);
+
+for (const absolutePath of priceFiles) {
+  const before = fs.readFileSync(absolutePath, "utf8");
+  const after = before.split(OLD_PRICE).join(NEW_PRICE);
+
+  if (after !== before) {
+    fs.writeFileSync(absolutePath, after, "utf8");
+  }
+}
+
+// The £70 package contains seven kits at £10 per shirt. Keep all related
+// quantities aligned across public pages, registration, admin and captain tools.
+for (const filePath of kitOfferFiles) {
   const absolutePath = path.join(root, filePath);
   if (!fs.existsSync(absolutePath)) continue;
 
   let source = fs.readFileSync(absolutePath, "utf8");
   const before = source;
 
-  for (const [from, to] of replacements) {
-    source = source.split(from).join(to);
+  for (const [from, to] of quantityReplacements) {
+    source = source.replace(from, to);
   }
 
   if (source !== before) {
@@ -60,9 +87,30 @@ for (const filePath of files) {
   }
 }
 
-const constants = fs.readFileSync(path.join(root, "src/lib/kits/constants.ts"), "utf8");
+const constants = fs.readFileSync(
+  path.join(root, "src/lib/kits/constants.ts"),
+  "utf8",
+);
 if (!constants.includes("export const TEAM_KIT_QUANTITY = 7;")) {
   throw new Error("The team kit quantity was not changed to seven.");
 }
 
-console.log("Applied seven-kit founding offer: seven kits at £10 each (£70 total).");
+const remainingOldPriceFiles = [
+  ...walk(path.join(root, "src")),
+  ...walk(path.join(root, "scripts")),
+  ...walk(path.join(root, "docs")),
+]
+  .filter(isTextSource)
+  .filter((filePath) => fs.readFileSync(filePath, "utf8").includes(OLD_PRICE));
+
+if (remainingOldPriceFiles.length > 0) {
+  throw new Error(
+    `Old £90 kit wording remains in: ${remainingOldPriceFiles
+      .map((filePath) => path.relative(root, filePath))
+      .join(", ")}`,
+  );
+}
+
+console.log(
+  "Applied seven-kit founding offer across all screens: seven kits at £10 each (£70 total).",
+);
