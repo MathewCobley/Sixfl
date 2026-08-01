@@ -12,13 +12,10 @@ import { track } from "@vercel/analytics";
 export default function SiteFooter() {
   return (
     <footer className="border-t border-white/10 bg-black text-white">
-      {/* Emerald accent line */}
       <div className="h-[3px] w-full bg-emerald-500"></div>
 
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
-        {/* Now 4 columns instead of 3 */}
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:gap-10">
-          {/* Brand / CTA */}
           <div className="max-w-md sm:col-span-2 lg:col-span-1">
             <Link href="/" className="inline-flex items-center">
               <Image
@@ -52,7 +49,6 @@ export default function SiteFooter() {
               </Link>
             </div>
 
-            {/* Social icons */}
             <div className="mt-6 flex items-center gap-3">
               <a
                 href="https://www.facebook.com/profile.php?id=61588172021259"
@@ -88,7 +84,6 @@ export default function SiteFooter() {
             </div>
           </div>
 
-          {/* Navigation */}
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
               Navigation
@@ -107,6 +102,10 @@ export default function SiteFooter() {
                 Pricing
               </Link>
 
+              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/founding-teams">
+                £90 Founding Kit Package
+              </Link>
+
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/faq">
                 FAQ
               </Link>
@@ -120,7 +119,6 @@ export default function SiteFooter() {
             </nav>
           </div>
 
-          {/* Legal */}
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
               Legal
@@ -135,6 +133,10 @@ export default function SiteFooter() {
                 League Agreement
               </Link>
 
+              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/founding-team-kit-terms">
+                Kit Package Terms
+              </Link>
+
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/referee-agreement">
                 Referee Agreement
               </Link>
@@ -145,7 +147,6 @@ export default function SiteFooter() {
             </nav>
           </div>
 
-          {/* Safeguarding */}
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
               Safeguarding
@@ -183,7 +184,6 @@ export default function SiteFooter() {
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div className="mt-10 h-[2px] w-full bg-emerald-500/40"></div>
 
         <div className="mt-5 flex flex-col gap-3 text-xs text-white/50 md:flex-row md:items-center md:justify-between">
