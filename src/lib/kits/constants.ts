@@ -3,6 +3,7 @@
 // ========================================
 
 export const TEAM_KIT_QUANTITY = 9;
+export const TEAM_KIT_MAX_QUANTITY = 99;
 
 export const TEAM_KIT_SIZE_OPTIONS = [
   { value: "S", label: "Small (S)" },
