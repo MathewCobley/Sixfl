@@ -71,7 +71,7 @@ replaceOnce(
 );
 
 const creatorType = [
-  "    createdByUser: {",
+  "    createdByUser?: {",
   "      id: string;",
   "      name: string | null;",
   "      email: string | null;",
@@ -93,7 +93,7 @@ for (const filePath of [inboxPath, threadPath]) {
       creatorType,
       "    dispatch?: {",
     ].join("\n"),
-    "message creator type",
+    "optional message creator type",
   );
 }
 
