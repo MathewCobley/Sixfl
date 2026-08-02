@@ -85,7 +85,8 @@ if (mergeService.includes("The duplicate account is not attached to any squad.")
 require("./apply-managed-squad-player-merge-control.cjs");
 require("./apply-player-merge-navigation-feedback.cjs");
 require("./apply-player-team-switcher.cjs");
+require("./apply-player-team-switcher-layout.cjs");
 
 console.log(
-  "Player merge controls and multi-team player dashboard switching are enabled.",
+  "Player merge controls and a polished multi-team player dashboard switcher are enabled.",
 );
