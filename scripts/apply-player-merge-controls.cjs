@@ -86,8 +86,7 @@ require("./apply-managed-squad-player-merge-control.cjs");
 require("./apply-player-merge-navigation-feedback.cjs");
 require("./apply-player-team-switcher.cjs");
 require("./apply-player-team-switcher-layout.cjs");
-require("./apply-player-performance-dashboard.cjs");
 
 console.log(
-  "Player merge controls, multi-team switching and player performance dashboards are enabled.",
+  "Player merge controls and a polished multi-team player dashboard switcher are enabled.",
 );
