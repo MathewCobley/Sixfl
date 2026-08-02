@@ -177,6 +177,7 @@ if (
 }
 
 fs.writeFileSync(absolutePath, source, "utf8");
+require("./apply-unknown-player-payment-details.cjs");
 console.log(
-  "Applied team-specific fees, safety messages and close controls to the modern squad-payment page.",
+  "Applied team-specific fees, safety messages, close controls and unlinked player diagnostics to the modern squad-payment page.",
 );
