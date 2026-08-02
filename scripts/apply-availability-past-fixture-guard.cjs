@@ -95,11 +95,18 @@ replaceOnce(
     "                      teamMemberId: member.id,",
     "                    }),",
     "                  );",
+    "                  const hasExistingSmsChase = Boolean(",
+    "                    smsDispatch &&",
+    '                      ["QUEUED", "PROCESSING", "SENT"].includes(',
+    "                        smsDispatch.status,",
+    "                      ),",
+    "                  );",
     "                  const canChaseBySms =",
     "                    Boolean(memberPhone) &&",
     '                    fixture.status === "SCHEDULED" &&',
     "                    fixture.kickoffAt.getTime() > now.getTime() &&",
-    '                    response === "NO_RESPONSE";',
+    '                    response === "NO_RESPONSE" &&',
+    "                    !hasExistingSmsChase;",
     "                  const chaseButtonLabel = !memberPhone",
     '                    ? "No phone to chase"',
     '                    : response !== "NO_RESPONSE"',
@@ -108,7 +115,11 @@ replaceOnce(
     '                        ? "Fixture postponed"',
     "                        : fixture.kickoffAt.getTime() <= now.getTime()",
     '                          ? "Fixture has passed"',
-    '                          : "Chase by SMS";',
+    "                          : hasExistingSmsChase",
+    '                            ? smsDispatch?.status === "SENT"',
+    '                              ? "SMS already sent"',
+    '                              : "SMS already queued"',
+    '                            : "Chase by SMS";',
     "",
     "                  return (",
   ].join("\n"),
@@ -164,6 +175,29 @@ replaceAfterMarker(
   actionPath,
   chaseMarker,
   [
+    "    select: {",
+    "      id: true,",
+    "      user: { select: { id: true, name: true, email: true } },",
+    "    },",
+  ].join("\n"),
+  [
+    "    select: {",
+    "      id: true,",
+    "      user: { select: { id: true, name: true, email: true } },",
+    "      fixtureAvailabilities: {",
+    "        where: { fixtureId },",
+    "        select: { response: true },",
+    "        take: 1,",
+    "      },",
+    "    },",
+  ].join("\n"),
+  "player availability response lookup",
+);
+
+replaceAfterMarker(
+  actionPath,
+  chaseMarker,
+  [
     "  if (!fixture || !member) {",
     "    redirect(",
     "      buildAvailabilityRedirect(",
@@ -172,6 +206,8 @@ replaceAfterMarker(
     "      ),",
     "    );",
     "  }",
+    "",
+    "  const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);",
   ].join("\n"),
   [
     "  if (!fixture || !member) {",
@@ -182,8 +218,65 @@ replaceAfterMarker(
     "      ),",
     "    );",
     "  }",
+    "",
+    "  const currentAvailability = member.fixtureAvailabilities[0] ?? null;",
+    "  if (",
+    "    currentAvailability &&",
+    '    currentAvailability.response !== "NO_RESPONSE"',
+    "  ) {",
+    "    redirect(",
+    "      buildAvailabilityRedirect(",
+    "        teamid,",
+    '        "?error=This%20player%20has%20already%20confirmed%20their%20availability.",',
+    "      ),",
+    "    );",
+    "  }",
+    "",
+    "  const smsSourceId = getSmsSourceId({",
+    "    fixtureId: fixture.id,",
+    "    teamMemberId: member.id,",
+    "  });",
+    "  const existingChase = await prisma.notificationDispatch.findFirst({",
+    "    where: {",
+    "      sourceType: AVAILABILITY_SMS_CHASE_SOURCE_TYPE,",
+    "      sourceId: smsSourceId,",
+    '      status: { in: ["QUEUED", "PROCESSING", "SENT"] },',
+    "    },",
+    "    select: { id: true, status: true },",
+    "    orderBy: [{ createdAt: \"desc\" }],",
+    "  });",
+    "",
+    "  if (existingChase) {",
+    "    redirect(",
+    "      buildAvailabilityRedirect(",
+    "        teamid,",
+    '        "?error=An%20availability%20SMS%20has%20already%20been%20sent%20or%20queued%20for%20this%20player%20and%20fixture.",',
+    "      ),",
+    "    );",
+    "  }",
+    "",
+    "  const profiles = await getTeamMemberProfilesByTeamMemberIds([member.id]);",
   ].join("\n"),
-  "clear stale chase error",
+  "response and duplicate chase guards",
+);
+
+replaceAfterMarker(
+  actionPath,
+  chaseMarker,
+  [
+    '      origin: "captain_availability_sms_chase",',
+    '      originLabel: "Availability SMS chase sent from captain availability page",',
+    "      teamId: teamid,",
+  ].join("\n"),
+  [
+    '      origin: "captain_availability_sms_chase",',
+    '      originLabel: "Availability SMS chase sent from captain availability page",',
+    '      actorRole: access.isAdmin ? "ADMIN" : "CAPTAIN",',
+    "      actorName: access.user?.name ?? access.user?.email ?? null,",
+    "      accessMode: access.accessMode,",
+    "      teamId: teamid,",
+  ].join("\n"),
+  "chase sender attribution metadata",
 );
 
 const page = read(pagePath);
@@ -191,11 +284,14 @@ const actions = read(actionPath);
 if (
   !page.includes("disabled={!canChaseBySms}") ||
   !page.includes('{ status: "SCHEDULED", kickoffAt: { gt: now } }') ||
-  !actions.includes("kickoffAt: { gt: new Date() }")
+  !page.includes("hasExistingSmsChase") ||
+  !actions.includes("kickoffAt: { gt: new Date() }") ||
+  !actions.includes("const existingChase = await prisma.notificationDispatch.findFirst") ||
+  !actions.includes('actorRole: access.isAdmin ? "ADMIN" : "CAPTAIN"')
 ) {
-  throw new Error("Past-fixture availability chase guard was not fully applied.");
+  throw new Error("Availability SMS chase safeguards were not fully applied.");
 }
 
 console.log(
-  "Availability SMS chases are now limited to unanswered players on future scheduled fixtures.",
+  "Availability SMS chases are limited to unanswered players on future scheduled fixtures, duplicate chases are blocked, and the sender is recorded.",
 );
