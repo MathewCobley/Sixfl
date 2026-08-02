@@ -58,8 +58,31 @@ if (
   );
 }
 
+const mergeServicePath = path.join(
+  process.cwd(),
+  "src/lib/players/player-account-merge.ts",
+);
+let mergeService = fs.readFileSync(mergeServicePath, "utf8");
+const emptyDuplicateGuard = [
+  "    if (mergedMemberships.length === 0) {",
+  '      throw new PlayerMergeConflictError("The duplicate account is not attached to any squad.");',
+  "    }",
+  "",
+].join("\n");
+
+if (mergeService.includes(emptyDuplicateGuard)) {
+  mergeService = mergeService.replace(emptyDuplicateGuard, "");
+  fs.writeFileSync(mergeServicePath, mergeService, "utf8");
+}
+
+if (mergeService.includes("The duplicate account is not attached to any squad.")) {
+  throw new Error(
+    "Player merge must allow an empty duplicate account to be disabled and merged into the active account.",
+  );
+}
+
 require("./apply-managed-squad-player-merge-control.cjs");
 
 console.log(
-  "Player merge controls are enabled with an unambiguous Account A / Account B confirmation screen.",
+  "Player merge controls are enabled, including safe removal of duplicate accounts with no squad cards.",
 );
