@@ -98,4 +98,7 @@ replaceOnce(
 );
 
 fs.writeFileSync(filePath, source, "utf8");
-console.log("Added squad member creation method and creator details to the admin squad console.");
+require("./apply-managed-squad-creation-details.cjs");
+console.log(
+  "Added squad member creation details to both admin and managed squad consoles.",
+);
