@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 require("./apply-captain-dom-observer-performance-guard.cjs");
+require("./apply-matchday-fee-waiver-reasons.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
