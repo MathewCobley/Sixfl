@@ -10,6 +10,7 @@
     "start": "prisma migrate deploy && next start",
     "lint": "eslint",
     "audit:dom": "node scripts/audit-dom-bridges.mjs",
+    "audit:dom:changed": "node scripts/audit-dom-bridges.mjs --changed-from HEAD^ --fail-on-findings",
     "db:deploy": "prisma migrate deploy",
     "seed:notifications": "tsx prisma/seed-notifications.ts"
   },
