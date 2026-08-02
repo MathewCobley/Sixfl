@@ -88,7 +88,8 @@ require("./apply-player-team-switcher.cjs");
 require("./apply-player-team-switcher-layout.cjs");
 require("./apply-player-performance-panel-placement.cjs");
 require("./apply-player-preview-admin-exit.cjs");
+require("./apply-player-removal-unpaid-fee-guard.cjs");
 
 console.log(
-  "Player merge controls, multi-team switching, performance stats and clear admin preview exits are enabled.",
+  "Player merge controls, multi-team switching, performance stats, clear admin preview exits and unpaid-fee removal safeguards are enabled.",
 );
