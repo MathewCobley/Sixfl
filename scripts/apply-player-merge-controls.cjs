@@ -51,7 +51,8 @@ if (
   !mergePage.includes("Account that stays active") ||
   !mergePage.includes("Duplicate account that will be disabled") ||
   !mergePage.includes("Result after the merge") ||
-  !mergePage.includes("Keep {keptLabel} — merge and disable {duplicateLabel}")
+  (!mergePage.includes("Keep {keptLabel} — merge and disable {duplicateLabel}") &&
+    !mergePage.includes("MergePlayerSubmitButton"))
 ) {
   throw new Error(
     "Player merge page must clearly identify the account that stays, the duplicate that is disabled and the final team registrations.",
@@ -82,7 +83,8 @@ if (mergeService.includes("The duplicate account is not attached to any squad.")
 }
 
 require("./apply-managed-squad-player-merge-control.cjs");
+require("./apply-player-merge-navigation-feedback.cjs");
 
 console.log(
-  "Player merge controls are enabled, including safe removal of duplicate accounts with no squad cards.",
+  "Player merge controls are enabled, including safe removal of empty duplicates and clear navigation feedback.",
 );
