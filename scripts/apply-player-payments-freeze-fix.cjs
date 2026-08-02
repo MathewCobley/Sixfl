@@ -108,6 +108,79 @@ patchFile(
   },
 );
 
+patchFile("src/components/captain/TeamAutoPayCopyBridge.tsx", (input) => {
+  let source = input;
+
+  const oldEffect = [
+    "  useEffect(() => {",
+    "    const params = new URLSearchParams(searchParams.toString());",
+    '    const isTeamPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/payments\\/?$/.test(pathname);',
+    '    const isSquadPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/player-payments\\/?$/.test(pathname);',
+    "",
+    "    if (!isTeamPaymentsPage && !isSquadPaymentsPage) return;",
+    "",
+    "    const apply = () => {",
+    "      if (isTeamPaymentsPage) {",
+    '        updatePaymentCopy(params.get("autopay"));',
+    "      }",
+    "      if (isSquadPaymentsPage) {",
+    "        updateSquadPaymentClarity(params);",
+    "      }",
+    "    };",
+    "",
+    "    apply();",
+    "    const observer = new MutationObserver(apply);",
+    "    observer.observe(document.body, { childList: true, subtree: true });",
+    "",
+    "    return () => observer.disconnect();",
+    "  }, [pathname, searchParams]);",
+  ].join("\n");
+
+  const newEffect = [
+    "  useEffect(() => {",
+    "    const params = new URLSearchParams(searchParams.toString());",
+    '    const isTeamPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/payments\\/?$/.test(pathname);',
+    '    const isSquadPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/player-payments\\/?$/.test(pathname);',
+    "",
+    "    if (!isTeamPaymentsPage && !isSquadPaymentsPage) return;",
+    "",
+    "    const apply = () => {",
+    "      if (isTeamPaymentsPage) {",
+    '        updatePaymentCopy(params.get("autopay"));',
+    "      }",
+    "      if (isSquadPaymentsPage) {",
+    "        updateSquadPaymentClarity(params);",
+    "      }",
+    "    };",
+    "",
+    "    if (isSquadPaymentsPage) {",
+    "      const frame = window.requestAnimationFrame(apply);",
+    "      const timer = window.setTimeout(apply, 250);",
+    "",
+    "      return () => {",
+    "        window.cancelAnimationFrame(frame);",
+    "        window.clearTimeout(timer);",
+    "      };",
+    "    }",
+    "",
+    "    apply();",
+    "    const observer = new MutationObserver(apply);",
+    "    observer.observe(document.body, { childList: true, subtree: true });",
+    "",
+    "    return () => observer.disconnect();",
+    "  }, [pathname, searchParams]);",
+  ].join("\n");
+
+  source = replaceRequired(
+    source,
+    oldEffect,
+    newEffect,
+    "squad payment observer removal",
+  );
+
+  return source;
+});
+
 const availabilitySource = fs.readFileSync(
   path.join(root, "src/components/captain/CaptainMatchdayAvailabilityBadgesBridge.tsx"),
   "utf8",
@@ -116,16 +189,22 @@ const fixtureBadgeSource = fs.readFileSync(
   path.join(root, "src/components/captain/CaptainFixtureBadgesBridge.tsx"),
   "utf8",
 );
+const autoPaySource = fs.readFileSync(
+  path.join(root, "src/components/captain/TeamAutoPayCopyBridge.tsx"),
+  "utf8",
+);
 
 if (
   !availabilitySource.includes("if (!teamId) return;") ||
   availabilitySource.includes("new MutationObserver(runCopyRewrite)") ||
   availabilitySource.includes("characterData: true") ||
-  fixtureBadgeSource.includes('`/captain/team/${teamId}/player-payments`,')
+  fixtureBadgeSource.includes('`/captain/team/${teamId}/player-payments`,') ||
+  !autoPaySource.includes("if (isSquadPaymentsPage) {") ||
+  !autoPaySource.includes("const timer = window.setTimeout(apply, 250);")
 ) {
   throw new Error("Squad payments freeze fix did not apply correctly.");
 }
 
 console.log(
-  "Squad payments no longer runs the matchday full-page text observer or the fixture AI badge injector.",
+  "Squad payments no longer runs full-page mutation observers or the fixture AI badge injector.",
 );
