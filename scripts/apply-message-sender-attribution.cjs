@@ -2,42 +2,165 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const servicePath = "src/lib/messaging/service.ts";
-const absolutePath = path.join(root, servicePath);
-let source = fs.readFileSync(absolutePath, "utf8");
 
-const before =
-  '      messages: { orderBy: [{ createdAt: "asc" }], include: { dispatch: { select: { id: true, template: { select: { id: true, name: true, key: true } }, metadata: true } } } },';
-const after = [
-  "      messages: {",
-  '        orderBy: [{ createdAt: "asc" }],',
-  "        include: {",
-  "          createdByUser: {",
-  "            select: { id: true, name: true, email: true, role: true },",
-  "          },",
-  "          dispatch: {",
-  "            select: {",
-  "              id: true,",
-  "              template: { select: { id: true, name: true, key: true } },",
-  "              metadata: true,",
-  "            },",
-  "          },",
-  "        },",
-  "      },",
-].join("\n");
+function read(filePath) {
+  return fs.readFileSync(path.join(root, filePath), "utf8");
+}
 
-if (!source.includes(after)) {
+function write(filePath, source) {
+  fs.writeFileSync(path.join(root, filePath), source, "utf8");
+}
+
+function replaceOnce(filePath, before, after, label) {
+  let source = read(filePath);
+  if (source.includes(after)) return;
   if (!source.includes(before)) {
-    throw new Error(
-      "Expected message-thread dispatch query was not found in src/lib/messaging/service.ts",
-    );
+    throw new Error(`Expected ${label} source was not found in ${filePath}`);
   }
   source = source.replace(before, after);
-  fs.writeFileSync(absolutePath, source, "utf8");
+  write(filePath, source);
 }
 
-if (!fs.readFileSync(absolutePath, "utf8").includes("createdByUser")) {
-  throw new Error("Message creator relation was not added to the thread query.");
+const servicePath = "src/lib/messaging/service.ts";
+const pagePath = "src/app/(admin)/admin/messaging/page.tsx";
+const inboxPath = "src/components/admin/messages/AdminMessagesInbox.tsx";
+const threadPath = "src/components/admin/messages/AdminMessageThread.tsx";
+
+replaceOnce(
+  servicePath,
+  '      messages: { orderBy: [{ createdAt: "asc" }], include: { dispatch: { select: { id: true, template: { select: { id: true, name: true, key: true } }, metadata: true } } } },',
+  [
+    "      messages: {",
+    '        orderBy: [{ createdAt: "asc" }],',
+    "        include: {",
+    "          createdByUser: {",
+    "            select: { id: true, name: true, email: true, role: true },",
+    "          },",
+    "          dispatch: {",
+    "            select: {",
+    "              id: true,",
+    "              template: { select: { id: true, name: true, key: true } },",
+    "              metadata: true,",
+    "            },",
+    "          },",
+    "        },",
+    "      },",
+  ].join("\n"),
+  "message creator query",
+);
+
+replaceOnce(
+  pagePath,
+  [
+    "                    readAt: message.readAt?.toISOString() ?? null,",
+    "                  })),",
+  ].join("\n"),
+  [
+    "                    readAt: message.readAt?.toISOString() ?? null,",
+    "                    createdByUser: message.createdByUser",
+    "                      ? {",
+    "                          id: message.createdByUser.id,",
+    "                          name: message.createdByUser.name,",
+    "                          email: message.createdByUser.email,",
+    "                          role: message.createdByUser.role,",
+    "                        }",
+    "                      : null,",
+    "                  })),",
+  ].join("\n"),
+  "message creator mapping",
+);
+
+const creatorType = [
+  "    createdByUser: {",
+  "      id: string;",
+  "      name: string | null;",
+  "      email: string | null;",
+  '      role: "USER" | "REFEREE" | "ADMIN";',
+  "    } | null;",
+].join("\n");
+
+for (const filePath of [inboxPath, threadPath]) {
+  replaceOnce(
+    filePath,
+    [
+      "    readAt: string | null;",
+      "    createdAt: string;",
+      "    dispatch?: {",
+    ].join("\n"),
+    [
+      "    readAt: string | null;",
+      "    createdAt: string;",
+      creatorType,
+      "    dispatch?: {",
+    ].join("\n"),
+    "message creator type",
+  );
 }
 
-console.log("Loaded message creator details with admin conversation threads.");
+replaceOnce(
+  threadPath,
+  [
+    "function getMessageRoleLabel(",
+    '  message: NonNullable<SelectedThread>["messages"][number],',
+    "): string {",
+    '  if (message.direction === "INBOUND") {',
+    '    return "Contact";',
+    "  }",
+    "",
+    "  switch (message.participantRole) {",
+    '    case "ADMIN":',
+    '      return "SIXFL admin";',
+    '    case "CAPTAIN":',
+    '      return "Captain";',
+    '    case "SYSTEM":',
+    '      return "Automated";',
+    "    default:",
+    '      return "SIXFL";',
+    "  }",
+    "}",
+  ].join("\n"),
+  [
+    "function getMessageRoleLabel(",
+    '  message: NonNullable<SelectedThread>["messages"][number],',
+    "): string {",
+    '  if (message.direction === "INBOUND") {',
+    '    return "Contact";',
+    "  }",
+    "",
+    "  const creatorName =",
+    "    message.createdByUser?.name?.trim() ||",
+    "    message.createdByUser?.email?.trim() ||",
+    "    null;",
+    "",
+    "  if (creatorName) {",
+    '    return message.createdByUser?.role === "ADMIN"',
+    '      ? `SIXFL admin · ${creatorName}`',
+    '      : `Sent by ${creatorName}`;',
+    "  }",
+    "",
+    "  switch (message.participantRole) {",
+    '    case "ADMIN":',
+    '      return "SIXFL admin";',
+    '    case "CAPTAIN":',
+    '      return "Captain";',
+    '    case "SYSTEM":',
+    '      return "Automated";',
+    "    default:",
+    '      return "SIXFL";',
+    "  }",
+    "}",
+  ].join("\n"),
+  "named message creator label",
+);
+
+for (const filePath of [servicePath, pagePath, inboxPath, threadPath]) {
+  if (!read(filePath).includes("createdByUser")) {
+    throw new Error(`Message creator attribution missing from ${filePath}`);
+  }
+}
+
+if (!read(threadPath).includes("SIXFL admin · ${creatorName}")) {
+  throw new Error("Named message creator label was not added.");
+}
+
+console.log("Named message creators are now shown in the admin timeline.");
