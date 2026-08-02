@@ -46,7 +46,7 @@ replaceOnce(
     "        },",
     "      },",
   ].join("\n"),
-  "message creator query",
+  "message creator and dispatch query",
 );
 
 replaceOnce(
@@ -65,9 +65,22 @@ replaceOnce(
     "                          role: message.createdByUser.role,",
     "                        }",
     "                      : null,",
+    "                    dispatch: message.dispatch",
+    "                      ? {",
+    "                          id: message.dispatch.id,",
+    "                          template: message.dispatch.template",
+    "                            ? {",
+    "                                id: message.dispatch.template.id,",
+    "                                name: message.dispatch.template.name,",
+    "                                key: message.dispatch.template.key,",
+    "                              }",
+    "                            : null,",
+    "                          metadata: message.dispatch.metadata,",
+    "                        }",
+    "                      : null,",
     "                  })),",
   ].join("\n"),
-  "message creator mapping",
+  "message creator and dispatch mapping",
 );
 
 const creatorType = [
@@ -120,6 +133,24 @@ replaceOnce(
     "}",
   ].join("\n"),
   [
+    "function getDispatchMetadataRecord(",
+    '  message: NonNullable<SelectedThread>["messages"][number],',
+    ") {",
+    "  const metadata = message.dispatch?.metadata;",
+    '  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {',
+    "    return null;",
+    "  }",
+    "  return metadata as Record<string, unknown>;",
+    "}",
+    "",
+    "function getDispatchMetadataString(",
+    '  message: NonNullable<SelectedThread>["messages"][number],',
+    "  key: string,",
+    ") {",
+    "  const value = getDispatchMetadataRecord(message)?.[key];",
+    '  return typeof value === "string" && value.trim() ? value.trim() : null;',
+    "}",
+    "",
     "function getMessageRoleLabel(",
     '  message: NonNullable<SelectedThread>["messages"][number],',
     "): string {",
@@ -130,13 +161,24 @@ replaceOnce(
     "  const creatorName =",
     "    message.createdByUser?.name?.trim() ||",
     "    message.createdByUser?.email?.trim() ||",
+    '    getDispatchMetadataString(message, "actorName") ||',
     "    null;",
+    '  const actorRole = getDispatchMetadataString(message, "actorRole")?.toUpperCase();',
+    '  const origin = getDispatchMetadataString(message, "origin");',
     "",
-    "  if (creatorName) {",
-    '    return message.createdByUser?.role === "ADMIN"',
-    '      ? `SIXFL admin · ${creatorName}`',
-    '      : `Sent by ${creatorName}`;',
+    "  if (",
+    '    actorRole === "CAPTAIN" ||',
+    "    (origin === \"captain_availability_sms_chase\" &&",
+    '      message.createdByUser?.role !== "ADMIN")',
+    "  ) {",
+    '    return creatorName ? `Captain · ${creatorName}` : "Captain";',
     "  }",
+    "",
+    '  if (actorRole === "ADMIN" || message.createdByUser?.role === "ADMIN") {',
+    '    return creatorName ? `SIXFL admin · ${creatorName}` : "SIXFL admin";',
+    "  }",
+    "",
+    "  if (creatorName) return `Sent by ${creatorName}`;",
     "",
     "  switch (message.participantRole) {",
     '    case "ADMIN":',
@@ -153,6 +195,33 @@ replaceOnce(
   "visible message creator label",
 );
 
+replaceOnce(
+  threadPath,
+  [
+    '  if (message.direction === "INBOUND") {',
+    "    return null;",
+    "  }",
+    "",
+    "  if (message.dispatch?.template) {",
+  ].join("\n"),
+  [
+    '  if (message.direction === "INBOUND") {',
+    "    return null;",
+    "  }",
+    "",
+    '  const originLabel = getDispatchMetadataString(message, "originLabel");',
+    "  if (originLabel) {",
+    "    return {",
+    "      label: originLabel,",
+    "      key: null,",
+    "    };",
+    "  }",
+    "",
+    "  if (message.dispatch?.template) {",
+  ].join("\n"),
+  "visible message action source",
+);
+
 for (const filePath of [servicePath, pagePath, inboxPath, threadPath]) {
   const source = read(filePath);
   if (!source.includes("createdByUser")) {
@@ -160,10 +229,15 @@ for (const filePath of [servicePath, pagePath, inboxPath, threadPath]) {
   }
 }
 
-if (!read(threadPath).includes("SIXFL admin · ${creatorName}")) {
-  throw new Error("Named sender label was not added to the admin timeline.");
+const threadSource = read(threadPath);
+if (
+  !threadSource.includes("SIXFL admin · ${creatorName}") ||
+  !threadSource.includes("Captain · ${creatorName}") ||
+  !threadSource.includes('getDispatchMetadataString(message, "originLabel")')
+) {
+  throw new Error("Named sender or action-source labels were not added.");
 }
 
 console.log(
-  "Manual messages in the admin timeline now identify the user account that triggered them.",
+  "The admin communications timeline now identifies the actual sender and the action that generated each notification.",
 );
