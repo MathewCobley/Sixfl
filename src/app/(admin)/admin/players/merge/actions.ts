@@ -51,35 +51,15 @@ export async function mergePlayerAccountsAction(formData: FormData) {
     );
   }
 
+  let result: Awaited<ReturnType<typeof mergePlayerAccounts>>;
+
   try {
-    const result = await mergePlayerAccounts({
+    result = await mergePlayerAccounts({
       keptUserId,
       mergedUserId,
       mergedByUserId: access.user?.id ?? null,
       mergedByEmail: access.user?.email ?? access.session?.user?.email ?? null,
     });
-
-    revalidatePath("/admin/teams");
-    revalidatePath("/admin/users");
-    revalidatePath("/admin/player-pool");
-    revalidatePath("/admin/player-prospects");
-    revalidatePath(`/admin/players/merge/${result.keptUserId}`);
-    if (teamId) {
-      revalidatePath(`/admin/teams/${teamId}`);
-      revalidatePath(`/admin/teams/${teamId}/squad`);
-      revalidatePath(`/captain/team/${teamId}/captain-squad`);
-      revalidatePath(`/captain/team/${teamId}/squad`);
-      revalidatePath(`/captain/team/${teamId}/payments`);
-      revalidatePath(`/captain/team/${teamId}/player-payments`);
-    }
-
-    redirect(
-      mergePagePath({
-        userId: result.keptUserId,
-        teamId,
-        merged: true,
-      }),
-    );
   } catch (error) {
     const message =
       error instanceof PlayerMergeConflictError
@@ -103,4 +83,26 @@ export async function mergePlayerAccountsAction(formData: FormData) {
       }),
     );
   }
+
+  revalidatePath("/admin/teams");
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/player-pool");
+  revalidatePath("/admin/player-prospects");
+  revalidatePath(`/admin/players/merge/${result.keptUserId}`);
+  if (teamId) {
+    revalidatePath(`/admin/teams/${teamId}`);
+    revalidatePath(`/admin/teams/${teamId}/squad`);
+    revalidatePath(`/captain/team/${teamId}/captain-squad`);
+    revalidatePath(`/captain/team/${teamId}/squad`);
+    revalidatePath(`/captain/team/${teamId}/payments`);
+    revalidatePath(`/captain/team/${teamId}/player-payments`);
+  }
+
+  redirect(
+    mergePagePath({
+      userId: result.keptUserId,
+      teamId,
+      merged: true,
+    }),
+  );
 }
