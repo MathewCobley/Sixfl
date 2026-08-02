@@ -168,7 +168,7 @@ replaceOnce(
     "",
     "  if (",
     '    actorRole === "CAPTAIN" ||',
-    "    (origin === \"captain_availability_sms_chase\" &&",
+    '    (origin === "captain_availability_sms_chase" &&',
     '      message.createdByUser?.role !== "ADMIN")',
     "  ) {",
     '    return creatorName ? `Captain · ${creatorName}` : "Captain";',
