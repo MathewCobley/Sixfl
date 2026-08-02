@@ -1,0 +1,54 @@
+name: DOM bridge policy
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prevent-new-dom-bridges:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve comparison commit
+        id: base
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+          fi
+
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Reject new or modified DOM bridges
+        run: >-
+          node scripts/audit-dom-bridges.mjs
+          --changed-from "${{ steps.base.outputs.sha }}"
+          --fail-on-findings
+
+      - name: Produce full legacy audit inventory
+        if: always()
+        run: node scripts/audit-dom-bridges.mjs | tee dom-bridge-audit.txt
+
+      - name: Upload audit inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dom-bridge-audit-${{ github.sha }}
+          path: dom-bridge-audit.txt
+          retention-days: 30
