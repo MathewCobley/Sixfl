@@ -243,7 +243,7 @@ replaceAfterMarker(
     '      status: { in: ["QUEUED", "PROCESSING", "SENT"] },',
     "    },",
     "    select: { id: true, status: true },",
-    "    orderBy: [{ createdAt: \"desc\" }],",
+    '    orderBy: [{ createdAt: "desc" }],',
     "  });",
     "",
     "  if (existingChase) {",
