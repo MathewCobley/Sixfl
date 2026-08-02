@@ -86,8 +86,9 @@ require("./apply-managed-squad-player-merge-control.cjs");
 require("./apply-player-merge-navigation-feedback.cjs");
 require("./apply-player-team-switcher.cjs");
 require("./apply-player-team-switcher-layout.cjs");
+require("./apply-player-performance-panel-placement.cjs");
 require("./apply-player-preview-admin-exit.cjs");
 
 console.log(
-  "Player merge controls, multi-team switching and clear admin exits from player preview are enabled.",
+  "Player merge controls, multi-team switching, performance stats and clear admin preview exits are enabled.",
 );
