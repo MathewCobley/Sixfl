@@ -20,6 +20,49 @@
 - Active current-season membership is authoritative. Affiliated-only, removed and fixture-placeholder teams must never appear in standings.
 - Change standings rules centrally and verify every consumer rather than patching individual pages.
 
+## DOM bridges and post-render page mutation
+
+DOM bridges are prohibited by default.
+
+A feature must be implemented in the React/Next.js page or component that owns the markup, using explicit props, server data, route handlers, server actions or a normal route-scoped client component.
+
+Do not implement product behaviour by scraping the rendered page and then injecting, hiding, moving, renaming, restyling or rewiring unrelated elements with selectors.
+
+The following patterns are banned unless an approved temporary exception exists in `config/dom-bridge-exceptions.json`:
+
+- page-wide or layout-wide `MutationObserver` use;
+- `document.querySelector*` or DOM walking used to discover application structure;
+- `document.createElement`, `innerHTML` or insertion APIs used to add application UI outside an owned portal;
+- changing unrelated elements through `classList`, direct style mutation or text replacement;
+- monkey-patching browser prototypes;
+- globally mounted components that inspect routes and alter other pages after render.
+
+Normal browser APIs are allowed when they operate on elements owned by the component, for example focusing an input through a React ref, measuring an owned element, using an accessible dialog portal or integrating an unavoidable third-party widget.
+
+### Exception standard
+
+A DOM bridge exception is allowed only when all of the following are true:
+
+1. The target DOM is not owned by SIXFL React code or cannot reasonably be changed at source.
+2. The exception is recorded by exact file path in `config/dom-bridge-exceptions.json`.
+3. The record includes a concrete reason, named approver, restricted route scope and expiry date.
+4. The code is narrowly scoped, idempotent, cleaned up on unmount and cannot run globally.
+5. It does not control payments, fees, fixtures, player records, referee operations or other business-critical state.
+6. A replacement or removal plan is documented.
+
+Exceptions must be temporary and should normally expire within 90 days.
+
+Existing legacy bridges are technical debt, not precedent. Do not expand their scope. When a legacy bridge is touched, replace it with native React/server rendering or add a valid temporary exception before merging.
+
+Required checks:
+
+```bash
+npm run audit:dom
+npm run audit:dom:changed
+```
+
+`audit:dom` reports the full legacy inventory. `audit:dom:changed` fails when changed source files add or modify suspicious DOM mutation without a valid exception.
+
 ## Change-completion standard
 
 Do not report a partial change as complete. Before saying a task is **done**:
