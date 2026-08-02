@@ -121,7 +121,8 @@ if (
 require("./apply-player-duplicate-guard.cjs");
 require("./apply-player-multi-team-badges.cjs");
 require("./apply-player-merge-controls.cjs");
+require("./apply-squad-member-creation-details.cjs");
 
 console.log(
-  "PlayerPool contact tools, duplicate-safe creation, multi-team badges and admin player merging are enabled.",
+  "PlayerPool contact tools, duplicate-safe creation, multi-team badges, admin player merging and squad creator details are enabled.",
 );
