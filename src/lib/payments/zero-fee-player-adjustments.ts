@@ -1,11 +1,11 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { getRelatedTeamIdsForPaymentLedger } from "@/lib/payments/team-payment-ledger";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 export const ZERO_FEE_WAIVER_NOTE = "Zero-fee player share waived by SIXFL";
 export const ZERO_FEE_ADJUSTMENT_NOTE = "Zero-fee player waiver adjustment";
-
-type ZeroFeeFeeRow = Awaited<ReturnType<typeof getMarkedZeroFeeRows>>[number];
 
 export type ZeroFeeAdjustmentPlayer = {
   playerMatchFeeId: string;
@@ -32,67 +32,160 @@ export type ZeroFeeAdjustmentReconciliation = {
   adjustments: ZeroFeeAdjustmentDetail[];
 };
 
-function formatMoney(amountPence: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(amountPence / 100);
-}
+type FixedChargeRepairRow = {
+  id: string;
+};
 
-function feeKey(teamId: string, fixtureId: string) {
-  return `${teamId}:${fixtureId}`;
-}
+type ZeroFeeFeeRow = {
+  id: string;
+  teamId: string;
+  fixtureId: string;
+  teamMemberId: string | null;
+  amountPence: number;
+  teamMember: {
+    user: {
+      name: string | null;
+      email: string | null;
+    };
+  } | null;
+  fixture: {
+    homeTeam: { name: string };
+    awayTeam: { name: string };
+  };
+};
 
-function getPlayerName(row: ZeroFeeFeeRow) {
-  return row.teamMember?.user.name || row.teamMember?.user.email || "Unnamed player";
-}
-
-function getMarkedAdjustmentPence(description: string | null) {
-  const matches = Array.from(
-    (description ?? "").matchAll(
-      /Zero-fee player waiver adjustment:\s*£([\d,]+(?:\.\d{1,2})?)/gi,
+function removeAdjustmentCopySql(column: Prisma.Sql) {
+  return Prisma.sql`NULLIF(
+    BTRIM(
+      REGEXP_REPLACE(
+        COALESCE(${column}, ''),
+        E'(^|\\n)Zero-fee player waiver adjustment:[^\\n]*(\\n|$)',
+        E'\\1',
+        'gi'
+      )
     ),
+    ''
+  )`;
+}
+
+/**
+ * Player payment rows describe how a captain is collecting money from players.
+ * They must never alter the fixed amount SIXFL charges the team for the fixture.
+ *
+ * This repair runs when the team ledger is loaded so old £37-style adjustments
+ * are corrected even on deployments where an earlier one-off migration did not run.
+ */
+export async function repairFixedFixtureChargesForTeamIds(teamIds: string[]) {
+  const uniqueTeamIds = Array.from(new Set(teamIds.filter(Boolean)));
+  if (uniqueTeamIds.length === 0) return [] as string[];
+
+  const descriptionWithoutAdjustment = removeAdjustmentCopySql(
+    Prisma.sql`charge."description"`,
   );
-  const latest = matches.at(-1)?.[1];
-  if (!latest) return 0;
 
-  const pounds = Number(latest.replaceAll(",", ""));
-  return Number.isFinite(pounds) ? Math.round(pounds * 100) : 0;
-}
-
-function removeOldAdjustmentCopy(description: string | null) {
-  const cleaned = (description ?? "")
-    .split("\n")
-    .filter((line) => !line.trim().startsWith(ZERO_FEE_ADJUSTMENT_NOTE))
-    .join("\n")
-    .replace(
-      /\s*Zero-fee player waiver adjustment:\s*£[\d,]+(?:\.\d{1,2})?[^\n]*/gi,
-      "",
+  const repaired = await prisma.$queryRaw<FixedChargeRepairRow[]>(Prisma.sql`
+    WITH expected AS (
+      SELECT
+        charge."id",
+        CASE
+          WHEN charge."teamId" = fixture."homeTeamId" THEN COALESCE(
+            fixture."homeMatchFeePence",
+            fixture."matchFeePence"
+          )
+          WHEN charge."teamId" = fixture."awayTeamId" THEN COALESCE(
+            fixture."awayMatchFeePence",
+            fixture."matchFeePence"
+          )
+          ELSE NULL
+        END AS "expectedAmountPence",
+        COALESCE((
+          SELECT SUM(transaction."amountPence")
+          FROM "PaymentTransaction" transaction
+          WHERE transaction."chargeId" = charge."id"
+        ), 0) + COALESCE((
+          SELECT SUM(fee."amountPence")
+          FROM "PlayerMatchFee" fee
+          WHERE fee."teamId" = charge."teamId"
+            AND fee."fixtureId" = charge."fixtureId"
+            AND fee."status" = 'PAID'
+        ), 0) AS "paidAmountPence"
+      FROM "PaymentCharge" charge
+      INNER JOIN "Fixture" fixture ON fixture."id" = charge."fixtureId"
+      WHERE charge."teamId" IN (${Prisma.join(uniqueTeamIds)})
+        AND charge."status" <> 'VOID'
     )
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+    UPDATE "PaymentCharge" charge
+    SET
+      "amountPence" = expected."expectedAmountPence",
+      "status" = CASE
+        WHEN expected."paidAmountPence" <= 0 THEN 'OPEN'::"PaymentChargeStatus"
+        WHEN expected."paidAmountPence" >= expected."expectedAmountPence" THEN 'PAID'::"PaymentChargeStatus"
+        ELSE 'PART_PAID'::"PaymentChargeStatus"
+      END,
+      "description" = ${descriptionWithoutAdjustment},
+      "updatedAt" = NOW()
+    FROM expected
+    WHERE charge."id" = expected."id"
+      AND expected."expectedAmountPence" IS NOT NULL
+      AND expected."expectedAmountPence" > 0
+      AND (
+        charge."amountPence" IS DISTINCT FROM expected."expectedAmountPence"
+        OR charge."description" ILIKE '%Zero-fee player waiver adjustment%'
+      )
+    RETURNING charge."id"
+  `);
 
-  return cleaned || null;
+  // Remove stale waived rows where the admin-only £0 override no longer exists.
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "PlayerMatchFee" fee
+    SET
+      "amountPence" = 0,
+      "status" = 'CANCELLED'::"PlayerMatchFeeStatus",
+      "paidAt" = NULL,
+      "waivedAt" = NULL,
+      "cancelledAt" = NOW(),
+      "paymentUrl" = NULL,
+      "paymentToken" = NULL,
+      "note" = CONCAT_WS(
+        E'\\n',
+        NULLIF(
+          BTRIM(
+            REGEXP_REPLACE(
+              COALESCE(fee."note", ''),
+              E'(^|\\n)Zero-fee player share waived by SIXFL:[^\\n]*(\\n|$)',
+              E'\\1',
+              'gi'
+            )
+          ),
+          ''
+        ),
+        'Cancelled by system repair: no valid £0 admin fee override exists.'
+      ),
+      "updatedAt" = NOW()
+    WHERE fee."teamId" IN (${Prisma.join(uniqueTeamIds)})
+      AND fee."teamMemberId" IS NOT NULL
+      AND fee."status" <> 'PAID'
+      AND fee."note" ILIKE '%Zero-fee player share waived by SIXFL%'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "TeamMemberProfile" profile
+        WHERE profile."teamMemberId" = fee."teamMemberId"
+          AND profile."playerMatchFeePenceOverride" = 0
+      )
+  `);
+
+  return repaired.map((row) => row.id);
 }
 
-function buildAdjustmentCopy(players: ZeroFeeAdjustmentPlayer[]) {
-  const totalPence = players.reduce((sum, player) => sum + player.amountPence, 0);
-  const names = players.map((player) => player.name).join(", ");
-  return `${ZERO_FEE_ADJUSTMENT_NOTE}: ${formatMoney(totalPence)} removed for ${names}.`;
-}
-
-async function getMarkedZeroFeeRows(input: {
-  teamIds: string[];
-  fixtureId?: string;
-}) {
-  return prisma.playerMatchFee.findMany({
+async function getValidZeroFeeDetails(teamIds: string[], fixtureId?: string) {
+  const rows = await prisma.playerMatchFee.findMany({
     where: {
-      teamId: { in: input.teamIds },
-      ...(input.fixtureId ? { fixtureId: input.fixtureId } : {}),
+      teamId: { in: teamIds },
+      ...(fixtureId ? { fixtureId } : {}),
       status: "WAIVED",
       note: { contains: ZERO_FEE_WAIVER_NOTE },
+      teamMemberId: { not: null },
     },
-    orderBy: [{ createdAt: "asc" }],
     include: {
       teamMember: {
         include: {
@@ -111,6 +204,59 @@ async function getMarkedZeroFeeRows(input: {
         },
       },
     },
+  }) as ZeroFeeFeeRow[];
+
+  const memberIds = rows
+    .map((row) => row.teamMemberId)
+    .filter((value): value is string => Boolean(value));
+  const profiles = await getTeamMemberProfilesByTeamMemberIds(memberIds);
+  const validRows = rows.filter(
+    (row) =>
+      Boolean(row.teamMemberId) &&
+      profiles.get(row.teamMemberId!)?.playerMatchFeePenceOverride === 0,
+  );
+
+  const charges = await prisma.paymentCharge.findMany({
+    where: {
+      teamId: { in: teamIds },
+      fixtureId: fixtureId ? fixtureId : { in: Array.from(new Set(validRows.map((row) => row.fixtureId))) },
+      status: { not: "VOID" },
+    },
+    select: {
+      id: true,
+      teamId: true,
+      fixtureId: true,
+      title: true,
+    },
+  });
+
+  return charges.flatMap<ZeroFeeAdjustmentDetail>((charge) => {
+    if (!charge.fixtureId) return [];
+    const matchingRows = validRows.filter(
+      (row) => row.teamId === charge.teamId && row.fixtureId === charge.fixtureId,
+    );
+    if (matchingRows.length === 0) return [];
+
+    const players = matchingRows.map<ZeroFeeAdjustmentPlayer>((row) => ({
+      playerMatchFeeId: row.id,
+      teamMemberId: row.teamMemberId!,
+      name:
+        row.teamMember?.user.name ||
+        row.teamMember?.user.email ||
+        "Unnamed player",
+      email: row.teamMember?.user.email ?? null,
+      amountPence: row.amountPence,
+    }));
+
+    return [{
+      chargeId: charge.id,
+      chargeTitle: charge.title,
+      teamId: charge.teamId,
+      fixtureId: charge.fixtureId,
+      fixtureLabel: `${matchingRows[0].fixture.homeTeam.name} vs ${matchingRows[0].fixture.awayTeam.name}`,
+      amountPence: players.reduce((sum, player) => sum + player.amountPence, 0),
+      players,
+    }];
   });
 }
 
@@ -118,120 +264,13 @@ async function reconcile(input: {
   teamIds: string[];
   fixtureId?: string;
 }): Promise<ZeroFeeAdjustmentReconciliation> {
-  const markedRows = await getMarkedZeroFeeRows(input);
-  const membershipIds = markedRows
-    .map((row) => row.teamMemberId)
-    .filter((value): value is string => Boolean(value));
-  const profiles = await getTeamMemberProfilesByTeamMemberIds(membershipIds);
-
-  const rowsByTeamFixture = new Map<string, ZeroFeeFeeRow[]>();
-  for (const row of markedRows) {
-    const key = feeKey(row.teamId, row.fixtureId);
-    const existing = rowsByTeamFixture.get(key) ?? [];
-    existing.push(row);
-    rowsByTeamFixture.set(key, existing);
-  }
-
-  const charges = await prisma.paymentCharge.findMany({
-    where: {
-      teamId: { in: input.teamIds },
-      fixtureId: input.fixtureId ? input.fixtureId : { not: null },
-      status: { not: "VOID" },
-      OR: [
-        { description: { contains: ZERO_FEE_ADJUSTMENT_NOTE } },
-        ...(markedRows.length
-          ? [{ fixtureId: { in: Array.from(new Set(markedRows.map((row) => row.fixtureId))) } }]
-          : []),
-      ],
-    },
-    select: {
-      id: true,
-      teamId: true,
-      fixtureId: true,
-      title: true,
-      description: true,
-      amountPence: true,
-      fixture: {
-        select: {
-          homeTeam: { select: { name: true } },
-          awayTeam: { select: { name: true } },
-        },
-      },
-    },
-  });
-
-  let changed = false;
-  const changedChargeIds: string[] = [];
-  const removedStaleAdjustmentChargeIds: string[] = [];
-  const adjustments: ZeroFeeAdjustmentDetail[] = [];
-
-  for (const charge of charges) {
-    if (!charge.fixtureId) continue;
-
-    const allMarkedRows = rowsByTeamFixture.get(feeKey(charge.teamId, charge.fixtureId)) ?? [];
-    const validRows = allMarkedRows.filter((row) => {
-      if (!row.teamMemberId) return false;
-      return profiles.get(row.teamMemberId)?.playerMatchFeePenceOverride === 0;
-    });
-    const players: ZeroFeeAdjustmentPlayer[] = validRows
-      .filter((row): row is ZeroFeeFeeRow & { teamMemberId: string } => Boolean(row.teamMemberId))
-      .map((row) => ({
-        playerMatchFeeId: row.id,
-        teamMemberId: row.teamMemberId,
-        name: getPlayerName(row),
-        email: row.teamMember?.user.email ?? null,
-        amountPence: row.amountPence,
-      }));
-
-    const currentAdjustmentPence = getMarkedAdjustmentPence(charge.description);
-    const validAdjustmentPence = players.reduce(
-      (sum, player) => sum + player.amountPence,
-      0,
-    );
-    const baseAmountPence = charge.amountPence + currentAdjustmentPence;
-    const nextAmountPence = Math.max(baseAmountPence - validAdjustmentPence, 0);
-    const cleanDescription = removeOldAdjustmentCopy(charge.description);
-    const nextDescription = players.length
-      ? [cleanDescription, buildAdjustmentCopy(players)].filter(Boolean).join("\n")
-      : cleanDescription;
-
-    if (
-      charge.amountPence !== nextAmountPence ||
-      (charge.description ?? null) !== (nextDescription ?? null)
-    ) {
-      await prisma.paymentCharge.update({
-        where: { id: charge.id },
-        data: {
-          amountPence: nextAmountPence,
-          description: nextDescription,
-        },
-      });
-      changed = true;
-      changedChargeIds.push(charge.id);
-      if (currentAdjustmentPence > 0 && validAdjustmentPence === 0) {
-        removedStaleAdjustmentChargeIds.push(charge.id);
-      }
-    }
-
-    if (players.length > 0) {
-      adjustments.push({
-        chargeId: charge.id,
-        chargeTitle: charge.title,
-        teamId: charge.teamId,
-        fixtureId: charge.fixtureId,
-        fixtureLabel: charge.fixture
-          ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
-          : charge.title,
-        amountPence: validAdjustmentPence,
-        players,
-      });
-    }
-  }
+  const changedChargeIds = await repairFixedFixtureChargesForTeamIds(input.teamIds);
+  const adjustments = await getValidZeroFeeDetails(input.teamIds, input.fixtureId);
 
   return {
-    changed,
+    changed: changedChargeIds.length > 0,
     changedChargeIds,
-    removedStaleAdjustmentChargeIds,
+    removedStaleAdjustmentChargeIds: changedChargeIds,
     adjustments,
   };
 }
