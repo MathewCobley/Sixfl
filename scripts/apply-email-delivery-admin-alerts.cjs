@@ -166,6 +166,8 @@ for (const filePath of [
   }
 }
 
+require("./apply-email-delivery-resolution.cjs");
+
 console.log(
-  "Applied prominent in-admin warnings, delayed email details and deduplicated admin email alerts for Resend delivery problems.",
+  "Applied prominent in-admin warnings, delayed email details, clear controls and deduplicated admin email alerts for Resend delivery problems.",
 );
