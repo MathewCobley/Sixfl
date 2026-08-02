@@ -97,70 +97,10 @@ for (const filePath of [inboxPath, threadPath]) {
   );
 }
 
-replaceOnce(
-  threadPath,
-  [
-    "function getMessageRoleLabel(",
-    '  message: NonNullable<SelectedThread>["messages"][number],',
-    "): string {",
-    '  if (message.direction === "INBOUND") {',
-    '    return "Contact";',
-    "  }",
-    "",
-    "  switch (message.participantRole) {",
-    '    case "ADMIN":',
-    '      return "SIXFL admin";',
-    '    case "CAPTAIN":',
-    '      return "Captain";',
-    '    case "SYSTEM":',
-    '      return "Automated";',
-    "    default:",
-    '      return "SIXFL";',
-    "  }",
-    "}",
-  ].join("\n"),
-  [
-    "function getMessageRoleLabel(",
-    '  message: NonNullable<SelectedThread>["messages"][number],',
-    "): string {",
-    '  if (message.direction === "INBOUND") {',
-    '    return "Contact";',
-    "  }",
-    "",
-    "  const creatorName =",
-    "    message.createdByUser?.name?.trim() ||",
-    "    message.createdByUser?.email?.trim() ||",
-    "    null;",
-    "",
-    "  if (creatorName) {",
-    '    return message.createdByUser?.role === "ADMIN"',
-    '      ? `SIXFL admin · ${creatorName}`',
-    '      : `Sent by ${creatorName}`;',
-    "  }",
-    "",
-    "  switch (message.participantRole) {",
-    '    case "ADMIN":',
-    '      return "SIXFL admin";',
-    '    case "CAPTAIN":',
-    '      return "Captain";',
-    '    case "SYSTEM":',
-    '      return "Automated";',
-    "    default:",
-    '      return "SIXFL";',
-    "  }",
-    "}",
-  ].join("\n"),
-  "named message creator label",
-);
-
 for (const filePath of [servicePath, pagePath, inboxPath, threadPath]) {
   if (!read(filePath).includes("createdByUser")) {
-    throw new Error(`Message creator attribution missing from ${filePath}`);
+    throw new Error(`Message creator data missing from ${filePath}`);
   }
 }
 
-if (!read(threadPath).includes("SIXFL admin · ${creatorName}")) {
-  throw new Error("Named message creator label was not added.");
-}
-
-console.log("Named message creators are now shown in the admin timeline.");
+console.log("Message creator details now flow into the admin conversation component.");
