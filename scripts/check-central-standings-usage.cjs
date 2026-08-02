@@ -3,7 +3,6 @@ const path = require("node:path");
 
 require("./apply-captain-dom-observer-performance-guard.cjs");
 require("./apply-player-payments-freeze-fix.cjs");
-require("./apply-native-squad-payment-presentation.cjs");
 require("./apply-matchday-fee-waiver-reasons.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
