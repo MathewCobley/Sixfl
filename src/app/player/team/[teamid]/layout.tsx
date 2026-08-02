@@ -6,7 +6,6 @@ import { Suspense, type ReactNode } from "react";
 import PlayerDashboardOnly from "@/components/player/PlayerDashboardOnly";
 import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
-import PlayerPerformancePanel from "@/components/player/PlayerPerformancePanel";
 import PlayerPreviewLinkPersistence from "@/components/player/PlayerPreviewLinkPersistence";
 
 export default async function PlayerTeamLayout({
@@ -33,7 +32,6 @@ export default async function PlayerTeamLayout({
       <PlayerDashboardOnly teamId={teamid}>
         <div className="space-y-8 pb-8">
           <PlayerLeagueMediaPanel teamId={teamid} />
-          <PlayerPerformancePanel teamId={teamid} />
           <PlayerMessageBox teamId={teamid} />
         </div>
       </PlayerDashboardOnly>
