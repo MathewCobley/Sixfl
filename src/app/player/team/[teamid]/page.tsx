@@ -120,7 +120,7 @@ function getFeeStatusLabel(status: PlayerMatchFeeStatus) {
     case PlayerMatchFeeStatus.PAID:
       return "Paid";
     case PlayerMatchFeeStatus.WAIVED:
-      return "Waived";
+      return "No payment needed";
     case PlayerMatchFeeStatus.CANCELLED:
       return "Cancelled";
     default:
@@ -449,7 +449,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
               {outstandingPence > 0
                 ? `${openFees.length} match fee${openFees.length === 1 ? "" : "s"} waiting for you.`
                 : paidPence > 0
-                  ? `${formatMoney(paidPence)} already paid against linked player match fees.`
+                  ? `You’ve already paid ${formatMoney(paidPence)} in match fees.`
                   : "No match fees are waiting for you right now."}
             </p>
             {nextOpenFee?.paymentUrl ? (
@@ -514,7 +514,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Payments</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Player match fees</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-100/70">
-                See what is due now, what has already been paid, and any waived player match fees linked to this player.
+                See what you need to pay, what you’ve already paid and any fees where no payment was needed.
               </p>
             </div>
 
@@ -528,7 +528,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                 <div className="mt-1 text-lg font-black text-white">{formatMoney(paidPence)}</div>
               </div>
               <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100/60">Waived</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100/60">No payment needed</div>
                 <div className="mt-1 text-lg font-black text-white">{formatMoney(waivedPence)}</div>
               </div>
             </div>
@@ -537,7 +537,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           <div className="mt-5 space-y-3">
             {playerFees.length === 0 ? (
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-white/60">
-                No payments are due and no player payment history has been recorded against this player yet.
+                You’re all clear — there are no match fees to pay yet.
               </div>
             ) : (
               playerFees.map((fee) => (
@@ -555,13 +555,11 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                       <h3 className="mt-3 text-sm font-semibold text-white">
                         {getFixtureLabel({ homeTeamName: fee.fixture.homeTeam.name, awayTeamName: fee.fixture.awayTeam.name })}
                       </h3>
-                      <p className="mt-1 text-xs text-white/45">Fixture: {formatFixtureDate(fee.fixture.kickoffAt)}</p>
-                      <p className="mt-1 text-xs text-white/45">Added: {formatPaymentDate(fee.createdAt)} · Paid: {formatPaymentDate(fee.paidAt)}</p>
-                      {!fee.teamMemberId && fee.prospect?.email ? (
-                        <p className="mt-1 text-xs text-emerald-100/55">
-                          Matched from previous signup/payment email: {fee.prospect.email}
-                        </p>
-                      ) : null}
+                      <p className="mt-1 text-xs text-white/45">Match: {formatFixtureDate(fee.fixture.kickoffAt)}</p>
+                      <p className="mt-1 text-xs text-white/45">
+                        Payment requested: {formatPaymentDate(fee.createdAt)}
+                        {fee.paidAt ? ` · Paid: ${formatPaymentDate(fee.paidAt)}` : ""}
+                      </p>
                     </div>
 
                     {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
