@@ -34,11 +34,10 @@ layout = replaceOnce(
 
 layout = replaceOnce(
   layout,
-  "          <CaptainSupportPanel teamId={team.id} />\n          {children}",
+  "          <CaptainSupportPanel teamId={team.id} />",
   [
     "          <CaptainSupportPanel teamId={team.id} />",
     "          <CaptainTeamNudges teamId={team.id} />",
-    "          {children}",
   ].join("\n"),
   "captain team nudge placement",
 );
