@@ -5,7 +5,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type SendToPlayerPoolResponse = {
   ok?: boolean;
@@ -168,7 +168,7 @@ function addPlayerPoolBadge(
   const label = `PlayerPool · ${formatPlayerPoolStatus(profile.status)}`;
 
   if (existing) {
-    existing.textContent = label;
+    if (existing.textContent !== label) existing.textContent = label;
     existing.className = `rounded-full border px-2.5 py-1 text-[11px] font-medium ${playerPoolStatusClasses(
       profile.status,
     )}`;
@@ -325,21 +325,22 @@ function syncPlayerPoolCards() {
 
 export default function PlayerProspectsPlayerPoolBridge() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
 
   useEffect(() => {
     if (pathname !== "/admin/player-prospects") return;
 
     statusRequests.clear();
-    syncPlayerPoolCards();
+    const run = () => syncPlayerPoolCards();
+    const frame = window.requestAnimationFrame(run);
+    const retry = window.setTimeout(run, 250);
 
-    const observer = new MutationObserver(syncPlayerPoolCards);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-
-    return () => observer.disconnect();
-  }, [pathname]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(retry);
+    };
+  }, [pathname, searchKey]);
 
   return null;
 }
