@@ -19,6 +19,8 @@ export const metadata = {
   title: "SIXFL PlayerPool | Captain",
 };
 
+const PLAYER_POOL_LOGO_URL = "/logos/sixfl%20player%20pool%20.png";
+
 type SearchParams = Promise<{ saved?: string; error?: string }>;
 
 type ProfileRow = {
@@ -171,6 +173,13 @@ export default async function CaptainPlayerPoolPage({
   return (
     <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-8">
+        <div className="mb-6 flex justify-center sm:justify-start">
+          <img
+            src={PLAYER_POOL_LOGO_URL}
+            alt="SIXFL PlayerPool"
+            className="h-auto w-full max-w-[34rem] object-contain"
+          />
+        </div>
         <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
           Available players for {team.name}
         </h1>
