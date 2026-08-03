@@ -34,11 +34,14 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
+      CI: true
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl_test?schema=public
       NEXTAUTH_SECRET: ci-native-kit-offer-secret
       NEXTAUTH_URL: http://localhost:3000
+      RESEND_API_KEY: re_ci_native_kit_offer
+      CRON_SECRET: ci-native-kit-offer-cron-secret
 
     steps:
       - name: Check out repository
@@ -63,6 +66,9 @@ jobs:
 
       - name: Type-check application
         run: npx tsc --noEmit
+
+      - name: Build application
+        run: npm run build
 
       - name: Confirm removed kit bridges stay removed
         run: |
