@@ -119,6 +119,68 @@ replaceRequired(
 
 fs.writeFileSync(pagePath, source, "utf8");
 
+// The paid-extra-kit patch runs immediately after this feature. Teach that patch
+// to extend the already-expanded Promise.all query rather than looking for the
+// original two-query version of the captain kit page.
+const paidExtraPatchPath = path.join(
+  root,
+  "scripts/apply-paid-extra-kit-order-rows.cjs",
+);
+if (fs.existsSync(paidExtraPatchPath)) {
+  let paidExtraPatch = fs.readFileSync(paidExtraPatchPath, "utf8");
+  const oldBlock = [
+    'replaceOnce(',
+    '  pagePath,',
+    '  [',
+    '    "  const [allDesigns, order] = await Promise.all([",',
+    '    "    listKitDesigns({ includeInactive: true }),",',
+    '    "    getTeamKitOrder(teamid),",',
+    '    "  ]);",',
+    '  ].join("\\n"),',
+    '  [',
+    '    "  const [allDesigns, order, extraKitPaymentSummary] = await Promise.all([",',
+    '    "    listKitDesigns({ includeInactive: true }),",',
+    '    "    getTeamKitOrder(teamid),",',
+    '    "    getTeamExtraKitPaymentSummary(teamid),",',
+    '    "  ]);",',
+    '  ].join("\\n"),',
+    '  "extra-kit payment summary query",',
+    ');',
+  ].join("\n");
+  const compatibleBlock = [
+    'replaceOnce(',
+    '  pagePath,',
+    '  [',
+    '    "  const [allDesigns, order, kitAssignments, kitMembers] = await Promise.all([",',
+    '    "    listKitDesigns({ includeInactive: true }),",',
+    '    "    getTeamKitOrder(teamid),",',
+    '    "    listKitPlayerAssignments(teamid),",',
+    '    "    listAssignableKitMembers(teamid),",',
+    '    "  ]);",',
+    '  ].join("\\n"),',
+    '  [',
+    '    "  const [allDesigns, order, kitAssignments, kitMembers, extraKitPaymentSummary] = await Promise.all([",',
+    '    "    listKitDesigns({ includeInactive: true }),",',
+    '    "    getTeamKitOrder(teamid),",',
+    '    "    listKitPlayerAssignments(teamid),",',
+    '    "    listAssignableKitMembers(teamid),",',
+    '    "    getTeamExtraKitPaymentSummary(teamid),",',
+    '    "  ]);",',
+    '  ].join("\\n"),',
+    '  "extra-kit payment summary query",',
+    ');',
+  ].join("\n");
+
+  if (paidExtraPatch.includes(oldBlock)) {
+    paidExtraPatch = paidExtraPatch.replace(oldBlock, compatibleBlock);
+    fs.writeFileSync(paidExtraPatchPath, paidExtraPatch, "utf8");
+  } else if (!paidExtraPatch.includes(compatibleBlock)) {
+    throw new Error(
+      "The paid-extra-kit build patch could not be made compatible with player kit assignments.",
+    );
+  }
+}
+
 if (
   !source.includes("TeamKitPlayerAssignments") ||
   !source.includes("listKitPlayerAssignments(teamid)") ||
