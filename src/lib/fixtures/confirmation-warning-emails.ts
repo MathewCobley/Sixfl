@@ -83,6 +83,7 @@ async function getUpcomingWarningsWithoutEmail(now: Date) {
         WHERE dispatch."sourceType" = ${FIXTURE_CONFIRMATION_WARNING_SOURCE_TYPE}
           AND dispatch."sourceId" = warning."id"
           AND dispatch."channel"::text = 'EMAIL'
+          AND dispatch."status"::text IN ('QUEUED', 'PROCESSING', 'SENT')
       )
     ORDER BY fixture."kickoffAt" ASC
     LIMIT ${BACKFILL_LIMIT}
@@ -97,6 +98,7 @@ export async function queueFixtureConfirmationWarningEmail(
       sourceType: FIXTURE_CONFIRMATION_WARNING_SOURCE_TYPE,
       sourceId: warning.warningId,
       channel: NotificationChannel.EMAIL,
+      status: { in: ["QUEUED", "PROCESSING", "SENT"] },
     },
     select: { id: true, status: true },
     orderBy: { createdAt: "desc" },
