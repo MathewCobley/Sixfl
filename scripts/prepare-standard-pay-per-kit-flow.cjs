@@ -13,4 +13,16 @@ source = source.replace(
 );
 
 fs.writeFileSync(filePath, source, "utf8");
+
+const panelPath = path.join(
+  process.cwd(),
+  "src/components/captain/StandardKitPaymentPanel.tsx",
+);
+let panelSource = fs.readFileSync(panelPath, "utf8");
+panelSource = panelSource.replace(
+  "        ...current,",
+  "        ...(current ?? {}),",
+);
+fs.writeFileSync(panelPath, panelSource, "utf8");
+
 console.log("Prepared standard pay-per-kit build patch.");
