@@ -1,0 +1,83 @@
+name: Validate native kit offer rendering
+
+on:
+  push:
+    branches:
+      - fix/native-kit-offer-rendering
+    paths:
+      - "src/app/(public)/founding-team-kit-terms/page.tsx"
+      - "src/app/(public)/founding-teams/page.tsx"
+      - "src/app/(public)/league-agreement/page.tsx"
+      - "src/app/api/captain/team/[teamid]/legacy-kit-offer/route.ts"
+      - "src/components/captain/**"
+      - "src/components/admin/teams/**"
+      - "src/components/layout/SiteFooter.tsx"
+      - "scripts/*kit*.cjs"
+      - "scripts/check-central-standings-usage.cjs"
+      - ".github/workflows/validate-kit-offer.yml"
+  pull_request:
+    paths:
+      - "src/app/(public)/founding-team-kit-terms/page.tsx"
+      - "src/app/(public)/founding-teams/page.tsx"
+      - "src/app/(public)/league-agreement/page.tsx"
+      - "src/app/api/captain/team/[teamid]/legacy-kit-offer/route.ts"
+      - "src/components/captain/**"
+      - "src/components/admin/teams/**"
+      - "src/components/layout/SiteFooter.tsx"
+      - "scripts/*kit*.cjs"
+      - "scripts/check-central-standings-usage.cjs"
+      - ".github/workflows/validate-kit-offer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: true
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl_test?schema=public
+      NEXTAUTH_SECRET: ci-native-kit-offer-secret
+      NEXTAUTH_URL: http://localhost:3000
+      RESEND_API_KEY: re_ci_native_kit_offer
+      CRON_SECRET: ci-native-kit-offer-cron-secret
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply source preparation scripts
+        run: npm run prebuild
+
+      - name: Validate and generate Prisma Client
+        run: |
+          npx prisma validate
+          npx prisma generate
+
+      - name: Type-check application
+        run: npx tsc --noEmit
+
+      - name: Build application
+        run: npx next build
+
+      - name: Confirm removed kit bridges stay removed
+        run: |
+          test ! -e src/components/captain/LegacyFreeKitOfferCopyBridge.tsx
+          test ! -e src/components/captain/StandardTeamKitCopyBridge.tsx
+          test ! -e src/components/admin/teams/FreeKitTeamBadgesBridge.tsx
+          ! grep -R "Compulsory printing contribution\|£10 per shirt\|£70 Founding Team Kit Package\|£90 Founding Team Kit Package" src --include='*.ts' --include='*.tsx'
+          grep -q "There is no printing charge" src/components/captain/TeamKitOrderForm.tsx
+          grep -q "IncludedKitPaymentPanel" src/app/captain/team/\[teamid\]/kit/page.tsx
+
+      - name: Audit DOM bridge policy
+        run: npm run audit:dom
