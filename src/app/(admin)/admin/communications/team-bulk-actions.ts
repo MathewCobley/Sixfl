@@ -4,17 +4,18 @@
 
 "use server";
 
+import { createHash } from "node:crypto";
 import { redirect } from "next/navigation";
 import {
   NotificationAudience,
   NotificationChannel,
+  NotificationDispatchStatus,
   NotificationRecipientSourceType,
 } from "@prisma/client";
 
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
 import { getPhoneDisplayValue } from "@/lib/notifications/phone";
-import { processNotificationQueue } from "@/lib/notifications/processor";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
@@ -25,6 +26,12 @@ import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
 const POLL_LINK_PLACEHOLDER = "{{pollLink}}";
+const DUPLICATE_SEND_WINDOW_MS = 10 * 60 * 1000;
+const ACTIVE_DUPLICATE_STATUSES = [
+  NotificationDispatchStatus.QUEUED,
+  NotificationDispatchStatus.PROCESSING,
+  NotificationDispatchStatus.SENT,
+];
 
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -97,6 +104,87 @@ function responseUrls(input: { teamId: string; type: "team" | "teamMember" | "pr
     yesResponseUrl: `${base}/player-response/yes?token=${encoded}`,
     noResponseUrl: `${base}/player-response/no?token=${encoded}`,
   };
+}
+
+function buildSendFingerprint(input: {
+  teamId: string;
+  recipientId: string;
+  channel: NotificationChannel;
+  subject: string | null;
+  body: string;
+  templateId: string | null;
+  templateKey: string | null;
+  isMarketingMessage: boolean;
+  variables: Record<string, string>;
+}) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        teamId: input.teamId,
+        recipientId: input.recipientId,
+        channel: input.channel,
+        subject: input.subject,
+        body: input.body,
+        templateId: input.templateId,
+        templateKey: input.templateKey,
+        isMarketingMessage: input.isMarketingMessage,
+        variables: input.variables,
+      }),
+    )
+    .digest("hex");
+}
+
+async function findRecentMatchingDispatch(input: {
+  recipientId: string;
+  channel: NotificationChannel;
+  createdByUserId: string | null;
+  sendFingerprint: string;
+}) {
+  return prisma.notificationDispatch.findFirst({
+    where: {
+      recipientId: input.recipientId,
+      channel: input.channel,
+      createdByUserId: input.createdByUserId,
+      createdAt: {
+        gte: new Date(Date.now() - DUPLICATE_SEND_WINDOW_MS),
+      },
+      status: {
+        in: ACTIVE_DUPLICATE_STATUSES,
+      },
+      metadata: {
+        path: ["sendFingerprint"],
+        equals: input.sendFingerprint,
+      },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true },
+  });
+}
+
+async function cancelNewerDuplicateDispatch(input: {
+  dispatchId: string;
+  recipientId: string;
+  channel: NotificationChannel;
+  createdByUserId: string | null;
+  sendFingerprint: string;
+}) {
+  const original = await findRecentMatchingDispatch(input);
+  if (!original || original.id === input.dispatchId) return false;
+
+  const cancelled = await prisma.notificationDispatch.updateMany({
+    where: {
+      id: input.dispatchId,
+      status: NotificationDispatchStatus.QUEUED,
+    },
+    data: {
+      status: NotificationDispatchStatus.CANCELLED,
+      cancelledAt: new Date(),
+      failureReason:
+        "Duplicate admin communication blocked before sending. The same message was already queued or sent recently.",
+    },
+  });
+
+  return cancelled.count > 0;
 }
 
 type CommunicationRecipientContext = {
@@ -239,16 +327,6 @@ async function getTeamCommunicationRecipientContext(input: {
   };
 }
 
-async function processJustQueuedMessages(queuedCount: number) {
-  if (queuedCount <= 0) return;
-
-  try {
-    await processNotificationQueue(Math.max(queuedCount + 10, 25));
-  } catch (error) {
-    console.error("Failed to process newly queued admin message immediately", error);
-  }
-}
-
 export async function sendTeamCommunicationBulkMessageAction(formData: FormData) {
   const { user } = await requireAdmin();
 
@@ -266,6 +344,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   const claimLink = text(formData.get("claimLink"));
   const captainDashboardUrl = text(formData.get("captainDashboardUrl")) || claimLink;
   const isMarketingMessage = text(formData.get("isMarketing")) === "1";
+  const createdByUserId = user?.id ?? null;
 
   const selectedRecipientValues = formData
     .getAll("recipientValues")
@@ -296,6 +375,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
 
   let queuedCount = 0;
   let skippedMissingContactCount = 0;
+  let duplicateBlockedCount = 0;
 
   for (const { parsed } of parsedRecipients) {
     const recipientContext = await getTeamCommunicationRecipientContext({
@@ -327,6 +407,29 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       noResponseUrl: urls.noResponseUrl,
     };
     const isTransactional = !isMarketingMessage;
+    const sendFingerprint = buildSendFingerprint({
+      teamId,
+      recipientId: recipientContext.recipient.id,
+      channel,
+      subject: channel === NotificationChannel.EMAIL ? subject : null,
+      body,
+      templateId,
+      templateKey,
+      isMarketingMessage,
+      variables,
+    });
+
+    const recentMatchingDispatch = await findRecentMatchingDispatch({
+      recipientId: recipientContext.recipient.id,
+      channel,
+      createdByUserId,
+      sendFingerprint,
+    });
+
+    if (recentMatchingDispatch) {
+      duplicateBlockedCount += 1;
+      continue;
+    }
 
     if (parsed.type === "team" && usesPoll) {
       const result = await sendTeamBroadcastMessage({
@@ -344,6 +447,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
           ? "Sent from communications hub as service message"
           : "Sent from communications hub as marketing message",
         metadata: {
+          sendFingerprint,
           isMarketingMessage,
           isTransactional,
           yesResponseUrl: urls.yesResponseUrl,
@@ -352,7 +456,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
           ...recipientContext.metadata,
         },
         variables,
-        createdByUserId: user?.id ?? null,
+        createdByUserId,
       });
 
       if (result.skipped) skippedMissingContactCount += 1;
@@ -377,6 +481,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
         originLabel: isTransactional
           ? "Sent from communications hub as service message"
           : "Sent from communications hub as marketing message",
+        sendFingerprint,
         teamId,
         templateId,
         templateKey,
@@ -389,8 +494,22 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
         bulkRecipientCount: recipientValues.length,
         ...recipientContext.metadata,
       },
-      createdByUserId: user?.id ?? null,
+      createdByUserId,
     });
+
+    if (
+      dispatch.status === NotificationDispatchStatus.QUEUED &&
+      (await cancelNewerDuplicateDispatch({
+        dispatchId: dispatch.id,
+        recipientId: recipientContext.recipient.id,
+        channel,
+        createdByUserId,
+        sendFingerprint,
+      }))
+    ) {
+      duplicateBlockedCount += 1;
+      continue;
+    }
 
     await logNotificationDispatchToThread({ dispatch, recipient: recipientContext.recipient });
 
@@ -405,6 +524,16 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
   }
 
   if (queuedCount === 0) {
+    if (duplicateBlockedCount > 0) {
+      redirect(
+        appendRedirectParams(from, {
+          saved: "already_queued",
+          channel: channel.toLowerCase(),
+          count: duplicateBlockedCount,
+        }),
+      );
+    }
+
     const reason = skippedMissingContactCount > 0
       ? channel === NotificationChannel.SMS
         ? "Selected recipients do not have mobile numbers."
@@ -414,14 +543,13 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: reason }));
   }
 
-  await processJustQueuedMessages(queuedCount);
-
   redirect(
     appendRedirectParams(from, {
       saved: "queued",
       channel: channel.toLowerCase(),
       count: queuedCount,
       skipped: skippedMissingContactCount || null,
+      duplicates: duplicateBlockedCount || null,
     }),
   );
 }
