@@ -299,6 +299,7 @@ export default async function PlayerPerformancePanel({
   const ratings = history.flatMap((match) =>
     match.rating === null ? [] : [Number(match.rating)],
   );
+  const unratedCount = history.filter((match) => match.rating === null).length;
   const averageRating =
     ratings.length > 0
       ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length
@@ -340,6 +341,16 @@ export default async function PlayerPerformancePanel({
           tone="violet"
         />
       </div>
+
+      {unratedCount > 0 ? (
+        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/[0.08] px-4 py-3 text-sm leading-6 text-amber-50/80">
+          <span className="font-semibold text-amber-100">
+            The dressing-room jury is still out.
+          </span>{" "}
+          Your captain has {unratedCount} performance{unratedCount === 1 ? "" : "s"} left to rate.
+          Give them a gentle nudge — reputations and bragging rights are at stake.
+        </div>
+      ) : null}
 
       {hasRecoveredHistory ? (
         <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-500/[0.07] px-4 py-3 text-xs leading-5 text-amber-50/70">
