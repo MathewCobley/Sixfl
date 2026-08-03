@@ -83,58 +83,111 @@ patchFile("src/components/captain/AdminPlayerPreviewLinks.tsx", (input) => {
 });
 
 patchFile("src/components/captain/CaptainViewModeHeader.tsx", (input) => {
-  let source = input;
+  const modernBefore = [
+    "  useEffect(() => {",
+    "    if (!shouldRewriteCaptainFacingText) return;",
+    "",
+    "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
+    "    const frame = window.requestAnimationFrame(rewriteCaptainFacingText);",
+    "    const observer = new MutationObserver(rewriteCaptainFacingText);",
+    "",
+    "    observer.observe(root, { childList: true, subtree: true, characterData: true });",
+    "",
+    "    return () => {",
+    "      window.cancelAnimationFrame(frame);",
+    "      observer.disconnect();",
+    "    };",
+    "  }, [pathname, searchParamsKey, shouldRewriteCaptainFacingText]);",
+  ].join("\n");
 
-  source = replaceRequired(
-    source,
-    [
-      "  useEffect(() => {",
-      "    if (isManagedTeam) return;",
-      "",
-      "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
-      "    const frame = window.requestAnimationFrame(rewriteCaptainFacingText);",
-      "    const observer = new MutationObserver(rewriteCaptainFacingText);",
-      "",
-      "    observer.observe(root, { childList: true, subtree: true, characterData: true });",
-      "",
-      "    return () => {",
-      "      window.cancelAnimationFrame(frame);",
-      "      observer.disconnect();",
-      "    };",
-      "  }, [isManagedTeam, pathname, searchParamsKey]);",
-    ].join("\n"),
-    [
-      "  useEffect(() => {",
-      "    if (isManagedTeam) return;",
-      "",
-      "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
-      "    let frame = 0;",
-      "    let observer: MutationObserver;",
-      "",
-      "    const scheduleRewrite = () => {",
-      "      if (frame) return;",
-      "      frame = window.requestAnimationFrame(() => {",
-      "        frame = 0;",
-      "        observer.disconnect();",
-      "        rewriteCaptainFacingText();",
-      "        observer.observe(root, { childList: true, subtree: true });",
-      "      });",
-      "    };",
-      "",
-      "    observer = new MutationObserver(scheduleRewrite);",
-      "    observer.observe(root, { childList: true, subtree: true });",
-      "    scheduleRewrite();",
-      "",
-      "    return () => {",
-      "      if (frame) window.cancelAnimationFrame(frame);",
-      "      observer.disconnect();",
-      "    };",
-      "  }, [isManagedTeam, pathname, searchParamsKey]);",
-    ].join("\n"),
-    "captain text observer debounce",
-  );
+  const modernAfter = [
+    "  useEffect(() => {",
+    "    if (!shouldRewriteCaptainFacingText) return;",
+    "",
+    "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
+    "    let frame = 0;",
+    "    let observer: MutationObserver;",
+    "",
+    "    const scheduleRewrite = () => {",
+    "      if (frame) return;",
+    "      frame = window.requestAnimationFrame(() => {",
+    "        frame = 0;",
+    "        observer.disconnect();",
+    "        rewriteCaptainFacingText();",
+    "        observer.observe(root, { childList: true, subtree: true });",
+    "      });",
+    "    };",
+    "",
+    "    observer = new MutationObserver(scheduleRewrite);",
+    "    observer.observe(root, { childList: true, subtree: true });",
+    "    scheduleRewrite();",
+    "",
+    "    return () => {",
+    "      if (frame) window.cancelAnimationFrame(frame);",
+    "      observer.disconnect();",
+    "    };",
+    "  }, [pathname, searchParamsKey, shouldRewriteCaptainFacingText]);",
+  ].join("\n");
 
-  return source;
+  const legacyBefore = [
+    "  useEffect(() => {",
+    "    if (isManagedTeam) return;",
+    "",
+    "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
+    "    const frame = window.requestAnimationFrame(rewriteCaptainFacingText);",
+    "    const observer = new MutationObserver(rewriteCaptainFacingText);",
+    "",
+    "    observer.observe(root, { childList: true, subtree: true, characterData: true });",
+    "",
+    "    return () => {",
+    "      window.cancelAnimationFrame(frame);",
+    "      observer.disconnect();",
+    "    };",
+    "  }, [isManagedTeam, pathname, searchParamsKey]);",
+  ].join("\n");
+
+  const legacyAfter = [
+    "  useEffect(() => {",
+    "    if (isManagedTeam) return;",
+    "",
+    "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
+    "    let frame = 0;",
+    "    let observer: MutationObserver;",
+    "",
+    "    const scheduleRewrite = () => {",
+    "      if (frame) return;",
+    "      frame = window.requestAnimationFrame(() => {",
+    "        frame = 0;",
+    "        observer.disconnect();",
+    "        rewriteCaptainFacingText();",
+    "        observer.observe(root, { childList: true, subtree: true });",
+    "      });",
+    "    };",
+    "",
+    "    observer = new MutationObserver(scheduleRewrite);",
+    "    observer.observe(root, { childList: true, subtree: true });",
+    "    scheduleRewrite();",
+    "",
+    "    return () => {",
+    "      if (frame) window.cancelAnimationFrame(frame);",
+    "      observer.disconnect();",
+    "    };",
+    "  }, [isManagedTeam, pathname, searchParamsKey]);",
+  ].join("\n");
+
+  if (input.includes(modernAfter) || input.includes(legacyAfter)) {
+    return input;
+  }
+
+  if (input.includes(modernBefore)) {
+    return input.replace(modernBefore, modernAfter);
+  }
+
+  if (input.includes(legacyBefore)) {
+    return input.replace(legacyBefore, legacyAfter);
+  }
+
+  throw new Error("Expected captain text observer source was not found.");
 });
 
 patchFile("src/components/captain/CaptainOnboardingReminderBridge.tsx", (input) => {
