@@ -5,8 +5,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 import { sendTeamCommunicationBulkMessageAction } from "@/app/(admin)/admin/communications/team-bulk-actions";
+import CommunicationQueueButton from "@/components/admin/communications/CommunicationQueueButton";
+import TemplateSelect from "@/components/admin/leads/TemplateSelect";
 
 type EmailTemplateOption = {
   id: string;
@@ -621,13 +622,10 @@ export default function TeamCommunicationsComposer({
               {selectedRecipientValues.map((value) => (
                 <input key={value} type="hidden" name="recipientValues" value={value} />
               ))}
-              <button
-                type="submit"
+              <CommunicationQueueButton
+                channel="EMAIL"
                 disabled={!emailSubject.trim() || !emailBody.trim() || selectedEmailCount === 0}
-                className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Queue email
-              </button>
+              />
             </form>
           </div>
         </section>
@@ -692,13 +690,10 @@ export default function TeamCommunicationsComposer({
               {selectedRecipientValues.map((value) => (
                 <input key={value} type="hidden" name="recipientValues" value={value} />
               ))}
-              <button
-                type="submit"
+              <CommunicationQueueButton
+                channel="SMS"
                 disabled={!smsBody.trim() || selectedSmsCount === 0}
-                className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Queue SMS
-              </button>
+              />
             </form>
           </div>
         </section>
