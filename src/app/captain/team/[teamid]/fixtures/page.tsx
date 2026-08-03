@@ -12,6 +12,10 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamKitColours } from "@/lib/teams/kit-colours";
+import {
+  fixtureHasPlaceholderTeam,
+  getFixturePlaceholderTeamIds,
+} from "@/lib/teams/fixture-placeholders";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -116,14 +120,27 @@ function getCountdownLabel(kickoffAt: Date) {
 
 function getFriendlyErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
-    if (error.message.includes("Fixture not found")) return "That fixture could not be found.";
-    if (error.message.includes("does not belong")) return "That fixture is not linked to this team.";
-    if (error.message.includes("not available for confirmation")) return "Only published scheduled upcoming fixtures can be confirmed.";
-    if (error.message.includes("Issue note must be at least")) return "Please add a short note so SIXFL knows what the issue is.";
-    return error.message;
+    if (
+      error.message.includes("TBC fixtures do not use captain confirmations") ||
+      error.message.includes("fixture is still provisional")
+    ) {
+      return "This fixture is still provisional. You do not need to confirm it until the opponent has been confirmed.";
+    }
+    if (error.message.includes("Fixture not found")) {
+      return "That fixture could not be found.";
+    }
+    if (error.message.includes("does not belong")) {
+      return "That fixture is not linked to this team.";
+    }
+    if (error.message.includes("not available for confirmation")) {
+      return "Only published scheduled upcoming fixtures can be confirmed.";
+    }
+    if (error.message.includes("Issue note must be at least")) {
+      return "Please add a short note so SIXFL knows what the issue is.";
+    }
   }
 
-  return "Something went wrong while saving.";
+  return "We could not save that just now. Please try again, or contact SIXFL if it continues.";
 }
 
 function getFixtureConfirmationSummary(input: {
@@ -229,6 +246,9 @@ async function confirmFixtureAction(formData: FormData) {
     if (fixture.publishedAt === null || fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
       throw new Error("This fixture is not available for confirmation.");
     }
+    if (await fixtureHasPlaceholderTeam(fixtureId)) {
+      throw new Error("This fixture is still provisional.");
+    }
 
     await prisma.fixtureCaptainConfirmation.upsert({
       where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
@@ -252,6 +272,7 @@ async function confirmFixtureAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamid}/fixtures`);
     revalidatePath("/admin/fixtures");
   } catch (error) {
+    console.error("Captain fixture confirmation failed", error);
     redirect(buildFixtureRedirect(teamid, { fixtureId, error: getFriendlyErrorMessage(error) }));
   }
 
@@ -288,6 +309,9 @@ async function raiseFixtureIssueAction(formData: FormData) {
     if (fixture.publishedAt === null || fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
       throw new Error("This fixture is not available for confirmation.");
     }
+    if (await fixtureHasPlaceholderTeam(fixtureId)) {
+      throw new Error("This fixture is still provisional.");
+    }
 
     await prisma.fixtureCaptainConfirmation.upsert({
       where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
@@ -312,6 +336,7 @@ async function raiseFixtureIssueAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamid}/fixtures`);
     revalidatePath("/admin/fixtures");
   } catch (error) {
+    console.error("Captain fixture issue submission failed", error);
     redirect(buildFixtureRedirect(teamid, { fixtureId, error: getFriendlyErrorMessage(error) }));
   }
 
@@ -399,15 +424,37 @@ export default async function CaptainFixturesPage({
     ...upcomingFixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId]),
     ...recentResults.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId]),
   ];
-  const kitColours = await getTeamKitColours(fixtureTeamIds);
+  const [kitColours, placeholderTeamIds] = await Promise.all([
+    getTeamKitColours(fixtureTeamIds),
+    getFixturePlaceholderTeamIds(fixtureTeamIds),
+  ]);
+  const fixtureIsProvisional = (fixture: {
+    homeTeamId: string;
+    awayTeamId: string;
+  }) =>
+    placeholderTeamIds.has(fixture.homeTeamId) ||
+    placeholderTeamIds.has(fixture.awayTeamId);
 
   const requestedFixture = requestedFixtureId
     ? upcomingFixtures.find((fixture) => fixture.id === requestedFixtureId) ?? null
     : null;
   const selectedFixture = requestedFixture ?? upcomingFixtures[0] ?? null;
   const selectedConfirmation = selectedFixture?.captainConfirmations[0] ?? null;
-  const selectedStatus = selectedFixture
-    ? getFixtureConfirmationSummary({ confirmation: selectedConfirmation, kickoffAt: selectedFixture.kickoffAt })
+  const selectedFixtureIsProvisional = Boolean(
+    selectedFixture && fixtureIsProvisional(selectedFixture),
+  );
+  const selectedStatus: ConfirmationSummary | null = selectedFixture
+    ? selectedFixtureIsProvisional
+      ? {
+          label: "Opponent TBC",
+          tone: "neutral",
+          helper:
+            "SIXFL is still confirming the other team. You do not need to confirm this fixture yet.",
+        }
+      : getFixtureConfirmationSummary({
+          confirmation: selectedConfirmation,
+          kickoffAt: selectedFixture.kickoffAt,
+        })
     : null;
   const isSelectedFixtureConfirmed = selectedConfirmation?.status === "CONFIRMED";
   const requestedFixtureWasNotFound = Boolean(requestedFixtureId && !requestedFixture);
@@ -468,40 +515,50 @@ export default async function CaptainFixturesPage({
 
           <div className="space-y-4">
             {selectedFixture ? (
-              <>
-                <form action={confirmFixtureAction}>
-                  <input type="hidden" name="teamid" value={team.id} />
-                  <input type="hidden" name="fixtureId" value={selectedFixture.id} />
-                  <button
-                    type="submit"
-                    disabled={isSelectedFixtureConfirmed}
-                    className={`inline-flex w-full items-center justify-center rounded-2xl border px-5 py-4 text-sm font-medium transition ${
-                      isSelectedFixtureConfirmed
-                        ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
-                        : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
-                    }`}
-                  >
-                    {isSelectedFixtureConfirmed ? "Fixture already confirmed" : "Confirm this fixture"}
-                  </button>
-                </form>
+              selectedFixtureIsProvisional ? (
+                <div className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 text-sky-50">
+                  <p className="text-base font-semibold">No action needed yet</p>
+                  <p className="mt-2 text-sm leading-6 text-sky-100/75">
+                    SIXFL is still confirming your opponent. Once the other team is known,
+                    this page will ask you to confirm the fixture or raise an issue.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <form action={confirmFixtureAction}>
+                    <input type="hidden" name="teamid" value={team.id} />
+                    <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                    <button
+                      type="submit"
+                      disabled={isSelectedFixtureConfirmed}
+                      className={`inline-flex w-full items-center justify-center rounded-2xl border px-5 py-4 text-sm font-medium transition ${
+                        isSelectedFixtureConfirmed
+                          ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
+                          : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
+                      }`}
+                    >
+                      {isSelectedFixtureConfirmed ? "Fixture already confirmed" : "Confirm this fixture"}
+                    </button>
+                  </form>
 
-                <form action={raiseFixtureIssueAction} className="rounded-3xl border border-white/10 bg-black/20 p-4">
-                  <input type="hidden" name="teamid" value={team.id} />
-                  <input type="hidden" name="fixtureId" value={selectedFixture.id} />
-                  <label className="block text-sm font-medium text-white">Need help with this fixture?</label>
-                  <p className="mt-1 text-sm text-white/50">Raise an issue early so SIXFL can review it before matchday.</p>
-                  <textarea
-                    name="note"
-                    rows={4}
-                    placeholder="Example: We may not have enough players available and need help reviewing this fixture."
-                    defaultValue={selectedConfirmation?.status === "ISSUE_RAISED" ? selectedConfirmation.note ?? "" : ""}
-                    className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
-                  />
-                  <button type="submit" className="mt-3 inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15">
-                    Raise fixture issue
-                  </button>
-                </form>
-              </>
+                  <form action={raiseFixtureIssueAction} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <input type="hidden" name="teamid" value={team.id} />
+                    <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                    <label className="block text-sm font-medium text-white">Need help with this fixture?</label>
+                    <p className="mt-1 text-sm text-white/50">Raise an issue early so SIXFL can review it before matchday.</p>
+                    <textarea
+                      name="note"
+                      rows={4}
+                      placeholder="Example: We may not have enough players available and need help reviewing this fixture."
+                      defaultValue={selectedConfirmation?.status === "ISSUE_RAISED" ? selectedConfirmation.note ?? "" : ""}
+                      className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
+                    />
+                    <button type="submit" className="mt-3 inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15">
+                      Raise fixture issue
+                    </button>
+                  </form>
+                </>
+              )
             ) : (
               <div className="rounded-3xl border border-white/10 bg-black/20 p-5 text-sm text-white/60">
                 No published upcoming fixture to confirm right now.
@@ -529,7 +586,17 @@ export default async function CaptainFixturesPage({
             ) : (
               upcomingFixtures.map((fixture, index) => {
                 const confirmation = fixture.captainConfirmations[0] ?? null;
-                const status = getFixtureConfirmationSummary({ confirmation, kickoffAt: fixture.kickoffAt });
+                const provisional = fixtureIsProvisional(fixture);
+                const status: ConfirmationSummary = provisional
+                  ? {
+                      label: "Opponent TBC",
+                      tone: "neutral",
+                      helper: "No confirmation needed yet",
+                    }
+                  : getFixtureConfirmationSummary({
+                      confirmation,
+                      kickoffAt: fixture.kickoffAt,
+                    });
                 const isSelected = selectedFixture?.id === fixture.id;
 
                 return (
