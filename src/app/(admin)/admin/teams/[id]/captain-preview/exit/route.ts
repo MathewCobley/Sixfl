@@ -36,7 +36,11 @@ function getPublicOrigin(request: Request) {
   const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
   const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
 
-  if (forwardedHost && !forwardedHost.includes("localhost") && !forwardedHost.includes("127.0.0.1")) {
+  if (
+    forwardedHost &&
+    !forwardedHost.includes("localhost") &&
+    !forwardedHost.includes("127.0.0.1")
+  ) {
     return `${forwardedProto}://${forwardedHost}`;
   }
 
@@ -70,11 +74,20 @@ function getSafeRedirect(input: {
 
   try {
     const target = new URL(requestedTo, input.origin);
-    const allowedPrefix = `/captain/team/${input.teamId}`;
+    const captainPrefix = `/captain/team/${input.teamId}`;
+    const adminTeamPrefix = `/admin/teams/${input.teamId}`;
+    const isCaptainTeamRoute =
+      target.pathname === captainPrefix ||
+      target.pathname.startsWith(`${captainPrefix}/`);
+    const isAdminHome = target.pathname === "/admin";
+    const isAdminTeamRoute =
+      target.pathname === adminTeamPrefix ||
+      target.pathname.startsWith(`${adminTeamPrefix}/`);
 
-    if (target.pathname.startsWith(allowedPrefix)) {
-      target.protocol = new URL(input.origin).protocol;
-      target.host = new URL(input.origin).host;
+    if (isCaptainTeamRoute || isAdminHome || isAdminTeamRoute) {
+      const publicOrigin = new URL(input.origin);
+      target.protocol = publicOrigin.protocol;
+      target.host = publicOrigin.host;
       target.searchParams.delete("captainPreview");
       return target;
     }
@@ -99,12 +112,14 @@ export async function GET(
   });
   const response = NextResponse.redirect(target);
 
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
   response.cookies.set(CAPTAIN_ONLY_PREVIEW_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 0,
+    expires: new Date(0),
   });
 
   return response;
