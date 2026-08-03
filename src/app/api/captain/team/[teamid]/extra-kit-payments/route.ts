@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+import { buildExtraKitPaymentEmailCopy } from "@/lib/kits/extra-kit-payment-email-copy";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -376,13 +377,34 @@ export async function POST(
         `${getPublicSiteUrl()}/`,
       ).toString();
       const payerName = member.user.name || email;
+      const paymentCopy = buildExtraKitPaymentEmailCopy({
+        teamName: team.name,
+        payerName,
+        quantity,
+        amountPence: charge.amountPence,
+        payerCount: selectedMembers.length,
+        purchaseOnly: !eligibility.eligible,
+      });
+
+      // These defaults are retained temporarily because the existing standard-kit
+      // prebuild migration still recognises them. The player-facing copy above is
+      // the source of truth for every email that is actually queued.
+      const notificationDefaults = {
+        subject: `${team.name} additional kit contribution`,
+        body: `Hi ${payerName},\n\nYour captain has asked you to contribute ${formatMoney(charge.amountPence)} towards ${quantity} additional SIXFL team kit${quantity === 1 ? "" : "s"}. The extra kits cost £20 each and the total has been divided between the selected team members.\n\nUse the secure payment link below.`,
+        emailCta: {
+          label: "Pay kit contribution",
+          url: paymentUrl,
+        },
+      };
 
       await queueDirectNotification({
+        ...notificationDefaults,
         recipientId: recipient.id,
         channel: NotificationChannel.EMAIL,
         audience: NotificationAudience.USER,
-        subject: `${team.name} additional kit contribution`,
-        body: `Hi ${payerName},\n\nYour captain has asked you to contribute ${formatMoney(charge.amountPence)} towards ${quantity} additional SIXFL team kit${quantity === 1 ? "" : "s"}. The extra kits cost £20 each and the total has been divided between the selected team members.\n\nUse the secure payment link below.`,
+        subject: paymentCopy.subject,
+        body: paymentCopy.body,
         isTransactional: true,
         sourceType: "EXTRA_TEAM_KIT_PAYMENT",
         sourceId: charge.id,
@@ -393,7 +415,7 @@ export async function POST(
           paymentChargeId: charge.id,
         },
         emailCta: {
-          label: "Pay kit contribution",
+          label: paymentCopy.ctaLabel,
           url: paymentUrl,
         },
         createdByUserId: access.user?.id ?? null,
