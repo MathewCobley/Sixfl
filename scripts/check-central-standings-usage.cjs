@@ -15,6 +15,7 @@ require("./apply-captain-team-nudges.cjs");
 require("./apply-captain-fixture-status-layout.cjs");
 require("./apply-managed-team-prospects-navigation.cjs");
 require("./apply-player-prospects-pagination.cjs");
+require("./apply-player-pool-lead-closure.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
