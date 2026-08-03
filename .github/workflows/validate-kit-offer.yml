@@ -68,7 +68,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Build application
-        run: npm run build
+        run: npx next build
 
       - name: Confirm removed kit bridges stay removed
         run: |
