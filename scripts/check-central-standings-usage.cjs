@@ -11,6 +11,7 @@ require("./apply-kit-design-deselect-lock.cjs");
 require("./apply-paid-extra-kit-player-details.cjs");
 require("./apply-late-confirmation-warning-delivery.cjs");
 require("./apply-captain-team-nudges.cjs");
+require("./apply-captain-fixture-status-layout.cjs");
 require("./apply-managed-team-prospects-navigation.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
