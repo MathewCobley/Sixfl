@@ -7,6 +7,7 @@ require("./apply-matchday-fee-waiver-reasons.cjs");
 require("./apply-captain-team-switcher-access-guard.cjs");
 require("./prepare-standard-pay-per-kit-flow.cjs");
 require("./apply-standard-pay-per-kit-flow.cjs");
+require("./apply-late-confirmation-warning-delivery.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
