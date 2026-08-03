@@ -14,6 +14,7 @@ require("./apply-late-confirmation-warning-delivery.cjs");
 require("./apply-captain-team-nudges.cjs");
 require("./apply-captain-fixture-status-layout.cjs");
 require("./apply-managed-team-prospects-navigation.cjs");
+require("./apply-pending-activation-player-pool-action.cjs");
 require("./apply-player-prospects-pagination.cjs");
 require("./apply-player-pool-lead-closure.cjs");
 
