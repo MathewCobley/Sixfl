@@ -9,10 +9,61 @@ import Link from "next/link";
 import { FaFacebookF, FaInstagram } from "react-icons/fa";
 import { track } from "@vercel/analytics";
 
+const navigationLinks = [
+  ["Leagues", "/leagues"],
+  ["Venues", "/venues"],
+  ["Pricing", "/pricing"],
+  ["Free Founding Kit Offer", "/founding-teams"],
+  ["FAQ", "/faq"],
+  ["Register", "/register-team"],
+] as const;
+
+const legalLinks = [
+  ["League Rules", "/league-rules"],
+  ["League Agreement", "/league-agreement"],
+  ["Kit Offer Terms", "/founding-team-kit-terms"],
+  ["Referee Agreement", "/referee-agreement"],
+  ["Match Rules", "/match-rules"],
+] as const;
+
+const safeguardingLinks = [
+  ["Safeguarding Policy", "/safeguarding/safeguarding-policy"],
+  ["Code of Conduct", "/safeguarding/code-of-conduct"],
+  ["Anti-Bullying Policy", "/safeguarding/anti-bullying"],
+  ["Reporting Concerns", "/safeguarding/reporting-concerns"],
+] as const;
+
+function FooterLinks({
+  title,
+  links,
+}: {
+  title: string;
+  links: readonly (readonly [string, string])[];
+}) {
+  return (
+    <div>
+      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
+        {title}
+      </div>
+      <nav className="mt-4 flex flex-col gap-1 text-sm text-white/80">
+        {links.map(([label, href]) => (
+          <Link
+            key={href}
+            className="inline-flex min-h-9 items-center transition hover:text-emerald-400"
+            href={href}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
 export default function SiteFooter() {
   return (
     <footer className="border-t border-white/10 bg-black text-white">
-      <div className="h-[3px] w-full bg-emerald-500"></div>
+      <div className="h-[3px] w-full bg-emerald-500" />
 
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:gap-10">
@@ -84,107 +135,12 @@ export default function SiteFooter() {
             </div>
           </div>
 
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
-              Navigation
-            </div>
-
-            <nav className="mt-4 flex flex-col gap-1 text-sm text-white/80">
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/leagues">
-                Leagues
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/venues">
-                Venues
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/pricing">
-                Pricing
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/founding-teams">
-                £90 Founding Kit Package
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/faq">
-                FAQ
-              </Link>
-
-              <Link
-                className="inline-flex min-h-9 items-center font-semibold text-white transition hover:text-emerald-400"
-                href="/register-team"
-              >
-                Register
-              </Link>
-            </nav>
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
-              Legal
-            </div>
-
-            <nav className="mt-4 flex flex-col gap-1 text-sm text-white/80">
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/league-rules">
-                League Rules
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/league-agreement">
-                League Agreement
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/founding-team-kit-terms">
-                Kit Package Terms
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/referee-agreement">
-                Referee Agreement
-              </Link>
-
-              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/match-rules">
-                Match Rules
-              </Link>
-            </nav>
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
-              Safeguarding
-            </div>
-
-            <nav className="mt-4 flex flex-col gap-1 text-sm text-white/80">
-              <Link
-                className="inline-flex min-h-9 items-center transition hover:text-emerald-400"
-                href="/safeguarding/safeguarding-policy"
-              >
-                Safeguarding Policy
-              </Link>
-
-              <Link
-                className="inline-flex min-h-9 items-center transition hover:text-emerald-400"
-                href="/safeguarding/code-of-conduct"
-              >
-                Code of Conduct
-              </Link>
-
-              <Link
-                className="inline-flex min-h-9 items-center transition hover:text-emerald-400"
-                href="/safeguarding/anti-bullying"
-              >
-                Anti-Bullying Policy
-              </Link>
-
-              <Link
-                className="inline-flex min-h-9 items-center transition hover:text-emerald-400"
-                href="/safeguarding/reporting-concerns"
-              >
-                Reporting Concerns
-              </Link>
-            </nav>
-          </div>
+          <FooterLinks title="Navigation" links={navigationLinks} />
+          <FooterLinks title="Legal" links={legalLinks} />
+          <FooterLinks title="Safeguarding" links={safeguardingLinks} />
         </div>
 
-        <div className="mt-10 h-[2px] w-full bg-emerald-500/40"></div>
+        <div className="mt-10 h-[2px] w-full bg-emerald-500/40" />
 
         <div className="mt-5 flex flex-col gap-3 text-xs text-white/50 md:flex-row md:items-center md:justify-between">
           <div>© {new Date().getFullYear()} SIXFL. All rights reserved.</div>
