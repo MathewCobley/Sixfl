@@ -96,6 +96,10 @@ export async function mergePlayerAccountsAction(formData: FormData) {
     revalidatePath(`/captain/team/${teamId}/squad`);
     revalidatePath(`/captain/team/${teamId}/payments`);
     revalidatePath(`/captain/team/${teamId}/player-payments`);
+
+    redirect(
+      `/admin/teams/${teamId}/squad?saved=player-merged&hardReload=1`,
+    );
   }
 
   redirect(
