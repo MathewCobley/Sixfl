@@ -5,38 +5,38 @@
 import Link from "next/link";
 
 const foundingBenefits = [
-  "Nine complete playing kits: shirts, shorts and socks",
-  "One personalised shirt for each of nine players",
-  "£90 total team contribution — £10 per shirt",
-  "Priority access to launch league spaces and updates",
+  "Seven complete playing kits: shirts, shorts and socks",
+  "Personalised names and unique shirt numbers included",
+  "No kit charge and no printing charge",
+  "Additional complete kits available for £20 each",
 ];
 
 const eligibilityPoints = [
   "Available to a limited number of selected launch teams",
   "The team must complete registration and secure its league place",
-  "Choose one design and submit nine checked sizes and shirt numbers",
-  "Pay the compulsory £90 contribution before the supplier order is placed",
+  "Choose one design and submit seven checked sizes, names and shirt numbers",
+  "SIXFL confirms the allocation before the supplier order is placed",
 ];
 
 const packageDetails = [
   {
-    title: "Nine complete kits",
-    body: "The package includes nine shirts, nine pairs of shorts and nine pairs of socks for the team.",
+    title: "Seven complete kits",
+    body: "The offer includes seven shirts, seven pairs of shorts and seven pairs of socks for the team.",
   },
   {
-    title: "Personalised printing",
-    body: "Each shirt must have a unique squad number. Player names can also be added and are optional.",
+    title: "Personalisation included",
+    body: "Each shirt can include a player name and must have a unique squad number. There is no separate printing charge.",
   },
   {
-    title: "£90 per team",
-    body: "SIXFL subsidises the kit itself. The team pays a compulsory £10 per shirt towards personalised printing.",
+    title: "Additional kits",
+    body: "Teams that need more than seven can order additional complete kits for £20 each through the captain dashboard.",
   },
 ];
 
 export const metadata = {
-  title: "£90 Founding Team Kit Package | SIXFL",
+  title: "Free Founding Team Kit Offer | SIXFL",
   description:
-    "Selected SIXFL founding teams can receive nine complete personalised playing kits for £90 per team.",
+    "Selected SIXFL founding teams can receive seven complete personalised playing kits free of charge.",
 };
 
 export default function FoundingTeamsPage() {
@@ -46,28 +46,26 @@ export default function FoundingTeamsPage() {
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <div className="max-w-4xl">
             <div className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
-              SIXFL Launch Package
+              SIXFL founding team offer
             </div>
 
             <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
-              Nine personalised team kits for £90
+              Seven complete personalised kits, free
             </h1>
 
             <p className="mt-6 max-w-3xl text-base leading-7 text-white/75 sm:text-lg">
-              Selected SIXFL founding teams can receive nine complete playing kits for a
-              compulsory total contribution of £90 — equivalent to £10 per shirt.
+              Selected SIXFL founding teams can receive seven complete playing kits free of charge. Shirts, shorts, socks and personalisation are all included.
             </p>
 
             <p className="mt-4 max-w-3xl text-base leading-7 text-white/65 sm:text-lg">
-              SIXFL subsidises the underlying kit. The team contribution covers the
-              personalised printing required for the original nine-shirt order.
+              There is no compulsory contribution and no printing charge. Additional complete kits cost £20 each when a team needs more than the included seven.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
               {[
-                ["Included", "9 shirts, shorts and socks"],
-                ["Team price", "£90 total"],
-                ["Per player", "£10 per shirt"],
+                ["Included", "7 complete kits"],
+                ["Team price", "Free"],
+                ["Extra kits", "£20 each"],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-2xl border border-white/10 bg-black/25 p-4">
                   <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
@@ -90,14 +88,14 @@ export default function FoundingTeamsPage() {
                 href="/founding-team-kit-terms"
                 className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-bold tracking-wide text-white transition hover:bg-white/10"
               >
-                VIEW PACKAGE TERMS
+                VIEW OFFER TERMS
               </Link>
             </div>
 
             <div className="mt-8 flex flex-wrap gap-2">
-              <Pill text="Limited launch package" />
+              <Pill text="Limited launch offer" />
               <Pill text="Selected teams only" />
-              <Pill text="£90 shown upfront" />
+              <Pill text="No printing charge" />
             </div>
           </div>
         </div>
@@ -111,12 +109,11 @@ export default function FoundingTeamsPage() {
             </div>
 
             <h2 className="mt-3 text-3xl font-black tracking-tight">
-              A heavily subsidised launch package
+              A ready-to-play team kit allocation
             </h2>
 
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-              The offer is a complete nine-player package rather than a voucher or cash
-              discount. The same selected design is ordered for all nine players.
+              The offer is a complete seven-player allocation rather than a voucher or discount. The same selected design is ordered for all included kits.
             </p>
 
             <div className="mt-8 grid gap-4">
@@ -155,11 +152,10 @@ export default function FoundingTeamsPage() {
               ))}
             </div>
 
-            <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
-              <div className="text-sm font-bold text-white">The £90 is compulsory</div>
+            <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+              <div className="text-sm font-bold text-white">The included seven are free</div>
               <p className="mt-2 text-sm leading-6 text-white/75">
-                A team cannot receive the package without paying the full £90 contribution.
-                Payment is required before SIXFL places the personalised order.
+                SIXFL does not charge the team for the included kits or their personalisation. Only additional kits beyond the allocation are charged at £20 each.
               </p>
             </div>
           </div>
@@ -169,7 +165,7 @@ export default function FoundingTeamsPage() {
       <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8">
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30 sm:p-8">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">
-            Package detail
+            Offer detail
           </div>
           <h2 className="mt-3 text-3xl font-black tracking-tight">
             Clear before your captain submits
@@ -185,8 +181,7 @@ export default function FoundingTeamsPage() {
           </div>
 
           <p className="mt-6 text-sm leading-7 text-white/55">
-            Additional kits, replacements and changes requested after the original order are
-            charged separately. Designs and sizes remain subject to supplier availability.
+            Replacements and changes requested after the order is locked may be charged separately. Designs and sizes remain subject to supplier availability.
           </p>
         </div>
       </section>
@@ -199,12 +194,11 @@ export default function FoundingTeamsPage() {
             </div>
 
             <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
-              Want to be considered for the £90 package?
+              Want to be considered for the free kit offer?
             </h2>
 
             <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-white/75 sm:text-base">
-              Register your team and select the kit-package option. Eligibility is limited,
-              and registering interest does not guarantee that a package will be allocated.
+              Register your team and select the free-kit option. Allocations are limited, and registering interest does not guarantee that an offer will be awarded.
             </p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
