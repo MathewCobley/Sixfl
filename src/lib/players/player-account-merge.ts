@@ -332,6 +332,57 @@ async function mergeProfiles(
   );
 }
 
+async function mergePlayerMatchPerformances(
+  tx: RawTransaction,
+  keptMembershipId: string,
+  duplicateMembershipId: string,
+) {
+  const tableRows = (await tx.$queryRawUnsafe(
+    `SELECT to_regclass('"PlayerMatchPerformance"') IS NOT NULL AS "exists"`,
+  )) as Array<{ exists: boolean }>;
+
+  if (!tableRows[0]?.exists) return;
+
+  await tx.$executeRawUnsafe(
+    `UPDATE "PlayerMatchPerformance" kept
+     SET
+       "played" = kept."played" OR duplicate."played",
+       "rating" = CASE
+         WHEN duplicate."rating" IS NULL THEN kept."rating"
+         WHEN kept."rating" IS NULL THEN duplicate."rating"
+         WHEN duplicate."updatedAt" > kept."updatedAt" THEN duplicate."rating"
+         ELSE kept."rating"
+       END,
+       "updatedAt" = GREATEST(kept."updatedAt", duplicate."updatedAt")
+     FROM "PlayerMatchPerformance" duplicate
+     WHERE kept."teamMemberId" = $1
+       AND duplicate."teamMemberId" = $2
+       AND kept."matchResultId" = duplicate."matchResultId"
+       AND kept."teamId" = duplicate."teamId"`,
+    keptMembershipId,
+    duplicateMembershipId,
+  );
+
+  await tx.$executeRawUnsafe(
+    `DELETE FROM "PlayerMatchPerformance" duplicate
+     USING "PlayerMatchPerformance" kept
+     WHERE duplicate."teamMemberId" = $1
+       AND kept."teamMemberId" = $2
+       AND duplicate."matchResultId" = kept."matchResultId"
+       AND duplicate."teamId" = kept."teamId"`,
+    duplicateMembershipId,
+    keptMembershipId,
+  );
+
+  await tx.$executeRawUnsafe(
+    `UPDATE "PlayerMatchPerformance"
+     SET "teamMemberId" = $1, "updatedAt" = NOW()
+     WHERE "teamMemberId" = $2`,
+    keptMembershipId,
+    duplicateMembershipId,
+  );
+}
+
 async function mergeMembershipRecords(
   tx: RawTransaction,
   keptMembershipId: string,
@@ -494,6 +545,12 @@ async function mergeMembershipRecords(
     keptMembershipId,
     duplicateMembershipId,
   ).catch(() => 0);
+
+  await mergePlayerMatchPerformances(
+    tx,
+    keptMembershipId,
+    duplicateMembershipId,
+  );
 
   await tx.$executeRawUnsafe(
     `UPDATE "MatchResultTeamMeta"
