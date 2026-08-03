@@ -51,7 +51,6 @@ function findClosingParen(openParen) {
 
 function addCallArgument(callName, argument, expectedCount) {
   let cursor = 0;
-  let changed = 0;
   let found = 0;
 
   while (cursor < source.length) {
@@ -75,7 +74,6 @@ function addCallArgument(callName, argument, expectedCount) {
       const previousLine = source.slice(previousLineStart, closeLineStart - 1);
       const argumentIndent = previousLine.match(/^\s*/)?.[0] ?? "    ";
       source = `${source.slice(0, closeLineStart)}${argumentIndent}${argument},\n${source.slice(closeLineStart)}`;
-      changed += 1;
       cursor = closeParen + argument.length + argumentIndent.length + 2;
     } else {
       cursor = closeParen + 1;
@@ -85,8 +83,6 @@ function addCallArgument(callName, argument, expectedCount) {
   if (found < expectedCount) {
     throw new Error(`Expected at least ${expectedCount} ${callName}() call(s), found ${found}.`);
   }
-
-  return changed;
 }
 
 if (!source.includes("async function loadTeamBadges")) {
@@ -135,11 +131,11 @@ function drawTeamBadge(
 ) {
   if (!badge) return;
 
-  roundedRect(ctx, x, y, size, size, 5);
+  roundedRect(ctx, x, y, size, size, 6);
   ctx.fillStyle = "#ffffff";
   ctx.fill();
   ctx.strokeStyle = LINE;
-  ctx.lineWidth = 0.6;
+  ctx.lineWidth = 0.7;
   ctx.stroke();
 
   const padding = 2;
@@ -172,12 +168,11 @@ if (fixtureRowStart < 0 || teamsStart < 0 || dividerStart < 0) {
   throw new Error("Could not locate the Nights Fixtures team-name drawing block.");
 }
 
-if (!source.slice(teamsStart, dividerStart).includes("drawTeamBadge(")) {
-  const teamRows = `  const teamsX = x + timeWidth + 10;
+const teamRows = `  const teamsX = x + timeWidth + 10;
   const teamsWidth = width - timeWidth - predictorWidth - 26;
-  const badgeSize = Math.min(22, Math.max(17, Math.floor((height - 8) / 2)));
-  const homeBadgeY = y + height / 2 - badgeSize - 2;
-  const awayBadgeY = y + height / 2 + 2;
+  const badgeSize = Math.min(30, Math.max(22, Math.floor((height - 12) / 2)));
+  const homeBadgeY = y + 4;
+  const awayBadgeY = y + height - badgeSize - 4;
 
   drawTeamBadge(
     ctx,
@@ -194,30 +189,34 @@ if (!source.slice(teamsStart, dividerStart).includes("drawTeamBadge(")) {
     badgeSize,
   );
 
-  const teamTextX = teamsX + badgeSize + 7;
-  const teamTextWidth = Math.max(55, teamsWidth - badgeSize - 7);
-  write(ctx, fit(ctx, fixture.homeTeam.name, teamTextWidth), teamTextX, y + height / 2 - 7, {
-    font: font(10.5, true),
+  const teamTextX = teamsX + badgeSize + 8;
+  const teamTextWidth = Math.max(55, teamsWidth - badgeSize - 8);
+  write(ctx, fit(ctx, fixture.homeTeam.name, teamTextWidth), teamTextX, y + height / 2 - 10, {
+    font: font(11.5, true),
   });
-  write(ctx, "vs", teamTextX, y + height / 2 + 7, {
-    font: font(7, true),
+  write(ctx, "VS", teamTextX + teamTextWidth, y + height / 2 + 2, {
+    font: font(6.5, true),
     fill: TEAL,
+    align: "right",
   });
-  write(
-    ctx,
-    fit(ctx, fixture.awayTeam.name, Math.max(40, teamTextWidth - 18)),
-    teamTextX + 18,
-    y + height / 2 + 7,
-    { font: font(10.5, true) },
-  );
+  write(ctx, fit(ctx, fixture.awayTeam.name, teamTextWidth), teamTextX, y + height / 2 + 17, {
+    font: font(11.5, true),
+  });
 
 `;
-  source = `${source.slice(0, teamsStart)}${teamRows}${source.slice(dividerStart)}`;
-}
+
+source = `${source.slice(0, teamsStart)}${teamRows}${source.slice(dividerStart)}`;
 
 addCallArgument("drawFixtureRow", "teamBadges", 1);
 addCallArgument("drawPitchColumn", "teamBadges", 2);
 addCallArgument("drawRasterPage", "teamBadges", 1);
+
+// Use the spare vertical space on nights with fewer fixtures instead of leaving
+// small cards floating at the top of the pitch column.
+source = source.replace(
+  /const rowHeight = Math\.min\(\n\s*65,/, 
+  "const rowHeight = Math.min(\n    88,",
+);
 
 if (!source.includes("const teamBadges = await loadTeamBadges(fixtures);")) {
   const createPdfAnchor = "  const pitch1All = fixtures.filter((fixture) => pitchNumber(fixture.pitch) === 1);";
@@ -244,6 +243,8 @@ const required = [
   "teamBadges.get(fixture.homeTeam.id)",
   "teamBadges.get(fixture.awayTeam.id)",
   "const teamBadges = await loadTeamBadges(fixtures);",
+  "const badgeSize = Math.min(30",
+  "const rowHeight = Math.min(\n    88,",
   "logoUrl: true",
 ];
 for (const marker of required) {
@@ -253,4 +254,6 @@ for (const marker of required) {
 }
 
 fs.writeFileSync(routePath, source, "utf8");
-console.log("Nights Fixtures now prints each available home and away team badge beside the team name.");
+console.log(
+  "Nights Fixtures now uses larger fixture cards and badges, with both team names aligned directly beside their badge.",
+);
