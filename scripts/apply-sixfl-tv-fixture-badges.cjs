@@ -24,24 +24,8 @@ patch("prisma/schema.prisma", [
   ],
 ]);
 
-patch("src/app/captain/team/[teamid]/fixtures/page.tsx", [
-  [
-    'import TeamShirt from "@/components/fixtures/TeamShirt";\n',
-    'import TeamShirt from "@/components/fixtures/TeamShirt";\nimport SixflTvFixtureBadge from "@/components/sixfl-tv/SixflTvFixtureBadge";\n',
-    "captain badge import",
-  ],
-  [
-    '            </h2>\n            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">',
-    '            </h2>\n            {selectedFixture ? (\n              <div className="mt-3">\n                <SixflTvFixtureBadge\n                  recorded={selectedFixture.sixflTvRecorded}\n                  url={selectedFixture.sixflTvUrl}\n                />\n              </div>\n            ) : null}\n            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">',
-    "captain selected fixture badge",
-  ],
-  [
-    '                        {isSelected ? (\n                          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Selected</span>\n                        ) : index === 0 ? (',
-    '                        <SixflTvFixtureBadge\n                          recorded={fixture.sixflTvRecorded}\n                          url={fixture.sixflTvUrl}\n                        />\n                        {isSelected ? (\n                          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Selected</span>\n                        ) : index === 0 ? (',
-    "captain upcoming fixture badges",
-  ],
-]);
-
+// Captain fixtures now render their SIXFL TV badges directly in the committed
+// React page. Do not rewrite that page during prebuild.
 patch("src/app/player/team/[teamid]/page.tsx", [
   [
     'import { authOptions } from "@/auth";\n',
@@ -60,4 +44,4 @@ patch("src/app/player/team/[teamid]/page.tsx", [
   ],
 ]);
 
-console.log("Applied shared SIXFL TV badges to captain and player fixtures.");
+console.log("Captain SIXFL TV badges are native; player fixture compatibility remains applied.");
