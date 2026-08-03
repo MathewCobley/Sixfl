@@ -18,9 +18,18 @@ export async function GET(
   const { id } = await params;
   const url = new URL(request.url);
   const target = new URL(`/captain/team/${id}`, url.origin);
-  const response = NextResponse.redirect(target);
+  target.searchParams.delete("captainPreview");
 
-  response.cookies.delete(CAPTAIN_ONLY_PREVIEW_COOKIE);
+  const response = NextResponse.redirect(target);
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  response.cookies.set(CAPTAIN_ONLY_PREVIEW_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  });
 
   return response;
 }
