@@ -201,6 +201,12 @@ const captainMobileStyles = String.raw`
 }
 `;
 
+type CaptainNavItem = {
+  href: string;
+  label: string;
+  logoSrc?: string;
+};
+
 function getTeamInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
 
@@ -306,12 +312,13 @@ export default async function CaptainTeamLayout({
     ? `/captain/team/${teamid}/squad`
     : `/captain/team/${teamid}/captain-squad`;
 
-  const navItems = [
+  const navItems: CaptainNavItem[] = [
     { href: `/captain/team/${teamid}`, label: "Overview" },
     { href: squadHref, label: "Squad" },
     ...(access.isAdmin
       ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
       : []),
+    { href: `/captain/team/${teamid}/player-pool`, label: "PlayerPool" },
     { href: `/captain/team/${teamid}/player-payments`, label: "Squad payments" },
     { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
@@ -322,7 +329,11 @@ export default async function CaptainTeamLayout({
     { href: `/captain/team/${teamid}/whatsapp`, label: "WhatsApp" },
     { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     { href: `/captain/team/${teamid}/results`, label: "Results" },
-    { href: `/captain/team/${teamid}/tv`, label: "SIXFL TV" },
+    {
+      href: `/captain/team/${teamid}/tv`,
+      label: "SIXFL TV",
+      logoSrc: "/Sixfl-tv.png",
+    },
     ...(showTeamPayments
       ? [{ href: `/captain/team/${teamid}/payments`, label: "Team payments" }]
       : []),
@@ -414,9 +425,19 @@ export default async function CaptainTeamLayout({
               <Link
                 key={item.href}
                 href={item.href}
+                aria-label={item.label}
+                title={item.logoSrc ? item.label : undefined}
                 className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100"
               >
-                {item.label}
+                {item.logoSrc ? (
+                  <img
+                    src={item.logoSrc}
+                    alt={item.label}
+                    className="h-5 w-auto max-w-[5rem] object-contain"
+                  />
+                ) : (
+                  item.label
+                )}
               </Link>
             ))}
           </nav>
