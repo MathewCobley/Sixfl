@@ -313,10 +313,9 @@ export default async function PlayerPerformancePanel({
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-200/70">
             Your performance
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Player stats</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Your stats</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-            Your appearances, ratings and contributions for {membership.team.name}.
-            Each team keeps its own separate record.
+            These are your stats for {membership.team.name}. Choose another team above to see your stats there.
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">
@@ -336,7 +335,7 @@ export default async function PlayerPerformancePanel({
         <Stat label="Goals" value={goals} tone="amber" />
         <Stat label="Assists" value={assists} tone="sky" />
         <Stat
-          label="Player of match"
+          label="Player of the Match"
           value={playerOfMatchAwards}
           tone="violet"
         />
@@ -354,9 +353,7 @@ export default async function PlayerPerformancePanel({
 
       {hasRecoveredHistory ? (
         <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-500/[0.07] px-4 py-3 text-xs leading-5 text-amber-50/70">
-          Some older matches were recorded before appearance and rating tracking was
-          introduced. Those appearances are included, but a rating is shown only where
-          the captain entered one.
+          We’ve included your older appearances too. Some of those matches do not have a rating because one was not entered at the time.
         </div>
       ) : null}
 
@@ -370,8 +367,7 @@ export default async function PlayerPerformancePanel({
 
         {history.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-white/10 bg-black/15 p-4 text-sm leading-6 text-white/50">
-            No appearances have been recorded yet. Stats appear after the captain
-            records the matchday players and result.
+            No appearances have been added yet. Your stats will appear after your captain confirms who played and submits the result.
           </div>
         ) : (
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
