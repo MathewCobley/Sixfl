@@ -60,15 +60,17 @@ function MetricCard({
   return (
     <Link
       href={href}
-      className="group rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-emerald-400/20 hover:bg-white/[0.05]"
+      className="group flex min-h-[10rem] min-w-0 flex-col rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-emerald-400/20 hover:bg-white/[0.05]"
     >
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+      <div className="block min-w-0 break-words text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
         {label}
       </div>
-      <div className="mt-3 text-3xl font-semibold tracking-tight text-white">
+      <div className="mt-4 block text-3xl font-semibold leading-none tracking-tight text-white">
         {value}
       </div>
-      <div className="mt-2 text-sm leading-6 text-white/55">{helper}</div>
+      <div className="mt-3 block min-w-0 break-words text-sm leading-6 text-white/55">
+        {helper}
+      </div>
     </Link>
   );
 }
@@ -333,7 +335,7 @@ export default async function AdminHome() {
           </div>
         </section>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
           <MetricCard
             href="/admin/leagues"
             label="Active leagues"
