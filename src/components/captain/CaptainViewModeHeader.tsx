@@ -5,7 +5,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const CAPTAIN_FACING_REPLACEMENTS = [
