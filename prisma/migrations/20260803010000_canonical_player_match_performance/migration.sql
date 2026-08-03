@@ -26,9 +26,6 @@ ALTER TABLE "PlayerMatchPerformance"
   ADD COLUMN IF NOT EXISTS "isPlayerOfMatch" BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'CAPTAIN_RECORDED';
 
-ALTER TABLE "MatchResultTeamMeta"
-  ADD COLUMN IF NOT EXISTS "playerOfMatchTeamMemberId" TEXT;
-
 -- The pre-migration table only contained genuine saved appearance rows.
 UPDATE "PlayerMatchPerformance"
 SET "appearanceRecorded" = COALESCE("played", TRUE);
@@ -99,16 +96,6 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
-    WHERE conname = 'MatchResultTeamMeta_playerOfMatchTeamMemberId_fkey'
-  ) THEN
-    ALTER TABLE "MatchResultTeamMeta"
-      ADD CONSTRAINT "MatchResultTeamMeta_playerOfMatchTeamMemberId_fkey"
-      FOREIGN KEY ("playerOfMatchTeamMemberId") REFERENCES "TeamMember"("id")
-      ON DELETE SET NULL ON UPDATE CASCADE;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
     WHERE conname = 'PlayerMatchPerformance_non_negative_contributions_check'
   ) THEN
     ALTER TABLE "PlayerMatchPerformance"
@@ -171,8 +158,6 @@ CREATE INDEX IF NOT EXISTS "PlayerMatchPerformance_teamId_matchResultId_idx"
 CREATE UNIQUE INDEX IF NOT EXISTS "PlayerMatchPerformance_one_pom_per_team_result_key"
   ON "PlayerMatchPerformance"("matchResultId", "teamId")
   WHERE "isPlayerOfMatch" = TRUE;
-CREATE INDEX IF NOT EXISTS "MatchResultTeamMeta_playerOfMatchTeamMemberId_idx"
-  ON "MatchResultTeamMeta"("playerOfMatchTeamMemberId");
 
 CREATE TABLE IF NOT EXISTS "PlayerPerformanceBackfillIssue" (
   "id" TEXT NOT NULL,
@@ -305,56 +290,6 @@ BEFORE INSERT OR UPDATE ON "PlayerMatchPerformance"
 FOR EACH ROW
 EXECUTE FUNCTION "sixfl_validate_player_match_performance"();
 
-CREATE OR REPLACE FUNCTION "sixfl_resolve_player_of_match_member"()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $function$
-DECLARE
-  contribution JSONB;
-  resolved_member_id TEXT;
-BEGIN
-  IF NULLIF(BTRIM(COALESCE(NEW."playerOfMatchName", '')), '') IS NULL THEN
-    NEW."playerOfMatchTeamMemberId" := NULL;
-    RETURN NEW;
-  END IF;
-
-  IF JSONB_TYPEOF(COALESCE(NEW."scorers"::jsonb, '[]'::jsonb)) = 'array' THEN
-    FOR contribution IN
-      SELECT value
-      FROM JSONB_ARRAY_ELEMENTS(COALESCE(NEW."scorers"::jsonb, '[]'::jsonb))
-    LOOP
-      IF "sixfl_normalise_player_name"(contribution ->> 'name') =
-         "sixfl_normalise_player_name"(NEW."playerOfMatchName") THEN
-        resolved_member_id := "sixfl_resolve_team_member"(
-          NEW."teamId",
-          contribution ->> 'teamMemberId',
-          contribution ->> 'name'
-        );
-        EXIT WHEN resolved_member_id IS NOT NULL;
-      END IF;
-    END LOOP;
-  END IF;
-
-  IF resolved_member_id IS NULL THEN
-    resolved_member_id := "sixfl_resolve_team_member"(
-      NEW."teamId",
-      NULL,
-      NEW."playerOfMatchName"
-    );
-  END IF;
-
-  NEW."playerOfMatchTeamMemberId" := resolved_member_id;
-  RETURN NEW;
-END;
-$function$;
-
-DROP TRIGGER IF EXISTS "MatchResultTeamMeta_resolve_player_of_match" ON "MatchResultTeamMeta";
-CREATE TRIGGER "MatchResultTeamMeta_resolve_player_of_match"
-BEFORE INSERT OR UPDATE OF "scorers", "playerOfMatchName", "teamId"
-ON "MatchResultTeamMeta"
-FOR EACH ROW
-EXECUTE FUNCTION "sixfl_resolve_player_of_match_member"();
-
 CREATE OR REPLACE FUNCTION "sixfl_sync_player_performance_from_meta"()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -362,6 +297,7 @@ AS $function$
 DECLARE
   contribution JSONB;
   resolved_member_id TEXT;
+  pom_member_id TEXT;
   contribution_goals INTEGER;
   contribution_assists INTEGER;
   issue_id TEXT;
@@ -470,7 +406,35 @@ BEGIN
     END LOOP;
   END IF;
 
-  IF NEW."playerOfMatchTeamMemberId" IS NOT NULL THEN
+  pom_member_id := NULL;
+  IF NULLIF(BTRIM(COALESCE(NEW."playerOfMatchName", '')), '') IS NOT NULL THEN
+    IF JSONB_TYPEOF(COALESCE(NEW."scorers"::jsonb, '[]'::jsonb)) = 'array' THEN
+      FOR contribution IN
+        SELECT value
+        FROM JSONB_ARRAY_ELEMENTS(COALESCE(NEW."scorers"::jsonb, '[]'::jsonb))
+      LOOP
+        IF "sixfl_normalise_player_name"(contribution ->> 'name') =
+           "sixfl_normalise_player_name"(NEW."playerOfMatchName") THEN
+          pom_member_id := "sixfl_resolve_team_member"(
+            NEW."teamId",
+            contribution ->> 'teamMemberId',
+            contribution ->> 'name'
+          );
+          EXIT WHEN pom_member_id IS NOT NULL;
+        END IF;
+      END LOOP;
+    END IF;
+
+    IF pom_member_id IS NULL THEN
+      pom_member_id := "sixfl_resolve_team_member"(
+        NEW."teamId",
+        NULL,
+        NEW."playerOfMatchName"
+      );
+    END IF;
+  END IF;
+
+  IF pom_member_id IS NOT NULL THEN
     INSERT INTO "PlayerMatchPerformance" (
       "id",
       "matchResultId",
@@ -486,13 +450,10 @@ BEGIN
       "createdAt",
       "updatedAt"
     ) VALUES (
-      MD5(
-        NEW."matchResultId" || ':' || NEW."teamId" || ':' ||
-        NEW."playerOfMatchTeamMemberId"
-      ),
+      MD5(NEW."matchResultId" || ':' || NEW."teamId" || ':' || pom_member_id),
       NEW."matchResultId",
       NEW."teamId",
-      NEW."playerOfMatchTeamMemberId",
+      pom_member_id,
       TRUE,
       FALSE,
       NULL,
@@ -593,6 +554,6 @@ ON CONFLICT ("matchResultId", "teamId", "teamMemberId") DO UPDATE SET
   END,
   "updatedAt" = NOW();
 
--- Resolve Player of the Match IDs and run the canonical contribution backfill.
+-- Run the canonical contribution and Player of the Match backfill.
 UPDATE "MatchResultTeamMeta"
 SET "playerOfMatchName" = "playerOfMatchName";
