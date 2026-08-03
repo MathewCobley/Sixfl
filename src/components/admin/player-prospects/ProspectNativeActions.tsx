@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -8,12 +8,12 @@ import {
   queuePlayerProspectSquadInviteFinalChaseAction,
 } from "@/app/(admin)/admin/player-prospects/actions";
 
-type TeamOption = {
+export type ProspectTeamOption = {
   value: string;
   label: string;
 };
 
-type PlayerPoolProfile = {
+export type ProspectPlayerPoolProfile = {
   id: string;
   publicCode: string;
   status: string;
@@ -22,23 +22,11 @@ type PlayerPoolProfile = {
   updatedAt: string;
 };
 
-type PlayerPoolStatusResponse = {
-  ok?: boolean;
-  exists?: boolean;
-  profile?: PlayerPoolProfile | null;
-  message?: string;
-  error?: string;
-};
-
-type ChaseStatus = {
+export type ProspectChaseStatus = {
   chaseStatus: string | null;
   chaseAt: string | null;
   finalChaseStatus: string | null;
   finalChaseAt: string | null;
-};
-
-type ChaseStatusResponse = {
-  items?: Array<ChaseStatus & { prospectId: string }>;
 };
 
 type Notice = {
@@ -56,7 +44,9 @@ type Props = {
   latestPlayerResponse: string | null;
   latestSigninEmailStatus: string | null;
   selectedLeagueId: string;
-  teamOptions: TeamOption[];
+  teamOptions: ProspectTeamOption[];
+  playerPoolProfile: ProspectPlayerPoolProfile | null;
+  chaseStatus: ProspectChaseStatus | null;
 };
 
 function statusLabel(status: string) {
@@ -100,7 +90,7 @@ function formatDateTime(value: string | null) {
   }).format(date);
 }
 
-function chaseStatusText(status: ChaseStatus | null) {
+function chaseStatusText(status: ProspectChaseStatus | null) {
   if (!status) return null;
 
   if (status.finalChaseAt || status.finalChaseStatus) {
@@ -131,6 +121,8 @@ export default function ProspectNativeActions({
   latestSigninEmailStatus,
   selectedLeagueId,
   teamOptions,
+  playerPoolProfile,
+  chaseStatus,
 }: Props) {
   const router = useRouter();
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -138,9 +130,6 @@ export default function ProspectNativeActions({
   const [showTeamChange, setShowTeamChange] = useState(false);
   const [targetTeamId, setTargetTeamId] = useState("");
   const [sendFreshInvite, setSendFreshInvite] = useState(true);
-  const [playerPoolProfile, setPlayerPoolProfile] = useState<PlayerPoolProfile | null>(null);
-  const [playerPoolLoaded, setPlayerPoolLoaded] = useState(false);
-  const [chaseStatus, setChaseStatus] = useState<ChaseStatus | null>(null);
 
   const availableTeams = useMemo(
     () => teamOptions.filter((team) => team.value !== currentTeamId),
@@ -163,66 +152,6 @@ export default function ProspectNativeActions({
       !latestPlayerResponse &&
       hasSquadInviteHistory,
   );
-
-  const loadPlayerPoolStatus = useCallback(async () => {
-    if (!canUsePlayerPool) {
-      setPlayerPoolLoaded(true);
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `/api/admin/player-prospects/${encodeURIComponent(prospectId)}/player-pool`,
-        { cache: "no-store" },
-      );
-      const payload = await readJson<PlayerPoolStatusResponse>(response);
-      setPlayerPoolProfile(
-        response.ok && payload?.ok && payload.exists
-          ? payload.profile ?? null
-          : null,
-      );
-    } catch {
-      setPlayerPoolProfile(null);
-    } finally {
-      setPlayerPoolLoaded(true);
-    }
-  }, [canUsePlayerPool, prospectId]);
-
-  const loadChaseStatus = useCallback(async () => {
-    if (!canChaseInvite) return;
-
-    try {
-      const response = await fetch(
-        `/api/admin/player-prospects/chase-status?ids=${encodeURIComponent(prospectId)}`,
-        { cache: "no-store" },
-      );
-      if (!response.ok) return;
-      const payload = await readJson<ChaseStatusResponse>(response);
-      const item = payload?.items?.find(
-        (candidate) => candidate.prospectId === prospectId,
-      );
-      setChaseStatus(
-        item
-          ? {
-              chaseStatus: item.chaseStatus,
-              chaseAt: item.chaseAt,
-              finalChaseStatus: item.finalChaseStatus,
-              finalChaseAt: item.finalChaseAt,
-            }
-          : null,
-      );
-    } catch {
-      setChaseStatus(null);
-    }
-  }, [canChaseInvite, prospectId]);
-
-  useEffect(() => {
-    void loadPlayerPoolStatus();
-  }, [loadPlayerPoolStatus]);
-
-  useEffect(() => {
-    void loadChaseStatus();
-  }, [loadChaseStatus]);
 
   async function runProspectPost(input: {
     action: string;
@@ -343,7 +272,9 @@ export default function ProspectNativeActions({
           body: JSON.stringify({ leagueId: selectedLeagueId || null }),
         },
       );
-      const payload = await readJson<PlayerPoolStatusResponse>(response);
+      const payload = await readJson<{ ok?: boolean; message?: string; error?: string }>(
+        response,
+      );
 
       if (!response.ok || !payload?.ok) {
         throw new Error(
@@ -355,7 +286,6 @@ export default function ProspectNativeActions({
         tone: "success",
         text: payload.message || "PlayerPool form sent.",
       });
-      await loadPlayerPoolStatus();
       router.refresh();
     } catch (error) {
       setNotice({
@@ -394,7 +324,6 @@ export default function ProspectNativeActions({
           ? "Final squad invite chase queued."
           : "Squad invite chase queued.",
       });
-      await loadChaseStatus();
       router.refresh();
     } catch (error) {
       setNotice({
@@ -549,19 +478,17 @@ export default function ProspectNativeActions({
           </div>
           <button
             type="button"
-            disabled={busyAction !== null || !playerPoolLoaded}
+            disabled={busyAction !== null}
             onClick={() => void sendToPlayerPool()}
             className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-wait disabled:opacity-50"
           >
-            {!playerPoolLoaded
-              ? "Checking PlayerPool…"
-              : busyAction === "player-pool"
-                ? "Sending…"
-                : playerPoolProfile?.status === "INVITED"
-                  ? "Resend PlayerPool invite"
-                  : playerPoolProfile
-                    ? "Resend PlayerPool form"
-                    : "Send to PlayerPool"}
+            {busyAction === "player-pool"
+              ? "Sending…"
+              : playerPoolProfile?.status === "INVITED"
+                ? "Resend PlayerPool invite"
+                : playerPoolProfile
+                  ? "Resend PlayerPool form"
+                  : "Send to PlayerPool"}
           </button>
         </div>
       ) : null}
