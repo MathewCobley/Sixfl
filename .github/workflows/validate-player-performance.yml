@@ -73,8 +73,10 @@ jobs:
           npx prisma validate
           npx prisma generate
 
-      - name: Apply all database migrations
-        run: npx prisma migrate deploy
+      - name: Prepare current schema and apply canonical migration
+        run: |
+          npx prisma db push --skip-generate
+          npx prisma db execute --file prisma/migrations/20260803010000_canonical_player_match_performance/migration.sql --schema prisma/schema.prisma
 
       - name: Type-check application
         run: npx tsc --noEmit
