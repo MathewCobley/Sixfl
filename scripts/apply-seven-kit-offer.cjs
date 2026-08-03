@@ -111,8 +111,6 @@ if (remainingOldPriceFiles.length > 0) {
   );
 }
 
-require("./apply-kit-player-assignments.cjs");
-
 console.log(
-  "Applied seven-kit founding offer across all screens: seven kits at £10 each (£70 total), with player self-service kit details.",
+  "Applied seven-kit founding offer across all screens: seven kits at £10 each (£70 total).",
 );
