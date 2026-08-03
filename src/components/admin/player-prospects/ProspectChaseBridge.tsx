@@ -5,6 +5,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   queuePlayerProspectSquadInviteChaseAction,
   queuePlayerProspectSquadInviteFinalChaseAction,
@@ -115,7 +116,7 @@ function setChaseStatusText(card: Element, text: string, tone: "chase" | "final"
   }
 
   const textElement = statusBox.querySelector<HTMLElement>("[data-prospect-chase-status-text='1']");
-  if (textElement) textElement.textContent = text;
+  if (textElement && textElement.textContent !== text) textElement.textContent = text;
 }
 
 function attachButtonHandler(input: {
@@ -243,18 +244,27 @@ async function refreshChaseStatuses() {
 }
 
 export default function ProspectChaseBridge() {
-  useEffect(() => {
-    addChaseControlsToPage();
-    void refreshChaseStatuses();
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
 
-    const observer = new MutationObserver(() => {
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = () => {
+      if (cancelled) return;
       addChaseControlsToPage();
       void refreshChaseStatuses();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+    };
 
-    return () => observer.disconnect();
-  }, []);
+    const frame = window.requestAnimationFrame(run);
+    const retry = window.setTimeout(run, 250);
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(retry);
+    };
+  }, [searchKey]);
 
   return null;
 }
