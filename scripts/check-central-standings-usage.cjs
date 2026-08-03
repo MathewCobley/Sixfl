@@ -22,6 +22,7 @@ require("./apply-player-pool-lead-closure.cjs");
 require("./apply-player-pool-nudge-history.cjs");
 require("./apply-orphan-player-fee-identity.cjs");
 require("./apply-nights-fixtures-predictor-column.cjs");
+require("./apply-nights-fixtures-team-badges.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
