@@ -46,6 +46,48 @@ function replaceAfterMarker(source, marker, before, after, label) {
   );
 }
 
+function ensureComponentProp(source, componentMarker, before, after, label) {
+  const markerIndex = source.indexOf(componentMarker);
+  if (markerIndex < 0) {
+    throw new Error(`Expected ${label} component was not found.`);
+  }
+
+  const componentEnd = source.indexOf("/>", markerIndex);
+  if (componentEnd < 0) {
+    throw new Error(`Expected end of ${label} component was not found.`);
+  }
+
+  const componentBlock = source.slice(markerIndex, componentEnd);
+  if (componentBlock.includes(after.trim())) return source;
+
+  const targetIndex = source.indexOf(before, markerIndex);
+  if (targetIndex < 0 || targetIndex > componentEnd) {
+    throw new Error(`Expected ${label} prop source was not found.`);
+  }
+
+  return (
+    source.slice(0, targetIndex) +
+    after +
+    source.slice(targetIndex + before.length)
+  );
+}
+
+function removeComponentProp(source, componentMarker, propLine) {
+  const markerIndex = source.indexOf(componentMarker);
+  if (markerIndex < 0) return source;
+
+  const componentEnd = source.indexOf("/>", markerIndex);
+  if (componentEnd < 0) return source;
+
+  const propIndex = source.indexOf(propLine, markerIndex);
+  if (propIndex < 0 || propIndex > componentEnd) return source;
+
+  return (
+    source.slice(0, propIndex) +
+    source.slice(propIndex + propLine.length)
+  );
+}
+
 let form = read(formPath);
 
 if (!form.includes("  designLocked: boolean;")) {
@@ -201,14 +243,22 @@ if (!page.includes("  const designLocked = Boolean(order && order.status !== \"D
   }
 }
 
-if (!page.includes("          designLocked={designLocked}")) {
-  page = replaceRequired(
-    page,
-    "          locked={locked}\n",
-    "          designLocked={designLocked}\n          locked={locked}\n",
-    "kit design lock form prop",
-  );
-}
+// A previous build attempt could have attached this prop to the player-assignment
+// component because it also has a locked prop. Remove that invalid prop before
+// adding it specifically to TeamKitOrderForm.
+page = removeComponentProp(
+  page,
+  "<TeamKitPlayerAssignments",
+  "          designLocked={designLocked}\n",
+);
+
+page = ensureComponentProp(
+  page,
+  "<TeamKitOrderForm",
+  "          locked={locked}\n",
+  "          designLocked={designLocked}\n          locked={locked}\n",
+  "TeamKitOrderForm design lock",
+);
 
 write(pagePath, page);
 
@@ -254,13 +304,27 @@ write(actionPath, action);
 const finalForm = read(formPath);
 const finalPage = read(pagePath);
 const finalAction = read(actionPath);
+const orderFormStart = finalPage.indexOf("<TeamKitOrderForm");
+const orderFormEnd = finalPage.indexOf("/>", orderFormStart);
+const orderFormBlock =
+  orderFormStart >= 0 && orderFormEnd >= 0
+    ? finalPage.slice(orderFormStart, orderFormEnd)
+    : "";
+const assignmentStart = finalPage.indexOf("<TeamKitPlayerAssignments");
+const assignmentEnd =
+  assignmentStart >= 0 ? finalPage.indexOf("/>", assignmentStart) : -1;
+const assignmentBlock =
+  assignmentStart >= 0 && assignmentEnd >= 0
+    ? finalPage.slice(assignmentStart, assignmentEnd)
+    : "";
 
 if (
   !finalForm.includes("Deselect kit") ||
   !finalForm.includes("Design locked") ||
   !finalForm.includes("{!designLocked ? (\n              <input") ||
   !finalForm.includes("{!designLocked ? (\n          <div className=\"p-4 sm:p-6\">") ||
-  !finalPage.includes("designLocked={designLocked}") ||
+  !orderFormBlock.includes("designLocked={designLocked}") ||
+  assignmentBlock.includes("designLocked={designLocked}") ||
   !finalAction.includes("const requestedKitDesignId") ||
   !finalAction.includes('const status = designLocked || intent === "submit"')
 ) {
