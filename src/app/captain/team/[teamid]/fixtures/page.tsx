@@ -8,6 +8,7 @@ import { notFound, redirect } from "next/navigation";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
 import TeamShirt from "@/components/fixtures/TeamShirt";
+import SixflTvFixtureBadge from "@/components/sixfl-tv/SixflTvFixtureBadge";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -479,6 +480,14 @@ export default async function CaptainFixturesPage({
                 "No upcoming published fixture"
               )}
             </h2>
+            {selectedFixture ? (
+              <div className="mt-3">
+                <SixflTvFixtureBadge
+                  recorded={selectedFixture.sixflTvRecorded}
+                  url={selectedFixture.sixflTvUrl}
+                />
+              </div>
+            ) : null}
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
               {selectedFixture
                 ? `${formatDateTime(selectedFixture.kickoffAt)} · ${selectedFixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}`
@@ -613,6 +622,10 @@ export default async function CaptainFixturesPage({
                             colours={kitColours}
                           />
                         </div>
+                        <SixflTvFixtureBadge
+                          recorded={fixture.sixflTvRecorded}
+                          url={fixture.sixflTvUrl}
+                        />
                         {isNextUpcoming ? (
                           <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">Next up</span>
                         ) : null}
