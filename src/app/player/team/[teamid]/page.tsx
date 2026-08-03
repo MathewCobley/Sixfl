@@ -13,6 +13,7 @@ import {
 } from "@prisma/client";
 
 import { authOptions } from "@/auth";
+import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 
@@ -256,8 +257,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         status: true,
         pitch: true,
         homeTeamId: true,
-        homeTeam: { select: { name: true } },
-        awayTeam: { select: { name: true } },
+        homeTeam: { select: { name: true, logoUrl: true } },
+        awayTeam: { select: { name: true, logoUrl: true } },
         venue: { select: { name: true } },
       },
     }),
@@ -460,21 +461,9 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                  Next fixture
-                </p>
-                <h2 className="mt-2 text-lg font-semibold leading-6 text-white">
-                  {nextFixture
-                    ? `vs ${getOpponentName({
-                        teamId: teamid,
-                        homeTeamId: nextFixture.homeTeamId,
-                        homeTeamName: nextFixture.homeTeam.name,
-                        awayTeamName: nextFixture.awayTeam.name,
-                      })}`
-                    : "No fixture published"}
-                </h2>
-              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Next fixture
+              </p>
               {upcomingFixtures.length > 0 ? (
                 <span className="shrink-0 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-medium text-white/60">
                   {upcomingFixtures.length} published
@@ -484,12 +473,18 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
             {nextFixture ? (
               <>
-                <p className="mt-3 text-sm leading-6 text-white/60">
+                <div className="mt-4">
+                  <PlayerFixtureTeams
+                    homeTeam={nextFixture.homeTeam}
+                    awayTeam={nextFixture.awayTeam}
+                  />
+                </div>
+                <p className="mt-3 text-center text-sm leading-6 text-white/60">
                   {formatFixtureDate(nextFixture.kickoffAt)}
                   {nextFixture.venue?.name ? ` · ${nextFixture.venue.name}` : ""}
                   {nextFixture.pitch ? ` · ${nextFixture.pitch}` : ""}
                 </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   <span
                     className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusClasses(
                       nextFixture.status,
