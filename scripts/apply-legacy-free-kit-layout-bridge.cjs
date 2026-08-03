@@ -25,25 +25,28 @@ if (!layoutSource.includes(standardImport)) {
   layoutSource = layoutSource.replace(anchor, `${anchor}\n${standardImport}`);
 }
 
-const renderAnchor = "      <CaptainRedirectErrorNoticeFix />";
-if (!layoutSource.includes(renderAnchor)) {
-  throw new Error(`Expected captain layout render anchor was not found in ${layoutPath}`);
+// These panels used to be inserted beside the top-level client bridges, which put
+// them above the team identity card and navigation. Remove any previous placement
+// and mount them inside the main content area after the persistent team header/nav.
+layoutSource = layoutSource
+  .replaceAll("      <LegacyFreeKitOfferCopyBridge />\n", "")
+  .replaceAll("      <StandardTeamKitCopyBridge />\n", "")
+  .replaceAll("          <LegacyFreeKitOfferCopyBridge />\n", "")
+  .replaceAll("          <StandardTeamKitCopyBridge />\n", "");
+
+const contentAnchor = "          <CaptainSupportPanel teamId={team.id} />";
+if (!layoutSource.includes(contentAnchor)) {
+  throw new Error(`Expected captain main-content anchor was not found in ${layoutPath}`);
 }
 
-if (!layoutSource.includes("      <LegacyFreeKitOfferCopyBridge />")) {
-  layoutSource = layoutSource.replace(
-    renderAnchor,
-    `${renderAnchor}\n      <LegacyFreeKitOfferCopyBridge />`,
-  );
-}
-
-if (!layoutSource.includes("      <StandardTeamKitCopyBridge />")) {
-  const anchor = "      <LegacyFreeKitOfferCopyBridge />";
-  layoutSource = layoutSource.replace(
-    anchor,
-    `${anchor}\n      <StandardTeamKitCopyBridge />`,
-  );
-}
+layoutSource = layoutSource.replace(
+  contentAnchor,
+  [
+    contentAnchor,
+    "          <LegacyFreeKitOfferCopyBridge />",
+    "          <StandardTeamKitCopyBridge />",
+  ].join("\n"),
+);
 
 fs.writeFileSync(layoutAbsolutePath, layoutSource, "utf8");
 
@@ -78,8 +81,35 @@ if (!legacySource.includes("      {data.legacyOffer ? (")) {
   );
 }
 
+// The bridges now live inside the captain main container, so they should fill that
+// content width rather than creating a second page-width container of their own.
+legacySource = legacySource.replace(
+  '    <div className="mx-auto mb-2 mt-4 w-[calc(100%-1.5rem)] max-w-[1400px] space-y-4 sm:w-[calc(100%-5rem)]">',
+  '    <div className="w-full space-y-4">',
+);
 fs.writeFileSync(legacyBridgeAbsolutePath, legacySource, "utf8");
 
+const standardPanelPath =
+  "src/components/captain/StandardKitPaymentPanel.tsx";
+const standardPanelAbsolutePath = path.join(root, standardPanelPath);
+if (fs.existsSync(standardPanelAbsolutePath)) {
+  let standardPanelSource = fs.readFileSync(standardPanelAbsolutePath, "utf8");
+  standardPanelSource = standardPanelSource.replace(
+    '    <section className="mx-auto mb-2 mt-4 w-[calc(100%-1.5rem)] max-w-[1400px] rounded-3xl border border-sky-400/25 bg-sky-500/[0.08] p-5 sm:w-[calc(100%-5rem)] sm:p-6">',
+    '    <section className="w-full rounded-3xl border border-sky-400/25 bg-sky-500/[0.08] p-5 sm:p-6">',
+  );
+  fs.writeFileSync(standardPanelAbsolutePath, standardPanelSource, "utf8");
+}
+
+if (
+  layoutSource.indexOf("<header className=\"captain-team-header") >
+    layoutSource.indexOf("<LegacyFreeKitOfferCopyBridge") ||
+  layoutSource.indexOf("<header className=\"captain-team-header") >
+    layoutSource.indexOf("<StandardTeamKitCopyBridge")
+) {
+  throw new Error("Kit payment panels must remain below the captain team header and navigation.");
+}
+
 console.log(
-  "Mounted free, founding-package and standard team-kit pricing in the captain layout.",
+  "Mounted kit pricing and payment panels below the persistent captain team card and navigation.",
 );
