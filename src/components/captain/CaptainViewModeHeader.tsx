@@ -8,8 +8,6 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-const CAPTAIN_PREVIEW_PARAM = "captainPreview";
-
 const CAPTAIN_FACING_REPLACEMENTS = [
   {
     from: "Tick this when the player uses WhatsApp, so captains know payment links can be sent that way.",
@@ -50,46 +48,34 @@ type CaptainViewModeHeaderProps = {
   isLive?: boolean;
 };
 
-function getFullAdminHref(input: { pathname: string | null; teamId: string }) {
-  const fallback = `/captain/team/${input.teamId}/squad`;
-  const pathname = input.pathname || fallback;
-
-  return pathname.replace(
-    new RegExp(`/captain/team/${input.teamId}/captain-squad/?$`),
-    `/captain/team/${input.teamId}/squad`,
-  );
-}
-
-function getExitCaptainPreviewHref(input: {
+function getFullAdminDestination(input: {
   pathname: string | null;
   searchParamsKey: string;
   teamId: string;
 }) {
-  const pathname = input.pathname || `/captain/team/${input.teamId}`;
-  const currentPath = `${pathname}${input.searchParamsKey ? `?${input.searchParamsKey}` : ""}`;
+  const fallback = `/captain/team/${input.teamId}/squad`;
+  const captainSquadPath = `/captain/team/${input.teamId}/captain-squad`;
+  const adminSquadPath = `/captain/team/${input.teamId}/squad`;
+  const currentPathname = input.pathname || fallback;
+  const pathname =
+    currentPathname === captainSquadPath || currentPathname === `${captainSquadPath}/`
+      ? adminSquadPath
+      : currentPathname;
+  const searchParams = new URLSearchParams(input.searchParamsKey);
 
-  return `/admin/teams/${input.teamId}/captain-preview/exit?to=${encodeURIComponent(currentPath)}`;
+  // Remove the old query-string preview mode as well as clearing the real
+  // preview cookie. This prevents a previously rewritten tab from turning
+  // Captain Preview back on after an administrator has left it.
+  searchParams.delete("captainPreview");
+
+  const query = searchParams.toString();
+  return `${pathname}${query ? `?${query}` : ""}`;
 }
 
-function applyCaptainPreviewToHref(input: { href: string; teamId: string }) {
-  const url = new URL(input.href, window.location.origin);
-  const teamPrefix = `/captain/team/${input.teamId}`;
-
-  if (url.origin !== window.location.origin) {
-    return input.href;
-  }
-
-  if (!url.pathname.startsWith(teamPrefix)) {
-    return input.href;
-  }
-
-  if (url.pathname === `${teamPrefix}/squad`) {
-    url.pathname = `${teamPrefix}/captain-squad`;
-  }
-
-  url.searchParams.set(CAPTAIN_PREVIEW_PARAM, "1");
-
-  return `${url.pathname}${url.search}${url.hash}`;
+function getPreviewExitHref(input: { teamId: string; to: string }) {
+  return `/admin/teams/${input.teamId}/captain-preview/exit?to=${encodeURIComponent(
+    input.to,
+  )}`;
 }
 
 function rewriteCaptainFacingText() {
@@ -138,17 +124,33 @@ export default function CaptainViewModeHeader({
   const isCaptainOnlyPreview = !isManagedTeam && accessMode === "captain-preview";
   const canShowAdminControls = hasTeamId && (isAdmin || isCaptainOnlyPreview);
   const canPreviewCaptainDashboard = hasTeamId && isAdmin && !isManagedTeam;
-  const isCaptainDashboardPreview = Boolean(
-    hasTeamId && (isCaptainOnlyPreview || (!isManagedTeam && isAdmin && searchParams.get(CAPTAIN_PREVIEW_PARAM) === "1")),
-  );
+
+  // Captain Preview now has one source of truth: the server-side preview cookie.
+  // The old client-side ?captainPreview=1 link rewriter was what made preview
+  // return after an administrator had switched back to the full view.
+  const isCaptainDashboardPreview = Boolean(hasTeamId && isCaptainOnlyPreview);
   const previewHref = `/admin/teams/${teamId}/captain-preview`;
-  const fullAdminHref = isCaptainOnlyPreview
-    ? getExitCaptainPreviewHref({ pathname, searchParamsKey, teamId })
-    : getFullAdminHref({ pathname, teamId });
+  const fullAdminDestination = getFullAdminDestination({
+    pathname,
+    searchParamsKey,
+    teamId,
+  });
+  const fullAdminHref = getPreviewExitHref({
+    teamId,
+    to: fullAdminDestination,
+  });
+  const adminHomeHref = isCaptainDashboardPreview
+    ? getPreviewExitHref({ teamId, to: "/admin" })
+    : "/admin";
+  const adminTeamHref = isCaptainDashboardPreview
+    ? getPreviewExitHref({ teamId, to: `/admin/teams/${teamId}` })
+    : `/admin/teams/${teamId}`;
   const displaySeason = season?.trim() || null;
+  const shouldRewriteCaptainFacingText =
+    !isManagedTeam && (!isAdmin || isCaptainDashboardPreview);
 
   useEffect(() => {
-    if (isManagedTeam) return;
+    if (!shouldRewriteCaptainFacingText) return;
 
     const root = document.querySelector(".captain-team-shell") ?? document.body;
     const frame = window.requestAnimationFrame(rewriteCaptainFacingText);
@@ -160,33 +162,7 @@ export default function CaptainViewModeHeader({
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [isManagedTeam, pathname, searchParamsKey]);
-
-  useEffect(() => {
-    if (!isCaptainDashboardPreview || isManagedTeam || !hasTeamId) return;
-
-    const selector = `.captain-team-shell a[href^="/captain/team/${teamId}"]:not([data-captain-preview-ignore="true"])`;
-
-    function updateLinks() {
-      for (const link of Array.from(document.querySelectorAll<HTMLAnchorElement>(selector))) {
-        const href = link.getAttribute("href");
-        if (!href) continue;
-
-        link.setAttribute(
-          "href",
-          applyCaptainPreviewToHref({ href, teamId }),
-        );
-      }
-    }
-
-    updateLinks();
-
-    const root = document.querySelector(".captain-team-shell") ?? document.body;
-    const observer = new MutationObserver(updateLinks);
-    observer.observe(root, { childList: true, subtree: true });
-
-    return () => observer.disconnect();
-  }, [hasTeamId, isCaptainDashboardPreview, isManagedTeam, searchParamsKey, teamId]);
+  }, [pathname, searchParamsKey, shouldRewriteCaptainFacingText]);
 
   const currentViewLabel = isManagedTeam
     ? "Full Admin View — Managed Squad"
@@ -236,20 +212,18 @@ export default function CaptainViewModeHeader({
 
         {canShowAdminControls ? (
           <div className="mt-4 flex flex-wrap gap-3">
-            <Link
-              href="/admin"
-              data-captain-preview-ignore="true"
+            <a
+              href={adminHomeHref}
               className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
             >
               Admin home
-            </Link>
-            <Link
-              href={`/admin/teams/${teamId}`}
-              data-captain-preview-ignore="true"
+            </a>
+            <a
+              href={adminTeamHref}
               className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
             >
               Admin team page
-            </Link>
+            </a>
           </div>
         ) : null}
       </div>
@@ -257,80 +231,65 @@ export default function CaptainViewModeHeader({
   }
 
   return (
-    <>
-      {canShowAdminControls && !isManagedTeam ? (
-        <style>{`
-          .captain-team-shell a[href="/captain/team/${teamId}/prospects"],
-          .captain-team-shell a[href="/captain/team/${teamId}/prospects?${CAPTAIN_PREVIEW_PARAM}=1"] {
-            display: none !important;
-          }
-        `}</style>
-      ) : null}
-
-      <div className="rounded-3xl border border-emerald-400/20 bg-black/20 p-4 sm:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              Current view
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm font-bold text-emerald-50">
-                {currentViewLabel}
+    <div className="rounded-3xl border border-emerald-400/20 bg-black/20 p-4 sm:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+            Current view
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm font-bold text-emerald-50">
+              {currentViewLabel}
+            </span>
+            {isManagedTeam ? (
+              <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
+                Captain preview unavailable
               </span>
-              {isManagedTeam ? (
-                <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
-                  Captain preview unavailable
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65 sm:text-base">
-              {currentViewDescription}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            {canShowAdminControls ? (
-              <Link
-                href="/admin"
-                data-captain-preview-ignore="true"
-                className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
-              >
-                Admin home
-              </Link>
-            ) : null}
-
-            {canShowAdminControls ? (
-              <Link
-                href={`/admin/teams/${teamId}`}
-                data-captain-preview-ignore="true"
-                className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
-              >
-                Admin team page
-              </Link>
-            ) : null}
-
-            {canPreviewCaptainDashboard && !isCaptainDashboardPreview ? (
-              <a
-                href={previewHref}
-                data-captain-preview-ignore="true"
-                className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
-              >
-                Switch to Captain Preview
-              </a>
-            ) : null}
-
-            {canShowAdminControls && isCaptainDashboardPreview ? (
-              <a
-                href={fullAdminHref}
-                data-captain-preview-ignore="true"
-                className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
-              >
-                Switch back to Full Admin View
-              </a>
             ) : null}
           </div>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65 sm:text-base">
+            {currentViewDescription}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {canShowAdminControls ? (
+            <a
+              href={adminHomeHref}
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+            >
+              Admin home
+            </a>
+          ) : null}
+
+          {canShowAdminControls ? (
+            <a
+              href={adminTeamHref}
+              className="inline-flex items-center rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white"
+            >
+              Admin team page
+            </a>
+          ) : null}
+
+          {canPreviewCaptainDashboard && !isCaptainDashboardPreview ? (
+            <a
+              href={previewHref}
+              className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
+            >
+              Switch to Captain Preview
+            </a>
+          ) : null}
+
+          {canShowAdminControls && isCaptainDashboardPreview ? (
+            <a
+              href={fullAdminHref}
+              className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
+            >
+              Switch back to Full Admin View
+            </a>
+          ) : null}
         </div>
       </div>
-    </>
+    </div>
   );
 }
