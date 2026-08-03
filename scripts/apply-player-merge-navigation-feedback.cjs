@@ -74,7 +74,17 @@ const oldSuccessRedirect = [
   "    }),",
   "  );",
 ].join("\n");
-const newSuccessRedirect = [
+const teamSuccessRedirect = [
+  "  if (teamId) {",
+  "    redirect(",
+  "      `/admin/teams/${teamId}/squad?saved=player-merged&hardReload=1`,",
+  "    );",
+  "  }",
+  "",
+  oldSuccessRedirect,
+].join("\n");
+
+const previousTeamRedirect = [
   "  if (teamId) {",
   "    redirect(`/admin/teams/${teamId}/squad?saved=player-merged`);",
   "  }",
@@ -82,13 +92,46 @@ const newSuccessRedirect = [
   oldSuccessRedirect,
 ].join("\n");
 
-if (!actions.includes("squad?saved=player-merged") && actions.includes(oldSuccessRedirect)) {
-  actions = actions.replace(oldSuccessRedirect, newSuccessRedirect);
-  write(actionsPath, actions);
+if (actions.includes(previousTeamRedirect)) {
+  actions = actions.replace(previousTeamRedirect, teamSuccessRedirect);
+} else if (
+  !actions.includes("saved=player-merged&hardReload=1") &&
+  actions.includes(oldSuccessRedirect)
+) {
+  actions = actions.replace(oldSuccessRedirect, teamSuccessRedirect);
 }
+write(actionsPath, actions);
 
 const squadPagePath = "src/app/(admin)/admin/teams/[id]/squad/page.tsx";
 let squadPage = read(squadPagePath);
+
+if (!squadPage.includes('import MergeResultHardReload from "@/components/admin/players/MergeResultHardReload";')) {
+  squadPage = squadPage.replace(
+    'import Link from "next/link";\n',
+    [
+      'import Link from "next/link";',
+      'import MergeResultHardReload from "@/components/admin/players/MergeResultHardReload";',
+      "",
+    ].join("\n"),
+  );
+}
+
+squadPage = squadPage.replace(
+  [
+    "type SearchParams = {",
+    "  saved?: string;",
+    "  error?: string;",
+    "};",
+  ].join("\n"),
+  [
+    "type SearchParams = {",
+    "  saved?: string;",
+    "  error?: string;",
+    "  hardReload?: string;",
+    "};",
+  ].join("\n"),
+);
+
 const oldSavedCases = [
   '    case "moved-to-prospects":',
   '      return "Player moved back to prospects and unlinked from the active squad.";',
@@ -104,21 +147,34 @@ const newSavedCases = [
 
 if (!squadPage.includes('case "player-merged":') && squadPage.includes(oldSavedCases)) {
   squadPage = squadPage.replace(oldSavedCases, newSavedCases);
-  write(squadPagePath, squadPage);
 }
+
+if (!squadPage.includes("<MergeResultHardReload active={filters.hardReload === \"1\"} />")) {
+  squadPage = squadPage.replace(
+    '    <div className="mx-auto max-w-7xl space-y-6">',
+    [
+      '    <div className="mx-auto max-w-7xl space-y-6">',
+      '      <MergeResultHardReload active={filters.hardReload === "1"} />',
+    ].join("\n"),
+  );
+}
+
+write(squadPagePath, squadPage);
 
 const checks = [
   mergePage.includes("MergePlayerSubmitButton"),
   mergePage.includes("Merging accounts") || mergePage.includes("<MergePlayerSubmitButton"),
   mergePage.includes("<a\n              href={`/admin/teams/${teamId}/squad`}"),
-  actions.includes("squad?saved=player-merged"),
+  actions.includes("saved=player-merged&hardReload=1"),
   squadPage.includes('case "player-merged":'),
+  squadPage.includes("MergeResultHardReload"),
+  squadPage.includes('active={filters.hardReload === "1"}'),
 ];
 
 if (checks.some((check) => !check)) {
-  throw new Error("Player merge navigation and progress feedback were not applied correctly.");
+  throw new Error("Player merge navigation, clean reload and progress feedback were not applied correctly.");
 }
 
 console.log(
-  "Player merges now show progress, return to the squad with a success message, and use a fresh navigation back to the squad.",
+  "Player merges now force one clean document reload before showing the refreshed admin squad and success message.",
 );
