@@ -345,6 +345,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     .slice()
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
   const feesByFixtureId = new Map(playerFees.map((fee) => [fee.fixtureId, fee]));
+  const nextFixture = upcomingFixtures[0] ?? null;
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
@@ -458,11 +459,57 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Upcoming fixtures</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">{upcomingFixtures.length} shown</h2>
-            <p className="mt-2 text-sm leading-6 text-white/60">
-              Only published fixtures are shown here.
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Next fixture
+                </p>
+                <h2 className="mt-2 text-lg font-semibold leading-6 text-white">
+                  {nextFixture
+                    ? `vs ${getOpponentName({
+                        teamId: teamid,
+                        homeTeamId: nextFixture.homeTeamId,
+                        homeTeamName: nextFixture.homeTeam.name,
+                        awayTeamName: nextFixture.awayTeam.name,
+                      })}`
+                    : "No fixture published"}
+                </h2>
+              </div>
+              {upcomingFixtures.length > 0 ? (
+                <span className="shrink-0 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-medium text-white/60">
+                  {upcomingFixtures.length} published
+                </span>
+              ) : null}
+            </div>
+
+            {nextFixture ? (
+              <>
+                <p className="mt-3 text-sm leading-6 text-white/60">
+                  {formatFixtureDate(nextFixture.kickoffAt)}
+                  {nextFixture.venue?.name ? ` · ${nextFixture.venue.name}` : ""}
+                  {nextFixture.pitch ? ` · ${nextFixture.pitch}` : ""}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusClasses(
+                      nextFixture.status,
+                    )}`}
+                  >
+                    {nextFixture.status}
+                  </span>
+                  <Link
+                    href={`/player/team/${teamid}/availability?fixtureId=${nextFixture.id}`}
+                    className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                  >
+                    Open fixture
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-white/60">
+                No upcoming published fixture is currently available for this team.
+              </p>
+            )}
           </div>
         </section>
 
