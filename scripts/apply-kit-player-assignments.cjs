@@ -86,6 +86,9 @@ replaceRequired(
     '  const mergedInitialItems = Array.from(initialItemByPosition.values()).sort(',
     '    (left, right) => left.position - right.position,',
     '  );',
+    '  const kitAssignmentFormVersion = kitAssignments',
+    '    .map((assignment) => `${assignment.position}:${assignment.updatedAt.getTime()}`)',
+    '    .join("-");',
   ].join("\n"),
   "completed player detail merge",
 );
@@ -115,6 +118,12 @@ replaceRequired(
 );
 
 replaceRequired(
+  '          key={`team-kit-order-${kitQuantity}`}',
+  '          key={`team-kit-order-${kitQuantity}-${kitAssignmentFormVersion}`}',
+  "kit form assignment refresh key",
+);
+
+replaceRequired(
   '          initialItems={order?.items ?? []}',
   '          initialItems={mergedInitialItems}',
   "completed player details in order form",
@@ -125,7 +134,8 @@ fs.writeFileSync(pagePath, source, "utf8");
 if (
   !source.includes("TeamKitPlayerAssignments") ||
   !source.includes("listKitPlayerAssignments(teamid)") ||
-  !source.includes("initialItems={mergedInitialItems}")
+  !source.includes("initialItems={mergedInitialItems}") ||
+  !source.includes("kitAssignmentFormVersion")
 ) {
   throw new Error("Player kit assignment workflow was not mounted correctly.");
 }
