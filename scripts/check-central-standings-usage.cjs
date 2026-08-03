@@ -9,6 +9,7 @@ require("./prepare-standard-pay-per-kit-flow.cjs");
 require("./apply-standard-pay-per-kit-flow.cjs");
 require("./apply-late-confirmation-warning-delivery.cjs");
 require("./apply-captain-team-nudges.cjs");
+require("./apply-managed-team-prospects-navigation.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
