@@ -7,6 +7,7 @@ require("./apply-matchday-fee-waiver-reasons.cjs");
 require("./apply-captain-team-switcher-access-guard.cjs");
 require("./prepare-standard-pay-per-kit-flow.cjs");
 require("./apply-standard-pay-per-kit-flow.cjs");
+require("./apply-kit-design-deselect-lock.cjs");
 require("./apply-late-confirmation-warning-delivery.cjs");
 require("./apply-captain-team-nudges.cjs");
 require("./apply-managed-team-prospects-navigation.cjs");
