@@ -1,0 +1,26 @@
+name: Temporary build diagnostic
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: diagnostic-secret
+      EMAIL_REPLY_DOMAIN: reply.example.com
+      NEXT_PUBLIC_SITE_URL: https://www.sixfl.co.uk
+      STRIPE_SECRET_KEY: sk_test_diagnostic
+      RESEND_API_KEY: re_diagnostic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
