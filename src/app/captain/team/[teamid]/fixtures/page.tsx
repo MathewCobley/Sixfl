@@ -458,6 +458,9 @@ export default async function CaptainFixturesPage({
     : null;
   const isSelectedFixtureConfirmed = selectedConfirmation?.status === "CONFIRMED";
   const requestedFixtureWasNotFound = Boolean(requestedFixtureId && !requestedFixture);
+  const otherUpcomingFixtures = selectedFixture
+    ? upcomingFixtures.filter((fixture) => fixture.id !== selectedFixture.id)
+    : upcomingFixtures;
 
   return (
     <div className="space-y-8">
@@ -573,7 +576,7 @@ export default async function CaptainFixturesPage({
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Upcoming fixtures</p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Match list</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">Other upcoming fixtures</h2>
             </div>
             <Link href={`/captain/team/${teamid}`} className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white">
               Back to overview
@@ -581,10 +584,10 @@ export default async function CaptainFixturesPage({
           </div>
 
           <div className="divide-y divide-white/10">
-            {upcomingFixtures.length === 0 ? (
-              <div className="px-6 py-10 text-sm text-white/55">No published upcoming fixtures yet.</div>
+            {otherUpcomingFixtures.length === 0 ? (
+              <div className="px-6 py-10 text-sm text-white/55">No other published upcoming fixtures yet.</div>
             ) : (
-              upcomingFixtures.map((fixture, index) => {
+              otherUpcomingFixtures.map((fixture) => {
                 const confirmation = fixture.captainConfirmations[0] ?? null;
                 const provisional = fixtureIsProvisional(fixture);
                 const status: ConfirmationSummary = provisional
@@ -597,10 +600,10 @@ export default async function CaptainFixturesPage({
                       confirmation,
                       kickoffAt: fixture.kickoffAt,
                     });
-                const isSelected = selectedFixture?.id === fixture.id;
+                const isNextUpcoming = upcomingFixtures[0]?.id === fixture.id;
 
                 return (
-                  <div key={fixture.id} className={`flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between ${isSelected ? "bg-emerald-500/[0.05]" : ""}`}>
+                  <div key={fixture.id} className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="text-base font-semibold text-white">
@@ -610,9 +613,7 @@ export default async function CaptainFixturesPage({
                             colours={kitColours}
                           />
                         </div>
-                        {isSelected ? (
-                          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Selected</span>
-                        ) : index === 0 ? (
+                        {isNextUpcoming ? (
                           <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-100">Next up</span>
                         ) : null}
                       </div>
@@ -623,11 +624,9 @@ export default async function CaptainFixturesPage({
                     <div className="flex flex-col items-start gap-2 lg:items-end">
                       <span className={`rounded-full border px-3 py-1 text-xs font-medium ${getToneClasses(status.tone)}`}>{status.label}</span>
                       <span className="text-xs uppercase tracking-[0.14em] text-white/45">{getCountdownLabel(fixture.kickoffAt)}</span>
-                      {!isSelected ? (
-                        <Link href={`/captain/team/${teamid}/fixtures?fixtureId=${fixture.id}`} className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/[0.08] hover:text-white">
-                          Open this fixture
-                        </Link>
-                      ) : null}
+                      <Link href={`/captain/team/${teamid}/fixtures?fixtureId=${fixture.id}`} className="mt-1 inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/[0.08] hover:text-white">
+                        Open this fixture
+                      </Link>
                     </div>
                   </div>
                 );
