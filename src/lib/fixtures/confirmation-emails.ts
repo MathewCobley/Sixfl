@@ -8,6 +8,7 @@ import {
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 type ConfirmationEmailMode = "initial" | "auto72h" | "auto24h";
 
@@ -120,8 +121,13 @@ export async function runFixtureConfirmationEmailJob() {
     },
   });
 
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds(
+    fixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]),
+  );
+
   const summary = {
     scannedFixtures: fixtures.length,
+    provisionalFixturesSkipped: 0,
     queued: 0,
     alreadySent: 0,
     skipped: 0,
@@ -129,6 +135,16 @@ export async function runFixtureConfirmationEmailJob() {
   };
 
   for (const fixture of fixtures) {
+    const isProvisional =
+      placeholderTeamIds.has(fixture.homeTeam.id) ||
+      placeholderTeamIds.has(fixture.awayTeam.id);
+
+    if (isProvisional) {
+      summary.provisionalFixturesSkipped += 1;
+      summary.skipped += 2;
+      continue;
+    }
+
     for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
       const confirmation = fixture.captainConfirmations.find(
         (item) => item.teamId === teamId,
