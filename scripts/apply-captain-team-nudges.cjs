@@ -32,14 +32,22 @@ layout = replaceOnce(
   "captain team nudge import",
 );
 
-layout = replaceOnce(
-  layout,
-  "          <CaptainSupportPanel teamId={team.id} />",
+// Keep the priority action panel immediately below the permanent team header and
+// navigation. It must sit above help and every page-specific section.
+layout = layout
+  .replaceAll("          <CaptainTeamNudges teamId={team.id} />\n", "")
+  .replaceAll("          <CaptainTeamNudges teamId={team.id} />", "");
+
+const supportAnchor = "          <CaptainSupportPanel teamId={team.id} />";
+if (!layout.includes(supportAnchor)) {
+  throw new Error("Expected captain support panel anchor was not found.");
+}
+layout = layout.replace(
+  supportAnchor,
   [
-    "          <CaptainSupportPanel teamId={team.id} />",
     "          <CaptainTeamNudges teamId={team.id} />",
+    supportAnchor,
   ].join("\n"),
-  "captain team nudge placement",
 );
 
 write(layoutPath, layout);
@@ -100,14 +108,19 @@ results = replaceOnce(
 
 write(resultsPath, results);
 
+const nudgePosition = layout.indexOf("<CaptainTeamNudges teamId={team.id} />");
+const supportPosition = layout.indexOf("<CaptainSupportPanel teamId={team.id} />");
+
 if (
-  !layout.includes("<CaptainTeamNudges teamId={team.id} />") ||
+  nudgePosition < 0 ||
+  supportPosition < 0 ||
+  nudgePosition > supportPosition ||
   !results.includes("const needsRatings = matchPerformances.some(") ||
   !results.includes("row.needsRatings")
 ) {
-  throw new Error("Captain team ratings and kit nudges were not applied correctly.");
+  throw new Error("Captain priority actions and completion filters were not applied correctly.");
 }
 
 console.log(
-  "Captains now receive data-driven player-rating and team-kit nudges below the help panel.",
+  "Captain fixture confirmation, rating and kit actions now appear above help in priority order.",
 );
