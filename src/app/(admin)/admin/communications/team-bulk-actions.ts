@@ -117,6 +117,12 @@ function buildSendFingerprint(input: {
   isMarketingMessage: boolean;
   variables: Record<string, string>;
 }) {
+  const stableVariables = Object.fromEntries(
+    Object.entries(input.variables).filter(
+      ([key]) => key !== "yesResponseUrl" && key !== "noResponseUrl",
+    ),
+  );
+
   return createHash("sha256")
     .update(
       JSON.stringify({
@@ -128,7 +134,7 @@ function buildSendFingerprint(input: {
         templateId: input.templateId,
         templateKey: input.templateKey,
         isMarketingMessage: input.isMarketingMessage,
-        variables: input.variables,
+        variables: stableVariables,
       }),
     )
     .digest("hex");
