@@ -169,8 +169,7 @@ export async function POST(
     await prisma.$transaction([
       prisma.$executeRaw`
         UPDATE "PlayerPoolProfile"
-        SET "invitedAt" = ${contactedAt},
-            "updatedAt" = ${contactedAt}
+        SET "updatedAt" = ${contactedAt}
         WHERE "id" = ${profile.id}
       `,
       prisma.teamPlayerProspect.update({
@@ -187,6 +186,8 @@ export async function POST(
       ok: true,
       message: `Nudge sent to ${displayName}.`,
       nudgedAt: contactedAt.toISOString(),
+      dispatchStatus: String(dispatch.status ?? "QUEUED"),
+      nudgedBy: user?.name ?? user?.email ?? "SIXFL admin",
     });
   } catch (error) {
     console.error("PlayerPool nudge failed", error);
