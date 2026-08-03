@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS "PlayerMatchPerformance" (
   "teamId" TEXT NOT NULL,
   "teamMemberId" TEXT NOT NULL,
   "played" BOOLEAN NOT NULL DEFAULT TRUE,
+  "appearanceRecorded" BOOLEAN NOT NULL DEFAULT FALSE,
   "rating" DOUBLE PRECISION,
   "goals" INTEGER NOT NULL DEFAULT 0,
   "assists" INTEGER NOT NULL DEFAULT 0,
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS "PlayerMatchPerformance" (
 );
 
 ALTER TABLE "PlayerMatchPerformance"
+  ADD COLUMN IF NOT EXISTS "appearanceRecorded" BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS "goals" INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS "assists" INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS "isPlayerOfMatch" BOOLEAN NOT NULL DEFAULT FALSE,
@@ -26,6 +28,10 @@ ALTER TABLE "PlayerMatchPerformance"
 
 ALTER TABLE "MatchResultTeamMeta"
   ADD COLUMN IF NOT EXISTS "playerOfMatchTeamMemberId" TEXT;
+
+-- The pre-migration table only contained genuine saved appearance rows.
+UPDATE "PlayerMatchPerformance"
+SET "appearanceRecorded" = COALESCE("played", TRUE);
 
 -- Remove impossible legacy rows before adding/validating the permanent keys.
 DELETE FROM "PlayerMatchPerformance" performance
@@ -44,7 +50,6 @@ WHERE NOT EXISTS (
 
 UPDATE "PlayerMatchPerformance"
 SET
-  "played" = TRUE,
   "rating" = CASE
     WHEN "rating" BETWEEN 1 AND 10 THEN "rating"
     ELSE NULL
@@ -53,6 +58,11 @@ SET
   "assists" = GREATEST(COALESCE("assists", 0), 0),
   "isPlayerOfMatch" = COALESCE("isPlayerOfMatch", FALSE),
   "source" = COALESCE(NULLIF(BTRIM("source"), ''), 'CAPTAIN_RECORDED'),
+  "played" = COALESCE("appearanceRecorded", FALSE)
+    OR "rating" IS NOT NULL
+    OR GREATEST(COALESCE("goals", 0), 0) > 0
+    OR GREATEST(COALESCE("assists", 0), 0) > 0
+    OR COALESCE("isPlayerOfMatch", FALSE),
   "updatedAt" = NOW();
 
 DO $migration$
@@ -129,6 +139,23 @@ BEGIN
           'PLAYER_OF_MATCH',
           'ADMIN_CORRECTED',
           'LEGACY_UNKNOWN'
+        )
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'PlayerMatchPerformance_played_evidence_check'
+  ) THEN
+    ALTER TABLE "PlayerMatchPerformance"
+      ADD CONSTRAINT "PlayerMatchPerformance_played_evidence_check"
+      CHECK (
+        "played" = (
+          "appearanceRecorded"
+          OR "rating" IS NOT NULL
+          OR "goals" > 0
+          OR "assists" > 0
+          OR "isPlayerOfMatch"
         )
       );
   END IF;
@@ -257,18 +284,16 @@ BEGIN
     RAISE EXCEPTION 'Player performance team does not belong to the selected result.';
   END IF;
 
+  NEW."appearanceRecorded" := COALESCE(NEW."appearanceRecorded", FALSE);
   NEW."goals" := GREATEST(COALESCE(NEW."goals", 0), 0);
   NEW."assists" := GREATEST(COALESCE(NEW."assists", 0), 0);
   NEW."isPlayerOfMatch" := COALESCE(NEW."isPlayerOfMatch", FALSE);
   NEW."source" := COALESCE(NULLIF(BTRIM(NEW."source"), ''), 'CAPTAIN_RECORDED');
-
-  IF NEW."rating" IS NOT NULL
-     OR NEW."goals" > 0
-     OR NEW."assists" > 0
-     OR NEW."isPlayerOfMatch" THEN
-    NEW."played" := TRUE;
-  END IF;
-
+  NEW."played" := NEW."appearanceRecorded"
+    OR NEW."rating" IS NOT NULL
+    OR NEW."goals" > 0
+    OR NEW."assists" > 0
+    OR NEW."isPlayerOfMatch";
   NEW."updatedAt" := NOW();
   RETURN NEW;
 END;
@@ -341,10 +366,6 @@ DECLARE
   contribution_assists INTEGER;
   issue_id TEXT;
 BEGIN
-  PERFORM pg_advisory_xact_lock(
-    hashtext('player-performance:' || NEW."matchResultId" || ':' || NEW."teamId")
-  );
-
   UPDATE "PlayerPerformanceBackfillIssue"
   SET "resolvedAt" = NOW()
   WHERE "matchResultId" = NEW."matchResultId"
@@ -414,6 +435,7 @@ BEGIN
         "teamId",
         "teamMemberId",
         "played",
+        "appearanceRecorded",
         "rating",
         "goals",
         "assists",
@@ -427,6 +449,7 @@ BEGIN
         NEW."teamId",
         resolved_member_id,
         TRUE,
+        FALSE,
         NULL,
         contribution_goals,
         contribution_assists,
@@ -436,11 +459,10 @@ BEGIN
         NOW()
       )
       ON CONFLICT ("matchResultId", "teamId", "teamMemberId") DO UPDATE SET
-        "played" = TRUE,
         "goals" = "PlayerMatchPerformance"."goals" + EXCLUDED."goals",
         "assists" = "PlayerMatchPerformance"."assists" + EXCLUDED."assists",
         "source" = CASE
-          WHEN "PlayerMatchPerformance"."source" = 'CAPTAIN_RECORDED'
+          WHEN "PlayerMatchPerformance"."appearanceRecorded"
             THEN "PlayerMatchPerformance"."source"
           ELSE EXCLUDED."source"
         END,
@@ -455,6 +477,7 @@ BEGIN
       "teamId",
       "teamMemberId",
       "played",
+      "appearanceRecorded",
       "rating",
       "goals",
       "assists",
@@ -471,6 +494,7 @@ BEGIN
       NEW."teamId",
       NEW."playerOfMatchTeamMemberId",
       TRUE,
+      FALSE,
       NULL,
       0,
       0,
@@ -480,10 +504,9 @@ BEGIN
       NOW()
     )
     ON CONFLICT ("matchResultId", "teamId", "teamMemberId") DO UPDATE SET
-      "played" = TRUE,
       "isPlayerOfMatch" = TRUE,
       "source" = CASE
-        WHEN "PlayerMatchPerformance"."source" = 'CAPTAIN_RECORDED'
+        WHEN "PlayerMatchPerformance"."appearanceRecorded"
           THEN "PlayerMatchPerformance"."source"
         ELSE EXCLUDED."source"
       END,
@@ -509,25 +532,10 @@ BEGIN
       "resolvedAt" = NULL;
   END IF;
 
-  UPDATE "PlayerMatchPerformance"
-  SET "played" = TRUE, "updatedAt" = NOW()
-  WHERE "matchResultId" = NEW."matchResultId"
-    AND "teamId" = NEW."teamId"
-    AND (
-      "rating" IS NOT NULL
-      OR "goals" > 0
-      OR "assists" > 0
-      OR "isPlayerOfMatch" = TRUE
-    );
-
   DELETE FROM "PlayerMatchPerformance"
   WHERE "matchResultId" = NEW."matchResultId"
     AND "teamId" = NEW."teamId"
-    AND "played" = FALSE
-    AND "rating" IS NULL
-    AND "goals" = 0
-    AND "assists" = 0
-    AND "isPlayerOfMatch" = FALSE;
+    AND "played" = FALSE;
 
   RETURN NEW;
 END;
@@ -547,6 +555,7 @@ INSERT INTO "PlayerMatchPerformance" (
   "teamId",
   "teamMemberId",
   "played",
+  "appearanceRecorded",
   "rating",
   "goals",
   "assists",
@@ -560,6 +569,7 @@ SELECT
   result."id",
   member."teamId",
   member."id",
+  TRUE,
   TRUE,
   NULL,
   0,
@@ -575,7 +585,7 @@ INNER JOIN "MatchResult" result ON result."fixtureId" = fixture."id"
 WHERE selection."selectionStatus" = 'SELECTED'
   AND member."teamId" IN (fixture."homeTeamId", fixture."awayTeamId")
 ON CONFLICT ("matchResultId", "teamId", "teamMemberId") DO UPDATE SET
-  "played" = TRUE,
+  "appearanceRecorded" = TRUE,
   "source" = CASE
     WHEN "PlayerMatchPerformance"."source" = 'CAPTAIN_RECORDED'
       THEN "PlayerMatchPerformance"."source"
