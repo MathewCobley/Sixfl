@@ -9,7 +9,6 @@ require("./prepare-standard-pay-per-kit-flow.cjs");
 require("./apply-standard-pay-per-kit-flow.cjs");
 require("./apply-kit-design-deselect-lock.cjs");
 require("./apply-paid-extra-kit-player-details.cjs");
-require("./apply-extra-kit-order-persistence-fix.cjs");
 require("./apply-admin-email-reply-feedback.cjs");
 require("./apply-late-confirmation-warning-delivery.cjs");
 require("./apply-captain-team-nudges.cjs");
