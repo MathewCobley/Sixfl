@@ -25,53 +25,6 @@ panelSource = panelSource.replace(
 );
 fs.writeFileSync(panelPath, panelSource, "utf8");
 
-const copyBridgePath = path.join(
-  process.cwd(),
-  "src/components/captain/StandardTeamKitCopyBridge.tsx",
-);
-let copyBridgeSource = fs.readFileSync(copyBridgePath, "utf8");
-
-const duplicatedInstructionBlock = [
-  "    if (",
-  "      text ===",
-  '      "The compulsory team contribution is £70 in total — £10 for each of the seven personalised shirts. Payment is required before SIXFL places the supplier order."',
-  "    ) {",
-  "      element.textContent =",
-  '        "Complete kits cost £20 each. Send a payment link to each squad member who wants one. A personalisation box appears after that kit has been paid for.";',
-  "      return;",
-  "    }",
-].join("\n");
-
-const deduplicatedInstructionBlock = [
-  "    if (",
-  "      element.tagName === \"P\" &&",
-  "      (text ===",
-  '        "The compulsory team contribution is £70 in total — £10 for each of the seven personalised shirts. Payment is required before SIXFL places the supplier order." ||',
-  "        text ===",
-  '          "Complete kits cost £20 each. Send a payment link to each squad member who wants one. A personalisation box appears after that kit has been paid for.")',
-  "    ) {",
-  "      // The server-rendered standard-team introduction already explains the",
-  "      // £20 payment flow. Remove this legacy package paragraph instead of",
-  "      // rewriting it into a second copy of the same instructions.",
-  "      element.remove();",
-  "      return;",
-  "    }",
-].join("\n");
-
-if (!copyBridgeSource.includes(deduplicatedInstructionBlock)) {
-  if (!copyBridgeSource.includes(duplicatedInstructionBlock)) {
-    throw new Error(
-      "Expected duplicated standard-kit instruction block was not found.",
-    );
-  }
-
-  copyBridgeSource = copyBridgeSource.replace(
-    duplicatedInstructionBlock,
-    deduplicatedInstructionBlock,
-  );
-  fs.writeFileSync(copyBridgePath, copyBridgeSource, "utf8");
-}
-
 console.log(
-  "Prepared standard pay-per-kit flow and removed the duplicated kit instructions.",
+  "Prepared the standard pay-per-kit flow without any post-render copy bridge.",
 );
