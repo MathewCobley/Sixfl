@@ -1,13 +1,26 @@
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+
+export type PlayerPerformanceSource =
+  | "CAPTAIN_RECORDED"
+  | "SQUAD_SELECTION"
+  | "MATCH_CONTRIBUTION"
+  | "PLAYER_OF_MATCH"
+  | "ADMIN_CORRECTED"
+  | "LEGACY_UNKNOWN";
 
 export type MatchPerformance = {
   matchResultId: string;
   teamMemberId: string;
   played: boolean;
+  appearanceRecorded: boolean;
   rating: number | null;
+  goals: number;
+  assists: number;
+  isPlayerOfMatch: boolean;
+  source: PlayerPerformanceSource;
 };
 
 export type PlayerPerformanceHistory = MatchPerformance & {
@@ -24,75 +37,53 @@ export type PlayerPerformanceSummary = {
   appearances: number;
   ratedAppearances: number;
   averageRating: number | null;
+  goals: number;
+  assists: number;
+  playerOfMatchAwards: number;
 };
 
-let tableReady: Promise<void> | null = null;
-
-export function ensurePlayerMatchPerformanceTable() {
-  if (!tableReady) {
-    tableReady = (async () => {
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS "PlayerMatchPerformance" (
-          "id" TEXT NOT NULL,
-          "matchResultId" TEXT NOT NULL,
-          "teamId" TEXT NOT NULL,
-          "teamMemberId" TEXT NOT NULL,
-          "played" BOOLEAN NOT NULL DEFAULT TRUE,
-          "rating" DOUBLE PRECISION,
-          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "PlayerMatchPerformance_pkey" PRIMARY KEY ("id"),
-          CONSTRAINT "PlayerMatchPerformance_matchResultId_fkey" FOREIGN KEY ("matchResultId") REFERENCES "MatchResult"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT "PlayerMatchPerformance_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT "PlayerMatchPerformance_teamMemberId_fkey" FOREIGN KEY ("teamMemberId") REFERENCES "TeamMember"("id") ON DELETE CASCADE ON UPDATE CASCADE
-        );
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE UNIQUE INDEX IF NOT EXISTS "PlayerMatchPerformance_result_team_member_key"
-        ON "PlayerMatchPerformance"("matchResultId", "teamId", "teamMemberId");
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "PlayerMatchPerformance_teamMemberId_idx"
-        ON "PlayerMatchPerformance"("teamMemberId");
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "PlayerMatchPerformance_teamId_matchResultId_idx"
-        ON "PlayerMatchPerformance"("teamId", "matchResultId");
-      `);
-    })().catch((error) => {
-      tableReady = null;
-      throw error;
-    });
-  }
-
-  return tableReady;
+/**
+ * Kept temporarily for callers introduced before the table became a real
+ * migration. Table creation now belongs exclusively to Prisma migrations.
+ */
+export async function ensurePlayerMatchPerformanceTable() {
+  return;
 }
 
-export async function getMatchPerformances(teamId: string, matchResultIds: string[]) {
+export async function getMatchPerformances(
+  teamId: string,
+  matchResultIds: string[],
+) {
   if (matchResultIds.length === 0) return [] as MatchPerformance[];
-  await ensurePlayerMatchPerformanceTable();
 
   return prisma.$queryRaw<MatchPerformance[]>(Prisma.sql`
     SELECT
       "matchResultId",
       "teamMemberId",
       "played",
-      "rating"
+      "appearanceRecorded",
+      "rating",
+      "goals",
+      "assists",
+      "isPlayerOfMatch",
+      "source"
     FROM "PlayerMatchPerformance"
     WHERE "teamId" = ${teamId}
       AND "matchResultId" IN (${Prisma.join(matchResultIds)})
+      AND "played" = TRUE
   `);
 }
 
 export async function getTeamPlayerPerformanceSummaries(teamId: string) {
-  await ensurePlayerMatchPerformanceTable();
-
   return prisma.$queryRaw<PlayerPerformanceSummary[]>(Prisma.sql`
     SELECT
       "teamMemberId",
       COUNT(*)::int AS "appearances",
       COUNT("rating")::int AS "ratedAppearances",
-      AVG("rating")::double precision AS "averageRating"
+      AVG("rating")::double precision AS "averageRating",
+      COALESCE(SUM("goals"), 0)::int AS "goals",
+      COALESCE(SUM("assists"), 0)::int AS "assists",
+      COUNT(*) FILTER (WHERE "isPlayerOfMatch" = TRUE)::int AS "playerOfMatchAwards"
     FROM "PlayerMatchPerformance"
     WHERE "teamId" = ${teamId}
       AND "played" = TRUE
@@ -100,16 +91,23 @@ export async function getTeamPlayerPerformanceSummaries(teamId: string) {
   `);
 }
 
+/**
+ * Replaces only the captain-recorded appearance/rating evidence for a match.
+ * Goals, assists and Player of the Match are maintained by the database trigger
+ * from MatchResultTeamMeta, so concurrent saves cannot erase either side.
+ */
 export async function replaceMatchPerformances(input: {
   teamId: string;
   matchResultId: string;
   rows: Array<{ teamMemberId: string; rating: number | null }>;
 }) {
-  await ensurePlayerMatchPerformanceTable();
-
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
-      DELETE FROM "PlayerMatchPerformance"
+      UPDATE "PlayerMatchPerformance"
+      SET
+        "appearanceRecorded" = FALSE,
+        "rating" = NULL,
+        "updatedAt" = NOW()
       WHERE "teamId" = ${input.teamId}
         AND "matchResultId" = ${input.matchResultId}
     `;
@@ -117,12 +115,48 @@ export async function replaceMatchPerformances(input: {
     for (const row of input.rows) {
       await tx.$executeRaw`
         INSERT INTO "PlayerMatchPerformance" (
-          "id", "matchResultId", "teamId", "teamMemberId", "played", "rating", "updatedAt"
+          "id",
+          "matchResultId",
+          "teamId",
+          "teamMemberId",
+          "played",
+          "appearanceRecorded",
+          "rating",
+          "goals",
+          "assists",
+          "isPlayerOfMatch",
+          "source",
+          "createdAt",
+          "updatedAt"
         ) VALUES (
-          ${randomUUID()}, ${input.matchResultId}, ${input.teamId}, ${row.teamMemberId}, TRUE, ${row.rating}, NOW()
+          ${randomUUID()},
+          ${input.matchResultId},
+          ${input.teamId},
+          ${row.teamMemberId},
+          TRUE,
+          TRUE,
+          ${row.rating},
+          0,
+          0,
+          FALSE,
+          'CAPTAIN_RECORDED',
+          NOW(),
+          NOW()
         )
+        ON CONFLICT ("matchResultId", "teamId", "teamMemberId") DO UPDATE SET
+          "appearanceRecorded" = TRUE,
+          "rating" = EXCLUDED."rating",
+          "source" = 'CAPTAIN_RECORDED',
+          "updatedAt" = NOW()
       `;
     }
+
+    await tx.$executeRaw`
+      DELETE FROM "PlayerMatchPerformance"
+      WHERE "teamId" = ${input.teamId}
+        AND "matchResultId" = ${input.matchResultId}
+        AND "played" = FALSE
+    `;
   });
 }
 
@@ -131,7 +165,6 @@ export async function getPlayerPerformanceHistory(input: {
   teamMemberId: string;
   limit?: number;
 }) {
-  await ensurePlayerMatchPerformanceTable();
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
 
   return prisma.$queryRaw<PlayerPerformanceHistory[]>(Prisma.sql`
@@ -139,7 +172,12 @@ export async function getPlayerPerformanceHistory(input: {
       performance."matchResultId",
       performance."teamMemberId",
       performance."played",
+      performance."appearanceRecorded",
       performance."rating",
+      performance."goals",
+      performance."assists",
+      performance."isPlayerOfMatch",
+      performance."source",
       fixture."kickoffAt",
       fixture."homeTeamId",
       home_team."name" AS "homeTeamName",

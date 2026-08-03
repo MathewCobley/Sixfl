@@ -11,6 +11,7 @@
     "lint": "eslint",
     "audit:dom": "node scripts/audit-dom-bridges.mjs",
     "audit:dom:changed": "node scripts/audit-dom-bridges.mjs --changed-from HEAD^ --fail-on-findings",
+    "audit:player-stats": "node scripts/audit-player-performance-integrity.mjs",
     "db:deploy": "prisma migrate deploy",
     "seed:notifications": "tsx prisma/seed-notifications.ts"
   },

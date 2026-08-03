@@ -1,0 +1,85 @@
+name: Validate player performance integrity
+
+on:
+  push:
+    branches:
+      - main
+      - fix/canonical-player-performance
+    paths:
+      - "prisma/**"
+      - "src/lib/playerMatchPerformances.ts"
+      - "src/components/player/PlayerPerformancePanel.tsx"
+      - "src/app/(public)/leagues/[slug]/stats/page.tsx"
+      - "scripts/audit-player-performance-integrity.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/validate-player-performance.yml"
+  pull_request:
+    paths:
+      - "prisma/**"
+      - "src/lib/playerMatchPerformances.ts"
+      - "src/components/player/PlayerPerformancePanel.tsx"
+      - "src/app/(public)/leagues/[slug]/stats/page.tsx"
+      - "scripts/audit-player-performance-integrity.mjs"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl_test?schema=public
+      NEXTAUTH_SECRET: ci-player-performance-secret
+      NEXTAUTH_URL: http://localhost:3000
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply source preparation scripts
+        run: npm run prebuild
+
+      - name: Validate and generate Prisma Client
+        run: |
+          npx prisma validate
+          npx prisma generate
+
+      - name: Prepare current schema and apply canonical migration
+        run: |
+          npx prisma db push --skip-generate
+          npx prisma db execute --file prisma/migrations/20260803010000_canonical_player_match_performance/migration.sql --schema prisma/schema.prisma
+
+      - name: Type-check application
+        run: npx tsc --noEmit
+
+      - name: Audit player performance integrity
+        run: npm run audit:player-stats

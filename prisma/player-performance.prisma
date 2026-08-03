@@ -1,0 +1,32 @@
+model PlayerMatchPerformance {
+  id                     String   @id
+  matchResultId          String
+  teamId                 String
+  teamMemberId           String
+  played                 Boolean  @default(true)
+  appearanceRecorded     Boolean  @default(false)
+  rating                 Float?
+  goals                  Int      @default(0)
+  assists                Int      @default(0)
+  isPlayerOfMatch        Boolean  @default(false)
+  source                 String   @default("CAPTAIN_RECORDED")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([matchResultId, teamId, teamMemberId], map: "PlayerMatchPerformance_result_team_member_key")
+  @@index([teamMemberId], map: "PlayerMatchPerformance_teamMemberId_idx")
+  @@index([teamId, matchResultId], map: "PlayerMatchPerformance_teamId_matchResultId_idx")
+}
+
+model PlayerPerformanceBackfillIssue {
+  id            String    @id
+  matchResultId String
+  teamId        String
+  kind          String
+  reference     Json?
+  reason        String
+  createdAt     DateTime  @default(now())
+  resolvedAt    DateTime?
+
+  @@index([resolvedAt, teamId], map: "PlayerPerformanceBackfillIssue_open_idx")
+}
