@@ -13,6 +13,21 @@ type Contribution = {
 };
 
 type MatchOutcome = "W" | "D" | "L";
+type PerformanceSource = "recorded" | "selected-squad" | "match-contribution";
+
+type PerformanceHistoryRow = {
+  matchResultId: string;
+  teamMemberId: string;
+  played: boolean;
+  rating: number | null;
+  kickoffAt: Date;
+  homeTeamId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number;
+  awayScore: number;
+  source: PerformanceSource;
+};
 
 function normalise(value: string | null | undefined) {
   return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -150,25 +165,95 @@ export default async function PlayerPerformancePanel({
   });
   if (!membership) return null;
 
-  const [history, metadata] = await Promise.all([
+  const [recordedHistory, selectedMatches, metadata] = await Promise.all([
     getPlayerPerformanceHistory({
       teamId,
       teamMemberId: membership.id,
-      limit: 30,
+      limit: 100,
+    }),
+    prisma.fixtureSelection.findMany({
+      where: {
+        teamMemberId: membership.id,
+        selectionStatus: "SELECTED",
+        fixture: {
+          OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+          result: { isNot: null },
+        },
+      },
+      select: {
+        fixture: {
+          select: {
+            kickoffAt: true,
+            homeTeamId: true,
+            homeTeam: { select: { name: true } },
+            awayTeam: { select: { name: true } },
+            result: {
+              select: { id: true, homeScore: true, awayScore: true },
+            },
+          },
+        },
+      },
     }),
     prisma.matchResultTeamMeta.findMany({
       where: { teamId },
-      select: { scorers: true, playerOfMatchName: true },
+      select: {
+        matchResultId: true,
+        scorers: true,
+        playerOfMatchName: true,
+        matchResult: {
+          select: {
+            homeScore: true,
+            awayScore: true,
+            fixture: {
+              select: {
+                kickoffAt: true,
+                homeTeamId: true,
+                homeTeam: { select: { name: true } },
+                awayTeam: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
     }),
   ]);
 
   const displayName = membership.user.name || membership.user.email || "Player";
   const normalisedDisplayName = normalise(displayName);
+  const historyByResultId = new Map<string, PerformanceHistoryRow>();
+  for (const match of recordedHistory) {
+    historyByResultId.set(match.matchResultId, {
+      ...match,
+      source: "recorded",
+    });
+  }
+
+  for (const selection of selectedMatches) {
+    const result = selection.fixture.result;
+    if (!result || historyByResultId.has(result.id)) continue;
+
+    historyByResultId.set(result.id, {
+      matchResultId: result.id,
+      teamMemberId: membership.id,
+      played: true,
+      rating: null,
+      kickoffAt: selection.fixture.kickoffAt,
+      homeTeamId: selection.fixture.homeTeamId,
+      homeTeamName: selection.fixture.homeTeam.name,
+      awayTeamName: selection.fixture.awayTeam.name,
+      homeScore: result.homeScore,
+      awayScore: result.awayScore,
+      source: "selected-squad",
+    });
+  }
+
   let goals = 0;
   let assists = 0;
   let playerOfMatchAwards = 0;
 
   for (const detail of metadata) {
+    let hasRecordedContribution = false;
+
     for (const contribution of parseContributions(detail.scorers)) {
       const matchesPlayer = contribution.teamMemberId
         ? contribution.teamMemberId === membership.id
@@ -177,13 +262,40 @@ export default async function PlayerPerformancePanel({
       if (!matchesPlayer) continue;
       goals += contribution.goals;
       assists += contribution.assists;
+      hasRecordedContribution = true;
     }
 
-    if (normalise(detail.playerOfMatchName) === normalisedDisplayName) {
+    const wasPlayerOfMatch =
+      normalise(detail.playerOfMatchName) === normalisedDisplayName;
+    if (wasPlayerOfMatch) {
       playerOfMatchAwards += 1;
+    }
+
+    if (
+      (hasRecordedContribution || wasPlayerOfMatch) &&
+      !historyByResultId.has(detail.matchResultId)
+    ) {
+      const fixture = detail.matchResult.fixture;
+      historyByResultId.set(detail.matchResultId, {
+        matchResultId: detail.matchResultId,
+        teamMemberId: membership.id,
+        played: true,
+        rating: null,
+        kickoffAt: fixture.kickoffAt,
+        homeTeamId: fixture.homeTeamId,
+        homeTeamName: fixture.homeTeam.name,
+        awayTeamName: fixture.awayTeam.name,
+        homeScore: detail.matchResult.homeScore,
+        awayScore: detail.matchResult.awayScore,
+        source: "match-contribution",
+      });
     }
   }
 
+  const history = Array.from(historyByResultId.values())
+    .sort((left, right) => right.kickoffAt.getTime() - left.kickoffAt.getTime())
+    .slice(0, 100);
+  const hasRecoveredHistory = history.some((match) => match.source !== "recorded");
   const ratings = history.flatMap((match) =>
     match.rating === null ? [] : [Number(match.rating)],
   );
@@ -228,6 +340,14 @@ export default async function PlayerPerformancePanel({
           tone="violet"
         />
       </div>
+
+      {hasRecoveredHistory ? (
+        <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-500/[0.07] px-4 py-3 text-xs leading-5 text-amber-50/70">
+          Some older matches were recorded before appearance and rating tracking was
+          introduced. Those appearances are included, but a rating is shown only where
+          the captain entered one.
+        </div>
+      ) : null}
 
       <div className="mt-5">
         <div className="flex items-center justify-between gap-3">
