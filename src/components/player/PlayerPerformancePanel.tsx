@@ -2,7 +2,10 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/auth";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
-import { getPlayerPerformanceHistory } from "@/lib/playerMatchPerformances";
+import {
+  getPlayerPerformanceHistory,
+  getTeamPlayerPerformanceSummaries,
+} from "@/lib/playerMatchPerformances";
 import { prisma } from "@/lib/prisma";
 
 type MatchOutcome = "W" | "D" | "L";
@@ -99,16 +102,33 @@ export default async function PlayerPerformancePanel({
     where: { id: resolvedMembershipId, teamId },
     select: {
       id: true,
+      userId: true,
       team: { select: { name: true } },
+      user: {
+        select: {
+          teamMembers: { select: { id: true }, take: 2 },
+        },
+      },
     },
   });
   if (!membership) return null;
 
-  const history = await getPlayerPerformanceHistory({
-    teamId,
-    teamMemberId: membership.id,
-    limit: 100,
-  });
+  const [history, squadMembers, squadSummaries] = await Promise.all([
+    getPlayerPerformanceHistory({
+      teamId,
+      teamMemberId: membership.id,
+      limit: 100,
+    }),
+    prisma.teamMember.findMany({
+      where: { teamId },
+      orderBy: [{ createdAt: "asc" }],
+      select: {
+        id: true,
+        user: { select: { name: true } },
+      },
+    }),
+    getTeamPlayerPerformanceSummaries(teamId),
+  ]);
 
   const goals = history.reduce((sum, match) => sum + Number(match.goals), 0);
   const assists = history.reduce((sum, match) => sum + Number(match.assists), 0);
@@ -127,6 +147,37 @@ export default async function PlayerPerformancePanel({
   const hasRecoveredHistory = history.some(
     (match) => match.source !== "CAPTAIN_RECORDED",
   );
+  const hasMultipleTeams = membership.user.teamMembers.length > 1;
+
+  const summaryByMemberId = new Map(
+    squadSummaries.map((summary) => [summary.teamMemberId, summary]),
+  );
+  const squadRows = squadMembers
+    .map((member) => {
+      const summary = summaryByMemberId.get(member.id);
+      const rowGoals = Number(summary?.goals ?? 0);
+      const rowAssists = Number(summary?.assists ?? 0);
+      return {
+        id: member.id,
+        name: member.user.name?.trim() || "Unnamed player",
+        appearances: Number(summary?.appearances ?? 0),
+        goals: rowGoals,
+        assists: rowAssists,
+        goalInvolvements: rowGoals + rowAssists,
+        averageRating:
+          summary?.averageRating === null || summary?.averageRating === undefined
+            ? null
+            : Number(summary.averageRating),
+        playerOfMatchAwards: Number(summary?.playerOfMatchAwards ?? 0),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.goalInvolvements - a.goalInvolvements ||
+        b.goals - a.goals ||
+        b.appearances - a.appearances ||
+        a.name.localeCompare(b.name),
+    );
 
   return (
     <section className="overflow-hidden rounded-3xl border border-sky-400/15 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.13),transparent_38%),rgba(255,255,255,0.04)] p-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] sm:p-6">
@@ -137,7 +188,10 @@ export default async function PlayerPerformancePanel({
           </p>
           <h2 className="mt-2 text-2xl font-semibold text-white">Your stats</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-            These are your stats for {membership.team.name}. Choose another team above to see your stats there.
+            These are your stats for {membership.team.name}.
+            {hasMultipleTeams
+              ? " Choose another team above to view your stats and that squad's statistics."
+              : " You can also see the whole squad's statistics below."}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">
@@ -179,9 +233,67 @@ export default async function PlayerPerformancePanel({
         </div>
       ) : null}
 
-      <div className="mt-5">
+      <div className="mt-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Squad stats</h3>
+            <p className="mt-1 text-sm text-white/50">
+              Football statistics for the {membership.team.name} squad. Your row is highlighted.
+            </p>
+          </div>
+          <span className="text-xs text-white/40">
+            {squadRows.length} squad member{squadRows.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <div className="mt-3 overflow-x-auto rounded-2xl border border-white/10 bg-black/15">
+          <table className="min-w-[760px] w-full text-left text-sm">
+            <thead className="border-b border-white/10 bg-white/[0.03] text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
+              <tr>
+                <th className="px-4 py-3">Player</th>
+                <th className="px-3 py-3 text-center">Apps</th>
+                <th className="px-3 py-3 text-center">Goals</th>
+                <th className="px-3 py-3 text-center">Assists</th>
+                <th className="px-3 py-3 text-center">Goal involvements</th>
+                <th className="px-3 py-3 text-center">Avg rating</th>
+                <th className="px-3 py-3 text-center">POTM</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.07]">
+              {squadRows.map((player) => {
+                const isCurrentPlayer = player.id === membership.id;
+                return (
+                  <tr
+                    key={player.id}
+                    className={isCurrentPlayer ? "bg-sky-500/10" : "hover:bg-white/[0.025]"}
+                  >
+                    <td className="px-4 py-3 font-semibold text-white">
+                      {player.name}
+                      {isCurrentPlayer ? (
+                        <span className="ml-2 rounded-full border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-100">
+                          You
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-3 text-center text-white/70">{player.appearances}</td>
+                    <td className="px-3 py-3 text-center text-white/70">{player.goals}</td>
+                    <td className="px-3 py-3 text-center text-white/70">{player.assists}</td>
+                    <td className="px-3 py-3 text-center font-semibold text-sky-100">{player.goalInvolvements}</td>
+                    <td className="px-3 py-3 text-center text-white/70">
+                      {player.averageRating === null ? "—" : player.averageRating.toFixed(1)}
+                    </td>
+                    <td className="px-3 py-3 text-center text-white/70">{player.playerOfMatchAwards}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="mt-6">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-white">Recent performances</h3>
+          <h3 className="text-sm font-semibold text-white">Your recent performances</h3>
           <span className="text-xs text-white/40">
             Latest {Math.min(history.length, 5)}
           </span>
