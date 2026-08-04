@@ -47,6 +47,12 @@ export default async function PlayerReferralsPage() {
           <p className="mt-3 max-w-2xl text-sm leading-7 text-emerald-50/90">
             Share your personal link with a new team. Once that team joins any SIXFL league and completes three matches, your £75 reward becomes payable.
           </p>
+          <Link
+            href="/referral-terms"
+            className="mt-3 inline-flex text-sm font-black text-emerald-100 underline decoration-emerald-300/50 underline-offset-4 hover:text-white"
+          >
+            Read the referral terms and conditions
+          </Link>
           <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
             <div>
               <label className="text-xs font-black uppercase tracking-[0.14em] text-emerald-200">Your referral code</label>
@@ -102,7 +108,7 @@ export default async function PlayerReferralsPage() {
         </section>
 
         <p className="text-xs leading-5 text-white/40">
-          The team must be new to SIXFL and use your referral code when registering. Cancelled or postponed fixtures do not count.
+          The team must be new to SIXFL and use your referral code when registering. Cancelled or postponed fixtures do not count. <Link href="/referral-terms" className="font-bold text-white/65 underline underline-offset-4 hover:text-white">Terms and conditions apply.</Link>
         </p>
       </div>
     </main>
