@@ -7,18 +7,20 @@ function getTeamId(pathname: string) {
   return pathname.match(/^\/(?:captain|player)\/team\/([^/]+)/)?.[1] ?? null;
 }
 
-function ensureButton(label: string, href: string, container: Element) {
+function ensureButton(label: string, href: string, container: Element, kind: string) {
   const existing = document.querySelector<HTMLAnchorElement>(
-    `[data-captain-player-mode-switch="true"][href="${href}"]`,
+    `[data-captain-player-mode-switch="${kind}"]`,
   );
   if (existing) return true;
 
   const link = document.createElement("a");
   link.href = href;
   link.textContent = label;
-  link.dataset.captainPlayerModeSwitch = "true";
+  link.dataset.captainPlayerModeSwitch = kind;
   link.className =
-    "inline-flex items-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/15";
+    kind === "dashboard"
+      ? "inline-flex items-center rounded-xl border border-white/15 bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white/85 transition hover:bg-white/[0.1]"
+      : "inline-flex items-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/15";
   container.appendChild(link);
   return true;
 }
@@ -28,11 +30,16 @@ function findPlayerActionArea() {
   const firstSection = main?.querySelector("section");
   if (!firstSection) return null;
 
+  const availabilityLink = firstSection.querySelector<HTMLAnchorElement>(
+    'a[href*="/availability"]',
+  );
+  if (availabilityLink?.parentElement) return availabilityLink.parentElement;
+
   return (
     Array.from(firstSection.querySelectorAll("div")).find((element) => {
       const text = element.textContent ?? "";
-      return text.includes("Confirm availability") && text.includes("View league");
-    }) ?? null
+      return text.includes("Confirm availability") || text.includes("View league");
+    }) ?? firstSection
   );
 }
 
@@ -47,13 +54,14 @@ function findCaptainActionArea() {
   );
 }
 
-function isCaptainPlayerPage() {
-  const firstSection = document.querySelector("main section");
-  if (!firstSection) return false;
+function pageShowsCaptainAccess() {
+  const main = document.querySelector("main");
+  if (!main) return false;
 
-  return Array.from(firstSection.querySelectorAll("span")).some(
-    (span) => span.textContent?.trim().toLowerCase() === "captain",
-  );
+  return Array.from(main.querySelectorAll("span, p, div")).some((element) => {
+    const text = element.textContent?.trim().toLowerCase() ?? "";
+    return text === "captain" || text.endsWith("· captain");
+  });
 }
 
 function correctCaptainWording() {
@@ -105,18 +113,20 @@ export default function CaptainPlayerModeBridge() {
       let complete = false;
 
       if (pathname.startsWith(`/player/team/${teamId}`)) {
-        if (isCaptainPlayerPage()) {
-          correctCaptainWording();
-          const actionArea = findPlayerActionArea();
-          if (actionArea) {
-            complete = ensureButton(
-              "Switch to captain dashboard",
+        const actionArea = findPlayerActionArea();
+        if (actionArea) {
+          ensureButton("Back to dashboard", "/dashboard", actionArea, "dashboard");
+
+          if (pageShowsCaptainAccess()) {
+            correctCaptainWording();
+            ensureButton(
+              "Open captain dashboard",
               `/captain/team/${teamId}`,
               actionArea,
+              "captain",
             );
           }
-        } else {
-          complete = Boolean(document.querySelector("main"));
+          complete = true;
         }
       } else if (pathname.startsWith(`/captain/team/${teamId}`)) {
         const actionArea = findCaptainActionArea();
@@ -125,6 +135,7 @@ export default function CaptainPlayerModeBridge() {
             "View my player page",
             `/player/team/${teamId}`,
             actionArea,
+            "player",
           );
         }
       }
@@ -140,7 +151,7 @@ export default function CaptainPlayerModeBridge() {
       cancelled = true;
       if (timer !== null) window.clearTimeout(timer);
       document
-        .querySelectorAll<HTMLElement>('[data-captain-player-mode-switch="true"]')
+        .querySelectorAll<HTMLElement>("[data-captain-player-mode-switch]")
         .forEach((element) => element.remove());
     };
   }, [pathname]);
