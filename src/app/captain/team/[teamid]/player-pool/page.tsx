@@ -184,7 +184,7 @@ export default async function CaptainPlayerPoolPage({
           Available players for {team.name}
         </h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">
-          These players are looking for a SIXFL team and match your league area or playing night. Profiles are anonymised: names, email addresses and mobile numbers stay private until the player agrees to an introduction.
+          These players have chosen your league, or are looking to play locally on the same night. Request an introduction and SIXFL will check with the player first. Their name and contact details stay private unless they agree.
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-white/70">
