@@ -249,7 +249,7 @@ function drawTeamTallyRow(
   },
 ) {
   const rowHeight = 38;
-  const teamWidth = 122;
+  const teamWidth = 140;
   const scoreWidth = 42;
   const sectionGap = 7;
   const tallyX = input.x + teamWidth;
@@ -257,34 +257,36 @@ function drawTeamTallyRow(
   const tallyWidth = scoreX - sectionGap - tallyX;
 
   drawShirt(ctx, input.x + 2, input.y + 10, input.kitColour);
-  ctx.font = font(9, true);
+  ctx.font = font(8.6, true);
   write(
     ctx,
     fit(ctx, input.teamName, teamWidth - 27),
     input.x + 23,
-    input.y + 17,
-    { font: font(9, true) },
+    input.y + 14,
+    { font: font(8.6, true) },
   );
 
   const warningBoxX = input.x + 23;
-  const warningBoxY = input.y + 23;
+  const warningBoxY = input.y + 21;
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#111111";
   ctx.lineWidth = 0.8;
-  ctx.fillRect(warningBoxX, warningBoxY, 9, 9);
-  ctx.strokeRect(warningBoxX, warningBoxY, 9, 9);
+  ctx.fillRect(warningBoxX, warningBoxY, 10, 10);
+  ctx.strokeRect(warningBoxX, warningBoxY, 10, 10);
+
+  const warningTextX = warningBoxX + 15;
+  write(ctx, "SHIN PAD WARNING", warningTextX, warningBoxY + 4.5, {
+    font: font(4.8, true),
+    fill: "#555555",
+  });
   write(
     ctx,
-    fit(
-      ctx,
-      `SHIN PAD WARNING | TO DATE ${input.warningCount}`,
-      teamWidth - 40,
-    ),
-    warningBoxX + 13,
-    warningBoxY + 8,
+    `PREVIOUS WARNINGS: ${input.warningCount}`,
+    warningTextX,
+    warningBoxY + 10.5,
     {
-      font: font(5.2, true),
-      fill: input.warningCount > 0 ? "#9a3412" : "#555555",
+      font: font(4.6, true),
+      fill: input.warningCount > 0 ? "#9a3412" : "#6b7280",
     },
   );
 
