@@ -101,13 +101,13 @@ source = source.replace(
   } else {`,
 );
 
-// Make both direction arrows the same larger size and place the pitch label
-// directly over the arrow. Pitch 1 points left and Pitch 2 points right, while
-// both retain the same position and spacing from the predictor panel.
+// Use the same short, chunky arrow position in both pitch columns. Only the
+// direction changes. Centre the pitch label on the arrow itself rather than on
+// the whole column, which prevents Pitch 2 drifting towards the predictor box.
 const balancedArrowBlock = [
-  "  const arrowWidth = Math.min(220, width - 132);",
-  "  const arrowHeight = 42;",
-  "  const arrowX = x + 4;",
+  "  const arrowWidth = 165;",
+  "  const arrowHeight = 48;",
+  "  const arrowX = x + 8;",
   "  drawArrow(",
   "    ctx,",
   "    arrowX,",
@@ -116,22 +116,25 @@ const balancedArrowBlock = [
   "    arrowHeight,",
   '    pitch === 1 ? "left" : "right",',
   "  );",
-  "  write(ctx, `PITCH ${pitch}`, x + width / 2, y + arrowHeight / 2 + 1, {",
-  "    font: font(22, true),",
+  "  write(ctx, `PITCH ${pitch}`, arrowX + arrowWidth / 2, y + arrowHeight / 2 + 1, {",
+  "    font: font(20, true),",
   '    fill: "#ffffff",',
   '    align: "center",',
   '    baseline: "middle",',
   "  });",
 ].join("\n");
 
-if (!source.includes("const arrowWidth = Math.min(220, width - 132);")) {
-  const headingPattern = /  const arrowWidth = 82;\n  const arrowHeight = 34;\n  if \(pitch === 1\) \{\n    drawArrow\(ctx, x \+ 4, y \+ 2, arrowWidth, arrowHeight, "left"\);\n  \} else \{\n    drawArrow\(ctx, x \+ width - arrowWidth - (?:4|126), y \+ 2, arrowWidth, arrowHeight, "right"\);\n  \}\n  write\(ctx, `PITCH \$\{pitch\}`, x \+ width \/ 2, y \+ 30, \{\n    font: font\(23, true\),\n    align: "center",\n  \}\);/;
+if (!source.includes("const arrowWidth = 165;")) {
+  const previousBalancedPattern = /  const arrowWidth = Math\.min\(220, width - 132\);\n  const arrowHeight = 42;\n  const arrowX = x \+ 4;\n  drawArrow\(\n    ctx,\n    arrowX,\n    y,\n    arrowWidth,\n    arrowHeight,\n    pitch === 1 \? "left" : "right",\n  \);\n  write\(ctx, `PITCH \$\{pitch\}`, x \+ width \/ 2, y \+ arrowHeight \/ 2 \+ 1, \{\n    font: font\(22, true\),\n    fill: "#ffffff",\n    align: "center",\n    baseline: "middle",\n  \}\);/;
+  const originalHeadingPattern = /  const arrowWidth = 82;\n  const arrowHeight = 34;\n  if \(pitch === 1\) \{\n    drawArrow\(ctx, x \+ 4, y \+ 2, arrowWidth, arrowHeight, "left"\);\n  \} else \{\n    drawArrow\(ctx, x \+ width - arrowWidth - (?:4|126), y \+ 2, arrowWidth, arrowHeight, "right"\);\n  \}\n  write\(ctx, `PITCH \$\{pitch\}`, x \+ width \/ 2, y \+ 30, \{\n    font: font\(23, true\),\n    align: "center",\n  \}\);/;
 
-  if (!headingPattern.test(source)) {
+  if (previousBalancedPattern.test(source)) {
+    source = source.replace(previousBalancedPattern, balancedArrowBlock);
+  } else if (originalHeadingPattern.test(source)) {
+    source = source.replace(originalHeadingPattern, balancedArrowBlock);
+  } else {
     throw new Error("Expected Nights Fixtures pitch-arrow heading block was not found.");
   }
-
-  source = source.replace(headingPattern, balancedArrowBlock);
 }
 
 if (
@@ -139,14 +142,15 @@ if (
   !source.includes("const predictorWidth = 96;") ||
   !source.includes("const predictorHeaderWidth = 116;") ||
   !source.includes("const logoPadding = 6;") ||
-  !source.includes("const arrowWidth = Math.min(220, width - 132);") ||
-  !source.includes('pitch === 1 ? "left" : "right"') ||
-  !source.includes('fill: "#ffffff"')
+  !source.includes("const arrowWidth = 165;") ||
+  !source.includes("const arrowHeight = 48;") ||
+  !source.includes("arrowX + arrowWidth / 2") ||
+  !source.includes('pitch === 1 ? "left" : "right"')
 ) {
   throw new Error("Nights Fixtures layout balance was not applied correctly.");
 }
 
 fs.writeFileSync(routePath, source, "utf8");
 console.log(
-  "Nights Fixtures now has equal enlarged pitch arrows behind the pitch labels, a neatly inset Predictor logo and wider team-name space.",
+  "Nights Fixtures now has matching short, thick pitch arrows with each pitch label centred on its arrow.",
 );
