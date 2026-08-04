@@ -113,7 +113,7 @@ replaceOnce(
 replaceOnce(
   captainPage,
   "          These players are looking for a SIXFL team and match your league area or playing night. Profiles are anonymised: names, email addresses and mobile numbers stay private until the player agrees to an introduction.",
-  "          These players selected your current SIXFL league, or are legacy profiles that match its area and playing night. Profiles are anonymised: names, email addresses and mobile numbers stay private until the player agrees to an introduction.",
+  "          These players have chosen your league, or are looking to play locally on the same night. Request an introduction and SIXFL will check with the player first. Their name and contact details stay private unless they agree.",
   "captain PlayerPool matching explanation",
 );
 
