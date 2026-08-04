@@ -26,7 +26,7 @@ require("./apply-nights-fixtures-final-polish.cjs");
 require("./apply-nights-fixtures-layout-balance.cjs");
 require("./apply-shared-player-email-safety.cjs");
 require("./fix-shared-email-safety-build.cjs");
-require("./apply-shared-player-email-safety-followup.cjs");
+require("./apply-shared-player-email-promotion-guard.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
