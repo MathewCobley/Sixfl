@@ -38,7 +38,7 @@ const pageContainerWithAdminPreview = [
   "                  href={`/captain/team/${teamid}/squad`}",
   '                  className="inline-flex items-center rounded-xl bg-violet-200 px-4 py-2.5 text-sm font-semibold text-violet-950 transition hover:bg-white"',
   "                >",
-  "                  Return to managed squad",
+  "                  Return to squad",
   "                </Link>",
   "                <Link",
   "                  href={`/admin/teams/${teamid}/squad`}",
@@ -64,6 +64,8 @@ if (!source.includes("Admin player preview")) {
     pageContainerWithAdminPreview,
     "player page container for admin preview banner",
   );
+} else if (source.includes("Return to managed squad")) {
+  source = source.replace("Return to managed squad", "Return to squad");
 }
 
 const signOutLink = [
@@ -105,13 +107,14 @@ fs.writeFileSync(pagePath, source, "utf8");
 
 if (
   !source.includes("Admin player preview") ||
-  !source.includes("Return to managed squad") ||
+  !source.includes("Return to squad") ||
   !source.includes("Full admin squad console") ||
-  !source.includes("Exit preview to squad admin")
+  !source.includes("Exit preview to squad admin") ||
+  source.includes("Return to managed squad")
 ) {
   throw new Error("Player preview admin exit controls were not applied correctly.");
 }
 
 console.log(
-  "Admin player preview now has persistent links back to managed squad, the full admin squad console and admin home.",
+  "Admin player preview now has persistent links back to the squad, the full admin squad console and admin home.",
 );
