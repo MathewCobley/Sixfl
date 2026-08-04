@@ -30,6 +30,7 @@ require("./fix-shared-email-safety-build.cjs");
 require("./apply-shared-player-email-admin-promotion-guard.cjs");
 require("./apply-shared-player-email-captain-promotion-guard-v2.cjs");
 require("./apply-player-merge-name-safety.cjs");
+require("./apply-kit-extra-row-save-and-dropdown-fix.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
