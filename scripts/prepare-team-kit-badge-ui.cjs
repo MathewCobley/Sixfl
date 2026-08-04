@@ -29,8 +29,6 @@ for (const filePath of [pagePath, formPath]) {
 let page = fs.readFileSync(pagePath, "utf8");
 let form = fs.readFileSync(formPath, "utf8");
 
-// Add the badge review fields to the original captain query before the later kit
-// compatibility patches reshape the page.
 if (!page.includes("kitBadgeConfirmedAt: true")) {
   const teamQueryStart = page.indexOf("  const team = await prisma.team.findUnique({");
   const teamQueryEnd = page.indexOf("  });", teamQueryStart);
@@ -61,8 +59,6 @@ if (!page.includes("kitBadgeConfirmedAt: true")) {
     page.slice(teamQueryEnd + 5);
 }
 
-// Keep the beginning of the TeamKitOrderForm block unchanged so the dynamic
-// quantity patch can still recognise and expand it. Add badge props at the end.
 if (!page.includes("teamLogoUrl={team.logoUrl}")) {
   const actionProp = "          action={saveAction}\n";
   if (!page.includes(actionProp)) {
@@ -146,14 +142,20 @@ if (!form.includes("  teamLogoUrl,\n")) {
 }
 
 if (!form.includes("<TeamBadgeReviewPanel")) {
-  const heading = "Personalise all nine kits";
-  const headingIndex = form.indexOf(heading);
-  if (headingIndex < 0) {
-    throw new Error("The original kit personalisation heading was not found.");
+  const possibleHeadings = [
+    "Personalise all {kitQuantity} kits",
+    "Personalise all nine kits",
+    "Personalise all seven kits",
+  ];
+  const headingIndex = possibleHeadings
+    .map((heading) => form.indexOf(heading))
+    .find((index) => index >= 0);
+  if (headingIndex === undefined) {
+    throw new Error("The kit personalisation heading was not found.");
   }
   const sectionEnd = form.indexOf("</section>", headingIndex);
   if (sectionEnd < 0) {
-    throw new Error("The original kit personalisation section end was not found.");
+    throw new Error("The kit personalisation section end was not found.");
   }
   const insertionPoint = sectionEnd + "</section>".length;
   const panel = `
