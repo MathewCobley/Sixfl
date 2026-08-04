@@ -20,40 +20,40 @@ if (!fs.existsSync(standingsPath) || !fs.existsSync(fixtureActionsPath)) {
 
 let standings = fs.readFileSync(standingsPath, "utf8");
 
-// Division tables must also recognise older/manual fixtures whose divisionId
-// was left null. Both participating teams still have to be active members of
-// the selected division, so fixtures from another division cannot leak in.
+// The active division membership is authoritative. Query all fixtures for the
+// league and let allowedTeamIds decide whether both participants belong in this
+// division. This also repairs older/manual fixtures with a blank or incorrect
+// Fixture.divisionId without allowing another division's teams into the table.
 standings = standings.replace(
   '        ...(options.divisionId ? { divisionId: options.divisionId } : {}),\n',
   "",
 );
 
-const fixtureLoopMarker = `  for (const fixture of fixtures) {
-    if (!fixture.result) continue;
-`;
-const fixtureDivisionGuard = `  for (const fixture of fixtures) {
-    if (!fixture.result) continue;
-    if (
+// A saved MatchResult is the authoritative indication that a game has been
+// played. Older records can contain a result while the Fixture status was left
+// as SCHEDULED, so requiring COMPLETED can silently hide genuine results.
+standings = standings.replace('        status: "COMPLETED",\n', "");
+
+// Remove the earlier fallback guard. It still rejected fixtures carrying an
+// incorrect non-null divisionId even when both teams are active in this table.
+standings = standings.replace(
+  `    if (
       options.divisionId &&
       fixture.divisionId !== options.divisionId &&
       fixture.divisionId !== null
     ) {
       continue;
     }
-`;
-
-if (!standings.includes("fixture.divisionId !== options.divisionId")) {
-  if (!standings.includes(fixtureLoopMarker)) {
-    throw new Error("Could not find the league-table fixture loop.");
-  }
-  standings = standings.replace(fixtureLoopMarker, fixtureDivisionGuard);
-}
+`,
+  "",
+);
 
 if (
   standings.includes('...(options.divisionId ? { divisionId: options.divisionId } : {})') ||
-  !standings.includes("fixture.divisionId !== options.divisionId")
+  standings.includes('status: "COMPLETED"') ||
+  standings.includes("fixture.divisionId !== options.divisionId")
 ) {
-  throw new Error("Division standings fallback was not applied correctly.");
+  throw new Error("Membership-based standings result repair was not applied correctly.");
 }
 
 fs.writeFileSync(standingsPath, standings, "utf8");
@@ -166,5 +166,5 @@ if (
 
 fs.writeFileSync(fixtureActionsPath, actions, "utf8");
 console.log(
-  "Division standings now include valid legacy fixtures, and manual fixtures inherit their teams' shared active division.",
+  "League tables now count saved results by active team membership, and manual fixtures inherit their teams' shared active division.",
 );
