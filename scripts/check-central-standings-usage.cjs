@@ -26,6 +26,7 @@ require("./apply-nights-fixtures-predictor-column.cjs");
 require("./apply-nights-fixtures-team-badges.cjs");
 require("./apply-nights-fixtures-final-polish.cjs");
 require("./apply-nights-fixtures-layout-balance.cjs");
+require("./apply-fixture-division-standings-repair.cjs");
 require("./apply-shared-player-email-safety.cjs");
 require("./fix-shared-email-safety-build.cjs");
 require("./apply-shared-player-email-admin-promotion-guard.cjs");
