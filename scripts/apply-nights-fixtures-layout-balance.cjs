@@ -37,8 +37,7 @@ source = source.replace(
 );
 
 // Align the predictor box directly over the narrower score column. It is taller
-// and uses a cropped, cover-style draw so the real logo artwork appears large
-// rather than as a tiny image surrounded by its original canvas margins.
+// and uses a cropped draw so the real logo artwork remains clear and prominent.
 source = source.replace(
   /  const predictorHeaderWidth = (?:112|116|120|150);\n  const predictorHeaderHeight = (?:38|58|68);\n  const predictorHeaderX = [^;]+;\n  const predictorHeaderY = y \+ \d+;/,
   [
@@ -61,14 +60,14 @@ source = source.replace(
   logoBlockPattern,
   `  const headerLogo = predictorLogo ?? brandLogo;
   if (headerLogo) {
-    const logoPadding = 2;
+    const logoPadding = 6;
     const destinationX = predictorHeaderX + logoPadding;
     const destinationY = predictorHeaderY + logoPadding;
     const destinationWidth = predictorHeaderWidth - logoPadding * 2;
     const destinationHeight = predictorHeaderHeight - logoPadding * 2;
 
     // The official PNG has generous design-canvas margins. Crop those first,
-    // then use cover-style scaling so the actual Predictor mark fills the box.
+    // then scale it inside the inset area so the mark fits comfortably in its box.
     const initialX = headerLogo.width * 0.08;
     const initialY = headerLogo.height * 0.18;
     const initialWidth = headerLogo.width * 0.84;
@@ -113,7 +112,7 @@ if (
   !source.includes("const timeWidth = 52;") ||
   !source.includes("const predictorWidth = 96;") ||
   !source.includes("const predictorHeaderWidth = 116;") ||
-  !source.includes("const logoPadding = 2;") ||
+  !source.includes("const logoPadding = 6;") ||
   !source.includes("x + width - arrowWidth - 126")
 ) {
   throw new Error("Nights Fixtures layout balance was not applied correctly.");
@@ -121,5 +120,5 @@ if (
 
 fs.writeFileSync(routePath, source, "utf8");
 console.log(
-  "Nights Fixtures now has a larger Predictor logo, wider team-name area and a clear gap before the right pitch arrow.",
+  "Nights Fixtures now has a neatly inset Predictor logo, wider team-name area and a clear gap before the right pitch arrow.",
 );
