@@ -101,24 +101,52 @@ source = source.replace(
   } else {`,
 );
 
-// Pitch 2's direction arrow previously ran underneath the predictor box. Move
-// it left and leave a deliberate gap before the score-column header.
-source = source.replace(
-  "    drawArrow(ctx, x + width - arrowWidth - 4, y + 2, arrowWidth, arrowHeight, \"right\");",
-  "    drawArrow(ctx, x + width - arrowWidth - 126, y + 2, arrowWidth, arrowHeight, \"right\");",
-);
+// Make both direction arrows the same larger size and place the pitch label
+// directly over the arrow. Pitch 1 points left and Pitch 2 points right, while
+// both retain the same position and spacing from the predictor panel.
+const balancedArrowBlock = [
+  "  const arrowWidth = Math.min(220, width - 132);",
+  "  const arrowHeight = 42;",
+  "  const arrowX = x + 4;",
+  "  drawArrow(",
+  "    ctx,",
+  "    arrowX,",
+  "    y,",
+  "    arrowWidth,",
+  "    arrowHeight,",
+  '    pitch === 1 ? "left" : "right",',
+  "  );",
+  "  write(ctx, `PITCH ${pitch}`, x + width / 2, y + arrowHeight / 2 + 1, {",
+  "    font: font(22, true),",
+  '    fill: "#ffffff",',
+  '    align: "center",',
+  '    baseline: "middle",',
+  "  });",
+].join("\n");
+
+if (!source.includes("const arrowWidth = Math.min(220, width - 132);")) {
+  const headingPattern = /  const arrowWidth = 82;\n  const arrowHeight = 34;\n  if \(pitch === 1\) \{\n    drawArrow\(ctx, x \+ 4, y \+ 2, arrowWidth, arrowHeight, "left"\);\n  \} else \{\n    drawArrow\(ctx, x \+ width - arrowWidth - (?:4|126), y \+ 2, arrowWidth, arrowHeight, "right"\);\n  \}\n  write\(ctx, `PITCH \$\{pitch\}`, x \+ width \/ 2, y \+ 30, \{\n    font: font\(23, true\),\n    align: "center",\n  \}\);/;
+
+  if (!headingPattern.test(source)) {
+    throw new Error("Expected Nights Fixtures pitch-arrow heading block was not found.");
+  }
+
+  source = source.replace(headingPattern, balancedArrowBlock);
+}
 
 if (
   !source.includes("const timeWidth = 52;") ||
   !source.includes("const predictorWidth = 96;") ||
   !source.includes("const predictorHeaderWidth = 116;") ||
   !source.includes("const logoPadding = 6;") ||
-  !source.includes("x + width - arrowWidth - 126")
+  !source.includes("const arrowWidth = Math.min(220, width - 132);") ||
+  !source.includes('pitch === 1 ? "left" : "right"') ||
+  !source.includes('fill: "#ffffff"')
 ) {
   throw new Error("Nights Fixtures layout balance was not applied correctly.");
 }
 
 fs.writeFileSync(routePath, source, "utf8");
 console.log(
-  "Nights Fixtures now has a neatly inset Predictor logo, wider team-name area and a clear gap before the right pitch arrow.",
+  "Nights Fixtures now has equal enlarged pitch arrows behind the pitch labels, a neatly inset Predictor logo and wider team-name space.",
 );
