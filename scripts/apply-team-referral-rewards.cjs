@@ -78,14 +78,12 @@ update("src/components/admin/AdminSidebar.tsx", (source) => {
 update("src/app/player/team/[teamid]/page.tsx", (source) => {
   if (source.includes('href="/player/referrals"')) return source;
 
-  const marker = '<div className="min-h-screen';
-  const index = source.indexOf(marker);
-  if (index === -1) return source;
+  const marker = '      <div className="mx-auto max-w-6xl space-y-8">';
+  if (!source.includes(marker)) {
+    throw new Error("Player dashboard content wrapper was not found for referral link insertion.");
+  }
 
-  const openingEnd = source.indexOf(">", index);
-  if (openingEnd === -1) return source;
+  const referralLink = `\n        <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 sm:p-6">\n          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">\n            <div>\n              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/75">Team referrals</p>\n              <h2 className="mt-2 text-xl font-semibold text-white">Refer a new team and earn £75</h2>\n              <p className="mt-2 text-sm leading-6 text-emerald-50/70">Share your private referral link. Your reward becomes due after the new team completes three matches.</p>\n            </div>\n            <Link\n              href="/player/referrals"\n              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-black text-black transition hover:bg-emerald-300"\n            >\n              Get my referral link\n            </Link>\n          </div>\n        </section>`;
 
-  const referralLink = `\n      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">\n        <Link\n          href="/player/referrals"\n          className="inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-black text-emerald-200 transition hover:bg-emerald-500/20"\n        >\n          Refer a team · Earn £75\n        </Link>\n      </div>`;
-
-  return source.slice(0, openingEnd + 1) + referralLink + source.slice(openingEnd + 1);
+  return source.replace(marker, `${marker}${referralLink}`);
 });
