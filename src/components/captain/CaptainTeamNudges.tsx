@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 
+import { confirmFixtureFromNudgeAction } from "@/app/captain/team/[teamid]/fixtures/nudge-actions";
+import CaptainFixtureConfirmButton from "@/components/captain/CaptainFixtureConfirmButton";
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getTeamKitOrder } from "@/lib/kits/db";
@@ -267,12 +269,17 @@ export default async function CaptainTeamNudges({ teamId }: { teamId: string }) 
                 </p>
               ) : null}
             </div>
-            <Link
-              href={`/captain/team/${teamId}/fixtures?fixtureId=${pendingFixture.fixture.id}`}
-              className={`inline-flex min-h-14 shrink-0 items-center justify-center rounded-2xl px-6 py-3 text-base font-black text-black shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition ${confirmationCopy.buttonClasses}`}
-            >
-              Confirm fixture
-            </Link>
+            <form action={confirmFixtureFromNudgeAction} className="shrink-0">
+              <input type="hidden" name="teamId" value={teamId} />
+              <input
+                type="hidden"
+                name="fixtureId"
+                value={pendingFixture.fixture.id}
+              />
+              <CaptainFixtureConfirmButton
+                className={`inline-flex min-h-14 items-center justify-center rounded-2xl px-6 py-3 text-base font-black text-black shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition ${confirmationCopy.buttonClasses}`}
+              />
+            </form>
           </div>
         </section>
       ) : null}
