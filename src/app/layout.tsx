@@ -15,6 +15,7 @@ import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPa
 import AdminPlayerPoolNavBridge from "@/components/admin/player-pool/AdminPlayerPoolNavBridge";
 import CaptainAdditionalCaptainBridge from "@/components/captain/CaptainAdditionalCaptainBridge";
 import CaptainHeaderLeaguePositionBridge from "@/components/captain/CaptainHeaderLeaguePositionBridge";
+import CaptainPlayerModeBridge from "@/components/captain/CaptainPlayerModeBridge";
 import HideImpossibleLeaguePositionBridge from "@/components/captain/HideImpossibleLeaguePositionBridge";
 import TeamAutoPayCopyBridge from "@/components/captain/TeamAutoPayCopyBridge";
 import TemporaryPlayerBridge from "@/components/captain/TemporaryPlayerBridge";
@@ -120,6 +121,7 @@ export default function RootLayout({
             <AdminPlayerPoolNavBridge />
             <CaptainAdditionalCaptainBridge />
             <CaptainHeaderLeaguePositionBridge />
+            <CaptainPlayerModeBridge />
             <HideImpossibleLeaguePositionBridge />
             <TeamAutoPayCopyBridge />
             <TemporaryPlayerBridge />
