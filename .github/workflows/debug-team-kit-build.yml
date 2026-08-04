@@ -1,0 +1,24 @@
+name: Debug team kit build
+
+on:
+  push:
+    branches:
+      - debug/team-badge-build
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://user:pass@localhost:5432/sixfl
+      NEXTAUTH_SECRET: debug-build-secret
+      NEXTAUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
