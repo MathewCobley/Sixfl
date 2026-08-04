@@ -35,6 +35,7 @@ require("./apply-extra-kit-save-repair.cjs");
 require("./apply-extra-kit-incomplete-order-recovery.cjs");
 require("./apply-team-kit-badge-review-stage.cjs");
 require("./remove-duplicate-kit-allocation-panel.cjs");
+require("./apply-native-team-kit-save-v2.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
