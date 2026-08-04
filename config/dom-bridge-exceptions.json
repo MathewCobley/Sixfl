@@ -1,28 +1,3 @@
 {
-  "exceptions": [
-    {
-      "path": "src/components/admin/player-prospects/ProspectChaseBridge.tsx",
-      "reason": "Emergency containment for the player prospects page crash. The continuous observer caused a request and DOM-update loop; it has been removed while the chase controls are moved into page-owned React.",
-      "approvedBy": "Mathew Cobley",
-      "routeScope": "/admin/player-prospects only",
-      "expires": "2026-08-10",
-      "replacementPlan": "Render chase status and chase buttons through the prospect card React component using explicit prospect data and server actions, then delete this bridge."
-    },
-    {
-      "path": "src/components/admin/player-prospects/PlayerProspectsPlayerPoolBridge.tsx",
-      "reason": "Emergency containment for the player prospects page crash. The continuous observer repeatedly redecorated PlayerPool rows; it has been removed while native controls are completed.",
-      "approvedBy": "Mathew Cobley",
-      "routeScope": "/admin/player-prospects only",
-      "expires": "2026-08-10",
-      "replacementPlan": "Render PlayerPool status and send/resend controls directly inside the prospect card React component, then delete this bridge."
-    },
-    {
-      "path": "src/components/admin/player-prospects/PlayerProspectsNotInterestedBridge.tsx",
-      "reason": "Emergency containment for the player prospects page crash. The page-wide observer has been removed while change-team and record-state actions are migrated to native React.",
-      "approvedBy": "Mathew Cobley",
-      "routeScope": "/admin/player-prospects only",
-      "expires": "2026-08-10",
-      "replacementPlan": "Move change-team, unassign, not-interested and duplicate actions into the prospect card React component using the existing APIs, then delete this bridge."
-    }
-  ]
+  "exceptions": []
 }
