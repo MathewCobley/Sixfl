@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 
 import { authOptions } from "@/auth";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -9,6 +10,16 @@ import {
 import { prisma } from "@/lib/prisma";
 
 type MatchOutcome = "W" | "D" | "L";
+
+type MatchPlayerRow = {
+  matchResultId: string;
+  teamMemberId: string;
+  playerName: string;
+  rating: number | null;
+  goals: number;
+  assists: number;
+  isPlayerOfMatch: boolean;
+};
 
 function formatDate(value: Date) {
   return formatDateTimeInLondon(value, {
@@ -102,7 +113,6 @@ export default async function PlayerPerformancePanel({
     where: { id: resolvedMembershipId, teamId },
     select: {
       id: true,
-      userId: true,
       team: { select: { name: true } },
       user: {
         select: {
@@ -113,7 +123,7 @@ export default async function PlayerPerformancePanel({
   });
   if (!membership) return null;
 
-  const [history, squadMembers, squadSummaries] = await Promise.all([
+  const [history, squadMembers, squadSummaries, recentMatches] = await Promise.all([
     getPlayerPerformanceHistory({
       teamId,
       teamMemberId: membership.id,
@@ -128,13 +138,68 @@ export default async function PlayerPerformancePanel({
       },
     }),
     getTeamPlayerPerformanceSummaries(teamId),
+    prisma.matchResult.findMany({
+      where: {
+        fixture: {
+          OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+        },
+      },
+      orderBy: { fixture: { kickoffAt: "desc" } },
+      take: 5,
+      select: {
+        id: true,
+        homeScore: true,
+        awayScore: true,
+        fixture: {
+          select: {
+            kickoffAt: true,
+            homeTeamId: true,
+            awayTeamId: true,
+            homeTeam: { select: { name: true } },
+            awayTeam: { select: { name: true } },
+          },
+        },
+      },
+    }),
   ]);
+
+  const recentMatchIds = recentMatches.map((match) => match.id);
+  const matchPlayerRows =
+    recentMatchIds.length === 0
+      ? []
+      : await prisma.$queryRaw<MatchPlayerRow[]>(Prisma.sql`
+          SELECT
+            performance."matchResultId",
+            performance."teamMemberId",
+            COALESCE(NULLIF(TRIM(player."name"), ''), 'Unnamed player') AS "playerName",
+            performance."rating"::double precision AS "rating",
+            performance."goals"::int AS "goals",
+            performance."assists"::int AS "assists",
+            performance."isPlayerOfMatch"
+          FROM "PlayerMatchPerformance" performance
+          INNER JOIN "TeamMember" member ON member."id" = performance."teamMemberId"
+          INNER JOIN "User" player ON player."id" = member."userId"
+          WHERE performance."teamId" = ${teamId}
+            AND performance."matchResultId" IN (${Prisma.join(recentMatchIds)})
+            AND performance."played" = TRUE
+          ORDER BY
+            performance."matchResultId",
+            performance."isPlayerOfMatch" DESC,
+            performance."rating" DESC NULLS LAST,
+            performance."goals" DESC,
+            "playerName" ASC
+        `);
+
+  const matchPlayersByResultId = new Map<string, MatchPlayerRow[]>();
+  for (const row of matchPlayerRows) {
+    const rows = matchPlayersByResultId.get(row.matchResultId) ?? [];
+    rows.push(row);
+    matchPlayersByResultId.set(row.matchResultId, rows);
+  }
 
   const goals = history.reduce((sum, match) => sum + Number(match.goals), 0);
   const assists = history.reduce((sum, match) => sum + Number(match.assists), 0);
-  const playerOfMatchAwards = history.filter(
-    (match) => match.isPlayerOfMatch,
-  ).length;
+  const playerOfMatchAwards = history.filter((match) => match.isPlayerOfMatch).length;
   const ratings = history.flatMap((match) =>
     match.rating === null ? [] : [Number(match.rating)],
   );
@@ -191,7 +256,7 @@ export default async function PlayerPerformancePanel({
             These are your stats for {membership.team.name}.
             {hasMultipleTeams
               ? " Choose another team above to view your stats and that squad's statistics."
-              : " You can also see the whole squad's statistics below."}
+              : " You can also see the whole squad's season and match statistics below."}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">
@@ -236,9 +301,9 @@ export default async function PlayerPerformancePanel({
       <div className="mt-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-white">Squad stats</h3>
+            <h3 className="text-lg font-semibold text-white">Squad season stats</h3>
             <p className="mt-1 text-sm text-white/50">
-              Football statistics for the {membership.team.name} squad. Your row is highlighted.
+              Season totals for the {membership.team.name} squad. Your row is highlighted.
             </p>
           </div>
           <span className="text-xs text-white/40">
@@ -247,7 +312,7 @@ export default async function PlayerPerformancePanel({
         </div>
 
         <div className="mt-3 overflow-x-auto rounded-2xl border border-white/10 bg-black/15">
-          <table className="min-w-[760px] w-full text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="border-b border-white/10 bg-white/[0.03] text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
               <tr>
                 <th className="px-4 py-3">Player</th>
@@ -291,63 +356,124 @@ export default async function PlayerPerformancePanel({
         </div>
       </div>
 
-      <div className="mt-6">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-white">Your recent performances</h3>
+      <div className="mt-7">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Match stats</h3>
+            <p className="mt-1 text-sm text-white/50">
+              Open a recent match to see who played and the squad’s individual statistics.
+            </p>
+          </div>
           <span className="text-xs text-white/40">
-            Latest {Math.min(history.length, 5)}
+            Latest {recentMatches.length}
           </span>
         </div>
 
-        {history.length === 0 ? (
+        {recentMatches.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-white/10 bg-black/15 p-4 text-sm leading-6 text-white/50">
-            No appearances have been added yet. Your stats will appear after your captain confirms who played and submits the result.
+            No completed matches have been recorded yet.
           </div>
         ) : (
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-            {history.slice(0, 5).map((match) => {
-              const opponent =
-                match.homeTeamId === teamId
-                  ? match.awayTeamName
-                  : match.homeTeamName;
+          <div className="mt-3 space-y-3">
+            {recentMatches.map((match) => {
+              const isHome = match.fixture.homeTeamId === teamId;
+              const opponent = isHome
+                ? match.fixture.awayTeam.name
+                : match.fixture.homeTeam.name;
               const outcome = getOutcome({
                 teamId,
-                homeTeamId: match.homeTeamId,
+                homeTeamId: match.fixture.homeTeamId,
                 homeScore: match.homeScore,
                 awayScore: match.awayScore,
               });
+              const players = matchPlayersByResultId.get(match.id) ?? [];
 
               return (
-                <div
-                  key={match.matchResultId}
-                  className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                <details
+                  key={match.id}
+                  className="group overflow-hidden rounded-2xl border border-white/10 bg-black/20"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-white/40">
-                      {formatDate(match.kickoffAt)}
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 marker:hidden sm:px-5">
+                    <div className="min-w-0">
+                      <div className="text-xs text-white/40">
+                        {formatDate(match.fixture.kickoffAt)}
+                      </div>
+                      <div className="mt-1 truncate font-semibold text-white">
+                        {membership.team.name} vs {opponent}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45">
+                        {players.length} player{players.length === 1 ? "" : "s"} recorded
+                      </div>
                     </div>
-                    <span
-                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black ${outcomeClasses(
-                        outcome,
-                      )}`}
-                    >
-                      {outcome}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="text-lg font-black text-white">
+                        {match.homeScore}-{match.awayScore}
+                      </span>
+                      <span
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-black ${outcomeClasses(outcome)}`}
+                      >
+                        {outcome}
+                      </span>
+                      <span className="text-lg text-white/40 transition group-open:rotate-180">⌄</span>
+                    </div>
+                  </summary>
+
+                  <div className="border-t border-white/10 px-3 py-4 sm:px-5">
+                    {players.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-white/50">
+                        No individual player statistics were recorded for this match.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border border-white/10">
+                        <table className="w-full min-w-[620px] text-left text-sm">
+                          <thead className="border-b border-white/10 bg-white/[0.03] text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
+                            <tr>
+                              <th className="px-4 py-3">Player</th>
+                              <th className="px-3 py-3 text-center">Goals</th>
+                              <th className="px-3 py-3 text-center">Assists</th>
+                              <th className="px-3 py-3 text-center">Rating</th>
+                              <th className="px-3 py-3 text-center">POTM</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.07]">
+                            {players.map((player) => {
+                              const isCurrentPlayer = player.teamMemberId === membership.id;
+                              return (
+                                <tr
+                                  key={player.teamMemberId}
+                                  className={isCurrentPlayer ? "bg-sky-500/10" : ""}
+                                >
+                                  <td className="px-4 py-3 font-semibold text-white">
+                                    {player.playerName}
+                                    {isCurrentPlayer ? (
+                                      <span className="ml-2 rounded-full border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-100">
+                                        You
+                                      </span>
+                                    ) : null}
+                                  </td>
+                                  <td className="px-3 py-3 text-center text-white/70">{Number(player.goals)}</td>
+                                  <td className="px-3 py-3 text-center text-white/70">{Number(player.assists)}</td>
+                                  <td className="px-3 py-3 text-center text-white/70">
+                                    {player.rating === null ? "Not rated" : `${Number(player.rating).toFixed(1)}/10`}
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    {player.isPlayerOfMatch ? (
+                                      <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-100">
+                                        POTM
+                                      </span>
+                                    ) : (
+                                      <span className="text-white/25">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-1 truncate text-sm font-semibold text-white">
-                    vs {opponent}
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-white/55">
-                    <span>
-                      {match.homeScore}-{match.awayScore}
-                    </span>
-                    <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 font-semibold text-sky-100">
-                      {match.rating === null
-                        ? "Not rated"
-                        : `${Number(match.rating).toFixed(1)}/10`}
-                    </span>
-                  </div>
-                </div>
+                </details>
               );
             })}
           </div>
