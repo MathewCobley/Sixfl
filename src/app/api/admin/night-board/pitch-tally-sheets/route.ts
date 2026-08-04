@@ -58,11 +58,14 @@ function font(size: number, bold = false) {
 }
 
 type TvRow = { id: string; sixflTvRecorded: boolean };
+type ShinPadWarningCountRow = { teamId: string; warningCount: number };
 type FixtureRow = Awaited<ReturnType<typeof getFixtures>>[number];
 type PrintableFixture = FixtureRow & {
   isTv: boolean;
   homeKitColour: string | null;
   awayKitColour: string | null;
+  homeShinPadWarningCount: number;
+  awayShinPadWarningCount: number;
   prediction: ReturnType<typeof calculateFixtureWinChance> | null;
 };
 
@@ -239,6 +242,7 @@ function drawTeamTallyRow(
   input: {
     teamName: string;
     kitColour: string | null;
+    warningCount: number;
     x: number;
     y: number;
     width: number;
@@ -253,13 +257,35 @@ function drawTeamTallyRow(
   const tallyWidth = scoreX - sectionGap - tallyX;
 
   drawShirt(ctx, input.x + 2, input.y + 10, input.kitColour);
-  ctx.font = font(9.5, true);
+  ctx.font = font(9, true);
   write(
     ctx,
     fit(ctx, input.teamName, teamWidth - 27),
     input.x + 23,
-    input.y + 25,
-    { font: font(9.5, true) },
+    input.y + 17,
+    { font: font(9, true) },
+  );
+
+  const warningBoxX = input.x + 23;
+  const warningBoxY = input.y + 23;
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#111111";
+  ctx.lineWidth = 0.8;
+  ctx.fillRect(warningBoxX, warningBoxY, 9, 9);
+  ctx.strokeRect(warningBoxX, warningBoxY, 9, 9);
+  write(
+    ctx,
+    fit(
+      ctx,
+      `SHIN PAD WARNING | TO DATE ${input.warningCount}`,
+      teamWidth - 40,
+    ),
+    warningBoxX + 13,
+    warningBoxY + 8,
+    {
+      font: font(5.2, true),
+      fill: input.warningCount > 0 ? "#9a3412" : "#555555",
+    },
   );
 
   ctx.fillStyle = "#ffffff";
@@ -273,8 +299,6 @@ function drawTeamTallyRow(
     fill: "#8a938e",
   });
 
-  // A faint centre line helps keep a long handwritten tally readable without
-  // turning the area into restrictive boxes.
   ctx.strokeStyle = "#d7ddd9";
   ctx.lineWidth = 0.45;
   ctx.beginPath();
@@ -345,6 +369,7 @@ function drawFixture(
   drawTeamTallyRow(ctx, {
     teamName: fixture.homeTeam.name,
     kitColour: fixture.homeKitColour,
+    warningCount: fixture.homeShinPadWarningCount,
     x: rowX,
     y: y + 58,
     width: rowWidth,
@@ -352,6 +377,7 @@ function drawFixture(
   drawTeamTallyRow(ctx, {
     teamName: fixture.awayTeam.name,
     kitColour: fixture.awayKitColour,
+    warningCount: fixture.awayShinPadWarningCount,
     x: rowX,
     y: y + 101,
     width: rowWidth,
@@ -570,7 +596,7 @@ export async function GET(request: Request) {
     new Set(fixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id])),
   );
 
-  const [history, tvRows, kitColours] = await Promise.all([
+  const [history, tvRows, kitColours, shinPadWarningRows] = await Promise.all([
     leagueIds.length
       ? prisma.fixture.findMany({
           where: { leagueId: { in: leagueIds } },
@@ -594,6 +620,18 @@ export async function GET(request: Request) {
           .catch(() => [] as TvRow[])
       : Promise.resolve([] as TvRow[]),
     getTeamKitColours(teamIds),
+    teamIds.length
+      ? prisma
+          .$queryRaw<ShinPadWarningCountRow[]>(Prisma.sql`
+            SELECT
+              warning."teamId" AS "teamId",
+              COUNT(*)::int AS "warningCount"
+            FROM "TeamShinPadWarning" warning
+            WHERE warning."teamId" IN (${Prisma.join(teamIds)})
+            GROUP BY warning."teamId"
+          `)
+          .catch(() => [] as ShinPadWarningCountRow[])
+      : Promise.resolve([] as ShinPadWarningCountRow[]),
   ]);
 
   const historyByLeague = new Map<string, typeof history>();
@@ -605,11 +643,16 @@ export async function GET(request: Request) {
   }
 
   const tvByFixture = new Map(tvRows.map((row) => [row.id, row.sixflTvRecorded]));
+  const warningCountByTeam = new Map(
+    shinPadWarningRows.map((row) => [row.teamId, row.warningCount]),
+  );
   const printable: PrintableFixture[] = fixtures.map((fixture) => ({
     ...fixture,
     isTv: tvByFixture.get(fixture.id) ?? false,
     homeKitColour: kitColours.get(fixture.homeTeam.id) ?? null,
     awayKitColour: kitColours.get(fixture.awayTeam.id) ?? null,
+    homeShinPadWarningCount: warningCountByTeam.get(fixture.homeTeam.id) ?? 0,
+    awayShinPadWarningCount: warningCountByTeam.get(fixture.awayTeam.id) ?? 0,
     prediction:
       fixture.status === FixtureStatus.SCHEDULED
         ? calculateFixtureWinChance({
