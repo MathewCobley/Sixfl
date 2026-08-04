@@ -28,12 +28,6 @@ replaceOnce(
 );
 
 replaceOnce(
-  "src/app/api/admin/night-board/pitch-tally-sheets/route.ts",
-  '  ctx.font = font(9.5, true);\n  write(\n    ctx,\n    fit(ctx, input.teamName, teamWidth - 27),\n    input.x + 23,\n    input.y + 25,\n    { font: font(9.5, true) },\n  );',
-  '  ctx.font = font(9, true);\n  write(\n    ctx,\n    fit(ctx, input.teamName, teamWidth - 27),\n    input.x + 23,\n    input.y + 17,\n    { font: font(9, true) },\n  );\n\n  const shinPadBoxX = input.x + 23;\n  const shinPadBoxY = input.y + 23;\n  ctx.fillStyle = "#ffffff";\n  ctx.strokeStyle = "#111111";\n  ctx.lineWidth = 0.8;\n  ctx.fillRect(shinPadBoxX, shinPadBoxY, 9, 9);\n  ctx.strokeRect(shinPadBoxX, shinPadBoxY, 9, 9);\n  write(ctx, "SHIN PADS", shinPadBoxX + 13, shinPadBoxY + 8, {\n    font: font(5.8, true),\n    fill: "#555555",\n  });',
-);
-
-replaceOnce(
   "src/components/admin/teams/TeamCommunicationsPage.tsx",
   'type SearchParams = {\n  page?: string;\n};',
   'type SearchParams = {\n  page?: string;\n  filter?: string;\n};',
@@ -81,4 +75,4 @@ replaceOnce(
   '            {inboundOnly\n              ? "No inbound messages have been logged for this team yet."\n              : "No communications have been logged for this team yet."}',
 );
 
-console.log("Applied fixture confirmation chase, tally-sheet shin pad checkbox and inbound communications filter.");
+console.log("Applied fixture confirmation chase and inbound communications filter.");
