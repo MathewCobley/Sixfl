@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./prepare-team-kit-badge-ui.cjs");
 require("./apply-captain-dom-observer-performance-guard.cjs");
 require("./apply-player-payments-freeze-fix.cjs");
 require("./apply-matchday-fee-waiver-reasons.cjs");
