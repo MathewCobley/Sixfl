@@ -24,9 +24,7 @@ require("./apply-nights-fixtures-predictor-column.cjs");
 require("./apply-nights-fixtures-team-badges.cjs");
 require("./apply-nights-fixtures-final-polish.cjs");
 require("./apply-nights-fixtures-layout-balance.cjs");
-require("./apply-manager-cross-team-player-guard.cjs");
 require("./apply-shared-player-email-safety.cjs");
-require("./apply-shared-player-email-safety-followup.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
