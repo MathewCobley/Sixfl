@@ -99,6 +99,7 @@ export default function IncludedKitPaymentPanel({
     setSelectedMemberIds([]);
     setMessage(null);
     setError(null);
+    setQuantity(1);
     void load();
   }, [teamId]);
 
@@ -112,6 +113,7 @@ export default function IncludedKitPaymentPanel({
     [members, selectedMemberIds],
   );
   const totalPence = quantity * extraKitPricePence;
+  const requestedTotalKitQuantity = displayedIncludedQuantity + quantity;
   const estimatedSharePence = selectedMembers.length
     ? Math.floor(totalPence / selectedMembers.length)
     : totalPence;
@@ -197,7 +199,7 @@ export default function IncludedKitPaymentPanel({
               Add more complete kits for £20 each
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-              Select one team member to pay the full amount, or select several members to split the total equally. Each selected person receives a secure payment link by email.
+              Choose only the number of extra kits needed beyond the {displayedIncludedQuantity} already included. Select one team member to pay the full amount, or select several members to split the total equally.
             </p>
 
             {(data?.paidExtraKitQuantity ?? 0) > 0 ? (
@@ -231,24 +233,25 @@ export default function IncludedKitPaymentPanel({
               </div>
             ) : (
               <form onSubmit={createRequests} className="mt-5 space-y-5">
-                <label className="block max-w-xs space-y-2">
+                <label className="block max-w-sm space-y-2">
                   <span className="text-sm font-semibold text-white">
-                    Number of additional kits
+                    Number of extra kits
                   </span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
+                  <select
                     value={quantity}
-                    onChange={(event) =>
-                      setQuantity(
-                        Math.max(1, Math.min(10, Number(event.target.value) || 1)),
-                      )
-                    }
+                    onChange={(event) => setQuantity(Number(event.target.value))}
                     className="h-12 w-full rounded-2xl border border-white/10 bg-black/25 px-4 text-white outline-none focus:border-sky-400/40"
-                  />
-                  <span className="block text-xs text-white/45">
-                    Total: {formatMoney(totalPence)}
+                  >
+                    {Array.from({ length: 10 }, (_, index) => index + 1).map(
+                      (option) => (
+                        <option key={option} value={option}>
+                          {option} extra kit{option === 1 ? "" : "s"} — {formatMoney(option * extraKitPricePence)}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  <span className="block rounded-xl border border-sky-400/15 bg-sky-500/[0.06] px-3 py-2 text-sm text-sky-50/80">
+                    {displayedIncludedQuantity} included + {quantity} extra = {requestedTotalKitQuantity} kits in total · Payment required: {formatMoney(totalPence)}
                     {selectedMembers.length > 1
                       ? ` · approximately ${formatMoney(estimatedSharePence)} each`
                       : ""}
@@ -302,7 +305,7 @@ export default function IncludedKitPaymentPanel({
                 >
                   {submitting
                     ? "Creating payment links…"
-                    : "Create and email payment links"}
+                    : `Create payment link${selectedMemberIds.length === 1 ? "" : "s"} for ${quantity} extra kit${quantity === 1 ? "" : "s"}`}
                 </button>
               </form>
             )}
