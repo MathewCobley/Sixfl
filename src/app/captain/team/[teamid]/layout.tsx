@@ -320,6 +320,7 @@ export default async function CaptainTeamLayout({
       : []),
     { href: `/captain/team/${teamid}/player-pool`, label: "PlayerPool" },
     { href: `/captain/team/${teamid}/player-payments`, label: "Squad payments" },
+    { href: `/captain/team/${teamid}/kit`, label: "Team kit" },
     { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
     { href: `/captain/team/${teamid}/availability`, label: "Availability" },
     {
