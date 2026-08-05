@@ -14,6 +14,7 @@ import {
   updateTeamKitOrderAdminNotes,
   updateTeamKitOrderStatus,
 } from "@/lib/kits/db";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 const KITS_PATH = "/admin/kits";
@@ -89,12 +90,54 @@ export async function updateKitOrderStatusAction(formData: FormData) {
     redirect(redirectToKits({ error: "invalid_order" }));
   }
 
+  let teamId: string | null = null;
+
   try {
-    await updateTeamKitOrderStatus({
-      orderId,
-      status,
-      editedByUserId: user?.id ?? null,
-    });
+    const orderRows = await prisma.$queryRaw<Array<{ teamId: string }>>(Prisma.sql`
+      SELECT "teamId"
+      FROM "TeamKitOrder"
+      WHERE "id" = ${orderId}
+      LIMIT 1
+    `);
+    teamId = orderRows[0]?.teamId ?? null;
+
+    if (!teamId) {
+      redirect(redirectToKits({ error: "invalid_order", team: teamName }));
+    }
+
+    if (status === "DRAFT") {
+      // Reopening must fully unlock the captain workflow, not merely alter the label.
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE "TeamKitOrder"
+        SET
+          "status" = 'DRAFT',
+          "submittedByUserId" = NULL,
+          "submittedAt" = NULL,
+          "approvedAt" = NULL,
+          "orderedAt" = NULL,
+          "fulfilledAt" = NULL,
+          "lastEditedByUserId" = ${user?.id ?? null},
+          "updatedAt" = NOW()
+        WHERE "id" = ${orderId}
+      `);
+    } else {
+      await updateTeamKitOrderStatus({
+        orderId,
+        status,
+        editedByUserId: user?.id ?? null,
+      });
+    }
+
+    const savedRows = await prisma.$queryRaw<Array<{ status: string }>>(Prisma.sql`
+      SELECT "status"::text AS "status"
+      FROM "TeamKitOrder"
+      WHERE "id" = ${orderId}
+      LIMIT 1
+    `);
+
+    if (savedRows[0]?.status !== status) {
+      throw new Error(`Kit order status remained ${savedRows[0]?.status ?? "unknown"}.`);
+    }
   } catch (error) {
     console.error("Kit order status update failed", error);
     redirect(redirectToKits({ error: "save_failed", team: teamName }));
@@ -102,6 +145,10 @@ export async function updateKitOrderStatusAction(formData: FormData) {
 
   revalidatePath(KITS_PATH);
   revalidatePath("/captain");
+  if (teamId) {
+    revalidatePath(`/captain/team/${teamId}`);
+    revalidatePath(`/captain/team/${teamId}/kit`);
+  }
   redirect(redirectToKits({ notice: "order_status_saved", team: teamName }));
 }
 
