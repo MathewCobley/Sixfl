@@ -19,19 +19,25 @@ export default function FixturePaymentWordingBridge() {
 
       const candidates = Array.from(document.querySelectorAll<HTMLElement>("div, p, span"));
       const title = candidates.find(
-        (element) => element.textContent?.trim() === "Player links still open",
+        (element) =>
+          element.textContent?.trim() === "Player links still open" ||
+          element.textContent?.trim() === "Unpaid player links included above",
       );
 
       if (title) {
-        title.textContent = "Unpaid player links included above";
+        title.textContent = "Unpaid player links";
         const box = title.closest<HTMLElement>("div.rounded-xl, div.rounded-2xl") ?? title.parentElement;
         const paragraphs = box ? Array.from(box.querySelectorAll<HTMLElement>("p, div")) : [];
-        const explanation = paragraphs.find((element) =>
-          element.textContent?.includes("This is not outstanding on the fixture"),
-        );
+        const explanation = paragraphs.find((element) => {
+          const text = element.textContent ?? "";
+          return (
+            text.includes("This is not outstanding on the fixture") ||
+            text.includes("These links have not been paid yet")
+          );
+        });
         if (explanation) {
           explanation.textContent =
-            "These links have not been paid yet, so this amount is already part of the fixture balance above. Each payment will reduce the outstanding balance. Only payments collected after the fixture is fully covered become team credit.";
+            "These payment links have not been paid yet. Their total is already included in the outstanding fixture balance above, and each payment will reduce that balance.";
         }
         return;
       }
