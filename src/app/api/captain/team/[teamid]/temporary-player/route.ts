@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import {
+  redeemTemporaryPlayerPass,
+  TemporaryPlayerPassError,
+} from "@/lib/temporary-player-passes";
 
 type TemporaryPlayerRow = {
   id: string;
@@ -11,17 +15,6 @@ type TemporaryPlayerRow = {
   status: string;
   amountPence: number;
 };
-
-function normaliseCode(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9-]/g, "");
-}
-
-function normaliseFirstName(value: unknown) {
-  return String(value ?? "").trim().toLocaleLowerCase("en-GB");
-}
 
 async function fixtureBelongsToTeam(fixtureId: string, teamId: string) {
   const fixture = await prisma.fixture.findFirst({
@@ -34,6 +27,28 @@ async function fixtureBelongsToTeam(fixtureId: string, teamId: string) {
   });
 
   return Boolean(fixture);
+}
+
+function passErrorResponse(error: unknown) {
+  if (error instanceof TemporaryPlayerPassError) {
+    const status =
+      error.code === "PASS_USED" ||
+      error.code === "PASS_REVOKED" ||
+      error.code === "ALREADY_IN_SQUAD" ||
+      error.code === "ALREADY_ADDED"
+        ? 409
+        : error.code === "FIXTURE_NOT_FOUND"
+          ? 404
+          : 400;
+
+    return NextResponse.json({ error: error.message, code: error.code }, { status });
+  }
+
+  console.error("Temporary-player pass redemption failed", error);
+  return NextResponse.json(
+    { error: "The temporary player could not be added. Please try again." },
+    { status: 500 },
+  );
 }
 
 export async function GET(
@@ -76,19 +91,18 @@ export async function POST(
   { params }: { params: Promise<{ teamid: string }> },
 ) {
   const { teamid } = await params;
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
 
   const body = (await request.json().catch(() => null)) as
-    | { fixtureId?: unknown; firstName?: unknown; playerCode?: unknown }
+    | { fixtureId?: unknown; passCode?: unknown }
     | null;
 
   const fixtureId = String(body?.fixtureId ?? "").trim();
-  const firstName = normaliseFirstName(body?.firstName);
-  const playerCode = normaliseCode(body?.playerCode);
+  const passCode = String(body?.passCode ?? "").trim();
 
-  if (!fixtureId || !firstName || !/^SIX-[A-Z0-9]{8}$/.test(playerCode)) {
+  if (!fixtureId || !passCode) {
     return NextResponse.json(
-      { error: "We couldn't find a player matching those details." },
+      { error: "Enter the one-time pass sent to you by the player." },
       { status: 400 },
     );
   }
@@ -97,71 +111,22 @@ export async function POST(
     return NextResponse.json({ error: "Fixture not found" }, { status: 404 });
   }
 
-  const matches = await prisma.$queryRaw<
-    { id: string; firstName: string; surnameInitial: string }[]
-  >`
-    SELECT
-      "id",
-      SPLIT_PART(TRIM("name"), ' ', 1) AS "firstName",
-      CASE
-        WHEN ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM("name"), '\\s+'), 1) > 1
-        THEN UPPER(LEFT((REGEXP_SPLIT_TO_ARRAY(TRIM("name"), '\\s+'))[2], 1))
-        ELSE ''
-      END AS "surnameInitial"
-    FROM "User"
-    WHERE "playerCode" = ${playerCode}
-      AND LOWER(SPLIT_PART(TRIM(COALESCE("name", '')), ' ', 1)) = ${firstName}
-    LIMIT 1
-  `;
-
-  const player = matches[0];
-  if (!player) {
-    return NextResponse.json(
-      { error: "We couldn't find a player matching those details." },
-      { status: 404 },
-    );
-  }
-
-  const permanentMember = await prisma.teamMember.findFirst({
-    where: { teamId: teamid, userId: player.id },
-    select: { id: true },
-  });
-
-  if (permanentMember) {
-    return NextResponse.json(
-      { error: "That player is already in this team's squad." },
-      { status: 409 },
-    );
-  }
-
   try {
-    await prisma.$executeRaw`
-      INSERT INTO "PlayerMatchFee" (
-        "id", "fixtureId", "teamId", "temporaryUserId", "amountPence",
-        "status", "note", "createdAt", "updatedAt"
-      )
-      VALUES (
-        CONCAT('tmp_', REPLACE(gen_random_uuid()::text, '-', '')),
-        ${fixtureId}, ${teamid}, ${player.id}, 600,
-        'OPEN'::"PlayerMatchFeeStatus", 'Temporary player added by captain', NOW(), NOW()
-      )
-    `;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message.includes("PlayerMatchFee_fixtureId_temporaryUserId_key")) {
-      return NextResponse.json(
-        { error: "That player is already added to this fixture." },
-        { status: 409 },
-      );
-    }
-    throw error;
-  }
+    const player = await redeemTemporaryPlayerPass({
+      code: passCode,
+      fixtureId,
+      teamId: teamid,
+      acceptedByUserId: access.user?.id ?? null,
+    });
 
-  return NextResponse.json({
-    ok: true,
-    player: {
-      displayName: `${player.firstName}${player.surnameInitial ? ` ${player.surnameInitial}.` : ""}`,
-      label: "Temporary player",
-    },
-  });
+    return NextResponse.json({
+      ok: true,
+      player: {
+        displayName: player.displayName,
+        label: "Temporary player",
+      },
+    });
+  } catch (error) {
+    return passErrorResponse(error);
+  }
 }
