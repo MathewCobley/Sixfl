@@ -19,7 +19,7 @@ import CaptainPlayerModeBridge from "@/components/captain/CaptainPlayerModeBridg
 import FixturePaymentWordingBridge from "@/components/captain/FixturePaymentWordingBridge";
 import HideImpossibleLeaguePositionBridge from "@/components/captain/HideImpossibleLeaguePositionBridge";
 import TeamAutoPayCopyBridge from "@/components/captain/TeamAutoPayCopyBridge";
-import TemporaryPlayerBridge from "@/components/captain/TemporaryPlayerBridge";
+import TemporaryPlayerPassLauncher from "@/components/captain/TemporaryPlayerPassLauncher";
 import NorthallertonWaitingListCopyBridge from "@/components/public/NorthallertonWaitingListCopyBridge";
 import SixflTvFixtureBridge from "@/components/SixflTvFixtureBridge";
 import Providers from "./providers";
@@ -126,7 +126,7 @@ export default function RootLayout({
             <FixturePaymentWordingBridge />
             <HideImpossibleLeaguePositionBridge />
             <TeamAutoPayCopyBridge />
-            <TemporaryPlayerBridge />
+            <TemporaryPlayerPassLauncher />
             <NorthallertonWaitingListCopyBridge />
             <SixflTvFixtureBridge />
           </Suspense>
