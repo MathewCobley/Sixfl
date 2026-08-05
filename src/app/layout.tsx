@@ -7,6 +7,7 @@ import "./mobile.css";
 import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import { Suspense, type ReactNode } from "react";
+import LeagueFreeKitOfferBridge from "@/components/admin/leagues/LeagueFreeKitOfferBridge";
 import NightBoardFixtureIssuesLink from "@/components/admin/night-board/NightBoardFixtureIssuesLink";
 import NightBoardPitchSheetsLink from "@/components/admin/night-board/NightBoardPitchSheetsLink";
 import NightBoardTeamIssuesPanel from "@/components/admin/night-board/NightBoardTeamIssuesPanel";
@@ -116,6 +117,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: safeClosestPatch }} />
         <Providers>
           <Suspense fallback={null}>
+            <LeagueFreeKitOfferBridge />
             <NightBoardTeamIssuesPanel />
             <NightBoardFixtureIssuesLink />
             <NightBoardPitchSheetsLink />
