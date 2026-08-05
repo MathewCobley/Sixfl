@@ -22,6 +22,7 @@ import TeamAutoPayCopyBridge from "@/components/captain/TeamAutoPayCopyBridge";
 import TemporaryPlayerPassLauncher from "@/components/captain/TemporaryPlayerPassLauncher";
 import TemporaryPlayerRequestsPanel from "@/components/captain/TemporaryPlayerRequestsPanel";
 import NorthallertonWaitingListCopyBridge from "@/components/public/NorthallertonWaitingListCopyBridge";
+import ReopenedNightAccessBridge from "@/components/referee/ReopenedNightAccessBridge";
 import SixflTvFixtureBridge from "@/components/SixflTvFixtureBridge";
 import Providers from "./providers";
 
@@ -130,6 +131,7 @@ export default function RootLayout({
             <TemporaryPlayerPassLauncher />
             <TemporaryPlayerRequestsPanel />
             <NorthallertonWaitingListCopyBridge />
+            <ReopenedNightAccessBridge />
             <SixflTvFixtureBridge />
           </Suspense>
           {children}
