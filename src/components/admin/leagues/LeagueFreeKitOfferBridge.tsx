@@ -11,6 +11,10 @@ function getCaptainTeamId(pathname: string) {
   return /^\/captain\/team\/([^/]+)(?:\/|$)/.exec(pathname)?.[1] ?? null;
 }
 
+function getPublicLeagueSlug(pathname: string) {
+  return /^\/leagues\/([^/]+)(?:\/|$)/.exec(pathname)?.[1] ?? null;
+}
+
 async function installAdminToggle(leagueId: string, signal: AbortSignal) {
   if (document.querySelector("[data-league-free-kit-toggle]")) return true;
 
@@ -84,10 +88,12 @@ function hideFreeOfferCopy() {
     "free kit allocation",
     "complete kits free of charge",
     "seven complete personalised kits free",
+    "7 complete personalised kits free",
     "free kits",
+    "founding team kit",
   ];
 
-  for (const element of Array.from(document.querySelectorAll<HTMLElement>("section, article, div, a"))) {
+  for (const element of Array.from(document.querySelectorAll<HTMLElement>("section, article, div, a, li"))) {
     const text = element.textContent?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
     if (!phrases.some((phrase) => text.includes(phrase))) continue;
     if (element.querySelector("input, select, textarea")) continue;
@@ -120,13 +126,25 @@ async function applyCaptainOffer(teamId: string, signal: AbortSignal) {
   return true;
 }
 
+async function applyPublicLeagueOffer(slug: string, signal: AbortSignal) {
+  const response = await fetch(`/api/public/leagues/${encodeURIComponent(slug)}/kit-offer-status`, {
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) return false;
+  const data = (await response.json()) as { enabled: boolean };
+  if (!data.enabled) hideFreeOfferCopy();
+  return true;
+}
+
 export default function LeagueFreeKitOfferBridge() {
   const pathname = usePathname();
 
   useEffect(() => {
     const leagueId = getLeagueId(pathname);
     const teamId = getCaptainTeamId(pathname);
-    if (!leagueId && !teamId) return;
+    const publicLeagueSlug = getPublicLeagueSlug(pathname);
+    if (!leagueId && !teamId && !publicLeagueSlug) return;
 
     const controller = new AbortController();
     let stopped = false;
@@ -142,7 +160,9 @@ export default function LeagueFreeKitOfferBridge() {
           ? await installAdminToggle(leagueId, controller.signal)
           : teamId
             ? await applyCaptainOffer(teamId, controller.signal)
-            : true;
+            : publicLeagueSlug
+              ? await applyPublicLeagueOffer(publicLeagueSlug, controller.signal)
+              : true;
       } catch (error) {
         if (!controller.signal.aborted) console.error(error);
       }
