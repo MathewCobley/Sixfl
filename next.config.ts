@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   ...(deploymentId ? { deploymentId } : {}),
   outputFileTracingExcludes: {
     "/api/admin/night-board/night-fixtures": ["./public/Kits/**/*"],
-    "/api/social/image/[fixtureId]": ["./public/Kits/**/*"],
+    "/api/social/image/**": ["./public/Kits/**/*"],
   },
   async redirects() {
     return [
