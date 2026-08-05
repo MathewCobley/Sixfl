@@ -22,22 +22,13 @@ export type TemporaryPlayerPassChoice = {
   pitch: string | null;
 };
 
-export type TemporaryPlayerPassSummary = {
+export type TemporaryPlayerPassSummary = TemporaryPlayerPassChoice & {
   id: string;
   code: string;
   status: TemporaryPlayerPassStatus;
   expiresAt: Date;
   createdAt: Date;
-  fixtureId: string;
-  teamId: string;
-  teamName: string;
-  opponentName: string;
-  kickoffAt: Date;
-  venueName: string | null;
-  pitch: string | null;
 };
-
-type PassRow = TemporaryPlayerPassSummary;
 
 type RedeemRow = {
   id: string;
@@ -47,6 +38,8 @@ type RedeemRow = {
   status: TemporaryPlayerPassStatus;
   expiresAt: Date;
 };
+
+type IdRow = { id: string };
 
 export class TemporaryPlayerPassError extends Error {
   constructor(
@@ -73,11 +66,7 @@ function createId(prefix: string) {
 function generatePassCode() {
   const bytes = randomBytes(6);
   let value = "";
-
-  for (const byte of bytes) {
-    value += PASS_ALPHABET[byte % PASS_ALPHABET.length];
-  }
-
+  for (const byte of bytes) value += PASS_ALPHABET[byte % PASS_ALPHABET.length];
   return `TP-${value}`;
 }
 
@@ -120,35 +109,43 @@ export async function ensureTemporaryPlayerPassTable() {
 
 async function expireOldPasses(userId?: string) {
   await ensureTemporaryPlayerPassTable();
-
   if (userId) {
     await prisma.$executeRaw`
       UPDATE "TemporaryPlayerPass"
       SET "status" = 'EXPIRED', "updatedAt" = NOW()
-      WHERE "userId" = ${userId}
-        AND "status" = 'OPEN'
-        AND "expiresAt" <= NOW()
+      WHERE "userId" = ${userId} AND "status" = 'OPEN' AND "expiresAt" <= NOW()
     `;
-    return;
+  } else {
+    await prisma.$executeRaw`
+      UPDATE "TemporaryPlayerPass"
+      SET "status" = 'EXPIRED', "updatedAt" = NOW()
+      WHERE "status" = 'OPEN' AND "expiresAt" <= NOW()
+    `;
   }
+}
 
-  await prisma.$executeRaw`
-    UPDATE "TemporaryPlayerPass"
-    SET "status" = 'EXPIRED', "updatedAt" = NOW()
-    WHERE "status" = 'OPEN'
-      AND "expiresAt" <= NOW()
-  `;
+async function hasTemporaryFee(input: {
+  fixtureId: string;
+  teamId: string;
+  userId: string;
+}) {
+  const rows = await prisma.$queryRaw<IdRow[]>(Prisma.sql`
+    SELECT "id"
+    FROM "PlayerMatchFee"
+    WHERE "fixtureId" = ${input.fixtureId}
+      AND "teamId" = ${input.teamId}
+      AND "temporaryUserId" = ${input.userId}
+      AND "status" <> 'CANCELLED'
+    LIMIT 1
+  `);
+  return Boolean(rows[0]);
 }
 
 export async function getTemporaryPlayerPassChoices(userId: string) {
   const now = new Date();
   const end = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
-
   const [memberships, fixtures] = await Promise.all([
-    prisma.teamMember.findMany({
-      where: { userId },
-      select: { teamId: true },
-    }),
+    prisma.teamMember.findMany({ where: { userId }, select: { teamId: true } }),
     prisma.fixture.findMany({
       where: {
         publishedAt: { not: null },
@@ -168,21 +165,18 @@ export async function getTemporaryPlayerPassChoices(userId: string) {
     }),
   ]);
 
-  const ownTeamIds = new Set(memberships.map((membership) => membership.teamId));
+  const ownTeamIds = new Set(memberships.map((item) => item.teamId));
   const choices: TemporaryPlayerPassChoice[] = [];
 
   for (const fixture of fixtures) {
-    const teams = [
+    for (const item of [
       { team: fixture.homeTeam, opponent: fixture.awayTeam },
       { team: fixture.awayTeam, opponent: fixture.homeTeam },
-    ];
-
-    for (const item of teams) {
+    ]) {
       const lowerName = item.team.name.trim().toLowerCase();
       if (ownTeamIds.has(item.team.id) || lowerName === "tbc" || lowerName.startsWith("tbc ")) {
         continue;
       }
-
       choices.push({
         fixtureId: fixture.id,
         teamId: item.team.id,
@@ -200,29 +194,18 @@ export async function getTemporaryPlayerPassChoices(userId: string) {
 
 export async function listTemporaryPlayerPasses(userId: string) {
   await expireOldPasses(userId);
-
-  return prisma.$queryRaw<PassRow[]>(Prisma.sql`
+  return prisma.$queryRaw<TemporaryPlayerPassSummary[]>(Prisma.sql`
     SELECT
-      pass."id",
-      pass."code",
-      pass."status",
-      pass."expiresAt",
-      pass."createdAt",
-      pass."fixtureId",
-      pass."teamId",
-      selected_team."name" AS "teamName",
-      CASE
-        WHEN fixture."homeTeamId" = pass."teamId" THEN away_team."name"
-        ELSE home_team."name"
-      END AS "opponentName",
-      fixture."kickoffAt",
-      venue."name" AS "venueName",
-      fixture."pitch"
+      pass."id", pass."code", pass."status", pass."expiresAt", pass."createdAt",
+      pass."fixtureId", pass."teamId", selected_team."name" AS "teamName",
+      CASE WHEN fixture."homeTeamId" = pass."teamId"
+        THEN away_team."name" ELSE home_team."name" END AS "opponentName",
+      fixture."kickoffAt", venue."name" AS "venueName", fixture."pitch"
     FROM "TemporaryPlayerPass" pass
-    INNER JOIN "Fixture" fixture ON fixture."id" = pass."fixtureId"
-    INNER JOIN "Team" selected_team ON selected_team."id" = pass."teamId"
-    INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
-    INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
+    JOIN "Fixture" fixture ON fixture."id" = pass."fixtureId"
+    JOIN "Team" selected_team ON selected_team."id" = pass."teamId"
+    JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
+    JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
     LEFT JOIN "Venue" venue ON venue."id" = fixture."venueId"
     WHERE pass."userId" = ${userId}
     ORDER BY pass."createdAt" DESC
@@ -236,7 +219,6 @@ export async function createTemporaryPlayerPass(input: {
   teamId: string;
 }) {
   await ensureTemporaryPlayerPassTable();
-
   const fixture = await prisma.fixture.findFirst({
     where: {
       id: input.fixtureId,
@@ -247,7 +229,6 @@ export async function createTemporaryPlayerPass(input: {
     },
     select: { id: true, kickoffAt: true },
   });
-
   if (!fixture) {
     throw new TemporaryPlayerPassError(
       "FIXTURE_NOT_FOUND",
@@ -255,30 +236,17 @@ export async function createTemporaryPlayerPass(input: {
     );
   }
 
-  const [permanentMember, existingFee] = await Promise.all([
-    prisma.teamMember.findFirst({
-      where: { teamId: input.teamId, userId: input.userId },
-      select: { id: true },
-    }),
-    prisma.playerMatchFee.findFirst({
-      where: {
-        fixtureId: input.fixtureId,
-        teamId: input.teamId,
-        temporaryUserId: input.userId,
-        status: { not: "CANCELLED" },
-      },
-      select: { id: true },
-    }),
-  ]);
-
+  const permanentMember = await prisma.teamMember.findFirst({
+    where: { teamId: input.teamId, userId: input.userId },
+    select: { id: true },
+  });
   if (permanentMember) {
     throw new TemporaryPlayerPassError(
       "ALREADY_IN_SQUAD",
       "You are already a permanent member of that squad.",
     );
   }
-
-  if (existingFee) {
+  if (await hasTemporaryFee(input)) {
     throw new TemporaryPlayerPassError(
       "ALREADY_ADDED",
       "You are already linked to that team for this fixture.",
@@ -302,7 +270,6 @@ export async function createTemporaryPlayerPass(input: {
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const id = createId("tpp");
     const code = generatePassCode();
-
     try {
       await prisma.$executeRaw`
         INSERT INTO "TemporaryPlayerPass" (
@@ -313,14 +280,14 @@ export async function createTemporaryPlayerPass(input: {
           'OPEN', ${expiresAt}, NOW(), NOW()
         )
       `;
-
-      const passes = await listTemporaryPlayerPasses(input.userId);
-      const created = passes.find((pass) => pass.id === id);
-      if (!created) throw new Error("Temporary-player pass was created but could not be reloaded.");
+      const created = (await listTemporaryPlayerPasses(input.userId)).find(
+        (pass) => pass.id === id,
+      );
+      if (!created) throw new Error("Temporary-player pass could not be reloaded.");
       return created;
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (message.includes("TemporaryPlayerPass_code_key") || message.includes("duplicate key")) {
+      if (message.includes("duplicate key") || message.includes("TemporaryPlayerPass_code_key")) {
         continue;
       }
       throw error;
@@ -335,7 +302,6 @@ export async function revokeTemporaryPlayerPass(input: {
   passId: string;
 }) {
   await ensureTemporaryPlayerPassTable();
-
   const changed = await prisma.$executeRaw`
     UPDATE "TemporaryPlayerPass"
     SET "status" = 'REVOKED', "updatedAt" = NOW()
@@ -343,7 +309,6 @@ export async function revokeTemporaryPlayerPass(input: {
       AND "userId" = ${input.userId}
       AND "status" = 'OPEN'
   `;
-
   return changed > 0;
 }
 
@@ -355,22 +320,19 @@ export async function redeemTemporaryPlayerPass(input: {
 }) {
   await expireOldPasses();
   const code = normaliseTemporaryPlayerPassCode(input.code);
-
   if (!/^TP-[A-Z0-9]{6}$/.test(code)) {
     throw new TemporaryPlayerPassError("INVALID_PASS", "That temporary-player pass is not valid.");
   }
 
   return prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<RedeemRow[]>(Prisma.sql`
-      SELECT
-        "id", "userId", "fixtureId", "teamId", "status", "expiresAt"
+      SELECT "id", "userId", "fixtureId", "teamId", "status", "expiresAt"
       FROM "TemporaryPlayerPass"
       WHERE "code" = ${code}
       LIMIT 1
       FOR UPDATE
     `);
     const pass = rows[0];
-
     if (!pass) {
       throw new TemporaryPlayerPassError("INVALID_PASS", "That temporary-player pass was not found.");
     }
@@ -405,7 +367,6 @@ export async function redeemTemporaryPlayerPass(input: {
       },
       select: { id: true },
     });
-
     if (!fixture) {
       throw new TemporaryPlayerPassError(
         "FIXTURE_NOT_FOUND",
@@ -424,16 +385,16 @@ export async function redeemTemporaryPlayerPass(input: {
       );
     }
 
-    const existingFee = await tx.playerMatchFee.findFirst({
-      where: {
-        fixtureId: input.fixtureId,
-        teamId: input.teamId,
-        temporaryUserId: pass.userId,
-        status: { not: "CANCELLED" },
-      },
-      select: { id: true },
-    });
-    if (existingFee) {
+    const existingFees = await tx.$queryRaw<IdRow[]>(Prisma.sql`
+      SELECT "id"
+      FROM "PlayerMatchFee"
+      WHERE "fixtureId" = ${input.fixtureId}
+        AND "teamId" = ${input.teamId}
+        AND "temporaryUserId" = ${pass.userId}
+        AND "status" <> 'CANCELLED'
+      LIMIT 1
+    `);
+    if (existingFees[0]) {
       throw new TemporaryPlayerPassError(
         "ALREADY_ADDED",
         "That player is already added to this fixture.",
@@ -455,12 +416,9 @@ export async function redeemTemporaryPlayerPass(input: {
 
     await tx.$executeRaw`
       UPDATE "TemporaryPlayerPass"
-      SET
-        "status" = 'ACCEPTED',
-        "acceptedAt" = NOW(),
-        "acceptedByUserId" = ${input.acceptedByUserId},
-        "playerMatchFeeId" = ${playerMatchFeeId},
-        "updatedAt" = NOW()
+      SET "status" = 'ACCEPTED', "acceptedAt" = NOW(),
+          "acceptedByUserId" = ${input.acceptedByUserId},
+          "playerMatchFeeId" = ${playerMatchFeeId}, "updatedAt" = NOW()
       WHERE "id" = ${pass.id}
     `;
 
