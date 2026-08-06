@@ -16,6 +16,21 @@ if (!fs.existsSync(componentPath)) {
 
 let source = fs.readFileSync(componentPath, "utf8");
 
+// The incremental additional-kit selector is now committed directly in React.
+// It deliberately distinguishes the current paid order from the new kits being
+// added in this payment batch. Do not replace it with the old cumulative copy.
+if (
+  source.includes("New kits to add now") &&
+  source.includes("Current order:") &&
+  source.includes("Adding {quantity}") &&
+  source.includes("New payment required:")
+) {
+  console.log(
+    "Native incremental extra-kit quantity selector already present; legacy dropdown rewrite skipped.",
+  );
+  process.exit(0);
+}
+
 const importLine = 'import FormListboxField from "@/components/ui/FormListboxField";';
 if (!source.includes(importLine)) {
   const importAnchor = 'import { useRouter } from "next/navigation";';
