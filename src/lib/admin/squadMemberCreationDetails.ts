@@ -275,17 +275,21 @@ export async function getSquadMemberCreationDetailsMap(input: {
       result.set(member.id, {
         method: invite && hasExactProfileLink
           ? "Player activated a squad invitation"
-          : "Created from a player prospect",
+          : inferred
+            ? "Possible match to an earlier player prospect"
+            : "Created from a player prospect",
         createdBy: invite && hasExactProfileLink
           ? inviter
             ? `Player completed activation · invitation sent by ${inviter}`
             : "Player completed activation · invitation sender was not recorded"
           : inviter
             ? `Prospect invitation sent by ${inviter}`
-            : "Individual creator was not recorded",
+            : inferred
+              ? "Creator cannot be confirmed from the available records"
+              : "Individual creator was not recorded",
         detail: [
           source ? `Original source: ${source}` : null,
-          inferred ? `Best available match: ${matchReason}; the original link was not stored.` : null,
+          inferred ? `Possible match only: ${matchReason}. This does not prove how the squad membership was created.` : null,
         ]
           .filter(Boolean)
           .join(" · ") || null,
@@ -333,12 +337,12 @@ export async function getSquadMemberCreationDetailsMap(input: {
     }
 
     result.set(member.id, {
-      method: "Existing account linked directly to the squad",
-      createdBy: "Individual creator was not recorded",
+      method: "How this player was added is not recorded",
+      createdBy: "Creator cannot be identified from the available records",
       detail:
-        "This membership was created before SIXFL stored a complete creation trail for every squad route.",
+        "SIXFL does not have enough historic audit data to state how this squad membership was created.",
       sourceRecordHref: null,
-      inferred: true,
+      inferred: false,
     });
   }
 
