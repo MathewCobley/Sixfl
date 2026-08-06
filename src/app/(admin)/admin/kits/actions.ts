@@ -106,7 +106,9 @@ export async function updateKitOrderStatusAction(formData: FormData) {
     }
 
     if (status === "DRAFT") {
-      // Reopening must fully unlock the captain workflow, not merely alter the label.
+      // A reopen is a team-level action. Historical duplicate order rows must not
+      // leave the captain reading a stale SUBMITTED/APPROVED record and hiding
+      // the Save/Submit controls.
       await prisma.$executeRaw(Prisma.sql`
         UPDATE "TeamKitOrder"
         SET
@@ -118,7 +120,7 @@ export async function updateKitOrderStatusAction(formData: FormData) {
           "fulfilledAt" = NULL,
           "lastEditedByUserId" = ${user?.id ?? null},
           "updatedAt" = NOW()
-        WHERE "id" = ${orderId}
+        WHERE "teamId" = ${teamId}
       `);
     } else {
       await updateTeamKitOrderStatus({
@@ -131,7 +133,8 @@ export async function updateKitOrderStatusAction(formData: FormData) {
     const savedRows = await prisma.$queryRaw<Array<{ status: string }>>(Prisma.sql`
       SELECT "status"::text AS "status"
       FROM "TeamKitOrder"
-      WHERE "id" = ${orderId}
+      WHERE ${status === "DRAFT" ? Prisma.sql`"teamId" = ${teamId}` : Prisma.sql`"id" = ${orderId}`}
+      ORDER BY "updatedAt" DESC, "createdAt" DESC
       LIMIT 1
     `);
 
