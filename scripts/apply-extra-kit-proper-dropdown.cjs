@@ -16,21 +16,6 @@ if (!fs.existsSync(componentPath)) {
 
 let source = fs.readFileSync(componentPath, "utf8");
 
-// The incremental additional-kit selector is now committed directly in React.
-// It deliberately distinguishes the current paid order from the new kits being
-// added in this payment batch. Do not replace it with the old cumulative copy.
-if (
-  source.includes("New kits to add now") &&
-  source.includes("Current order:") &&
-  source.includes("Adding {quantity}") &&
-  source.includes("New payment required:")
-) {
-  console.log(
-    "Native incremental extra-kit quantity selector already present; legacy dropdown rewrite skipped.",
-  );
-  process.exit(0);
-}
-
 const importLine = 'import FormListboxField from "@/components/ui/FormListboxField";';
 if (!source.includes(importLine)) {
   const importAnchor = 'import { useRouter } from "next/navigation";';
@@ -40,6 +25,37 @@ if (!source.includes(importLine)) {
   source = source.replace(importAnchor, `${importAnchor}\n\n${importLine}`);
 }
 
+const oldTotals = [
+  "  const totalPence = quantity * extraKitPricePence;",
+  "  const requestedTotalKitQuantity = displayedIncludedQuantity + quantity;",
+].join("\n");
+const incrementalTotals = [
+  "  const paidExtraKitQuantity = data?.paidExtraKitQuantity ?? 0;",
+  "  const currentTotalKitQuantity =",
+  "    data?.totalKitQuantity ??",
+  "    displayedIncludedQuantity + paidExtraKitQuantity;",
+  "  const totalPence = quantity * extraKitPricePence;",
+  "  const requestedTotalKitQuantity = currentTotalKitQuantity + quantity;",
+].join("\n");
+if (!source.includes(incrementalTotals)) {
+  if (!source.includes(oldTotals)) {
+    throw new Error("Could not find the extra-kit total calculation.");
+  }
+  source = source.replace(oldTotals, incrementalTotals);
+}
+
+source = source.replace(
+  "              Choose only the number of extra kits needed beyond the {displayedIncludedQuantity} already included. Select one team member to pay the full amount, or select several members to split the total equally.",
+  "              Choose only the new kits you are adding now. Kits already paid for are shown separately and will not be charged again. Select one team member to pay the new amount, or several members to split it.",
+);
+
+if (!source.includes("      setQuantity(1);\n      setSelectedMemberIds([]);")) {
+  source = source.replace(
+    "      setSelectedMemberIds([]);",
+    "      setQuantity(1);\n      setSelectedMemberIds([]);",
+  );
+}
+
 const nativeSelectPattern = /                <label className="block max-w-sm space-y-2">[\s\S]*?                <\/label>\n\n                <div>/;
 
 if (!source.includes('<FormListboxField\n                    name="extraKitQuantity"')) {
@@ -47,21 +63,21 @@ if (!source.includes('<FormListboxField\n                    name="extraKitQuant
     throw new Error("Could not find the native extra-kit quantity selector.");
   }
 
-  const replacement = `                <div className="max-w-sm space-y-2">
+  const replacement = `                <div className="max-w-lg space-y-2">
                   <FormListboxField
                     name="extraKitQuantity"
-                    label="Number of extra kits"
+                    label="New kits to add now"
                     value={String(quantity)}
                     options={Array.from({ length: 10 }, (_, index) => index + 1).map(
                       (option) => ({
                         value: String(option),
-                        label: \`${"${option}"} extra kit${"${option === 1 ? \"\" : \"s\"}"} — ${"${formatMoney(option * extraKitPricePence)}"}\`,
+                        label: \`Add ${"${option}"} more kit${"${option === 1 ? \"\" : \"s\"}"} now — ${"${formatMoney(option * extraKitPricePence)}"}\`,
                       }),
                     )}
                     onValueChange={(value) => setQuantity(Number(value))}
                   />
-                  <span className="block rounded-xl border border-sky-400/15 bg-sky-500/[0.06] px-3 py-2 text-sm text-sky-50/80">
-                    {displayedIncludedQuantity} included + {quantity} extra = {requestedTotalKitQuantity} kits in total · Payment required: {formatMoney(totalPence)}
+                  <span className="block rounded-xl border border-sky-400/15 bg-sky-500/[0.06] px-3 py-2 text-sm leading-6 text-sky-50/80">
+                    Current order: {currentTotalKitQuantity} kits. Adding {quantity} new kit{quantity === 1 ? "" : "s"} will make {requestedTotalKitQuantity} kits in total. New payment required: {formatMoney(totalPence)}
                     {selectedMembers.length > 1
                       ? \` · approximately ${"${formatMoney(estimatedSharePence)}"} each\`
                       : ""}
@@ -77,10 +93,16 @@ if (
   source.includes("<select") ||
   !source.includes(importLine) ||
   !source.includes('name="extraKitQuantity"') ||
+  !source.includes('label="New kits to add now"') ||
+  !source.includes("currentTotalKitQuantity + quantity") ||
+  !source.includes("New payment required:") ||
+  !source.includes("setQuantity(1);") ||
   !source.includes("onValueChange={(value) => setQuantity(Number(value))}")
 ) {
-  throw new Error("The SIXFL extra-kit dropdown was not applied correctly.");
+  throw new Error("The incremental SIXFL extra-kit dropdown was not applied correctly.");
 }
 
 fs.writeFileSync(componentPath, source, "utf8");
-console.log("Extra kit quantity now uses the standard SIXFL Headless UI dropdown.");
+console.log(
+  "Extra kit quantity now charges only the new kits being added to the existing paid order.",
+);
