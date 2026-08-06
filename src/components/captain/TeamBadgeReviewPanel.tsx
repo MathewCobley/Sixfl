@@ -180,13 +180,13 @@ export default function TeamBadgeReviewPanel({
         </div>
 
         <div className="mx-auto flex w-full max-w-[310px] shrink-0 flex-col items-center">
-          <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 p-5 shadow-[0_22px_60px_rgba(0,0,0,0.35)]">
+          <div className="flex aspect-square w-full items-center justify-center overflow-visible rounded-[2rem] border border-white/10 bg-black/30 p-6 shadow-[0_22px_60px_rgba(0,0,0,0.35)]">
             {hasBadge ? (
               <img
                 src={logoUrl ?? ""}
                 alt={`${teamName} team badge`}
                 onError={() => setImageFailed(true)}
-                className="h-full w-full object-contain"
+                className="max-h-full max-w-full object-contain object-center"
               />
             ) : (
               <div className="text-center">
