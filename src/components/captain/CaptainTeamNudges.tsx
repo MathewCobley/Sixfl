@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 
 import { confirmFixtureFromNudgeAction } from "@/app/captain/team/[teamid]/fixtures/nudge-actions";
 import CaptainFixtureConfirmButton from "@/components/captain/CaptainFixtureConfirmButton";
+import CaptainPlayerPaymentLinkSummary from "@/components/captain/CaptainPlayerPaymentLinkSummary";
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getTeamKitOrder } from "@/lib/kits/db";
@@ -224,8 +225,6 @@ export default async function CaptainTeamNudges({ teamId }: { teamId: string }) 
   const showRatingsNudge = pendingRatingMatchCount > 0;
   const showKitNudge = !kitOrder || kitOrder.status === "DRAFT";
 
-  if (!pendingFixture && !showRatingsNudge && !showKitNudge) return null;
-
   const kitCopy = getKitNudgeCopy(offerType);
   const confirmationCopy = pendingFixture
     ? getConfirmationUrgency(pendingFixture.fixture.kickoffAt)
@@ -283,6 +282,8 @@ export default async function CaptainTeamNudges({ teamId }: { teamId: string }) 
           </div>
         </section>
       ) : null}
+
+      <CaptainPlayerPaymentLinkSummary teamId={teamId} />
 
       {showRatingsNudge || showKitNudge ? (
         <section className="overflow-hidden rounded-3xl border border-rose-400/20 bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.13),transparent_38%),rgba(255,255,255,0.04)] shadow-[0_18px_65px_rgba(0,0,0,0.22)]">
