@@ -74,7 +74,19 @@ component = component.replace(
 );
 component = component.replace(
   '      "Add this pass to that fixture in the SIXFL Matchday Squad page.",',
-  '      pass.isPast\n        ? "Please accept this claim against that completed fixture in SIXFL."\n        : "Add this pass to that fixture in the SIXFL Matchday Squad page.",',
+  '      pass.isPast\n        ? "SIXFL has already sent my claim to the captain automatically. This code is only a backup."\n        : "SIXFL has already sent my request to the captain automatically. This code is only a backup.",',
+);
+component = component.replace(
+  '      setMessage(`Your one-time pass ${payload.pass.code} is ready to share.`);',
+  '      setMessage(`Request sent automatically to ${payload.pass.teamName}. You do not need to share the code unless the captain cannot see your request.`);',
+);
+component = component.replace(
+  '{captainMatch ? "Add a temporary player" : "Share a temporary-player pass"}',
+  '{captainMatch ? "Add a temporary player" : "Play for another team"}',
+);
+component = component.replace(
+  '                    : "Choose the team and fixture you are offering to play in. You stay in control: the pass works once, expires automatically and can be cancelled before the captain accepts it."}',
+  '                    : "Choose the team and fixture you want to play in. When you send the request, it appears automatically for that captain to accept or decline. You do not need to share the code unless they cannot see the request."}',
 );
 component = component.replace(
   '                        {playerData.choices.map((choice) => (',
@@ -86,7 +98,7 @@ component = component.replace(
 );
 component = component.replace(
   '{busy ? "Creating pass…" : "Create one-time pass"}',
-  '{busy\n                        ? "Creating pass…"\n                        : pastChoices.some((choice) => `${choice.fixtureId}|${choice.teamId}` === selection)\n                          ? "Create past-match claim"\n                          : "Create one-time pass"}',
+  '{busy\n                        ? "Sending request…"\n                        : pastChoices.some((choice) => `${choice.fixtureId}|${choice.teamId}` === selection)\n                          ? "Send past-match claim"\n                          : "Send request to captain"}',
 );
 component = component.replace(
   '                    No suitable published fixtures were found in the next three weeks. The team may need to publish or confirm the fixture first.',
@@ -94,8 +106,21 @@ component = component.replace(
 );
 component = component.replace(
   '                {message ? <p',
-  '                {pastChoices.length > 0 ? (\n                  <div className="rounded-2xl border border-sky-400/20 bg-sky-500/[0.08] p-4 text-sm leading-6 text-sky-100">\n                    <div className="font-semibold">Played previously?</div>\n                    <p className="mt-1 text-sky-100/75">Choose a completed match from the last 30 days and create a claim. The captain must accept it before the appearance is linked to your account.</p>\n                  </div>\n                ) : null}\n\n                {message ? <p',
+  '                {pastChoices.length > 0 ? (\n                  <div className="rounded-2xl border border-sky-400/20 bg-sky-500/[0.08] p-4 text-sm leading-6 text-sky-100">\n                    <div className="font-semibold">Played previously?</div>\n                    <p className="mt-1 text-sky-100/75">Choose a completed match from the last 30 days and send a claim. The captain will see it automatically and must accept it before the appearance is linked to your account.</p>\n                  </div>\n                ) : null}\n\n                {message ? <p',
 );
+component = component.replace(
+  '<h3 className="font-semibold text-white">Passes waiting for a captain</h3>',
+  '<h3 className="font-semibold text-white">Requests waiting for a captain</h3>',
+);
+component = component.replace(
+  '<p className="mt-2 text-center text-xs text-white/50">Expires {formatDateTime(pass.expiresAt)}</p>',
+  '<p className="mt-2 text-center text-xs leading-5 text-white/55">Request sent automatically · expires {formatDateTime(pass.expiresAt)}. The code below is only a backup if the captain cannot see the request.</p>',
+);
+component = component.replace(
+  '                            Share pass',
+  '                            Share backup code',
+);
+
 write(componentPath, component);
 
-console.log("Past temporary-player match claims are available for completed fixtures from the last 30 days.");
+console.log("Past temporary-player claims and automatic captain-request wording are applied.");
