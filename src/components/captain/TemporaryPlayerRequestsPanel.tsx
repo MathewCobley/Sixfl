@@ -102,7 +102,7 @@ export default function TemporaryPlayerRequestsPanel() {
       const playerName = payload?.player?.displayName ?? "The player";
       if (decision === "accept") {
         setMessage(
-          `${playerName} has been added to this fixture and their £6 match fee is now open.`,
+          `${playerName} has been added to this fixture and their match fee is now open for review.`,
         );
         window.setTimeout(() => window.location.reload(), 900);
       } else {
@@ -151,7 +151,7 @@ export default function TemporaryPlayerRequestsPanel() {
               >
                 <p className="font-semibold text-white">{request.displayName}</p>
                 <p className="mt-1 text-sm leading-6 text-white/65">
-                  Wants to play for your team in this fixture and pay the £6 match fee.
+                  Wants to play for your team in this fixture and pay their match fee.
                   The request expires at {formatTime(request.expiresAt)}.
                 </p>
                 <div className="mt-4 grid grid-cols-2 gap-2">
