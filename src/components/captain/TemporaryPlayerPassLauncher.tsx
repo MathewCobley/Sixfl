@@ -80,6 +80,13 @@ export default function TemporaryPlayerPassLauncher() {
   const isPlayerArea = pathname.startsWith("/player");
   const teamId = captainMatch?.[1] ?? "";
   const fixtureId = searchParams.get("fixtureId") ?? "";
+  const previewMembershipId =
+    isPlayerArea ? searchParams.get("previewMembershipId")?.trim() || null : null;
+
+  function playerPassApiUrl() {
+    if (!previewMembershipId) return "/api/player/temporary-pass";
+    return `/api/player/temporary-pass?previewMembershipId=${encodeURIComponent(previewMembershipId)}`;
+  }
 
   const openPasses = useMemo(
     () => playerData?.passes.filter((pass) => pass.status === "OPEN") ?? [],
@@ -92,7 +99,7 @@ export default function TemporaryPlayerPassLauncher() {
     setMessage("");
 
     try {
-      const response = await fetch("/api/player/temporary-pass", { cache: "no-store" });
+      const response = await fetch(playerPassApiUrl(), { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as
         | (PlayerPassPayload & { error?: string })
         | null;
@@ -129,7 +136,11 @@ export default function TemporaryPlayerPassLauncher() {
       const response = await fetch("/api/player/temporary-pass", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fixtureId: selectedFixtureId, teamId: selectedTeamId }),
+        body: JSON.stringify({
+          fixtureId: selectedFixtureId,
+          teamId: selectedTeamId,
+          previewMembershipId,
+        }),
       });
       const payload = (await response.json().catch(() => null)) as
         | { error?: string; pass?: PlayerPass }
@@ -153,7 +164,7 @@ export default function TemporaryPlayerPassLauncher() {
       const response = await fetch("/api/player/temporary-pass", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passId }),
+        body: JSON.stringify({ passId, previewMembershipId }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
