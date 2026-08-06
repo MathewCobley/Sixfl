@@ -122,5 +122,6 @@ component = component.replace(
 );
 
 write(componentPath, component);
+require("./apply-temporary-player-team-label-clarity.cjs");
 
 console.log("Past temporary-player claims and automatic captain-request wording are applied.");
