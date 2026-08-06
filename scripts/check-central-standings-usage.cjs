@@ -16,6 +16,7 @@ require("./apply-native-free-kit-team-badges.cjs");
 require("./apply-admin-email-reply-feedback.cjs");
 require("./apply-late-confirmation-warning-delivery.cjs");
 require("./apply-captain-team-nudges.cjs");
+require("./apply-temporary-player-request-overview.cjs");
 require("./apply-captain-fixture-status-layout.cjs");
 require("./apply-managed-team-prospects-navigation.cjs");
 require("./apply-pending-activation-player-pool-action.cjs");
