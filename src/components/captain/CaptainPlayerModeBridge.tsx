@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 function getTeamId(pathname: string) {
-  return pathname.match(/^\/(?:captain|player)\/team\/([^/]+)/)?.[1] ?? null;
+  return pathname.match(/^\/player\/team\/([^/]+)/)?.[1] ?? null;
 }
 
 function ensureButton(label: string, href: string, container: Element, kind: string) {
@@ -40,17 +40,6 @@ function findPlayerActionArea() {
       const text = element.textContent ?? "";
       return text.includes("Confirm availability") || text.includes("View league");
     }) ?? firstSection
-  );
-}
-
-function findCaptainActionArea() {
-  const firstSection = document.querySelector("main section");
-  if (!firstSection) return null;
-
-  return (
-    Array.from(firstSection.querySelectorAll("div")).find(
-      (element) => element.querySelectorAll("a").length > 0,
-    ) ?? firstSection
   );
 }
 
@@ -111,33 +100,20 @@ export default function CaptainPlayerModeBridge() {
       attempt += 1;
 
       let complete = false;
+      const actionArea = findPlayerActionArea();
+      if (actionArea) {
+        ensureButton("Back to dashboard", "/dashboard", actionArea, "dashboard");
 
-      if (pathname.startsWith(`/player/team/${teamId}`)) {
-        const actionArea = findPlayerActionArea();
-        if (actionArea) {
-          ensureButton("Back to dashboard", "/dashboard", actionArea, "dashboard");
-
-          if (pageShowsCaptainAccess()) {
-            correctCaptainWording();
-            ensureButton(
-              "Open captain dashboard",
-              `/captain/team/${teamId}`,
-              actionArea,
-              "captain",
-            );
-          }
-          complete = true;
-        }
-      } else if (pathname.startsWith(`/captain/team/${teamId}`)) {
-        const actionArea = findCaptainActionArea();
-        if (actionArea) {
-          complete = ensureButton(
-            "View my player page",
-            `/player/team/${teamId}`,
+        if (pageShowsCaptainAccess()) {
+          correctCaptainWording();
+          ensureButton(
+            "Open captain dashboard",
+            `/captain/team/${teamId}`,
             actionArea,
-            "player",
+            "captain",
           );
         }
+        complete = true;
       }
 
       if (!complete && attempt < 20) {
