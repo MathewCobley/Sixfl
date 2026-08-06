@@ -16,13 +16,19 @@ if (!fs.existsSync(componentPath)) {
 
 let source = fs.readFileSync(componentPath, "utf8");
 
+const importAnchor = 'import { useRouter } from "next/navigation";';
 const importLine = 'import FormListboxField from "@/components/ui/FormListboxField";';
+const cancelImportLine =
+  'import CancelExtraKitPaymentButton from "@/components/captain/CancelExtraKitPaymentButton";';
+
+if (!source.includes(importAnchor)) {
+  throw new Error("Could not find the IncludedKitPaymentPanel import anchor.");
+}
 if (!source.includes(importLine)) {
-  const importAnchor = 'import { useRouter } from "next/navigation";';
-  if (!source.includes(importAnchor)) {
-    throw new Error("Could not find the IncludedKitPaymentPanel import anchor.");
-  }
   source = source.replace(importAnchor, `${importAnchor}\n\n${importLine}`);
+}
+if (!source.includes(cancelImportLine)) {
+  source = source.replace(importLine, `${importLine}\n${cancelImportLine}`);
 }
 
 const oldTotals = [
@@ -89,14 +95,56 @@ if (!source.includes('<FormListboxField\n                    name="extraKitQuant
   source = source.replace(nativeSelectPattern, replacement);
 }
 
+const oldRequestAction = `                    {request.paymentUrl ? (
+                      <a
+                        href={request.paymentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex text-xs font-semibold text-sky-200 underline decoration-sky-400/40 underline-offset-4"
+                      >
+                        Open payment link
+                      </a>
+                    ) : null}`;
+
+if (!source.includes("<CancelExtraKitPaymentButton")) {
+  if (!source.includes(oldRequestAction)) {
+    throw new Error("Could not find the extra-kit payment request actions.");
+  }
+
+  const newRequestActions = `                    <div className="mt-3 flex flex-wrap items-start gap-3">
+                      {request.paymentUrl ? (
+                        <a
+                          href={request.paymentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex text-xs font-semibold text-sky-200 underline decoration-sky-400/40 underline-offset-4"
+                        >
+                          Open payment link
+                        </a>
+                      ) : null}
+                      {request.status === "OPEN" && request.paidPence <= 0 ? (
+                        <CancelExtraKitPaymentButton
+                          teamId={teamId}
+                          chargeId={request.id}
+                          payerName={request.payerName}
+                          amountPence={request.amountPence}
+                        />
+                      ) : null}
+                    </div>`;
+
+  source = source.replace(oldRequestAction, newRequestActions);
+}
+
 if (
   source.includes("<select") ||
   !source.includes(importLine) ||
+  !source.includes(cancelImportLine) ||
   !source.includes('name="extraKitQuantity"') ||
   !source.includes('label="New kits to add now"') ||
   !source.includes("currentTotalKitQuantity + quantity") ||
   !source.includes("New payment required:") ||
   !source.includes("setQuantity(1);") ||
+  !source.includes("<CancelExtraKitPaymentButton") ||
   !source.includes("onValueChange={(value) => setQuantity(Number(value))}")
 ) {
   throw new Error("The incremental SIXFL extra-kit dropdown was not applied correctly.");
@@ -104,5 +152,5 @@ if (
 
 fs.writeFileSync(componentPath, source, "utf8");
 console.log(
-  "Extra kit quantity now charges only the new kits being added to the existing paid order.",
+  "Extra kit quantity now charges only newly added kits and unpaid mistakes can be cancelled.",
 );
