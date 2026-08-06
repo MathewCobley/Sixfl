@@ -57,6 +57,7 @@ export default function IncludedKitPaymentPanel({
   const [quantity, setQuantity] = useState(1);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,7 +75,9 @@ export default function IncludedKitPaymentPanel({
         | null;
 
       if (!response.ok || !payload) {
-        throw new Error(payload?.error || "The kit payment details could not be loaded.");
+        throw new Error(
+          payload?.error || "The kit payment details could not be loaded.",
+        );
       }
 
       if (payload.eligible === false) {
@@ -108,15 +111,20 @@ export default function IncludedKitPaymentPanel({
   const extraKitPricePence = data?.extraKitPricePence ?? 2000;
   const displayedIncludedQuantity =
     data?.includedKitQuantity ?? includedKitQuantity;
+  const paidExtraKitQuantity = data?.paidExtraKitQuantity ?? 0;
+  const pendingExtraKitQuantity = data?.pendingExtraKitQuantity ?? 0;
+  const currentTotalKitQuantity =
+    data?.totalKitQuantity ??
+    displayedIncludedQuantity + paidExtraKitQuantity;
   const selectedMembers = useMemo(
     () => members.filter((member) => selectedMemberIds.includes(member.id)),
     [members, selectedMemberIds],
   );
-  const totalPence = quantity * extraKitPricePence;
-  const requestedTotalKitQuantity = displayedIncludedQuantity + quantity;
+  const newPaymentPence = quantity * extraKitPricePence;
+  const totalAfterPayment = currentTotalKitQuantity + quantity;
   const estimatedSharePence = selectedMembers.length
-    ? Math.floor(totalPence / selectedMembers.length)
-    : totalPence;
+    ? Math.floor(newPaymentPence / selectedMembers.length)
+    : newPaymentPence;
 
   function toggleMember(memberId: string) {
     setSelectedMemberIds((current) =>
@@ -151,6 +159,8 @@ export default function IncludedKitPaymentPanel({
         throw new Error(payload?.error || "The payment links could not be created.");
       }
 
+      const createdQuantity = quantity;
+      setQuantity(1);
       setSelectedMemberIds([]);
       setData((current) => ({
         ...(current ?? {}),
@@ -160,8 +170,8 @@ export default function IncludedKitPaymentPanel({
       }));
       setMessage(
         payload.emailsFailed
-          ? `Payment links created. ${payload.emailsQueued ?? 0} email${payload.emailsQueued === 1 ? "" : "s"} queued; ${payload.emailsFailed} could not be emailed, so use the payment links shown below.`
-          : `Payment link${(payload.emailsQueued ?? 0) === 1 ? "" : "s"} created and emailed successfully.`,
+          ? `Payment request for ${createdQuantity} new kit${createdQuantity === 1 ? "" : "s"} created. ${payload.emailsQueued ?? 0} email${payload.emailsQueued === 1 ? "" : "s"} queued; ${payload.emailsFailed} could not be emailed, so use the payment links shown below.`
+          : `Payment request for ${createdQuantity} new kit${createdQuantity === 1 ? "" : "s"} created and emailed successfully.`,
       );
       router.refresh();
     } catch (caught) {
@@ -175,6 +185,44 @@ export default function IncludedKitPaymentPanel({
     }
   }
 
+  async function cancelRequest(request: ExtraKitRequest) {
+    const confirmed = window.confirm(
+      `Cancel the unpaid ${formatMoney(request.amountPence)} kit payment request for ${request.payerName}?`,
+    );
+    if (!confirmed) return;
+
+    setCancellingId(request.id);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/captain/team/${encodeURIComponent(teamId)}/extra-kit-payments/${encodeURIComponent(request.id)}`,
+        { method: "DELETE" },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "The payment request could not be cancelled.");
+      }
+
+      setMessage(
+        `${request.payerName}'s unpaid kit payment request has been cancelled. You can now create the correct new request.`,
+      );
+      await load(true);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The payment request could not be cancelled.",
+      );
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   return (
     <div className="w-full space-y-4">
       <section className="rounded-3xl border border-emerald-400/25 bg-emerald-500/[0.08] p-5 sm:p-6">
@@ -185,7 +233,8 @@ export default function IncludedKitPaymentPanel({
           {displayedIncludedQuantity} complete kits are included free of charge
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
-          The included kits cover the shirt, shorts, socks and personalisation. There is no printing charge. Additional complete kits cost £20 each.
+          The included kits cover the shirt, shorts, socks and personalisation.
+          There is no printing charge. Additional complete kits cost £20 each.
         </p>
       </section>
 
@@ -199,20 +248,44 @@ export default function IncludedKitPaymentPanel({
               Add more complete kits for £20 each
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-              Choose only the number of extra kits needed beyond the {displayedIncludedQuantity} already included. Select one team member to pay the full amount, or select several members to split the total equally.
+              Choose only the new kits you are adding now. Kits already paid for
+              are shown separately and are not charged again. Select one person to
+              pay the full new amount, or several people to split it.
             </p>
 
-            {(data?.paidExtraKitQuantity ?? 0) > 0 ? (
-              <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-                {data?.paidExtraKitQuantity} additional kit
-                {data?.paidExtraKitQuantity === 1 ? " has" : "s have"} been paid for. Your order now has {data?.totalKitQuantity} personalisation boxes.
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">
+                  Included
+                </div>
+                <div className="mt-1 text-xl font-semibold text-white">
+                  {displayedIncludedQuantity}
+                </div>
               </div>
-            ) : null}
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-100/60">
+                  Extra kits paid
+                </div>
+                <div className="mt-1 text-xl font-semibold text-white">
+                  {paidExtraKitQuantity}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-100/60">
+                  Current order total
+                </div>
+                <div className="mt-1 text-xl font-semibold text-white">
+                  {currentTotalKitQuantity}
+                </div>
+              </div>
+            </div>
 
-            {(data?.pendingExtraKitQuantity ?? 0) > 0 ? (
+            {pendingExtraKitQuantity > 0 ? (
               <div className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
-                {data?.pendingExtraKitQuantity} additional kit
-                {data?.pendingExtraKitQuantity === 1 ? " is" : "s are"} waiting for the full payment batch. New personalisation boxes unlock when the whole batch is paid.
+                {pendingExtraKitQuantity} additional kit
+                {pendingExtraKitQuantity === 1 ? " is" : "s are"} waiting for
+                payment. New personalisation boxes unlock only when that batch is
+                fully paid.
               </div>
             ) : null}
 
@@ -233,9 +306,9 @@ export default function IncludedKitPaymentPanel({
               </div>
             ) : (
               <form onSubmit={createRequests} className="mt-5 space-y-5">
-                <label className="block max-w-sm space-y-2">
+                <label className="block max-w-lg space-y-2">
                   <span className="text-sm font-semibold text-white">
-                    Number of extra kits
+                    New kits to add now
                   </span>
                   <select
                     value={quantity}
@@ -245,13 +318,16 @@ export default function IncludedKitPaymentPanel({
                     {Array.from({ length: 10 }, (_, index) => index + 1).map(
                       (option) => (
                         <option key={option} value={option}>
-                          {option} extra kit{option === 1 ? "" : "s"} — {formatMoney(option * extraKitPricePence)}
+                          Add {option} more kit{option === 1 ? "" : "s"} now —{" "}
+                          {formatMoney(option * extraKitPricePence)}
                         </option>
                       ),
                     )}
                   </select>
-                  <span className="block rounded-xl border border-sky-400/15 bg-sky-500/[0.06] px-3 py-2 text-sm text-sky-50/80">
-                    {displayedIncludedQuantity} included + {quantity} extra = {requestedTotalKitQuantity} kits in total · Payment required: {formatMoney(totalPence)}
+                  <span className="block rounded-xl border border-sky-400/15 bg-sky-500/[0.06] px-3 py-2 text-sm leading-6 text-sky-50/80">
+                    Current order: {currentTotalKitQuantity} kits. Adding {quantity}{" "}
+                    new kit{quantity === 1 ? "" : "s"} will make {totalAfterPayment}{" "}
+                    kits in total. New payment required: {formatMoney(newPaymentPence)}
                     {selectedMembers.length > 1
                       ? ` · approximately ${formatMoney(estimatedSharePence)} each`
                       : ""}
@@ -305,7 +381,7 @@ export default function IncludedKitPaymentPanel({
                 >
                   {submitting
                     ? "Creating payment links…"
-                    : `Create payment link${selectedMemberIds.length === 1 ? "" : "s"} for ${quantity} extra kit${quantity === 1 ? "" : "s"}`}
+                    : `Create payment link${selectedMemberIds.length === 1 ? "" : "s"} for ${quantity} new kit${quantity === 1 ? "" : "s"}`}
                 </button>
               </form>
             )}
@@ -359,16 +435,30 @@ export default function IncludedKitPaymentPanel({
                             : `${formatMoney(request.outstandingPence)} open`}
                       </span>
                     </div>
-                    {request.paymentUrl ? (
-                      <a
-                        href={request.paymentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-3 inline-flex text-xs font-semibold text-sky-200 underline decoration-sky-400/40 underline-offset-4"
-                      >
-                        Open payment link
-                      </a>
-                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {request.paymentUrl ? (
+                        <a
+                          href={request.paymentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex text-xs font-semibold text-sky-200 underline decoration-sky-400/40 underline-offset-4"
+                        >
+                          Open payment link
+                        </a>
+                      ) : null}
+                      {request.status === "OPEN" && request.paidPence <= 0 ? (
+                        <button
+                          type="button"
+                          disabled={cancellingId === request.id}
+                          onClick={() => void cancelRequest(request)}
+                          className="text-xs font-semibold text-red-200 underline decoration-red-400/40 underline-offset-4 disabled:opacity-50"
+                        >
+                          {cancellingId === request.id
+                            ? "Cancelling…"
+                            : "Cancel incorrect request"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ))
               )}
