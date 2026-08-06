@@ -89,7 +89,7 @@ export default async function CaptainTemporaryPlayerRequestSummary({
                 : `${requests.length} players are waiting for your response`}
             </h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-white/65">
-              The player selected your team and this fixture themselves. Review the request and choose Accept or Decline. Accepting links them to that fixture and creates their £6 match fee.
+              The player selected your team and this fixture themselves. Review the request and choose Accept or Decline. Accepting links them to that fixture and creates their match fee for you to review.
             </p>
           </div>
           <span className="w-fit rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-100">
