@@ -8,34 +8,63 @@ const write = (file, source) => fs.writeFileSync(path.join(root, file), source, 
 const dbPath = "src/lib/kits/db.ts";
 let db = read(dbPath);
 
-const oldGetOrder = `    WHERE orders."teamId" = \${teamId}\n    LIMIT 1`;
-const newGetOrder = `    WHERE orders."teamId" = \${teamId}\n    ORDER BY orders."updatedAt" DESC, orders."createdAt" DESC\n    LIMIT 1`;
-if (db.includes(oldGetOrder)) db = db.replace(oldGetOrder, newGetOrder);
+// A team can have historical duplicate TeamKitOrder rows. An explicitly reopened
+// DRAFT row is the active captain order and must win over stale submitted/approved
+// rows; otherwise the form can look populated but hide its Save/Submit controls.
+const unorderedGetOrder = `    WHERE orders."teamId" = \${teamId}\n    LIMIT 1`;
+const updatedGetOrder = `    WHERE orders."teamId" = \${teamId}\n    ORDER BY orders."updatedAt" DESC, orders."createdAt" DESC\n    LIMIT 1`;
+const reopenedFirstGetOrder = `    WHERE orders."teamId" = \${teamId}\n    ORDER BY\n      CASE WHEN orders."status" = 'DRAFT' THEN 0 ELSE 1 END,\n      orders."updatedAt" DESC,\n      orders."createdAt" DESC\n    LIMIT 1`;
+if (db.includes(unorderedGetOrder)) {
+  db = db.replace(unorderedGetOrder, reopenedFirstGetOrder);
+} else if (db.includes(updatedGetOrder)) {
+  db = db.replace(updatedGetOrder, reopenedFirstGetOrder);
+}
 
-const oldExisting = `      WHERE "teamId" = \${input.teamId}\n      FOR UPDATE`;
-const newExisting = `      WHERE "teamId" = \${input.teamId}\n      ORDER BY "updatedAt" DESC, "createdAt" DESC\n      LIMIT 1\n      FOR UPDATE`;
-if (db.includes(oldExisting)) db = db.replace(oldExisting, newExisting);
+const unorderedExisting = `      WHERE "teamId" = \${input.teamId}\n      FOR UPDATE`;
+const updatedExisting = `      WHERE "teamId" = \${input.teamId}\n      ORDER BY "updatedAt" DESC, "createdAt" DESC\n      LIMIT 1\n      FOR UPDATE`;
+const reopenedFirstExisting = `      WHERE "teamId" = \${input.teamId}\n      ORDER BY\n        CASE WHEN "status" = 'DRAFT' THEN 0 ELSE 1 END,\n        "updatedAt" DESC,\n        "createdAt" DESC\n      LIMIT 1\n      FOR UPDATE`;
+if (db.includes(unorderedExisting)) {
+  db = db.replace(unorderedExisting, reopenedFirstExisting);
+} else if (db.includes(updatedExisting)) {
+  db = db.replace(updatedExisting, reopenedFirstExisting);
+}
 write(dbPath, db);
 
 const actionsPath = "src/app/(admin)/admin/kits/actions.ts";
 let actions = read(actionsPath);
 
-const oldReopenWhere = `        WHERE "id" = \${orderId}\n      \`);`;
-const newReopenWhere = `        WHERE "teamId" = \${teamId}\n      \`);`;
 const reopenBlockStart = actions.indexOf('    if (status === "DRAFT") {');
 if (reopenBlockStart >= 0) {
   const reopenBlockEnd = actions.indexOf('    } else {', reopenBlockStart);
   if (reopenBlockEnd > reopenBlockStart) {
     const block = actions.slice(reopenBlockStart, reopenBlockEnd);
-    if (block.includes(oldReopenWhere)) {
-      actions = actions.slice(0, reopenBlockStart) + block.replace(oldReopenWhere, newReopenWhere) + actions.slice(reopenBlockEnd);
+    const idWhere = `        WHERE "id" = \${orderId}\n      \`);`;
+    const teamWhere = `        WHERE "teamId" = \${teamId}\n      \`);`;
+    if (block.includes(idWhere)) {
+      actions =
+        actions.slice(0, reopenBlockStart) +
+        block.replace(idWhere, teamWhere) +
+        actions.slice(reopenBlockEnd);
     }
   }
 }
 
+// Verification must inspect the active row for the team after a reopen, not a
+// stale historical order id.
 const oldVerify = `      WHERE "id" = \${orderId}\n      LIMIT 1`;
-const newVerify = `      WHERE "teamId" = \${teamId}\n      ORDER BY "updatedAt" DESC, "createdAt" DESC\n      LIMIT 1`;
+const newVerify = `      WHERE \${status === "DRAFT" ? Prisma.sql\`"teamId" = \${teamId}\` : Prisma.sql\`"id" = \${orderId}\`}\n      ORDER BY\n        CASE WHEN "status" = 'DRAFT' THEN 0 ELSE 1 END,\n        "updatedAt" DESC,\n        "createdAt" DESC\n      LIMIT 1`;
 if (actions.includes(oldVerify)) actions = actions.replace(oldVerify, newVerify);
 write(actionsPath, actions);
 
-console.log("Reopened kit orders now unlock every current order row for the team and captain reads use the newest record.");
+const finalDb = read(dbPath);
+const finalActions = read(actionsPath);
+if (!finalDb.includes("CASE WHEN orders.\"status\" = 'DRAFT' THEN 0 ELSE 1 END")) {
+  throw new Error("Captain kit lookup does not prefer reopened draft orders.");
+}
+if (!finalActions.includes('WHERE "teamId" = ${teamId}')) {
+  throw new Error("Admin kit reopen is not team-wide.");
+}
+
+console.log(
+  "Reopened kit orders now take priority for captain reads, remain editable, and can be submitted again.",
+);
