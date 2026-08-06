@@ -22,35 +22,39 @@ function replaceOnce(source, before, after, label) {
 const layoutPath = "src/app/captain/team/[teamid]/layout.tsx";
 let layout = read(layoutPath);
 
-layout = replaceOnce(
-  layout,
-  'import CaptainSupportPanel from "@/components/captain/CaptainSupportPanel";',
-  [
-    'import CaptainSupportPanel from "@/components/captain/CaptainSupportPanel";',
-    'import CaptainTeamNudges from "@/components/captain/CaptainTeamNudges";',
-  ].join("\n"),
-  "captain team nudge import",
-);
-
-// Keep the priority action panel immediately below the permanent team header and
-// navigation. It must sit above help and every page-specific section.
+// Captain nudges are dashboard-only. Remove any legacy shared-layout mount/import so
+// they do not appear on every captain sub-page.
 layout = layout
+  .replaceAll('import CaptainTeamNudges from "@/components/captain/CaptainTeamNudges";\n', "")
   .replaceAll("          <CaptainTeamNudges teamId={team.id} />\n", "")
   .replaceAll("          <CaptainTeamNudges teamId={team.id} />", "");
 
-const supportAnchor = "          <CaptainSupportPanel teamId={team.id} />";
-if (!layout.includes(supportAnchor)) {
-  throw new Error("Expected captain support panel anchor was not found.");
-}
-layout = layout.replace(
-  supportAnchor,
-  [
-    "          <CaptainTeamNudges teamId={team.id} />",
-    supportAnchor,
-  ].join("\n"),
-);
-
 write(layoutPath, layout);
+
+const overviewPath = "src/app/captain/team/[teamid]/page.tsx";
+let overview = read(overviewPath);
+
+const overviewImport = 'import CaptainTeamNudges from "@/components/captain/CaptainTeamNudges";';
+if (!overview.includes(overviewImport)) {
+  const importAnchor = 'import CaptainOnboardingChecklist from "@/components/captain/CaptainOnboardingChecklist";';
+  if (!overview.includes(importAnchor)) {
+    throw new Error("Expected captain overview import anchor was not found.");
+  }
+  overview = overview.replace(importAnchor, `${importAnchor}\n${overviewImport}`);
+}
+
+if (!overview.includes("<CaptainTeamNudges teamId={teamid} />")) {
+  const rootAnchor = '    <div className="space-y-8">';
+  if (!overview.includes(rootAnchor)) {
+    throw new Error("Expected captain overview root was not found.");
+  }
+  overview = overview.replace(
+    rootAnchor,
+    `${rootAnchor}\n      <CaptainTeamNudges teamId={teamid} />`,
+  );
+}
+
+write(overviewPath, overview);
 
 const resultsPath = "src/app/captain/team/[teamid]/results/page.tsx";
 let results = read(resultsPath);
@@ -108,19 +112,16 @@ results = replaceOnce(
 
 write(resultsPath, results);
 
-const nudgePosition = layout.indexOf("<CaptainTeamNudges teamId={team.id} />");
-const supportPosition = layout.indexOf("<CaptainSupportPanel teamId={team.id} />");
-
 if (
-  nudgePosition < 0 ||
-  supportPosition < 0 ||
-  nudgePosition > supportPosition ||
+  layout.includes("CaptainTeamNudges") ||
+  !overview.includes(overviewImport) ||
+  !overview.includes("<CaptainTeamNudges teamId={teamid} />") ||
   !results.includes("const needsRatings = matchPerformances.some(") ||
   !results.includes("row.needsRatings")
 ) {
-  throw new Error("Captain priority actions and completion filters were not applied correctly.");
+  throw new Error("Dashboard-only captain nudges and completion filters were not applied correctly.");
 }
 
 console.log(
-  "Captain fixture confirmation, rating and kit actions now appear above help in priority order.",
+  "Captain rating and kit nudges now appear only on the team overview; result completion filters remain enabled.",
 );
