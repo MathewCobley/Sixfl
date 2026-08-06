@@ -50,12 +50,62 @@ if (source.includes(pastOption)) {
   source = source.replace(pastOption, clearerPastOption);
 }
 
+const oldLauncher = [
+  '      <button',
+  '        type="button"',
+  '        onClick={() => void openLauncher()}',
+  '        className={',
+  '          captainMatch',
+  '            ? "fixed bottom-5 right-5 z-[90] rounded-full bg-emerald-400 px-5 py-3 text-sm font-bold text-black shadow-2xl hover:bg-emerald-300"',
+  '            : "fixed bottom-5 right-5 z-[90] rounded-full border border-emerald-400/30 bg-[#10241b] px-5 py-3 text-sm font-semibold text-emerald-100 shadow-2xl hover:bg-[#163326]"',
+  '        }',
+  '      >',
+  '        {captainMatch ? "+ Add temporary player" : "Play for another team"}',
+  '      </button>',
+].join("\n");
+
+const clearerLauncher = [
+  '      {captainMatch ? (',
+  '        <button',
+  '          type="button"',
+  '          onClick={() => void openLauncher()}',
+  '          className="fixed bottom-5 right-5 z-[90] rounded-full bg-emerald-400 px-5 py-3 text-sm font-bold text-black shadow-2xl hover:bg-emerald-300"',
+  '        >',
+  '          + Add temporary player',
+  '        </button>',
+  '      ) : (',
+  '        <div className="fixed bottom-5 right-5 z-[90] w-[min(22rem,calc(100vw-2.5rem))] rounded-2xl border border-emerald-400/25 bg-[#10241b]/95 p-3 shadow-2xl backdrop-blur">',
+  '          <p className="text-xs leading-5 text-emerald-50/70">',
+  '            Playing for, or played for, another SIXFL team? Link yourself to their fixture so your match fee can be set up.',
+  '          </p>',
+  '          <button',
+  '            type="button"',
+  '            onClick={() => void openLauncher()}',
+  '            className="mt-3 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"',
+  '          >',
+  '            Set up match fee',
+  '          </button>',
+  '        </div>',
+  '      )}',
+].join("\n");
+
+if (source.includes(oldLauncher)) {
+  source = source.replace(oldLauncher, clearerLauncher);
+}
+
+source = source.replace(
+  '{captainMatch ? "Add a temporary player" : "Play for another team"}',
+  '{captainMatch ? "Add a temporary player" : "Set up a match fee"}',
+);
+
 if (
   !source.includes("Past matches — choose the team you played for") ||
-  !source.includes("Team: {pass.teamName} · Opponent: {pass.opponentName}")
+  !source.includes("Team: {pass.teamName} · Opponent: {pass.opponentName}") ||
+  !source.includes("Set up match fee") ||
+  !source.includes("Playing for, or played for, another SIXFL team?")
 ) {
-  throw new Error("Temporary-player team selection wording was not applied.");
+  throw new Error("Temporary-player team selection and launcher wording was not applied.");
 }
 
 fs.writeFileSync(componentPath, source, "utf8");
-console.log("Temporary-player claims now make the represented team explicit.");
+console.log("Temporary-player claims now make the represented team and match-fee purpose explicit.");
