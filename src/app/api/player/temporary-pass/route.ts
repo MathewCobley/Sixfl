@@ -1,3 +1,4 @@
+import { UserRole } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -11,15 +12,65 @@ import {
   TemporaryPlayerPassError,
 } from "@/lib/temporary-player-passes";
 
-async function requirePlayerUser() {
+function previewMembershipIdFromRequest(
+  request: Request,
+  explicitValue?: unknown,
+) {
+  const explicit = String(explicitValue ?? "").trim();
+  if (explicit) return explicit;
+
+  const referer = request.headers.get("referer")?.trim();
+  if (!referer) return null;
+
+  try {
+    const requestUrl = new URL(request.url);
+    const refererUrl = new URL(referer);
+    if (refererUrl.origin !== requestUrl.origin) return null;
+    return refererUrl.searchParams.get("previewMembershipId")?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function requirePlayerUser(
+  request: Request,
+  explicitPreviewMembershipId?: unknown,
+) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email?.trim().toLowerCase();
   if (!email) return null;
 
-  return prisma.user.findUnique({
+  const sessionUser = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, role: true },
   });
+  if (!sessionUser) return null;
+
+  const previewMembershipId = previewMembershipIdFromRequest(
+    request,
+    explicitPreviewMembershipId,
+  );
+
+  if (previewMembershipId && sessionUser.role === UserRole.ADMIN) {
+    const previewMembership = await prisma.teamMember.findUnique({
+      where: { id: previewMembershipId },
+      select: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    if (previewMembership?.user) {
+      return previewMembership.user;
+    }
+  }
+
+  return {
+    id: sessionUser.id,
+    name: sessionUser.name,
+    email: sessionUser.email,
+  };
 }
 
 function passErrorResponse(error: unknown) {
@@ -40,8 +91,8 @@ function passErrorResponse(error: unknown) {
   );
 }
 
-export async function GET() {
-  const user = await requirePlayerUser();
+export async function GET(request: Request) {
+  const user = await requirePlayerUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
@@ -68,14 +119,18 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await requirePlayerUser();
+  const body = (await request.json().catch(() => null)) as
+    | {
+        fixtureId?: unknown;
+        teamId?: unknown;
+        previewMembershipId?: unknown;
+      }
+    | null;
+  const user = await requirePlayerUser(request, body?.previewMembershipId);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as
-    | { fixtureId?: unknown; teamId?: unknown }
-    | null;
   const fixtureId = String(body?.fixtureId ?? "").trim();
   const teamId = String(body?.teamId ?? "").trim();
 
@@ -99,18 +154,21 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const user = await requirePlayerUser();
+  const body = (await request.json().catch(() => null)) as
+    | { passId?: unknown; previewMembershipId?: unknown }
+    | null;
+  const user = await requirePlayerUser(request, body?.previewMembershipId);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as
-    | { passId?: unknown }
-    | null;
   const passId = String(body?.passId ?? "").trim();
 
   if (!passId) {
-    return NextResponse.json({ error: "Temporary-player pass not found." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Temporary-player pass not found." },
+      { status: 400 },
+    );
   }
 
   try {
