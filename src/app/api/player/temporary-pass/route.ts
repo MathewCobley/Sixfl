@@ -19,11 +19,14 @@ function previewMembershipIdFromRequest(
   const explicit = String(explicitValue ?? "").trim();
   if (explicit) return explicit;
 
-  const referer = request.headers.get("referer")?.trim();
-  if (!referer) return null;
-
   try {
     const requestUrl = new URL(request.url);
+    const queryValue = requestUrl.searchParams.get("previewMembershipId")?.trim();
+    if (queryValue) return queryValue;
+
+    const referer = request.headers.get("referer")?.trim();
+    if (!referer) return null;
+
     const refererUrl = new URL(referer);
     if (refererUrl.origin !== requestUrl.origin) return null;
     return refererUrl.searchParams.get("previewMembershipId")?.trim() || null;
