@@ -365,6 +365,14 @@ export default async function CaptainTeamLayout({
                 isManagedTeam={isManagedTeam}
                 accessMode={access.accessMode}
               />
+              <div className="mt-3 flex justify-end">
+                <Link
+                  href={`/player/team/${team.id}`}
+                  className="inline-flex items-center rounded-2xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/15"
+                >
+                  {access.isAdmin ? "View player page" : "View my player page"}
+                </Link>
+              </div>
             </div>
 
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
