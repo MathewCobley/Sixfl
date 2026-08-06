@@ -5,6 +5,17 @@ import { prisma } from "@/lib/prisma";
 
 const PASS_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const PASS_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_PLAYER_MATCH_FEE_PENCE = Number.parseInt(
+  process.env.DEFAULT_PLAYER_MATCH_FEE_PENCE ?? "600",
+  10,
+);
+
+function getDefaultPlayerMatchFeePence() {
+  return Number.isFinite(DEFAULT_PLAYER_MATCH_FEE_PENCE) &&
+    DEFAULT_PLAYER_MATCH_FEE_PENCE >= 0
+    ? DEFAULT_PLAYER_MATCH_FEE_PENCE
+    : 600;
+}
 
 export type TemporaryPlayerPassStatus =
   | "OPEN"
@@ -402,14 +413,15 @@ export async function redeemTemporaryPlayerPass(input: {
     }
 
     const playerMatchFeeId = createId("tmp");
+    const amountPence = getDefaultPlayerMatchFeePence();
     await tx.$executeRaw`
       INSERT INTO "PlayerMatchFee" (
         "id", "fixtureId", "teamId", "temporaryUserId", "amountPence",
         "status", "note", "createdAt", "updatedAt"
       ) VALUES (
-        ${playerMatchFeeId}, ${input.fixtureId}, ${input.teamId}, ${pass.userId}, 600,
+        ${playerMatchFeeId}, ${input.fixtureId}, ${input.teamId}, ${pass.userId}, ${amountPence},
         'OPEN'::"PlayerMatchFeeStatus",
-        'Temporary player joined using a player-created one-time pass',
+        'Temporary player joined using a player-created one-time pass. Fee uses the configured default player match fee and can be reviewed by the captain.',
         NOW(), NOW()
       )
     `;
@@ -432,6 +444,7 @@ export async function redeemTemporaryPlayerPass(input: {
 
     return {
       playerMatchFeeId,
+      amountPence,
       userId: pass.userId,
       displayName: `${firstName}${surnameInitial ? ` ${surnameInitial}.` : ""}`,
       email: player?.email ?? null,
