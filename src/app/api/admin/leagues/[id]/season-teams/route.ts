@@ -118,11 +118,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Team is required." }, { status: 400 });
   }
 
+  // Leaving a season changes participation only. Preserve the division on the
+  // historical season row so standings/history and a later re-entry can still
+  // recover the team's last known division safely.
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "LeagueSeasonTeam"
     SET
       "isActive" = false,
-      "divisionId" = NULL,
       "updatedAt" = NOW()
     WHERE "leagueId" = ${id}
       AND "teamId" = ${teamId}
