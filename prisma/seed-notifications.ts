@@ -169,7 +169,7 @@ SIXFL`,
 Please note this fixture has changed.
 
 - Match: {{homeTeam}} vs {{awayTeam}}
-- New kickoff: {{kickoffTime}}
+- New kick-off: {{kickoffTime}}
 - Venue: {{venueName}}
 
 {{cta}}`,
@@ -201,7 +201,7 @@ Your fixtures for {{leagueDisplayName}} are now live.
 
 {{fixturesList}}
 
-You will also receive automatic reminders before kickoff.
+You will also receive automatic reminders before kick-off.
 
 {{cta}}`,
     ctaLabel: "View fixtures",
@@ -211,7 +211,7 @@ You will also receive automatic reminders before kickoff.
   await upsertTemplate({
     key: "fixture-reminder-email",
     name: "Fixture reminder email",
-    description: "Automated reminder email before kickoff.",
+    description: "Automated reminder email before kick-off.",
     kind: NotificationTemplateKind.TRANSACTIONAL,
     channel: NotificationChannel.EMAIL,
     audience: NotificationAudience.TEAM,
@@ -219,9 +219,9 @@ You will also receive automatic reminders before kickoff.
     body: `Hi {{firstName}}
 
 Reminder: {{fixtureName}}
-Kickoff: {{kickoffLabel}}
+Kick-off: {{kickoffLabel}}
 
-Please make sure your team is ready for kickoff.
+Please make sure your team is ready for kick-off.
 
 {{cta}}`,
     ctaLabel: "View fixtures",
@@ -263,10 +263,10 @@ Please make sure your team is ready for kickoff.
 A match fee has been raised for your SIXFL fixture.
 
 Fixture: {{fixtureName}}
-Kickoff: {{kickoffLabel}}
+Kick-off: {{kickoffLabel}}
 Amount due: {{amount}}
 
-Payment is normally settled after the match. If the charge is still unpaid, SIXFL will automatically send reminder emails 24 hours and 72 hours after kickoff.
+Payment is normally settled after the match. If the charge is still unpaid, SIXFL will automatically send reminder emails 24 hours and 72 hours after kick-off.
 
 Use the secure payment link below to review the charge and pay online.
 
@@ -299,7 +299,7 @@ Use the secure payment link below to review the charge and pay online.
 {{reminderIntro}}
 
 Fixture: {{fixtureName}}
-Kickoff: {{kickoffLabel}}
+Kick-off: {{kickoffLabel}}
 
 Please use the secure payment link below to review the charge and pay the outstanding balance.
 
