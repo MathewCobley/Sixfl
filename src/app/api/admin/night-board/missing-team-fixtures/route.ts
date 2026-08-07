@@ -2,7 +2,7 @@
 // File: src/app/api/admin/night-board/missing-team-fixtures/route.ts
 // ========================================
 
-import { FixtureStatus } from "@prisma/client";
+import { FixtureStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -16,6 +16,13 @@ const VISIBLE_FIXTURE_STATUSES: FixtureStatus[] = [
   FixtureStatus.SCHEDULED,
   FixtureStatus.COMPLETED,
 ];
+
+type ActiveSeasonTeam = {
+  leagueId: string;
+  teamId: string;
+  teamName: string;
+  divisionName: string | null;
+};
 
 function isDateInput(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -140,46 +147,55 @@ export async function GET(request: Request) {
   }
 
   const weekRange = weekRangeFromInput(selectedDate);
-  const [leagues, weeklyFixtures, advanceNotices] = await Promise.all([
-    prisma.league.findMany({
-      where: { id: { in: relevantLeagueIds } },
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        teams: {
-          orderBy: { name: "asc" },
-          select: {
-            id: true,
-            name: true,
-            division: { select: { name: true } },
-          },
+  const [leagues, activeSeasonTeams, weeklyFixtures, advanceNotices] =
+    await Promise.all([
+      prisma.league.findMany({
+        where: { id: { in: relevantLeagueIds } },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.$queryRaw<ActiveSeasonTeam[]>(Prisma.sql`
+        SELECT
+          membership."leagueId" AS "leagueId",
+          team."id" AS "teamId",
+          team."name" AS "teamName",
+          division."name" AS "divisionName"
+        FROM "LeagueSeasonTeam" membership
+        JOIN "Team" team ON team."id" = membership."teamId"
+        LEFT JOIN "LeagueDivision" division
+          ON division."id" = membership."divisionId"
+         AND division."leagueId" = membership."leagueId"
+        WHERE membership."leagueId" IN (${Prisma.join(relevantLeagueIds)})
+          AND membership."isActive" = TRUE
+          AND team."leagueId" IS NOT NULL
+          AND COALESCE(team."isFixturePlaceholder", FALSE) = FALSE
+          AND UPPER(TRIM(team."name")) <> 'TBC'
+        ORDER BY membership."leagueId" ASC, team."name" ASC
+      `),
+      prisma.fixture.findMany({
+        where: {
+          leagueId: { in: relevantLeagueIds },
+          publishedAt: { not: null },
+          kickoffAt: { gte: weekRange.start, lt: weekRange.end },
+          status: { in: VISIBLE_FIXTURE_STATUSES },
         },
-      },
-    }),
-    prisma.fixture.findMany({
-      where: {
-        leagueId: { in: relevantLeagueIds },
-        publishedAt: { not: null },
-        kickoffAt: { gte: weekRange.start, lt: weekRange.end },
-        status: { in: VISIBLE_FIXTURE_STATUSES },
-      },
-      select: {
-        leagueId: true,
-        homeTeamId: true,
-        awayTeamId: true,
-      },
-    }),
-    getTeamWeekUnavailabilityOverview({
-      from: weekRange.start,
-      to: weekRange.end,
-      leagueIds: relevantLeagueIds,
-    }),
-  ]);
+        select: {
+          leagueId: true,
+          homeTeamId: true,
+          awayTeamId: true,
+        },
+      }),
+      getTeamWeekUnavailabilityOverview({
+        from: weekRange.start,
+        to: weekRange.end,
+        leagueIds: relevantLeagueIds,
+      }),
+    ]);
 
   const scheduledTeamIdsByLeague = new Map<string, Set<string>>();
   for (const fixture of weeklyFixtures) {
-    const teamIds = scheduledTeamIdsByLeague.get(fixture.leagueId) ?? new Set<string>();
+    const teamIds =
+      scheduledTeamIdsByLeague.get(fixture.leagueId) ?? new Set<string>();
     teamIds.add(fixture.homeTeamId);
     teamIds.add(fixture.awayTeamId);
     scheduledTeamIdsByLeague.set(fixture.leagueId, teamIds);
@@ -223,29 +239,31 @@ export async function GET(request: Request) {
     };
   });
 
-  const missingFixtureWarnings = leagues.flatMap((league) => {
-    const scheduledTeamIds = scheduledTeamIdsByLeague.get(league.id) ?? new Set<string>();
+  const leagueById = new Map(leagues.map((league) => [league.id, league]));
+  const missingFixtureWarnings = activeSeasonTeams
+    .filter((team) => {
+      const scheduledTeamIds =
+        scheduledTeamIdsByLeague.get(team.leagueId) ?? new Set<string>();
+      return (
+        !scheduledTeamIds.has(team.teamId) && !noticeByTeamId.has(team.teamId)
+      );
+    })
+    .map((team) => {
+      const league = leagueById.get(team.leagueId);
+      const leagueName = league?.name ?? "League";
+      const leagueLabel = team.divisionName
+        ? `${leagueName} · ${team.divisionName}`
+        : leagueName;
 
-    return league.teams
-      .filter(
-        (team) =>
-          !scheduledTeamIds.has(team.id) && !noticeByTeamId.has(team.id),
-      )
-      .map((team) => {
-        const leagueLabel = team.division?.name
-          ? `${league.name} · ${team.division.name}`
-          : league.name;
-
-        return {
-          key: `missing-weekly-fixture:${league.id}:${team.id}`,
-          level: "amber" as const,
-          leagueId: league.id,
-          teamId: team.id,
-          teamName: team.name,
-          message: `Potential issue – no fixture this week: ${team.name} has no published scheduled or completed fixture in ${leagueLabel} for the week beginning ${weekBeginning}. This may be intentional, for example a bye, but it is worth checking.`,
-        };
-      });
-  });
+      return {
+        key: `missing-weekly-fixture:${team.leagueId}:${team.teamId}`,
+        level: "amber" as const,
+        leagueId: team.leagueId,
+        teamId: team.teamId,
+        teamName: team.teamName,
+        message: `Potential issue – no fixture this week: ${team.teamName} has no published scheduled or completed fixture in ${leagueLabel} for the week beginning ${weekBeginning}. This may be intentional, for example a bye, but it is worth checking.`,
+      };
+    });
 
   return NextResponse.json(
     { selectedDate, warnings: [...advanceWarnings, ...missingFixtureWarnings] },
