@@ -41,6 +41,26 @@
       ]
     },
     {
+      "id": "captain-results-match-reports-navigation",
+      "removedPaths": [
+        "src/components/captain/CaptainResultsNavBridge.tsx"
+      ],
+      "responsibilities": [
+        "Expose the simple result history as Results in captain navigation.",
+        "Expose the detailed appearances, ratings, scorers, assists, Player of the Match and dispute workflow as Match reports.",
+        "Keep both links in the owned React navigation without cloning or relabelling rendered anchors."
+      ],
+      "checks": [
+        {
+          "path": "src/app/captain/team/[teamid]/layout.tsx",
+          "contains": [
+            "{ href: `/captain/team/${teamid}/results-history`, label: \"Results\" }",
+            "{ href: `/captain/team/${teamid}/results`, label: \"Match reports\" }"
+          ]
+        }
+      ]
+    },
+    {
       "id": "captain-fixture-deduplication",
       "removedPaths": [
         "src/components/captain/CaptainFixturesDeduplicateBridge.tsx"
