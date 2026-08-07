@@ -27,10 +27,6 @@ const AdminPaymentsPageBridge = dynamic(
   () => import("@/components/admin/payments/AdminPaymentsPageBridge"),
   { ssr: false },
 );
-const AdminPlayerPoolNavBridge = dynamic(
-  () => import("@/components/admin/player-pool/AdminPlayerPoolNavBridge"),
-  { ssr: false },
-);
 const CaptainAdditionalCaptainBridge = dynamic(
   () => import("@/components/captain/CaptainAdditionalCaptainBridge"),
   { ssr: false },
@@ -94,7 +90,6 @@ export default function RouteScopedBridges() {
   const isPublicLeague = pathname.startsWith("/leagues/");
   const isNightBoard = pathname.startsWith("/admin/night-board");
   const isAdminPayments = pathname.startsWith("/admin/payments");
-  const isAdminPlayerPool = pathname.startsWith("/admin/player-pool");
   const isAdminFixtures = pathname.startsWith("/admin/fixtures");
   const isReferee = pathname.startsWith("/referee");
 
@@ -112,7 +107,6 @@ export default function RouteScopedBridges() {
       ) : null}
 
       {isAdminPayments ? <AdminPaymentsPageBridge /> : null}
-      {isAdminPlayerPool ? <AdminPlayerPoolNavBridge /> : null}
 
       {isCaptain ? (
         <>
