@@ -56,20 +56,20 @@ function getEmailCopy(input: {
   if (input.mode === "auto24h") {
     return {
       subject: `Urgent: confirm ${fixtureLabel}`,
-      body: `Your fixture is now within 24 hours and still needs confirming.\n\nFixture: ${fixtureLabel}\nKickoff: ${kickoffLabel}\n\nPlease confirm now or raise an issue using the button below.`,
+      body: `Your fixture is now within 24 hours and still needs confirming.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\nPlease confirm now or raise an issue using the button below.`,
     };
   }
 
   if (input.mode === "auto72h") {
     return {
       subject: `Reminder: confirm ${fixtureLabel}`,
-      body: `We are still waiting for confirmation of your upcoming fixture.\n\nFixture: ${fixtureLabel}\nKickoff: ${kickoffLabel}\n\nPlease confirm the fixture or raise an issue using the button below.`,
+      body: `We are still waiting for confirmation of your upcoming fixture.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\nPlease confirm the fixture or raise an issue using the button below.`,
     };
   }
 
   return {
     subject: `Please confirm ${fixtureLabel}`,
-    body: `A new SIXFL fixture is live and needs your confirmation.\n\nFixture: ${fixtureLabel}\nKickoff: ${kickoffLabel}\n\nPlease confirm the fixture or raise an issue using the button below.`,
+    body: `A new SIXFL fixture is live and needs your confirmation.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\nPlease confirm the fixture or raise an issue using the button below.`,
   };
 }
 
