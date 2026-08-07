@@ -15,6 +15,8 @@ type SeasonTeam = {
   contactPhone: string | null;
   divisionId: string | null;
   divisionName: string | null;
+  canEnterSeason?: boolean;
+  affiliationLabel?: string;
 };
 
 type Division = {
@@ -194,6 +196,24 @@ function renderAffiliatedTeamRow(input: {
   const layout = document.createElement("div");
   layout.className = "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between";
   const link = createTeamIdentity(input.team);
+
+  if (input.team.canEnterSeason === false) {
+    const status = document.createElement("div");
+    status.className = "rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-right";
+
+    const label = document.createElement("div");
+    label.className = "text-xs font-semibold text-sky-100";
+    label.textContent = input.team.affiliationLabel || "Communications only";
+
+    const helper = document.createElement("div");
+    helper.className = "mt-0.5 text-[11px] text-white/45";
+    helper.textContent = "No league · cannot enter a season or division here";
+
+    status.append(label, helper);
+    layout.append(link, status);
+    row.appendChild(layout);
+    return row;
+  }
 
   const enterButton = document.createElement("button");
   enterButton.type = "button";
