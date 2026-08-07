@@ -11,7 +11,10 @@ function patchFile(relativePath, transform, label) {
   const before = fs.readFileSync(filePath, "utf8");
   const after = transform(before);
   if (after === before) {
-    if (before.includes("fixture-week-unassigned")) {
+    const alreadyPatched =
+      before.includes("fixture-week-unassigned") ||
+      before.includes('startsWith("/admin/fixtures#")');
+    if (alreadyPatched) {
       console.log(`[fixture-week-scroll] ${label} already patched.`);
       return;
     }
