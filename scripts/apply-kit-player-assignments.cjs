@@ -143,3 +143,5 @@ if (
 console.log(
   "Captains can assign the seven included kit slots to squad members, email secure forms and track completion.",
 );
+
+require("./apply-admin-kit-draft-visibility.cjs");
