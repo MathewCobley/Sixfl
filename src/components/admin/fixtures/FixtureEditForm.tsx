@@ -9,13 +9,19 @@ import FormListboxField from "@/components/ui/FormListboxField";
 import { updateFixtureFromEditPageAction } from "@/app/(admin)/admin/fixtures/[id]/edit/actions";
 
 type LeagueOption = { id: string; name: string; season: string | null };
-type TeamOption = { id: string; name: string; leagueIds: string[] };
+type TeamOption = {
+  id: string;
+  name: string;
+  leagueIds: string[];
+  divisionKeys: string[];
+};
 type VenueOption = { id: string; name: string };
 type RefereeOption = { id: string; name: string | null; email: string | null };
 
 type FixtureValues = {
   id: string;
   leagueId: string;
+  divisionId: string | null;
   homeTeamId: string;
   awayTeamId: string;
   venueId: string | null;
@@ -78,10 +84,20 @@ export default function FixtureEditForm({
 
   const teamOptions = useMemo(() => {
     const currentIds = new Set([fixture.homeTeamId, fixture.awayTeamId]);
+    const divisionKey =
+      leagueId === fixture.leagueId && fixture.divisionId
+        ? `${leagueId}:${fixture.divisionId}`
+        : null;
+
     return teams
-      .filter((team) => team.leagueIds.includes(leagueId) || currentIds.has(team.id))
+      .filter((team) => {
+        if (currentIds.has(team.id)) return true;
+        if (!team.leagueIds.includes(leagueId)) return false;
+        if (!divisionKey) return true;
+        return team.divisionKeys.includes(divisionKey);
+      })
       .map((team) => ({ id: team.id, label: team.name }));
-  }, [fixture.awayTeamId, fixture.homeTeamId, leagueId, teams]);
+  }, [fixture.awayTeamId, fixture.divisionId, fixture.homeTeamId, fixture.leagueId, leagueId, teams]);
 
   const venueOptions = useMemo(
     () => venues.map((venue) => ({ id: venue.id, label: venue.name })),
@@ -113,7 +129,9 @@ export default function FixtureEditForm({
             onValueChange={setLeagueId}
           />
           <p className="mt-2 text-xs text-white/40">
-            Team choices follow the selected competition season. The fixture’s current teams remain available as a safe fallback.
+            {leagueId === fixture.leagueId && fixture.divisionId
+              ? "Team choices are limited to this fixture’s division. The two teams already on the fixture remain available as a safety fallback."
+              : "Team choices follow the selected competition season. The fixture’s current teams remain available as a safety fallback."}
           </p>
         </div>
 
