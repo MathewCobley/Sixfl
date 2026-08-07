@@ -7,26 +7,7 @@ import "./mobile.css";
 import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import { Suspense, type ReactNode } from "react";
-import LeagueFreeKitOfferBridge from "@/components/admin/leagues/LeagueFreeKitOfferBridge";
-import NightBoardFixtureIssuesLink from "@/components/admin/night-board/NightBoardFixtureIssuesLink";
-import NightBoardPitchSheetsLink from "@/components/admin/night-board/NightBoardPitchSheetsLink";
-import NightBoardTeamIssuesPanel from "@/components/admin/night-board/NightBoardTeamIssuesPanel";
-import NightBoardWarningsPositionBridge from "@/components/admin/night-board/NightBoardWarningsPositionBridge";
-import AdminPaymentsPageBridge from "@/components/admin/payments/AdminPaymentsPageBridge";
-import AdminPlayerPoolNavBridge from "@/components/admin/player-pool/AdminPlayerPoolNavBridge";
-import CaptainAdditionalCaptainBridge from "@/components/captain/CaptainAdditionalCaptainBridge";
-import CaptainHeaderLeaguePositionBridge from "@/components/captain/CaptainHeaderLeaguePositionBridge";
-import CaptainPlayerModeBridge from "@/components/captain/CaptainPlayerModeBridge";
-import CaptainResultsNavBridge from "@/components/captain/CaptainResultsNavBridge";
-import CaptainStoredPredictionBridge from "@/components/captain/CaptainStoredPredictionBridge";
-import FixturePaymentWordingBridge from "@/components/captain/FixturePaymentWordingBridge";
-import HideImpossibleLeaguePositionBridge from "@/components/captain/HideImpossibleLeaguePositionBridge";
-import TeamAutoPayCopyBridge from "@/components/captain/TeamAutoPayCopyBridge";
-import TemporaryPlayerPassLauncher from "@/components/captain/TemporaryPlayerPassLauncher";
-import TemporaryPlayerRequestsPanel from "@/components/captain/TemporaryPlayerRequestsPanel";
-import NorthallertonWaitingListCopyBridge from "@/components/public/NorthallertonWaitingListCopyBridge";
-import ReopenedNightAccessBridge from "@/components/referee/ReopenedNightAccessBridge";
-import SixflTvFixtureBridge from "@/components/SixflTvFixtureBridge";
+import RouteScopedBridges from "@/components/RouteScopedBridges";
 import Providers from "./providers";
 
 export const metadata = {
@@ -119,26 +100,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: safeClosestPatch }} />
         <Providers>
           <Suspense fallback={null}>
-            <LeagueFreeKitOfferBridge />
-            <NightBoardTeamIssuesPanel />
-            <NightBoardFixtureIssuesLink />
-            <NightBoardPitchSheetsLink />
-            <NightBoardWarningsPositionBridge />
-            <AdminPaymentsPageBridge />
-            <AdminPlayerPoolNavBridge />
-            <CaptainAdditionalCaptainBridge />
-            <CaptainHeaderLeaguePositionBridge />
-            <CaptainPlayerModeBridge />
-            <CaptainResultsNavBridge />
-            <CaptainStoredPredictionBridge />
-            <FixturePaymentWordingBridge />
-            <HideImpossibleLeaguePositionBridge />
-            <TeamAutoPayCopyBridge />
-            <TemporaryPlayerPassLauncher />
-            <TemporaryPlayerRequestsPanel />
-            <NorthallertonWaitingListCopyBridge />
-            <ReopenedNightAccessBridge />
-            <SixflTvFixtureBridge />
+            <RouteScopedBridges />
           </Suspense>
           {children}
         </Providers>
