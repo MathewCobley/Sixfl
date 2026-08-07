@@ -37,20 +37,20 @@ export default function AdminComboboxField({
   onSelectedIdChange,
 }: AdminComboboxFieldProps) {
   const [query, setQuery] = useState("");
-
-  const initialSelected =
-    options.find((option) => option.id === defaultValue) ?? null;
-
-  const [selected, setSelected] = useState<ComboboxOption | null>(initialSelected);
+  const [selectedId, setSelectedId] = useState(defaultValue);
 
   useEffect(() => {
-    const next = options.find((option) => option.id === defaultValue) ?? null;
-    setSelected(next);
-  }, [defaultValue, options]);
+    setSelectedId(defaultValue);
+  }, [defaultValue]);
 
   useEffect(() => {
-    onSelectedIdChange?.(selected?.id ?? "");
-  }, [selected, onSelectedIdChange]);
+    onSelectedIdChange?.(selectedId);
+  }, [selectedId, onSelectedIdChange]);
+
+  const selectedOption = useMemo(
+    () => options.find((option) => option.id === selectedId) ?? null,
+    [options, selectedId],
+  );
 
   const filteredOptions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -67,14 +67,20 @@ export default function AdminComboboxField({
     <div className="space-y-2">
       <label className="text-sm text-white/70">{label}</label>
 
-      <input type="hidden" name={name} value={selected?.id ?? ""} />
+      <input type="hidden" name={name} value={selectedId} />
 
-      <Combobox value={selected} onChange={setSelected} nullable>
+      <Combobox
+        value={selectedId || null}
+        onChange={(nextId: string | null) => setSelectedId(nextId ?? "")}
+        nullable
+      >
         <div className="relative">
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400/60 focus-within:bg-black/40">
             <Combobox.Input
               className="w-full bg-transparent px-4 py-3 pr-11 text-sm text-white outline-none placeholder:text-white/30"
-              displayValue={(option: ComboboxOption | null) => option?.label ?? ""}
+              displayValue={(id: string | null) =>
+                options.find((option) => option.id === id)?.label ?? ""
+              }
               onChange={(event) => setQuery(event.target.value)}
               placeholder={placeholder}
               autoComplete="off"
@@ -102,7 +108,7 @@ export default function AdminComboboxField({
                 filteredOptions.map((option) => (
                   <Combobox.Option
                     key={option.id}
-                    value={option}
+                    value={option.id}
                     disabled={option.disabled}
                     className={({ active, disabled }) =>
                       [
@@ -144,7 +150,7 @@ export default function AdminComboboxField({
         </div>
       </Combobox>
 
-      {required && !selected ? (
+      {required && !selectedOption ? (
         <p className="text-xs text-amber-300">Please select an option.</p>
       ) : null}
     </div>
