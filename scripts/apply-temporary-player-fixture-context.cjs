@@ -6,6 +6,11 @@ const file = "src/components/captain/TemporaryPlayerPassLauncher.tsx";
 const fullPath = path.join(root, file);
 let source = fs.readFileSync(fullPath, "utf8");
 
+source = source.replace(
+  '  const captainMatch = pathname.match(/^\\/captain\\/team\\/([^/]+)\\/match-fees\\/?$/);',
+  '  const captainMatch = pathname.match(/^\\/captain\\/team\\/([^/]+)\\/(?:match-fees|player-payments)\\/?$/);',
+);
+
 if (!source.includes("const captainFixtureContext = Boolean(captainMatch && fixtureId);")) {
   source = source.replace(
     '  const fixtureId = searchParams.get("fixtureId") ?? "";\n',
@@ -25,9 +30,13 @@ source = source
   .replaceAll('{captainMatch\n                    ?', '{captainFixtureContext\n                    ?')
   .replaceAll('{captainMatch ? (', '{captainFixtureContext ? (');
 
+if (!source.includes('/(?:match-fees|player-payments)')) {
+  throw new Error("Captain temporary-player launcher does not recognise squad payments.");
+}
+
 if (!source.includes('if (!mounted || (!captainFixtureContext && !isPlayerArea)) return null;')) {
   throw new Error("Captain temporary-player launcher was not restricted to a selected fixture.");
 }
 
 fs.writeFileSync(fullPath, source, "utf8");
-console.log("Temporary-player captain controls now appear only when a fixture is selected.");
+console.log("Temporary-player captain controls now appear on selected Matchday Squad and Squad Payments fixtures.");
