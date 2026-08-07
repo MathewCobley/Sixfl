@@ -43,7 +43,6 @@ require("./apply-native-team-kit-save-v2.cjs");
 require("./apply-kit-reopen-consistency.cjs");
 require("./apply-league-kit-design-lock.cjs");
 require("./apply-kit-order-payment-readiness.cjs");
-require("./apply-admin-kit-payment-status.cjs");
 require("./apply-team-referral-rewards.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
