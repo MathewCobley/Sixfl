@@ -83,6 +83,13 @@ const SixflTvFixtureBridge = dynamic(
 export default function RouteScopedBridges() {
   const pathname = usePathname();
 
+  // The main team dashboards are fully rendered by their native React pages.
+  // Do not mount any legacy DOM bridge here: a bridge that mutates the page
+  // after hydration must never be able to replace or hide the team dashboard.
+  const isCaptainTeamRoot = /^\/captain\/team\/[^/]+\/?$/.test(pathname);
+  const isPlayerTeamRoot = /^\/player\/team\/[^/]+\/?$/.test(pathname);
+  if (isCaptainTeamRoot || isPlayerTeamRoot) return null;
+
   const isCaptain = pathname.startsWith("/captain/");
   const isPlayer = pathname.startsWith("/player/");
   const isCaptainMatchFees = /^\/captain\/team\/[^/]+\/match-fees\/?$/.test(pathname);
