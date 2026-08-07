@@ -29,12 +29,16 @@ function formatMoneyInputValue(amountPence: number | null) {
   return amountPence === null ? "" : (amountPence / 100).toFixed(2);
 }
 
-type SeasonTeamLink = { leagueId: string; teamId: string };
+type SeasonTeamLink = {
+  leagueId: string;
+  teamId: string;
+  divisionId: string | null;
+};
 
 async function getSeasonTeamLinks() {
   try {
     return await prisma.$queryRaw<SeasonTeamLink[]>(Prisma.sql`
-      SELECT "leagueId", "teamId"
+      SELECT "leagueId", "teamId", "divisionId"
       FROM "LeagueSeasonTeam"
       WHERE "isActive" = true
     `);
@@ -64,6 +68,7 @@ export default async function EditFixturePage({
     select: {
       id: true,
       leagueId: true,
+      divisionId: true,
       homeTeamId: true,
       awayTeamId: true,
       venueId: true,
@@ -88,13 +93,9 @@ export default async function EditFixturePage({
     select: { id: true, name: true, season: true, isActive: true },
   });
 
-  const leagueIdsToRefresh = leagues
-    .filter((league) => league.isActive || league.id === fixture.leagueId)
-    .map((league) => league.id);
-
-  await Promise.all(
-    leagueIdsToRefresh.map((leagueId) => ensureSeasonTeamRowsForLeague(leagueId)),
-  );
+  // Refresh only the season being edited. This backfills missing legacy rows
+  // without touching another competition season while an admin edits a fixture.
+  await ensureSeasonTeamRowsForLeague(fixture.leagueId);
 
   const [allTeams, seasonLinks, venues, referees, charges] = await Promise.all([
     prisma.team.findMany({
@@ -127,15 +128,24 @@ export default async function EditFixturePage({
   ]);
 
   const leagueIdsByTeam = new Map<string, Set<string>>();
+  const divisionKeysByTeam = new Map<string, Set<string>>();
+
   for (const team of allTeams) {
     const ids = leagueIdsByTeam.get(team.id) ?? new Set<string>();
     if (team.leagueId) ids.add(team.leagueId);
     leagueIdsByTeam.set(team.id, ids);
   }
+
   for (const link of seasonLinks) {
     const ids = leagueIdsByTeam.get(link.teamId) ?? new Set<string>();
     ids.add(link.leagueId);
     leagueIdsByTeam.set(link.teamId, ids);
+
+    if (link.divisionId) {
+      const keys = divisionKeysByTeam.get(link.teamId) ?? new Set<string>();
+      keys.add(`${link.leagueId}:${link.divisionId}`);
+      divisionKeysByTeam.set(link.teamId, keys);
+    }
   }
 
   const homeCharge = charges.find((charge) => charge.teamId === fixture.homeTeamId);
@@ -178,6 +188,7 @@ export default async function EditFixturePage({
           fixture={{
             id: fixture.id,
             leagueId: fixture.leagueId,
+            divisionId: fixture.divisionId,
             homeTeamId: fixture.homeTeamId,
             awayTeamId: fixture.awayTeamId,
             venueId: fixture.venueId,
@@ -196,6 +207,7 @@ export default async function EditFixturePage({
             id: team.id,
             name: team.name,
             leagueIds: Array.from(leagueIdsByTeam.get(team.id) ?? []),
+            divisionKeys: Array.from(divisionKeysByTeam.get(team.id) ?? []),
           }))}
           venues={venues}
           referees={referees}
