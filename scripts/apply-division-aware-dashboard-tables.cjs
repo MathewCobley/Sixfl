@@ -74,4 +74,3 @@ patchFile(
 );
 
 require("./apply-player-current-league-context.cjs");
-require("./apply-fixture-division-standings-repair.cjs");
