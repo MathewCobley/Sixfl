@@ -39,10 +39,6 @@ const CaptainPlayerModeBridge = dynamic(
   () => import("@/components/captain/CaptainPlayerModeBridge"),
   { ssr: false },
 );
-const CaptainResultsNavBridge = dynamic(
-  () => import("@/components/captain/CaptainResultsNavBridge"),
-  { ssr: false },
-);
 const CaptainStoredPredictionBridge = dynamic(
   () => import("@/components/captain/CaptainStoredPredictionBridge"),
   { ssr: false },
@@ -120,7 +116,6 @@ export default function RouteScopedBridges() {
           <CaptainAdditionalCaptainBridge />
           <CaptainHeaderLeaguePositionBridge />
           <CaptainPlayerModeBridge />
-          <CaptainResultsNavBridge />
           <CaptainStoredPredictionBridge />
           <FixturePaymentWordingBridge />
           <HideImpossibleLeaguePositionBridge />
