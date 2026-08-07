@@ -59,7 +59,7 @@ patchFile(
   (source) => {
     source = source.replace(
       `function safeFixturesReturnTo(value: FormDataEntryValue | null) {\n  const parsed = String(value ?? \"\").trim();\n  return parsed === \"/admin/fixtures\" || parsed.startsWith(\"/admin/fixtures?\")\n    ? parsed\n    : \"/admin/fixtures\";\n}\n`,
-      `function safeFixturesReturnTo(value: FormDataEntryValue | null) {\n  const parsed = String(value ?? \"\").trim();\n  return\n    parsed === \"/admin/fixtures\" ||\n    parsed.startsWith(\"/admin/fixtures?\") ||\n    parsed.startsWith(\"/admin/fixtures#\")\n      ? parsed\n      : \"/admin/fixtures\";\n}\n\nfunction stripHash(value: string) {\n  return value.split(\"#\", 1)[0] || \"/admin/fixtures\";\n}\n\nfunction withWeekAnchor(value: string, round: number | null) {\n  const base = stripHash(value);\n  const anchor = round === null ? \"fixture-week-unassigned\" : \`fixture-week-\${round}\`;\n  return \`${"${base}"}#${"${anchor}"}\`;\n}\n`,
+      `function safeFixturesReturnTo(value: FormDataEntryValue | null) {\n  const parsed = String(value ?? \"\").trim();\n  return (\n    parsed === \"/admin/fixtures\" ||\n    parsed.startsWith(\"/admin/fixtures?\") ||\n    parsed.startsWith(\"/admin/fixtures#\")\n  )\n    ? parsed\n    : \"/admin/fixtures\";\n}\n\nfunction stripHash(value: string) {\n  return value.split(\"#\", 1)[0] || \"/admin/fixtures\";\n}\n\nfunction withWeekAnchor(value: string, round: number | null) {\n  const base = stripHash(value);\n  const anchor = round === null ? \"fixture-week-unassigned\" : \`fixture-week-\${round}\`;\n  return \`${"${base}"}#${"${anchor}"}\`;\n}\n`,
     );
 
     source = source.replace(
@@ -92,7 +92,7 @@ patchFile(
   (source) => {
     source = source.replace(
       `function safeReturnTo(value: string) {\n  return value === \"/admin/fixtures\" || value.startsWith(\"/admin/fixtures?\")\n    ? value\n    : \"/admin/fixtures\";\n}\n`,
-      `function safeReturnTo(value: string) {\n  return\n    value === \"/admin/fixtures\" ||\n    value.startsWith(\"/admin/fixtures?\") ||\n    value.startsWith(\"/admin/fixtures#\")\n      ? value\n      : \"/admin/fixtures\";\n}\n`,
+      `function safeReturnTo(value: string) {\n  return (\n    value === \"/admin/fixtures\" ||\n    value.startsWith(\"/admin/fixtures?\") ||\n    value.startsWith(\"/admin/fixtures#\")\n  )\n    ? value\n    : \"/admin/fixtures\";\n}\n`,
     );
     return source;
   },
