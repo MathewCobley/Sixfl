@@ -138,6 +138,22 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
   if (isOverview(pathname, teamId)) {
     return (
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Link
+          href={`/captain/team/${teamId}/weeks-unavailable`}
+          className="md:col-span-2 xl:col-span-4 rounded-3xl border border-amber-400/25 bg-amber-500/[0.08] p-5 transition hover:border-amber-300/35 hover:bg-amber-500/[0.12] sm:p-6"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/65">Advance fixture planning</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Know a week when your team cannot play?</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/70">Your team is assumed available. Only tell SIXFL about weeks when you already know you cannot field a team, before fixtures are published.</p>
+            </div>
+            <span className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black">
+              Tell SIXFL
+            </span>
+          </div>
+        </Link>
+
         <Link href={`/captain/team/${teamId}/help`} className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">How-to help</p>
           <h2 className="mt-3 text-xl font-semibold text-white">How to use the captain area</h2>
