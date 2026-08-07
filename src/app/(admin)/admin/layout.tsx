@@ -18,7 +18,6 @@ import EmailTemplateListControlsBridge from "@/components/admin/email-templates/
 import PlayerPoolTemplateCtaBridge from "@/components/admin/email-templates/PlayerPoolTemplateCtaBridge";
 import FixtureCardResultLinksBridge from "@/components/admin/fixtures/FixtureCardResultLinksBridge";
 import FixtureSeasonWordingBridge from "@/components/admin/fixtures/FixtureSeasonWordingBridge";
-import GenerateNextWeekFixturesBridge from "@/components/admin/fixtures/GenerateNextWeekFixturesBridge";
 import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditButtonBridge";
 import AdminDivisionSelectBridge from "@/components/admin/leagues/AdminDivisionSelectBridge";
@@ -91,7 +90,6 @@ export default async function AdminLayout({
       <EmailBrandOptionBridge />
       <PlayerPoolTemplateCtaBridge />
       <PlayerPoolNudgeBridge />
-      <GenerateNextWeekFixturesBridge />
       <AdminSidebarDesktopColumnsBridge />
       <RemoveUnusedSettingsNavBridge />
       <AdminLeagueSeasonsBridge />
