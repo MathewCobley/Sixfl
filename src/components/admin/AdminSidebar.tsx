@@ -276,6 +276,12 @@ const navigationGroups = [
         description: "Inbound",
       },
       {
+        name: "Player pool",
+        href: "/admin/player-pool",
+        icon: UserGroupIcon,
+        description: "Available players",
+      },
+      {
         name: "Players",
         href: "/admin/player-prospects",
         icon: UsersIcon,
