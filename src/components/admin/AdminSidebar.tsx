@@ -174,10 +174,10 @@ const navigationGroups = [
         description: "Availability",
       },
       {
-        name: "Bulk generator",
+        name: "Generate fixtures",
         href: "/admin/fixtures/generate",
         icon: CalendarDaysIcon,
-        description: "Drafts",
+        description: "Create schedule",
       },
       {
         name: "Drop team",
