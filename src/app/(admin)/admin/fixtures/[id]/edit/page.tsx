@@ -8,6 +8,7 @@ import {
   toLondonDateInputValue,
   toLondonTimeInputValue,
 } from "@/lib/datetime/london";
+import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -82,11 +83,20 @@ export default async function EditFixturePage({
 
   if (!fixture) notFound();
 
-  const [leagues, allTeams, seasonLinks, venues, referees, charges] = await Promise.all([
-    prisma.league.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
-      select: { id: true, name: true, season: true },
-    }),
+  const leagues = await prisma.league.findMany({
+    orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
+    select: { id: true, name: true, season: true, isActive: true },
+  });
+
+  const leagueIdsToRefresh = leagues
+    .filter((league) => league.isActive || league.id === fixture.leagueId)
+    .map((league) => league.id);
+
+  await Promise.all(
+    leagueIdsToRefresh.map((leagueId) => ensureSeasonTeamRowsForLeague(leagueId)),
+  );
+
+  const [allTeams, seasonLinks, venues, referees, charges] = await Promise.all([
     prisma.team.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, leagueId: true },
