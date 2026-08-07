@@ -1,3 +1,5 @@
+require("./apply-result-dispute-conversations.cjs");
+
 const fs = require("node:fs");
 const path = require("node:path");
 
