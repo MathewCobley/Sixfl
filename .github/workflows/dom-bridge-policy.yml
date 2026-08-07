@@ -41,6 +41,11 @@ jobs:
           --changed-from "${{ steps.base.outputs.sha }}"
           --fail-on-findings
 
+      - name: Verify retired bridge replacement contracts
+        run: >-
+          node scripts/audit-dom-replacements.mjs
+          --changed-from "${{ steps.base.outputs.sha }}"
+
       - name: Produce full legacy audit inventory
         if: always()
         run: node scripts/audit-dom-bridges.mjs | tee dom-bridge-audit.txt
