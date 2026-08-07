@@ -46,6 +46,7 @@ require("./apply-kit-pending-payment-editability.cjs");
 require("./apply-admin-kit-payment-status.cjs");
 require("./apply-admin-kit-readiness-guard.cjs");
 require("./apply-team-referral-rewards.cjs");
+require("./apply-fixture-week-scroll-return.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
