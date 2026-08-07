@@ -108,7 +108,10 @@ async function applyCaptainOffer(teamId: string, signal: AbortSignal) {
   });
   if (!response.ok) return false;
   const data = (await response.json()) as { offerAvailable: boolean; existingEntitlement: boolean };
-  if (data.offerAvailable) return true;
+
+  // Closing a league's offer stops new teams qualifying; it must not remove an
+  // entitlement that was already granted to an existing team.
+  if (data.offerAvailable || data.existingEntitlement) return true;
 
   hideFreeOfferCopy();
 
