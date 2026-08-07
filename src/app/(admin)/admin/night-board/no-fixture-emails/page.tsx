@@ -36,10 +36,23 @@ function toLondonDateInput(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function buildNightBoardHref(input: {
+  date: string;
+  leagueId: string;
+  venueId: string;
+}) {
+  const params = new URLSearchParams({ date: input.date });
+  if (input.leagueId) params.set("leagueId", input.leagueId);
+  if (input.venueId) params.set("venueId", input.venueId);
+  return `/admin/night-board?${params.toString()}`;
+}
+
 export default async function NoFixtureEmailsPage({ searchParams }: PageProps) {
   await requireAdmin();
   const params = searchParams ? await searchParams : {};
   const requestedDate = getParam(params.date).trim();
+  const leagueId = getParam(params.leagueId).trim();
+  const venueId = getParam(params.venueId).trim();
 
   const nextFixture = !isDateInput(requestedDate)
     ? await prisma.fixture.findFirst({
@@ -47,6 +60,8 @@ export default async function NoFixtureEmailsPage({ searchParams }: PageProps) {
           publishedAt: { not: null },
           kickoffAt: { gte: new Date() },
           status: "SCHEDULED",
+          ...(leagueId ? { leagueId } : {}),
+          ...(venueId ? { venueId } : {}),
         },
         orderBy: { kickoffAt: "asc" },
         select: { kickoffAt: true },
@@ -56,6 +71,7 @@ export default async function NoFixtureEmailsPage({ searchParams }: PageProps) {
   const selectedDate = isDateInput(requestedDate)
     ? requestedDate
     : toLondonDateInput(nextFixture?.kickoffAt ?? new Date());
+  const backHref = buildNightBoardHref({ date: selectedDate, leagueId, venueId });
 
   return (
     <div className="w-full space-y-7 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
@@ -73,7 +89,7 @@ export default async function NoFixtureEmailsPage({ searchParams }: PageProps) {
             </p>
           </div>
           <Link
-            href={`/admin/night-board?date=${encodeURIComponent(selectedDate)}`}
+            href={backHref}
             className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white/75 transition hover:bg-white/[0.08]"
           >
             Back to Night Board
@@ -81,6 +97,8 @@ export default async function NoFixtureEmailsPage({ searchParams }: PageProps) {
         </div>
 
         <form method="get" className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+          {leagueId ? <input type="hidden" name="leagueId" value={leagueId} /> : null}
+          {venueId ? <input type="hidden" name="venueId" value={venueId} /> : null}
           <label className="space-y-1.5 text-sm text-white/60">
             Fixture week
             <input
@@ -99,7 +117,11 @@ export default async function NoFixtureEmailsPage({ searchParams }: PageProps) {
         </form>
       </section>
 
-      <NightBoardNoFixtureEmails date={selectedDate} leagueId="" venueId="" />
+      <NightBoardNoFixtureEmails
+        date={selectedDate}
+        leagueId={leagueId}
+        venueId={venueId}
+      />
     </div>
   );
 }
