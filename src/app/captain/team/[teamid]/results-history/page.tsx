@@ -10,6 +10,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const metadata = { title: "Results | SIXFL Captain" };
 
+type Scorer = {
+  name: string;
+  goals: number;
+};
+
 function formatDate(date: Date) {
   return formatDateTimeInLondon(date, {
     weekday: "short",
@@ -25,6 +30,20 @@ function outcome(forScore: number, againstScore: number) {
   if (forScore > againstScore) return "WIN";
   if (forScore < againstScore) return "LOSS";
   return "DRAW";
+}
+
+function parseScorers(value: unknown): Scorer[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const name = typeof row.name === "string" ? row.name.trim() : "";
+    const goals = Number(row.goals ?? 0);
+
+    if (!name || !Number.isInteger(goals) || goals < 1) return [];
+    return [{ name, goals }];
+  });
 }
 
 export default async function CaptainResultsHistoryPage({
@@ -58,7 +77,19 @@ export default async function CaptainResultsHistoryPage({
       awayTeamId: true,
       homeTeam: { select: { name: true, logoUrl: true } },
       awayTeam: { select: { name: true, logoUrl: true } },
-      result: { select: { homeScore: true, awayScore: true } },
+      result: {
+        select: {
+          homeScore: true,
+          awayScore: true,
+          teamMetadata: {
+            select: {
+              teamId: true,
+              scorers: true,
+              playerOfMatchName: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -87,9 +118,14 @@ export default async function CaptainResultsHistoryPage({
           <div className="divide-y divide-white/10">
             {fixtures.map((fixture) => {
               const isHome = relatedTeamIds.has(fixture.homeTeamId);
+              const teamIdForFixture = isHome ? fixture.homeTeamId : fixture.awayTeamId;
               const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
               const actualFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
               const actualAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
+              const matchDetails =
+                fixture.result!.teamMetadata.find((item) => item.teamId === teamIdForFixture) ?? null;
+              const scorers = parseScorers(matchDetails?.scorers);
+              const playerOfMatch = matchDetails?.playerOfMatchName?.trim() || null;
               const preview = stored.get(fixture.id) ?? null;
               const hasPrediction =
                 preview?.predictedHomeScore !== null &&
@@ -151,6 +187,23 @@ export default async function CaptainResultsHistoryPage({
                         </span>
                       ) : null}
                     </div>
+
+                    {scorers.length > 0 || playerOfMatch ? (
+                      <div className="mt-3 space-y-1 text-sm text-white/65">
+                        {scorers.length > 0 ? (
+                          <p>
+                            <span className="font-semibold text-white/85">Scorers:</span>{" "}
+                            {scorers.map((scorer) => `${scorer.name}${scorer.goals > 1 ? ` ×${scorer.goals}` : ""}`).join(", ")}
+                          </p>
+                        ) : null}
+                        {playerOfMatch ? (
+                          <p>
+                            <span className="font-semibold text-amber-100">MOTM:</span>{" "}
+                            {playerOfMatch}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="text-left sm:text-right">
