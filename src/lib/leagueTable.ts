@@ -175,8 +175,9 @@ export async function getLeagueTable(
     prisma.fixture.findMany({
       where: {
         leagueId,
-        ...(options.divisionId ? { divisionId: options.divisionId } : {}),
-        status: "COMPLETED",
+        // A saved result is the authoritative indication that a game was played.
+        // Do not trust legacy/stale Fixture.status or Fixture.divisionId here.
+        // Division membership is enforced below by allowedTeamIds.
         result: { isNot: null },
       },
       orderBy: { kickoffAt: "asc" },
@@ -191,8 +192,9 @@ export async function getLeagueTable(
   const table = new Map<string, LeagueTableRow>();
 
   // The selected/active team list is always authoritative, including when it
-  // is empty. Historic completed fixtures must never recreate a removed or
-  // affiliated-only team in the current league table.
+  // is empty. Historic fixtures must never recreate a removed or affiliated-only
+  // team in the current league table. For division tables, this also means a
+  // result counts only when both participating teams are active in that division.
   const allowedTeamIds = new Set(teams.map((team) => team.id));
 
   for (const team of teams) {
