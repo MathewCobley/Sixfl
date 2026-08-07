@@ -101,7 +101,7 @@ export default function AdminComboboxField({
             leaveTo="opacity-0"
             afterLeave={() => setQuery("")}
           >
-            <Combobox.Options className="absolute z-50 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-white/10 bg-[#090909] p-2 shadow-2xl shadow-black/50 ring-1 ring-white/5 focus:outline-none">
+            <Combobox.Options className="absolute z-50 mt-2 max-h-72 w-full overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-[#090909] p-2 shadow-2xl shadow-black/50 ring-1 ring-white/5 [scrollbar-gutter:stable] focus:outline-none">
               {filteredOptions.length === 0 ? (
                 <div className="px-3 py-3 text-sm text-white/45">{emptyLabel}</div>
               ) : (
