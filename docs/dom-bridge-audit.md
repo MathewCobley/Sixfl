@@ -4,7 +4,7 @@
 
 Formal audit started: **3 August 2026**.
 
-New or modified DOM bridges are now blocked by repository policy and CI unless an exact, approved and unexpired temporary exception exists in `config/dom-bridge-exceptions.json`.
+New or modified DOM bridges are blocked by repository policy and CI unless an exact, approved and unexpired temporary exception exists in `config/dom-bridge-exceptions.json`.
 
 The full legacy inventory remains a report so existing production behaviour is not deleted blindly. Changed source files are enforced immediately.
 
@@ -13,9 +13,10 @@ Run:
 ```bash
 npm run audit:dom
 npm run audit:dom:changed
+node scripts/audit-dom-replacements.mjs
 ```
 
-The GitHub **DOM bridge policy** workflow also produces a full downloadable audit inventory for every push and pull request.
+The GitHub **DOM bridge policy** workflow runs both the changed-file DOM audit and the native replacement-contract audit on every push to `main` and every pull request. It also produces a downloadable full DOM inventory.
 
 ## Policy
 
@@ -25,50 +26,77 @@ Legitimate browser APIs such as focusing an owned input, reading element dimensi
 
 A temporary exception is permitted only when the DOM is genuinely outside SIXFL's control, the route scope is narrow, the code is non-critical and a replacement plan and expiry are recorded. Existing bridges are technical debt and are not precedent for new work.
 
-## First audit pass
+Route-scoping a bridge is **containment, not completion**. A bridge remains unfinished until its behaviour is owned by normal React/Next.js code and its replacement contract passes.
 
-The audit begins in this order:
+## Replacement contracts
 
-1. **P0 global bridges and browser monkey patches** — these can affect unrelated pages and caused the Squad payments freeze.
+Deleting a bridge is no longer enough to mark the work complete.
+
+Completed replacements are recorded in `config/dom-bridge-replacements.json`. Every contract must record:
+
+1. The retired bridge/source path or paths.
+2. The user-visible or operational responsibilities the old code provided.
+3. The native source file or files that now own those responsibilities.
+4. Stable source markers proving those native behaviours are still present.
+
+`scripts/audit-dom-replacements.mjs` verifies every recorded contract. It fails when:
+
+- a supposedly retired bridge still exists;
+- a native replacement file disappears;
+- a required replacement marker disappears; or
+- a DOM/Bridge source file is deleted in a new change without being registered in a replacement contract.
+
+This is specifically intended to prevent regressions where a bridge is removed but one of its less-obvious responsibilities is forgotten.
+
+## Priority order
+
+Continue the audit in this order:
+
+1. **P0 broad/global bridges and browser monkey patches** — these can affect unrelated pages and have previously caused freezes or black screens.
 2. **P1 payment, fixture and referee workflows** — markup-dependent operational behaviour must be moved into the owning pages and actions.
 3. **P2 forms, navigation and cosmetic copy** — lower financial risk, but still brittle and difficult to maintain.
-4. Remove the global `Element.prototype.closest` patch after dependent legacy selectors are gone.
+4. Remove the global `Element.prototype.closest` patch only after dependent legacy selectors are gone.
 
-The Squad payments presentation is the first completed example: fee summaries and team badges now render natively from server data, and the global DOM bridge no longer alters that page.
+## Completed and contract-protected replacements
 
-## Completed in this pass
+The replacement manifest now protects the key completed migrations reviewed in August 2026, including:
 
-- Deleted `InjuredPlayerAvailabilityBridge.tsx`.
-- Availability rows now load injury state server-side and render the unavailable state directly.
-- Match-selection rows now load injury state server-side and omit selection controls for injured players.
-- Rebuilt `ManagedSquadInjuryBridge.tsx` as a normal React injury-management panel. Despite the legacy filename, it no longer queries or mutates page HTML.
-- Added a database trigger preventing injured players from being marked available through a stale or crafted form submission.
-- Replaced `NightBoardMatchFeeSyncBridge.tsx` with direct React fixture editors and live potential-issue calculations.
-- Preserved the existing operational API path so fixture changes still synchronise match-fee charges/messages, cancel stale referee-night links and invalidate obsolete referee confirmations.
-- Added both UI and API protection for completed fixtures while retaining the fixture form identity needed by the separate team-issue navigation feature.
-- Replaced Squad payments post-render rewrites with server-rendered React payment summaries and fixture identity.
-- Added repository rules, changed-file enforcement, an exception registry and a GitHub audit workflow.
+- Admin Player Pool navigation rendered directly by `AdminSidebar`.
+- Captain PlayerPool navigation and SIXFL TV logo rendered directly by the captain team layout.
+- Captain fixture deduplication handled by server-rendered fixture data rather than hiding a selected DOM row.
+- Player Prospect chase, team-change, PlayerPool, Not interested and duplicate controls handled by `ProspectNativeActions`.
+- Team future-unavailability navigation, captain overview reminder, admin planning navigation and pre-generator summary.
+- Availability-history nudge controls rendered through `AvailabilityHistoryNudgePanel`.
+- Dedicated server-rendered Harrogate signup presentation.
+- Captain PlayerPool page logo rendered directly in JSX.
+- Night Board operational fixture editing and live warning calculations handled by `NightBoardOperations`.
+- Captain outstanding balance rendered from the payment ledger; the retired no-op balance bridge has been deleted.
 
-## Highest-risk remaining areas
+Other completed work already includes:
 
-### P0 — globally mounted DOM mutation
+- Injury state loaded through application/server data instead of scanning rendered squad rows.
+- `ManagedSquadInjuryBridge.tsx` rebuilt as an owned React panel despite retaining its legacy filename.
+- Database protection preventing injured players from being made available through stale or crafted submissions.
+- Squad-payment summaries and fixture identity rendered directly from server data.
+- Kit-offer copy/rendering moved to owned components with dedicated validation preventing retired kit bridges from returning.
 
-These components are mounted from broad layouts and can therefore affect many pages when markup changes:
+## Known remaining DOM-mutating areas
+
+This list is deliberately illustrative rather than authoritative. `npm run audit:dom` is the source of truth.
+
+### P0 / broad presentation risk
 
 - `src/components/admin/night-board/NightBoardWarningsPositionBridge.tsx`
 - `src/components/admin/payments/AdminPaymentsPageBridge.tsx`
-- `src/components/captain/CaptainFixturesDeduplicateBridge.tsx`
 - `src/components/captain/CaptainHeaderLeaguePositionBridge.tsx`
 - `src/components/captain/HideImpossibleLeaguePositionBridge.tsx`
 - `src/components/captain/TeamAutoPayCopyBridge.tsx`
 - `src/components/public/NorthallertonWaitingListCopyBridge.tsx`
 - `src/components/SixflTvFixtureBridge.tsx`
 
-`src/app/layout.tsx` also contains a global `Element.prototype.closest` monkey patch. It appears to exist to protect legacy selector-based bridges from invalid selectors. It should be removed only after the dependent bridges have been replaced.
+`src/app/layout.tsx` also contains a global `Element.prototype.closest` monkey patch. It should not be removed until the remaining selector-dependent legacy code has been replaced and verified.
 
 ### P1 — operational and financial workflows
-
-Replace these before cosmetic bridges because a markup change could affect payments, fixture operations or referee work:
 
 - `src/components/captain/SquadPaymentAmountSync.tsx`
 - `src/components/captain/VoidFixturePlayerFeesBridge.tsx`
@@ -83,8 +111,6 @@ Replace these before cosmetic bridges because a markup change could affect payme
 
 ### P2 — forms, navigation and copy polish
 
-These are still brittle but generally lower-risk than payment and fixture workflows:
-
 - `src/components/admin/teams/TeamDivisionPickerBridge.tsx`
 - `src/components/admin/teams/TeamCompetitionPickerBridge.tsx`
 - `src/components/admin/teams/TeamStandardMatchFeeBridge.tsx`
@@ -95,21 +121,19 @@ These are still brittle but generally lower-risk than payment and fixture workfl
 - `src/components/admin/leads/AdminLeadEditButtonBridge.tsx`
 - `src/components/admin/email-templates/EmailTemplateListControlsBridge.tsx`
 - `src/components/admin/email-templates/EmailTemplatePollBridge.tsx`
-- `src/components/admin/player-prospects/PlayerProspectsNotInterestedBridge.tsx`
 - `src/components/admin/social/AdminSocialResultsGeneratorLinksBridge.tsx`
 
-This is not an exhaustive handwritten list. `npm run audit:dom` and the workflow artifact are the source of truth and find additional route-specific files.
+## Required replacement approach
 
-## Replacement approach
+For every remaining bridge:
 
-For each bridge:
+1. Read the whole bridge and write down **every responsibility**, including navigation, labels, empty states, warnings, styling, status text, redirects, side effects and API calls.
+2. Identify the page/shared component/action that should own each responsibility.
+3. Implement the replacement with server data and JSX; use an owned client component only where interactivity is required.
+4. Add or update the entry in `config/dom-bridge-replacements.json` **before deleting the bridge**.
+5. Verify desktop, mobile, captain/admin preview, empty states and relevant error/success states.
+6. Remove the old import/mount and delete the retired bridge only after all responsibilities are accounted for.
+7. Run the DOM audit, replacement-contract audit, type-check/build and relevant workflow checks.
+8. Do not describe route-scoping, disabling, returning `null`, or merely deleting a file as a completed replacement.
 
-1. Identify the page or shared component that owns the markup.
-2. Move the required query into its server loader or route action.
-3. Render the element directly in JSX.
-4. Pass explicit props to a client component only when interactivity is required.
-5. Remove the bridge import and delete the bridge file.
-6. Confirm mobile, captain/admin preview and empty-state behaviour.
-7. Re-run `npm run audit:dom`, the changed-file policy check and the production build.
-
-Do not bulk-delete bridges. Several currently provide operational behaviour and must be replaced one workflow at a time.
+Do not bulk-delete bridges. Several still provide operational behaviour and must be replaced one workflow at a time.
