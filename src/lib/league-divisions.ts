@@ -57,7 +57,13 @@ export async function getLeagueDivisions(leagueId: string) {
         d."isActive",
         COUNT(t."id")::int AS "teamCount"
       FROM "LeagueDivision" d
-      LEFT JOIN "Team" t ON t."divisionId" = d."id"
+      LEFT JOIN "LeagueSeasonTeam" lst
+        ON lst."leagueId" = d."leagueId"
+       AND lst."divisionId" = d."id"
+       AND lst."isActive" = true
+      LEFT JOIN "Team" t
+        ON t."id" = lst."teamId"
+       AND COALESCE(t."isFixturePlaceholder", false) = false
       WHERE d."leagueId" = ${leagueId}
       GROUP BY d."id", d."leagueId", d."name", d."slug", d."sortOrder", d."isActive"
       ORDER BY d."sortOrder" ASC, d."name" ASC
@@ -84,7 +90,13 @@ export async function getAllLeagueDivisionOptions() {
         l."season" AS "leagueSeason"
       FROM "LeagueDivision" d
       JOIN "League" l ON l."id" = d."leagueId"
-      LEFT JOIN "Team" t ON t."divisionId" = d."id"
+      LEFT JOIN "LeagueSeasonTeam" lst
+        ON lst."leagueId" = d."leagueId"
+       AND lst."divisionId" = d."id"
+       AND lst."isActive" = true
+      LEFT JOIN "Team" t
+        ON t."id" = lst."teamId"
+       AND COALESCE(t."isFixturePlaceholder", false) = false
       GROUP BY d."id", d."leagueId", d."name", d."slug", d."sortOrder", d."isActive", l."name", l."season"
       ORDER BY l."name" ASC, l."season" ASC, d."sortOrder" ASC, d."name" ASC
     `);
@@ -118,9 +130,10 @@ export async function getTeamDivisionId(teamId: string) {
 export async function getTeamDivisionMap(leagueId: string) {
   try {
     const rows = await prisma.$queryRaw<Array<{ id: string; divisionId: string | null }>>(Prisma.sql`
-      SELECT "id", "divisionId"
-      FROM "Team"
-      WHERE "leagueId" = ${leagueId}
+      SELECT lst."teamId" AS "id", lst."divisionId"
+      FROM "LeagueSeasonTeam" lst
+      WHERE lst."leagueId" = ${leagueId}
+        AND lst."isActive" = true
     `);
 
     return new Map(rows.map((row) => [row.id, row.divisionId]));
