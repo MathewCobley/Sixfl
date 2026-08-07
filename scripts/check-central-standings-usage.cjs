@@ -44,7 +44,6 @@ require("./apply-kit-reopen-consistency.cjs");
 require("./apply-league-kit-design-lock.cjs");
 require("./apply-kit-order-payment-readiness.cjs");
 require("./apply-kit-pending-payment-editability.cjs");
-require("./apply-kit-pending-payment-submit-ui.cjs");
 require("./apply-admin-kit-payment-status.cjs");
 require("./apply-admin-kit-readiness-guard.cjs");
 require("./apply-team-referral-rewards.cjs");
