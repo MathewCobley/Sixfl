@@ -127,6 +127,10 @@ export async function getLeagueSeasonTeams(input: {
  * Teams affiliated with the parent competition but not entered in this season.
  * These teams retain captain access, PlayerPool visibility and league comms,
  * while staying out of tables, fixtures and season counts.
+ *
+ * Team.leagueId = NULL is the explicit "No league" state. Such a team must not
+ * appear as affiliated to any competition even if stale competitionId data is
+ * still present from an older migration or admin flow.
  */
 export async function getAffiliatedTeamsOutsideSeason(leagueId: string) {
   await ensureSeasonTeamRowsForLeague(leagueId);
@@ -162,6 +166,7 @@ export async function getAffiliatedTeamsOutsideSeason(leagueId: string) {
      AND lst."teamId" = t."id"
     LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
     WHERE target."id" = ${leagueId}
+      AND t."leagueId" IS NOT NULL
       AND COALESCE(lst."isActive", false) = false
       AND COALESCE(t."isFixturePlaceholder", false) = false
     ORDER BY t."name" ASC
