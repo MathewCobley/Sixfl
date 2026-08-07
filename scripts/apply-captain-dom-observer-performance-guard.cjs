@@ -83,6 +83,13 @@ patchFile("src/components/captain/AdminPlayerPreviewLinks.tsx", (input) => {
 });
 
 patchFile("src/components/captain/CaptainViewModeHeader.tsx", (input) => {
+  // Newer captain preview code deliberately avoids MutationObserver entirely.
+  // A handful of bounded rewrites is safer because this component itself changes
+  // text nodes; observing the same subtree can trigger repeated render/mutation work.
+  if (input.includes("const delays = [0, 100, 300, 700, 1400];")) {
+    return input;
+  }
+
   const modernBefore = [
     "  useEffect(() => {",
     "    if (!shouldRewriteCaptainFacingText) return;",
@@ -104,95 +111,30 @@ patchFile("src/components/captain/CaptainViewModeHeader.tsx", (input) => {
     "  useEffect(() => {",
     "    if (!shouldRewriteCaptainFacingText) return;",
     "",
-    "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
-    "    let frame = 0;",
-    "    let observer: MutationObserver;",
+    "    let cancelled = false;",
+    "    const timers: number[] = [];",
+    "    const delays = [0, 100, 300, 700, 1400];",
     "",
-    "    const scheduleRewrite = () => {",
-    "      if (frame) return;",
-    "      frame = window.requestAnimationFrame(() => {",
-    "        frame = 0;",
-    "        observer.disconnect();",
-    "        rewriteCaptainFacingText();",
-    "        observer.observe(root, { childList: true, subtree: true });",
-    "      });",
-    "    };",
-    "",
-    "    observer = new MutationObserver(scheduleRewrite);",
-    "    observer.observe(root, { childList: true, subtree: true });",
-    "    scheduleRewrite();",
+    "    for (const delay of delays) {",
+    "      const timer = window.setTimeout(() => {",
+    "        if (!cancelled) rewriteCaptainFacingText();",
+    "      }, delay);",
+    "      timers.push(timer);",
+    "    }",
     "",
     "    return () => {",
-    "      if (frame) window.cancelAnimationFrame(frame);",
-    "      observer.disconnect();",
+    "      cancelled = true;",
+    "      for (const timer of timers) window.clearTimeout(timer);",
     "    };",
     "  }, [pathname, searchParamsKey, shouldRewriteCaptainFacingText]);",
   ].join("\n");
 
-  const legacyBefore = [
-    "  useEffect(() => {",
-    "    if (isManagedTeam) return;",
-    "",
-    "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
-    "    const frame = window.requestAnimationFrame(rewriteCaptainFacingText);",
-    "    const observer = new MutationObserver(rewriteCaptainFacingText);",
-    "",
-    "    observer.observe(root, { childList: true, subtree: true, characterData: true });",
-    "",
-    "    return () => {",
-    "      window.cancelAnimationFrame(frame);",
-    "      observer.disconnect();",
-    "    };",
-    "  }, [isManagedTeam, pathname, searchParamsKey]);",
-  ].join("\n");
-
-  const legacyAfter = [
-    "  useEffect(() => {",
-    "    if (isManagedTeam) return;",
-    "",
-    "    const root = document.querySelector(\".captain-team-shell\") ?? document.body;",
-    "    let frame = 0;",
-    "    let observer: MutationObserver;",
-    "",
-    "    const scheduleRewrite = () => {",
-    "      if (frame) return;",
-    "      frame = window.requestAnimationFrame(() => {",
-    "        frame = 0;",
-    "        observer.disconnect();",
-    "        rewriteCaptainFacingText();",
-    "        observer.observe(root, { childList: true, subtree: true });",
-    "      });",
-    "    };",
-    "",
-    "    observer = new MutationObserver(scheduleRewrite);",
-    "    observer.observe(root, { childList: true, subtree: true });",
-    "    scheduleRewrite();",
-    "",
-    "    return () => {",
-    "      if (frame) window.cancelAnimationFrame(frame);",
-    "      observer.disconnect();",
-    "    };",
-    "  }, [isManagedTeam, pathname, searchParamsKey]);",
-  ].join("\n");
-
-  if (input.includes(modernAfter) || input.includes(legacyAfter)) {
-    return input;
-  }
-
-  if (input.includes(modernBefore)) {
-    return input.replace(modernBefore, modernAfter);
-  }
-
-  if (input.includes(legacyBefore)) {
-    return input.replace(legacyBefore, legacyAfter);
-  }
-
-  throw new Error("Expected captain text observer source was not found.");
+  if (input.includes(modernBefore)) return input.replace(modernBefore, modernAfter);
+  throw new Error("Expected captain text rewrite source was not found.");
 });
 
 patchFile("src/components/captain/CaptainOnboardingReminderBridge.tsx", (input) => {
   let source = input;
-
   source = replaceRequired(
     source,
     [
@@ -222,33 +164,22 @@ patchFile("src/components/captain/CaptainOnboardingReminderBridge.tsx", (input) 
     ].join("\n"),
     "captain onboarding observer scope",
   );
-
   return source;
 });
 
-const previewSource = fs.readFileSync(
-  path.join(root, "src/components/captain/AdminPlayerPreviewLinks.tsx"),
-  "utf8",
-);
-const headerSource = fs.readFileSync(
-  path.join(root, "src/components/captain/CaptainViewModeHeader.tsx"),
-  "utf8",
-);
-const reminderSource = fs.readFileSync(
-  path.join(root, "src/components/captain/CaptainOnboardingReminderBridge.tsx"),
-  "utf8",
-);
+const previewSource = fs.readFileSync(path.join(root, "src/components/captain/AdminPlayerPreviewLinks.tsx"), "utf8");
+const headerSource = fs.readFileSync(path.join(root, "src/components/captain/CaptainViewModeHeader.tsx"), "utf8");
+const reminderSource = fs.readFileSync(path.join(root, "src/components/captain/CaptainOnboardingReminderBridge.tsx"), "utf8");
 
 if (
   !previewSource.includes("if (!teamId) return;") ||
   headerSource.includes("characterData: true") ||
-  !headerSource.includes("const scheduleRewrite = () =>") ||
+  headerSource.includes("new MutationObserver(rewriteCaptainFacingText)") ||
+  !headerSource.includes("const delays = [0, 100, 300, 700, 1400];") ||
   reminderSource.includes("attributes: true") ||
   !reminderSource.includes('const nav = document.querySelector(".captain-team-nav")')
 ) {
   throw new Error("Captain dashboard DOM observer performance guard did not apply correctly.");
 }
 
-console.log(
-  "Captain dashboard DOM observers are route-scoped, debounced and limited to the elements they actually manage.",
-);
+console.log("Captain dashboard DOM observers are route-scoped and captain preview text rewrites are bounded.");
