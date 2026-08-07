@@ -82,10 +82,35 @@ async function loadManifest() {
   return parsed.replacements;
 }
 
+function validateSourcePathList({ id, field, value, allowEmpty = true }) {
+  const errors = [];
+  const paths = [];
+
+  if (value === undefined) return { errors, paths };
+  if (!Array.isArray(value)) {
+    return { errors: [`${id}: ${field} must be an array.`], paths };
+  }
+  if (!allowEmpty && value.length === 0) {
+    return { errors: [`${id}: ${field} must not be empty.`], paths };
+  }
+
+  for (const rawPath of value) {
+    const repoPath = normaliseRepoPath(rawPath);
+    if (!isSourceFile(repoPath)) {
+      errors.push(`${id}: invalid ${field} source path ${repoPath}.`);
+      continue;
+    }
+    paths.push(repoPath);
+  }
+
+  return { errors, paths };
+}
+
 function validateManifestShape(replacements) {
   const errors = [];
   const ids = new Set();
   const removedPaths = new Set();
+  const retainedPaths = new Set();
 
   for (const replacement of replacements) {
     const id = String(replacement?.id ?? "").trim();
@@ -106,23 +131,36 @@ function validateManifestShape(replacements) {
       errors.push(`${id}: responsibilities must be a non-empty string array.`);
     }
 
-    if (
-      !Array.isArray(replacement.removedPaths) ||
-      replacement.removedPaths.length === 0
-    ) {
-      errors.push(`${id}: removedPaths must contain at least one retired source path.`);
-    } else {
-      for (const rawPath of replacement.removedPaths) {
-        const repoPath = normaliseRepoPath(rawPath);
-        if (!isSourceFile(repoPath)) {
-          errors.push(`${id}: invalid removed source path ${repoPath}.`);
-          continue;
-        }
-        if (removedPaths.has(repoPath)) {
-          errors.push(`Removed bridge path is registered more than once: ${repoPath}`);
-        }
-        removedPaths.add(repoPath);
+    const removed = validateSourcePathList({
+      id,
+      field: "removedPaths",
+      value: replacement.removedPaths,
+    });
+    const retained = validateSourcePathList({
+      id,
+      field: "retainedPaths",
+      value: replacement.retainedPaths,
+    });
+    errors.push(...removed.errors, ...retained.errors);
+
+    if (removed.paths.length === 0 && retained.paths.length === 0) {
+      errors.push(
+        `${id}: register at least one removedPaths or retainedPaths legacy source path.`,
+      );
+    }
+
+    for (const repoPath of removed.paths) {
+      if (removedPaths.has(repoPath) || retainedPaths.has(repoPath)) {
+        errors.push(`Legacy bridge path is registered more than once: ${repoPath}`);
       }
+      removedPaths.add(repoPath);
+    }
+
+    for (const repoPath of retained.paths) {
+      if (retainedPaths.has(repoPath) || removedPaths.has(repoPath)) {
+        errors.push(`Legacy bridge path is registered more than once: ${repoPath}`);
+      }
+      retainedPaths.add(repoPath);
     }
 
     if (!Array.isArray(replacement.checks) || replacement.checks.length === 0) {
@@ -152,7 +190,7 @@ function validateManifestShape(replacements) {
     }
   }
 
-  return { errors, removedPaths };
+  return { errors, removedPaths, retainedPaths };
 }
 
 async function verifyContracts(replacements) {
@@ -161,11 +199,20 @@ async function verifyContracts(replacements) {
   for (const replacement of replacements) {
     const id = replacement.id;
 
-    for (const rawPath of replacement.removedPaths) {
+    for (const rawPath of replacement.removedPaths ?? []) {
       const repoPath = normaliseRepoPath(rawPath);
       if (await fileExists(repoPath)) {
         errors.push(
-          `${id}: retired bridge still exists at ${repoPath}. Delete it only after its native replacement is in place.`,
+          `${id}: removed bridge unexpectedly exists at ${repoPath}. Restore the native-only state or change the contract deliberately.`,
+        );
+      }
+    }
+
+    for (const rawPath of replacement.retainedPaths ?? []) {
+      const repoPath = normaliseRepoPath(rawPath);
+      if (!(await fileExists(repoPath))) {
+        errors.push(
+          `${id}: retired compatibility shell is missing at ${repoPath}. Remove its build/runtime dependency and move it to removedPaths before deleting it.`,
         );
       }
     }
@@ -173,7 +220,7 @@ async function verifyContracts(replacements) {
     for (const check of replacement.checks) {
       const repoPath = normaliseRepoPath(check.path);
       if (!(await fileExists(repoPath))) {
-        errors.push(`${id}: native replacement file is missing: ${repoPath}.`);
+        errors.push(`${id}: replacement check file is missing: ${repoPath}.`);
         continue;
       }
 
@@ -220,7 +267,7 @@ function getDeletedSourceFiles(baseRef) {
         .map(normaliseRepoPath)
         .filter(isSourceFile);
     } catch {
-      // Try the parent fallback below.
+      // Try the parent commit fallback below.
     }
   }
 
@@ -261,7 +308,7 @@ function verifyDeletedFilesAreRegistered(baseRef, registeredRemovedPaths) {
     if (registeredRemovedPaths.has(repoPath)) continue;
 
     errors.push(
-      `Deleted DOM/bridge source is not covered by a replacement contract: ${repoPath}. Record its old responsibilities and native replacement checks in config/dom-bridge-replacements.json before deleting it.`,
+      `Deleted DOM/bridge source is not covered by a removedPaths replacement contract: ${repoPath}. Record every old responsibility and native replacement check before deleting it.`,
     );
   }
 
@@ -270,7 +317,10 @@ function verifyDeletedFilesAreRegistered(baseRef, registeredRemovedPaths) {
 
 const args = parseArguments(process.argv.slice(2));
 const replacements = await loadManifest();
-const { errors: shapeErrors, removedPaths } = validateManifestShape(replacements);
+const {
+  errors: shapeErrors,
+  removedPaths,
+} = validateManifestShape(replacements);
 const contractErrors = shapeErrors.length ? [] : await verifyContracts(replacements);
 const deletionErrors = shapeErrors.length
   ? []
