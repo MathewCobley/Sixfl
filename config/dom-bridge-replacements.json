@@ -1,0 +1,237 @@
+{
+  "replacements": [
+    {
+      "id": "admin-player-pool-navigation",
+      "removedPaths": [
+        "src/components/admin/player-pool/AdminPlayerPoolNavBridge.tsx"
+      ],
+      "responsibilities": [
+        "Expose Player Pool in the admin navigation.",
+        "Keep the navigation label and destination available without cloning or mutating another sidebar link."
+      ],
+      "checks": [
+        {
+          "path": "src/components/admin/AdminSidebar.tsx",
+          "contains": [
+            "name: \"Player pool\"",
+            "href: \"/admin/player-pool\"",
+            "description: \"Available players\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": "captain-player-pool-navigation",
+      "removedPaths": [
+        "src/components/captain/CaptainPlayerPoolNavBridge.tsx"
+      ],
+      "responsibilities": [
+        "Expose PlayerPool in the captain team navigation.",
+        "Render the SIXFL TV navigation logo directly rather than replacing link contents after render."
+      ],
+      "checks": [
+        {
+          "path": "src/app/captain/team/[teamid]/layout.tsx",
+          "contains": [
+            "href: `/captain/team/${teamid}/player-pool`",
+            "label: \"PlayerPool\"",
+            "logoSrc: \"/Sixfl-tv.png\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": "captain-fixture-deduplication",
+      "removedPaths": [
+        "src/components/captain/CaptainFixturesDeduplicateBridge.tsx"
+      ],
+      "responsibilities": [
+        "Do not repeat the selected fixture in the other-upcoming-fixtures list.",
+        "Render the Other upcoming fixtures heading and empty state directly."
+      ],
+      "checks": [
+        {
+          "path": "src/app/captain/team/[teamid]/fixtures/page.tsx",
+          "contains": [
+            "upcomingFixtures.filter((fixture) => fixture.id !== selectedFixture.id)",
+            "Other upcoming fixtures",
+            "No other published upcoming fixtures yet."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "player-prospect-native-actions",
+      "removedPaths": [
+        "src/components/admin/player-prospects/ProspectChaseBridge.tsx",
+        "src/components/admin/player-prospects/PlayerProspectsPlayerPoolBridge.tsx",
+        "src/components/admin/player-prospects/PlayerProspectsNotInterestedBridge.tsx"
+      ],
+      "responsibilities": [
+        "Chase and final-chase outstanding squad invites.",
+        "Change or clear a prospect team assignment.",
+        "Send or resend PlayerPool forms.",
+        "Move prospects to Not interested or Duplicated without page scraping."
+      ],
+      "checks": [
+        {
+          "path": "src/app/(admin)/admin/player-prospects/page.tsx",
+          "contains": [
+            "ProspectNativeActions"
+          ]
+        },
+        {
+          "path": "src/components/admin/player-prospects/ProspectNativeActions.tsx",
+          "contains": [
+            "Chase invite",
+            "Final chase",
+            "Change team",
+            "Send to PlayerPool",
+            "Move to not interested",
+            "Remove duplicate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "team-week-unavailability",
+      "removedPaths": [
+        "src/components/TeamWeekUnavailabilityBridge.tsx"
+      ],
+      "responsibilities": [
+        "Expose Weeks unavailable in captain navigation.",
+        "Prompt captains on the overview to report known future weeks off before fixtures are published.",
+        "Expose advance unavailability in admin fixture planning and before fixture generation."
+      ],
+      "checks": [
+        {
+          "path": "src/app/captain/team/[teamid]/layout.tsx",
+          "contains": [
+            "href: `/captain/team/${teamid}/weeks-unavailable`",
+            "label: \"Weeks unavailable\""
+          ]
+        },
+        {
+          "path": "src/components/captain/CaptainSupportPanel.tsx",
+          "contains": [
+            "Advance fixture planning",
+            "Know a week when your team cannot play?",
+            "href={`/captain/team/${teamId}/weeks-unavailable`}"
+          ]
+        },
+        {
+          "path": "src/app/(admin)/admin/team-unavailability/layout.tsx",
+          "contains": [
+            "AdminFixturePlanningNav"
+          ]
+        },
+        {
+          "path": "src/app/(admin)/admin/fixtures/generate/layout.tsx",
+          "contains": [
+            "AdminFixtureUnavailabilitySummary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "availability-history-nudges",
+      "removedPaths": [
+        "src/components/captain/CaptainAvailabilityHistoryNudgeBridge.tsx"
+      ],
+      "responsibilities": [
+        "Show players who repeatedly ignored availability requests.",
+        "Allow captains to send and audit availability nudges without decorating table rows after render."
+      ],
+      "checks": [
+        {
+          "path": "src/app/captain/team/[teamid]/availability/history/layout.tsx",
+          "contains": [
+            "AvailabilityHistoryNudgePanel",
+            "CAPTAIN_AVAILABILITY_HISTORY_NUDGE",
+            "ignoredCount"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "harrogate-signup-page",
+      "removedPaths": [
+        "src/components/layout/HarrogateSignupStyleBridge.tsx"
+      ],
+      "responsibilities": [
+        "Provide the dedicated Harrogate team/player/referee registration presentation without restyling the generic page after render."
+      ],
+      "checks": [
+        {
+          "path": "src/app/(public)/register-interest/harrogate/page.tsx",
+          "contains": [
+            "Join the Harrogate Tuesday League",
+            "Register your Harrogate team",
+            "harrogate-west-tuesday-rossett"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "captain-player-pool-logo",
+      "removedPaths": [
+        "src/components/captain/CaptainPlayerPoolPageLogoBridge.tsx"
+      ],
+      "responsibilities": [
+        "Render the SIXFL PlayerPool logo at the top of the captain PlayerPool page."
+      ],
+      "checks": [
+        {
+          "path": "src/app/captain/team/[teamid]/player-pool/page.tsx",
+          "contains": [
+            "PLAYER_POOL_LOGO_URL",
+            "alt=\"SIXFL PlayerPool\"",
+            "Available players for {team.name}"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "night-board-operations",
+      "removedPaths": [
+        "src/components/admin/night-board/NightBoardMatchFeeSyncBridge.tsx"
+      ],
+      "responsibilities": [
+        "Edit Night Board fixture operational fields through owned React controls.",
+        "Show latest-kickoff and repeated-team warnings live.",
+        "Preserve the operational update API that synchronises linked payment and referee state."
+      ],
+      "checks": [
+        {
+          "path": "src/components/admin/night-board/NightBoardOperations.tsx",
+          "contains": [
+            "NightBoardFixtureEditor",
+            "buildLatestKickoffWarning",
+            "buildRepeatedTeamWarnings",
+            "/api/admin/night-board/update-match"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "captain-outstanding-balance",
+      "removedPaths": [
+        "src/components/captain/CaptainOutstandingBalanceBridge.tsx"
+      ],
+      "responsibilities": [
+        "Show the captain's actual outstanding team balance and open-charge count from the payment ledger without rewriting a rendered card."
+      ],
+      "checks": [
+        {
+          "path": "src/app/captain/team/[teamid]/page.tsx",
+          "contains": [
+            "getTeamPaymentLedger(teamid)",
+            "Outstanding balance",
+            "formatMoney(ledger.outstandingPence)",
+            "ledger.openChargeCount"
+          ]
+        }
+      ]
+    }
+  ]
+}
