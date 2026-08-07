@@ -7,6 +7,7 @@ import "./mobile.css";
 import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import { Suspense, type ReactNode } from "react";
+import BridgeErrorBoundary from "@/components/BridgeErrorBoundary";
 import RouteScopedBridges from "@/components/RouteScopedBridges";
 import Providers from "./providers";
 
@@ -99,9 +100,11 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <script dangerouslySetInnerHTML={{ __html: safeClosestPatch }} />
         <Providers>
-          <Suspense fallback={null}>
-            <RouteScopedBridges />
-          </Suspense>
+          <BridgeErrorBoundary>
+            <Suspense fallback={null}>
+              <RouteScopedBridges />
+            </Suspense>
+          </BridgeErrorBoundary>
           {children}
         </Providers>
       </body>
