@@ -215,11 +215,13 @@
     },
     {
       "id": "captain-outstanding-balance",
-      "removedPaths": [
+      "removedPaths": [],
+      "retainedPaths": [
         "src/components/captain/CaptainOutstandingBalanceBridge.tsx"
       ],
       "responsibilities": [
-        "Show the captain's actual outstanding team balance and open-charge count from the payment ledger without rewriting a rendered card."
+        "Show the captain's actual outstanding team balance and open-charge count from the payment ledger without rewriting a rendered card.",
+        "Keep the historical bridge path as an inert compatibility shell until its remaining build dependency is removed."
       ],
       "checks": [
         {
@@ -229,6 +231,13 @@
             "Outstanding balance",
             "formatMoney(ledger.outstandingPence)",
             "ledger.openChargeCount"
+          ]
+        },
+        {
+          "path": "src/components/captain/CaptainOutstandingBalanceBridge.tsx",
+          "contains": [
+            "Retired compatibility shell",
+            "return null;"
           ]
         }
       ]
