@@ -32,19 +32,20 @@ Route-scoping a bridge is **containment, not completion**. A bridge remains unfi
 
 Deleting a bridge is no longer enough to mark the work complete.
 
-Completed replacements are recorded in `config/dom-bridge-replacements.json`. Every contract must record:
+Completed or functionally retired replacements are recorded in `config/dom-bridge-replacements.json`. Every contract must record:
 
-1. The retired bridge/source path or paths.
+1. The legacy source path or paths, either as `removedPaths` or `retainedPaths` when a harmless compatibility shell still has a build/runtime dependency.
 2. The user-visible or operational responsibilities the old code provided.
 3. The native source file or files that now own those responsibilities.
 4. Stable source markers proving those native behaviours are still present.
 
 `scripts/audit-dom-replacements.mjs` verifies every recorded contract. It fails when:
 
-- a supposedly retired bridge still exists;
-- a native replacement file disappears;
+- a bridge registered as removed reappears;
+- a compatibility shell registered as retained disappears before its dependency has been removed;
+- a native replacement/check file disappears;
 - a required replacement marker disappears; or
-- a DOM/Bridge source file is deleted in a new change without being registered in a replacement contract.
+- a DOM/Bridge source file is deleted in a new change without being moved into a `removedPaths` replacement contract.
 
 This is specifically intended to prevent regressions where a bridge is removed but one of its less-obvious responsibilities is forgotten.
 
@@ -70,7 +71,7 @@ The replacement manifest now protects the key completed migrations reviewed in A
 - Dedicated server-rendered Harrogate signup presentation.
 - Captain PlayerPool page logo rendered directly in JSX.
 - Night Board operational fixture editing and live warning calculations handled by `NightBoardOperations`.
-- Captain outstanding balance rendered from the payment ledger; the retired no-op balance bridge has been deleted.
+- Captain outstanding balance rendered from the payment ledger. The historical balance bridge is an inert retained compatibility shell until the build dependency on its path is removed.
 
 Other completed work already includes:
 
@@ -130,10 +131,11 @@ For every remaining bridge:
 1. Read the whole bridge and write down **every responsibility**, including navigation, labels, empty states, warnings, styling, status text, redirects, side effects and API calls.
 2. Identify the page/shared component/action that should own each responsibility.
 3. Implement the replacement with server data and JSX; use an owned client component only where interactivity is required.
-4. Add or update the entry in `config/dom-bridge-replacements.json` **before deleting the bridge**.
+4. Add or update the entry in `config/dom-bridge-replacements.json` before removing any behaviour.
 5. Verify desktop, mobile, captain/admin preview, empty states and relevant error/success states.
-6. Remove the old import/mount and delete the retired bridge only after all responsibilities are accounted for.
-7. Run the DOM audit, replacement-contract audit, type-check/build and relevant workflow checks.
-8. Do not describe route-scoping, disabling, returning `null`, or merely deleting a file as a completed replacement.
+6. Remove the old import/mount. If the historical source path is still required by build/runtime plumbing, reduce it to an inert shell and register it under `retainedPaths`; move it to `removedPaths` only when that dependency is gone.
+7. Delete the retired bridge only after all responsibilities are accounted for and the build no longer expects its path.
+8. Run the DOM audit, replacement-contract audit, type-check/build and relevant workflow checks.
+9. Do not describe route-scoping, disabling, returning `null`, or merely deleting a file as a completed replacement.
 
 Do not bulk-delete bridges. Several still provide operational behaviour and must be replaced one workflow at a time.
