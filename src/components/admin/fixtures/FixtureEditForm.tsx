@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import AdminComboboxField from "@/components/admin/forms/AdminComboboxField";
 import FormListboxField from "@/components/ui/FormListboxField";
@@ -33,6 +34,21 @@ const inputClass =
   "h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/20";
 const labelClass =
   "mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/45";
+
+function SaveFixtureButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      aria-disabled={pending}
+      className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-wait disabled:opacity-60"
+    >
+      {pending ? "Saving fixture changes…" : "Save fixture changes"}
+    </button>
+  );
+}
 
 export default function FixtureEditForm({
   fixture,
@@ -221,12 +237,7 @@ export default function FixtureEditForm({
       </div>
 
       <div className="flex flex-wrap gap-3 border-t border-white/10 pt-6">
-        <button
-          type="submit"
-          className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"
-        >
-          Save fixture changes
-        </button>
+        <SaveFixtureButton />
         <Link
           href={returnTo}
           className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-6 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
