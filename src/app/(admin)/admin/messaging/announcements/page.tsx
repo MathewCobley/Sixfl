@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import {
   getAnnouncementAlreadyQueuedEmails,
+  getAnnouncementSourceId,
   getAnnouncementTemplateCompatibility,
   getSystemAnnouncementAudience,
 } from "@/lib/communications/system-announcements";
@@ -76,9 +77,19 @@ export default async function AnnouncementsPage({
         template.id === requestedTemplate || template.key === requestedTemplate,
     ) ?? templates[0] ?? null;
 
+  const announcementSourceId = selectedTemplate
+    ? getAnnouncementSourceId({
+        id: selectedTemplate.id,
+        subject: selectedTemplate.subject,
+        body: selectedTemplate.body,
+        ctaLabel: selectedTemplate.ctaLabel,
+        ctaUrlKey: selectedTemplate.ctaUrlKey,
+      })
+    : null;
+
   const audience = await getSystemAnnouncementAudience();
-  const alreadyQueuedEmails = selectedTemplate
-    ? await getAnnouncementAlreadyQueuedEmails(selectedTemplate.id)
+  const alreadyQueuedEmails = announcementSourceId
+    ? await getAnnouncementAlreadyQueuedEmails(announcementSourceId)
     : new Set<string>();
   const compatibility = selectedTemplate
     ? getAnnouncementTemplateCompatibility({
@@ -106,7 +117,7 @@ export default async function AnnouncementsPage({
             Announcements
           </h1>
           <p className="mt-3 max-w-4xl text-sm leading-6 text-white/65 sm:text-base">
-            Send one existing SIXFL email template to every unique email address saved in the system. The audience is deduplicated by normalised email address, so the same address receives this announcement only once even if it appears as a user, player, team contact, lead or notification contact.
+            Send one existing SIXFL email template to every unique email address saved in the system. The audience is deduplicated by normalised email address, so the same address receives each saved announcement only once even if it appears as a user, player, team contact, lead or notification contact.
           </p>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -121,7 +132,7 @@ export default async function AnnouncementsPage({
                 Already queued / sent
               </div>
               <div className="mt-2 text-3xl font-black text-white">{alreadyCount}</div>
-              <div className="mt-1 text-xs text-white/40">For the selected template</div>
+              <div className="mt-1 text-xs text-white/40">For this saved announcement revision</div>
             </div>
             <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100/60">
@@ -250,7 +261,7 @@ export default async function AnnouncementsPage({
             </p>
             <h2 className="mt-2 text-2xl font-black text-white">Send this announcement</h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-amber-50/70">
-              This uses the normal SIXFL notification queue, branded email renderer, preferences, suppression handling and delivery processing. Re-running the same announcement only considers email addresses that have not already been queued or sent for this template.
+              This uses the normal SIXFL notification queue, branded email renderer, preferences, suppression handling and delivery processing. Re-running this unchanged announcement cannot send a second copy to an address that was already queued or sent. If you later edit the template into a genuinely new announcement, that new saved revision can be sent once in its own right.
             </p>
 
             <form action={sendSystemAnnouncementAction} className="mt-5 space-y-4">
@@ -264,7 +275,7 @@ export default async function AnnouncementsPage({
                   className="mt-1 h-4 w-4 rounded border-white/20"
                 />
                 <span>
-                  I have reviewed the selected template and understand that this will queue it to every remaining unique saved email address.
+                  I have reviewed the selected template and understand that this saved announcement revision will be queued to every remaining unique saved email address.
                 </span>
               </label>
 
