@@ -50,7 +50,8 @@ function statusCopy(status: "CLEAR" | "DRAFT_CONFLICT" | "PUBLISHED_CONFLICT") {
 export default async function AdminTeamUnavailabilityPage() {
   await requireAdmin();
 
-  const from = getCurrentWeekStart();
+  // This planning list starts next Monday so completed/current weeks disappear.
+  const from = addWeeks(getCurrentWeekStart(), 1);
   const to = addWeeks(from, 20);
   const notices = await getTeamWeekUnavailabilityOverview({ from, to });
 
