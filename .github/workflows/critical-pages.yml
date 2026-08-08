@@ -1,0 +1,79 @@
+name: Critical pages
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  homepage:
+    name: Homepage safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Guard critical homepage source
+        run: node scripts/check-critical-pages.mjs
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Install browser test dependency
+        run: npm install --no-save --package-lock=false playwright@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Start SIXFL without build-time patch scripts
+        shell: bash
+        env:
+          DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/invalid?connect_timeout=1
+          NEXTAUTH_SECRET: critical-pages-test-secret
+          NEXTAUTH_URL: http://127.0.0.1:3000
+        run: |
+          npx next dev --hostname 127.0.0.1 --port 3000 > critical-pages-next.log 2>&1 &
+          echo $! > critical-pages-next.pid
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "SIXFL did not become ready in time."
+          cat critical-pages-next.log
+          exit 1
+
+      - name: Exercise homepage in Chromium
+        env:
+          CRITICAL_PAGES_BASE_URL: http://127.0.0.1:3000
+        run: node tests/critical-pages/homepage.mjs
+
+      - name: Upload homepage screenshots and server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: critical-homepage-${{ github.sha }}
+          path: |
+            artifacts/critical-pages/
+            critical-pages-next.log
+          if-no-files-found: warn
+          retention-days: 30
