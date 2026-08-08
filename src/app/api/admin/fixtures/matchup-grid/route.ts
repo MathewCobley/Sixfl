@@ -13,9 +13,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 type MatchupCell = {
   opponentId: string;
   opponentName: string;
-  homeCount: number;
-  awayCount: number;
-  totalCount: number;
+  meetingCount: number;
   latestKickoffAt: string | null;
 };
 
@@ -40,13 +38,8 @@ const COUNTABLE_FIXTURE_STATUSES = [
 ] as const;
 
 function getCellLabel(cell: MatchupCell) {
-  if (cell.totalCount === 0) return "—";
-
-  const parts: string[] = [];
-  if (cell.homeCount > 0) parts.push(`H${cell.homeCount}`);
-  if (cell.awayCount > 0) parts.push(`A${cell.awayCount}`);
-
-  return parts.join(" · ");
+  if (cell.meetingCount === 0) return "—";
+  return `${cell.meetingCount} fixture${cell.meetingCount === 1 ? "" : "s"}`;
 }
 
 function parseVisibility(value: string | null): FixtureVisibilityFilter {
@@ -162,8 +155,8 @@ export async function GET(request: Request) {
       fixtures: [],
       summary: {
         scheduledPairs: 0,
-        oneWayPairs: 0,
-        completedPairs: 0,
+        singleMeetingPairs: 0,
+        twoMeetingPairs: 0,
         missingPairs: 0,
       },
     });
@@ -235,9 +228,7 @@ export async function GET(request: Request) {
     const cell: MatchupCell = {
       opponentId,
       opponentName,
-      homeCount: 0,
-      awayCount: 0,
-      totalCount: 0,
+      meetingCount: 0,
       latestKickoffAt: null,
     };
 
@@ -250,15 +241,15 @@ export async function GET(request: Request) {
     if (!fixture.homeTeamId || !fixture.awayTeamId) continue;
     if (!teamIds.has(fixture.homeTeamId) || !teamIds.has(fixture.awayTeamId)) continue;
 
-    const homeCell = getCell(fixture.homeTeamId, fixture.awayTeamId);
-    homeCell.homeCount += 1;
-    homeCell.totalCount += 1;
-    homeCell.latestKickoffAt = fixture.kickoffAt.toISOString();
+    // homeTeamId/awayTeamId are storage slots only. Each fixture increments the
+    // meeting count for both teams equally; direction has no sporting meaning.
+    const firstCell = getCell(fixture.homeTeamId, fixture.awayTeamId);
+    firstCell.meetingCount += 1;
+    firstCell.latestKickoffAt = fixture.kickoffAt.toISOString();
 
-    const awayCell = getCell(fixture.awayTeamId, fixture.homeTeamId);
-    awayCell.awayCount += 1;
-    awayCell.totalCount += 1;
-    awayCell.latestKickoffAt = fixture.kickoffAt.toISOString();
+    const secondCell = getCell(fixture.awayTeamId, fixture.homeTeamId);
+    secondCell.meetingCount += 1;
+    secondCell.latestKickoffAt = fixture.kickoffAt.toISOString();
   }
 
   const cells = teams.map((team) => ({
@@ -269,9 +260,7 @@ export async function GET(request: Request) {
         return {
           opponentId: opponent.id,
           opponentName: opponent.name,
-          homeCount: 0,
-          awayCount: 0,
-          totalCount: 0,
+          meetingCount: 0,
           latestKickoffAt: null,
           label: "—",
           isSelf: true,
@@ -289,24 +278,20 @@ export async function GET(request: Request) {
   }));
 
   let missingPairs = 0;
-  let oneWayPairs = 0;
-  let completedPairs = 0;
+  let singleMeetingPairs = 0;
+  let twoMeetingPairs = 0;
   let scheduledPairs = 0;
 
   for (let row = 0; row < teams.length; row += 1) {
     for (let col = row + 1; col < teams.length; col += 1) {
       const a = teams[row];
       const b = teams[col];
-      const aCell = getCell(a.id, b.id);
-      const bCell = getCell(b.id, a.id);
-      const total = aCell.totalCount + bCell.totalCount;
-      const hasBothDirections =
-        aCell.homeCount > 0 && aCell.awayCount > 0 && bCell.homeCount > 0 && bCell.awayCount > 0;
+      const meetingCount = getCell(a.id, b.id).meetingCount;
 
-      if (total === 0) missingPairs += 1;
-      else if (hasBothDirections) completedPairs += 1;
-      else oneWayPairs += 1;
-      if (total > 0) scheduledPairs += 1;
+      if (meetingCount === 0) missingPairs += 1;
+      else if (meetingCount === 1) singleMeetingPairs += 1;
+      else twoMeetingPairs += 1;
+      if (meetingCount > 0) scheduledPairs += 1;
     }
   }
 
@@ -396,8 +381,8 @@ export async function GET(request: Request) {
     }),
     summary: {
       scheduledPairs,
-      oneWayPairs,
-      completedPairs,
+      singleMeetingPairs,
+      twoMeetingPairs,
       missingPairs,
     },
   });
