@@ -65,6 +65,7 @@ export async function getLeagueDivisions(leagueId: string) {
         ON t."id" = lst."teamId"
        AND COALESCE(t."isFixturePlaceholder", false) = false
       WHERE d."leagueId" = ${leagueId}
+        AND d."isActive" = true
       GROUP BY d."id", d."leagueId", d."name", d."slug", d."sortOrder", d."isActive"
       ORDER BY d."sortOrder" ASC, d."name" ASC
     `);
@@ -97,6 +98,7 @@ export async function getAllLeagueDivisionOptions() {
       LEFT JOIN "Team" t
         ON t."id" = lst."teamId"
        AND COALESCE(t."isFixturePlaceholder", false) = false
+      WHERE d."isActive" = true
       GROUP BY d."id", d."leagueId", d."name", d."slug", d."sortOrder", d."isActive", l."name", l."season"
       ORDER BY l."name" ASC, l."season" ASC, d."sortOrder" ASC, d."name" ASC
     `);

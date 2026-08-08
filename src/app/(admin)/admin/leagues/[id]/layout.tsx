@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import AdminLeagueSeasonTeamsPanel from "@/components/admin/leagues/AdminLeagueSeasonTeamsPanel";
+import MergeLeagueDivisionsButton from "@/components/admin/leagues/MergeLeagueDivisionsButton";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -40,6 +42,8 @@ export default async function AdminLeagueLayout({
           Advert video
         </Link>
       </div>
+      <MergeLeagueDivisionsButton />
+      <AdminLeagueSeasonTeamsPanel />
       {children}
     </div>
   );
