@@ -186,7 +186,7 @@ export default function TeamBadgeReviewPanel({
                 src={logoUrl ?? ""}
                 alt={`${teamName} team badge`}
                 onError={() => setImageFailed(true)}
-                className="max-h-full max-w-full object-contain object-center"
+                className="max-h-[88%] max-w-[88%] object-contain object-center"
               />
             ) : (
               <div className="text-center">
