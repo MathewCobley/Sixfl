@@ -21,6 +21,44 @@ function leagueIdFromPathname(pathname: string) {
   return pathname.match(/^\/admin\/leagues\/([^/]+)\/?$/)?.[1] ?? null;
 }
 
+function MergeStatus({
+  message,
+  error,
+}: {
+  message: string | null;
+  error: string | null;
+}) {
+  if (!message && !error) return null;
+
+  return (
+    <section
+      className={`mx-auto w-full max-w-7xl rounded-3xl p-5 sm:p-6 ${
+        error
+          ? "border border-red-400/25 bg-red-500/[0.08]"
+          : "border border-emerald-400/25 bg-emerald-500/[0.08]"
+      }`}
+    >
+      <p
+        className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${
+          error ? "text-red-200/75" : "text-emerald-200/75"
+        }`}
+      >
+        {error ? "League structure update failed" : "League structure updated"}
+      </p>
+      <h2 className="mt-2 text-xl font-semibold text-white">
+        {error ? "The divisions were not changed" : "Divisions merged successfully"}
+      </h2>
+      <p
+        className={`mt-2 text-sm leading-6 ${
+          error ? "text-red-100" : "text-emerald-100"
+        }`}
+      >
+        {error || message}
+      </p>
+    </section>
+  );
+}
+
 export default function MergeLeagueDivisionsButton() {
   const pathname = usePathname();
   const router = useRouter();
@@ -60,7 +98,19 @@ export default function MergeLeagueDivisionsButton() {
     };
   }, [leagueId]);
 
-  if (!leagueId || checking || divisionNames.length === 0) return null;
+  if (!leagueId) return null;
+
+  // Once a successful merge has removed the active divisions, keep the result
+  // visible instead of unmounting the entire control and making the action look
+  // as though nothing happened.
+  if (divisionNames.length === 0) {
+    if (message || error) {
+      return <MergeStatus message={message} error={error} />;
+    }
+    return null;
+  }
+
+  if (checking && !message && !error) return null;
 
   async function mergeDivisions() {
     if (!leagueId || merging) return;
@@ -89,12 +139,12 @@ export default function MergeLeagueDivisionsButton() {
         throw new Error(payload?.error || "The divisions could not be merged.");
       }
 
+      const successMessage = payload.alreadyMerged
+        ? payload.message || "This league already uses one table."
+        : `${payload.message || "The divisions were merged."} ${payload.activeTeams ?? 0} active teams remain in the season; ${payload.savedResults ?? 0} saved results were preserved; ${payload.futureFixturesMerged ?? 0} unplayed fixture${payload.futureFixturesMerged === 1 ? " was" : "s were"} moved into the combined pool.`;
+
+      setMessage(successMessage);
       setDivisionNames([]);
-      setMessage(
-        payload.alreadyMerged
-          ? payload.message || "This league already uses one table."
-          : `${payload.message || "The divisions were merged."} ${payload.activeTeams ?? 0} active teams remain in the season; ${payload.savedResults ?? 0} saved results were preserved; ${payload.futureFixturesMerged ?? 0} unplayed fixture${payload.futureFixturesMerged === 1 ? " was" : "s were"} moved into the combined pool.`,
-      );
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The divisions could not be merged.");
