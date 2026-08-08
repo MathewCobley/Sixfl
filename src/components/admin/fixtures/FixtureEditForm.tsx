@@ -175,6 +175,24 @@ export default function FixtureEditForm({
           />
         </div>
 
+        <div className="md:col-span-2">
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-500/[0.07] px-4 py-4 text-sm text-amber-50/90">
+            <input
+              type="checkbox"
+              name="overrideLatestKickoff"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-amber-300 focus:ring-amber-300/30"
+            />
+            <span>
+              <span className="block font-semibold text-amber-100">
+                Override latest kick-off preference for this fixture
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-amber-50/65">
+                Use this only when you deliberately want this match to kick off later than a team’s saved preference. The team’s normal latest kick-off setting is not changed.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <AdminComboboxField
           name="venueId"
           label="Venue"
