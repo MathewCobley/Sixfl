@@ -73,3 +73,5 @@ patch(
   },
   "admin SIXFL TV navigation",
 );
+
+require("./fix-community-goal-of-week-payload-narrowing.cjs");
