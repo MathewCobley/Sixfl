@@ -94,7 +94,12 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
         AND lst."isActive" = true
         AND COALESCE(t."isFixturePlaceholder", false) = false
         AND LOWER(TRIM(t."name")) <> 'tbc'
-        AND (t."leagueId" IS NULL OR t."leagueId" <> ${leagueId})
+        AND lst."divisionId" IS NOT NULL
+        AND (
+          d."id" IS NULL
+          OR d."leagueId" <> ${leagueId}
+          OR d."isActive" = false
+        )
       ORDER BY t."name" ASC
     `),
   ]);
