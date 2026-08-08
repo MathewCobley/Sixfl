@@ -40,12 +40,21 @@ function ChannelFallback({ channelUrl }: { channelUrl: string }) {
       className="group flex min-h-[330px] w-full flex-col items-center justify-center rounded-3xl border border-white/10 bg-black/70 p-6 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/80 sm:min-h-[390px] sm:p-8"
       aria-label="Open the SIXFL TV YouTube channel"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/logos/you-tube.png"
-        alt="YouTube"
-        className="h-auto w-full max-w-[340px] object-contain sm:max-w-[400px]"
-      />
+      <div className="flex w-full max-w-[360px] items-center justify-center gap-4 rounded-3xl border border-red-400/20 bg-red-500/[0.08] px-6 py-7 shadow-[0_18px_55px_rgba(239,68,68,0.12)]">
+        <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-2xl bg-red-600 shadow-[0_12px_34px_rgba(220,38,38,0.3)]">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="h-9 w-9 fill-white"
+          >
+            <path d="M8 5.5v13l10-6.5-10-6.5Z" />
+          </svg>
+        </div>
+        <div className="text-left">
+          <div className="text-2xl font-black tracking-tight text-white sm:text-3xl">YouTube</div>
+          <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">SIXFL TV</div>
+        </div>
+      </div>
       <div className="mt-8 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/55 transition group-hover:text-white/75">
         <span>Watch on YouTube</span>
         <span aria-hidden="true">↗</span>

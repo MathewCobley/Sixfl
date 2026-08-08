@@ -2,6 +2,12 @@
 // File: src/components/home/SixflTvHomepageSection.tsx
 // ========================================
 
+import Image from "next/image";
+
+import GoalOfWeekHomepageFeature from "@/components/home/GoalOfWeekHomepageFeature";
+import HomepageSixflTvLatestLinks from "@/components/home/HomepageSixflTvLatestLinks";
+import sixflTvLogo from "../../../public/Sixfl-tv.png";
+
 const SIXFL_TV_CHANNEL_URL =
   "https://youtube.com/@sixfl?si=it2uNcdU3fHIf094";
 
@@ -15,25 +21,8 @@ export default function SixflTvHomepageSection() {
           <div className="absolute right-[7.4rem] top-1/2 h-16 w-16 -translate-y-1/2 rounded-full bg-white/10" />
         </div>
 
-        <div className="relative grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
-          <a
-            href={SIXFL_TV_CHANNEL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex min-h-[330px] w-full flex-col items-center justify-center rounded-3xl border border-white/10 bg-black/70 p-6 transition hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-black/80 sm:min-h-[390px] sm:p-8"
-            aria-label="Open the SIXFL TV YouTube channel"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logos/you-tube.png"
-              alt="YouTube"
-              className="h-auto w-full max-w-[340px] object-contain sm:max-w-[400px]"
-            />
-            <div className="mt-8 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/55 transition group-hover:text-white/75">
-              <span>Watch on YouTube</span>
-              <span aria-hidden="true">↗</span>
-            </div>
-          </a>
+        <div className="relative grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
+          <GoalOfWeekHomepageFeature channelUrl={SIXFL_TV_CHANNEL_URL} />
 
           <div>
             <a
@@ -43,11 +32,11 @@ export default function SixflTvHomepageSection() {
               className="inline-flex transition hover:scale-[1.02] hover:opacity-90"
               aria-label="Open SIXFL TV on YouTube"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/Sixfl-tv.png"
+              <Image
+                src={sixflTvLogo}
                 alt="SIXFL TV"
                 className="h-auto w-full max-w-[330px] object-contain drop-shadow-[0_14px_34px_rgba(0,0,0,0.45)] sm:max-w-[400px]"
+                sizes="(max-width: 640px) 330px, 400px"
               />
             </a>
 
@@ -58,14 +47,15 @@ export default function SixflTvHomepageSection() {
               id="sixfl-tv-heading"
               className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl"
             >
-              Watch SIXFL matches, highlights and goals.
+              Watch the Goal of the Week and every SIXFL highlight.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
-              Selected SIXFL fixtures are recorded and uploaded to SIXFL TV, giving teams and players the chance to watch matches back, relive the best goals and share matchday highlights.
+              See the latest Goal of the Week, then open uploaded highlights, full matches and matchday moments from across SIXFL.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
               {[
+                "Goal of the Week",
                 "Recorded matches",
                 "Highlights and goals",
                 "Matchday moments",
@@ -88,6 +78,8 @@ export default function SixflTvHomepageSection() {
               WATCH SIXFL TV
               <span aria-hidden="true">↗</span>
             </a>
+
+            <HomepageSixflTvLatestLinks />
           </div>
         </div>
       </div>

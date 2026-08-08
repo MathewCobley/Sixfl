@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+import predictorLogo from "../../../public/logos/sixfl-ai-predictor.png";
+
 const COPY_REPLACEMENTS = new Map([
   ["Sample prediction", "Match prediction"],
   [
@@ -36,7 +38,7 @@ function addPredictorLogo(predictorSection: HTMLElement) {
     "relative -mt-2 h-32 w-full max-w-xl overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/70 shadow-[0_18px_55px_rgba(0,0,0,0.35)] sm:h-40";
 
   const logo = document.createElement("img");
-  logo.src = "/logos/sixfl-ai-predictor.png";
+  logo.src = predictorLogo.src;
   logo.alt = "SIXFL AI Predictor";
   logo.className = "h-full w-full object-cover object-[center_58%]";
   logo.loading = "eager";
