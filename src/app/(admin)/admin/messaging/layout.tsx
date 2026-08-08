@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { NotificationDispatchStatus } from "@prisma/client";
 
+import CommunicationsTabs from "@/components/admin/communications/CommunicationsTabs";
 import AdminMessagingNoticeBridge from "@/components/admin/messages/AdminMessagingNoticeBridge";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -35,6 +36,7 @@ export default async function AdminMessagingLayout({
   return (
     <div className="space-y-4">
       <AdminMessagingNoticeBridge />
+      <CommunicationsTabs />
 
       {queuedSmsCount > 0 ? (
         <div className="mx-4 mt-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-amber-50 sm:mx-6 lg:mx-8">
