@@ -5,6 +5,7 @@
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
+import { setSeasonTeamDivision } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 
 export type LeagueDivisionRow = {
@@ -114,12 +115,24 @@ export async function getAllLeagueDivisionOptions() {
   }
 }
 
+/**
+ * Compatibility helper for older callers. The current division is read from the
+ * active LeagueSeasonTeam row for the team's competition current season, never
+ * from Team.divisionId.
+ */
 export async function getTeamDivisionId(teamId: string) {
   try {
     const rows = await prisma.$queryRaw<Array<{ divisionId: string | null }>>(Prisma.sql`
-      SELECT "divisionId"
-      FROM "Team"
-      WHERE "id" = ${teamId}
+      SELECT current_lst."divisionId"
+      FROM "Team" t
+      LEFT JOIN "League" legacy_l ON legacy_l."id" = t."leagueId"
+      LEFT JOIN "LeagueCompetition" c
+        ON c."id" = COALESCE(t."competitionId", legacy_l."competitionId")
+      LEFT JOIN "LeagueSeasonTeam" current_lst
+        ON current_lst."teamId" = t."id"
+       AND current_lst."leagueId" = c."currentLeagueId"
+       AND current_lst."isActive" = true
+      WHERE t."id" = ${teamId}
       LIMIT 1
     `);
 
@@ -219,35 +232,22 @@ export async function ensureDefaultLeagueDivisions(leagueId: string) {
   }
 }
 
+/**
+ * Compatibility wrapper. All division assignment now updates the canonical
+ * LeagueSeasonTeam row; Team.divisionId is never written here.
+ */
 export async function updateTeamDivision(input: {
   teamId: string;
   leagueId: string | null;
   divisionId: string | null;
 }) {
-  if (!input.divisionId) {
-    await prisma.$executeRaw(Prisma.sql`
-      UPDATE "Team"
-      SET "divisionId" = NULL, "updatedAt" = NOW()
-      WHERE "id" = ${input.teamId}
-    `);
-    return;
+  if (!input.leagueId) {
+    throw new Error("A current season is required before assigning a division.");
   }
 
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT "id"
-    FROM "LeagueDivision"
-    WHERE "id" = ${input.divisionId}
-      AND "leagueId" = ${input.leagueId}
-    LIMIT 1
-  `);
-
-  if (!rows[0]) {
-    throw new Error("Division must belong to the selected league.");
-  }
-
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "Team"
-    SET "divisionId" = ${input.divisionId}, "updatedAt" = NOW()
-    WHERE "id" = ${input.teamId}
-  `);
+  await setSeasonTeamDivision({
+    teamId: input.teamId,
+    leagueId: input.leagueId,
+    divisionId: input.divisionId,
+  });
 }
