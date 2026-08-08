@@ -34,6 +34,11 @@ type SeasonTeamLink = {
   divisionId: string | null;
 };
 
+type FixtureTeamOption = {
+  id: string;
+  name: string;
+};
+
 async function getSeasonTeamLinks() {
   try {
     return await prisma.$queryRaw<SeasonTeamLink[]>(Prisma.sql`
@@ -43,6 +48,20 @@ async function getSeasonTeamLinks() {
     `);
   } catch (error) {
     console.error("Fixture edit page could not load LeagueSeasonTeam links", error);
+    return [];
+  }
+}
+
+async function getFixtureTeamOptions() {
+  try {
+    return await prisma.$queryRaw<FixtureTeamOption[]>(Prisma.sql`
+      SELECT "id", "name"
+      FROM "Team"
+      WHERE COALESCE("isFixturePlaceholder", false) = false
+      ORDER BY "name" ASC
+    `);
+  } catch (error) {
+    console.error("Fixture edit page could not load team options", error);
     return [];
   }
 }
@@ -93,11 +112,7 @@ export default async function EditFixturePage({
   });
 
   const [allTeams, seasonLinks, venues, referees, charges] = await Promise.all([
-    prisma.team.findMany({
-      where: { isFixturePlaceholder: false },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
+    getFixtureTeamOptions(),
     getSeasonTeamLinks(),
     prisma.venue.findMany({
       orderBy: { name: "asc" },
