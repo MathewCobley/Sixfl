@@ -68,7 +68,7 @@ function assertKickoffAllowed(kickoffAt: Date, team: TeamRow) {
   if (latest === null) return;
   if (getLondonMinutesSinceMidnight(kickoffAt) <= latest) return;
   throw new Error(
-    `${team.name} cannot kick off later than ${team.latestKickoffTime}. Choose an earlier time or update the team's latest kick-off preference.`,
+    `${team.name} cannot kick off later than ${team.latestKickoffTime}. Choose an earlier time, tick the override box for this fixture, or update the team's latest kick-off preference.`,
   );
 }
 
@@ -110,6 +110,8 @@ export async function createSingleDraftFixtureAction(formData: FormData) {
     const round = optionalPositiveInt(formData, "round", "Week");
     const position = optionalPositiveInt(formData, "position", "Game position");
     const status = parseStatus(formData.get("status"));
+    const overrideLatestKickoff =
+      String(formData.get("overrideLatestKickoff") ?? "").trim() === "on";
 
     if (homeTeamId === awayTeamId) {
       throw new Error("Team 1 and Team 2 cannot be the same team.");
@@ -183,7 +185,7 @@ export async function createSingleDraftFixtureAction(formData: FormData) {
       divisionId = homeTeam.divisionId;
     }
 
-    if (status === FixtureStatus.SCHEDULED) {
+    if (status === FixtureStatus.SCHEDULED && !overrideLatestKickoff) {
       assertKickoffAllowed(kickoffAt, homeTeam);
       assertKickoffAllowed(kickoffAt, awayTeam);
     }
