@@ -119,7 +119,7 @@ export default function SiteFooter() {
               </Link>
 
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/founding-teams">
-                £90 Founding Kit Package
+                Founding Kit Package
               </Link>
 
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/faq">
