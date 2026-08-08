@@ -5,14 +5,12 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
+import {
+  getTeamCompetitionData,
+  setSeasonTeamDivision,
+} from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-
-type TeamDivisionRow = {
-  id: string;
-  leagueId: string | null;
-  divisionId: string | null;
-};
 
 type DivisionRow = {
   id: string;
@@ -30,17 +28,11 @@ function getString(value: unknown) {
 }
 
 async function getTeamDivisionData(teamId: string) {
-  const teamRows = await prisma.$queryRaw<TeamDivisionRow[]>(Prisma.sql`
-    SELECT "id", "leagueId", "divisionId"
-    FROM "Team"
-    WHERE "id" = ${teamId}
-    LIMIT 1
-  `);
+  const teamData = await getTeamCompetitionData(teamId);
+  if (!teamData) return null;
 
-  const team = teamRows[0] ?? null;
-  if (!team) return null;
-
-  const divisions = team.leagueId
+  const leagueId = teamData.currentLeagueId;
+  const divisions = leagueId
     ? await prisma.$queryRaw<DivisionRow[]>(Prisma.sql`
         SELECT
           d."id",
@@ -52,13 +44,22 @@ async function getTeamDivisionData(teamId: string) {
           l."season" AS "leagueSeason"
         FROM "LeagueDivision" d
         JOIN "League" l ON l."id" = d."leagueId"
-        WHERE d."leagueId" = ${team.leagueId}
+        WHERE d."leagueId" = ${leagueId}
           AND d."isActive" = true
         ORDER BY d."sortOrder" ASC, d."name" ASC
       `)
     : [];
 
-  return { team, divisions };
+  // Preserve the old response shape for callers, but source its current league
+  // and division from the competition + LeagueSeasonTeam model.
+  return {
+    team: {
+      id: teamData.id,
+      leagueId,
+      divisionId: teamData.divisionId,
+    },
+    divisions,
+  };
 }
 
 export async function GET(
@@ -94,36 +95,40 @@ export async function POST(
     return NextResponse.json({ error: "Team not found." }, { status: 404 });
   }
 
-  if (!divisionId) {
-    await prisma.$executeRaw(Prisma.sql`
-      UPDATE "Team"
-      SET "divisionId" = NULL, "updatedAt" = NOW()
-      WHERE "id" = ${teamId}
-    `);
-
-    return NextResponse.json({ ok: true, divisionId: null });
-  }
-
   if (!data.team.leagueId) {
     return NextResponse.json(
-      { error: "Choose a league before assigning a division." },
+      { error: "Choose the team's competition before assigning a current-season division." },
       { status: 400 },
     );
   }
 
-  const matchingDivision = data.divisions.find((division) => division.id === divisionId);
-  if (!matchingDivision) {
+  if (divisionId) {
+    const matchingDivision = data.divisions.find((division) => division.id === divisionId);
+    if (!matchingDivision) {
+      return NextResponse.json(
+        { error: "Division must be an active division in the current season." },
+        { status: 400 },
+      );
+    }
+  }
+
+  try {
+    await setSeasonTeamDivision({
+      leagueId: data.team.leagueId,
+      teamId,
+      divisionId,
+    });
+  } catch (error) {
     return NextResponse.json(
-      { error: "Division must belong to the selected league." },
-      { status: 400 },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Division could not be updated.",
+      },
+      { status: 409 },
     );
   }
-
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "Team"
-    SET "divisionId" = ${divisionId}, "updatedAt" = NOW()
-    WHERE "id" = ${teamId}
-  `);
 
   return NextResponse.json({ ok: true, divisionId });
 }
