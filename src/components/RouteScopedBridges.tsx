@@ -80,11 +80,13 @@ export default function RouteScopedBridges() {
   const pathname = usePathname();
 
   // The main team dashboards are fully rendered by their native React pages.
-  // Do not mount any legacy DOM bridge here: a bridge that mutates the page
-  // after hydration must never be able to replace or hide the team dashboard.
+  // Do not mount legacy DOM-mutating bridges on those roots. The temporary
+  // player launcher is safe here because it is an owned React component/portal
+  // and does not scrape or rewrite the dashboard DOM.
   const isCaptainTeamRoot = /^\/captain\/team\/[^/]+\/?$/.test(pathname);
   const isPlayerTeamRoot = /^\/player\/team\/[^/]+\/?$/.test(pathname);
-  if (isCaptainTeamRoot || isPlayerTeamRoot) return null;
+  if (isCaptainTeamRoot) return null;
+  if (isPlayerTeamRoot) return <TemporaryPlayerPassLauncher />;
 
   const isCaptain = pathname.startsWith("/captain/");
   const isPlayer = pathname.startsWith("/player/");
