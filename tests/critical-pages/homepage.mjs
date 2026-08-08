@@ -10,6 +10,13 @@ function fail(message) {
   throw new Error(`Homepage critical check failed: ${message}`);
 }
 
+async function assertSubstantialBox(locator, label, minHeight = 220) {
+  const box = await locator.boundingBox();
+  if (!box || box.width < 280 || box.height < minHeight) {
+    fail(`${label} collapsed or disappeared (${JSON.stringify(box)}).`);
+  }
+}
+
 async function assertHomepage(page, label) {
   const browserErrors = [];
   page.on("pageerror", (error) => browserErrors.push(`pageerror: ${error.message}`));
@@ -34,6 +41,10 @@ async function assertHomepage(page, label) {
   await tv.waitFor({ state: "visible" });
   await predictor.waitFor({ state: "visible" });
 
+  await assertSubstantialBox(hero, `${label} homepage hero`, 420);
+  await assertSubstantialBox(tv, `${label} SIXFL TV`, 360);
+  await assertSubstantialBox(predictor, `${label} AI Predictor`, 360);
+
   await page.getByRole("heading", {
     level: 1,
     name: /Local 6-a-side football across North Yorkshire/i,
@@ -44,6 +55,9 @@ async function assertHomepage(page, label) {
   await page.getByRole("heading", {
     name: /Match predictions, powered by SIXFL AI Predictor/i,
   }).waitFor({ state: "visible" });
+
+  const areaCardCount = await hero.locator("article").count();
+  if (areaCardCount !== 4) fail(`${label} expected 4 homepage league cards, found ${areaCardCount}.`);
 
   const tvBeforePredictor = await page.evaluate(() => {
     const tvSection = document.querySelector('[data-testid="homepage-sixfl-tv"]');
@@ -83,6 +97,11 @@ async function assertHomepage(page, label) {
       (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
     );
     if (!loaded) fail(`${label} ${alt} brand image did not load.`);
+
+    const box = await logo.boundingBox();
+    if (!box || box.width < 120 || box.height < 35) {
+      fail(`${label} ${alt} brand image collapsed (${JSON.stringify(box)}).`);
+    }
   }
 
   if (browserErrors.length) {
