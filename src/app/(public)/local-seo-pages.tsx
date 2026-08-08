@@ -20,42 +20,57 @@ type LocalSeoPageConfig = {
   secondaryHref: string;
   canonicalPath: string;
   nearbyAreas: string[];
+  searchIntentHeading?: string;
+  searchIntentCopy?: string[];
   faqs: Array<{ question: string; answer: string }>;
 };
 
 export const localSeoPages: Record<string, LocalSeoPageConfig> = {
   harrogate: {
     area: "Harrogate",
-    title: "6-a-side Football in Harrogate",
+    title: "Harrogate 6-a-side football league",
     description:
-      "Join SIXFL 6-a-side football in Harrogate. Weekly league fixtures at Rossett Sports Centre with results, tables and team registration.",
+      "Play organised 6-a-side football in Harrogate with SIXFL at Rossett Sports Centre. Tuesday league fixtures, live results, tables and registration for teams and individual players.",
     venue: "Rossett Sports Centre",
     night: "Tuesday",
-    kickoffInfo: "Evening kick-offs",
-    surface: "3G / astroturf style pitches",
+    kickoffInfo: "Tuesday evenings",
+    surface: "3G small-sided football pitches",
     status: "Live league",
-    primaryCta: "View Harrogate league",
+    primaryCta: "View live Harrogate league",
     primaryHref: "/leagues/rossett-mens-tuesday",
-    secondaryCta: "Register interest",
+    secondaryCta: "Register for Harrogate",
     secondaryHref: "/register-interest?area=Harrogate&type=team&night=Tuesday",
     canonicalPath: "/harrogate-6-a-side-football",
     nearbyAreas: ["Knaresborough", "Ripon", "Pannal", "Starbeck", "Wetherby"],
+    searchIntentHeading: "Looking for 5-a-side football in Harrogate?",
+    searchIntentCopy: [
+      "People often search for 5-a-side football when they are really looking for a local small-sided football league. SIXFL Harrogate is a 6-a-side competition rather than a 5-a-side league, played on Tuesday evenings at Rossett Sports Centre.",
+      "If you want regular small-sided football in Harrogate, you can enter a full team or register as an individual player. The live league page shows the current teams, fixtures, results and standings before you join.",
+    ],
     faqs: [
       {
         question: "Where is SIXFL 6-a-side football in Harrogate played?",
-        answer: "The Harrogate league is played at Rossett Sports Centre, with weekly evening fixtures.",
+        answer: "The Harrogate SIXFL league is played at Rossett Sports Centre on Tuesday evenings, with published fixtures, results and league standings available online.",
+      },
+      {
+        question: "Is SIXFL Harrogate 5-a-side or 6-a-side?",
+        answer: "SIXFL Harrogate is a 6-a-side football league. If you are searching for 5-a-side or small-sided football in Harrogate, the SIXFL league offers the same regular local small-sided format with six players per team.",
       },
       {
         question: "Can I enter a team into the Harrogate league?",
-        answer: "Yes. Captains can register interest online and SIXFL will confirm availability, league details and next steps.",
+        answer: "Yes. Captains can register a team online and SIXFL will confirm current availability, match-night details and next steps.",
       },
       {
         question: "Can individual players join in Harrogate?",
-        answer: "Yes. Individual players can register interest and be matched with teams looking for extra players where possible.",
+        answer: "Yes. Individual players can register interest and may be matched with teams looking for extra players or other available playing opportunities.",
       },
       {
-        question: "Is the Harrogate league indoor or outdoor?",
-        answer: "The Harrogate SIXFL league is played on outdoor small-sided football pitches at Rossett Sports Centre.",
+        question: "What night is the Harrogate 6-a-side league?",
+        answer: "The current SIXFL Harrogate league plays on Tuesday evenings at Rossett Sports Centre.",
+      },
+      {
+        question: "Can I see the Harrogate league before registering?",
+        answer: "Yes. The live SIXFL Harrogate league page shows current teams, upcoming fixtures, recent results and the league table.",
       },
     ],
   },
@@ -264,6 +279,36 @@ export function LocalSeoLandingPage({ page }: { page: LocalSeoPageConfig }) {
             </dl>
           </aside>
         </div>
+
+        {page.searchIntentHeading && page.searchIntentCopy?.length ? (
+          <section className="mt-10 rounded-3xl border border-sky-400/20 bg-sky-500/[0.06] p-6 lg:p-8">
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-sky-200/70">
+              Small-sided football in {page.area}
+            </p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
+              {page.searchIntentHeading}
+            </h2>
+            <div className="mt-4 max-w-4xl space-y-4 text-sm leading-7 text-white/68">
+              {page.searchIntentCopy.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={page.primaryHref}
+                className="inline-flex h-11 items-center justify-center rounded-full bg-sky-300 px-5 text-sm font-black text-black transition hover:bg-sky-200"
+              >
+                See Harrogate fixtures & table
+              </Link>
+              <Link
+                href="/register-interest?area=Harrogate&type=player&night=Tuesday"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-sky-300/25 bg-sky-400/10 px-5 text-sm font-black text-sky-100 transition hover:bg-sky-400/15"
+              >
+                Join as an individual player
+              </Link>
+            </div>
+          </section>
+        ) : null}
 
         <section className="mt-10 rounded-3xl border border-white/10 bg-white/[0.04] p-6 lg:p-8">
           <h2 className="text-2xl font-black tracking-tight">{page.area} 6-a-side football FAQs</h2>
