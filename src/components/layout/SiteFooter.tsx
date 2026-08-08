@@ -94,6 +94,18 @@ export default function SiteFooter() {
                 Leagues
               </Link>
 
+              <Link className="inline-flex min-h-9 items-center font-semibold text-emerald-200 transition hover:text-emerald-400" href="/harrogate-6-a-side-football">
+                Harrogate 6-a-side football
+              </Link>
+
+              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/northallerton-6-a-side-football">
+                Northallerton 6-a-side football
+              </Link>
+
+              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/wetherby-6-a-side-football">
+                Wetherby 6-a-side football
+              </Link>
+
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/venues">
                 Venues
               </Link>
