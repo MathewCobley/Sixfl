@@ -221,7 +221,7 @@ fs.writeFileSync(absolutePath, source, "utf8");
 
 if (
   !source.includes("const playerMemberships = (") ||
-  !source.includes("Switch team") ||
+  !source.includes("playerMemberships.map((teamMembership) => {") ||
   !source.includes("previewMembershipId=${teamMembership.id}") ||
   source.includes(oldMembershipSelect)
 ) {
