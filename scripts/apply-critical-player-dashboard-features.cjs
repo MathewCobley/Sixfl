@@ -1,10 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-// These two features have previously disappeared when their standalone patch
-// scripts dropped out of the prebuild chain. Keep them grouped as one critical
-// player-dashboard contract so a normal build restores and verifies both.
-require("./apply-player-team-switcher.cjs");
+// The player team switcher is applied earlier in the normal prebuild chain via
+// apply-player-pool-edit-details -> apply-player-merge-controls. Do not rerun
+// that source patch here: its layout pass deliberately changes presentation
+// copy, so a second patch pass can misread the polished version as missing.
+// Keep the temporary-player label patch here, then verify both features from
+// their structural contracts rather than fragile headings.
 require("./apply-temporary-player-team-label-clarity.cjs");
 
 const root = process.cwd();
@@ -19,7 +21,11 @@ const routeScoped = read("src/components/RouteScopedBridges.tsx");
 
 const checks = [
   {
-    ok: playerPage.includes("Switch team") && playerPage.includes("playerMemberships.length > 1"),
+    ok:
+      playerPage.includes("const playerMemberships = (") &&
+      playerPage.includes("playerMemberships.length > 1") &&
+      playerPage.includes("teamMembership.team.id === teamid") &&
+      playerPage.includes("previewMembershipId=${teamMembership.id}"),
     message: "Player multi-team switcher is missing from the player team dashboard.",
   },
   {
