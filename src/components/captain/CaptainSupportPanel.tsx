@@ -9,6 +9,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { sendCaptainSupportRequestAction } from "@/app/captain/team/[teamid]/support/actions";
+import GoalOfWeekDashboardPromo from "@/components/goal-of-week/GoalOfWeekDashboardPromo";
 
 type HelpContext = {
   topic: string;
@@ -138,6 +139,13 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
   if (isOverview(pathname, teamId)) {
     return (
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="md:col-span-2 xl:col-span-4">
+          <GoalOfWeekDashboardPromo
+            teamId={teamId}
+            href={`/captain/team/${teamId}/tv`}
+          />
+        </div>
+
         <Link
           href={`/captain/team/${teamId}/weeks-unavailable`}
           className="md:col-span-2 xl:col-span-4 rounded-3xl border border-amber-400/25 bg-amber-500/[0.08] p-5 transition hover:border-amber-300/35 hover:bg-amber-500/[0.12] sm:p-6"
