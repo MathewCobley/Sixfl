@@ -48,6 +48,7 @@ require("./apply-admin-kit-readiness-guard.cjs");
 require("./apply-team-referral-rewards.cjs");
 require("./apply-fixture-week-scroll-return.cjs");
 require("./apply-context-aware-payment-charge-labels.cjs");
+require("./apply-community-goal-of-week-ui.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
