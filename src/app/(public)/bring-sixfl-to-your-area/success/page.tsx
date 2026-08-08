@@ -28,9 +28,9 @@ export default function ExpansionLeadSuccessPage() {
           </h1>
 
           <p className="mt-5 text-base leading-7 text-white/70 sm:text-lg">
-            We’ll review the area, potential venue and likely team demand. If it
-            looks viable, SIXFL will contact you to discuss the opportunity and
-            agree exactly what help is needed.
+            We&apos;ll review the area, potential venue and likely team demand. If
+            it looks viable, SIXFL will contact you to agree the launch work and
+            confirm the commission arrangement in writing.
           </p>
 
           <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-5">
@@ -39,17 +39,22 @@ export default function ExpansionLeadSuccessPage() {
               <li>1. SIXFL checks how the area fits our expansion plans.</li>
               <li>2. We assess venue availability and realistic team demand.</li>
               <li>
-                3. We agree the role, qualifying conditions and payment in
-                writing before commission-earning work begins.
+                3. We agree your role and qualifying work before it begins.
+              </li>
+              <li>
+                4. The standard commission is 10% of qualifying weekly team fees
+                collected during the first 12 months, capped at £2,500 per
+                approved league.
               </li>
             </ol>
           </div>
 
-          <p className="mt-6 text-sm leading-6 text-white/50">
-            SIXFL will confirm in writing when an opportunity is approved and
-            agree any role, qualifying conditions and commission before work
-            begins.
-          </p>
+          <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] p-5 text-sm leading-6 text-white/65">
+            Commission only begins after SIXFL approves the opportunity and the
+            written launch-partner agreement is in place. That agreement confirms
+            the work, qualifying fees, exclusions, payment schedule and any split
+            between launch partners.
+          </div>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
@@ -59,10 +64,10 @@ export default function ExpansionLeadSuccessPage() {
               Return to SIXFL
             </Link>
             <Link
-              href="/leagues"
+              href="/bring-sixfl-to-your-area#commission"
               className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-bold text-white transition hover:bg-white/10"
             >
-              View current leagues
+              Review commission details
             </Link>
           </div>
         </div>
