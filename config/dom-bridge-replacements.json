@@ -234,6 +234,50 @@
       ]
     },
     {
+      "id": "homepage-native-critical-content",
+      "removedPaths": [
+        "src/components/home/HomepageSixflTvBridge.tsx",
+        "src/components/home/HomepageAiPredictorCopyBridge.tsx",
+        "src/components/home/HomepageLeagueTypeFocusBridge.tsx"
+      ],
+      "responsibilities": [
+        "Render SIXFL TV in the homepage React tree before the AI Predictor rather than inserting it after render.",
+        "Render the SIXFL TV logo, Goal of the Week and latest uploaded match links from owned components.",
+        "Render AI Predictor branding and explanatory copy directly rather than replacing elements and text nodes after render.",
+        "Keep the Harrogate, Wetherby, Northallerton and Heartlands card names, statuses and registration destinations in the actual homepage data."
+      ],
+      "checks": [
+        {
+          "path": "src/app/(public)/page.tsx",
+          "contains": [
+            "<SixflTvHomepageSection />",
+            "<HomepageAiPredictorSection teamLogos={predictorSampleTeamLogos} />",
+            "Harrogate West Tuesday League",
+            "harrogatePlayerLink",
+            "North Yorkshire Heartlands League"
+          ]
+        },
+        {
+          "path": "src/components/home/SixflTvHomepageSection.tsx",
+          "contains": [
+            "data-testid=\"homepage-sixfl-tv\"",
+            "GoalOfWeekHomepageFeature",
+            "HomepageSixflTvLatestLinks",
+            "sixflTvLogo"
+          ]
+        },
+        {
+          "path": "src/components/home/HomepageAiPredictorSection.tsx",
+          "contains": [
+            "data-testid=\"homepage-ai-predictor\"",
+            "predictorLogo",
+            "Match predictions, powered by SIXFL AI Predictor.",
+            "Live predictions are calculated from completed SIXFL results"
+          ]
+        }
+      ]
+    },
+    {
       "id": "captain-outstanding-balance",
       "removedPaths": [],
       "retainedPaths": [
