@@ -106,6 +106,10 @@ export default function SiteFooter() {
                 Wetherby 6-a-side football
               </Link>
 
+              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/north-yorkshire-heartlands-6-a-side-football">
+                Heartlands 6-a-side football
+              </Link>
+
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/venues">
                 Venues
               </Link>

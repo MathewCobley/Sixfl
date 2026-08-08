@@ -64,6 +64,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.92,
     },
     {
+      url: absoluteUrl("/north-yorkshire-heartlands-6-a-side-football"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.92,
+    },
+    {
       url: absoluteUrl("/register-interest"),
       lastModified: now,
       changeFrequency: "weekly",
