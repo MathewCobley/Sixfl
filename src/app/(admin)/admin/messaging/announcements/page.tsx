@@ -1,13 +1,13 @@
 import Link from "next/link";
 
-import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/requireAdmin";
 import {
   getAnnouncementAlreadyQueuedEmails,
   getAnnouncementTemplateCompatibility,
   getSystemAnnouncementAudience,
-  sendSystemAnnouncementAction,
-} from "./actions";
+} from "@/lib/communications/system-announcements";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/requireAdmin";
+import { sendSystemAnnouncementAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -81,7 +81,7 @@ export default async function AnnouncementsPage({
     ? await getAnnouncementAlreadyQueuedEmails(selectedTemplate.id)
     : new Set<string>();
   const compatibility = selectedTemplate
-    ? await getAnnouncementTemplateCompatibility({
+    ? getAnnouncementTemplateCompatibility({
         subject: selectedTemplate.subject,
         body: selectedTemplate.body,
         ctaLabel: selectedTemplate.ctaLabel,
@@ -98,24 +98,6 @@ export default async function AnnouncementsPage({
   return (
     <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <nav className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
-          <Link
-            href="/admin/messaging"
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-white/60 transition hover:bg-white/[0.06] hover:text-white"
-          >
-            Inbox & communications
-          </Link>
-          <span className="rounded-xl bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100">
-            Announcements
-          </span>
-          <Link
-            href="/admin/templates"
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-white/60 transition hover:bg-white/[0.06] hover:text-white"
-          >
-            Templates
-          </Link>
-        </nav>
-
         <section className="rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.16),transparent_36%),rgba(255,255,255,0.04)] p-6 lg:p-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200/70">
             System-wide email
