@@ -171,15 +171,16 @@ function validateBulkConfirmation(input: {
 
 function withIncludedLeadIds(formData: FormData, leadIds: string[]) {
   const safeFormData = new FormData();
+  const addFormValue = safeFormData.append.bind(safeFormData);
 
   formData.forEach((value, key) => {
     if (key !== "includedLeadIds") {
-      safeFormData.append(key, value);
+      addFormValue(key, value);
     }
   });
 
   for (const leadId of leadIds) {
-    safeFormData.append("includedLeadIds", leadId);
+    addFormValue("includedLeadIds", leadId);
   }
 
   return safeFormData;
