@@ -18,9 +18,18 @@ async function assertSubstantialBox(locator, label, minHeight = 220) {
 }
 
 async function waitForImagesToSettle(page) {
-  await page.locator("img").evaluateAll(async (images) => {
+  const images = page.locator("img");
+  const count = await images.count();
+
+  // Force legitimate lazy-loaded images (for example the footer logo) into
+  // view before deciding whether an image is actually broken.
+  for (let index = 0; index < count; index += 1) {
+    await images.nth(index).scrollIntoViewIfNeeded();
+  }
+
+  await images.evaluateAll(async (elements) => {
     await Promise.all(
-      images.map(
+      elements.map(
         (image) =>
           new Promise((resolve) => {
             if (image.complete) {
@@ -104,8 +113,8 @@ async function assertHomepage(page, label) {
 
   await waitForImagesToSettle(page);
 
-  const brokenImages = await page.locator("img").evaluateAll((images) =>
-    images
+  const brokenImages = await page.locator("img").evaluateAll((elements) =>
+    elements
       .filter((image) => !image.complete || image.naturalWidth === 0 || image.naturalHeight === 0)
       .map((image) => ({ alt: image.alt, src: image.currentSrc || image.src })),
   );
