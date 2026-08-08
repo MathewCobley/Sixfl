@@ -4,7 +4,7 @@
 -- Important safety rules:
 -- - only create a row when no LeagueSeasonTeam row exists at all for the pair;
 -- - never reactivate or overwrite an explicit inactive season membership;
--- - never copy a division unless it belongs to the same league;
+-- - only copy a division when it is active and belongs to the same league;
 -- - never add fixture-placeholder/TBC teams through this legacy backfill.
 
 INSERT INTO "LeagueSeasonTeam" (
@@ -31,6 +31,7 @@ FROM "Team" t
 LEFT JOIN "LeagueDivision" d
   ON d."id" = t."divisionId"
  AND d."leagueId" = t."leagueId"
+ AND d."isActive" = true
 WHERE t."leagueId" IS NOT NULL
   AND COALESCE(t."isFixturePlaceholder", false) = false
   AND NOT EXISTS (
