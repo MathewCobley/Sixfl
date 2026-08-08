@@ -96,7 +96,7 @@ function assertLatestKickoffAllowed(input: {
   if (latestMinutes === null) return;
   if (getLondonMinutesSinceMidnight(input.kickoffAt) <= latestMinutes) return;
   throw new Error(
-    `${input.team.name} has latest KO ${input.team.latestKickoffTime}, so ${formatTimeInLondon(input.kickoffAt)} is too late. Change the fixture time or update the team's Latest KO first.`,
+    `${input.team.name} has latest KO ${input.team.latestKickoffTime}, so ${formatTimeInLondon(input.kickoffAt)} is too late. Change the fixture time or tick the latest kick-off override.`,
   );
 }
 
@@ -204,6 +204,8 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
     const position = parseOptionalInt(formData.get("position"), "Game position");
     const pitch = parseOptionalString(formData.get("pitch"));
     const status = parseFixtureStatus(formData.get("status"));
+    const overrideLatestKickoff =
+      String(formData.get("overrideLatestKickoff") ?? "") === "on";
     const requestedHomeMatchFeePence = parseOptionalMoneyToPence(
       formData.get("homeMatchFeePounds"),
       "Team 1 fee",
@@ -297,7 +299,10 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
       );
     }
 
-    if (status === FixtureStatus.SCHEDULED || status === FixtureStatus.COMPLETED) {
+    if (
+      !overrideLatestKickoff &&
+      (status === FixtureStatus.SCHEDULED || status === FixtureStatus.COMPLETED)
+    ) {
       assertLatestKickoffAllowed({ kickoffAt, team: homeTeam });
       assertLatestKickoffAllowed({ kickoffAt, team: awayTeam });
     }
