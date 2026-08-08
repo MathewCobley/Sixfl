@@ -109,7 +109,6 @@ async function getLeagueTableTeams(
       WHERE lst."leagueId" = ${leagueId}
         AND lst."divisionId" = ${options.divisionId}
         AND lst."isActive" = true
-        AND t."leagueId" IS NOT NULL
       ORDER BY t."name" ASC
     `);
 
@@ -117,14 +116,15 @@ async function getLeagueTableTeams(
   }
 
   if (options.teamIds?.length) {
-    const selectedTeams = await prisma.team.findMany({
-      where: {
-        id: { in: options.teamIds },
-        leagueId,
-      },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, logoUrl: true },
-    });
+    const selectedTeams = await prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
+      SELECT t."id", t."name", t."logoUrl"
+      FROM "LeagueSeasonTeam" lst
+      JOIN "Team" t ON t."id" = lst."teamId"
+      WHERE lst."leagueId" = ${leagueId}
+        AND lst."isActive" = true
+        AND t."id" IN (${Prisma.join(options.teamIds)})
+      ORDER BY t."name" ASC
+    `);
 
     return removeFixturePlaceholderTeams(selectedTeams);
   }
@@ -136,7 +136,6 @@ async function getLeagueTableTeams(
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${leagueId}
         AND lst."isActive" = true
-        AND t."leagueId" IS NOT NULL
       ORDER BY t."name" ASC
     `),
     prisma.$queryRaw<SeasonEntryPresenceRow[]>(Prisma.sql`
@@ -148,15 +147,15 @@ async function getLeagueTableTeams(
     `),
   ]);
 
-  // Once a league uses season-team entries, those entries are authoritative.
-  // The legacy Team.leagueId may still point at another season, so equality is
-  // deliberately not required here. A NULL leagueId is different: it is the
-  // explicit admin choice "No league" and must remove the team from standings
-  // even if a stale active LeagueSeasonTeam row remains.
+  // Once a league has LeagueSeasonTeam records, they are the sole authority for
+  // who belongs in its current table. Team.leagueId is deliberately ignored.
   if (seasonTeams.length > 0 || seasonEntryPresence[0]?.hasEntries) {
     return removeFixturePlaceholderTeams(seasonTeams);
   }
 
+  // Temporary compatibility fallback for a genuinely unmigrated historical
+  // league. The deployment migration creates missing season rows once, so live
+  // current leagues should not normally reach this branch.
   const legacyTeams = await prisma.team.findMany({
     where: { leagueId },
     orderBy: { name: "asc" },
@@ -191,10 +190,9 @@ export async function getLeagueTable(
 
   const table = new Map<string, LeagueTableRow>();
 
-  // The selected/active team list is always authoritative, including when it
-  // is empty. Historic fixtures must never recreate a removed or affiliated-only
-  // team in the current league table. For division tables, this also means a
-  // result counts only when both participating teams are active in that division.
+  // The selected/active season membership is always authoritative, including
+  // when it is empty. Historic fixtures must never recreate a removed team in
+  // the current table.
   const allowedTeamIds = new Set(teams.map((team) => team.id));
 
   for (const team of teams) {
