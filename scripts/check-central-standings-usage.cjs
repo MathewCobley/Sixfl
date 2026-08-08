@@ -6,6 +6,7 @@ require("./apply-captain-dom-observer-performance-guard.cjs");
 require("./apply-player-payments-freeze-fix.cjs");
 require("./apply-matchday-fee-waiver-reasons.cjs");
 require("./apply-captain-team-switcher-access-guard.cjs");
+require("./apply-player-team-switcher.cjs");
 require("./prepare-standard-pay-per-kit-flow.cjs");
 require("./apply-standard-pay-per-kit-flow.cjs");
 require("./apply-kit-design-deselect-lock.cjs");
