@@ -28,7 +28,8 @@ function statusCopy(status: "CLEAR" | "DRAFT_CONFLICT" | "PUBLISHED_CONFLICT") {
 }
 
 export default async function AdminFixtureUnavailabilitySummary() {
-  const from = getCurrentWeekStart();
+  // Fixture planning is for complete upcoming weeks, so start from next Monday.
+  const from = addWeeks(getCurrentWeekStart(), 1);
   const to = addWeeks(from, 20);
   const notices = await getTeamWeekUnavailabilityOverview({ from, to });
   const draftConflicts = notices.filter(
