@@ -23,12 +23,17 @@ function patchAdminPage() {
   const filePath = "src/app/(admin)/admin/sixfl-tv/page.tsx";
   let source = read(filePath);
 
-  source = replaceRequired(
-    source,
-    'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";',
-    'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";\nimport GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";',
-    filePath,
-  );
+  const adminPanelImport =
+    'import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";';
+  if (!source.includes(adminPanelImport)) {
+    source = replaceRequired(
+      source,
+      'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";',
+      'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";\n' +
+        adminPanelImport,
+      filePath,
+    );
+  }
 
   source = replaceRequired(
     source,
