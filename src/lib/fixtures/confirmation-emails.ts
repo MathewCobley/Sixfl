@@ -12,6 +12,12 @@ import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 type ConfirmationEmailMode = "initial" | "auto72h" | "auto24h";
 
+export type InitialFixtureConfirmationQueueResult =
+  | "queued"
+  | "already-sent"
+  | "no-email"
+  | "skipped";
+
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
@@ -93,6 +99,147 @@ async function hasDispatch(input: {
   });
 
   return Boolean(dispatch);
+}
+
+export async function queueInitialFixtureConfirmationEmailForTeam(input: {
+  fixtureId: string;
+  teamId: string;
+}): Promise<InitialFixtureConfirmationQueueResult> {
+  const now = new Date();
+  const fixture = await prisma.fixture.findUnique({
+    where: { id: input.fixtureId },
+    select: {
+      id: true,
+      leagueId: true,
+      publishedAt: true,
+      status: true,
+      kickoffAt: true,
+      homeTeam: { select: { id: true, name: true, logoUrl: true } },
+      awayTeam: { select: { id: true, name: true, logoUrl: true } },
+      league: { select: { name: true, season: true } },
+      captainConfirmations: {
+        where: { teamId: input.teamId },
+        select: { status: true },
+        take: 1,
+      },
+    },
+  });
+
+  if (
+    !fixture ||
+    !fixture.publishedAt ||
+    fixture.status !== "SCHEDULED" ||
+    fixture.kickoffAt <= now
+  ) {
+    return "skipped";
+  }
+
+  if (
+    input.teamId !== fixture.homeTeam.id &&
+    input.teamId !== fixture.awayTeam.id
+  ) {
+    return "skipped";
+  }
+
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds([
+    fixture.homeTeam.id,
+    fixture.awayTeam.id,
+  ]);
+  if (
+    placeholderTeamIds.has(fixture.homeTeam.id) ||
+    placeholderTeamIds.has(fixture.awayTeam.id)
+  ) {
+    return "skipped";
+  }
+
+  const confirmation = fixture.captainConfirmations[0];
+  if (
+    confirmation?.status === FixtureCaptainConfirmationStatus.CONFIRMED ||
+    confirmation?.status === FixtureCaptainConfirmationStatus.ISSUE_RAISED
+  ) {
+    return "skipped";
+  }
+
+  const sourceId = `${fixture.id}:${input.teamId}`;
+  const sourceType = getSourceType("initial");
+  if (await hasDispatch({ sourceType, sourceId })) {
+    return "already-sent";
+  }
+
+  const team =
+    fixture.homeTeam.id === input.teamId ? fixture.homeTeam : fixture.awayTeam;
+  const opponent =
+    fixture.homeTeam.id === input.teamId ? fixture.awayTeam : fixture.homeTeam;
+  const { recipient } = await upsertTeamNotificationRecipient(input.teamId);
+  if (!recipient.email?.trim()) return "no-email";
+
+  const captainFixturesUrl = new URL(
+    `/captain/team/${input.teamId}/fixtures?fixtureId=${encodeURIComponent(fixture.id)}`,
+    getSiteUrl(),
+  ).toString();
+  const copy = getEmailCopy({
+    mode: "initial",
+    teamName: team.name,
+    opponentName: opponent.name,
+    kickoffAt: fixture.kickoffAt,
+  });
+
+  const dispatch = await queueDirectNotification({
+    recipientId: recipient.id,
+    channel: NotificationChannel.EMAIL,
+    audience: NotificationAudience.TEAM,
+    subject: copy.subject,
+    body: copy.body,
+    isTransactional: true,
+    sourceType,
+    sourceId,
+    emailBranding: {
+      teamName: team.name,
+      teamLogoUrl: team.logoUrl ?? null,
+      leagueName: fixture.league.season
+        ? `${fixture.league.name} — ${fixture.league.season}`
+        : fixture.league.name,
+    },
+    emailCta: {
+      label: "Confirm fixture",
+      url: captainFixturesUrl,
+    },
+    metadata: {
+      kind: "fixture_confirmation_email",
+      mode: "initial",
+      trigger: "published_fixture_team_added",
+      fixtureId: fixture.id,
+      leagueId: fixture.leagueId,
+      teamId: input.teamId,
+      teamName: team.name,
+      opponentName: opponent.name,
+    },
+  });
+
+  if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
+    return "skipped";
+  }
+
+  await prisma.fixtureCaptainConfirmation.upsert({
+    where: {
+      fixtureId_teamId: {
+        fixtureId: fixture.id,
+        teamId: input.teamId,
+      },
+    },
+    update: {
+      status: FixtureCaptainConfirmationStatus.PENDING,
+      lastChasedAt: new Date(),
+    },
+    create: {
+      fixtureId: fixture.id,
+      teamId: input.teamId,
+      status: FixtureCaptainConfirmationStatus.PENDING,
+      lastChasedAt: new Date(),
+    },
+  });
+
+  return "queued";
 }
 
 export async function runFixtureConfirmationEmailJob() {
