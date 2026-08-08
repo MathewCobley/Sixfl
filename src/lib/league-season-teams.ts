@@ -27,6 +27,19 @@ export type CompetitionOption = {
 };
 
 /**
+ * Deprecated compatibility shim while callers are migrated away from the old
+ * helper. It intentionally performs no database write. Missing legacy rows are
+ * handled once by a deployment migration, never as a side effect of reading a
+ * page or API.
+ */
+export async function ensureSeasonTeamRowsForLeague(
+  _leagueId: string,
+  _client?: unknown,
+) {
+  return;
+}
+
+/**
  * LeagueSeasonTeam is the authoritative record for current season participation
  * and division placement. Reads in this module are deliberately side-effect free:
  * they never create or repair membership rows from legacy Team.leagueId or
