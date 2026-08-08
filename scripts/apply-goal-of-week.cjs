@@ -23,12 +23,17 @@ function patchAdminPage() {
   const filePath = "src/app/(admin)/admin/sixfl-tv/page.tsx";
   let source = read(filePath);
 
-  source = replaceRequired(
-    source,
-    'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";',
-    'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";\nimport GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";',
-    filePath,
-  );
+  const adminPanelImport =
+    'import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";';
+  if (!source.includes(adminPanelImport)) {
+    source = replaceRequired(
+      source,
+      'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";',
+      'import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";\n' +
+        adminPanelImport,
+      filePath,
+    );
+  }
 
   source = replaceRequired(
     source,
@@ -51,12 +56,25 @@ function patchHomepageSection() {
   const filePath = "src/components/home/SixflTvHomepageSection.tsx";
   let source = read(filePath);
 
-  source = replaceRequired(
-    source,
-    'const SIXFL_TV_CHANNEL_URL =',
-    'import GoalOfWeekHomepageFeature from "@/components/home/GoalOfWeekHomepageFeature";\n\nconst SIXFL_TV_CHANNEL_URL =',
-    filePath,
-  );
+  const homepageFeatureImport =
+    'import GoalOfWeekHomepageFeature from "@/components/home/GoalOfWeekHomepageFeature";';
+  if (!source.includes(homepageFeatureImport)) {
+    const latestLinksImport =
+      'import HomepageSixflTvLatestLinks from "@/components/home/HomepageSixflTvLatestLinks";';
+    if (source.includes(latestLinksImport)) {
+      source = source.replace(
+        latestLinksImport,
+        `${homepageFeatureImport}\n${latestLinksImport}`,
+      );
+    } else {
+      source = replaceRequired(
+        source,
+        'const SIXFL_TV_CHANNEL_URL =',
+        `${homepageFeatureImport}\n\nconst SIXFL_TV_CHANNEL_URL =`,
+        filePath,
+      );
+    }
+  }
 
   if (!source.includes("<GoalOfWeekHomepageFeature")) {
     const startMarker = [
