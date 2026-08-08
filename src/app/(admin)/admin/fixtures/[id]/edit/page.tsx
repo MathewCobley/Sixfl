@@ -8,7 +8,6 @@ import {
   toLondonDateInputValue,
   toLondonTimeInputValue,
 } from "@/lib/datetime/london";
-import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -93,14 +92,11 @@ export default async function EditFixturePage({
     select: { id: true, name: true, season: true, isActive: true },
   });
 
-  // Refresh only the season being edited. This backfills missing legacy rows
-  // without touching another competition season while an admin edits a fixture.
-  await ensureSeasonTeamRowsForLeague(fixture.leagueId);
-
   const [allTeams, seasonLinks, venues, referees, charges] = await Promise.all([
     prisma.team.findMany({
+      where: { isFixturePlaceholder: false },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, leagueId: true },
+      select: { id: true, name: true },
     }),
     getSeasonTeamLinks(),
     prisma.venue.findMany({
@@ -130,12 +126,9 @@ export default async function EditFixturePage({
   const leagueIdsByTeam = new Map<string, Set<string>>();
   const divisionKeysByTeam = new Map<string, Set<string>>();
 
-  for (const team of allTeams) {
-    const ids = leagueIdsByTeam.get(team.id) ?? new Set<string>();
-    if (team.leagueId) ids.add(team.leagueId);
-    leagueIdsByTeam.set(team.id, ids);
-  }
-
+  // LeagueSeasonTeam is the only source of current fixture eligibility. Do not
+  // add legacy Team.leagueId values here: that was one of the feedback loops
+  // that allowed stale team fields to re-enter a season after an admin change.
   for (const link of seasonLinks) {
     const ids = leagueIdsByTeam.get(link.teamId) ?? new Set<string>();
     ids.add(link.leagueId);
