@@ -17,7 +17,8 @@ export const revalidate = 0;
 export async function GET() {
   await requireAdmin();
 
-  const from = getCurrentWeekStart();
+  // Keep the API aligned with fixture planning: return complete future weeks only.
+  const from = addWeeks(getCurrentWeekStart(), 1);
   const to = addWeeks(from, 20);
   const notices = await getTeamWeekUnavailabilityOverview({ from, to });
 
