@@ -11,6 +11,7 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import { EXPANSION_LEAD_SOURCE } from "@/lib/expansion-leads";
 import { TEAM_PLACE_CONFIRMATION_CTA_KEY } from "@/lib/leads/teamPlaceConfirmation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -84,6 +85,9 @@ function getLeadFilterWhere(formData: FormData, contactField: "email" | "phone")
   const includedLeadIds = getIncludedLeadIds(formData);
 
   const where: Prisma.InterestLeadWhereInput = {
+    source: {
+      not: EXPANSION_LEAD_SOURCE,
+    },
     ...(selectedTypeRaw && isInterestType(selectedTypeRaw)
       ? { interestType: selectedTypeRaw }
       : {}),
@@ -164,6 +168,31 @@ function validateBulkConfirmation(input: {
   return `This bulk action would queue ${input.count} ${input.label.toLowerCase()}. Type ${requiredPhrase} to confirm.`;
 }
 
+function withIncludedLeadIds(formData: FormData, leadIds: string[]) {
+  const safeFormData = new FormData();
+
+  formData.forEach((value, key) => {
+    if (key !== "includedLeadIds") {
+      safeFormData.append(key, value);
+    }
+  });
+
+  for (const leadId of leadIds) {
+    safeFormData.append("includedLeadIds", leadId);
+  }
+
+  return safeFormData;
+}
+
+async function getMatchingLeadIds(where: Prisma.InterestLeadWhereInput) {
+  const leads = await prisma.interestLead.findMany({
+    where,
+    select: { id: true },
+  });
+
+  return leads.map((lead) => lead.id);
+}
+
 async function isTeamPlaceConfirmationEmail(formData: FormData) {
   const ctaUrlKey = String(formData.get("ctaUrlKey") ?? "").trim();
   const templateKey = String(formData.get("templateKey") ?? "").trim();
@@ -218,12 +247,11 @@ export async function sendBulkLeadEmailAction(
   await requireAdmin();
 
   const isTeamConfirmationEmail = await isTeamPlaceConfirmationEmail(formData);
-
-  const recipientCount = await prisma.interestLead.count({
-    where: isTeamConfirmationEmail
-      ? getTeamConfirmationLeadWhere(formData)
-      : getLeadFilterWhere(formData, "email"),
-  });
+  const where = isTeamConfirmationEmail
+    ? getTeamConfirmationLeadWhere(formData)
+    : getLeadFilterWhere(formData, "email");
+  const matchingLeadIds = await getMatchingLeadIds(where);
+  const recipientCount = matchingLeadIds.length;
 
   const confirmationError = validateBulkConfirmation({
     count: recipientCount,
@@ -238,11 +266,20 @@ export async function sendBulkLeadEmailAction(
     };
   }
 
-  if (isTeamConfirmationEmail) {
-    return sendBulkTeamPlaceConfirmationEmailAction(prevState, formData);
+  if (recipientCount === 0) {
+    return {
+      ok: false,
+      error: "No matching recipients were found for this bulk email.",
+    };
   }
 
-  return rawSendBulkLeadEmailAction(prevState, formData);
+  const safeFormData = withIncludedLeadIds(formData, matchingLeadIds);
+
+  if (isTeamConfirmationEmail) {
+    return sendBulkTeamPlaceConfirmationEmailAction(prevState, safeFormData);
+  }
+
+  return rawSendBulkLeadEmailAction(prevState, safeFormData);
 }
 
 export async function sendBulkLeadSmsAction(
@@ -251,9 +288,10 @@ export async function sendBulkLeadSmsAction(
 ): Promise<BulkSmsActionState> {
   await requireAdmin();
 
-  const recipientCount = await prisma.interestLead.count({
-    where: getLeadFilterWhere(formData, "phone"),
-  });
+  const matchingLeadIds = await getMatchingLeadIds(
+    getLeadFilterWhere(formData, "phone"),
+  );
+  const recipientCount = matchingLeadIds.length;
 
   const confirmationError = validateBulkConfirmation({
     count: recipientCount,
@@ -268,5 +306,15 @@ export async function sendBulkLeadSmsAction(
     };
   }
 
-  return rawSendBulkLeadSmsAction(prevState, formData);
+  if (recipientCount === 0) {
+    return {
+      ok: false,
+      error: "No matching SMS recipients were found for this message.",
+    };
+  }
+
+  return rawSendBulkLeadSmsAction(
+    prevState,
+    withIncludedLeadIds(formData, matchingLeadIds),
+  );
 }
