@@ -8,9 +8,9 @@ import Link from "next/link";
 import { submitExpansionLeadAction } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Bring SIXFL to Your Area | SIXFL",
+  title: "Bring SIXFL to Your Area | Earn a Launch Commission",
   description:
-    "Help SIXFL identify a new league opportunity, venue and opening teams in your area. Approved launch partners can earn an agreed commission when a league successfully launches.",
+    "Help SIXFL launch a new six-a-side league and earn 10% of qualifying team fees collected during its first 12 months, capped at £2,500 per league.",
 };
 
 const inputClassName =
@@ -25,7 +25,7 @@ function getErrorMessage(error?: string) {
   if (error === "email") return "Please enter your email address.";
   if (error === "email-format") return "Please enter a valid email address.";
   if (error === "terms") {
-    return "Please confirm that you understand how commission eligibility works.";
+    return "Please confirm that you understand how the launch commission works.";
   }
   return "";
 }
@@ -43,13 +43,13 @@ const steps = [
   },
   {
     number: "03",
-    title: "We agree a launch plan",
-    text: "Before commission-earning work begins, we confirm your role, the qualifying milestones and the payment available.",
+    title: "We agree your launch role",
+    text: "Before qualifying work begins, we confirm your responsibilities and commission terms in writing.",
   },
   {
     number: "04",
     title: "Help us launch",
-    text: "You make the agreed introductions or recruit teams. SIXFL owns and operates the league and pays when the conditions are met.",
+    text: "You complete the agreed introductions or recruitment work. SIXFL builds and operates the league and pays commission on qualifying team fees.",
   },
 ];
 
@@ -70,7 +70,49 @@ const partnerContributions = [
   "Introduce SIXFL to venue management",
   "Connect us with genuine local teams",
   "Help create initial local awareness",
-  "Complete only the work agreed with SIXFL",
+  "Complete the work agreed with SIXFL",
+];
+
+const commissionExamples = [
+  { teams: 6, revenue: "£11,520", commission: "£1,152" },
+  { teams: 8, revenue: "£15,360", commission: "£1,536" },
+  { teams: 10, revenue: "£19,200", commission: "£1,920" },
+  { teams: 12, revenue: "£23,040", commission: "£2,304" },
+];
+
+const commissionTerms = [
+  {
+    title: "Qualifying team fees",
+    text: "Commission is calculated on standard weekly team fees actually paid for the approved league.",
+  },
+  {
+    title: "12-month limit",
+    text: "Commission runs from the first paid matchnight and ends after 12 months, or earlier when the £2,500 cap is reached.",
+  },
+  {
+    title: "Payments",
+    text: "Commission is paid quarterly in arrears. The first payment is released after three paid matchnights and is then backdated to the first paid matchnight.",
+  },
+  {
+    title: "Excluded amounts",
+    text: "VAT, refunds, credits, chargebacks, kits, fines, late-payment charges, sponsorship and unrelated income do not count.",
+  },
+  {
+    title: "One cap per league",
+    text: "The £2,500 maximum is one commission pool for the approved league. If more than one partner helps, the agreed shares come from that same pool.",
+  },
+  {
+    title: "Separate rewards",
+    text: "Teams covered by the launch commission do not also receive the standard team-referral reward unless SIXFL agrees this separately in writing.",
+  },
+  {
+    title: "Future leagues",
+    text: "A second league in the same town or at the same venue is a separate opportunity and is not automatically included.",
+  },
+  {
+    title: "Ongoing local work",
+    text: "Any paid matchnight or local coordinator role after launch is a separate agreement with its own responsibilities and payment.",
+  },
 ];
 
 export default async function BringSixflToYourAreaPage({
@@ -102,10 +144,10 @@ export default async function BringSixflToYourAreaPage({
               </h1>
 
               <p className="mt-6 max-w-3xl text-base leading-8 text-white/70 sm:text-xl">
-                Know a town that needs a properly run six-a-side league? Help
-                SIXFL identify the venue and opening teams. When an approved
-                opportunity launches and the agreed conditions are met, you can
-                earn a commission.
+                Use your local knowledge and contacts to help SIXFL find a venue
+                and opening teams. Approved launch partners earn 10% of
+                qualifying team fees collected during the league&apos;s first 12
+                months, capped at £2,500 per league.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -116,34 +158,33 @@ export default async function BringSixflToYourAreaPage({
                   Tell us about an area
                 </a>
                 <a
-                  href="#how-it-works"
+                  href="#commission"
                   className="inline-flex h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 text-sm font-bold text-white transition hover:bg-white/10"
                 >
-                  See how it works
+                  See the commission
                 </a>
               </div>
             </div>
 
             <aside className="rounded-[2rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-6 shadow-2xl shadow-black/40 sm:p-8">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">
-                Local league launch partnership
+                Launch partner commission
               </p>
               <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">
-                Help bring a new SIXFL league to your area.
+                Earn 10% of the league&apos;s qualifying team fees.
               </h2>
               <p className="mt-4 text-sm leading-7 text-white/70">
-                Use your local knowledge and contacts to identify a suitable
-                venue and connect us with the first teams. SIXFL builds and
-                operates the league, and you earn an agreed commission when the
-                launch conditions are met.
+                The commission runs for the first 12 months from the first paid
+                matchnight and is capped at £2,500 in total for each approved
+                league.
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 {[
-                  "Spot a strong local opportunity",
-                  "Introduce a suitable venue",
-                  "Connect the opening teams",
-                  "Earn an agreed commission",
+                  "10% of qualifying fees",
+                  "First 12 months",
+                  "£2,500 maximum",
+                  "Based on fees collected",
                 ].map((item) => (
                   <div
                     key={item}
@@ -193,15 +234,123 @@ export default async function BringSixflToYourAreaPage({
           </div>
 
           <div className="mt-8 rounded-3xl border border-amber-300/20 bg-amber-300/[0.06] p-5 text-sm leading-6 text-amber-50/80 sm:p-6">
-            <strong className="text-amber-100">How commission works:</strong>{" "}
-            SIXFL reviews each opportunity and confirms in writing when an area
-            is approved for development. Your role, qualifying work and
-            commission are agreed before that work begins.
+            <strong className="text-amber-100">Approval comes first:</strong>{" "}
+            SIXFL must approve the opportunity and agree your role and qualifying
+            work in writing before commission-earning work begins.
           </div>
         </div>
       </section>
 
-      <section className="border-b border-white/10">
+      <section id="commission" className="scroll-mt-24 border-b border-white/10">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+          <div className="max-w-4xl">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">
+              The commission
+            </p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
+              10% for the first year, up to £2,500.
+            </h2>
+            <p className="mt-5 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">
+              Commission rises with the number of paying teams and paid match
+              weeks. It ends at the earlier of 12 months from the first paid
+              matchnight or £2,500 of total commission paid.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <article className="rounded-[2rem] border border-emerald-400/25 bg-emerald-500/[0.08] p-6 sm:p-8">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">
+                Worked example
+              </p>
+              <h3 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">
+                A 12-team league over 48 paid weeks
+              </h3>
+
+              <div className="mt-7 space-y-4">
+                <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4 text-sm text-white/65">
+                  <span>12 teams × £40 qualifying fee × 48 weeks</span>
+                  <strong className="text-white">£23,040</strong>
+                </div>
+                <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4 text-sm text-white/65">
+                  <span>Launch commission at 10%</span>
+                  <strong className="text-2xl text-emerald-300">£2,304</strong>
+                </div>
+                <div className="flex items-center justify-between gap-4 text-sm text-white/65">
+                  <span>Maximum commission per league</span>
+                  <strong className="text-white">£2,500</strong>
+                </div>
+              </div>
+
+              <p className="mt-6 text-xs leading-5 text-white/45">
+                This is a worked example using £40 of qualifying weekly team fees per team. Actual
+                commission depends on qualifying fees actually collected and may
+                be lower.
+              </p>
+            </article>
+
+            <article className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6 sm:p-8">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-300">
+                48-week examples
+              </p>
+              <h3 className="mt-3 text-2xl font-black tracking-tight">
+                What different league sizes could produce
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-white/55">
+                These examples also assume £40 of qualifying weekly team fees is
+                collected per team for every listed week.
+              </p>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                {commissionExamples.map((item) => (
+                  <div
+                    key={item.teams}
+                    className="rounded-2xl border border-white/10 bg-black/25 p-4"
+                  >
+                    <div className="text-sm font-bold text-white">
+                      {item.teams} paying teams
+                    </div>
+                    <div className="mt-2 text-xs text-white/45">
+                      Qualifying revenue: {item.revenue}
+                    </div>
+                    <div className="mt-3 text-xl font-black text-emerald-300">
+                      {item.commission} commission
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+
+          <div className="mt-10">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/45">
+              Commission terms at a glance
+            </p>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {commissionTerms.map((item) => (
+                <article
+                  key={item.title}
+                  className="rounded-3xl border border-white/10 bg-black/25 p-5 sm:p-6"
+                >
+                  <h3 className="font-extrabold text-white">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-white/55">
+                    {item.text}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.035] p-5 text-xs leading-6 text-white/50 sm:p-6">
+            The written launch-partner agreement for an approved opportunity
+            confirms the qualifying work, any shared commission split and the
+            final payment details. The standard calculation is 10% of qualifying
+            weekly team fees actually collected, excluding VAT and the other
+            excluded amounts listed above.
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-white/10 bg-white/[0.02]">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <div className="grid gap-6 lg:grid-cols-2">
             <article className="rounded-[2rem] border border-emerald-400/20 bg-emerald-500/[0.06] p-6 sm:p-8">
@@ -252,7 +401,10 @@ export default async function BringSixflToYourAreaPage({
         </div>
       </section>
 
-      <section id="apply" className="scroll-mt-24 border-b border-white/10 bg-white/[0.02]">
+      <section
+        id="apply"
+        className="scroll-mt-24 border-b border-white/10"
+      >
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <div className="grid gap-10 lg:grid-cols-[0.75fr_1.25fr] lg:items-start">
             <div className="lg:sticky lg:top-24">
@@ -273,7 +425,7 @@ export default async function BringSixflToYourAreaPage({
                   "Share the area and local opportunity",
                   "SIXFL reviews venue and team potential",
                   "Approved opportunities receive a written launch plan",
-                  "Commission is agreed before qualifying work",
+                  "Earn 10% for up to 12 months, capped at £2,500",
                 ].map((item) => (
                   <div key={item} className="flex gap-3">
                     <span className="text-emerald-300">✓</span>
@@ -346,8 +498,8 @@ export default async function BringSixflToYourAreaPage({
                       </label>
                       <select id="leagueType" name="leagueType" className={inputClassName}>
                         <option value="">Not sure yet</option>
-                        <option value="MENS">Men’s league</option>
-                        <option value="WOMENS">Women’s league</option>
+                        <option value="MENS">Men&apos;s league</option>
+                        <option value="WOMENS">Women&apos;s league</option>
                         <option value="YOUTH">Youth league</option>
                       </select>
                     </div>
@@ -566,10 +718,12 @@ export default async function BringSixflToYourAreaPage({
                       className="mt-1 h-4 w-4 shrink-0 accent-emerald-500"
                     />
                     <span className="text-xs leading-5 text-white/65">
-                      I understand that SIXFL will review the proposed area and
-                      confirm in writing whether the opportunity is approved. Any
-                      role, qualifying conditions and commission will be agreed in
-                      writing before commission-earning work begins. *
+                      I understand that the standard launch commission is 10% of
+                      qualifying weekly team fees actually collected during the
+                      approved league&apos;s first 12 months, capped at £2,500 per
+                      league. SIXFL must approve the opportunity and agree my role,
+                      qualifying work and payment terms in writing before
+                      commission-earning work begins. *
                     </span>
                   </label>
 
@@ -591,8 +745,8 @@ export default async function BringSixflToYourAreaPage({
         </div>
       </section>
 
-      <section className="border-b border-white/10">
-        <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+      <section className="border-b border-white/10 bg-white/[0.02]">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <div className="text-center">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">
               Common questions
@@ -607,12 +761,32 @@ export default async function BringSixflToYourAreaPage({
               {
                 question: "What would my role be?",
                 answer:
-                  "You help with the part of the launch agreed with SIXFL, such as introducing a venue or connecting opening teams. SIXFL builds and operates the league. A separate local coordination role may also be discussed where needed.",
+                  "You help with the part of the launch agreed with SIXFL, such as introducing a venue or connecting opening teams. SIXFL builds and operates the league.",
               },
               {
-                question: "How does commission work?",
+                question: "How much could I earn?",
                 answer:
-                  "SIXFL first assesses the opportunity. We then agree your role, milestones and payment in writing before qualifying work begins. Commission is paid when those agreed conditions are met.",
+                  "The standard commission is 10% of qualifying weekly team fees actually collected during the first 12 months, capped at £2,500 per approved league. A 12-team league paying £40 for 48 weeks would produce £2,304 commission.",
+              },
+              {
+                question: "What counts as qualifying revenue?",
+                answer:
+                  "Standard weekly team fees actually paid for the approved league, excluding VAT, refunds, credits, chargebacks, kits, fines, late-payment charges, sponsorship and unrelated income.",
+              },
+              {
+                question: "When would I be paid?",
+                answer:
+                  "Payments are made quarterly in arrears. The first payment is released once the league has completed three paid matchnights and is then backdated to the first paid matchnight.",
+              },
+              {
+                question: "What happens if two people help?",
+                answer:
+                  "There is one £2,500 commission cap for the league. Any split between launch partners is agreed in writing before qualifying work begins.",
+              },
+              {
+                question: "Can I also claim a team-referral reward?",
+                answer:
+                  "The normal team-referral reward is not added for teams already covered by your launch commission unless SIXFL approves both rewards separately in writing.",
               },
               {
                 question: "What experience is useful?",
@@ -622,7 +796,7 @@ export default async function BringSixflToYourAreaPage({
               {
                 question: "Can I submit more than one area?",
                 answer:
-                  "Yes. Please submit a separate form for each distinct opportunity so we can assess and track them properly.",
+                  "Yes. Submit each distinct opportunity separately. A later second league in the same town or venue also needs its own approval and agreement.",
               },
             ].map((item) => (
               <article
