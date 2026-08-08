@@ -41,8 +41,8 @@ export default async function AdminLeagueLayout({
           Advert video
         </Link>
       </div>
-      {children}
       <AdminLeagueSeasonTeamsPanel />
+      {children}
     </div>
   );
 }
