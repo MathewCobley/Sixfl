@@ -11,12 +11,20 @@ export type FixturePlaceholderTeamRow = {
   leagueId: string;
 };
 
+/**
+ * Some older SIXFL placeholder rows pre-date the isFixturePlaceholder flag and
+ * are simply named TBC. Treat both representations as placeholders so legacy
+ * data cannot accidentally behave like a real club.
+ */
 export async function isFixturePlaceholderTeam(
   teamId: string,
   client: RawDbClient = prisma,
 ) {
   const rows = await client.$queryRaw<Array<{ value: boolean }>>(Prisma.sql`
-    SELECT COALESCE("isFixturePlaceholder", false) AS "value"
+    SELECT (
+      COALESCE("isFixturePlaceholder", false)
+      OR UPPER(TRIM("name")) = 'TBC'
+    ) AS "value"
     FROM "Team"
     WHERE "id" = ${teamId}
     LIMIT 1
@@ -35,13 +43,17 @@ export async function getFixturePlaceholderTeamIds(
     ? await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id"
         FROM "Team"
-        WHERE "isFixturePlaceholder" = true
+        WHERE (
+          "isFixturePlaceholder" = true
+          OR UPPER(TRIM("name")) = 'TBC'
+        )
           AND "id" IN (${Prisma.join(teamIds)})
       `)
     : await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id"
         FROM "Team"
         WHERE "isFixturePlaceholder" = true
+          OR UPPER(TRIM("name")) = 'TBC'
       `);
 
   return new Set(rows.map((row) => row.id));
@@ -60,7 +72,9 @@ export async function fixtureHasPlaceholderTeam(
       WHERE f."id" = ${fixtureId}
         AND (
           home_team."isFixturePlaceholder" = true
+          OR UPPER(TRIM(home_team."name")) = 'TBC'
           OR away_team."isFixturePlaceholder" = true
+          OR UPPER(TRIM(away_team."name")) = 'TBC'
         )
     ) AS "value"
   `);
@@ -93,7 +107,10 @@ export async function getLeagueFixturePlaceholderTeam(
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${leagueId}
       AND lst."isActive" = true
-      AND t."isFixturePlaceholder" = true
+      AND (
+        t."isFixturePlaceholder" = true
+        OR UPPER(TRIM(t."name")) = 'TBC'
+      )
     ORDER BY t."createdAt" ASC
     LIMIT 1
   `);
