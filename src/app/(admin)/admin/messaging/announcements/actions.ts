@@ -8,6 +8,7 @@ import {
   findOrCreateAnnouncementRecipient,
   getAnnouncementAlreadyQueuedEmails,
   getAnnouncementFirstName,
+  getAnnouncementSourceId,
   getAnnouncementTemplateCompatibility,
   getSystemAnnouncementAudience,
   resolveAnnouncementCta,
@@ -92,9 +93,17 @@ export async function sendSystemAnnouncementAction(formData: FormData) {
     );
   }
 
+  const announcementSourceId = getAnnouncementSourceId({
+    id: template.id,
+    subject: template.subject,
+    body: template.body,
+    ctaLabel: template.ctaLabel,
+    ctaUrlKey: template.ctaUrlKey,
+  });
+
   const [audience, alreadyQueuedEmails] = await Promise.all([
     getSystemAnnouncementAudience(),
-    getAnnouncementAlreadyQueuedEmails(template.id),
+    getAnnouncementAlreadyQueuedEmails(announcementSourceId),
   ]);
 
   const publicSite = getPublicSiteUrl();
@@ -130,7 +139,7 @@ export async function sendSystemAnnouncementAction(formData: FormData) {
         body: template.body,
         isTransactional: true,
         sourceType: ANNOUNCEMENT_SOURCE_TYPE,
-        sourceId: template.id,
+        sourceId: announcementSourceId,
         variables: {
           firstName: getAnnouncementFirstName(person.displayName),
           name: displayName,
@@ -142,6 +151,7 @@ export async function sendSystemAnnouncementAction(formData: FormData) {
         },
         emailCta,
         metadata: {
+          announcementSourceId,
           announcementTemplateId: template.id,
           announcementTemplateKey: template.key,
           announcementTemplateName: template.name,
@@ -159,6 +169,7 @@ export async function sendSystemAnnouncementAction(formData: FormData) {
       failed += 1;
       console.error("System announcement queue failed", {
         templateId: template.id,
+        announcementSourceId,
         email: person.email,
         error,
       });
