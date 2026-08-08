@@ -14,12 +14,31 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 const CAMPAIGN_KEY = "goal-of-week-player-vote-launch-2026-08";
+export const GOAL_OF_WEEK_LAUNCH_TEMPLATE_KEY = "goal-of-week-player-vote-launch";
 
 export type GoalOfWeekAnnouncementRecipient = {
   userId: string;
   email: string;
   name: string | null;
 };
+
+export async function getGoalOfWeekLaunchTemplate() {
+  return prisma.emailTemplate.findUnique({
+    where: { key: GOAL_OF_WEEK_LAUNCH_TEMPLATE_KEY },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      description: true,
+      subject: true,
+      body: true,
+      ctaLabel: true,
+      ctaUrlKey: true,
+      isActive: true,
+      updatedAt: true,
+    },
+  });
+}
 
 export async function getGoalOfWeekAnnouncementRecipients() {
   const rows = await prisma.$queryRaw<GoalOfWeekAnnouncementRecipient[]>`
@@ -63,7 +82,19 @@ function firstName(value: string | null) {
 
 export async function sendGoalOfWeekLaunchAnnouncementAction() {
   const admin = await requireAdmin();
-  const recipients = await getGoalOfWeekAnnouncementRecipients();
+  const [recipients, template] = await Promise.all([
+    getGoalOfWeekAnnouncementRecipients(),
+    getGoalOfWeekLaunchTemplate(),
+  ]);
+
+  if (!template) {
+    redirect("/admin/sixfl-tv/goal-of-week/announcement?template=missing");
+  }
+
+  if (!template.isActive) {
+    redirect("/admin/sixfl-tv/goal-of-week/announcement?template=inactive");
+  }
+
   const dashboardUrl = `${getPublicSiteUrl()}/dashboard`;
 
   let queued = 0;
@@ -92,7 +123,9 @@ export async function sendGoalOfWeekLaunchAnnouncementAction() {
         transactionalEmailOptIn: existingRecipient?.transactionalEmailOptIn ?? true,
         transactionalSmsOptIn: existingRecipient?.transactionalSmsOptIn ?? true,
         metadata: {
-          ...(existingRecipient?.metadata && typeof existingRecipient.metadata === "object" && !Array.isArray(existingRecipient.metadata)
+          ...(existingRecipient?.metadata &&
+          typeof existingRecipient.metadata === "object" &&
+          !Array.isArray(existingRecipient.metadata)
             ? existingRecipient.metadata
             : {}),
           goalOfWeekLaunchAudience: true,
@@ -117,35 +150,26 @@ export async function sendGoalOfWeekLaunchAnnouncementAction() {
         recipientId: recipient.id,
         channel: NotificationChannel.EMAIL,
         audience: NotificationAudience.USER,
-        subject: "Goal of the Week is now yours to decide ⚽",
-        body: [
-          "Hi {{firstName}},",
-          "",
-          "SIXFL Goal of the Week is changing — the players now choose it.",
-          "",
-          "After a recorded SIXFL TV match, players and captains can nominate the goals they think deserve to be in the running. If more than one person picks the same goal, those nominations are combined.",
-          "",
-          "The six most-nominated goals go into the following week's ballot. Every verified SIXFL player and captain gets one vote, and you can change your choice until voting closes.",
-          "",
-          "You will now see a Goal of the Week card on your SIXFL dashboard whenever there is something to nominate or a vote is open.",
-          "",
-          "{{cta}}",
-          "",
-          "So if somebody scores an absolute worldie, don't just talk about it — nominate it. And when the shortlist opens, you decide the winner.",
-        ].join("\n"),
+        subject: template.subject,
+        body: template.body,
         variables: {
           firstName: firstName(person.name),
+          captainDashboardUrl: dashboardUrl,
         },
-        emailCta: {
-          label: "Open my SIXFL dashboard",
-          url: dashboardUrl,
-        },
+        emailCta: template.ctaLabel
+          ? {
+              label: template.ctaLabel,
+              url: dashboardUrl,
+            }
+          : undefined,
         isTransactional: true,
         sourceType: "GOAL_OF_WEEK",
         sourceId: CAMPAIGN_KEY,
         metadata: {
           purpose: "Goal of the Week player-vote launch",
           campaignKey: CAMPAIGN_KEY,
+          emailTemplateKey: template.key,
+          emailTemplateId: template.id,
           userId: person.userId,
         },
         createdByUserId: admin.user?.id ?? null,
