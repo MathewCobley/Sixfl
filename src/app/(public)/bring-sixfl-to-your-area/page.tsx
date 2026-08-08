@@ -126,24 +126,24 @@ export default async function BringSixflToYourAreaPage({
 
             <aside className="rounded-[2rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-6 shadow-2xl shadow-black/40 sm:p-8">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">
-                SIXFL stays in control
+                Local league launch partnership
               </p>
               <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">
-                A launch-partner opportunity, not a franchise.
+                Help bring a new SIXFL league to your area.
               </h2>
               <p className="mt-4 text-sm leading-7 text-white/70">
-                SIXFL creates, owns and operates every league. You can help us
-                find the local opportunity, make introductions and recruit the
-                first teams. We agree the role, qualifying conditions and
-                commission in writing before any commission-earning work begins.
+                Use your local knowledge and contacts to identify a suitable
+                venue and connect us with the first teams. SIXFL builds and
+                operates the league, and you earn an agreed commission when the
+                launch conditions are met.
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 {[
-                  "SIXFL owns the league",
-                  "SIXFL controls pricing",
-                  "SIXFL manages payments",
-                  "You earn an agreed reward",
+                  "Spot a strong local opportunity",
+                  "Introduce a suitable venue",
+                  "Connect the opening teams",
+                  "Earn an agreed commission",
                 ].map((item) => (
                   <div
                     key={item}
@@ -193,10 +193,10 @@ export default async function BringSixflToYourAreaPage({
           </div>
 
           <div className="mt-8 rounded-3xl border border-amber-300/20 bg-amber-300/[0.06] p-5 text-sm leading-6 text-amber-50/80 sm:p-6">
-            <strong className="text-amber-100">Important:</strong> simply naming
-            a town does not qualify for payment. An area is not reserved, and no
-            commission is due unless SIXFL approves the opportunity and agrees
-            the terms with you in writing before the relevant work begins.
+            <strong className="text-amber-100">How commission works:</strong>{" "}
+            SIXFL reviews each opportunity and confirms in writing when an area
+            is approved for development. Your role, qualifying work and
+            commission are agreed before that work begins.
           </div>
         </div>
       </section>
@@ -243,9 +243,9 @@ export default async function BringSixflToYourAreaPage({
                 ))}
               </div>
               <p className="mt-6 text-sm leading-6 text-white/55">
-                A separate paid local coordinator role may be discussed after
-                launch where SIXFL needs one. It is not automatic and does not
-                change ownership of the league.
+                Where a local matchnight coordinator is needed after launch,
+                SIXFL may offer a separate paid role with clearly agreed
+                responsibilities.
               </p>
             </article>
           </div>
@@ -270,9 +270,9 @@ export default async function BringSixflToYourAreaPage({
 
               <div className="mt-7 space-y-3 text-sm text-white/65">
                 {[
-                  "No fee to submit an opportunity",
-                  "No obligation to continue",
-                  "No area is reserved by submitting",
+                  "Share the area and local opportunity",
+                  "SIXFL reviews venue and team potential",
+                  "Approved opportunities receive a written launch plan",
                   "Commission is agreed before qualifying work",
                 ].map((item) => (
                   <div key={item} className="flex gap-3">
@@ -566,17 +566,16 @@ export default async function BringSixflToYourAreaPage({
                       className="mt-1 h-4 w-4 shrink-0 accent-emerald-500"
                     />
                     <span className="text-xs leading-5 text-white/65">
-                      I understand that submitting an area does not reserve it or
-                      create a right to commission. Any role, qualifying conditions
-                      and commission must be approved and agreed in writing by
-                      SIXFL before commission-earning work begins. *
+                      I understand that SIXFL will review the proposed area and
+                      confirm in writing whether the opportunity is approved. Any
+                      role, qualifying conditions and commission will be agreed in
+                      writing before commission-earning work begins. *
                     </span>
                   </label>
 
                   <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-xs leading-5 text-white/50">
-                    We will use these details to assess and contact you about this
-                    expansion opportunity. This form does not add you to a general
-                    marketing list.
+                    We will use these details only to assess and contact you about
+                    this expansion opportunity.
                   </div>
 
                   <button
@@ -606,19 +605,19 @@ export default async function BringSixflToYourAreaPage({
           <div className="mt-10 grid gap-4 md:grid-cols-2">
             {[
               {
-                question: "Would I own or run the league?",
+                question: "What would my role be?",
                 answer:
-                  "No. SIXFL owns and operates the league. You may help with an agreed part of the launch, and a separate local coordination role can be discussed later where needed.",
+                  "You help with the part of the launch agreed with SIXFL, such as introducing a venue or connecting opening teams. SIXFL builds and operates the league. A separate local coordination role may also be discussed where needed.",
               },
               {
-                question: "Is commission automatic when I submit an area?",
+                question: "How does commission work?",
                 answer:
-                  "No. We first assess the opportunity. Commission only applies where SIXFL agrees the role, milestones and payment with you in writing before the relevant work starts.",
+                  "SIXFL first assesses the opportunity. We then agree your role, milestones and payment in writing before qualifying work begins. Commission is paid when those agreed conditions are met.",
               },
               {
-                question: "Do I need football-management experience?",
+                question: "What experience is useful?",
                 answer:
-                  "Not necessarily. Reliable local knowledge, genuine venue or team connections and the ability to follow through are often more valuable.",
+                  "Local knowledge, genuine venue or team connections and the ability to follow through are most valuable. Football, community, events or sales experience can also help.",
               },
               {
                 question: "Can I submit more than one area?",

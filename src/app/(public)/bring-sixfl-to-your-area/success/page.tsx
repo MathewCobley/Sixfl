@@ -36,18 +36,19 @@ export default function ExpansionLeadSuccessPage() {
           <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-5">
             <h2 className="font-bold text-white">What happens next</h2>
             <ol className="mt-4 space-y-3 text-sm leading-6 text-white/70">
-              <li>1. SIXFL checks whether the area fits our expansion plans.</li>
+              <li>1. SIXFL checks how the area fits our expansion plans.</li>
               <li>2. We assess venue availability and realistic team demand.</li>
               <li>
-                3. Before any commission-earning work begins, the role,
-                qualifying conditions and payment are agreed in writing.
+                3. We agree the role, qualifying conditions and payment in
+                writing before commission-earning work begins.
               </li>
             </ol>
           </div>
 
           <p className="mt-6 text-sm leading-6 text-white/50">
-            Submitting an area does not reserve it and does not by itself create
-            a right to commission.
+            SIXFL will confirm in writing when an opportunity is approved and
+            agree any role, qualifying conditions and commission before work
+            begins.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
