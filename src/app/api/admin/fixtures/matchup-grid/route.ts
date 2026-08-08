@@ -6,7 +6,6 @@ import { FixtureStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { getCurrentLeagueOptions } from "@/lib/current-leagues";
-import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -92,8 +91,6 @@ async function getSeasonTeams(input: {
   leagueId: string;
   divisionId: string | null;
 }) {
-  await ensureSeasonTeamRowsForLeague(input.leagueId);
-
   if (input.divisionId) {
     return prisma.$queryRaw<TeamOption[]>(Prisma.sql`
       SELECT t."id", t."name"
@@ -102,7 +99,8 @@ async function getSeasonTeams(input: {
       WHERE lst."leagueId" = ${input.leagueId}
         AND lst."divisionId" = ${input.divisionId}
         AND lst."isActive" = true
-        AND t."leagueId" = ${input.leagueId}
+        AND COALESCE(t."isFixturePlaceholder", false) = false
+        AND LOWER(TRIM(t."name")) <> 'tbc'
       ORDER BY t."name" ASC
     `);
   }
@@ -113,7 +111,8 @@ async function getSeasonTeams(input: {
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
       AND lst."isActive" = true
-      AND t."leagueId" = ${input.leagueId}
+      AND COALESCE(t."isFixturePlaceholder", false) = false
+      AND LOWER(TRIM(t."name")) <> 'tbc'
     ORDER BY t."name" ASC
   `);
 }
