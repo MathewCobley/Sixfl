@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import AdminLeagueSeasonTeamsPanel from "@/components/admin/leagues/AdminLeagueSeasonTeamsPanel";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -41,6 +42,7 @@ export default async function AdminLeagueLayout({
         </Link>
       </div>
       {children}
+      <AdminLeagueSeasonTeamsPanel />
     </div>
   );
 }
