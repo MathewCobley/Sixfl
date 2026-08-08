@@ -85,9 +85,10 @@ function getLeadFilterWhere(formData: FormData, contactField: "email" | "phone")
   const includedLeadIds = getIncludedLeadIds(formData);
 
   const where: Prisma.InterestLeadWhereInput = {
-    source: {
-      not: EXPANSION_LEAD_SOURCE,
-    },
+    OR: [
+      { source: null },
+      { source: { not: EXPANSION_LEAD_SOURCE } },
+    ],
     ...(selectedTypeRaw && isInterestType(selectedTypeRaw)
       ? { interestType: selectedTypeRaw }
       : {}),
