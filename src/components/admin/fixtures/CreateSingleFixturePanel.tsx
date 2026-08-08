@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { createSingleDraftFixtureAction } from "@/app/(admin)/admin/fixtures/generate/single-fixture-action";
@@ -50,8 +52,12 @@ export default function CreateSingleFixturePanel({
   venues: VenueOption[];
   referees: RefereeOption[];
 }) {
+  const searchParams = useSearchParams();
   const [leagueId, setLeagueId] = useState(leagues[0]?.id ?? "");
   const [divisionId, setDivisionId] = useState("");
+  const created = searchParams.get("singleCreated") === "1";
+  const createdFixtureId = searchParams.get("singleFixtureId")?.trim() ?? "";
+  const createError = searchParams.get("singleError")?.trim() ?? "";
 
   const leagueDivisions = useMemo(
     () => divisions.filter((division) => division.leagueId === leagueId),
@@ -85,6 +91,26 @@ export default function CreateSingleFixturePanel({
           It is created as an unpublished draft so you can check it before publishing.
         </p>
       </div>
+
+      {created ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          <span>Fixture created successfully as a draft.</span>
+          {createdFixtureId ? (
+            <Link
+              href={`/admin/fixtures/${encodeURIComponent(createdFixtureId)}/edit`}
+              className="font-semibold underline decoration-emerald-200/40 underline-offset-4 hover:text-white"
+            >
+              Open fixture
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+
+      {createError ? (
+        <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          {createError}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div>
