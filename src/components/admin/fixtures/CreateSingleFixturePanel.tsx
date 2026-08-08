@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { createSingleDraftFixtureAction } from "@/app/(admin)/admin/fixtures/generate/division-actions";
+import { createSingleDraftFixtureAction } from "@/app/(admin)/admin/fixtures/generate/single-fixture-action";
 
 type LeagueOption = {
   id: string;
