@@ -17,6 +17,27 @@ async function assertSubstantialBox(locator, label, minHeight = 220) {
   }
 }
 
+async function waitForImagesToSettle(page) {
+  await page.locator("img").evaluateAll(async (images) => {
+    await Promise.all(
+      images.map(
+        (image) =>
+          new Promise((resolve) => {
+            if (image.complete) {
+              resolve();
+              return;
+            }
+
+            const finish = () => resolve();
+            image.addEventListener("load", finish, { once: true });
+            image.addEventListener("error", finish, { once: true });
+            setTimeout(finish, 5_000);
+          }),
+      ),
+    );
+  });
+}
+
 async function assertHomepage(page, label) {
   const browserErrors = [];
   page.on("pageerror", (error) => browserErrors.push(`pageerror: ${error.message}`));
@@ -81,6 +102,8 @@ async function assertHomepage(page, label) {
     fail(`${label} Harrogate player link regressed.`);
   }
 
+  await waitForImagesToSettle(page);
+
   const brokenImages = await page.locator("img").evaluateAll((images) =>
     images
       .filter((image) => !image.complete || image.naturalWidth === 0 || image.naturalHeight === 0)
@@ -103,6 +126,13 @@ async function assertHomepage(page, label) {
       fail(`${label} ${alt} brand image collapsed (${JSON.stringify(box)}).`);
     }
   }
+
+  const mainLogo = page.getByAltText("SIXFL").first();
+  await mainLogo.waitFor({ state: "visible" });
+  const mainLogoLoaded = await mainLogo.evaluate(
+    (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+  );
+  if (!mainLogoLoaded) fail(`${label} main SIXFL header logo did not load.`);
 
   if (browserErrors.length) {
     fail(`${label} emitted browser errors: ${browserErrors.join(" | ")}`);
