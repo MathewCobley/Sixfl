@@ -118,6 +118,13 @@ export default function SiteFooter() {
                 Pricing
               </Link>
 
+              <Link
+                className="inline-flex min-h-9 items-center font-semibold text-emerald-200 transition hover:text-emerald-400"
+                href="/bring-sixfl-to-your-area"
+              >
+                Bring SIXFL to your area
+              </Link>
+
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/founding-teams">
                 £90 Founding Kit Package
               </Link>
