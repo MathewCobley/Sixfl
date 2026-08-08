@@ -75,6 +75,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.85,
     },
+    {
+      url: absoluteUrl("/bring-sixfl-to-your-area"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.78,
+    },
   ];
 
   const leagueRoutes: MetadataRoute.Sitemap = leagues.flatMap((league) => [
