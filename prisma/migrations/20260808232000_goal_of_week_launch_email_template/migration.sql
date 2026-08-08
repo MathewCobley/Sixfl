@@ -38,7 +38,7 @@ You will now see a Goal of the Week card on your SIXFL dashboard whenever there 
 
 So if somebody scores an absolute worldie, don't just talk about it — nominate it. And when the shortlist opens, you decide the winner.$body$,
   'Open my SIXFL dashboard',
-  'dashboardUrl',
+  'captainDashboardUrl',
   true,
   CURRENT_TIMESTAMP,
   CURRENT_TIMESTAMP
