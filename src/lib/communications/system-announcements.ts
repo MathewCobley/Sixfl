@@ -42,6 +42,35 @@ export function getAnnouncementFirstName(value: string | null) {
   return value?.trim().split(/\s+/)[0]?.trim() || "there";
 }
 
+/**
+ * An announcement is one saved revision of an existing email template, not the
+ * template forever. Re-submitting the same unchanged revision cannot duplicate
+ * it; editing the subject/body/CTA produces a new fingerprint and therefore a
+ * genuinely new announcement that can be sent again.
+ */
+export function getAnnouncementSourceId(input: {
+  id: string;
+  subject: string;
+  body: string;
+  ctaLabel: string | null;
+  ctaUrlKey: string | null;
+}) {
+  const fingerprint = createHash("sha256")
+    .update(
+      JSON.stringify({
+        id: input.id,
+        subject: input.subject,
+        body: input.body,
+        ctaLabel: input.ctaLabel ?? null,
+        ctaUrlKey: input.ctaUrlKey ?? null,
+      }),
+    )
+    .digest("hex")
+    .slice(0, 32);
+
+  return `${input.id}:${fingerprint}`;
+}
+
 function getRecipientPriority(sourceType: string) {
   switch (sourceType) {
     case "USER":
@@ -131,8 +160,10 @@ export async function getSystemAnnouncementAudience() {
     .filter((row) => Boolean(row.email));
 }
 
-export async function getAnnouncementAlreadyQueuedEmails(templateId: string) {
-  if (!templateId) return new Set<string>();
+export async function getAnnouncementAlreadyQueuedEmails(
+  announcementSourceId: string,
+) {
+  if (!announcementSourceId) return new Set<string>();
 
   const rows = await prisma.$queryRaw<Array<{ email: string }>>(Prisma.sql`
     SELECT DISTINCT
@@ -141,7 +172,7 @@ export async function getAnnouncementAlreadyQueuedEmails(templateId: string) {
     INNER JOIN "NotificationRecipient" recipient
       ON recipient."id" = dispatch."recipientId"
     WHERE dispatch."sourceType" = ${ANNOUNCEMENT_SOURCE_TYPE}
-      AND dispatch."sourceId" = ${templateId}
+      AND dispatch."sourceId" = ${announcementSourceId}
       AND dispatch."status" IN ('QUEUED', 'PROCESSING', 'SENT')
       AND COALESCE(recipient."emailNormalized", recipient."email") IS NOT NULL
   `);
