@@ -47,56 +47,8 @@ function patchAdminPage() {
   write(filePath, source);
 }
 
-function patchHomepageSection() {
-  const filePath = "src/components/home/SixflTvHomepageSection.tsx";
-  let source = read(filePath);
-
-  source = replaceRequired(
-    source,
-    'const SIXFL_TV_CHANNEL_URL =',
-    'import GoalOfWeekHomepageFeature from "@/components/home/GoalOfWeekHomepageFeature";\n\nconst SIXFL_TV_CHANNEL_URL =',
-    filePath,
-  );
-
-  if (!source.includes("<GoalOfWeekHomepageFeature")) {
-    const startMarker = [
-      "          <a",
-      "            href={SIXFL_TV_CHANNEL_URL}",
-      '            target="_blank"',
-      '            rel="noopener noreferrer"',
-      '            className="group flex min-h-[330px]',
-    ].join("\n");
-    const endMarker = "          </a>\n\n          <div>";
-    const start = source.indexOf(startMarker);
-    const end = source.indexOf(endMarker, start);
-
-    if (start === -1 || end === -1) {
-      throw new Error(`Expected SIXFL TV homepage card was not found in ${filePath}`);
-    }
-
-    source =
-      source.slice(0, start) +
-      "          <GoalOfWeekHomepageFeature channelUrl={SIXFL_TV_CHANNEL_URL} />\n\n          <div>" +
-      source.slice(end + endMarker.length);
-  }
-
-  source = source.replace(
-    "Watch SIXFL matches, highlights and goals.",
-    "Watch the Goal of the Week and every SIXFL highlight.",
-  );
-  source = source.replace(
-    "Selected SIXFL fixtures are recorded and uploaded to SIXFL TV, giving teams and players the chance to watch matches back, relive the best goals and share matchday highlights.",
-    "See the latest Goal of the Week, then explore recorded fixtures, highlights and matchday moments from across SIXFL.",
-  );
-  source = source.replace(
-    '[\n                "Recorded matches",',
-    '[\n                "Goal of the Week",\n                "Recorded matches",',
-  );
-
-  write(filePath, source);
-}
-
+// The homepage is now native React. This compatibility script is deliberately
+// limited to the admin page and must never rewrite public homepage source.
 patchAdminPage();
-patchHomepageSection();
 
-console.log("Applied Goal of the Week admin and homepage integration.");
+console.log("Applied Goal of the Week admin integration.");
