@@ -3,6 +3,11 @@
 // ========================================
 
 import Link from "next/link";
+
+import HomepageAiPredictorSection, {
+  type PredictorSampleTeamLogos,
+} from "@/components/home/HomepageAiPredictorSection";
+import SixflTvHomepageSection from "@/components/home/SixflTvHomepageSection";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +25,16 @@ const generalRegisterLink = "/register-interest";
 const generalTeamLink = "/register-interest?type=team";
 const generalPlayerLink = "/register-interest?type=player";
 const generalRefereeLink = "/register-interest?type=referee";
-const wetherbyTeamLink = "/register-interest?type=team&area=Wetherby&night=Wednesday";
-const wetherbyPlayerLink = "/register-interest?type=player&area=Wetherby&night=Wednesday";
+const wetherbyTeamLink =
+  "/register-interest?type=team&area=Wetherby&night=Wednesday";
+const wetherbyPlayerLink =
+  "/register-interest?type=player&area=Wetherby&night=Wednesday";
 const northallertonTeamLink =
   "/register-interest?type=team&area=Northallerton&night=Wednesday";
 const northallertonPlayerLink =
   "/register-interest?type=player&area=Northallerton&night=Wednesday";
+const harrogatePlayerLink =
+  "/register-interest?type=player&area=Harrogate&night=Tuesday";
 
 const leagueTypes = ["MEN’S LEAGUES"];
 const launchAreas = [
@@ -43,18 +52,18 @@ const predictorAwayTeamName = "Crescent United";
 const areaCards = [
   {
     eyebrow: "LIVE HARROGATE LEAGUE",
-    title: "Harrogate Tuesday 6-a-side",
+    title: "Harrogate West Tuesday League",
     status: "Fixtures live",
     body: "See upcoming fixtures, recent results, teams and the current league table for the Tuesday 6-a-side league at Rossett Sports Centre.",
     primaryLabel: "View league",
     primaryHref: harrogateLeagueLink,
-    secondaryLabel: "Register interest",
-    secondaryHref: generalRegisterLink,
+    secondaryLabel: "Join as player",
+    secondaryHref: harrogatePlayerLink,
     featured: true,
   },
   {
     eyebrow: "WETHERBY LAUNCH",
-    title: "Wetherby Wednesday 6-a-side",
+    title: "Wetherby Wednesday League",
     status: "Registrations open",
     body: "Wetherby team entries are now open for a new Wednesday night SIXFL league at Boston Spa Academy. Captains, players and referees can register interest now.",
     primaryLabel: "Register team",
@@ -65,7 +74,7 @@ const areaCards = [
   },
   {
     eyebrow: "NORTHALLERTON LAUNCH",
-    title: "Northallerton Wednesday 6-a-side",
+    title: "Northallerton Wednesday League",
     status: "Registrations open",
     body: "Northallerton team entries are open for the upcoming Wednesday night 6-a-side league. Individual players and referees can also register interest.",
     primaryLabel: "Register team",
@@ -77,12 +86,12 @@ const areaCards = [
   {
     eyebrow: "NORTH YORKSHIRE HEARTLANDS",
     title: "North Yorkshire Heartlands League",
-    status: "New league forming",
-    body: "A new SIXFL league for Bedale, Richmond and the surrounding area. Teams and individual players can view the details and register now.",
-    primaryLabel: "View & join",
-    primaryHref: heartlandsLeagueLink,
+    status: "Registrations open",
+    body: "A new SIXFL league for Bedale, Richmond, Thirsk, Catterick and the surrounding area. Teams and individual players can view the details and register now.",
+    primaryLabel: "Register team",
+    primaryHref: `${heartlandsLeagueLink}?type=team#register`,
     secondaryLabel: "Join as player",
-    secondaryHref: `${heartlandsLeagueLink}#register`,
+    secondaryHref: `${heartlandsLeagueLink}?type=player#register`,
     featured: false,
   },
 ];
@@ -122,17 +131,6 @@ const joinRoutes = [
     cta: "Referee interest",
   },
 ];
-
-const predictorSample = [
-  { label: predictorHomeTeamName, value: 58, tone: "emerald" },
-  { label: "Draw", value: 14, tone: "neutral" },
-  { label: predictorAwayTeamName, value: 28, tone: "sky" },
-];
-
-type PredictorSampleTeamLogos = {
-  homeLogoUrl: string | null;
-  awayLogoUrl: string | null;
-};
 
 function normaliseTeamName(name: string) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -179,8 +177,11 @@ export default async function HomePage() {
 
       <div className="pointer-events-none absolute left-1/2 top-20 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[130px]" />
 
-      <main className="relative mx-auto max-w-6xl px-4 pb-16 pt-4 sm:px-6 sm:pb-20 sm:pt-6 lg:px-8">
-        <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
+      <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-4 sm:px-6 sm:pb-20 sm:pt-6 lg:px-8">
+        <section
+          className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10"
+          data-testid="homepage-hero"
+        >
           <div className="max-w-5xl text-left">
             <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
               Harrogate live now • New leagues forming
@@ -234,7 +235,8 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <SixflAiPredictorSection teamLogos={predictorSampleTeamLogos} />
+        <SixflTvHomepageSection />
+        <HomepageAiPredictorSection teamLogos={predictorSampleTeamLogos} />
 
         <section id="why-sixfl" className="mt-12 lg:mt-16">
           <div className="mb-6">
@@ -301,7 +303,7 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
@@ -372,189 +374,6 @@ function AreaCard({
         </Link>
       </div>
     </article>
-  );
-}
-
-function SixflAiPredictorSection({
-  teamLogos,
-}: {
-  teamLogos: PredictorSampleTeamLogos;
-}) {
-  return (
-    <section className="mt-12 lg:mt-16">
-      <div className="overflow-hidden rounded-[1.5rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.035))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8 lg:p-10">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-center">
-          <div>
-            <div className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
-              SIXFL AI Predictor
-            </div>
-            <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">
-              Match predictions, powered by SIXFL AI Predictor.
-            </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
-              Before kick-off, SIXFL AI Predictor turns recent results, goals scored, goals conceded and league position into a simple match preview and win chance estimate.
-            </p>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/55">
-              It is just for fun. It gives teams something extra to check, compare and talk about before they play.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              <FeaturePill text="AI match previews" />
-              <FeaturePill text="Win chance estimates" />
-              <FeaturePill text="Form-based insight" />
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-white/10 bg-black/45 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.35)] sm:rounded-[2rem] sm:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
-                  Sample prediction
-                </div>
-                <h3 className="mt-2 text-xl font-black text-white">
-                  {predictorHomeTeamName} vs {predictorAwayTeamName}
-                </h3>
-              </div>
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-200">
-                SIXFL AI Predictor
-              </span>
-            </div>
-
-            <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-4 sm:gap-5 sm:p-5">
-              <SampleTeamBadge
-                initials="SO"
-                logoUrl={teamLogos.homeLogoUrl}
-                name={predictorHomeTeamName}
-                tone="emerald"
-              />
-              <div className="rounded-full border border-white/10 bg-black/60 px-3 py-2 text-xs font-black tracking-[0.2em] text-white/55">
-                VS
-              </div>
-              <SampleTeamBadge
-                initials="CU"
-                logoUrl={teamLogos.awayLogoUrl}
-                name={predictorAwayTeamName}
-                tone="sky"
-              />
-            </div>
-
-            <div className="mt-6 space-y-4">
-              {predictorSample.map((item) => (
-                <PredictionBar key={item.label} {...item} />
-              ))}
-            </div>
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/62">
-              SIXFL AI Predictor: Six Offenders edge the sample prediction after stronger recent scoring form, but Crescent United carry enough threat to make this a competitive fixture.
-            </div>
-            <div className="mt-4 text-[11px] leading-5 text-white/35">
-              Example only. Live predictions update from actual SIXFL fixture and results data.
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function SampleTeamBadge({
-  initials,
-  logoUrl,
-  name,
-  tone,
-}: {
-  initials: string;
-  logoUrl: string | null;
-  name: string;
-  tone: "emerald" | "sky";
-}) {
-  const badgeStyles =
-    tone === "emerald"
-      ? {
-          outer:
-            "border-emerald-300/25 bg-gradient-to-b from-emerald-300/22 via-emerald-500/12 to-black/70 shadow-emerald-500/20",
-          inner:
-            "border-emerald-200/30 bg-emerald-400/15 text-emerald-100",
-          accent: "bg-emerald-300/75",
-        }
-      : {
-          outer:
-            "border-sky-300/25 bg-gradient-to-b from-sky-300/22 via-sky-500/12 to-black/70 shadow-sky-500/20",
-          inner: "border-sky-200/30 bg-sky-400/15 text-sky-100",
-          accent: "bg-sky-300/75",
-        };
-
-  return (
-    <div className="flex min-w-0 flex-col items-center text-center">
-      <div
-        className={`relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[2rem] border shadow-2xl sm:h-40 sm:w-40 ${badgeStyles.outer}`}
-        aria-label={`${name} badge`}
-        title={`${name} badge`}
-      >
-        {logoUrl ? (
-          <div className="flex h-full w-full items-center justify-center bg-black/35 p-3 sm:p-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={logoUrl}
-              alt={`${name} badge`}
-              className="h-full w-full object-contain drop-shadow-[0_18px_24px_rgba(0,0,0,0.5)]"
-            />
-          </div>
-        ) : (
-          <>
-            <div className="absolute inset-3 rounded-[1.45rem] border border-white/10 bg-black/35" />
-            <div
-              className={`absolute left-1/2 top-4 h-1.5 w-12 -translate-x-1/2 rounded-full sm:w-16 ${badgeStyles.accent}`}
-            />
-            <div
-              className={`relative flex h-16 w-16 items-center justify-center rounded-full border text-2xl font-black tracking-tight sm:h-20 sm:w-20 sm:text-3xl ${badgeStyles.inner}`}
-            >
-              {initials}
-            </div>
-          </>
-        )}
-      </div>
-      <div className="mt-3 max-w-[9rem] text-sm font-black leading-5 text-white sm:text-base">
-        {name}
-      </div>
-    </div>
-  );
-}
-
-function PredictionBar({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: string;
-}) {
-  const barClass =
-    tone === "emerald"
-      ? "bg-emerald-400"
-      : tone === "sky"
-        ? "bg-sky-400"
-        : "bg-white/45";
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-        <span className="font-semibold text-white">{label}</span>
-        <span className="font-black text-white">{value}%</span>
-      </div>
-      <div className="h-3 overflow-hidden rounded-full bg-white/10">
-        <div
-          className={`h-full rounded-full ${barClass}`}
-          style={{ width: `${value}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function FeaturePill({ text }: { text: string }) {
-  return (
-    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-bold tracking-[0.12em] text-emerald-200">
-      {text}
-    </span>
   );
 }
 
