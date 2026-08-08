@@ -137,26 +137,22 @@ export async function POST(
     return NextResponse.json({ error: "Team is required." }, { status: 400 });
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { leagueId: true },
-  });
-
-  if (!team) {
-    return NextResponse.json({ error: "Team not found." }, { status: 404 });
-  }
-
-  if (!team.leagueId) {
+  try {
+    // LeagueSeasonTeam is authoritative. The service validates long-term
+    // competition affiliation and active division ownership; this route no
+    // longer treats legacy Team.leagueId as current season membership.
+    await setSeasonTeamDivision({ leagueId: id, teamId, divisionId });
+  } catch (error) {
     return NextResponse.json(
       {
         error:
-          "This team is set to No league and is affiliated for communications only. Assign it to a league from the team page before entering a season or division.",
+          error instanceof Error
+            ? error.message
+            : "The season membership could not be updated.",
       },
       { status: 409 },
     );
   }
-
-  await setSeasonTeamDivision({ leagueId: id, teamId, divisionId });
 
   revalidateLeaguePaths(league);
   revalidatePath(`/admin/teams/${teamId}`);
