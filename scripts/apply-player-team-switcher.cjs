@@ -221,9 +221,9 @@ fs.writeFileSync(absolutePath, source, "utf8");
 
 if (
   !source.includes("const playerMemberships = (") ||
-  !source.includes("playerMemberships.map((teamMembership) => {") ||
+  !source.includes("Switch team") ||
   !source.includes("previewMembershipId=${teamMembership.id}") ||
-  source.includes(oldMembershipSelect)
+  source.includes("where: { teamId: teamid },\n        select")
 ) {
   throw new Error("Player multi-team switcher was not applied correctly.");
 }
