@@ -270,6 +270,12 @@ const navigationGroups = [
     tint: "lime",
     items: [
       {
+        name: "Expansion",
+        href: "/admin/expansion-leads",
+        icon: MapPinIcon,
+        description: "New areas",
+      },
+      {
         name: "Leads",
         href: "/admin/leads",
         icon: UsersIcon,
