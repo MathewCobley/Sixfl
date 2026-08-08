@@ -14,6 +14,7 @@ import {
   getLondonMinutesSinceMidnight,
   parseLondonDateTime,
 } from "@/lib/datetime/london";
+import { queueInitialFixtureConfirmationEmailForTeam } from "@/lib/fixtures/confirmation-emails";
 import { syncFixtureMatchFeeCharges } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -223,6 +224,9 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
           select: {
             id: true,
             leagueId: true,
+            homeTeamId: true,
+            awayTeamId: true,
+            publishedAt: true,
             result: { select: { id: true } },
             league: { select: { slug: true } },
           },
@@ -338,6 +342,13 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
           DELETE FROM "FixtureAiPrediction"
           WHERE "fixtureId" = ${fixtureId}
         `);
+      } else {
+        await tx.fixtureCaptainConfirmation.deleteMany({
+          where: {
+            fixtureId,
+            teamId: { notIn: [homeTeamId, awayTeamId] },
+          },
+        });
       }
 
       await syncFixtureMatchFeeCharges({
@@ -367,6 +378,40 @@ export async function updateFixtureFromEditPageAction(formData: FormData) {
             ? "Fixture was postponed before queued confirmation SMS was sent."
             : "Fixture was cancelled before queued confirmation SMS was sent.",
       });
+    }
+
+    const previousTeamIds = new Set([fixture.homeTeamId, fixture.awayTeamId]);
+    const addedTeamIds = [homeTeamId, awayTeamId].filter(
+      (teamId) => !previousTeamIds.has(teamId),
+    );
+
+    if (
+      fixture.publishedAt &&
+      status === FixtureStatus.SCHEDULED &&
+      !hasFixturePlaceholder &&
+      kickoffAt > new Date() &&
+      addedTeamIds.length > 0
+    ) {
+      for (const addedTeamId of addedTeamIds) {
+        try {
+          const confirmationResult =
+            await queueInitialFixtureConfirmationEmailForTeam({
+              fixtureId,
+              teamId: addedTeamId,
+            });
+          console.info("Published fixture team confirmation processed", {
+            fixtureId,
+            teamId: addedTeamId,
+            result: confirmationResult,
+          });
+        } catch (confirmationError) {
+          console.error("Could not queue confirmation for newly added fixture team", {
+            fixtureId,
+            teamId: addedTeamId,
+            error: confirmationError,
+          });
+        }
+      }
     }
 
     revalidatePath("/admin/fixtures");
