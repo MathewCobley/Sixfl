@@ -223,7 +223,7 @@ if (
   !source.includes("const playerMemberships = (") ||
   !source.includes("Switch team") ||
   !source.includes("previewMembershipId=${teamMembership.id}") ||
-  source.includes("where: { teamId: teamid },\n        select")
+  source.includes(oldMembershipSelect)
 ) {
   throw new Error("Player multi-team switcher was not applied correctly.");
 }
