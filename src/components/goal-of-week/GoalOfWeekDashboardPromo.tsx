@@ -64,6 +64,9 @@ export default function GoalOfWeekDashboardPromo({
         if (!cancelled && response.ok && result && !("error" in result)) {
           setPayload(result);
         }
+      } catch {
+        // Keep the generic Goal of the Week promotion visible even if the
+        // live ballot endpoint is temporarily unavailable.
       } finally {
         if (!cancelled) setLoaded(true);
       }
