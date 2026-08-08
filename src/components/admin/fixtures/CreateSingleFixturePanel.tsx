@@ -234,6 +234,22 @@ export default function CreateSingleFixturePanel({
         </div>
       </div>
 
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-500/[0.07] p-4">
+        <input
+          type="checkbox"
+          name="overrideLatestKickoff"
+          className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-black/40 text-amber-300 focus:ring-amber-300/30"
+        />
+        <span>
+          <span className="block text-sm font-semibold text-amber-100">
+            Override latest kick-off preference for this fixture
+          </span>
+          <span className="mt-1 block text-xs leading-5 text-amber-50/60">
+            Use this when you have decided to schedule this match later than a team&apos;s saved preference. It only overrides the check for this one fixture and does not change the team&apos;s preference for future generation.
+          </span>
+        </span>
+      </label>
+
       {leagueId && availableTeams.length < 2 ? (
         <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           This selection has fewer than two active teams in the current season. Check the league/division membership first.
