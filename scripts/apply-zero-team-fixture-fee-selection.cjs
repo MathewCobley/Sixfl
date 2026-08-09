@@ -290,18 +290,30 @@ patchFile(pagePath, [
   },
   {
     label: "zero-fee expected total",
-    before: '  const expectedTotal = activeFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE;',
-    after: '  const expectedTotal = ignorePlayerFees ? 0 : activeFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE;',
+    before: [
+      '  const expectedTotal =',
+      '    standardActiveFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE +',
+      '    temporaryPlayerTotal;',
+    ].join("\n"),
+    after: [
+      '  const expectedTotal = ignorePlayerFees',
+      '    ? 0',
+      '    : standardActiveFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE +',
+      '      temporaryPlayerTotal;',
+    ].join("\n"),
   },
   {
     label: "zero-fee mismatch suppression",
     before: [
       '  const hasAmountMismatch =',
-      '    activeFees.length > 0 && totals.total !== expectedTotal;',
+      '    standardActiveFees.length > 0 &&',
+      '    standardFeeTotal !== standardActiveFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE;',
     ].join("\n"),
     after: [
       '  const hasAmountMismatch =',
-      '    !ignorePlayerFees && activeFees.length > 0 && totals.total !== expectedTotal;',
+      '    !ignorePlayerFees &&',
+      '    standardActiveFees.length > 0 &&',
+      '    standardFeeTotal !== standardActiveFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE;',
     ].join("\n"),
   },
   {

@@ -5,17 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 const PASS_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const PASS_LIFETIME_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_PLAYER_MATCH_FEE_PENCE = Number.parseInt(
-  process.env.DEFAULT_PLAYER_MATCH_FEE_PENCE ?? "600",
-  10,
-);
-
-function getDefaultPlayerMatchFeePence() {
-  return Number.isFinite(DEFAULT_PLAYER_MATCH_FEE_PENCE) &&
-    DEFAULT_PLAYER_MATCH_FEE_PENCE >= 0
-    ? DEFAULT_PLAYER_MATCH_FEE_PENCE
-    : 600;
-}
+const MAX_TEMPORARY_PLAYER_MATCH_FEE_PENCE = 10_000;
 
 export type TemporaryPlayerPassStatus =
   | "OPEN"
@@ -56,6 +46,7 @@ export class TemporaryPlayerPassError extends Error {
   constructor(
     public readonly code:
       | "INVALID_PASS"
+      | "INVALID_AMOUNT"
       | "PASS_EXPIRED"
       | "PASS_USED"
       | "PASS_REVOKED"
@@ -327,12 +318,23 @@ export async function redeemTemporaryPlayerPass(input: {
   code: string;
   fixtureId: string;
   teamId: string;
+  amountPence: number;
   acceptedByUserId: string | null;
 }) {
   await expireOldPasses();
   const code = normaliseTemporaryPlayerPassCode(input.code);
   if (!/^TP-[A-Z0-9]{6}$/.test(code)) {
     throw new TemporaryPlayerPassError("INVALID_PASS", "That temporary-player pass is not valid.");
+  }
+  if (
+    !Number.isInteger(input.amountPence) ||
+    input.amountPence < 0 ||
+    input.amountPence > MAX_TEMPORARY_PLAYER_MATCH_FEE_PENCE
+  ) {
+    throw new TemporaryPlayerPassError(
+      "INVALID_AMOUNT",
+      "Choose a temporary-player match fee between £0 and £100.",
+    );
   }
 
   return prisma.$transaction(async (tx) => {
@@ -413,15 +415,23 @@ export async function redeemTemporaryPlayerPass(input: {
     }
 
     const playerMatchFeeId = createId("tmp");
-    const amountPence = getDefaultPlayerMatchFeePence();
+    const amountPence = input.amountPence;
+    const feeStatus = amountPence === 0 ? "WAIVED" : "OPEN";
+    const waivedAt = amountPence === 0 ? new Date() : null;
+    const feeNote =
+      amountPence === 0
+        ? "Temporary player linked using a player-created one-time pass. The captain set this player as having no match fee when accepting the pass."
+        : `Temporary player linked using a player-created one-time pass. The captain set the match fee to £${(
+            amountPence / 100
+          ).toFixed(2)} when accepting the pass.`;
+
     await tx.$executeRaw`
       INSERT INTO "PlayerMatchFee" (
         "id", "fixtureId", "teamId", "temporaryUserId", "amountPence",
-        "status", "note", "createdAt", "updatedAt"
+        "status", "waivedAt", "note", "createdAt", "updatedAt"
       ) VALUES (
         ${playerMatchFeeId}, ${input.fixtureId}, ${input.teamId}, ${pass.userId}, ${amountPence},
-        'OPEN'::"PlayerMatchFeeStatus",
-        'Temporary player joined using a player-created one-time pass. Fee uses the configured default player match fee and can be reviewed by the captain.',
+        ${feeStatus}::"PlayerMatchFeeStatus", ${waivedAt}, ${feeNote},
         NOW(), NOW()
       )
     `;

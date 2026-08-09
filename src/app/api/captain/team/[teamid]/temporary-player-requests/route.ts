@@ -10,6 +10,17 @@ import {
 } from "@/lib/temporary-player-requests";
 import { TemporaryPlayerPassError } from "@/lib/temporary-player-passes";
 
+function parseAmountPence(value: unknown) {
+  const cleaned = String(value ?? "")
+    .replace(/[£,\s]/g, "")
+    .trim();
+  if (!cleaned) return null;
+
+  const amount = Number(cleaned);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 100) return null;
+  return Math.round(amount * 100);
+}
+
 async function fixtureBelongsToTeam(fixtureId: string, teamId: string) {
   const fixture = await prisma.fixture.findFirst({
     where: {
@@ -25,7 +36,8 @@ async function fixtureBelongsToTeam(fixtureId: string, teamId: string) {
 
 function errorResponse(error: unknown) {
   if (error instanceof TemporaryPlayerPassError) {
-    return NextResponse.json({ error: error.message }, { status: 409 });
+    const status = error.code === "INVALID_AMOUNT" ? 400 : 409;
+    return NextResponse.json({ error: error.message, code: error.code }, { status });
   }
 
   console.error("Temporary-player request action failed.", error);
@@ -70,6 +82,7 @@ export async function POST(
         fixtureId?: unknown;
         requestId?: unknown;
         decision?: unknown;
+        amount?: unknown;
       }
     | null;
 
@@ -90,17 +103,32 @@ export async function POST(
 
   try {
     if (decision === "accept") {
+      const amountPence = parseAmountPence(body?.amount);
+      if (amountPence === null) {
+        return NextResponse.json(
+          {
+            error:
+              "Enter the temporary player's match fee before accepting. Use £0 if no fee is due.",
+          },
+          { status: 400 },
+        );
+      }
+
       const player = await acceptTemporaryPlayerRequest({
         requestId,
         teamId: teamid,
         fixtureId,
+        amountPence,
         acceptedByUserId: access.user?.id ?? null,
       });
 
       return NextResponse.json({
         ok: true,
         decision: "accepted",
-        player: { displayName: player.displayName },
+        player: {
+          displayName: player.displayName,
+          amountPence: player.amountPence,
+        },
       });
     }
 

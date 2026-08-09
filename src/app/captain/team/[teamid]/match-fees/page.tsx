@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { PlayerMatchFeeStatus } from "@prisma/client";
+import { Prisma, type PlayerMatchFeeStatus } from "@prisma/client";
 
 import MatchdaySquadSelectionForm from "@/components/captain/MatchdaySquadSelectionForm";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -31,6 +31,12 @@ const DEFAULT_PLAYER_MATCH_FEE_PENCE = 600;
 type Props = {
   params: Promise<{ teamid: string }>;
   searchParams?: Promise<{ fixtureId?: string; saved?: string; error?: string }>;
+};
+
+type TemporaryPlayerIdentityRow = {
+  feeId: string;
+  firstName: string;
+  email: string | null;
 };
 
 function formatUkDateTime(value: Date) {
@@ -146,6 +152,10 @@ function getFriendlyFeeNote(note: string | null, fee: { status: PlayerMatchFeeSt
       fee.paidAt
         ? "Paid fee cancelled because the player was removed from the matchday squad. Payment retained for audit and player credit created."
         : "Unpaid fee cancelled because the player was removed from the matchday squad. No payment was taken and no credit is due.",
+    )
+    .replace(
+      /Temporary player joined using a player-created one-time pass\. Fee uses the configured default player match fee and can be reviewed by the captain\./gi,
+      "Temporary player linked using a player-created pass. The team can choose and update this player's match fee.",
     )
     .replace(/Voided:/gi, "Fixture fee cancelled:");
 }
@@ -374,6 +384,26 @@ export default async function CaptainManagedPlayerMatchFeesPage({
       ])
     : [[], []];
 
+  const temporaryPlayerRows = selectedFixture
+    ? await prisma.$queryRaw<TemporaryPlayerIdentityRow[]>(Prisma.sql`
+        SELECT
+          pmf."id" AS "feeId",
+          COALESCE(
+            NULLIF(SPLIT_PART(TRIM(COALESCE(player."name", '')), ' ', 1), ''),
+            'Player'
+          ) AS "firstName",
+          player."email"
+        FROM "PlayerMatchFee" pmf
+        INNER JOIN "User" player ON player."id" = pmf."temporaryUserId"
+        WHERE pmf."teamId" = ${teamid}
+          AND pmf."fixtureId" = ${selectedFixture.id}
+          AND pmf."temporaryUserId" IS NOT NULL
+      `)
+    : [];
+  const temporaryPlayerByFeeId = new Map(
+    temporaryPlayerRows.map((player) => [player.feeId, player]),
+  );
+
   const availabilityByMemberId = new Map(
     selectedFixtureAvailabilities.map((availability) => [
       availability.teamMemberId,
@@ -401,6 +431,18 @@ export default async function CaptainManagedPlayerMatchFeesPage({
   );
 
   const activeFees = fees.filter((fee) => fee.status !== "CANCELLED");
+  const standardActiveFees = activeFees.filter(
+    (fee) => !temporaryPlayerByFeeId.has(fee.id),
+  );
+  const temporaryPlayerTotal = activeFees.reduce(
+    (sum, fee) =>
+      sum + (temporaryPlayerByFeeId.has(fee.id) ? fee.amountPence : 0),
+    0,
+  );
+  const standardFeeTotal = standardActiveFees.reduce(
+    (sum, fee) => sum + fee.amountPence,
+    0,
+  );
   const feeByMemberId = new Map(
     activeFees
       .filter((fee) => Boolean(fee.teamMemberId))
@@ -442,7 +484,9 @@ export default async function CaptainManagedPlayerMatchFeesPage({
   const paidCount = activeFees.filter((fee) => fee.status === "PAID").length;
   const openCount = activeFees.filter((fee) => fee.status === "OPEN").length;
   const waivedCount = activeFees.filter((fee) => fee.status === "WAIVED").length;
-  const expectedTotal = activeFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE;
+  const expectedTotal =
+    standardActiveFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE +
+    temporaryPlayerTotal;
   const selectedCount = activeFees.length;
   const targetSize = team.matchdayTargetSize ?? 0;
   const hasSelection = selectedCount > 0;
@@ -450,7 +494,8 @@ export default async function CaptainManagedPlayerMatchFeesPage({
     targetSize > 0 && selectedCount > 0 && selectedCount < targetSize;
   const isOverTarget = targetSize > 0 && selectedCount > targetSize;
   const hasAmountMismatch =
-    activeFees.length > 0 && totals.total !== expectedTotal;
+    standardActiveFees.length > 0 &&
+    standardFeeTotal !== standardActiveFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE;
   const savedMessage = getSavedMessage(sp.saved, isAdmin);
   const errorMessage = getErrorMessage(sp.error);
 
@@ -465,7 +510,13 @@ export default async function CaptainManagedPlayerMatchFeesPage({
       ? `Captain selected ${selectedCount} players, above the target squad size of ${targetSize}. Check whether any backup or extra players should be charged.`
       : null,
     hasAmountMismatch
-      ? `Fee total does not match the £6 default. Expected ${formatMoney(expectedTotal)} for ${selectedCount} selected player${selectedCount === 1 ? "" : "s"}; current fee total is ${formatMoney(totals.total)}.`
+      ? `Linked squad-player fees do not match the £6 default. Expected ${formatMoney(
+          standardActiveFees.length * DEFAULT_PLAYER_MATCH_FEE_PENCE,
+        )} for ${standardActiveFees.length} linked player${
+          standardActiveFees.length === 1 ? "" : "s"
+        }; their current total is ${formatMoney(
+          standardFeeTotal,
+        )}. Temporary-player fees are excluded because the team sets them individually.`
       : null,
   ].filter(Boolean) as string[];
 
@@ -546,7 +597,10 @@ export default async function CaptainManagedPlayerMatchFeesPage({
               {
                 label: "Expected",
                 value: formatMoney(expectedTotal),
-                text: "Selected players × £6.00.",
+                text:
+                  temporaryPlayerRows.length > 0
+                    ? "Linked squad players × £6.00; temporary-player fees are set by the team."
+                    : "Selected players × £6.00.",
                 classes:
                   "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70",
               },
@@ -590,7 +644,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
             </section>
           ) : (
             <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 text-sm text-emerald-100">
-              Selection and expected £6 player fee total look aligned for this fixture.
+              Selection and player fee totals look aligned for this fixture.
             </section>
           )}
 
@@ -934,8 +988,11 @@ export default async function CaptainManagedPlayerMatchFeesPage({
               </div>
             ) : null}
             {fees.map((fee) => {
-              const playerName = getPlayerName(fee);
-              const playerContact = getPlayerContact(fee);
+              const temporaryPlayer = temporaryPlayerByFeeId.get(fee.id) ?? null;
+              const playerName = temporaryPlayer?.firstName ?? getPlayerName(fee);
+              const playerContact = temporaryPlayer
+                ? temporaryPlayer.email || "Player account linked"
+                : getPlayerContact(fee);
               const statusButtons = [
                 "OPEN",
                 "WAIVED",
@@ -955,6 +1012,11 @@ export default async function CaptainManagedPlayerMatchFeesPage({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="font-semibold text-white">{playerName}</div>
+                      {temporaryPlayer ? (
+                        <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-100">
+                          Temporary player
+                        </span>
+                      ) : null}
                       <span
                         className={`rounded-full border px-2.5 py-1 text-xs font-medium ${getFeeStatusClasses(
                           fee.status,

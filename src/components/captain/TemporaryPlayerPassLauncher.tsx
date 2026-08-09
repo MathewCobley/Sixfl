@@ -28,6 +28,15 @@ type PlayerPassPayload = {
   passes: PlayerPass[];
 };
 
+type LinkedTemporaryPlayer = {
+  id: string;
+  firstName: string;
+  surnameInitial: string;
+  email: string | null;
+  status: "OPEN" | "PAID" | "WAIVED" | "CANCELLED";
+  amountPence: number;
+};
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
@@ -36,6 +45,13 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
 }
 
 function passStatusLabel(status: PlayerPass["status"]) {
@@ -63,6 +79,19 @@ function passStatusClasses(status: PlayerPass["status"]) {
   }
 }
 
+function linkedPlayerStatusLabel(status: LinkedTemporaryPlayer["status"]) {
+  switch (status) {
+    case "PAID":
+      return "Paid";
+    case "WAIVED":
+      return "No fee";
+    case "CANCELLED":
+      return "Cancelled";
+    default:
+      return "Awaiting payment";
+  }
+}
+
 export default function TemporaryPlayerPassLauncher() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -73,6 +102,10 @@ export default function TemporaryPlayerPassLauncher() {
   const [message, setMessage] = useState("");
   const [playerData, setPlayerData] = useState<PlayerPassPayload | null>(null);
   const [selection, setSelection] = useState("");
+  const [linkedPlayers, setLinkedPlayers] = useState<LinkedTemporaryPlayer[]>([]);
+  const [linkedFeeAmounts, setLinkedFeeAmounts] = useState<Record<string, string>>(
+    {},
+  );
 
   useEffect(() => setMounted(true), []);
 
@@ -117,10 +150,52 @@ export default function TemporaryPlayerPassLauncher() {
     }
   }
 
+  async function loadLinkedTemporaryPlayers() {
+    if (!teamId || !fixtureId) {
+      setLinkedPlayers([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `/api/captain/team/${teamId}/temporary-player?fixtureId=${encodeURIComponent(fixtureId)}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; players?: LinkedTemporaryPlayer[] }
+        | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Temporary players could not be loaded.");
+      }
+
+      const players = payload?.players ?? [];
+      setLinkedPlayers(players);
+      setLinkedFeeAmounts(
+        Object.fromEntries(
+          players.map((player) => [
+            player.id,
+            (player.amountPence / 100).toFixed(2),
+          ]),
+        ),
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Temporary players could not be loaded.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function openLauncher() {
     setMessage("");
     setOpen(true);
-    if (isPlayerArea) await loadPlayerPasses();
+    if (isPlayerArea) {
+      await loadPlayerPasses();
+    } else if (captainMatch) {
+      await loadLinkedTemporaryPlayers();
+    }
   }
 
   async function createPass() {
@@ -213,6 +288,14 @@ export default function TemporaryPlayerPassLauncher() {
 
     const form = new FormData(event.currentTarget);
     const passCode = String(form.get("passCode") ?? "").trim();
+    const amount = String(form.get("amount") ?? "").trim();
+    if (!amount) {
+      setMessage(
+        "Enter the temporary player's match fee before linking them. Use £0 if no fee is due.",
+      );
+      return;
+    }
+
     setBusy(true);
     setMessage("");
 
@@ -220,19 +303,69 @@ export default function TemporaryPlayerPassLauncher() {
       const response = await fetch(`/api/captain/team/${teamId}/temporary-player`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fixtureId, passCode }),
+        body: JSON.stringify({ fixtureId, passCode, amount }),
       });
       const result = (await response.json().catch(() => null)) as
-        | { error?: string; player?: { displayName: string } }
+        | {
+            error?: string;
+            player?: { displayName: string; amountPence: number };
+          }
         | null;
       if (!response.ok || !result?.player) {
         throw new Error(result?.error || "The temporary player could not be added.");
       }
 
-      setMessage(`${result.player.displayName} has been linked to this fixture.`);
-      window.setTimeout(() => window.location.reload(), 700);
+      setMessage(
+        result.player.amountPence > 0
+          ? `${result.player.displayName} has been linked as a temporary player with a ${formatMoney(result.player.amountPence)} match fee.`
+          : `${result.player.displayName} has been linked as a temporary player with no match fee.`,
+      );
+      window.setTimeout(() => window.location.reload(), 900);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The temporary player could not be added.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateLinkedTemporaryPlayerFee(player: LinkedTemporaryPlayer) {
+    const amount = linkedFeeAmounts[player.id]?.trim() ?? "";
+    if (!amount) {
+      setMessage("Enter the match fee to save. Use £0 if no fee is due.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/captain/team/${teamId}/temporary-player`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fixtureId, feeId: player.id, amount }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            player?: { displayName: string; amountPence: number; status: string };
+          }
+        | null;
+      if (!response.ok || !payload?.player) {
+        throw new Error(payload?.error || "The temporary-player fee could not be updated.");
+      }
+
+      setMessage(
+        payload.player.amountPence > 0
+          ? `${payload.player.displayName}'s temporary-player fee is now ${formatMoney(payload.player.amountPence)}.`
+          : `${payload.player.displayName} now has no match fee for this fixture.`,
+      );
+      await loadLinkedTemporaryPlayers();
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The temporary-player fee could not be updated.",
+      );
     } finally {
       setBusy(false);
     }
@@ -264,7 +397,7 @@ export default function TemporaryPlayerPassLauncher() {
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-white/65">
                   {captainMatch
-                    ? "The player must create the pass from their own dashboard first. Enter the one-time code they sent you; it will only work for this team and fixture."
+                    ? "The player must create the pass from their own dashboard first. Enter the code and choose what this team wants them to pay for this fixture."
                     : "Choose the team and fixture you are offering to play in. You stay in control: the pass works once, expires automatically and can be cancelled before the captain accepts it."}
                 </p>
               </div>
@@ -274,22 +407,127 @@ export default function TemporaryPlayerPassLauncher() {
             </div>
 
             {captainMatch ? (
-              <form onSubmit={submitCaptainPass} className="mt-6 space-y-4">
-                <label className="block text-sm font-semibold text-white">
-                  One-time player pass
-                  <input
-                    name="passCode"
-                    required
-                    placeholder="TP-7K4P9A"
-                    autoComplete="off"
-                    className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 font-mono uppercase text-white outline-none focus:border-emerald-400"
-                  />
-                </label>
-                {message ? <p className="rounded-xl bg-white/[0.06] px-4 py-3 text-sm text-white/80">{message}</p> : null}
-                <button disabled={busy} className="w-full rounded-xl bg-emerald-400 px-4 py-3 font-bold text-black hover:bg-emerald-300 disabled:opacity-50">
-                  {busy ? "Adding player…" : "Add to this fixture"}
-                </button>
-              </form>
+              <div className="mt-6 space-y-5">
+                <form onSubmit={submitCaptainPass} className="space-y-4">
+                  <label className="block text-sm font-semibold text-white">
+                    One-time player pass
+                    <input
+                      name="passCode"
+                      required
+                      placeholder="TP-7K4P9A"
+                      autoComplete="off"
+                      className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 font-mono uppercase text-white outline-none focus:border-emerald-400"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold text-white">
+                    Match fee for this temporary player
+                    <div className="relative mt-2">
+                      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/45">
+                        £
+                      </span>
+                      <input
+                        name="amount"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        inputMode="decimal"
+                        required
+                        placeholder="Enter amount"
+                        className="w-full rounded-xl border border-white/15 bg-black/25 py-3 pl-7 pr-4 text-white outline-none placeholder:text-white/30 focus:border-emerald-400"
+                      />
+                    </div>
+                    <span className="mt-1 block text-xs font-normal text-white/45">
+                      The team chooses the amount. Enter 0 if no match fee is due.
+                    </span>
+                  </label>
+                  {message ? <p className="rounded-xl bg-white/[0.06] px-4 py-3 text-sm text-white/80">{message}</p> : null}
+                  <button disabled={busy} className="w-full rounded-xl bg-emerald-400 px-4 py-3 font-bold text-black hover:bg-emerald-300 disabled:opacity-50">
+                    {busy ? "Adding player…" : "Link temporary player and set fee"}
+                  </button>
+                </form>
+
+                {loading ? (
+                  <p className="rounded-xl bg-white/[0.06] px-4 py-3 text-sm text-white/70">
+                    Loading temporary players…
+                  </p>
+                ) : null}
+
+                {linkedPlayers.length > 0 ? (
+                  <section className="space-y-3 border-t border-white/10 pt-5">
+                    <div>
+                      <h3 className="font-semibold text-white">
+                        Temporary players linked to this fixture
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        The team can revise an unpaid temporary-player fee here. Paid fees stay locked for safe reconciliation.
+                      </p>
+                    </div>
+                    {linkedPlayers.map((player) => {
+                      const playerName = `${player.firstName}${
+                        player.surnameInitial ? ` ${player.surnameInitial}.` : ""
+                      }`;
+                      const locked = player.status === "PAID" || player.status === "CANCELLED";
+
+                      return (
+                        <article
+                          key={player.id}
+                          className="rounded-2xl border border-violet-400/20 bg-violet-500/[0.07] p-4"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-white">{playerName}</p>
+                            <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-100">
+                              Temporary player
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-white/60">
+                              {linkedPlayerStatusLabel(player.status)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-white/45">
+                            {player.email || "Player account linked"}
+                          </p>
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            <div className="relative flex-1">
+                              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/45">
+                                £
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                inputMode="decimal"
+                                disabled={locked || busy}
+                                value={linkedFeeAmounts[player.id] ?? ""}
+                                onChange={(event) =>
+                                  setLinkedFeeAmounts((current) => ({
+                                    ...current,
+                                    [player.id]: event.target.value,
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-white/15 bg-black/25 py-2.5 pl-7 pr-3 text-white outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              disabled={locked || busy}
+                              onClick={() => void updateLinkedTemporaryPlayerFee(player)}
+                              className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Update fee
+                            </button>
+                          </div>
+                          {locked ? (
+                            <p className="mt-2 text-xs text-white/45">
+                              Current fee: {formatMoney(player.amountPence)}. This fee is locked because it is {player.status.toLowerCase()}.
+                            </p>
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </section>
+                ) : null}
+              </div>
             ) : (
               <div className="mt-6 space-y-5">
                 {loading ? (
