@@ -15,66 +15,74 @@ function replaceRequired(before, after, label) {
   source = source.replace(before, after);
 }
 
-replaceRequired(
-  '  return "Unknown player";',
-  '  return "Unlinked player payment";',
-  "unknown player label",
-);
+// If a newer native payment page already contains the complete diagnostic UI,
+// this script is deliberately a no-op. Build patches must be idempotent.
+const alreadyApplied =
+  source.includes("orphanRecipientByFeeId") &&
+  source.includes("Temporary player payment") &&
+  source.includes("Player record no longer linked") &&
+  source.includes("Payment request sent to");
 
-replaceRequired(
-  [
-    "  const selectedFees = selectedFixture",
-    "    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)",
-    "    : [];",
-    "  const missingLinkIds = selectedFees",
-  ].join("\n"),
-  [
-    "  const selectedFees = selectedFixture",
-    "    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)",
-    "    : [];",
-    "  const orphanFeeIds = selectedFees",
-    "    .filter((fee) => !fee.teamMember && !fee.prospect)",
-    "    .map((fee) => fee.id);",
-    "  const orphanDispatches = orphanFeeIds.length",
-    "    ? await prisma.notificationDispatch.findMany({",
-    "        where: {",
-    "          sourceId: { in: orphanFeeIds },",
-    "          sourceType: {",
-    "            in: [",
-    '              "PLAYER_MATCH_FEE_REQUEST",',
-    '              "PLAYER_MATCH_FEE_CHASE_24H",',
-    '              "PLAYER_MATCH_FEE_CHASE_72H",',
-    "            ],",
-    "          },",
-    "        },",
-    '        orderBy: [{ createdAt: "asc" }],',
-    "        select: {",
-    "          sourceId: true,",
-    "          recipient: {",
-    "            select: {",
-    "              displayName: true,",
-    "              email: true,",
-    "              phone: true,",
-    "            },",
-    "          },",
-    "        },",
-    "      })",
-    "    : [];",
-    "  const orphanRecipientByFeeId = new Map<",
-    "    string,",
-    "    { displayName: string | null; email: string | null; phone: string | null }",
-    "  >();",
-    "  for (const dispatch of orphanDispatches) {",
-    "    if (!dispatch.sourceId || orphanRecipientByFeeId.has(dispatch.sourceId)) continue;",
-    "    orphanRecipientByFeeId.set(dispatch.sourceId, dispatch.recipient);",
-    "  }",
-    "  const missingLinkIds = selectedFees",
-  ].join("\n"),
-  "orphan payment recipient lookup",
-);
+if (!alreadyApplied) {
+  replaceRequired(
+    '  return "Unknown player";',
+    '  return "Unlinked player payment";',
+    "unknown player label",
+  );
 
-replaceRequired(
-  [
+  replaceRequired(
+    [
+      "  const selectedFees = selectedFixture",
+      "    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)",
+      "    : [];",
+      "  const missingLinkIds = selectedFees",
+    ].join("\n"),
+    [
+      "  const selectedFees = selectedFixture",
+      "    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)",
+      "    : [];",
+      "  const orphanFeeIds = selectedFees",
+      "    .filter((fee) => !fee.teamMember && !fee.prospect)",
+      "    .map((fee) => fee.id);",
+      "  const orphanDispatches = orphanFeeIds.length",
+      "    ? await prisma.notificationDispatch.findMany({",
+      "        where: {",
+      "          sourceId: { in: orphanFeeIds },",
+      "          sourceType: {",
+      "            in: [",
+      '              "PLAYER_MATCH_FEE_REQUEST",',
+      '              "PLAYER_MATCH_FEE_CHASE_24H",',
+      '              "PLAYER_MATCH_FEE_CHASE_72H",',
+      "            ],",
+      "          },",
+      "        },",
+      '        orderBy: [{ createdAt: "asc" }],',
+      "        select: {",
+      "          sourceId: true,",
+      "          recipient: {",
+      "            select: {",
+      "              displayName: true,",
+      "              email: true,",
+      "              phone: true,",
+      "            },",
+      "          },",
+      "        },",
+      "      })",
+      "    : [];",
+      "  const orphanRecipientByFeeId = new Map<",
+      "    string,",
+      "    { displayName: string | null; email: string | null; phone: string | null }",
+      "  >();",
+      "  for (const dispatch of orphanDispatches) {",
+      "    if (!dispatch.sourceId || orphanRecipientByFeeId.has(dispatch.sourceId)) continue;",
+      "    orphanRecipientByFeeId.set(dispatch.sourceId, dispatch.recipient);",
+      "  }",
+      "  const missingLinkIds = selectedFees",
+    ].join("\n"),
+    "orphan payment recipient lookup",
+  );
+
+  const oldRendering = [
     "            {selectedFees.map((fee) => (",
     "              <div",
     "                key={fee.id}",
@@ -90,12 +98,13 @@ replaceRequired(
     "                <span",
     '                  className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(fee.status)}`}',
     "                >",
-    "                  {statusLabel(fee.status)}",
+    "                  {statusLabel(fee.status, fee.note)}",
     "                </span>",
     "              </div>",
     "            ))}",
-  ].join("\n"),
-  [
+  ].join("\n");
+
+  const newRendering = [
     "            {selectedFees.map((fee) => {",
     "              const isUnlinked = !fee.teamMember && !fee.prospect;",
     "              const isTemporaryPlayerPass =",
@@ -167,14 +176,15 @@ replaceRequired(
     "                  <span",
     '                    className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(fee.status)}`}',
     "                  >",
-    "                    {statusLabel(fee.status)}",
+    "                    {statusLabel(fee.status, fee.note)}",
     "                  </span>",
     "                </div>",
     "              );",
     "            })}",
-  ].join("\n"),
-  "unlinked player payment explanation",
-);
+  ].join("\n");
+
+  replaceRequired(oldRendering, newRendering, "unlinked player payment explanation");
+}
 
 fs.writeFileSync(absolutePath, source, "utf8");
 
@@ -190,5 +200,5 @@ if (
 }
 
 console.log(
-  "Unlinked player payment rows now distinguish temporary-player passes from genuinely removed player records and explain each case clearly.",
+  "Unlinked player payment rows are applied compatibly to the native squad-payment page.",
 );
