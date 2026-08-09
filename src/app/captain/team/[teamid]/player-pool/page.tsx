@@ -2,6 +2,7 @@
 // File: src/app/captain/team/[teamid]/player-pool/page.tsx
 // ========================================
 
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
@@ -10,6 +11,7 @@ import {
 } from "@/lib/player-pool/storage";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { convertProspectToMemberAction } from "../prospects/actions";
 import { requestPlayerPoolIntroductionAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,7 @@ type ProfileRow = {
   availabilitySummary: string | null;
   requestId: string | null;
   requestStatus: string | null;
+  teamProspectId: string | null;
 };
 
 function formatNights(value: unknown) {
@@ -55,9 +58,11 @@ function matchesNight(value: unknown, teamNight: string | null | undefined) {
 function requestStatusCopy(status: string | null) {
   switch (status) {
     case "REQUESTED":
-      return "Introduction requested";
+      return "Waiting for SIXFL approval";
     case "INTRODUCED":
-      return "Introduction arranged";
+      return "Approved — waiting for player";
+    case "JOINED":
+      return "Joined squad";
     case "DECLINED":
       return "Introduction declined";
     case "CLOSED":
@@ -73,6 +78,9 @@ function savedMessage(saved?: string) {
   }
   if (saved === "request-already-sent") {
     return "You have already requested an introduction to that player.";
+  }
+  if (saved === "promoted") {
+    return "Player added to the squad. Their PlayerPool request has been marked as joined.";
   }
   return null;
 }
@@ -123,7 +131,17 @@ export default async function CaptainPlayerPoolPage({
         prospect."preferredNights",
         prospect."availabilitySummary",
         request."id" AS "requestId",
-        request."status" AS "requestStatus"
+        request."status" AS "requestStatus",
+        (
+          SELECT squad_prospect."id"
+          FROM "TeamPlayerProspect" squad_prospect
+          WHERE squad_prospect."teamId" = ${teamid}
+            AND squad_prospect."email" IS NOT NULL
+            AND prospect."email" IS NOT NULL
+            AND LOWER(TRIM(squad_prospect."email")) = LOWER(TRIM(prospect."email"))
+          ORDER BY squad_prospect."createdAt" DESC
+          LIMIT 1
+        ) AS "teamProspectId"
       FROM "PlayerPoolProfile" profile
       JOIN "TeamPlayerProspect" prospect ON prospect."id" = profile."prospectId"
       LEFT JOIN "PlayerPoolIntroductionRequest" request
@@ -133,22 +151,27 @@ export default async function CaptainPlayerPoolPage({
         AND profile."consentContact" = true
         AND profile."profileSubmittedAt" IS NOT NULL
         AND (profile."status" = 'AVAILABLE' OR request."id" IS NOT NULL)
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "TeamPlayerProspect" squad_prospect
-          WHERE squad_prospect."teamId" = ${teamid}
-            AND squad_prospect."email" IS NOT NULL
-            AND prospect."email" IS NOT NULL
-            AND LOWER(TRIM(squad_prospect."email")) = LOWER(TRIM(prospect."email"))
-        )
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "TeamMember" squad_member
-          JOIN "User" squad_user ON squad_user."id" = squad_member."userId"
-          WHERE squad_member."teamId" = ${teamid}
-            AND squad_user."email" IS NOT NULL
-            AND prospect."email" IS NOT NULL
-            AND LOWER(TRIM(squad_user."email")) = LOWER(TRIM(prospect."email"))
+        AND (
+          request."id" IS NOT NULL
+          OR (
+            NOT EXISTS (
+              SELECT 1
+              FROM "TeamPlayerProspect" squad_prospect
+              WHERE squad_prospect."teamId" = ${teamid}
+                AND squad_prospect."email" IS NOT NULL
+                AND prospect."email" IS NOT NULL
+                AND LOWER(TRIM(squad_prospect."email")) = LOWER(TRIM(prospect."email"))
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "TeamMember" squad_member
+              JOIN "User" squad_user ON squad_user."id" = squad_member."userId"
+              WHERE squad_member."teamId" = ${teamid}
+                AND squad_user."email" IS NOT NULL
+                AND prospect."email" IS NOT NULL
+                AND LOWER(TRIM(squad_user."email")) = LOWER(TRIM(prospect."email"))
+            )
+          )
         )
       ORDER BY profile."profileSubmittedAt" DESC
     `,
@@ -181,10 +204,10 @@ export default async function CaptainPlayerPoolPage({
           />
         </div>
         <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-          Available players for {team.name}
+          Players for {team.name}
         </h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">
-          These players have chosen your league, or are looking to play locally on the same night. Request an introduction and SIXFL will check with the player first. Their name and contact details stay private unless they agree.
+          Available players and every introduction you have requested stay visible here from first request through to joining your squad.
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-white/70">
@@ -227,6 +250,7 @@ export default async function CaptainPlayerPoolPage({
             const statusLabel = requestStatusCopy(profile.requestStatus);
             const requestOpen = profile.requestStatus === "REQUESTED";
             const introduced = profile.requestStatus === "INTRODUCED";
+            const joined = profile.requestStatus === "JOINED";
 
             return (
               <article
@@ -236,18 +260,22 @@ export default async function CaptainPlayerPoolPage({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-300/80">
-                      Available player
+                      {joined ? "PlayerPool squad member" : introduced ? "PlayerPool introduction" : "Available player"}
                     </p>
                     <h2 className="mt-2 font-mono text-xl font-black text-white">
                       {profile.publicCode}
                     </h2>
                   </div>
                   {statusLabel ? (
-                    <span className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
-                      introduced
-                        ? "border-sky-400/25 bg-sky-500/10 text-sky-100"
-                        : "border-amber-400/25 bg-amber-500/10 text-amber-100"
-                    }`}>
+                    <span
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+                        joined
+                          ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                          : introduced
+                            ? "border-sky-400/25 bg-sky-500/10 text-sky-100"
+                            : "border-amber-400/25 bg-amber-500/10 text-amber-100"
+                      }`}
+                    >
                       {statusLabel}
                     </span>
                   ) : (
@@ -287,11 +315,43 @@ export default async function CaptainPlayerPoolPage({
                 ) : null}
 
                 <div className="mt-5 border-t border-white/10 pt-5">
-                  {requestOpen || introduced ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-sm leading-6 text-white/60">
-                      {introduced
-                        ? "SIXFL has arranged this introduction. The player now appears in your team prospects area."
-                        : "SIXFL is checking with the player. Their contact details have not been shared yet."}
+                  {joined ? (
+                    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100/80">
+                      This player is now connected to your squad.
+                    </div>
+                  ) : introduced ? (
+                    <div className="space-y-3">
+                      <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/80">
+                        SIXFL approved the introduction and alerted the player. Contact them about a game or trial. Once they agree to join, add them to the squad here — no second PlayerPool form is needed.
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Link
+                          href={`/captain/team/${teamid}/prospects`}
+                          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white/75 transition hover:bg-white/10"
+                        >
+                          Open prospect
+                        </Link>
+                        {profile.teamProspectId ? (
+                          <form action={convertProspectToMemberAction}>
+                            <input type="hidden" name="teamid" value={teamid} />
+                            <input type="hidden" name="prospectId" value={profile.teamProspectId} />
+                            <input type="hidden" name="returnTo" value="player-pool" />
+                            <button
+                              type="submit"
+                              className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black transition hover:bg-emerald-400"
+                            >
+                              Add to squad
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                      <p className="text-xs leading-5 text-white/40">
+                        Only use “Add to squad” once the player has agreed to join this team.
+                      </p>
+                    </div>
+                  ) : requestOpen ? (
+                    <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100/80">
+                      SIXFL is reviewing this request. The player has been alerted that a team is interested, but their contact details have not been shared yet.
                     </div>
                   ) : (
                     <form action={requestPlayerPoolIntroductionAction} className="space-y-3">
