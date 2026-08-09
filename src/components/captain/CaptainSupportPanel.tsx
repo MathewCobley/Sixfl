@@ -142,7 +142,7 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
         <div className="md:col-span-2 xl:col-span-4">
           <GoalOfWeekDashboardPromo
             teamId={teamId}
-            href={`/captain/team/${teamId}/tv`}
+            href={`/goal-of-the-week?from=captain&teamId=${encodeURIComponent(teamId)}`}
           />
         </div>
 
