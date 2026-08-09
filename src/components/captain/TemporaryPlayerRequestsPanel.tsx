@@ -18,11 +18,19 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
+}
+
 export default function TemporaryPlayerRequestsPanel() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [requests, setRequests] = useState<PendingRequest[]>([]);
+  const [feeAmounts, setFeeAmounts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
@@ -52,7 +60,13 @@ export default function TemporaryPlayerRequestsPanel() {
           | { requests?: PendingRequest[] }
           | null;
         if (!cancelled && response.ok) {
-          setRequests(payload?.requests ?? []);
+          const nextRequests = payload?.requests ?? [];
+          setRequests(nextRequests);
+          setFeeAmounts((current) => {
+            const next: Record<string, string> = {};
+            for (const item of nextRequests) next[item.id] = current[item.id] ?? "";
+            return next;
+          });
         }
       } catch {
         // Keep the current panel state if a background refresh fails.
@@ -69,6 +83,14 @@ export default function TemporaryPlayerRequestsPanel() {
   }, [fixtureId, teamId]);
 
   async function decide(requestId: string, decision: "accept" | "decline") {
+    const amount = feeAmounts[requestId]?.trim() ?? "";
+    if (decision === "accept" && !amount) {
+      setMessage(
+        "Enter this temporary player's match fee before accepting. Use £0 if no fee is due.",
+      );
+      return;
+    }
+
     setBusyId(requestId);
     setMessage("");
 
@@ -78,13 +100,18 @@ export default function TemporaryPlayerRequestsPanel() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fixtureId, requestId, decision }),
+          body: JSON.stringify({
+            fixtureId,
+            requestId,
+            decision,
+            ...(decision === "accept" ? { amount } : {}),
+          }),
         },
       );
       const payload = (await response.json().catch(() => null)) as
         | {
             error?: string;
-            player?: { displayName?: string };
+            player?: { displayName?: string; amountPence?: number };
             decision?: string;
           }
         | null;
@@ -98,11 +125,19 @@ export default function TemporaryPlayerRequestsPanel() {
       setRequests((current) =>
         current.filter((request) => request.id !== requestId),
       );
+      setFeeAmounts((current) => {
+        const next = { ...current };
+        delete next[requestId];
+        return next;
+      });
 
       const playerName = payload?.player?.displayName ?? "The player";
       if (decision === "accept") {
+        const amountPence = payload?.player?.amountPence ?? 0;
         setMessage(
-          `${playerName} has been added to this fixture and their match fee is now open for review.`,
+          amountPence > 0
+            ? `${playerName} has been added as a temporary player. Their match fee is ${formatMoney(amountPence)}.`
+            : `${playerName} has been added as a temporary player with no match fee.`,
         );
         window.setTimeout(() => window.location.reload(), 900);
       } else {
@@ -149,11 +184,45 @@ export default function TemporaryPlayerRequestsPanel() {
                 key={request.id}
                 className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
               >
-                <p className="font-semibold text-white">{request.displayName}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold text-white">{request.displayName}</p>
+                  <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-100">
+                    Temporary player
+                  </span>
+                </div>
                 <p className="mt-1 text-sm leading-6 text-white/65">
-                  Wants to play for your team in this fixture and pay their match fee.
-                  The request expires at {formatTime(request.expiresAt)}.
+                  Wants to play for your team in this fixture. Choose what they
+                  should pay before accepting. The request expires at {formatTime(request.expiresAt)}.
                 </p>
+
+                <label className="mt-4 block text-sm font-semibold text-white">
+                  Match fee for this temporary player
+                  <div className="relative mt-2">
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/45">
+                      £
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={feeAmounts[request.id] ?? ""}
+                      onChange={(event) =>
+                        setFeeAmounts((current) => ({
+                          ...current,
+                          [request.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Enter amount"
+                      className="w-full rounded-xl border border-white/15 bg-black/25 py-2.5 pl-7 pr-3 text-white outline-none placeholder:text-white/30 focus:border-emerald-400"
+                    />
+                  </div>
+                  <span className="mt-1 block text-xs font-normal text-white/45">
+                    Enter 0 if no match fee is due. Nothing is assumed automatically.
+                  </span>
+                </label>
+
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -161,7 +230,7 @@ export default function TemporaryPlayerRequestsPanel() {
                     onClick={() => void decide(request.id, "accept")}
                     className="rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-bold text-black transition hover:bg-emerald-300 disabled:opacity-50"
                   >
-                    {busyId === request.id ? "Updating…" : "Accept"}
+                    {busyId === request.id ? "Updating…" : "Accept and set fee"}
                   </button>
                   <button
                     type="button"
