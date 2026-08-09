@@ -154,7 +154,8 @@ export default function ProspectNativeActions({
     hasEmail &&
       !isClosed &&
       !isActivePlayer &&
-      (!currentTeamId || canChaseInvite),
+      (!currentTeamId ||
+        (hasSquadInviteHistory && latestPlayerResponse !== "NO")),
   );
 
   async function runProspectPost(input: {
@@ -488,8 +489,9 @@ export default function ProspectNativeActions({
           </div>
           {currentTeamId ? (
             <p className="text-xs leading-5 text-emerald-100/65">
-              No response to the squad invite. You can add this player to PlayerPool
-              without removing their current team prospect assignment.
+              This player has been invited to a squad but is not active in it yet.
+              You can also add them to PlayerPool without removing their current
+              team prospect assignment.
             </p>
           ) : null}
           <button
