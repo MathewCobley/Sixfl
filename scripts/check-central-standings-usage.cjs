@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+// Diagnostic branch only: touching this file triggers the full production validator.
 require("./apply-division-aware-dashboard-tables.cjs");
 require("./prepare-team-kit-badge-ui.cjs");
 require("./apply-captain-dom-observer-performance-guard.cjs");
