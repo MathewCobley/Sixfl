@@ -1,19 +1,21 @@
-import Link from "next/link";
-import { getServerSession } from "next-auth";
+"use client";
 
-import { authOptions } from "@/auth";
-import { formatDateTimeInLondon } from "@/lib/datetime/london";
-import { prisma } from "@/lib/prisma";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
-type TemporaryMatchFeeRow = {
+type TemporaryMatchFee = {
   id: string;
   amountPence: number;
   paymentUrl: string | null;
-  createdAt: Date;
+  createdAt: string;
   teamName: string;
-  kickoffAt: Date;
+  kickoffAt: string;
   homeTeamName: string;
   awayTeamName: string;
+};
+
+type ResponsePayload = {
+  fees: TemporaryMatchFee[];
 };
 
 function formatMoney(amountPence: number) {
@@ -23,53 +25,59 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
-function formatFixtureDate(value: Date) {
-  return formatDateTimeInLondon(value, {
+function formatFixtureDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  });
+    timeZone: "Europe/London",
+  }).format(new Date(value));
 }
 
-export default async function PlayerTemporaryMatchFeesPanel() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email?.trim().toLowerCase();
+export default function PlayerTemporaryMatchFeesPanel({ teamId }: { teamId: string }) {
+  const searchParams = useSearchParams();
+  const previewMembershipId = searchParams.get("previewMembershipId")?.trim() ?? "";
+  const [fees, setFees] = useState<TemporaryMatchFee[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (!email) return null;
+  useEffect(() => {
+    const controller = new AbortController();
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
+    async function load() {
+      setLoading(true);
+      try {
+        const query = new URLSearchParams({ teamId });
+        if (previewMembershipId) query.set("previewMembershipId", previewMembershipId);
 
-  if (!user) return null;
+        const response = await fetch(`/api/player/temporary-match-fees?${query.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as ResponsePayload | null;
+        if (!controller.signal.aborted) {
+          setFees(response.ok && payload?.fees ? payload.fees : []);
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setFees([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
 
-  const fees = await prisma.$queryRaw<TemporaryMatchFeeRow[]>`
-    SELECT
-      fee."id",
-      fee."amountPence",
-      fee."paymentUrl",
-      fee."createdAt",
-      team."name" AS "teamName",
-      fixture."kickoffAt",
-      home_team."name" AS "homeTeamName",
-      away_team."name" AS "awayTeamName"
-    FROM "PlayerMatchFee" fee
-    INNER JOIN "Team" team ON team."id" = fee."teamId"
-    INNER JOIN "Fixture" fixture ON fixture."id" = fee."fixtureId"
-    INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
-    INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
-    WHERE fee."temporaryUserId" = ${user.id}
-      AND fee."status" = 'OPEN'::"PlayerMatchFeeStatus"
-      AND fixture."publishedAt" IS NOT NULL
-    ORDER BY fixture."kickoffAt" ASC, fee."createdAt" ASC
-  `;
+    void load();
+    return () => controller.abort();
+  }, [previewMembershipId, teamId]);
 
-  if (fees.length === 0) return null;
+  const totalPence = useMemo(
+    () => fees.reduce((sum, fee) => sum + fee.amountPence, 0),
+    [fees],
+  );
 
-  const totalPence = fees.reduce((sum, fee) => sum + fee.amountPence, 0);
+  if (loading || fees.length === 0) return null;
 
   return (
     <section className="mt-4 rounded-3xl border border-amber-400/30 bg-amber-500/[0.09] p-5 sm:p-6">
@@ -82,7 +90,7 @@ export default async function PlayerTemporaryMatchFeesPanel() {
             {formatMoney(totalPence)} due from temporary appearances
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/70">
-            These fees are attached to your SIXFL account because you played temporarily for another team. They stay visible here even though that team is not one of your regular squads.
+            These are fixture-only fees from teams you played for temporarily. They remain attached to your SIXFL account even though those teams are not part of your regular squad.
           </p>
         </div>
         <span className="inline-flex shrink-0 rounded-full border border-amber-300/25 bg-black/20 px-3 py-1.5 text-xs font-semibold text-amber-100">
@@ -112,15 +120,16 @@ export default async function PlayerTemporaryMatchFeesPanel() {
               </div>
 
               {fee.paymentUrl ? (
-                <Link
+                <a
                   href={fee.paymentUrl}
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-amber-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300"
                 >
                   Pay this fee
-                </Link>
+                </a>
               ) : (
-                <span className="text-xs text-amber-100/65">Payment link is being prepared.</span>
+                <span className="text-xs text-amber-100/65">Payment link could not be prepared.</span>
               )}
             </div>
           </article>
