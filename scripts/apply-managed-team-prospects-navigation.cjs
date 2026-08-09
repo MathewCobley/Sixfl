@@ -8,26 +8,40 @@ const layoutPath = path.join(
 
 let source = fs.readFileSync(layoutPath, "utf8");
 
-const standardTeamNav = [
-  "    ...(access.isAdmin",
-  '      ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]',
-  "      : []),",
-].join("\n");
+const prospectsHref =
+  'href: `/captain/team/${teamid}/prospects`, label: "Prospects"';
 
-const managedTeamNav = [
-  "    ...(access.isAdmin && isManagedTeam",
-  '      ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]',
-  "      : []),",
-].join("\n");
+function getProspectsNavBlock(input) {
+  const prospectsIndex = input.indexOf(prospectsHref);
+  if (prospectsIndex < 0) return null;
 
-if (!source.includes(managedTeamNav)) {
-  if (!source.includes(standardTeamNav)) {
-    throw new Error(
-      "Expected captain Prospects navigation block was not found in the team layout.",
-    );
-  }
+  const guardStart = input.lastIndexOf("...(access.isAdmin", prospectsIndex);
+  const guardEnd = input.indexOf("),", prospectsIndex);
+  if (guardStart < 0 || guardEnd < 0) return null;
 
-  source = source.replace(standardTeamNav, managedTeamNav);
+  return {
+    start: guardStart,
+    end: guardEnd + 2,
+    value: input.slice(guardStart, guardEnd + 2),
+  };
+}
+
+const prospectsBlock = getProspectsNavBlock(source);
+if (!prospectsBlock) {
+  throw new Error(
+    "Expected captain Prospects navigation block was not found in the team layout.",
+  );
+}
+
+if (!prospectsBlock.value.includes("access.isAdmin && isManagedTeam")) {
+  const replacement = prospectsBlock.value.replace(
+    "...(access.isAdmin",
+    "...(access.isAdmin && isManagedTeam",
+  );
+  source =
+    source.slice(0, prospectsBlock.start) +
+    replacement +
+    source.slice(prospectsBlock.end);
 }
 
 const allTeamBridge = "      <ProspectsReadableLayout />";
@@ -47,10 +61,10 @@ if (!source.includes(managedTeamBridge)) {
 fs.writeFileSync(layoutPath, source, "utf8");
 
 const finalSource = fs.readFileSync(layoutPath, "utf8");
+const finalProspectsBlock = getProspectsNavBlock(finalSource);
 if (
-  !finalSource.includes(managedTeamNav) ||
-  !finalSource.includes(managedTeamBridge) ||
-  finalSource.includes(standardTeamNav)
+  !finalProspectsBlock?.value.includes("access.isAdmin && isManagedTeam") ||
+  !finalSource.includes(managedTeamBridge)
 ) {
   throw new Error(
     "Prospects navigation was not restricted to managed squads correctly.",
