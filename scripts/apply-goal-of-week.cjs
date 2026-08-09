@@ -109,10 +109,7 @@ function patchAdminPanel() {
       '            "opponentName" = ${opponentName},',
       '            "caption" = ${caption},',
       '            "isFeatured" = ${publishNow},',
-      '            "publishedAt" = CASE',
-      '              WHEN ${publishNow} THEN COALESCE("publishedAt", NOW())',
-      '              ELSE "publishedAt"',
-      '            END,',
+      '            "publishedAt" = COALESCE("publishedAt", NOW()),',
       '            "updatedAt" = NOW()',
       '          WHERE "id" = ${existing.id}',
       '        `);',
@@ -150,7 +147,7 @@ function patchAdminPanel() {
       '            ${caption},',
       '            ${weekOf},',
       '            ${publishNow},',
-      '            ${publishNow ? new Date() : null},',
+      '            ${new Date()},',
       '            NOW(),',
       '            NOW()',
       '          )',
@@ -171,14 +168,28 @@ function patchAdminPanel() {
   source = replaceRequired(
     source,
     '  revalidatePath("/api/public/goal-of-week");\n  redirect("/admin/sixfl-tv?goalSaved=created");',
-    '  revalidatePath("/api/public/goal-of-week");\n  revalidatePath("/goal-of-week");\n  redirect(`/admin/sixfl-tv?goalSaved=${updatedExisting ? "updated" : "created"}#goal-of-week-admin`);',
+    '  revalidatePath("/api/public/goal-of-week");\n  revalidatePath("/goal-of-the-week");\n  redirect(`/admin/sixfl-tv?goalSaved=${updatedExisting ? "updated" : "created"}#goal-of-week-admin`);',
     filePath,
   );
 
   source = replaceRequired(
     source,
     '  if (code === "created") return "Goal of the Week saved.";',
-    '  if (code === "created") return "Goal of the Week saved and published.";\n  if (code === "updated") return "This Goal of the Week was already saved, so SIXFL updated the existing entry instead of creating another copy.";',
+    '  if (code === "created") return "Goal of the Week saved and added to the winner archive.";\n  if (code === "updated") return "This Goal of the Week was already saved, so SIXFL updated the existing winner instead of creating another copy.";',
+    filePath,
+  );
+
+  source = replaceRequired(
+    source,
+    '              Paste the YouTube clip, choose the scoring team and publish it. The homepage will embed the video and show the team, week and any scorer or opponent details you add.',
+    '              Paste the YouTube clip and choose the scoring team. Saving adds the winner to the Goal of the Week archive; featuring it on the homepage is optional.',
+    filePath,
+  );
+
+  source = replaceRequired(
+    source,
+    '                Publish on the homepage\n                <span className="mt-1 block text-xs font-normal text-white/40">This replaces the previous featured goal.</span>',
+    '                Feature on the homepage\n                <span className="mt-1 block text-xs font-normal text-white/40">Optional. This replaces the previous homepage feature, but every saved winner remains in the Goal of the Week archive.</span>',
     filePath,
   );
 
@@ -205,4 +216,4 @@ function patchAdminPanel() {
 patchAdminPage();
 patchAdminPanel();
 
-console.log("Applied Goal of the Week admin integration and save safeguards.");
+console.log("Applied Goal of the Week admin integration, archive publishing and save safeguards.");
