@@ -4,16 +4,25 @@
 
 "use server";
 
+import {
+  NotificationAudience,
+  NotificationChannel,
+  NotificationRecipientSourceType,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { sendEmail } from "@/lib/email";
 import {
   PLAYER_POOL_PROFILE_STATUSES,
   PLAYER_POOL_REQUEST_STATUSES,
   createPlayerPoolId,
   ensurePlayerPoolTables,
+  getPlayerPoolBaseUrl,
 } from "@/lib/player-pool/storage";
+import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { queueDirectNotification } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -33,11 +42,100 @@ type ApprovedPlayerPoolProspect = {
   requestId: string;
   profileId: string;
   prospectId: string;
+  firstName: string;
+  lastName: string | null;
   email: string | null;
+  phone: string | null;
+  teamName: string;
+  teamLogoUrl: string | null;
+  joinSlug: string | null;
+  leagueName: string | null;
 };
 
 function pagePath(teamid: string, query = "") {
   return `/captain/team/${teamid}/player-pool${query}`;
+}
+
+function playerDisplayName(input: { firstName: string; lastName: string | null }) {
+  return [input.firstName, input.lastName].filter(Boolean).join(" ").trim() || "Player";
+}
+
+async function queuePlayerPoolSquadActivation(input: {
+  teamId: string;
+  createdByUserId: string | null;
+  player: ApprovedPlayerPoolProspect;
+}) {
+  const email = input.player.email?.trim().toLowerCase();
+  if (!email) return;
+
+  const displayName = playerDisplayName(input.player);
+  const activationUrl = input.player.joinSlug
+    ? `${getPlayerPoolBaseUrl()}/teams/join/${input.player.joinSlug}`
+    : `${getPlayerPoolBaseUrl()}/login`;
+
+  const recipient = await upsertNotificationRecipient({
+    sourceType: NotificationRecipientSourceType.GENERAL,
+    sourceId: `team-prospect:${input.player.prospectId}`,
+    audience: NotificationAudience.PLAYER,
+    displayName,
+    email,
+    phone: input.player.phone,
+    transactionalEmailOptIn: true,
+    transactionalSmsOptIn: true,
+    marketingEmailOptIn: false,
+    marketingSmsOptIn: false,
+    metadata: {
+      entityType: "TEAM_PLAYER_PROSPECT",
+      teamId: input.teamId,
+      prospectId: input.player.prospectId,
+      playerPoolProfileId: input.player.profileId,
+      playerPoolRequestId: input.player.requestId,
+    },
+  });
+
+  const body = `Hi ${input.player.firstName || "there"},
+
+You’re joining ${input.player.teamName} through SIXFL PlayerPool.
+
+Your squad place is ready. Complete your SIXFL squad signup using the same email address (${email}) so your player profile can be activated and linked to the team.
+
+{{cta}}
+
+If you have already activated your SIXFL account with this email address, there is nothing else you need to do.
+
+Thanks,
+SIXFL`;
+
+  const dispatch = await queueDirectNotification({
+    recipientId: recipient.id,
+    channel: NotificationChannel.EMAIL,
+    audience: NotificationAudience.PLAYER,
+    subject: `Your place in the ${input.player.teamName} squad`,
+    body,
+    isTransactional: true,
+    sourceType: "TEAM_PLAYER_PROSPECT",
+    sourceId: input.player.prospectId,
+    emailBranding: {
+      teamName: input.player.teamName,
+      teamLogoUrl: input.player.teamLogoUrl,
+      leagueName: input.player.leagueName,
+    },
+    emailCta: {
+      label: "Activate your squad place",
+      url: activationUrl,
+    },
+    metadata: {
+      origin: "player_pool_squad_activation",
+      originLabel: "PlayerPool player added to squad",
+      teamId: input.teamId,
+      prospectId: input.player.prospectId,
+      playerPoolProfileId: input.player.profileId,
+      playerPoolRequestId: input.player.requestId,
+    },
+    createdByUserId: input.createdByUserId,
+  });
+
+  await logNotificationDispatchToThread({ dispatch, recipient });
 }
 
 export async function requestPlayerPoolIntroductionAction(formData: FormData) {
@@ -194,7 +292,7 @@ export async function addPlayerPoolPlayerToSquadAction(formData: FormData) {
   const profileId = String(formData.get("profileId") ?? "").trim();
   const prospectId = String(formData.get("prospectId") ?? "").trim();
 
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
   await ensurePlayerPoolTables();
 
   if (!teamid || !profileId || !prospectId) {
@@ -206,10 +304,19 @@ export async function addPlayerPoolPlayerToSquadAction(formData: FormData) {
       request."id" AS "requestId",
       profile."id" AS "profileId",
       squad_prospect."id" AS "prospectId",
-      squad_prospect."email"
+      squad_prospect."firstName",
+      squad_prospect."lastName",
+      squad_prospect."email",
+      squad_prospect."phone",
+      team."name" AS "teamName",
+      team."logoUrl" AS "teamLogoUrl",
+      team."joinSlug",
+      league."name" AS "leagueName"
     FROM "PlayerPoolIntroductionRequest" request
     JOIN "PlayerPoolProfile" profile ON profile."id" = request."profileId"
     JOIN "TeamPlayerProspect" pool_prospect ON pool_prospect."id" = profile."prospectId"
+    JOIN "Team" team ON team."id" = request."teamId"
+    LEFT JOIN "League" league ON league."id" = team."leagueId"
     JOIN "TeamPlayerProspect" squad_prospect
       ON squad_prospect."id" = ${prospectId}
      AND squad_prospect."teamId" = request."teamId"
@@ -276,6 +383,18 @@ export async function addPlayerPoolPlayerToSquadAction(formData: FormData) {
       WHERE "id" = ${item.profileId}
     `;
   });
+
+  if (!user && item.email?.trim()) {
+    try {
+      await queuePlayerPoolSquadActivation({
+        teamId: teamid,
+        createdByUserId: access.user?.id ?? null,
+        player: item,
+      });
+    } catch (error) {
+      console.error("PlayerPool squad activation email could not be queued", error);
+    }
+  }
 
   revalidatePath(pagePath(teamid));
   revalidatePath(`/captain/team/${teamid}/prospects`);
