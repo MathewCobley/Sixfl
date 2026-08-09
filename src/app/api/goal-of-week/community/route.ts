@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const noStoreHeaders = { "Cache-Control": "no-store, max-age=0" };
+const MAX_WEEKLY_NOMINATIONS = 3;
 
 type Viewer = {
   id: string;
@@ -35,6 +36,8 @@ type NominationFixtureRow = {
   homeScore: number;
   awayScore: number;
   sixflTvUrl: string;
+  leagueName: string;
+  leagueSeason: string | null;
 };
 
 function cleanText(value: unknown, maxLength: number) {
@@ -136,10 +139,13 @@ export async function GET(request: Request) {
             away_team."name" AS "awayTeamName",
             result."homeScore"::int AS "homeScore",
             result."awayScore"::int AS "awayScore",
-            fixture."sixflTvUrl" AS "sixflTvUrl"
+            fixture."sixflTvUrl" AS "sixflTvUrl",
+            league."name" AS "leagueName",
+            league."season" AS "leagueSeason"
           FROM "Fixture" fixture
           JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
           JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
+          JOIN "League" league ON league."id" = fixture."leagueId"
           JOIN "MatchResult" result ON result."fixtureId" = fixture."id"
           WHERE fixture."kickoffAt" >= ${cycle.nominationWeekStart}
             AND fixture."kickoffAt" < ${cycle.nominationWeekEnd}
@@ -147,7 +153,6 @@ export async function GET(request: Request) {
             AND fixture."sixflTvUrl" IS NOT NULL
             AND fixture."sixflTvUrl" <> ''
             AND fixture."status" = ${FixtureStatus.COMPLETED}::"FixtureStatus"
-            AND (fixture."homeTeamId" = ${teamId} OR fixture."awayTeamId" = ${teamId})
           ORDER BY fixture."kickoffAt" DESC
         `),
         getCommunityGoalBallot(cycle.votingWeekStart, 6),
@@ -165,6 +170,7 @@ export async function GET(request: Request) {
             ON candidate."id" = nomination."candidateId"
           WHERE nomination."userId" = ${viewer.id}
             AND candidate."weekOf" = ${cycle.nominationWeekStart}
+            AND candidate."status" = 'ACTIVE'
         `),
         getLatestCommunityGoalWinner(now),
       ]);
@@ -181,6 +187,8 @@ export async function GET(request: Request) {
             videoUrl: splitSixflTvUrls(fixture.sixflTvUrl)[0] ?? null,
           })),
           nominatedCandidateIds: currentNominations.map((row) => row.candidateId),
+          usedNominations: currentNominations.length,
+          maxNominations: MAX_WEEKLY_NOMINATIONS,
         },
         voting: {
           weekOf: cycle.votingWeekStart.toISOString(),
@@ -257,10 +265,13 @@ export async function POST(request: Request) {
         away_team."name" AS "awayTeamName",
         result."homeScore"::int AS "homeScore",
         result."awayScore"::int AS "awayScore",
-        fixture."sixflTvUrl" AS "sixflTvUrl"
+        fixture."sixflTvUrl" AS "sixflTvUrl",
+        league."name" AS "leagueName",
+        league."season" AS "leagueSeason"
       FROM "Fixture" fixture
       JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
       JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
+      JOIN "League" league ON league."id" = fixture."leagueId"
       JOIN "MatchResult" result ON result."fixtureId" = fixture."id"
       WHERE fixture."id" = ${fixtureId}
         AND fixture."kickoffAt" >= ${cycle.nominationWeekStart}
@@ -269,7 +280,6 @@ export async function POST(request: Request) {
         AND fixture."sixflTvUrl" IS NOT NULL
         AND fixture."sixflTvUrl" <> ''
         AND fixture."status" = ${FixtureStatus.COMPLETED}::"FixtureStatus"
-        AND (fixture."homeTeamId" = ${teamId} OR fixture."awayTeamId" = ${teamId})
       LIMIT 1
     `);
     const fixture = fixtures[0];
@@ -320,6 +330,37 @@ export async function POST(request: Request) {
         { error: "That nomination has been removed by SIXFL and cannot be re-added." },
         { status: 409 },
       );
+    }
+
+    const existingViewerNomination = candidateId
+      ? await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT nomination."id"
+          FROM "GoalOfWeekNomination" nomination
+          WHERE nomination."candidateId" = ${candidateId}
+            AND nomination."userId" = ${viewer.id}
+          LIMIT 1
+        `)
+      : [];
+
+    if (existingViewerNomination.length === 0) {
+      const weeklyNominationCount = await prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+        SELECT COUNT(*)::int AS "count"
+        FROM "GoalOfWeekNomination" nomination
+        JOIN "GoalOfWeekCandidate" candidate
+          ON candidate."id" = nomination."candidateId"
+        WHERE nomination."userId" = ${viewer.id}
+          AND candidate."weekOf" = ${cycle.nominationWeekStart}
+          AND candidate."status" = 'ACTIVE'
+      `);
+
+      if (Number(weeklyNominationCount[0]?.count ?? 0) >= MAX_WEEKLY_NOMINATIONS) {
+        return NextResponse.json(
+          {
+            error: `You can nominate up to ${MAX_WEEKLY_NOMINATIONS} different goals each week. Your nominations have already been used for this week.`,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     if (!candidateId) {
