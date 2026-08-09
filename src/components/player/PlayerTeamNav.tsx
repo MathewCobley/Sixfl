@@ -8,6 +8,11 @@ const tabs = (teamId: string) => [
   { href: `/player/team/${teamId}/stats`, label: "Player stats", exact: false },
   { href: `/player/team/${teamId}/availability`, label: "Availability", exact: false },
   { href: `/player/team/${teamId}/tv`, label: "SIXFL TV", exact: false },
+  {
+    href: `/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamId)}`,
+    label: "Goal of the Week",
+    exact: false,
+  },
 ];
 
 export default function PlayerTeamNav({ teamId }: { teamId: string }) {
@@ -19,9 +24,10 @@ export default function PlayerTeamNav({ teamId }: { teamId: string }) {
       className="mx-auto mt-4 flex w-full max-w-6xl gap-2 overflow-x-auto px-4 pb-1"
     >
       {tabs(teamId).map((tab) => {
+        const hrefPath = tab.href.split("?")[0] ?? tab.href;
         const active = tab.exact
-          ? pathname === tab.href || pathname === `${tab.href}/`
-          : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          ? pathname === hrefPath || pathname === `${hrefPath}/`
+          : pathname === hrefPath || pathname.startsWith(`${hrefPath}/`);
 
         return (
           <Link
