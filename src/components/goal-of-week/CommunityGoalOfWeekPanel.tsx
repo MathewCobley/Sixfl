@@ -37,6 +37,10 @@ type Candidate = {
 };
 
 type Payload = {
+  viewer?: {
+    signedIn: boolean;
+    verifiedPlayer: boolean;
+  };
   nomination: {
     weekOf: string;
     closesAt: string;
@@ -48,6 +52,7 @@ type Payload = {
   voting: {
     weekOf: string;
     closesAt: string;
+    windowOpen?: boolean;
     open: boolean;
     verifiedPlayer: boolean;
     selectedCandidateId: string | null;
@@ -82,19 +87,26 @@ function formatWeek(value: string) {
   }).format(new Date(value));
 }
 
-function defaultDraft(fixture: FixtureChoice, teamId: string): Draft {
+function defaultDraft(fixture: FixtureChoice, preferredTeamId?: string): Draft {
   return {
     goalNumber: "",
     scoringTeamId:
-      fixture.homeTeamId === teamId || fixture.awayTeamId === teamId
-        ? teamId
+      preferredTeamId &&
+      (fixture.homeTeamId === preferredTeamId || fixture.awayTeamId === preferredTeamId)
+        ? preferredTeamId
         : fixture.homeTeamId,
     scorerName: "",
     comment: "",
   };
 }
 
-export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string }) {
+export default function CommunityGoalOfWeekPanel({
+  teamId,
+  showLatestWinner = true,
+}: {
+  teamId?: string;
+  showLatestWinner?: boolean;
+}) {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [loading, setLoading] = useState(true);
@@ -106,20 +118,19 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(
-        `/api/goal-of-week/community?teamId=${encodeURIComponent(teamId)}`,
-        { cache: "no-store" },
-      );
+      const response = await fetch("/api/goal-of-week/community", {
+        cache: "no-store",
+      });
       const result = (await response.json().catch(() => null)) as
         | Payload
         | { error?: string }
         | null;
-      if (!response.ok || !result || "error" in result) {
-        throw new Error(
-          result && "error" in result && result.error
+      if (!response.ok || !result || !("nomination" in result)) {
+        const apiError =
+          result && "error" in result && typeof result.error === "string"
             ? result.error
-            : "Could not load Goal of the Week.",
-        );
+            : null;
+        throw new Error(apiError || "Could not load Goal of the Week.");
       }
       setPayload(result);
       setDrafts((current) => {
@@ -138,15 +149,24 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
 
   useEffect(() => {
     void load();
-    // teamId identifies the dashboard context; load once when it changes.
+    // teamId is only used to preselect the scoring team when arriving from a dashboard.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
 
   const selectedCandidateId = payload?.voting.selectedCandidateId ?? null;
   const votingCandidates = payload?.voting.candidates ?? [];
   const winner = payload?.latestWinner ?? null;
+  const canParticipate = Boolean(
+    payload?.viewer?.verifiedPlayer ?? payload?.voting.verifiedPlayer,
+  );
+  const signedIn = Boolean(payload?.viewer?.signedIn);
+  const votingWindowOpen = Boolean(
+    payload?.voting.windowOpen ?? payload?.voting.open,
+  );
   const hasSomethingToShow = Boolean(
-    payload?.nomination.fixtures.length || votingCandidates.length || winner,
+    payload?.nomination.fixtures.length ||
+      votingCandidates.length ||
+      (showLatestWinner && winner),
   );
 
   const ballotWeekLabel = useMemo(
@@ -165,7 +185,6 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "nominate",
-          teamId,
           fixtureId: fixture.id,
           goalNumber: Number(draft.goalNumber),
           scoringTeamId: draft.scoringTeamId,
@@ -198,7 +217,7 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
       const response = await fetch("/api/goal-of-week/community", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "vote", teamId, candidateId }),
+        body: JSON.stringify({ action: "vote", candidateId }),
       });
       const result = (await response.json().catch(() => null)) as
         | { ok?: boolean; error?: string }
@@ -240,7 +259,7 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
         </p>
         <h2 className="mt-2 text-2xl font-black text-white">Goal of the Week</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-          Nominate a goal from any completed SIXFL TV match this week. Duplicate nominations are combined, and the six most-nominated goals make the following week's verified-player ballot.
+          Watch the SIXFL TV highlights, nominate your favourites by Sunday, then vote on the six most-nominated goals on Monday and Tuesday.
         </p>
       </div>
 
@@ -256,7 +275,7 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
           </div>
         ) : null}
 
-        {winner ? (
+        {showLatestWinner && winner ? (
           <div className="rounded-3xl border border-amber-300/25 bg-amber-400/[0.08] p-5">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/65">
               Latest player-voted winner
@@ -285,16 +304,37 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
             <div>
               <h3 className="text-xl font-semibold text-white">Nominate this week's goals</h3>
               <p className="mt-1 text-sm text-white/50">
-                Choose up to {payload.nomination.maxNominations} different goals from any completed SIXFL TV match. Nominations close at the end of the fixture week.
+                Choose up to {payload.nomination.maxNominations} different goals from any completed SIXFL TV match. The six most-nominated goals go into the player vote.
               </p>
             </div>
             <div className="text-right text-xs text-white/40">
               <div>Week of {formatWeek(payload.nomination.weekOf)}</div>
               <div className="mt-1 font-semibold text-fuchsia-100/70">
-                {payload.nomination.usedNominations}/{payload.nomination.maxNominations} nominations used
+                Nominations close {formatDate(payload.nomination.closesAt)}
               </div>
+              {canParticipate ? (
+                <div className="mt-1">
+                  {payload.nomination.usedNominations}/{payload.nomination.maxNominations} nominations used
+                </div>
+              ) : null}
             </div>
           </div>
+
+          {!canParticipate && payload.nomination.fixtures.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-400/[0.08] p-4 text-sm leading-6 text-amber-50/80">
+              {signedIn
+                ? "This page is public to view, but nominations are limited to verified SIXFL players and captains."
+                : "Anyone can view Goal of the Week. Sign in with your SIXFL player or captain account to nominate a goal."}
+              {!signedIn ? (
+                <a
+                  href={`/api/auth/signin?callbackUrl=${encodeURIComponent("/goal-of-the-week")}`}
+                  className="ml-2 font-bold text-amber-100 underline underline-offset-4"
+                >
+                  Sign in
+                </a>
+              ) : null}
+            </div>
+          ) : null}
 
           {payload.nomination.fixtures.length === 0 ? (
             <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/50">
@@ -328,84 +368,88 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
                       ) : null}
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <label className="space-y-1 text-xs font-semibold text-white/55">
-                        Goal number
-                        <select
-                          value={draft.goalNumber}
-                          onChange={(event) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [fixture.id]: { ...draft, goalNumber: event.target.value },
-                            }))
-                          }
-                          className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white"
+                    {canParticipate ? (
+                      <>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          <label className="space-y-1 text-xs font-semibold text-white/55">
+                            Goal number
+                            <select
+                              value={draft.goalNumber}
+                              onChange={(event) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [fixture.id]: { ...draft, goalNumber: event.target.value },
+                                }))
+                              }
+                              className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white"
+                            >
+                              <option value="">Choose goal</option>
+                              {Array.from({ length: fixture.totalGoals }, (_, index) => index + 1).map((number) => (
+                                <option key={number} value={number}>Goal {number}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="space-y-1 text-xs font-semibold text-white/55">
+                            Scoring team
+                            <select
+                              value={draft.scoringTeamId}
+                              onChange={(event) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [fixture.id]: { ...draft, scoringTeamId: event.target.value },
+                                }))
+                              }
+                              className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white"
+                            >
+                              <option value={fixture.homeTeamId}>{fixture.homeTeamName}</option>
+                              <option value={fixture.awayTeamId}>{fixture.awayTeamName}</option>
+                            </select>
+                          </label>
+
+                          <label className="space-y-1 text-xs font-semibold text-white/55">
+                            Scorer <span className="font-normal text-white/35">optional</span>
+                            <input
+                              value={draft.scorerName}
+                              onChange={(event) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [fixture.id]: { ...draft, scorerName: event.target.value },
+                                }))
+                              }
+                              maxLength={100}
+                              placeholder="Player name"
+                              className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white placeholder:text-white/25"
+                            />
+                          </label>
+
+                          <label className="space-y-1 text-xs font-semibold text-white/55">
+                            Why nominate it? <span className="font-normal text-white/35">optional</span>
+                            <input
+                              value={draft.comment}
+                              onChange={(event) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [fixture.id]: { ...draft, comment: event.target.value },
+                                }))
+                              }
+                              maxLength={180}
+                              placeholder="Top corner, long range…"
+                              className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white placeholder:text-white/25"
+                            />
+                          </label>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={isBusy || !draft.goalNumber || !draft.scoringTeamId}
+                          onClick={() => void nominate(fixture)}
+                          className="mt-4 rounded-xl bg-fuchsia-400 px-4 py-2.5 text-sm font-black text-black transition hover:bg-fuchsia-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <option value="">Choose goal</option>
-                          {Array.from({ length: fixture.totalGoals }, (_, index) => index + 1).map((number) => (
-                            <option key={number} value={number}>Goal {number}</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="space-y-1 text-xs font-semibold text-white/55">
-                        Scoring team
-                        <select
-                          value={draft.scoringTeamId}
-                          onChange={(event) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [fixture.id]: { ...draft, scoringTeamId: event.target.value },
-                            }))
-                          }
-                          className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white"
-                        >
-                          <option value={fixture.homeTeamId}>{fixture.homeTeamName}</option>
-                          <option value={fixture.awayTeamId}>{fixture.awayTeamName}</option>
-                        </select>
-                      </label>
-
-                      <label className="space-y-1 text-xs font-semibold text-white/55">
-                        Scorer <span className="font-normal text-white/35">optional</span>
-                        <input
-                          value={draft.scorerName}
-                          onChange={(event) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [fixture.id]: { ...draft, scorerName: event.target.value },
-                            }))
-                          }
-                          maxLength={100}
-                          placeholder="Player name"
-                          className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white placeholder:text-white/25"
-                        />
-                      </label>
-
-                      <label className="space-y-1 text-xs font-semibold text-white/55">
-                        Why nominate it? <span className="font-normal text-white/35">optional</span>
-                        <input
-                          value={draft.comment}
-                          onChange={(event) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [fixture.id]: { ...draft, comment: event.target.value },
-                            }))
-                          }
-                          maxLength={180}
-                          placeholder="Top corner, long range…"
-                          className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-sm text-white placeholder:text-white/25"
-                        />
-                      </label>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={isBusy || !draft.goalNumber || !draft.scoringTeamId}
-                      onClick={() => void nominate(fixture)}
-                      className="mt-4 rounded-xl bg-fuchsia-400 px-4 py-2.5 text-sm font-black text-black transition hover:bg-fuchsia-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isBusy ? "Nominating…" : "Nominate this goal"}
-                    </button>
+                          {isBusy ? "Nominating…" : "Nominate this goal"}
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 );
               })}
@@ -418,10 +462,15 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
             <div>
               <h3 className="text-xl font-semibold text-white">Player vote</h3>
               <p className="mt-1 text-sm text-white/50">
-                One vote per verified SIXFL player each week. You can change your choice until voting closes.
+                The previous week's six finalists are voted on from Monday until Tuesday evening. One vote per verified SIXFL player, and you can change it until voting closes.
               </p>
             </div>
-            <span className="text-xs text-white/40">Goals from week of {ballotWeekLabel}</span>
+            <div className="text-right text-xs text-white/40">
+              <div>Goals from week of {ballotWeekLabel}</div>
+              <div className="mt-1 font-semibold text-fuchsia-100/70">
+                Voting closes {formatDate(payload.voting.closesAt)}
+              </div>
+            </div>
           </div>
 
           {votingCandidates.length === 0 ? (
@@ -495,6 +544,10 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
                       >
                         {isBusy ? "Saving…" : selected ? "✓ Your vote" : "Vote for this goal"}
                       </button>
+                    ) : votingWindowOpen && !canParticipate ? (
+                      <div className="mt-4 text-sm text-amber-100/75">
+                        Sign in with a verified SIXFL player or captain account to vote.
+                      </div>
                     ) : (
                       <div className="mt-4 text-sm text-white/50">
                         Voting closed · {candidate.voteCount} vote{candidate.voteCount === 1 ? "" : "s"}
@@ -506,13 +559,13 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
             </div>
           )}
 
-          {!payload.voting.verifiedPlayer ? (
+          {!canParticipate && votingWindowOpen ? (
             <p className="mt-3 text-xs text-amber-100/70">
-              You can view the ballot, but voting is limited to verified SIXFL players and captains.
+              The ballot is public to view, but voting is limited to verified SIXFL players and captains.
             </p>
           ) : payload.voting.open ? (
             <p className="mt-3 text-xs text-white/40">
-              Voting closes {formatDate(payload.voting.closesAt)}. Vote totals stay hidden until voting closes.
+              Vote totals stay hidden until voting closes.
             </p>
           ) : null}
         </div>
