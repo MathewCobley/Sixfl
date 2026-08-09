@@ -24,6 +24,30 @@ function key(teamId: string, fixtureId: string) {
   return `${teamId}:${fixtureId}`;
 }
 
+export async function ensureCaptainCollectedRemittanceTable() {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "CaptainCollectedRemittanceCheckout" (
+      "checkoutSessionId" TEXT NOT NULL,
+      "teamId" TEXT NOT NULL,
+      "chargeId" TEXT NOT NULL,
+      "fixtureId" TEXT NOT NULL,
+      "amountPence" INTEGER NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "CaptainCollectedRemittanceCheckout_pkey" PRIMARY KEY ("checkoutSessionId")
+    );
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "CaptainCollectedRemittanceCheckout_chargeId_idx"
+      ON "CaptainCollectedRemittanceCheckout"("chargeId");
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "CaptainCollectedRemittanceCheckout_team_fixture_idx"
+      ON "CaptainCollectedRemittanceCheckout"("teamId", "fixtureId");
+  `);
+}
+
 export async function getCaptainCollectedRemittanceSnapshots(
   entries: CaptainCollectedRemittanceEntry[],
 ) {
@@ -42,6 +66,8 @@ export async function getCaptainCollectedRemittanceSnapshots(
   }
 
   if (uniqueEntries.length === 0) return snapshots;
+
+  await ensureCaptainCollectedRemittanceTable();
 
   const teamIds = Array.from(new Set(uniqueEntries.map((entry) => entry.teamId)));
   const fixtureIds = Array.from(new Set(uniqueEntries.map((entry) => entry.fixtureId)));
