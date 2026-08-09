@@ -57,7 +57,7 @@ export function getCommunityGoalCycle(now: Date = new Date()): CommunityGoalCycl
   const nominationWeekEnd = addLondonDays(nominationWeekStart, 7, "00:00");
   const votingWeekStart = addLondonDays(nominationWeekStart, -7, "00:00");
   const votingOpensAt = nominationWeekStart;
-  const votingClosesAt = addLondonDays(nominationWeekStart, 6, "20:00");
+  const votingClosesAt = addLondonDays(nominationWeekStart, 1, "18:00");
   const votingOpen = now >= votingOpensAt && now < votingClosesAt;
   const latestClosedCandidateWeek = votingOpen
     ? addLondonDays(nominationWeekStart, -14, "00:00")
