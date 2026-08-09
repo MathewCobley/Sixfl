@@ -130,4 +130,47 @@ patchFile(
   "public league central standings and clubs",
 );
 
+patchFile(
+  path.join(root, "src", "app", "(public)", "teams", "[id]", "page.tsx"),
+  (source) => {
+    if (!source.includes('import { getLeagueStandings } from "@/lib/standings";')) {
+      source = source.replace(
+        'import { prisma } from "@/lib/prisma";\n',
+        'import { prisma } from "@/lib/prisma";\nimport { getLeagueStandings } from "@/lib/standings";\n',
+      );
+    }
+
+    source = source.replace(
+      /function buildLeagueTable\([\s\S]*?\n}\n\n\/\/ ========================================\n\/\/ Page/,
+      "// ========================================\n// Page",
+    );
+
+    const teamFoundAnchor = `  if (!team) {\n    notFound();\n  }\n\n  const teamLogo = normaliseLogoUrl(team.logoUrl);`;
+    const teamFoundReplacement = `  if (!team) {\n    notFound();\n  }\n\n  const centralStandings = team.league\n    ? await getLeagueStandings(team.league.id)\n    : null;\n\n  const teamLogo = normaliseLogoUrl(team.logoUrl);`;
+    if (!source.includes("const centralStandings = team.league") && source.includes(teamFoundAnchor)) {
+      source = source.replace(teamFoundAnchor, teamFoundReplacement);
+    }
+
+    const localTableCall = `  const leagueTable = buildLeagueTable(team.league.teams, leagueFixtures);`;
+    const centralTableMapping = `  const leagueTable: TableRow[] = (centralStandings?.rows ?? []).map((row) => ({\n    team: {\n      id: row.teamId,\n      name: row.teamName,\n      logoUrl: row.teamLogoUrl,\n    },\n    played: row.played,\n    wins: row.won,\n    draws: row.drawn,\n    losses: row.lost,\n    goalsFor: row.goalsFor,\n    goalsAgainst: row.goalsAgainst,\n    goalDifference: row.goalDifference,\n    points: row.points,\n  }));`;
+    if (source.includes(localTableCall)) {
+      source = source.replace(localTableCall, centralTableMapping);
+    }
+
+    if (
+      source.includes("function buildLeagueTable(") ||
+      source.includes("buildLeagueTable(team.league.teams") ||
+      !source.includes("getLeagueStandings(team.league.id)") ||
+      !source.includes("const leagueTable: TableRow[] = (centralStandings?.rows ?? [])")
+    ) {
+      throw new Error(
+        "Public team page still contains a local league-table calculation.",
+      );
+    }
+
+    return source;
+  },
+  "public team central standings",
+);
+
 require("./apply-player-current-league-context.cjs");
