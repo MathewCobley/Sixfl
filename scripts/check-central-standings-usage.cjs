@@ -1,3 +1,4 @@
+// Diagnostic only: rerun full validation against current main.
 const fs = require("node:fs");
 const path = require("node:path");
 
