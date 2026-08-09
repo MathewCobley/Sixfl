@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { queueDuePlayerMatchFeeReminders } from "@/lib/payments/player-match-fees";
+import { queueOutstandingTemporaryPlayerMatchFeeRequests } from "@/lib/payments/temporary-player-match-fee-requests";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,14 +24,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const temporaryPlayerRequests =
+    await queueOutstandingTemporaryPlayerMatchFeeRequests();
   const queued = await queueDuePlayerMatchFeeReminders();
-  const processed = queued.queued > 0
-    ? await processNotificationQueue(Math.max(queued.queued + 10, 25))
+  const totalQueued = temporaryPlayerRequests.queued + queued.queued;
+  const processed = totalQueued > 0
+    ? await processNotificationQueue(Math.max(totalQueued + 10, 25))
     : { processed: 0, sent: 0, failed: 0, skipped: 0, items: [] };
 
   return NextResponse.json({
     ok: true,
     ...queued,
+    temporaryPlayerRequests,
     processedQueue: {
       processed: processed.processed,
       sent: processed.sent,
