@@ -330,7 +330,6 @@ export default async function CaptainTeamLayout({
       items: [
         { href: `/captain/team/${teamid}`, label: "Overview" },
         { href: squadHref, label: "Squad" },
-        { href: `/captain/team/${teamid}/player-stats`, label: "Player stats" },
         ...(access.isAdmin
           ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
           : []),
@@ -349,7 +348,6 @@ export default async function CaptainTeamLayout({
           href: `/captain/team/${teamid}/weeks-unavailable`,
           label: "Weeks unavailable",
         },
-        { href: `/captain/team/${teamid}/results-history`, label: "Results" },
         { href: `/captain/team/${teamid}/results`, label: "Match reports" },
       ],
     },
@@ -360,6 +358,8 @@ export default async function CaptainTeamLayout({
           href: `/captain/team/${teamid}#captain-league-table`,
           label: "Table",
         },
+        { href: `/captain/team/${teamid}/results-history`, label: "Results" },
+        { href: `/captain/team/${teamid}/player-stats`, label: "Player stats" },
         {
           href: `/captain/team/${teamid}/tv`,
           label: "SIXFL TV",
