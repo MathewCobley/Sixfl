@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
+import { queueTemporaryPlayerMatchFeeRequest } from "@/lib/payments/temporary-player-match-fee-requests";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import {
@@ -45,6 +46,18 @@ function errorResponse(error: unknown) {
     { error: "The temporary-player request could not be updated." },
     { status: 500 },
   );
+}
+
+async function queuePaymentRequestSafely(feeId: string) {
+  try {
+    return await queueTemporaryPlayerMatchFeeRequest(feeId);
+  } catch (error) {
+    console.error("Temporary-player payment request could not be queued", {
+      feeId,
+      error,
+    });
+    return { queued: 0, skipped: 1, status: "failed" as const };
+  }
 }
 
 export async function GET(
@@ -122,6 +135,11 @@ export async function POST(
         acceptedByUserId: access.user?.id ?? null,
       });
 
+      const paymentRequest =
+        player.amountPence > 0
+          ? await queuePaymentRequestSafely(player.playerMatchFeeId)
+          : null;
+
       return NextResponse.json({
         ok: true,
         decision: "accepted",
@@ -129,6 +147,7 @@ export async function POST(
           displayName: player.displayName,
           amountPence: player.amountPence,
         },
+        paymentRequest,
       });
     }
 
