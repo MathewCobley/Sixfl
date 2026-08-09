@@ -136,8 +136,6 @@ export default function ProspectNativeActions({
     [currentTeamId, teamOptions],
   );
 
-  const canUsePlayerPool =
-    !currentTeamId && hasEmail && !isClosed && !isActivePlayer;
   const hasSquadInviteHistory = Boolean(
     latestSigninEmailStatus &&
       ["SENT", "QUEUED", "PROCESSING", "RECORDED"].includes(
@@ -151,6 +149,12 @@ export default function ProspectNativeActions({
       !isActivePlayer &&
       !latestPlayerResponse &&
       hasSquadInviteHistory,
+  );
+  const canUsePlayerPool = Boolean(
+    hasEmail &&
+      !isClosed &&
+      !isActivePlayer &&
+      (!currentTeamId || canChaseInvite),
   );
 
   async function runProspectPost(input: {
@@ -256,7 +260,9 @@ export default function ProspectNativeActions({
     const confirmed = window.confirm(
       existingProfile
         ? `Resend ${playerName}'s SIXFL PlayerPool profile form?`
-        : `Send ${playerName} a SIXFL PlayerPool profile form?`,
+        : currentTeamId
+          ? `Add ${playerName} to SIXFL PlayerPool? Their current team prospect assignment will be kept while the PlayerPool profile form is sent.`
+          : `Send ${playerName} a SIXFL PlayerPool profile form?`,
     );
     if (!confirmed) return;
 
@@ -284,7 +290,11 @@ export default function ProspectNativeActions({
 
       setNotice({
         tone: "success",
-        text: payload.message || "PlayerPool form sent.",
+        text: currentTeamId
+          ? existingProfile
+            ? `PlayerPool form resent for ${playerName}. Their current team prospect assignment has been kept.`
+            : `${playerName} has been added to PlayerPool and sent the profile form. Their current team prospect assignment has been kept.`
+          : payload.message || "PlayerPool form sent.",
       });
       router.refresh();
     } catch (error) {
@@ -476,6 +486,12 @@ export default function ProspectNativeActions({
               </span>
             ) : null}
           </div>
+          {currentTeamId ? (
+            <p className="text-xs leading-5 text-emerald-100/65">
+              No response to the squad invite. You can add this player to PlayerPool
+              without removing their current team prospect assignment.
+            </p>
+          ) : null}
           <button
             type="button"
             disabled={busyAction !== null}
@@ -488,7 +504,9 @@ export default function ProspectNativeActions({
                 ? "Resend PlayerPool invite"
                 : playerPoolProfile
                   ? "Resend PlayerPool form"
-                  : "Send to PlayerPool"}
+                  : currentTeamId
+                    ? "Add to PlayerPool"
+                    : "Send to PlayerPool"}
           </button>
         </div>
       ) : null}
