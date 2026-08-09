@@ -22,7 +22,6 @@ const MAX_WEEKLY_NOMINATIONS = 3;
 type Viewer = {
   id: string;
   role: UserRole;
-  canManageTeam: boolean;
   isVerifiedPlayer: boolean;
 };
 
@@ -50,46 +49,32 @@ function asPositiveInt(value: unknown) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-async function getViewer(teamId: string): Promise<Viewer | null> {
+async function getViewer(): Promise<Viewer | null> {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email?.trim().toLowerCase();
-  if (!email || !teamId) return null;
+  if (!email) return null;
 
   const user = await prisma.user.findUnique({
     where: { email },
     select: {
       id: true,
       role: true,
-      teamMembers: {
-        where: { teamId },
-        select: { id: true },
-        take: 1,
-      },
       _count: { select: { teamMembers: true } },
     },
   });
   if (!user) return null;
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { captainUserId: true },
-  });
-  if (!team) return null;
-
-  const isCaptain = team.captainUserId === user.id;
-  const canManageTeam =
-    user.role === UserRole.ADMIN || user.teamMembers.length > 0 || isCaptain;
-  if (!canManageTeam) return null;
-
-  const isCaptainAnywhere = await prisma.team.count({
+  const captainTeamCount = await prisma.team.count({
     where: { captainUserId: user.id },
   });
 
   return {
     id: user.id,
     role: user.role,
-    canManageTeam,
-    isVerifiedPlayer: user._count.teamMembers > 0 || isCaptainAnywhere > 0,
+    isVerifiedPlayer:
+      user.role === UserRole.ADMIN ||
+      user._count.teamMembers > 0 ||
+      captainTeamCount > 0,
   };
 }
 
@@ -115,18 +100,38 @@ function candidatePayload(candidate: Awaited<ReturnType<typeof getCommunityGoalB
   };
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const teamId = url.searchParams.get("teamId")?.trim() ?? "";
-  const viewer = await getViewer(teamId);
-  if (!viewer) {
-    return NextResponse.json({ error: "Not authorised." }, { status: 403 });
-  }
-
+export async function GET() {
+  const viewer = await getViewer();
   const now = new Date();
   const cycle = getCommunityGoalCycle(now);
+  const verifiedPlayer = Boolean(viewer?.isVerifiedPlayer);
+  const nominationClosesAt = new Date(
+    cycle.nominationWeekEnd.getTime() - 60_000,
+  );
 
   try {
+    const currentVotePromise = viewer
+      ? prisma.$queryRaw<Array<{ candidateId: string }>>(Prisma.sql`
+          SELECT vote."candidateId"
+          FROM "GoalOfWeekVote" vote
+          WHERE vote."userId" = ${viewer.id}
+            AND vote."weekOf" = ${cycle.votingWeekStart}
+          LIMIT 1
+        `)
+      : Promise.resolve([] as Array<{ candidateId: string }>);
+
+    const currentNominationsPromise = viewer
+      ? prisma.$queryRaw<Array<{ candidateId: string }>>(Prisma.sql`
+          SELECT nomination."candidateId"
+          FROM "GoalOfWeekNomination" nomination
+          JOIN "GoalOfWeekCandidate" candidate
+            ON candidate."id" = nomination."candidateId"
+          WHERE nomination."userId" = ${viewer.id}
+            AND candidate."weekOf" = ${cycle.nominationWeekStart}
+            AND candidate."status" = 'ACTIVE'
+        `)
+      : Promise.resolve([] as Array<{ candidateId: string }>);
+
     const [fixtures, ballot, currentVote, currentNominations, latestWinner] =
       await Promise.all([
         prisma.$queryRaw<NominationFixtureRow[]>(Prisma.sql`
@@ -156,30 +161,20 @@ export async function GET(request: Request) {
           ORDER BY fixture."kickoffAt" DESC
         `),
         getCommunityGoalBallot(cycle.votingWeekStart, 6),
-        prisma.$queryRaw<Array<{ candidateId: string }>>(Prisma.sql`
-          SELECT vote."candidateId"
-          FROM "GoalOfWeekVote" vote
-          WHERE vote."userId" = ${viewer.id}
-            AND vote."weekOf" = ${cycle.votingWeekStart}
-          LIMIT 1
-        `),
-        prisma.$queryRaw<Array<{ candidateId: string }>>(Prisma.sql`
-          SELECT nomination."candidateId"
-          FROM "GoalOfWeekNomination" nomination
-          JOIN "GoalOfWeekCandidate" candidate
-            ON candidate."id" = nomination."candidateId"
-          WHERE nomination."userId" = ${viewer.id}
-            AND candidate."weekOf" = ${cycle.nominationWeekStart}
-            AND candidate."status" = 'ACTIVE'
-        `),
+        currentVotePromise,
+        currentNominationsPromise,
         getLatestCommunityGoalWinner(now),
       ]);
 
     return NextResponse.json(
       {
+        viewer: {
+          signedIn: Boolean(viewer),
+          verifiedPlayer,
+        },
         nomination: {
           weekOf: cycle.nominationWeekStart.toISOString(),
-          closesAt: cycle.nominationWeekEnd.toISOString(),
+          closesAt: nominationClosesAt.toISOString(),
           fixtures: fixtures.map((fixture) => ({
             ...fixture,
             kickoffAt: fixture.kickoffAt.toISOString(),
@@ -193,8 +188,9 @@ export async function GET(request: Request) {
         voting: {
           weekOf: cycle.votingWeekStart.toISOString(),
           closesAt: cycle.votingClosesAt.toISOString(),
-          open: cycle.votingOpen && viewer.isVerifiedPlayer,
-          verifiedPlayer: viewer.isVerifiedPlayer,
+          windowOpen: cycle.votingOpen,
+          open: cycle.votingOpen && verifiedPlayer,
+          verifiedPlayer,
           selectedCandidateId: currentVote[0]?.candidateId ?? null,
           candidates: ballot.map(candidatePayload),
         },
@@ -225,10 +221,12 @@ type CommunityAction = {
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as CommunityAction | null;
   const action = String(payload?.action ?? "").trim();
-  const teamId = String(payload?.teamId ?? "").trim();
-  const viewer = await getViewer(teamId);
-  if (!viewer) {
-    return NextResponse.json({ error: "Not authorised." }, { status: 403 });
+  const viewer = await getViewer();
+  if (!viewer?.isVerifiedPlayer) {
+    return NextResponse.json(
+      { error: "Sign in with a verified SIXFL player or captain account to take part." },
+      { status: 403 },
+    );
   }
 
   const now = new Date();
@@ -397,12 +395,6 @@ export async function POST(request: Request) {
   }
 
   if (action === "vote") {
-    if (!viewer.isVerifiedPlayer) {
-      return NextResponse.json(
-        { error: "Voting is limited to verified SIXFL players and captains." },
-        { status: 403 },
-      );
-    }
     if (!cycle.votingOpen) {
       return NextResponse.json(
         { error: "Voting for this week's ballot has closed." },
