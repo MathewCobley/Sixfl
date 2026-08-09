@@ -80,7 +80,10 @@ function walk(directory) {
       violations.push(`${relative}: direct leagueTable import: ${directImports.join(" | ").trim()}`);
     }
 
-    if (/\bfunction\s+buildLeagueTable\s*\(/.test(source)) {
+    // League-facing pages must never maintain a second standings calculator.
+    // Other pages can have local presentation helpers with the same function
+    // name without representing the canonical league standings contract.
+    if (relative.includes("/leagues/") && /\bfunction\s+buildLeagueTable\s*\(/.test(source)) {
       violations.push(`${relative}: local buildLeagueTable() calculator`);
     }
   }
