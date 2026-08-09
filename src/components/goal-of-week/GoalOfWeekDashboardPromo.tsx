@@ -52,10 +52,9 @@ export default function GoalOfWeekDashboardPromo({
 
     async function load() {
       try {
-        const response = await fetch(
-          `/api/goal-of-week/community?teamId=${encodeURIComponent(teamId)}`,
-          { cache: "no-store" },
-        );
+        const response = await fetch("/api/goal-of-week/community", {
+          cache: "no-store",
+        });
         const result = (await response.json().catch(() => null)) as
           | GoalPayload
           | { error?: string }
@@ -101,7 +100,7 @@ export default function GoalOfWeekDashboardPromo({
       return {
         eyebrow: "GOAL OF THE WEEK · NOMINATIONS OPEN",
         title: "Seen a worldie? Put it forward.",
-        body: `Nominate a goal from your completed SIXFL TV match${deadline ? ` before ${deadline}` : ""}. The six most-nominated goals make the player vote.`,
+        body: `Nominate a goal from any completed SIXFL TV match${deadline ? ` before ${deadline}` : ""}. The six most-nominated goals make the Monday–Tuesday player vote.`,
         cta: "Nominate a goal",
         secondary: null,
       };
@@ -112,7 +111,7 @@ export default function GoalOfWeekDashboardPromo({
       return {
         eyebrow: "SIXFL GOAL OF THE WEEK",
         title: "Goal of the Week is chosen by SIXFL players.",
-        body: `${winnerName} is the latest player-voted winner. Open SIXFL TV to watch, nominate and vote when the next ballot is ready.`,
+        body: `${winnerName} is the latest player-voted winner. Open Goal of the Week to watch, nominate and vote when the next ballot is ready.`,
         cta: "Open Goal of the Week",
         secondary: null,
       };
