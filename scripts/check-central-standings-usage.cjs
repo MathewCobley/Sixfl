@@ -76,7 +76,11 @@ function walk(directory) {
       .filter((line) => !/^\s*import\s+type\b/.test(line));
 
     if (directImports.length > 0) {
-      violations.push(`${relative}: ${directImports.join(" | ").trim()}`);
+      violations.push(`${relative}: direct leagueTable import: ${directImports.join(" | ").trim()}`);
+    }
+
+    if (/\bfunction\s+buildLeagueTable\s*\(/.test(source)) {
+      violations.push(`${relative}: local buildLeagueTable() calculator`);
     }
   }
 }
@@ -84,7 +88,7 @@ function walk(directory) {
 walk(srcRoot);
 
 if (violations.length > 0) {
-  console.error("Direct league table calculation imports are not allowed.");
+  console.error("Non-central league table calculations are not allowed.");
   console.error("Use getLeagueStandings() or getTeamStanding() from src/lib/standings.ts.");
   for (const violation of violations) console.error(`- ${violation}`);
   process.exit(1);
