@@ -29,11 +29,13 @@ type CaptainAccessMode = "admin-preview" | "captain-preview" | "captain";
 
 type PendingPlayerPoolApproval = {
   requestId: string;
+  status: string;
   publicCode: string;
   firstName: string;
   lastName: string | null;
   email: string | null;
   phone: string | null;
+  requestedAt: string;
   introducedAt: string | null;
 };
 
@@ -252,10 +254,10 @@ export default function CaptainViewModeHeader({
                 PlayerPool · action needed
               </p>
               <h2 className="mt-2 text-lg font-black text-white">
-                {pendingPlayerPoolApprovals.length} approved player{pendingPlayerPoolApprovals.length === 1 ? " is" : "s are"} waiting to join
+                {pendingPlayerPoolApprovals.length} PlayerPool request{pendingPlayerPoolApprovals.length === 1 ? " needs" : "s need"} attention
               </h2>
               <p className="mt-1 text-sm text-sky-50/70">
-                These introductions have been approved but the players are not active squad members yet.
+                Approved players are ready for the team handoff. Any request still waiting for SIXFL approval is shown here too, so nobody disappears from view.
               </p>
             </div>
             <a
@@ -267,20 +269,29 @@ export default function CaptainViewModeHeader({
           </div>
 
           <div className="mt-4 grid gap-2 lg:grid-cols-2">
-            {pendingPlayerPoolApprovals.map((player) => (
-              <div key={player.requestId} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-sky-200">{player.publicCode}</span>
-                  <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
-                    Approved · waiting to join
-                  </span>
+            {pendingPlayerPoolApprovals.map((player) => {
+              const introduced = player.status === "INTRODUCED";
+              return (
+                <div key={player.requestId} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-sky-200">{player.publicCode}</span>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                        introduced
+                          ? "border-amber-300/25 bg-amber-400/10 text-amber-100"
+                          : "border-sky-300/25 bg-sky-400/10 text-sky-100"
+                      }`}
+                    >
+                      {introduced ? "Approved · waiting to join" : "Waiting for SIXFL approval"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-white">{getPlayerDisplayName(player)}</div>
+                  <div className="mt-1 text-xs text-white/50">
+                    {player.email || "No email saved"}{player.phone ? ` · ${player.phone}` : ""}
+                  </div>
                 </div>
-                <div className="mt-2 text-sm font-semibold text-white">{getPlayerDisplayName(player)}</div>
-                <div className="mt-1 text-xs text-white/50">
-                  {player.email || "No email saved"}{player.phone ? ` · ${player.phone}` : ""}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}
