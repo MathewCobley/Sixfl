@@ -9,11 +9,13 @@ export const revalidate = 0;
 
 type PendingApprovalRow = {
   requestId: string;
+  status: string;
   publicCode: string;
   firstName: string;
   lastName: string | null;
   email: string | null;
   phone: string | null;
+  requestedAt: Date;
   introducedAt: Date | null;
 };
 
@@ -28,17 +30,19 @@ export async function GET(
   const items = await prisma.$queryRaw<PendingApprovalRow[]>`
     SELECT
       request."id" AS "requestId",
+      request."status",
       profile."publicCode",
       prospect."firstName",
       prospect."lastName",
       prospect."email",
       prospect."phone",
+      request."requestedAt",
       request."introducedAt"
     FROM "PlayerPoolIntroductionRequest" request
     JOIN "PlayerPoolProfile" profile ON profile."id" = request."profileId"
     JOIN "TeamPlayerProspect" prospect ON prospect."id" = profile."prospectId"
     WHERE request."teamId" = ${teamid}
-      AND request."status" = 'INTRODUCED'
+      AND request."status" IN ('REQUESTED', 'INTRODUCED')
       AND NOT EXISTS (
         SELECT 1
         FROM "TeamMember" member
@@ -55,6 +59,7 @@ export async function GET(
     {
       items: items.map((item) => ({
         ...item,
+        requestedAt: item.requestedAt.toISOString(),
         introducedAt: item.introducedAt?.toISOString() ?? null,
       })),
     },
