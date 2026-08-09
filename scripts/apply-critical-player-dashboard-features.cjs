@@ -8,6 +8,7 @@ const path = require("node:path");
 // Keep the temporary-player label patch here, then verify both features from
 // their structural contracts rather than fragile headings.
 require("./apply-temporary-player-team-label-clarity.cjs");
+require("./apply-player-dashboard-temporary-fees-inline.cjs");
 
 const root = process.cwd();
 
@@ -40,6 +41,13 @@ const checks = [
       playerPage.includes("<TemporaryPlayerPassLauncher"),
     message: "The player team dashboard no longer mounts the temporary-player match-fee launcher.",
   },
+  {
+    ok:
+      playerPage.includes('fee."temporaryUserId" = ${user.id}') &&
+      playerPage.includes("const allPlayerFees = [") &&
+      playerPage.includes("Temporary player · {fee.temporaryTeamName}"),
+    message: "Temporary-player fees are not integrated into the main player match-fee ledger.",
+  },
 ];
 
 const failures = checks.filter((check) => !check.ok);
@@ -50,5 +58,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Critical player dashboard features verified: team switching and another-team match-fee setup are present.",
+  "Critical player dashboard features verified: team switching, temporary-player setup and unified player fee visibility are present.",
 );
