@@ -36,7 +36,7 @@ export default async function PlayerTeamLayout({
         <div className="mx-auto w-full max-w-6xl px-4 pt-6">
           <GoalOfWeekDashboardPromo
             teamId={teamid}
-            href={`/player/team/${teamid}/tv`}
+            href={`/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamid)}`}
           />
           <PlayerTemporaryMatchFeesPanel />
         </div>
