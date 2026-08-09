@@ -92,19 +92,26 @@ const captainMobileStyles = String.raw`
   }
 
   .captain-team-shell .captain-team-nav {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 0.5rem;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    overflow: visible;
     padding: 0.75rem 1rem 1rem;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
+  }
+
+  .captain-team-shell .captain-team-nav-group {
+    min-width: 0;
+  }
+
+  .captain-team-shell .captain-team-nav-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .captain-team-shell .captain-team-nav a {
     min-height: 2.5rem;
     flex: 0 0 auto;
-    scroll-snap-align: start;
     white-space: nowrap;
   }
 
@@ -205,6 +212,11 @@ type CaptainNavItem = {
   href: string;
   label: string;
   logoSrc?: string;
+};
+
+type CaptainNavGroup = {
+  label: string;
+  items: CaptainNavItem[];
 };
 
 function getTeamInitials(name: string) {
@@ -312,38 +324,61 @@ export default async function CaptainTeamLayout({
     ? `/captain/team/${teamid}/squad`
     : `/captain/team/${teamid}/captain-squad`;
 
-  const navItems: CaptainNavItem[] = [
-    { href: `/captain/team/${teamid}`, label: "Overview" },
-    { href: squadHref, label: "Squad" },
-    { href: `/captain/team/${teamid}/player-stats`, label: "Player stats" },
-    ...(access.isAdmin
-      ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
-      : []),
-    { href: `/captain/team/${teamid}/player-pool`, label: "PlayerPool" },
-    { href: `/captain/team/${teamid}/player-payments`, label: "Squad payments" },
-    { href: `/captain/team/${teamid}/kit`, label: "Team kit" },
-    { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
-    { href: `/captain/team/${teamid}/availability`, label: "Availability" },
+  const navGroups: CaptainNavGroup[] = [
     {
-      href: `/captain/team/${teamid}/weeks-unavailable`,
-      label: "Weeks unavailable",
+      label: "Team & players",
+      items: [
+        { href: `/captain/team/${teamid}`, label: "Overview" },
+        { href: squadHref, label: "Squad" },
+        { href: `/captain/team/${teamid}/player-stats`, label: "Player stats" },
+        ...(access.isAdmin
+          ? [{ href: `/captain/team/${teamid}/prospects`, label: "Prospects" }]
+          : []),
+        { href: `/captain/team/${teamid}/player-pool`, label: "PlayerPool" },
+        { href: `/captain/team/${teamid}/kit`, label: "Team kit" },
+        { href: `/captain/team/${teamid}/whatsapp`, label: "WhatsApp" },
+      ],
     },
-    { href: `/captain/team/${teamid}/whatsapp`, label: "WhatsApp" },
-    { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
     {
-      href: `/captain/team/${teamid}#captain-league-table`,
-      label: "Table",
+      label: "Matchday",
+      items: [
+        { href: `/captain/team/${teamid}/fixtures`, label: "Fixtures" },
+        { href: `/captain/team/${teamid}/match-fees`, label: "Matchday squad" },
+        { href: `/captain/team/${teamid}/availability`, label: "Availability" },
+        {
+          href: `/captain/team/${teamid}/weeks-unavailable`,
+          label: "Weeks unavailable",
+        },
+        { href: `/captain/team/${teamid}/results-history`, label: "Results" },
+        { href: `/captain/team/${teamid}/results`, label: "Match reports" },
+      ],
     },
-    { href: `/captain/team/${teamid}/results-history`, label: "Results" },
-    { href: `/captain/team/${teamid}/results`, label: "Match reports" },
     {
-      href: `/captain/team/${teamid}/tv`,
-      label: "SIXFL TV",
-      logoSrc: "/Sixfl-tv.png",
+      label: "League & media",
+      items: [
+        {
+          href: `/captain/team/${teamid}#captain-league-table`,
+          label: "Table",
+        },
+        {
+          href: `/captain/team/${teamid}/tv`,
+          label: "SIXFL TV",
+          logoSrc: "/Sixfl-tv.png",
+        },
+      ],
     },
-    ...(showTeamPayments
-      ? [{ href: `/captain/team/${teamid}/payments`, label: "Team payments" }]
-      : []),
+    {
+      label: "Payments",
+      items: [
+        {
+          href: `/captain/team/${teamid}/player-payments`,
+          label: "Squad payments",
+        },
+        ...(showTeamPayments
+          ? [{ href: `/captain/team/${teamid}/payments`, label: "Team payments" }]
+          : []),
+      ],
+    },
   ];
 
   return (
@@ -435,25 +470,42 @@ export default async function CaptainTeamLayout({
             </div>
           </div>
 
-          <nav className="captain-team-nav flex flex-wrap gap-2 px-4 py-4 sm:px-6">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-label={item.label}
-                title={item.logoSrc ? item.label : undefined}
-                className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100"
+          <nav
+            className="captain-team-nav grid gap-3 px-4 py-4 sm:px-6 lg:grid-cols-2 xl:grid-cols-4"
+            aria-label="Team dashboard"
+          >
+            {navGroups.map((group) => (
+              <div
+                key={group.label}
+                className="captain-team-nav-group min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3"
+                role="group"
+                aria-label={group.label}
               >
-                {item.logoSrc ? (
-                  <img
-                    src={item.logoSrc}
-                    alt={item.label}
-                    className="h-5 w-auto max-w-[5rem] object-contain"
-                  />
-                ) : (
-                  item.label
-                )}
-              </Link>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300/65">
+                  {group.label}
+                </div>
+                <div className="captain-team-nav-items mt-2 flex flex-wrap gap-2">
+                  {group.items.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-label={item.label}
+                      title={item.logoSrc ? item.label : undefined}
+                      className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100"
+                    >
+                      {item.logoSrc ? (
+                        <img
+                          src={item.logoSrc}
+                          alt={item.label}
+                          className="h-5 w-auto max-w-[5rem] object-contain"
+                        />
+                      ) : (
+                        item.label
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             ))}
           </nav>
         </header>
