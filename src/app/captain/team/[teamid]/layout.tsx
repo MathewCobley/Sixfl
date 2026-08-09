@@ -365,6 +365,10 @@ export default async function CaptainTeamLayout({
           label: "SIXFL TV",
           logoSrc: "/Sixfl-tv.png",
         },
+        {
+          href: `/goal-of-the-week?from=captain&teamId=${encodeURIComponent(teamid)}`,
+          label: "Goal of the Week",
+        },
       ],
     },
     {
