@@ -110,4 +110,5 @@ if (
   throw new Error("Player-payment summary pluralisation was not applied correctly.");
 }
 
+require("./apply-player-fee-note-hygiene.cjs");
 console.log("Player-payment summaries now use the actual number of unpaid players.");
