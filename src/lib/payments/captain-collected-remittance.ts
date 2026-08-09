@@ -17,7 +17,9 @@ export type CaptainCollectedRemittanceSnapshot = {
   collectedPence: number;
   collectedPlayerCount: number;
   remittedPence: number;
+  pendingPence: number;
   unremittedPence: number;
+  availablePence: number;
 };
 
 function key(teamId: string, fixtureId: string) {
@@ -48,6 +50,17 @@ export async function ensureCaptainCollectedRemittanceTable() {
   `);
 }
 
+function emptySnapshot(): CaptainCollectedRemittanceSnapshot {
+  return {
+    collectedPence: 0,
+    collectedPlayerCount: 0,
+    remittedPence: 0,
+    pendingPence: 0,
+    unremittedPence: 0,
+    availablePence: 0,
+  };
+}
+
 export async function getCaptainCollectedRemittanceSnapshots(
   entries: CaptainCollectedRemittanceEntry[],
 ) {
@@ -57,12 +70,7 @@ export async function getCaptainCollectedRemittanceSnapshots(
   const snapshots = new Map<string, CaptainCollectedRemittanceSnapshot>();
 
   for (const entry of uniqueEntries) {
-    snapshots.set(entry.chargeId, {
-      collectedPence: 0,
-      collectedPlayerCount: 0,
-      remittedPence: 0,
-      unremittedPence: 0,
-    });
+    snapshots.set(entry.chargeId, emptySnapshot());
   }
 
   if (uniqueEntries.length === 0) return snapshots;
@@ -73,7 +81,7 @@ export async function getCaptainCollectedRemittanceSnapshots(
   const fixtureIds = Array.from(new Set(uniqueEntries.map((entry) => entry.fixtureId)));
   const chargeIds = uniqueEntries.map((entry) => entry.chargeId);
 
-  const [collectedFees, remittedRows] = await Promise.all([
+  const [collectedFees, remittanceRows] = await Promise.all([
     prisma.playerMatchFee.findMany({
       where: {
         teamId: { in: teamIds },
@@ -89,12 +97,24 @@ export async function getCaptainCollectedRemittanceSnapshots(
         amountPence: true,
       },
     }),
-    prisma.$queryRaw<Array<{ chargeId: string; remittedPence: number }>>(Prisma.sql`
+    prisma.$queryRaw<
+      Array<{ chargeId: string; remittedPence: number; pendingPence: number }>
+    >(Prisma.sql`
       SELECT
         remittance."chargeId" AS "chargeId",
-        COALESCE(SUM(remittance."amountPence"), 0)::int AS "remittedPence"
+        COALESCE(SUM(
+          CASE WHEN payment."id" IS NOT NULL THEN remittance."amountPence" ELSE 0 END
+        ), 0)::int AS "remittedPence",
+        COALESCE(SUM(
+          CASE
+            WHEN payment."id" IS NULL
+              AND remittance."createdAt" >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
+            THEN remittance."amountPence"
+            ELSE 0
+          END
+        ), 0)::int AS "pendingPence"
       FROM "CaptainCollectedRemittanceCheckout" remittance
-      INNER JOIN "PaymentTransaction" payment
+      LEFT JOIN "PaymentTransaction" payment
         ON payment."stripeCheckoutSessionId" = remittance."checkoutSessionId"
       WHERE remittance."chargeId" IN (${Prisma.join(chargeIds)})
       GROUP BY remittance."chargeId"
@@ -117,8 +137,14 @@ export async function getCaptainCollectedRemittanceSnapshots(
     collectedByTeamFixture.set(feeKey, current);
   }
 
-  const remittedByCharge = new Map(
-    remittedRows.map((row) => [row.chargeId, Number(row.remittedPence ?? 0)]),
+  const remittanceByCharge = new Map(
+    remittanceRows.map((row) => [
+      row.chargeId,
+      {
+        remittedPence: Number(row.remittedPence ?? 0),
+        pendingPence: Number(row.pendingPence ?? 0),
+      },
+    ]),
   );
 
   for (const entry of uniqueEntries) {
@@ -126,12 +152,26 @@ export async function getCaptainCollectedRemittanceSnapshots(
       amountPence: 0,
       playerCount: 0,
     };
-    const remittedPence = remittedByCharge.get(entry.chargeId) ?? 0;
+    const remittance = remittanceByCharge.get(entry.chargeId) ?? {
+      remittedPence: 0,
+      pendingPence: 0,
+    };
+    const unremittedPence = Math.max(
+      collected.amountPence - remittance.remittedPence,
+      0,
+    );
+    const availablePence = Math.max(
+      unremittedPence - remittance.pendingPence,
+      0,
+    );
+
     snapshots.set(entry.chargeId, {
       collectedPence: collected.amountPence,
       collectedPlayerCount: collected.playerCount,
-      remittedPence,
-      unremittedPence: Math.max(collected.amountPence - remittedPence, 0),
+      remittedPence: remittance.remittedPence,
+      pendingPence: remittance.pendingPence,
+      unremittedPence,
+      availablePence,
     });
   }
 
@@ -142,12 +182,5 @@ export async function getCaptainCollectedRemittanceSnapshot(
   entry: CaptainCollectedRemittanceEntry,
 ) {
   const snapshots = await getCaptainCollectedRemittanceSnapshots([entry]);
-  return (
-    snapshots.get(entry.chargeId) ?? {
-      collectedPence: 0,
-      collectedPlayerCount: 0,
-      remittedPence: 0,
-      unremittedPence: 0,
-    }
-  );
+  return snapshots.get(entry.chargeId) ?? emptySnapshot();
 }
