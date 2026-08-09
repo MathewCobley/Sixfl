@@ -90,6 +90,7 @@ export async function acceptTemporaryPlayerRequest(input: {
   requestId: string;
   teamId: string;
   fixtureId: string;
+  amountPence: number;
   acceptedByUserId: string | null;
 }) {
   const request = await getOpenRequest(input);
@@ -104,6 +105,7 @@ export async function acceptTemporaryPlayerRequest(input: {
     code: request.code,
     fixtureId: input.fixtureId,
     teamId: input.teamId,
+    amountPence: input.amountPence,
     acceptedByUserId: input.acceptedByUserId,
   });
 }
