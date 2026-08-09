@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./apply-native-captain-collected-summary.cjs");
+
 const pagePath = path.join(
   process.cwd(),
   "src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx",
@@ -12,10 +14,13 @@ if (
   !source.includes("What is happening with this fixture?") ||
   !source.includes("playerOutstandingPence") ||
   !source.includes('selectedFees.length === 1 ? "" : "s"') ||
-  !source.includes("The team balance remaining is")
+  !source.includes("The team balance remaining is") ||
+  !source.includes("captainCollectedPence") ||
+  !source.includes("Paid directly to captain:") ||
+  !source.includes("captain passes on to SIXFL")
 ) {
   throw new Error(
-    "Native player-payment summary is missing its player count or real team-balance wording.",
+    "Native player-payment summary is missing its real balance, player count or captain-collected money wording.",
   );
 }
 
@@ -24,5 +29,5 @@ if (source.includes("TeamAutoPayCopyBridge")) {
 }
 
 console.log(
-  "Player-payment summary count and outstanding balance are rendered natively by the server page.",
+  "Player-payment summary, real outstanding balance and captain-collected money are rendered natively by the server page.",
 );
