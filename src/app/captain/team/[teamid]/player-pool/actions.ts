@@ -29,6 +29,13 @@ type PlayerPoolRequestProfile = {
   teamContactEmail: string | null;
 };
 
+type ApprovedPlayerPoolProspect = {
+  requestId: string;
+  profileId: string;
+  prospectId: string;
+  email: string | null;
+};
+
 function pagePath(teamid: string, query = "") {
   return `/captain/team/${teamid}/player-pool${query}`;
 }
@@ -180,4 +187,99 @@ export async function requestPlayerPoolIntroductionAction(formData: FormData) {
   revalidatePath(pagePath(teamid));
   revalidatePath("/admin/player-pool");
   redirect(pagePath(teamid, "?saved=request-sent"));
+}
+
+export async function addPlayerPoolPlayerToSquadAction(formData: FormData) {
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const profileId = String(formData.get("profileId") ?? "").trim();
+  const prospectId = String(formData.get("prospectId") ?? "").trim();
+
+  await requireCaptain(teamid);
+  await ensurePlayerPoolTables();
+
+  if (!teamid || !profileId || !prospectId) {
+    redirect(pagePath(teamid, "?error=PlayerPool%20player%20could%20not%20be%20identified."));
+  }
+
+  const rows = await prisma.$queryRaw<ApprovedPlayerPoolProspect[]>`
+    SELECT
+      request."id" AS "requestId",
+      profile."id" AS "profileId",
+      squad_prospect."id" AS "prospectId",
+      squad_prospect."email"
+    FROM "PlayerPoolIntroductionRequest" request
+    JOIN "PlayerPoolProfile" profile ON profile."id" = request."profileId"
+    JOIN "TeamPlayerProspect" pool_prospect ON pool_prospect."id" = profile."prospectId"
+    JOIN "TeamPlayerProspect" squad_prospect
+      ON squad_prospect."id" = ${prospectId}
+     AND squad_prospect."teamId" = request."teamId"
+     AND squad_prospect."email" IS NOT NULL
+     AND pool_prospect."email" IS NOT NULL
+     AND LOWER(TRIM(squad_prospect."email")) = LOWER(TRIM(pool_prospect."email"))
+    WHERE request."teamId" = ${teamid}
+      AND request."profileId" = ${profileId}
+      AND request."status" = ${PLAYER_POOL_REQUEST_STATUSES.INTRODUCED}
+    LIMIT 1
+  `;
+
+  const item = rows[0];
+  if (!item) {
+    redirect(pagePath(teamid, "?error=This%20PlayerPool%20introduction%20is%20not%20ready%20to%20join%20the%20squad."));
+  }
+
+  const normalizedEmail = item.email?.trim().toLowerCase() || null;
+  const user = normalizedEmail
+    ? await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      })
+    : null;
+
+  await prisma.$transaction(async (tx) => {
+    if (user) {
+      await tx.teamMember.upsert({
+        where: {
+          userId_teamId: {
+            userId: user.id,
+            teamId: teamid,
+          },
+        },
+        update: {},
+        create: {
+          userId: user.id,
+          teamId: teamid,
+          role: "PLAYER",
+        },
+      });
+    }
+
+    await tx.teamPlayerProspect.update({
+      where: { id: item.prospectId },
+      data: {
+        status: "ACTIVE_SQUAD",
+        lastContactedAt: new Date(),
+      },
+    });
+
+    await tx.$executeRaw`
+      UPDATE "PlayerPoolIntroductionRequest"
+      SET "status" = ${PLAYER_POOL_REQUEST_STATUSES.JOINED},
+          "resolvedAt" = NOW(),
+          "updatedAt" = NOW()
+      WHERE "id" = ${item.requestId}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "PlayerPoolProfile"
+      SET "status" = ${PLAYER_POOL_PROFILE_STATUSES.JOINED},
+          "updatedAt" = NOW()
+      WHERE "id" = ${item.profileId}
+    `;
+  });
+
+  revalidatePath(pagePath(teamid));
+  revalidatePath(`/captain/team/${teamid}/prospects`);
+  revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath("/admin/player-pool");
+  redirect(pagePath(teamid, "?saved=promoted"));
 }
