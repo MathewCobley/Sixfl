@@ -63,7 +63,12 @@ function statusClasses(status: string) {
   return "border-amber-400/25 bg-amber-500/10 text-amber-100";
 }
 
-function statusLabel(status: string) {
+function isCaptainCollected(note?: string | null) {
+  return Boolean(note?.includes("captain/organiser marked"));
+}
+
+function statusLabel(status: string, note?: string | null) {
+  if (isCaptainCollected(note)) return "Captain collected";
   if (status === "PAID") return "Paid";
   if (status === "WAIVED") return "No payment needed";
   if (status === "CANCELLED") return "Cancelled";
@@ -112,8 +117,12 @@ function playerContact(input: {
   );
 }
 
-function collectionMethod(status?: string | null, amountPence?: number | null) {
-  if (status === "PAID") return "captain_paid";
+function collectionMethod(
+  status?: string | null,
+  amountPence?: number | null,
+  note?: string | null,
+) {
+  if (status === "PAID" || isCaptainCollected(note)) return "captain_paid";
   if (status === "WAIVED" || amountPence === 0) return "waived";
   return "link";
 }
@@ -351,7 +360,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     (fee) => fee.status === "OPEN",
   ).length;
   const selectedWaivedCount = selectedFees.filter(
-    (fee) => fee.status === "WAIVED",
+    (fee) => fee.status === "WAIVED" && !isCaptainCollected(fee.note),
   ).length;
   const playerAllocationPence = selectedFees.reduce(
     (sum, fee) => sum + fee.amountPence,
@@ -639,6 +648,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                   const method = collectionMethod(
                     player.fee?.status,
                     player.fee?.amountPence,
+                    player.fee?.note,
                   );
 
                   return (
@@ -750,7 +760,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                 <span
                   className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(fee.status)}`}
                 >
-                  {statusLabel(fee.status)}
+                  {statusLabel(fee.status, fee.note)}
                 </span>
               </div>
             ))}
