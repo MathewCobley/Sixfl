@@ -11,8 +11,10 @@ import {
 } from "@/lib/player-pool/storage";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { convertProspectToMemberAction } from "../prospects/actions";
-import { requestPlayerPoolIntroductionAction } from "./actions";
+import {
+  addPlayerPoolPlayerToSquadAction,
+  requestPlayerPoolIntroductionAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -332,10 +334,10 @@ export default async function CaptainPlayerPoolPage({
                           Open prospect
                         </Link>
                         {profile.teamProspectId ? (
-                          <form action={convertProspectToMemberAction}>
+                          <form action={addPlayerPoolPlayerToSquadAction}>
                             <input type="hidden" name="teamid" value={teamid} />
+                            <input type="hidden" name="profileId" value={profile.profileId} />
                             <input type="hidden" name="prospectId" value={profile.teamProspectId} />
-                            <input type="hidden" name="returnTo" value="player-pool" />
                             <button
                               type="submit"
                               className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black transition hover:bg-emerald-400"
