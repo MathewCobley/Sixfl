@@ -7,11 +7,14 @@ const pagePath = path.join(
 );
 let source = fs.readFileSync(pagePath, "utf8");
 
+if (!source.includes("autopay?: string")) {
+  source = source.replace(
+    /searchParams\?: Promise<\{([^}]*)\}>;/,
+    (match, fields) => `searchParams?: Promise<{ autopay?: string;${fields} }>;`,
+  );
+}
+
 source = source
-  .replace(
-    '  searchParams?: Promise<{ subscription?: string; credit?: string; amount?: string }>;',
-    '  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string }>;',
-  )
   .replace(
     '  const subscriptionMessage = getSubscriptionMessage(sp.subscription);',
     '  const subscriptionMessage = getSubscriptionMessage(sp.autopay ?? sp.subscription);',
@@ -58,6 +61,7 @@ source = source
 
 if (
   !source.includes("Saved card matchday payments") ||
+  !source.includes("autopay?: string") ||
   !source.includes("sp.autopay ?? sp.subscription") ||
   source.includes("Recurring team payments") ||
   source.includes("Set up automatic payments")
