@@ -16,47 +16,39 @@ function patch(relativePath, transform, label) {
   }
 }
 
-function addImport(source) {
-  const importLine = 'import CommunityGoalOfWeekPanel from "@/components/goal-of-week/CommunityGoalOfWeekPanel";';
-  if (source.includes(importLine)) return source;
-  const anchor = 'import SixflTvFixtureMatchup from "@/components/sixfl-tv/SixflTvFixtureMatchup";';
-  if (!source.includes(anchor)) throw new Error("SIXFL TV matchup import anchor changed.");
-  return source.replace(anchor, `${importLine}\n${anchor}`);
+function assertCentralGoalOfWeek() {
+  const publicPage = path.join(
+    root,
+    "src/app/(public)/goal-of-the-week/page.tsx",
+  );
+  const panel = path.join(
+    root,
+    "src/components/goal-of-week/CommunityGoalOfWeekPanel.tsx",
+  );
+
+  if (!fs.existsSync(publicPage)) {
+    throw new Error("Central /goal-of-the-week page is missing.");
+  }
+  if (!fs.existsSync(panel)) {
+    throw new Error("Community Goal of the Week panel is missing.");
+  }
+
+  for (const relativePath of [
+    "src/app/player/team/[teamid]/tv/page.tsx",
+    "src/app/captain/team/[teamid]/tv/page.tsx",
+  ]) {
+    const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+    if (source.includes("CommunityGoalOfWeekPanel")) {
+      throw new Error(
+        `Goal of the Week must live on /goal-of-the-week, not inside ${relativePath}.`,
+      );
+    }
+  }
+
+  console.log("[community-gotw] Central Goal of the Week route verified.");
 }
 
-patch(
-  "src/app/player/team/[teamid]/tv/page.tsx",
-  (source) => {
-    source = addImport(source);
-    if (!source.includes("<CommunityGoalOfWeekPanel")) {
-      const anchor = `        </section>\n\n        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">`;
-      if (!source.includes(anchor)) throw new Error("Player SIXFL TV section anchor changed.");
-      source = source.replace(
-        anchor,
-        `        </section>\n\n        <CommunityGoalOfWeekPanel teamId={team.id} />\n\n        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">`,
-      );
-    }
-    return source;
-  },
-  "player SIXFL TV",
-);
-
-patch(
-  "src/app/captain/team/[teamid]/tv/page.tsx",
-  (source) => {
-    source = addImport(source);
-    if (!source.includes("<CommunityGoalOfWeekPanel")) {
-      const anchor = `      </section>\n\n      <section className="rounded-3xl border border-white/10 bg-white/[0.04]">`;
-      if (!source.includes(anchor)) throw new Error("Captain SIXFL TV section anchor changed.");
-      source = source.replace(
-        anchor,
-        `      </section>\n\n      <CommunityGoalOfWeekPanel teamId={team.id} />\n\n      <section className="rounded-3xl border border-white/10 bg-white/[0.04]">`,
-      );
-    }
-    return source;
-  },
-  "captain SIXFL TV",
-);
+assertCentralGoalOfWeek();
 
 patch(
   "src/app/(admin)/admin/sixfl-tv/page.tsx",
