@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { queueDuePlayerMatchFeeReminders } from "@/lib/payments/player-match-fees";
 import { queueOutstandingTemporaryPlayerMatchFeeRequests } from "@/lib/payments/temporary-player-match-fee-requests";
+import { runPlayerDataHealthCleanup } from "@/lib/players/player-data-health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let playerDataHealth: Awaited<ReturnType<typeof runPlayerDataHealthCleanup>> | null = null;
+  let playerDataHealthError: string | null = null;
+
+  try {
+    playerDataHealth = await runPlayerDataHealthCleanup({ source: "MONTHLY" });
+  } catch (error) {
+    playerDataHealthError = error instanceof Error ? error.message : String(error);
+    console.error("Monthly player data health cleanup failed", error);
+  }
+
   const temporaryPlayerRequests =
     await queueOutstandingTemporaryPlayerMatchFeeRequests();
   const queued = await queueDuePlayerMatchFeeReminders();
@@ -36,6 +47,8 @@ export async function GET(request: NextRequest) {
     ok: true,
     ...queued,
     temporaryPlayerRequests,
+    playerDataHealth,
+    playerDataHealthError,
     processedQueue: {
       processed: processed.processed,
       sent: processed.sent,
