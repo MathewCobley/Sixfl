@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const CAPTAIN_FACING_REPLACEMENTS = [
@@ -26,6 +26,16 @@ const CAPTAIN_FACING_REPLACEMENTS = [
 ] as const;
 
 type CaptainAccessMode = "admin-preview" | "captain-preview" | "captain";
+
+type PendingPlayerPoolApproval = {
+  requestId: string;
+  publicCode: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  introducedAt: string | null;
+};
 
 type CaptainViewModeHeaderProps = {
   teamId?: string;
@@ -83,6 +93,14 @@ function rewriteCaptainFacingText() {
   }
 }
 
+function getPlayerDisplayName(player: PendingPlayerPoolApproval) {
+  return (
+    [player.firstName, player.lastName].filter(Boolean).join(" ").trim() ||
+    player.email ||
+    "PlayerPool player"
+  );
+}
+
 export default function CaptainViewModeHeader({
   teamId = "",
   isAdmin = false,
@@ -110,6 +128,13 @@ export default function CaptainViewModeHeader({
     : `/admin/teams/${teamId}`;
   const displaySeason = season?.trim() || null;
   const shouldRewriteCaptainFacingText = !isManagedTeam && (!isAdmin || isCaptainDashboardPreview);
+  const isOverview = Boolean(
+    hasTeamId &&
+      (pathname === `/captain/team/${teamId}` || pathname === `/captain/team/${teamId}/`),
+  );
+  const [pendingPlayerPoolApprovals, setPendingPlayerPoolApprovals] = useState<
+    PendingPlayerPoolApproval[]
+  >([]);
 
   useEffect(() => {
     if (!shouldRewriteCaptainFacingText) return;
@@ -130,6 +155,35 @@ export default function CaptainViewModeHeader({
       for (const timer of timers) window.clearTimeout(timer);
     };
   }, [pathname, searchParamsKey, shouldRewriteCaptainFacingText]);
+
+  useEffect(() => {
+    if (!isOverview || !teamId) {
+      setPendingPlayerPoolApprovals([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    fetch(`/api/captain/team/${teamId}/player-pool/pending-approvals`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return { items: [] as PendingPlayerPoolApproval[] };
+        return (await response.json()) as { items?: PendingPlayerPoolApproval[] };
+      })
+      .then((payload) => {
+        if (!controller.signal.aborted) {
+          setPendingPlayerPoolApprovals(Array.isArray(payload.items) ? payload.items : []);
+        }
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (!controller.signal.aborted) setPendingPlayerPoolApprovals([]);
+      });
+
+    return () => controller.abort();
+  }, [isOverview, teamId]);
 
   const currentViewLabel = isManagedTeam
     ? "Full Admin View — Managed Squad"
@@ -189,6 +243,47 @@ export default function CaptainViewModeHeader({
           {canShowAdminControls && isCaptainDashboardPreview ? <a href={fullAdminHref} className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20">Switch back to Full Admin View</a> : null}
         </div>
       </div>
+
+      {isOverview && pendingPlayerPoolApprovals.length > 0 ? (
+        <div className="mt-5 rounded-2xl border border-sky-400/25 bg-sky-500/10 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">
+                PlayerPool · action needed
+              </p>
+              <h2 className="mt-2 text-lg font-black text-white">
+                {pendingPlayerPoolApprovals.length} approved player{pendingPlayerPoolApprovals.length === 1 ? " is" : "s are"} waiting to join
+              </h2>
+              <p className="mt-1 text-sm text-sky-50/70">
+                These introductions have been approved but the players are not active squad members yet.
+              </p>
+            </div>
+            <a
+              href={`/captain/team/${teamId}/player-pool`}
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-sky-300 px-4 py-2.5 text-sm font-black text-slate-950 transition hover:bg-sky-200"
+            >
+              Open PlayerPool
+            </a>
+          </div>
+
+          <div className="mt-4 grid gap-2 lg:grid-cols-2">
+            {pendingPlayerPoolApprovals.map((player) => (
+              <div key={player.requestId} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-sky-200">{player.publicCode}</span>
+                  <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
+                    Approved · waiting to join
+                  </span>
+                </div>
+                <div className="mt-2 text-sm font-semibold text-white">{getPlayerDisplayName(player)}</div>
+                <div className="mt-1 text-xs text-white/50">
+                  {player.email || "No email saved"}{player.phone ? ` · ${player.phone}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
