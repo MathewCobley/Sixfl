@@ -32,7 +32,7 @@ export default async function CaptainCollectedRemittancePanel({
       if (!snapshot || snapshot.collectedPence <= 0) return null;
 
       const amountAvailableToRemitPence = Math.min(
-        snapshot.unremittedPence,
+        snapshot.availablePence,
         entry.outstandingPence,
       );
 
@@ -62,7 +62,7 @@ export default async function CaptainCollectedRemittancePanel({
         {rows.map(({ entry, snapshot, amountAvailableToRemitPence }) => {
           const heldButNotRemittedPence = snapshot.unremittedPence;
           const cappedByOutstanding =
-            heldButNotRemittedPence > amountAvailableToRemitPence;
+            snapshot.availablePence > amountAvailableToRemitPence;
 
           return (
             <article
@@ -87,6 +87,11 @@ export default async function CaptainCollectedRemittancePanel({
                         Already passed to SIXFL {formatMoney(snapshot.remittedPence)}
                       </span>
                     ) : null}
+                    {snapshot.pendingPence > 0 ? (
+                      <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1 text-amber-50">
+                        Stripe checkout pending {formatMoney(snapshot.pendingPence)}
+                      </span>
+                    ) : null}
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65">
                       Fixture outstanding {formatMoney(entry.outstandingPence)}
                     </span>
@@ -94,7 +99,7 @@ export default async function CaptainCollectedRemittancePanel({
 
                   {cappedByOutstanding ? (
                     <p className="mt-3 text-xs leading-5 text-amber-100/80">
-                      You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected, but only {formatMoney(amountAvailableToRemitPence)} can be paid to this fixture because that is all that remains outstanding.
+                      You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected, but only {formatMoney(amountAvailableToRemitPence)} can be paid to this fixture because that is all that remains outstanding after allowing for any payment already in progress.
                     </p>
                   ) : null}
                 </div>
@@ -158,6 +163,10 @@ export default async function CaptainCollectedRemittancePanel({
                         </form>
                       </details>
                     </>
+                  ) : snapshot.pendingPence > 0 ? (
+                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-50">
+                      A Stripe checkout for this collected money is already in progress. This prevents the same cash being sent twice.
+                    </div>
                   ) : (
                     <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-50">
                       No collected player money needs to be passed to this fixture right now.
