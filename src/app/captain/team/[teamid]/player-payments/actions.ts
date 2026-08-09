@@ -105,6 +105,33 @@ function appendNote(input: { existingNote: string | null; note: string }) {
   return `${existingNote}\n${input.note}`;
 }
 
+const COLLECTION_NOTE_PREFIXES = [
+  "SIXFL player payment link:",
+  "No individual player payment link:",
+  "No player link needed:",
+  ZERO_FEE_WAIVER_NOTE,
+] as const;
+
+function replaceCollectionNote(existingNote: string | null, nextNote: string) {
+  const preservedLines = (existingNote ?? "")
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      return (
+        Boolean(trimmed) &&
+        !COLLECTION_NOTE_PREFIXES.some((prefix) => trimmed.startsWith(prefix))
+      );
+    });
+
+  // OPEN payment-link state is already represented by structured fields
+  // (status, amountPence, paymentUrl/paymentToken), so do not duplicate it in note.
+  if (!nextNote.startsWith("SIXFL player payment link:")) {
+    preservedLines.push(nextNote);
+  }
+
+  return preservedLines.length > 0 ? preservedLines.join("\n") : null;
+}
+
 function isLockedPlayerFee(status: PlayerMatchFeeStatus) {
   return status === "PAID";
 }
@@ -323,7 +350,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         cancelledAt: null,
         paymentUrl: clearPaymentLink ? null : undefined,
         paymentToken: clearPaymentLink ? null : undefined,
-        note: existing ? appendNote({ existingNote: existing.note, note }) : note,
+        note: replaceCollectionNote(existing?.note ?? null, note),
       };
 
       const fee = existing
@@ -368,7 +395,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         cancelledAt: null,
         paymentUrl: clearPaymentLink ? null : undefined,
         paymentToken: clearPaymentLink ? null : undefined,
-        note: existing ? appendNote({ existingNote: existing.note, note }) : note,
+        note: replaceCollectionNote(existing?.note ?? null, note),
       };
 
       const fee = existing
