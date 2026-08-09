@@ -13,6 +13,8 @@ type FixtureChoice = {
   awayScore: number;
   totalGoals: number;
   videoUrl: string | null;
+  leagueName: string;
+  leagueSeason: string | null;
 };
 
 type Candidate = {
@@ -40,6 +42,8 @@ type Payload = {
     closesAt: string;
     fixtures: FixtureChoice[];
     nominatedCandidateIds: string[];
+    usedNominations: number;
+    maxNominations: number;
   };
   voting: {
     weekOf: string;
@@ -236,7 +240,7 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
         </p>
         <h2 className="mt-2 text-2xl font-black text-white">Goal of the Week</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-          Nominate a goal from a completed SIXFL TV match using the fixture and goal number. Duplicate nominations are combined. The six most-nominated goals make the following week's verified-player ballot.
+          Nominate a goal from any completed SIXFL TV match this week. Duplicate nominations are combined, and the six most-nominated goals make the following week's verified-player ballot.
         </p>
       </div>
 
@@ -281,17 +285,20 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
             <div>
               <h3 className="text-xl font-semibold text-white">Nominate this week's goals</h3>
               <p className="mt-1 text-sm text-white/50">
-                Nominations close at the end of the fixture week. You can nominate more than one genuinely outstanding goal.
+                Choose up to {payload.nomination.maxNominations} different goals from any completed SIXFL TV match. Nominations close at the end of the fixture week.
               </p>
             </div>
-            <span className="text-xs text-white/40">
-              Week of {formatWeek(payload.nomination.weekOf)}
-            </span>
+            <div className="text-right text-xs text-white/40">
+              <div>Week of {formatWeek(payload.nomination.weekOf)}</div>
+              <div className="mt-1 font-semibold text-fuchsia-100/70">
+                {payload.nomination.usedNominations}/{payload.nomination.maxNominations} nominations used
+              </div>
+            </div>
           </div>
 
           {payload.nomination.fixtures.length === 0 ? (
             <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/50">
-              No completed SIXFL TV match for this team is ready for nominations this week yet.
+              No completed SIXFL TV matches are ready for nominations this week yet.
             </div>
           ) : (
             <div className="mt-4 space-y-4">
@@ -306,7 +313,7 @@ export default function CommunityGoalOfWeekPanel({ teamId }: { teamId: string })
                           {fixture.homeTeamName} {fixture.homeScore}-{fixture.awayScore} {fixture.awayTeamName}
                         </div>
                         <div className="mt-1 text-xs text-white/45">
-                          {formatDate(fixture.kickoffAt)} · {fixture.totalGoals} goal{fixture.totalGoals === 1 ? "" : "s"} in the match
+                          {fixture.leagueName}{fixture.leagueSeason ? ` · ${fixture.leagueSeason}` : ""} · {formatDate(fixture.kickoffAt)} · {fixture.totalGoals} goal{fixture.totalGoals === 1 ? "" : "s"} in the match
                         </div>
                       </div>
                       {fixture.videoUrl ? (
