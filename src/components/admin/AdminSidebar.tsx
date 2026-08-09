@@ -138,6 +138,12 @@ const navigationGroups = [
         description: "Recordings",
       },
       {
+        name: "Goal of the week",
+        href: "/admin/sixfl-tv/goal-of-week",
+        icon: TrophyIcon,
+        description: "Nominations/votes",
+      },
+      {
         name: "Social posts",
         href: "/admin/social",
         icon: PhotoIcon,
