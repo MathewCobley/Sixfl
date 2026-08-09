@@ -166,6 +166,12 @@ export default function GoalOfWeekHomepageFeature({
             Watch on YouTube ↗
           </a>
           <a
+            href="/goal-of-the-week"
+            className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/30 bg-fuchsia-400/15 px-4 py-2.5 text-xs font-extrabold text-fuchsia-50 transition hover:bg-fuchsia-400/20"
+          >
+            Nominate & vote
+          </a>
+          <a
             href={channelUrl}
             target="_blank"
             rel="noopener noreferrer"
