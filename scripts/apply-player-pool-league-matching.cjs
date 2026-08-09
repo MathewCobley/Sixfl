@@ -110,12 +110,21 @@ replaceOnce(
   "captain PlayerPool exact league matching",
 );
 
-replaceOnce(
-  captainPage,
-  "          These players are looking for a SIXFL team and match your league area or playing night. Profiles are anonymised: names, email addresses and mobile numbers stay private until the player agrees to an introduction.",
-  "          These players have chosen your league, or are looking to play locally on the same night. Request an introduction and SIXFL will check with the player first. Their name and contact details stay private unless they agree.",
-  "captain PlayerPool matching explanation",
-);
+// Copy is deliberately not a build contract. The PlayerPool page now explains
+// the full request lifecycle (requested -> approved -> joined), so an older
+// wording patch must not fail prebuild or overwrite newer native copy.
+const oldMatchingExplanation =
+  "          These players are looking for a SIXFL team and match your league area or playing night. Profiles are anonymised: names, email addresses and mobile numbers stay private until the player agrees to an introduction.";
+const previousMatchingExplanation =
+  "          These players have chosen your league, or are looking to play locally on the same night. Request an introduction and SIXFL will check with the player first. Their name and contact details stay private unless they agree.";
+let captainSource = read(captainPage);
+if (captainSource.includes(oldMatchingExplanation)) {
+  captainSource = captainSource.replace(
+    oldMatchingExplanation,
+    previousMatchingExplanation,
+  );
+  write(captainPage, captainSource);
+}
 
 replaceOnce(
   captainPage,
@@ -225,5 +234,5 @@ for (const filePath of [captainPage, adminPage]) {
 }
 
 console.log(
-  "PlayerPool profiles now match captains by selected league IDs, while legacy profiles retain the previous area/night fallback.",
+  "PlayerPool profiles now match captains by selected league IDs, while legacy profiles retain the previous area/night fallback. Display copy is not used as a build anchor.",
 );
