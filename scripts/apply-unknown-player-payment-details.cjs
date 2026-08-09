@@ -98,6 +98,11 @@ replaceRequired(
   [
     "            {selectedFees.map((fee) => {",
     "              const isUnlinked = !fee.teamMember && !fee.prospect;",
+    "              const isTemporaryPlayerPass =",
+    "                isUnlinked &&",
+    "                fee.note?.toLowerCase().includes(",
+    '                  "temporary player joined using a player-created one-time pass",',
+    "                );",
     "              const originalRecipient = orphanRecipientByFeeId.get(fee.id) ?? null;",
     "              const originalRecipientLabel = originalRecipient",
     "                ? [",
@@ -108,6 +113,9 @@ replaceRequired(
     "                    .filter(Boolean)",
     '                    .join(" · ")',
     "                : null;",
+    "              const displayPlayerName = isTemporaryPlayerPass",
+    '                ? "Temporary player"',
+    "                : playerName(fee);",
     "",
     "              return (",
     "                <div",
@@ -115,27 +123,44 @@ replaceRequired(
     '                  className="flex flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between"',
     "                >",
     '                  <div className="min-w-0">',
-    '                    <div className="font-semibold text-white">{playerName(fee)}</div>',
+    '                    <div className="font-semibold text-white">{displayPlayerName}</div>',
     '                    <div className="mt-1 text-xs text-white/45">',
     "                      {formatMoney(fee.amountPence)} ·{\" \"}",
     '                      {fee.teamId === teamid ? "Current team" : "Historical team row"}',
     "                    </div>",
     "                    {isUnlinked ? (",
     '                      <div className="mt-2 rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-50/80">',
-    "                        <div className=\"font-semibold text-amber-100\">",
-    "                          The original squad or prospect record has been removed.",
-    "                        </div>",
-    "                        {originalRecipientLabel ? (",
-    '                          <div className="mt-1">Original payment recipient: {originalRecipientLabel}</div>',
+    "                        {isTemporaryPlayerPass ? (",
+    "                          <>",
+    '                            <div className="font-semibold text-amber-100">Temporary player payment</div>',
+    '                            <div className="mt-1">',
+    "                              This fee was created when a temporary player joined this fixture using a one-time pass. Temporary players are not added to your permanent squad, so there is no squad player record attached to this payment.",
+    "                            </div>",
+    "                            {originalRecipientLabel ? (",
+    '                              <div className="mt-1">Payment request sent to: {originalRecipientLabel}</div>',
+    "                            ) : (",
+    '                              <div className="mt-1">No payment request was sent for this fee.</div>',
+    "                            )}",
+    "                          </>",
     "                        ) : (",
-    '                          <div className="mt-1">No sent payment message was found, so the old record does not contain a recoverable name or contact.</div>',
+    "                          <>",
+    '                            <div className="font-semibold text-amber-100">Player record no longer linked</div>',
+    '                            <div className="mt-1">',
+    "                              The squad or prospect record originally linked to this payment has since been removed or merged. The fee remains here so the fixture payment history stays accurate.",
+    "                            </div>",
+    "                            {originalRecipientLabel ? (",
+    '                              <div className="mt-1">Original payment recipient: {originalRecipientLabel}</div>',
+    "                            ) : (",
+    '                              <div className="mt-1">No payment request was sent, so there is no saved contact to display.</div>',
+    "                            )}",
+    "                            {fee.note ? (",
+    '                              <div className="mt-1 text-amber-100/65">Note: {fee.note}</div>',
+    "                            ) : null}",
+    "                          </>",
     "                        )}",
     '                        <div className="mt-1 text-amber-100/55">',
-    "                          Fee reference {fee.id.slice(-8).toUpperCase()} · created {formatDateTime(fee.createdAt)}",
+    "                          Reference {fee.id.slice(-8).toUpperCase()} · created {formatDateTime(fee.createdAt)}",
     "                        </div>",
-    "                        {fee.note ? (",
-    '                          <div className="mt-1 text-amber-100/65">Note: {fee.note}</div>',
-    "                        ) : null}",
     "                      </div>",
     "                    ) : null}",
     "                  </div>",
@@ -155,13 +180,15 @@ fs.writeFileSync(absolutePath, source, "utf8");
 
 if (
   !source.includes("orphanRecipientByFeeId") ||
-  !source.includes("Original payment recipient") ||
-  !source.includes("Fee reference") ||
+  !source.includes("Temporary player payment") ||
+  !source.includes("Player record no longer linked") ||
+  !source.includes("Payment request sent to") ||
+  !source.includes("Reference {fee.id.slice(-8).toUpperCase()}") ||
   source.includes('return "Unknown player";')
 ) {
   throw new Error("Unlinked player payment details were not applied correctly.");
 }
 
 console.log(
-  "Unlinked player payment rows now show the original notification recipient where available, plus a fee reference and creation date.",
+  "Unlinked player payment rows now distinguish temporary-player passes from genuinely removed player records and explain each case clearly.",
 );
