@@ -165,7 +165,10 @@ export function pickCommunityGoalWinner(candidates: CommunityGoalCandidate[]) {
   return ranked[0]?.voteCount > 0 ? ranked[0] : null;
 }
 
-export async function getLatestCommunityGoalWinner(now: Date = new Date()) {
+export async function getCommunityGoalWinners(
+  now: Date = new Date(),
+  limit = 24,
+): Promise<CommunityGoalCandidate[]> {
   const cycle = getCommunityGoalCycle(now);
   const weeks = await prisma.$queryRaw<Array<{ weekOf: Date }>>(Prisma.sql`
     SELECT DISTINCT candidate."weekOf"
@@ -173,14 +176,21 @@ export async function getLatestCommunityGoalWinner(now: Date = new Date()) {
     WHERE candidate."status" = 'ACTIVE'
       AND candidate."weekOf" <= ${cycle.latestClosedCandidateWeek}
     ORDER BY candidate."weekOf" DESC
-    LIMIT 12
+    LIMIT ${Math.max(1, Math.min(limit * 2, 100))}
   `);
 
+  const winners: CommunityGoalCandidate[] = [];
   for (const row of weeks) {
     const ballot = await getCommunityGoalBallot(row.weekOf, 6);
     const winner = pickCommunityGoalWinner(ballot);
-    if (winner) return winner;
+    if (winner) winners.push(winner);
+    if (winners.length >= limit) break;
   }
 
-  return null;
+  return winners;
+}
+
+export async function getLatestCommunityGoalWinner(now: Date = new Date()) {
+  const winners = await getCommunityGoalWinners(now, 1);
+  return winners[0] ?? null;
 }
