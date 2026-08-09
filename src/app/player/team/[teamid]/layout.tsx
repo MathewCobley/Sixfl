@@ -3,6 +3,7 @@
 // ========================================
 
 import { Suspense, type ReactNode } from "react";
+import GoalOfWeekDashboardPromo from "@/components/goal-of-week/GoalOfWeekDashboardPromo";
 import PlayerDashboardOnly from "@/components/player/PlayerDashboardOnly";
 import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
@@ -28,6 +29,14 @@ export default async function PlayerTeamLayout({
       <Suspense>
         <PlayerPreviewLinkPersistence teamId={teamid} />
       </Suspense>
+      <PlayerDashboardOnly teamId={teamid}>
+        <div className="mx-auto w-full max-w-6xl px-4 pt-6">
+          <GoalOfWeekDashboardPromo
+            teamId={teamid}
+            href={`/player/team/${teamid}/tv`}
+          />
+        </div>
+      </PlayerDashboardOnly>
       {children}
       <PlayerDashboardOnly teamId={teamid}>
         <div className="space-y-8 pb-8">
