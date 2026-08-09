@@ -102,17 +102,32 @@ patchFile(
       source = source.replace(localTableCall, centralTableMapping);
     }
 
+    const canonicalClubs = `  const leagueClubs = centralStandings.rows\n    .map((row) => ({\n      id: row.teamId,\n      name: row.teamName,\n      logoUrl: row.teamLogoUrl,\n    }))\n    .sort((a, b) => a.name.localeCompare(b.name));`;
+    if (!source.includes("const leagueClubs = centralStandings.rows") && source.includes(centralTableMapping)) {
+      source = source.replace(
+        centralTableMapping,
+        `${centralTableMapping}\n\n${canonicalClubs}`,
+      );
+    }
+
+    source = source.replaceAll("league.teams.map((team) =>", "leagueClubs.map((team) =>");
+
     if (
       source.includes("function buildLeagueTable(") ||
       source.includes("buildLeagueTable(league.teams") ||
-      !source.includes("getLeagueStandings(league.id)")
+      source.includes("league.teams.map((team)") ||
+      source.includes("league.teams.length") ||
+      !source.includes("getLeagueStandings(league.id)") ||
+      !source.includes("const leagueClubs = centralStandings.rows")
     ) {
-      throw new Error("Public league landing still contains a local league-table calculation.");
+      throw new Error(
+        "Public league landing still contains legacy league membership or a local league-table calculation.",
+      );
     }
 
     return source;
   },
-  "public league central standings",
+  "public league central standings and clubs",
 );
 
 require("./apply-player-current-league-context.cjs");
