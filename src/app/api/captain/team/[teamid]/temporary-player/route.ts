@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import { ensurePlayerMatchFeePaymentDetails } from "@/lib/payments/player-match-fees";
+import { queueTemporaryPlayerMatchFeeRequest } from "@/lib/payments/temporary-player-match-fee-requests";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import {
@@ -73,6 +74,18 @@ function passErrorResponse(error: unknown) {
     { error: "The temporary player could not be added. Please try again." },
     { status: 500 },
   );
+}
+
+async function queuePaymentRequestSafely(feeId: string) {
+  try {
+    return await queueTemporaryPlayerMatchFeeRequest(feeId);
+  } catch (error) {
+    console.error("Temporary-player payment request could not be queued", {
+      feeId,
+      error,
+    });
+    return { queued: 0, skipped: 1, status: "failed" as const };
+  }
 }
 
 export async function GET(
@@ -156,6 +169,11 @@ export async function POST(
       acceptedByUserId: access.user?.id ?? null,
     });
 
+    const paymentRequest =
+      player.amountPence > 0
+        ? await queuePaymentRequestSafely(player.playerMatchFeeId)
+        : null;
+
     return NextResponse.json({
       ok: true,
       player: {
@@ -163,6 +181,7 @@ export async function POST(
         label: "Temporary player",
         amountPence: player.amountPence,
       },
+      paymentRequest,
     });
   } catch (error) {
     return passErrorResponse(error);
@@ -256,6 +275,8 @@ export async function PATCH(
           amountPence / 100
         ).toFixed(2)}.`;
 
+  let paymentRequest: Awaited<ReturnType<typeof queuePaymentRequestSafely>> | null = null;
+
   if (amountPence === 0) {
     await prisma.$executeRaw`
       UPDATE "PlayerMatchFee"
@@ -292,6 +313,7 @@ export async function PATCH(
     `;
 
     await ensurePlayerMatchFeePaymentDetails(feeId);
+    paymentRequest = await queuePaymentRequestSafely(feeId);
   }
 
   return NextResponse.json({
@@ -303,5 +325,6 @@ export async function PATCH(
       amountPence,
       status: amountPence === 0 ? "WAIVED" : "OPEN",
     },
+    paymentRequest,
   });
 }
