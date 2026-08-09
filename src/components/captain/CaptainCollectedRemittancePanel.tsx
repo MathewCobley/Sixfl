@@ -13,9 +13,9 @@ export default async function CaptainCollectedRemittancePanel({
   const ledger = await getTeamPaymentLedger(teamId);
   if (!ledger) return null;
 
-  const fixtureEntries = ledger.entries.filter(
-    (entry): entry is typeof entry & { fixtureId: string } => Boolean(entry.fixtureId),
-  );
+  const fixtureEntries = ledger.entries
+    .filter((entry) => Boolean(entry.fixtureId))
+    .map((entry) => ({ ...entry, fixtureId: entry.fixtureId as string }));
   if (fixtureEntries.length === 0) return null;
 
   const snapshots = await getCaptainCollectedRemittanceSnapshots(
