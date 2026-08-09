@@ -21,6 +21,7 @@ require("./apply-captain-team-nudges.cjs");
 require("./apply-temporary-player-request-overview.cjs");
 require("./apply-captain-fixture-status-layout.cjs");
 require("./apply-managed-team-prospects-navigation.cjs");
+require("./apply-captain-messages-inbox-navigation.cjs");
 require("./apply-pending-activation-player-pool-action.cjs");
 require("./apply-player-pool-lead-closure.cjs");
 require("./apply-player-pool-nudge-history.cjs");
