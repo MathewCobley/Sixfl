@@ -8,6 +8,7 @@ import PlayerDashboardOnly from "@/components/player/PlayerDashboardOnly";
 import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 import PlayerPreviewLinkPersistence from "@/components/player/PlayerPreviewLinkPersistence";
+import PlayerTeamNav from "@/components/player/PlayerTeamNav";
 
 export default async function PlayerTeamLayout({
   children,
@@ -29,6 +30,7 @@ export default async function PlayerTeamLayout({
       <Suspense>
         <PlayerPreviewLinkPersistence teamId={teamid} />
       </Suspense>
+      <PlayerTeamNav teamId={teamid} />
       <PlayerDashboardOnly teamId={teamid}>
         <div className="mx-auto w-full max-w-6xl px-4 pt-6">
           <GoalOfWeekDashboardPromo
