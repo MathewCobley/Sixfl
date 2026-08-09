@@ -64,7 +64,7 @@ export async function POST(
     fixtureId: entry.fixtureId,
   });
   const maximumRemittancePence = Math.min(
-    snapshot.unremittedPence,
+    snapshot.availablePence,
     entry.outstandingPence,
   );
 
