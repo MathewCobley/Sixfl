@@ -54,6 +54,7 @@ require("./apply-community-goal-of-week-ui.cjs");
 require("./apply-native-single-fixture-publish.cjs");
 require("./fix-goal-of-week-dashboard-promo-payload-narrowing.cjs");
 require("./apply-critical-player-dashboard-features.cjs");
+require("./apply-late-payment-72h-review.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
