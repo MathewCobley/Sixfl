@@ -33,6 +33,10 @@ function getLeagueSlugFromPathname(pathname: string | null) {
   return match?.[1] ?? null;
 }
 
+function isLeagueLandingPath(pathname: string | null, slug: string) {
+  return pathname === `/leagues/${slug}` || pathname === `/leagues/${slug}/`;
+}
+
 function removeExistingSwitcher() {
   document.querySelector("[data-public-league-season-switcher]")?.remove();
 }
@@ -81,7 +85,9 @@ function createSwitcher(payload: SeasonPayload, slug: string) {
 
   for (const season of payload.seasons) {
     const link = document.createElement("a");
-    link.href = `/leagues/${season.slug}`;
+    link.href = season.isCurrent
+      ? `/leagues/${season.slug}`
+      : `/leagues/${season.slug}?archive=1`;
     link.className = [
       "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
       season.slug === slug
@@ -122,6 +128,27 @@ async function injectSeasonSwitcher(pathname: string | null) {
     if (!response.ok) return;
 
     const payload = (await response.json()) as SeasonPayload;
+    const currentLeagueId = payload.competition?.currentLeagueId ?? null;
+    const isArchiveRequest =
+      new URLSearchParams(window.location.search).get("archive") === "1";
+
+    if (
+      isLeagueLandingPath(pathname, slug) &&
+      !isArchiveRequest &&
+      payload.leagueId &&
+      currentLeagueId &&
+      payload.leagueId !== currentLeagueId
+    ) {
+      const currentSeason = payload.seasons?.find(
+        (season) => season.id === currentLeagueId || season.isCurrent,
+      );
+
+      if (currentSeason) {
+        window.location.replace(`/leagues/${currentSeason.slug}${window.location.hash}`);
+        return;
+      }
+    }
+
     const switcher = createSwitcher(payload, slug);
     if (!switcher) return;
 
