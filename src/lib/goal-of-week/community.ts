@@ -190,7 +190,9 @@ export async function getCommunityGoalWinners(
   return winners;
 }
 
-export async function getLatestCommunityGoalWinner(now: Date = new Date()) {
+export async function getLatestCommunityGoalWinner(
+  now: Date = new Date(),
+): Promise<CommunityGoalCandidate | null> {
   const winners = await getCommunityGoalWinners(now, 1);
   return winners[0] ?? null;
 }
