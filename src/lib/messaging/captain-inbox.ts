@@ -150,7 +150,7 @@ export async function getCaptainUnreadMessageCount(teamId: string) {
       )
   `);
 
-  return Number(rows[0]?.count ?? 0n);
+  return Number(rows[0]?.count ?? 0);
 }
 
 export async function markCaptainMessageRead(input: {
