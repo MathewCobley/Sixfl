@@ -51,10 +51,6 @@ const HideImpossibleLeaguePositionBridge = dynamic(
   () => import("@/components/captain/HideImpossibleLeaguePositionBridge"),
   { ssr: false },
 );
-const TeamAutoPayCopyBridge = dynamic(
-  () => import("@/components/captain/TeamAutoPayCopyBridge"),
-  { ssr: false },
-);
 const TemporaryPlayerPassLauncher = dynamic(
   () => import("@/components/captain/TemporaryPlayerPassLauncher"),
   { ssr: false },
@@ -121,7 +117,6 @@ export default function RouteScopedBridges() {
           <CaptainStoredPredictionBridge />
           <FixturePaymentWordingBridge />
           <HideImpossibleLeaguePositionBridge />
-          <TeamAutoPayCopyBridge />
         </>
       ) : null}
 
