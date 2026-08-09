@@ -79,8 +79,8 @@ replaceTextRequired(
 
 const summaryParagraph =
   '        <p className="mt-3 max-w-4xl text-sm leading-6 text-white/70">{summaryText}</p>';
-insertBeforeRequired(
-  `${summaryParagraph}\n`,
+replaceTextRequired(
+  summaryParagraph,
   [
     summaryParagraph,
     "        {captainCollectedPence > 0 ? (",
@@ -94,7 +94,7 @@ insertBeforeRequired(
     "            captain passes on to SIXFL is reflected in the team balance shown above.",
     "          </div>",
     "        ) : null}",
-  ].join("\n") + "\n",
+  ].join("\n"),
   "Paid directly to captain:",
   "native captain-collected summary panel",
 );
