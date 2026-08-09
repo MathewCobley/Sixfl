@@ -33,13 +33,24 @@ replaceRequired(
     "  return Number.isInteger(count) ? count : null;",
     "}",
     "",
+    "function getSelectedTeamBalancePence() {",
+    "  const labels = Array.from(document.querySelectorAll<HTMLElement>(\"p\"));",
+    "  const balanceLabel = labels.find(",
+    "    (element) => element.textContent?.trim() === \"Team balance remaining\",",
+    "  );",
+    "  const metricCard = balanceLabel?.closest<HTMLElement>(\"div.rounded-3xl\") ?? null;",
+    "  const value = metricCard?.querySelector<HTMLElement>(\"p.text-3xl\") ?? null;",
+    "  if (!value?.textContent) return null;",
+    "  return parseMoneyPence(value.textContent);",
+    "}",
+    "",
     "function updateSelectedSummary(input: {",
     "  cancelled: boolean;",
     "  awaitingLabel: string | null;",
     "  awaitingCount: number | null;",
     "}) {",
   ].join("\n"),
-  "open-player count helper and summary signature",
+  "open-player count, team-balance helper and summary signature",
 );
 
 replaceRequired(
@@ -58,6 +69,13 @@ replaceRequired(
   ].join("\n"),
   [
     "  if (input.awaitingLabel) {",
+    "    // Open player links do not mean the fixture itself is paid. Only use",
+    "    // the special 'covered' wording when the native team-balance card",
+    "    // explicitly says £0.00. Otherwise leave the server-rendered summary",
+    "    // alone (for example: £40 fee, £6 paid, £34 still owed).",
+    "    const teamBalancePence = getSelectedTeamBalancePence();",
+    "    if (teamBalancePence !== 0) return;",
+    "",
     "    const playerLabel =",
     "      input.awaitingCount === 1",
     "        ? \"1 player\"",
@@ -79,7 +97,7 @@ replaceRequired(
     "    setSummaryTone(section, \"amber\");",
     "  }",
   ].join("\n"),
-  "count-aware covered-fixture summary",
+  "count-aware covered-fixture summary with team-balance guard",
 );
 
 replaceRequired(
@@ -105,9 +123,13 @@ fs.writeFileSync(filePath, source, "utf8");
 if (
   source.includes("still to collect from a player") ||
   !source.includes("getSelectedOpenPlayerCount") ||
+  !source.includes("getSelectedTeamBalancePence") ||
+  !source.includes("if (teamBalancePence !== 0) return;") ||
   !source.includes("player payment requests totalling")
 ) {
-  throw new Error("Player-payment summary pluralisation was not applied correctly.");
+  throw new Error("Player-payment summary pluralisation and coverage guard were not applied correctly.");
 }
 
-console.log("Player-payment summaries now use the actual number of unpaid players.");
+console.log(
+  "Player-payment summaries now use the actual number of unpaid players and only say a fixture is covered when its team balance is £0.00.",
+);
