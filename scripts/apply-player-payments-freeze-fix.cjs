@@ -10,12 +10,8 @@ function patchFile(relativePath, patcher) {
   fs.writeFileSync(absolutePath, next, "utf8");
 }
 
-function replaceRequired(source, before, after, label) {
-  if (source.includes(after)) return source;
-  if (!source.includes(before)) {
-    throw new Error(`Expected ${label} source was not found.`);
-  }
-  return source.replace(before, after);
+function replaceIfPresent(source, before, after) {
+  return source.includes(before) ? source.replace(before, after) : source;
 }
 
 patchFile(
@@ -54,14 +50,9 @@ patchFile(
       "      if (!fixtureId) return;",
     ].join("\n");
 
-    source = replaceRequired(
-      source,
-      oldEffectStart,
-      newEffectStart,
-      "matchday availability route guard and observer removal",
-    );
+    source = replaceIfPresent(source, oldEffectStart, newEffectStart);
 
-    source = replaceRequired(
+    source = replaceIfPresent(
       source,
       [
         "    return () => {",
@@ -76,7 +67,6 @@ patchFile(
         "      window.cancelAnimationFrame(frame);",
         "    };",
       ].join("\n"),
-      "matchday availability observer cleanup removal",
     );
 
     return source;
@@ -85,102 +75,36 @@ patchFile(
 
 patchFile(
   "src/components/captain/CaptainFixtureBadgesBridge.tsx",
-  (input) => {
-    let source = input;
-
-    source = replaceRequired(
-      source,
-      [
-        "    `/captain/team/${teamId}/fixtures`,",
-        "    `/captain/team/${teamId}/results`,",
-        "    `/captain/team/${teamId}/player-payments`,",
-        "    `/captain/team/${teamId}/match-fees`,",
-      ].join("\n"),
-      [
-        "    `/captain/team/${teamId}/fixtures`,",
-        "    `/captain/team/${teamId}/results`,",
-        "    `/captain/team/${teamId}/match-fees`,",
-      ].join("\n"),
-      "player-payments fixture badge exclusion",
-    );
-
-    return source;
-  },
+  (input) =>
+    input.replace(
+      '    `/captain/team/${teamId}/player-payments`,\n',
+      "",
+    ),
 );
 
-patchFile("src/components/captain/TeamAutoPayCopyBridge.tsx", (input) => {
-  let source = input;
+// TeamAutoPayCopyBridge used to rewrite the player-payment summary after React
+// rendered it. That allowed an open player link to overwrite the real fixture
+// balance and incorrectly claim that a fixture was covered. The bridge is now
+// removed completely: both payment pages must render their own state natively.
+require("./apply-native-team-payment-copy.cjs");
 
-  const oldEffect = [
-    "  useEffect(() => {",
-    "    const params = new URLSearchParams(searchParams.toString());",
-    '    const isTeamPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/payments\\/?$/.test(pathname);',
-    '    const isSquadPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/player-payments\\/?$/.test(pathname);',
-    "",
-    "    if (!isTeamPaymentsPage && !isSquadPaymentsPage) return;",
-    "",
-    "    const apply = () => {",
-    "      if (isTeamPaymentsPage) {",
-    '        updatePaymentCopy(params.get("autopay"));',
-    "      }",
-    "      if (isSquadPaymentsPage) {",
-    "        updateSquadPaymentClarity(params);",
-    "      }",
-    "    };",
-    "",
-    "    apply();",
-    "    const observer = new MutationObserver(apply);",
-    "    observer.observe(document.body, { childList: true, subtree: true });",
-    "",
-    "    return () => observer.disconnect();",
-    "  }, [pathname, searchParams]);",
-  ].join("\n");
-
-  const newEffect = [
-    "  useEffect(() => {",
-    "    const params = new URLSearchParams(searchParams.toString());",
-    '    const isTeamPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/payments\\/?$/.test(pathname);',
-    '    const isSquadPaymentsPage = /^\\/captain\\/team\\/[^/]+\\/player-payments\\/?$/.test(pathname);',
-    "",
-    "    if (!isTeamPaymentsPage && !isSquadPaymentsPage) return;",
-    "",
-    "    const apply = () => {",
-    "      if (isTeamPaymentsPage) {",
-    '        updatePaymentCopy(params.get("autopay"));',
-    "      }",
-    "      if (isSquadPaymentsPage) {",
-    "        updateSquadPaymentClarity(params);",
-    "      }",
-    "    };",
-    "",
-    "    if (isSquadPaymentsPage) {",
-    "      const frame = window.requestAnimationFrame(apply);",
-    "      const timer = window.setTimeout(apply, 250);",
-    "",
-    "      return () => {",
-    "        window.cancelAnimationFrame(frame);",
-    "        window.clearTimeout(timer);",
-    "      };",
-    "    }",
-    "",
-    "    apply();",
-    "    const observer = new MutationObserver(apply);",
-    "    observer.observe(document.body, { childList: true, subtree: true });",
-    "",
-    "    return () => observer.disconnect();",
-    "  }, [pathname, searchParams]);",
-  ].join("\n");
-
-  source = replaceRequired(
-    source,
-    oldEffect,
-    newEffect,
-    "squad payment observer removal",
-  );
-
-  return source;
-});
-
+const routeScopedPath = path.join(root, "src/components/RouteScopedBridges.tsx");
+const routeScopedSource = fs.readFileSync(routeScopedPath, "utf8");
+const retiredPaymentBridgePath = path.join(
+  root,
+  "src/components/captain/TeamAutoPayCopyBridge.tsx",
+);
+const playerPaymentPage = fs.readFileSync(
+  path.join(
+    root,
+    "src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx",
+  ),
+  "utf8",
+);
+const teamPaymentPage = fs.readFileSync(
+  path.join(root, "src/app/captain/team/[teamid]/payments/page.tsx"),
+  "utf8",
+);
 const availabilitySource = fs.readFileSync(
   path.join(root, "src/components/captain/CaptainMatchdayAvailabilityBadgesBridge.tsx"),
   "utf8",
@@ -189,22 +113,21 @@ const fixtureBadgeSource = fs.readFileSync(
   path.join(root, "src/components/captain/CaptainFixtureBadgesBridge.tsx"),
   "utf8",
 );
-const autoPaySource = fs.readFileSync(
-  path.join(root, "src/components/captain/TeamAutoPayCopyBridge.tsx"),
-  "utf8",
-);
 
 if (
-  !availabilitySource.includes("if (!teamId) return;") ||
+  fs.existsSync(retiredPaymentBridgePath) ||
+  routeScopedSource.includes("TeamAutoPayCopyBridge") ||
+  !playerPaymentPage.includes("The team balance remaining is") ||
+  !playerPaymentPage.includes("playerOutstandingPence") ||
+  !teamPaymentPage.includes("Saved card matchday payments") ||
   availabilitySource.includes("new MutationObserver(runCopyRewrite)") ||
-  availabilitySource.includes("characterData: true") ||
-  fixtureBadgeSource.includes('`/captain/team/${teamId}/player-payments`,') ||
-  !autoPaySource.includes("if (isSquadPaymentsPage) {") ||
-  !autoPaySource.includes("const timer = window.setTimeout(apply, 250);")
+  fixtureBadgeSource.includes('`/captain/team/${teamId}/player-payments`,')
 ) {
-  throw new Error("Squad payments freeze fix did not apply correctly.");
+  throw new Error(
+    "Payment pages are not fully protected from the retired DOM payment bridge.",
+  );
 }
 
 console.log(
-  "Squad payments no longer runs full-page mutation observers or the fixture AI badge injector.",
+  "Captain payment pages now use native React payment state; the old DOM payment copy bridge is gone.",
 );
