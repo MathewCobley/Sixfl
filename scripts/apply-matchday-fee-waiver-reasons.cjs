@@ -57,6 +57,7 @@ replaceRequired(
     '  const note = fee.note?.toLowerCase() ?? "";',
     '  const wasZeroTeamFixture = note.includes("team fixture fee is £0.00");',
     '  const hasZeroPlayerOverride = note.includes("player match fee override: £0.00");',
+    '  const hasExplicitManualWaiver = note.includes("fee waived manually by sixfl admin");',
     "",
     "  if (wasZeroTeamFixture && currentTeamFixtureFeePence !== 0) {",
     "    return {",
@@ -90,10 +91,18 @@ replaceRequired(
     "    };",
     "  }",
     "",
+    "  if (hasExplicitManualWaiver) {",
+    "    return {",
+    '      label: "Fee waived manually",',
+    '      detail: "This fee has an explicit admin-waiver audit note. No payment is currently due.",',
+    '      classes: "border-violet-400/25 bg-violet-500/10 text-violet-100",',
+    "    };",
+    "  }",
+    "",
     "  return {",
-    '    label: "Fee waived manually",',
-    '    detail: "A SIXFL admin marked this player fee as waived. No payment is currently due.",',
-    '    classes: "border-violet-400/25 bg-violet-500/10 text-violet-100",',
+    '    label: "Waived — reason not recorded",',
+    '    detail: "This fee is stored as waived, but the record does not say why or who changed it. Older/system-created waivers must not be described as a manual admin action without evidence.",',
+    '    classes: "border-amber-400/25 bg-amber-500/10 text-amber-100",',
     "  };",
     "}",
   ].join("\n"),
@@ -121,7 +130,7 @@ replaceRequired(
     '        <section className="rounded-3xl border border-violet-400/20 bg-violet-500/[0.07] p-5 text-sm text-violet-50/80">',
     '          <p className="font-semibold text-white">Why some players show no fee due</p>',
     '          <p className="mt-2 leading-6">',
-    "            Waived is a payment status, not an availability status. Each waived row below now explains whether it comes from a £0 team fixture, a £0 player override, an older £0 fixture setting or a manual admin waiver.",
+    "            Waived is a payment status, not an availability status. Each waived row below now explains the recorded reason where one exists, and clearly flags older rows whose reason was never stored.",
     "          </p>",
     "        </section>",
     "      ) : null}",
@@ -214,11 +223,12 @@ if (
   !source.includes("getFeeWaiverReason") ||
   !source.includes("Why some players show no fee due") ||
   !source.includes("Review old £0 waiver") ||
-  !source.includes("No fee — player override £0")
+  !source.includes("No fee — player override £0") ||
+  !source.includes("Waived — reason not recorded")
 ) {
   throw new Error("Matchday fee waiver reasons were not applied correctly.");
 }
 
 console.log(
-  "Matchday squad rows now explain exactly why a player fee is waived and flag stale waivers from an old £0 fixture setting.",
+  "Matchday squad rows now explain recorded waiver reasons without guessing that unexplained waivers were manual admin actions.",
 );
