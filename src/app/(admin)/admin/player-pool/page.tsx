@@ -55,6 +55,7 @@ type RequestRow = {
   status: string;
   requestedAt: Date;
   introducedAt: Date | null;
+  resolvedAt: Date | null;
   captainMessage: string | null;
   publicCode: string;
   firstName: string;
@@ -107,6 +108,63 @@ function statusClasses(status: string) {
       return "border-white/10 bg-white/5 text-white/55";
     default:
       return "border-white/10 bg-white/5 text-white/70";
+  }
+}
+
+function getDisplayedProfileStatus(profileStatus: string, activity: RequestRow | null) {
+  // Older PlayerPool introductions were automatically labelled TRIAL_ARRANGED as
+  // soon as SIXFL approved the introduction, even though no trial event/date was
+  // actually stored. Never present that as a confirmed trial in the admin UI.
+  if (profileStatus === "TRIAL_ARRANGED" && activity?.status === "INTRODUCED") {
+    return "INTRODUCED";
+  }
+  return profileStatus;
+}
+
+function activityCopy(request: RequestRow) {
+  switch (request.status) {
+    case "REQUESTED":
+      return {
+        eyebrow: "Introduction requested",
+        title: `${request.teamName} has asked to speak to this player`,
+        detail: `Requested ${formatDate(request.requestedAt)} by ${request.requesterName || request.requesterEmail || "captain"}. Contact details have not yet been released by SIXFL.`,
+        tone: "border-amber-400/20 bg-amber-500/[0.08] text-amber-50/80",
+      };
+    case "INTRODUCED":
+      return {
+        eyebrow: "Introduction made",
+        title: `Introduced to ${request.teamName}`,
+        detail: `SIXFL introduced the player to ${request.teamName} on ${formatDate(request.introducedAt)}. The team and player can now discuss a game or trial.`,
+        tone: "border-sky-400/20 bg-sky-500/[0.08] text-sky-50/80",
+      };
+    case "JOINED":
+      return {
+        eyebrow: "Joined team",
+        title: `Joined ${request.teamName}`,
+        detail: `This PlayerPool route is recorded as completed${request.resolvedAt ? ` on ${formatDate(request.resolvedAt)}` : ""}.`,
+        tone: "border-emerald-400/20 bg-emerald-500/[0.08] text-emerald-50/80",
+      };
+    case "DECLINED":
+      return {
+        eyebrow: "Introduction declined",
+        title: `Request from ${request.teamName} declined`,
+        detail: `Requested ${formatDate(request.requestedAt)}${request.resolvedAt ? ` · closed ${formatDate(request.resolvedAt)}` : ""}.`,
+        tone: "border-red-400/20 bg-red-500/[0.07] text-red-50/75",
+      };
+    case "CLOSED":
+      return {
+        eyebrow: "Introduction closed",
+        title: `Request involving ${request.teamName} is closed`,
+        detail: `Requested ${formatDate(request.requestedAt)}${request.resolvedAt ? ` · closed ${formatDate(request.resolvedAt)}` : ""}.`,
+        tone: "border-white/10 bg-white/[0.04] text-white/65",
+      };
+    default:
+      return {
+        eyebrow: request.status.replaceAll("_", " "),
+        title: `PlayerPool activity with ${request.teamName}`,
+        detail: `Requested ${formatDate(request.requestedAt)}.`,
+        tone: "border-white/10 bg-white/[0.04] text-white/65",
+      };
   }
 }
 
@@ -172,6 +230,7 @@ export default async function AdminPlayerPoolPage({
         request."status",
         request."requestedAt",
         request."introducedAt",
+        request."resolvedAt",
         request."captainMessage",
         profile."publicCode",
         prospect."firstName",
@@ -208,6 +267,12 @@ export default async function AdminPlayerPoolPage({
   const awaitingProfile = playerLeads.filter((lead) => !profileLeadIds.has(lead.id));
   const openRequests = requests.filter((request) => request.status === "REQUESTED");
   const availableCount = profiles.filter((profile) => profile.status === "AVAILABLE").length;
+  const latestRequestByProfileId = new Map<string, RequestRow>();
+  for (const request of requests) {
+    if (!latestRequestByProfileId.has(request.profileId)) {
+      latestRequestByProfileId.set(request.profileId, request);
+    }
+  }
   const savedMessage = getSavedMessage(params.saved);
 
   return (
@@ -321,6 +386,11 @@ export default async function AdminPlayerPoolPage({
           ) : null}
           {profiles.map((profile) => {
             const playerName = nameOf(profile.firstName, profile.lastName) || profile.email || "this player";
+            const activity = latestRequestByProfileId.get(profile.id) ?? null;
+            const displayedStatus = getDisplayedProfileStatus(profile.status, activity);
+            const activityDetails = activity ? activityCopy(activity) : null;
+            const legacyTrialLabel =
+              profile.status === "TRIAL_ARRANGED" && activity?.status === "INTRODUCED";
 
             return (
               <article key={profile.id} className="rounded-3xl border border-white/10 bg-black/25 p-5">
@@ -328,8 +398,8 @@ export default async function AdminPlayerPoolPage({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-bold text-emerald-200">{profile.publicCode}</span>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusClasses(profile.status)}`}>
-                        {profile.status.replaceAll("_", " ")}
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusClasses(displayedStatus)}`}>
+                        {displayedStatus.replaceAll("_", " ")}
                       </span>
                     </div>
                     <h3 className="mt-3 text-lg font-bold text-white">{playerName}</h3>
@@ -367,6 +437,37 @@ export default async function AdminPlayerPoolPage({
                   <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-white/65">
                     {profile.availabilitySummary}
                   </p>
+                ) : null}
+
+                {activity && activityDetails ? (
+                  <section className={`mt-4 rounded-2xl border p-4 ${activityDetails.tone}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-70">
+                          {activityDetails.eyebrow}
+                        </p>
+                        <h4 className="mt-1 text-base font-bold text-white">{activityDetails.title}</h4>
+                      </div>
+                      <Link
+                        href={`/admin/teams/${activity.teamId}`}
+                        className="rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10"
+                      >
+                        Open {activity.teamName}
+                      </Link>
+                    </div>
+                    <p className="mt-2 text-sm leading-6">{activityDetails.detail}</p>
+                    {activity.captainMessage ? (
+                      <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/65">
+                        <span className="font-semibold text-white/80">Captain message:</span>{" "}
+                        {activity.captainMessage}
+                      </div>
+                    ) : null}
+                    {legacyTrialLabel ? (
+                      <div className="mt-3 rounded-xl border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-50/85">
+                        <strong>Trial detail not recorded.</strong> Older PlayerPool logic labelled an approved introduction as “Trial arranged” immediately. The stored record only proves that SIXFL introduced this player to {activity.teamName}; there is no separate trial date or trial confirmation on record.
+                      </div>
+                    ) : null}
+                  </section>
                 ) : null}
 
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/45">
