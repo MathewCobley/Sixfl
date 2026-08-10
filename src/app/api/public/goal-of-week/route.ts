@@ -29,8 +29,8 @@ const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
 };
 
-async function getManualFeaturedGoal() {
-  const rows = await prisma.$queryRaw<FeaturedGoalRow[]>(Prisma.sql`
+async function getManualFeaturedGoals() {
+  return prisma.$queryRaw<FeaturedGoalRow[]>(Prisma.sql`
     SELECT
       goal."id",
       goal."videoUrl",
@@ -49,18 +49,40 @@ async function getManualFeaturedGoal() {
     WHERE goal."isFeatured" = true
       AND goal."publishedAt" IS NOT NULL
     ORDER BY goal."weekOf" DESC, goal."publishedAt" DESC
-    LIMIT 1
+    LIMIT 2
   `);
-  return rows[0] ?? null;
+}
+
+function serializeManualGoal(goal: FeaturedGoalRow | null | undefined) {
+  if (!goal) return null;
+  const videoId = getYouTubeVideoId(goal.videoUrl);
+  if (!videoId) return null;
+
+  return {
+    id: goal.id,
+    videoId,
+    videoUrl: goal.videoUrl,
+    playerName: goal.playerName,
+    opponentName: goal.opponentName,
+    caption: goal.caption,
+    weekOf: goal.weekOf.toISOString(),
+    publishedAt: goal.publishedAt.toISOString(),
+    teamName: goal.teamName,
+    teamLogoUrl: goal.teamLogoUrl,
+    leagueName: goal.leagueName,
+    leagueSeason: goal.leagueSeason,
+    communitySelected: false,
+  };
 }
 
 export async function GET() {
   try {
-    const [manualGoal, communityWinner] = await Promise.all([
-      getManualFeaturedGoal(),
+    const [manualGoals, communityWinner] = await Promise.all([
+      getManualFeaturedGoals(),
       getLatestCommunityGoalWinner(),
     ]);
 
+    const manualGoal = manualGoals[0] ?? null;
     const communityVideoUrl = communityWinner
       ? splitSixflTvUrls(communityWinner.sixflTvUrl).find((url) =>
           Boolean(getYouTubeVideoId(url)),
@@ -106,37 +128,31 @@ export async function GET() {
             nominationCount: communityWinner.nominationCount,
             voteCount: communityWinner.voteCount,
           },
+          previousGoal: serializeManualGoal(manualGoal),
         },
         { headers: noStoreHeaders },
       );
     }
 
     if (!manualGoal || !manualVideoId) {
-      return NextResponse.json({ goal: null }, { headers: noStoreHeaders });
+      return NextResponse.json(
+        { goal: null, previousGoal: null },
+        { headers: noStoreHeaders },
+      );
     }
 
     return NextResponse.json(
       {
-        goal: {
-          id: manualGoal.id,
-          videoId: manualVideoId,
-          videoUrl: manualGoal.videoUrl,
-          playerName: manualGoal.playerName,
-          opponentName: manualGoal.opponentName,
-          caption: manualGoal.caption,
-          weekOf: manualGoal.weekOf.toISOString(),
-          publishedAt: manualGoal.publishedAt.toISOString(),
-          teamName: manualGoal.teamName,
-          teamLogoUrl: manualGoal.teamLogoUrl,
-          leagueName: manualGoal.leagueName,
-          leagueSeason: manualGoal.leagueSeason,
-          communitySelected: false,
-        },
+        goal: serializeManualGoal(manualGoal),
+        previousGoal: serializeManualGoal(manualGoals[1]),
       },
       { headers: noStoreHeaders },
     );
   } catch (error) {
     console.error("Failed to load the featured Goal of the Week", error);
-    return NextResponse.json({ goal: null }, { headers: noStoreHeaders });
+    return NextResponse.json(
+      { goal: null, previousGoal: null },
+      { headers: noStoreHeaders },
+    );
   }
 }
