@@ -7,6 +7,7 @@ import {
   type PlayerDataHealthIssue,
   type PlayerDataHealthSummary,
 } from "@/lib/players/player-data-health";
+import { recordPlayerDataHealthChange } from "@/lib/players/player-data-health-audit";
 import {
   normalisePlayerIdentityName,
   playerNamesMatch,
@@ -16,14 +17,22 @@ import { prisma } from "@/lib/prisma";
 type ProspectRow = {
   id: string;
   teamId: string | null;
+  teamName: string | null;
   firstName: string;
   lastName: string | null;
+  status: string;
+};
+
+type PlayerPoolRow = {
+  id: string;
+  publicCode: string;
   status: string;
 };
 
 type RequestRow = {
   id: string;
   teamId: string;
+  teamName: string | null;
   status: string;
   prospectId: string;
 };
@@ -31,6 +40,7 @@ type RequestRow = {
 type LeadRow = {
   id: string;
   contactName: string | null;
+  status: string;
 };
 
 type SourceProspectRow = { sourceProspectId: string };
@@ -82,7 +92,32 @@ function emptyResult() {
   };
 }
 
-async function reconcileIssue(issue: PlayerDataHealthIssue) {
+async function logChange(input: {
+  runId: string;
+  issue: PlayerDataHealthIssue;
+  recordType: string;
+  recordId: string;
+  recordLabel: string;
+  previousStatus: string;
+  newStatus: string;
+  reason: string;
+}) {
+  await recordPlayerDataHealthChange({
+    runId: input.runId,
+    userId: input.issue.userId,
+    playerName: input.issue.name,
+    email: input.issue.email,
+    teamNames: input.issue.teamNames,
+    recordType: input.recordType,
+    recordId: input.recordId,
+    recordLabel: input.recordLabel,
+    previousStatus: input.previousStatus,
+    newStatus: input.newStatus,
+    reason: input.reason,
+  });
+}
+
+async function reconcileIssue(issue: PlayerDataHealthIssue, runId: string) {
   const email = normaliseEmail(issue.email);
   if (!email || issue.teamIds.length === 0) return emptyResult();
 
@@ -91,10 +126,12 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
       SELECT
         prospect."id",
         prospect."teamId",
+        team."name" AS "teamName",
         prospect."firstName",
         prospect."lastName",
         prospect."status"::text AS "status"
       FROM "TeamPlayerProspect" prospect
+      LEFT JOIN "Team" team ON team."id" = prospect."teamId"
       WHERE prospect."email" IS NOT NULL
         AND LOWER(TRIM(prospect."email")) = ${email}
     `),
@@ -125,6 +162,7 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
 
     if (prospect.teamId && teamIds.has(prospect.teamId)) {
       if (prospect.status !== "ACTIVE_SQUAD") {
+        const reason = "Verified player is already an active member of this squad.";
         await prisma.$executeRaw(Prisma.sql`
           UPDATE "TeamPlayerProspect"
           SET
@@ -139,6 +177,16 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
             "updatedAt" = NOW()
           WHERE "id" = ${prospect.id}
         `);
+        await logChange({
+          runId,
+          issue,
+          recordType: "PROSPECT",
+          recordId: prospect.id,
+          recordLabel: `Prospect · ${prospect.teamName ?? "current team"}`,
+          previousStatus: prospect.status,
+          newStatus: "ACTIVE_SQUAD",
+          reason,
+        });
         prospectsActivated += 1;
       }
       continue;
@@ -152,6 +200,7 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
       prospect.status !== "DECLINED" &&
       prospect.status !== "DUPLICATE"
     ) {
+      const reason = "Verified player is already in a SIXFL squad, so this unassigned recruitment copy is no longer live.";
       await prisma.$executeRaw(Prisma.sql`
         UPDATE "TeamPlayerProspect"
         SET
@@ -166,6 +215,16 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
           "updatedAt" = NOW()
         WHERE "id" = ${prospect.id}
       `);
+      await logChange({
+        runId,
+        issue,
+        recordType: "PROSPECT",
+        recordId: prospect.id,
+        recordLabel: "Unassigned prospect",
+        previousStatus: prospect.status,
+        newStatus: "DUPLICATE",
+        reason,
+      });
       prospectsClosedAsDuplicate += 1;
     }
   }
@@ -176,21 +235,42 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
   const requestsClosed = 0;
 
   if (safeIds.length > 0) {
-    playerPoolProfilesJoined = await prisma.$executeRaw(Prisma.sql`
-      UPDATE "PlayerPoolProfile"
-      SET "status" = 'JOINED', "updatedAt" = NOW()
+    const profiles = await prisma.$queryRaw<PlayerPoolRow[]>(Prisma.sql`
+      SELECT "id", "publicCode", "status"::text AS "status"
+      FROM "PlayerPoolProfile"
       WHERE "prospectId" IN (${Prisma.join(safeIds)})
         AND "status" <> 'JOINED'
     `);
+
+    for (const profile of profiles) {
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE "PlayerPoolProfile"
+        SET "status" = 'JOINED', "updatedAt" = NOW()
+        WHERE "id" = ${profile.id}
+      `);
+      await logChange({
+        runId,
+        issue,
+        recordType: "PLAYER_POOL",
+        recordId: profile.id,
+        recordLabel: `PlayerPool ${profile.publicCode}`,
+        previousStatus: profile.status,
+        newStatus: "JOINED",
+        reason: "The verified player is now in a squad, so this PlayerPool profile is fulfilled rather than still available.",
+      });
+      playerPoolProfilesJoined += 1;
+    }
 
     const requests = await prisma.$queryRaw<RequestRow[]>(Prisma.sql`
       SELECT
         request."id",
         request."teamId",
-        request."status",
+        team."name" AS "teamName",
+        request."status"::text AS "status",
         profile."prospectId"
       FROM "PlayerPoolIntroductionRequest" request
       JOIN "PlayerPoolProfile" profile ON profile."id" = request."profileId"
+      LEFT JOIN "Team" team ON team."id" = request."teamId"
       WHERE profile."prospectId" IN (${Prisma.join(safeIds)})
         AND request."status" IN ('REQUESTED', 'INTRODUCED')
     `);
@@ -205,6 +285,16 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
           "updatedAt" = NOW()
         WHERE "id" = ${request.id}
       `);
+      await logChange({
+        runId,
+        issue,
+        recordType: "PLAYER_POOL_REQUEST",
+        recordId: request.id,
+        recordLabel: `Introduction · ${request.teamName ?? "joined team"}`,
+        previousStatus: request.status,
+        newStatus: "JOINED",
+        reason: "The player is now a member of the team that requested the introduction.",
+      });
       requestsJoined += 1;
     }
   }
@@ -212,7 +302,7 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
   let leadsClosed = 0;
   if (normalisePlayerIdentityName(issue.name)) {
     const leads = await prisma.$queryRaw<LeadRow[]>(Prisma.sql`
-      SELECT lead."id", lead."contactName"
+      SELECT lead."id", lead."contactName", lead."status"::text AS "status"
       FROM "InterestLead" lead
       WHERE lead."interestType" = 'PLAYER'::"InterestType"
         AND lead."email" IS NOT NULL
@@ -230,6 +320,16 @@ async function reconcileIssue(issue: PlayerDataHealthIssue) {
           "updatedAt" = NOW()
         WHERE "id" = ${lead.id}
       `);
+      await logChange({
+        runId,
+        issue,
+        recordType: "LEAD",
+        recordId: lead.id,
+        recordLabel: "Player lead",
+        previousStatus: lead.status,
+        newStatus: "CLOSED",
+        reason: "This player lead has been fulfilled by an active squad membership.",
+      });
       leadsClosed += 1;
     }
   }
@@ -319,7 +419,7 @@ export async function runSafePlayerDataHealthCleanup(input: {
     };
 
     for (const issue of issues) {
-      const result = await reconcileIssue(issue);
+      const result = await reconcileIssue(issue, runId);
       if (result.changed) totals.affectedUsers += 1;
       totals.prospectsActivated += result.prospectsActivated;
       totals.prospectsClosedAsDuplicate += result.prospectsClosedAsDuplicate;
@@ -369,5 +469,9 @@ export async function reconcilePlayerRecruitmentStateForUser(userId: string) {
   const issues = await getPlayerDataHealthIssues();
   const issue = issues.find((item) => item.userId === userId);
   if (!issue) return emptyResult();
-  return reconcileIssue(issue);
+
+  // Immediate membership reconciliation deliberately has no cleanup run record.
+  // It uses a synthetic id so any changed recruitment rows remain traceable in
+  // the itemised audit table without appearing as a monthly/manual run.
+  return reconcileIssue(issue, `membership:${userId}`);
 }
