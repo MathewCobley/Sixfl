@@ -31,3 +31,7 @@ if (source.includes("TeamAutoPayCopyBridge")) {
 console.log(
   "Player-payment summary, real outstanding balance and captain-collected money are rendered natively by the server page.",
 );
+
+// Keep the team payment page's saved-card state native and explicit after all
+// other payment-page build patches have finished.
+require("./apply-native-team-payment-copy.cjs");
