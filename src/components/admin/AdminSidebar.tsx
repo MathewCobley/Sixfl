@@ -306,6 +306,12 @@ const navigationGroups = [
         description: "Pipeline",
       },
       {
+        name: "Data health",
+        href: "/admin/players/data-health",
+        icon: WrenchScrewdriverIcon,
+        description: "Player cleanup",
+      },
+      {
         name: "Prospect teams",
         href: "/admin/team-prospects",
         icon: UserGroupIcon,
