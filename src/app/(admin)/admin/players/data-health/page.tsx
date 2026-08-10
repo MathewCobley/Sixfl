@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { getPlayerDataHealthRunChanges } from "@/lib/players/player-data-health-audit";
 import {
   getPlayerDataHealthIssues,
   getPlayerDataHealthRuns,
@@ -30,6 +31,29 @@ function formatDate(value: Date | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(value);
+}
+
+function statusLabel(value: string | null) {
+  if (!value) return "Before status not recorded";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function recordTypeLabel(value: string) {
+  switch (value) {
+    case "PLAYER_POOL":
+      return "PlayerPool";
+    case "PLAYER_POOL_REQUEST":
+      return "PlayerPool request";
+    case "PROSPECT":
+      return "Prospect";
+    case "LEAD":
+      return "Lead";
+    default:
+      return value;
+  }
 }
 
 async function runCleanupNowAction() {
@@ -64,6 +88,15 @@ export default async function PlayerDataHealthPage({
     getPlayerDataHealthIssues(),
     getPlayerDataHealthRuns(12),
   ]);
+  const runChanges = await Promise.all(
+    runs.map((run) =>
+      getPlayerDataHealthRunChanges({
+        id: run.id,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+      }),
+    ),
+  );
 
   const prospectCount = issues.reduce((sum, item) => sum + item.prospectCount, 0);
   const poolCount = issues.reduce((sum, item) => sum + item.playerPoolCount, 0);
@@ -171,27 +204,91 @@ export default async function PlayerDataHealthPage({
       <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
         <div className="border-b border-white/10 px-5 py-4">
           <h2 className="text-xl font-semibold text-white">Cleanup history</h2>
-          <p className="mt-1 text-sm text-white/50">Monthly and manual reconciliation runs are recorded here.</p>
+          <p className="mt-1 text-sm text-white/50">
+            Open any run to see exactly which people and records changed. Older runs created before itemised logging are reconstructed from the cleanup timestamps and audit notes and are labelled accordingly.
+          </p>
         </div>
         {runs.length === 0 ? (
           <div className="px-5 py-8 text-sm text-white/45">No cleanup run has been recorded yet.</div>
         ) : (
           <div className="divide-y divide-white/10">
-            {runs.map((run) => (
-              <div key={run.id} className="px-5 py-4 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-white">{run.source}</span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] ${run.status === "COMPLETED" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : run.status === "FAILED" ? "border-red-400/20 bg-red-500/10 text-red-100" : "border-amber-400/20 bg-amber-500/10 text-amber-100"}`}>
-                    {run.status}
-                  </span>
-                  <span className="text-white/40">{formatDate(run.startedAt)}</span>
-                </div>
-                <p className="mt-2 text-white/55">
-                  {run.affectedUsers} people · {run.prospectsActivated} prospects linked · {run.prospectsClosedAsDuplicate} unassigned duplicates closed · {run.playerPoolProfilesJoined} PlayerPool profiles joined · {run.requestsJoined + run.requestsClosed} requests resolved · {run.leadsClosed} leads closed
-                </p>
-                {run.error ? <p className="mt-2 text-red-200/75">{run.error}</p> : null}
-              </div>
-            ))}
+            {runs.map((run, index) => {
+              const changes = runChanges[index] ?? [];
+              return (
+                <details key={run.id} className="group px-5 py-4 text-sm">
+                  <summary className="cursor-pointer list-none">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-white">{run.source}</span>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${run.status === "COMPLETED" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : run.status === "FAILED" ? "border-red-400/20 bg-red-500/10 text-red-100" : "border-amber-400/20 bg-amber-500/10 text-amber-100"}`}>
+                            {run.status}
+                          </span>
+                          <span className="text-white/40">{formatDate(run.startedAt)}</span>
+                        </div>
+                        <p className="mt-2 text-white/55">
+                          {run.affectedUsers} people · {run.prospectsActivated} prospects linked · {run.prospectsClosedAsDuplicate} unassigned duplicates closed · {run.playerPoolProfilesJoined} PlayerPool profiles joined · {run.requestsJoined + run.requestsClosed} requests resolved · {run.leadsClosed} leads closed
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/65 group-open:bg-white/10">
+                        {changes.length > 0 ? `View ${changes.length} record change${changes.length === 1 ? "" : "s"}` : "No itemised records found"}
+                      </span>
+                    </div>
+                  </summary>
+
+                  {run.error ? <p className="mt-3 text-red-200/75">{run.error}</p> : null}
+
+                  {changes.length > 0 ? (
+                    <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                      {changes.map((change) => (
+                        <div key={change.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-white">{change.playerName || change.email || "Unknown player"}</span>
+                                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/55">
+                                  {recordTypeLabel(change.recordType)}
+                                </span>
+                                {change.reconstructed ? (
+                                  <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-100">
+                                    Reconstructed
+                                  </span>
+                                ) : null}
+                              </div>
+                              {change.email ? <div className="mt-1 text-xs text-white/45">{change.email}</div> : null}
+                              {change.teamNames ? <div className="mt-1 text-xs text-white/40">Squad: {change.teamNames}</div> : null}
+                              <div className="mt-3 font-medium text-white/80">{change.recordLabel || change.recordId}</div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                <span className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-white/50">
+                                  {statusLabel(change.previousStatus)}
+                                </span>
+                                <span className="text-white/30">→</span>
+                                <span className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-emerald-100">
+                                  {statusLabel(change.newStatus)}
+                                </span>
+                              </div>
+                              {change.reason ? <p className="mt-3 text-xs leading-5 text-white/50">{change.reason}</p> : null}
+                            </div>
+                            {change.email ? (
+                              <Link
+                                href={`/admin/players/audit?q=${encodeURIComponent(change.email)}`}
+                                className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/65 hover:bg-white/10"
+                              >
+                                Full player audit
+                              </Link>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 border-t border-white/10 pt-4 text-xs leading-5 text-white/45">
+                      This run has a summary total but no recoverable per-record detail. Future cleanup changes are logged individually at the moment they happen.
+                    </div>
+                  )}
+                </details>
+              );
+            })}
           </div>
         )}
       </section>
