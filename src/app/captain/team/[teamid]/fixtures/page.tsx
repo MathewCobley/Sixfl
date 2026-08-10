@@ -27,6 +27,9 @@ export const metadata = {
 
 const TEAM_UNAVAILABLE_NOTE =
   "Team unavailable: captain has told SIXFL they cannot fulfil this fixture.";
+const FIXTURE_RESPONSE_LOCK_HOURS = 72;
+const FIXTURE_RESPONSE_LOCK_MS = FIXTURE_RESPONSE_LOCK_HOURS * 60 * 60 * 1000;
+const SIXFL_FIXTURE_EMAIL = "hello@sixfl.co.uk";
 
 type SearchParams = {
   saved?: string;
@@ -126,6 +129,10 @@ function isTeamUnavailableNote(note: string | null | undefined) {
   return (note ?? "").startsWith("Team unavailable:");
 }
 
+function isFixtureResponseLocked(kickoffAt: Date) {
+  return kickoffAt.getTime() - Date.now() <= FIXTURE_RESPONSE_LOCK_MS;
+}
+
 function getFriendlyErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
     if (
@@ -142,6 +149,9 @@ function getFriendlyErrorMessage(error: unknown) {
     }
     if (error.message.includes("not available for confirmation")) {
       return "Only published scheduled upcoming fixtures can be confirmed.";
+    }
+    if (error.message.includes("Fixture response window closed")) {
+      return `Online team responses close ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Please email ${SIXFL_FIXTURE_EMAIL} if you need to change or report anything now.`;
     }
     if (error.message.includes("Issue note must be at least")) {
       return "Please add a short note so SIXFL knows what the issue is.";
@@ -196,19 +206,11 @@ function getFixtureConfirmationSummary(input: {
     };
   }
 
-  if (diffHours <= 24) {
-    return {
-      label: "Overdue",
-      tone: "red",
-      helper: confirmation?.lastChasedAt ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}` : "Confirmation needed urgently",
-    };
-  }
-
   if (diffHours <= 72) {
     return {
-      label: "Awaiting team response",
-      tone: "amber",
-      helper: confirmation?.lastChasedAt ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}` : "Please tell SIXFL whether your team can play",
+      label: "Online response closed",
+      tone: "red",
+      helper: `Within ${FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off — contact SIXFL directly`,
     };
   }
 
@@ -266,6 +268,9 @@ async function getConfirmableFixture(fixtureId: string, teamid: string) {
   }
   if (await fixtureHasPlaceholderTeam(fixtureId)) {
     throw new Error("This fixture is still provisional.");
+  }
+  if (isFixtureResponseLocked(fixture.kickoffAt)) {
+    throw new Error("Fixture response window closed.");
   }
 
   return fixture;
@@ -495,6 +500,9 @@ export default async function CaptainFixturesPage({
   const selectedFixtureIsProvisional = Boolean(
     selectedFixture && fixtureIsProvisional(selectedFixture),
   );
+  const selectedResponseLocked = Boolean(
+    selectedFixture && isFixtureResponseLocked(selectedFixture.kickoffAt),
+  );
   const selectedStatus: ConfirmationSummary | null = selectedFixture
     ? selectedFixtureIsProvisional
       ? {
@@ -516,6 +524,11 @@ export default async function CaptainFixturesPage({
   const otherUpcomingFixtures = selectedFixture
     ? upcomingFixtures.filter((fixture) => fixture.id !== selectedFixture.id)
     : upcomingFixtures;
+  const selectedFixtureEmailHref = selectedFixture
+    ? `mailto:${SIXFL_FIXTURE_EMAIL}?subject=${encodeURIComponent(
+        `Fixture response - ${team.name} - ${formatDateTime(selectedFixture.kickoffAt)}`,
+      )}`
+    : `mailto:${SIXFL_FIXTURE_EMAIL}`;
 
   return (
     <div className="space-y-8">
@@ -551,7 +564,7 @@ export default async function CaptainFixturesPage({
             {selectedFixture ? (
               <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/85">
                 <strong className="text-sky-50">This is about the whole team.</strong>{" "}
-                Tell SIXFL whether your team can fulfil the fixture. Individual player availability is handled separately in the Availability tab.
+                Tell SIXFL whether your team can fulfil the fixture. Individual player availability is handled separately in the Availability tab. Online team responses close {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.
               </div>
             ) : null}
 
@@ -599,12 +612,26 @@ export default async function CaptainFixturesPage({
                     this page will ask whether your team can play the fixture.
                   </p>
                 </div>
+              ) : selectedResponseLocked ? (
+                <div className="rounded-3xl border border-red-400/25 bg-red-500/10 p-5 text-red-50">
+                  <p className="text-base font-semibold">Online response window closed</p>
+                  <p className="mt-2 text-sm leading-6 text-red-100/80">
+                    Team responses are locked {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off so SIXFL has time to deal with any fixture changes properly. If your team can no longer play, or you need to change a previous response, email SIXFL directly now.
+                  </p>
+                  <a
+                    href={selectedFixtureEmailHref}
+                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-red-100 px-4 py-2.5 text-sm font-semibold text-red-950 transition hover:bg-white"
+                  >
+                    Email SIXFL about this fixture
+                  </a>
+                  <p className="mt-3 text-xs text-red-100/65">{SIXFL_FIXTURE_EMAIL}</p>
+                </div>
               ) : (
                 <>
                   <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
                     <p className="text-base font-semibold text-white">Can your team play this fixture?</p>
                     <p className="mt-1 text-sm leading-6 text-white/55">
-                      Choose one. If you clicked the wrong option before, you can correct it here.
+                      Choose one. You can correct your response here until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. After that, contact SIXFL directly.
                     </p>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
