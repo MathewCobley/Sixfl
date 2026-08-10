@@ -82,6 +82,14 @@ source = source
   .replace(
     '              Set up a recurring Stripe payment for your team. Successful renewal payments will be recorded automatically in the SIXFL payment history.',
     '              Save a team card securely with Stripe. SIXFL only takes a one-off outstanding match fee on the actual fixture day. Player payments and team credit reduce that amount first, and postponed or cancelled fixtures are not charged.',
+  )
+  .replace(
+    '/payments/start-subscription',
+    '/payments/setup-saved-card',
+  )
+  .replace(
+    '/payments/manage-subscription',
+    '/payments/manage-saved-card',
   );
 
 const oldPageState = [
@@ -116,9 +124,11 @@ const newPageState = [
   '  const subscriptionMessage =',
   '    sp.autopay === "success"',
   '      ? hasSavedCard',
-  '        ? "Saved card setup complete. Your card is ready for matchday team payments."',
+  '        ? "Saved card setup complete. Your card is authorised for automatic one-off matchday team payments."',
   '        : "Stripe returned you to SIXFL, but a complete saved-card mandate has not been confirmed yet. Use Continue saved card setup below to finish."',
-  '      : getSubscriptionMessage(sp.autopay ?? sp.subscription);',
+  '      : sp.autopay === "incomplete"',
+  '        ? "Saved card setup is incomplete. Continue the setup to enter and confirm the card details."',
+  '        : getSubscriptionMessage(sp.autopay ?? sp.subscription);',
   '  const creditMessage = getCreditMessage(sp.credit, sp.amount);',
   '  const canOpenPortal = hasSavedCard;',
 ].join("\n");
@@ -136,9 +146,10 @@ if (!source.includes("const hasSavedCard = isConfirmedTeamAutoPaySetup(autoPay);
 }
 
 source = source
+  .replaceAll('"Saved card ready"', '"Saved card setup complete"')
   .replace(
     '                {formatSubscriptionStatus(subscription?.subscriptionStatus ?? null)}',
-    '                {hasSavedCard ? "Saved card ready" : hasStripeCustomer ? "Card setup incomplete" : "Not set up"}',
+    '                {hasSavedCard ? "Saved card setup complete" : hasStripeCustomer ? "Card setup incomplete" : "Not set up"}',
   )
   .replace(
     '                  getSubscriptionTone(subscription?.subscriptionStatus ?? null),',
@@ -146,7 +157,7 @@ source = source
   )
   .replace(
     '                {canOpenPortal ? "Stripe account linked" : "Not set up"}',
-    '                {hasSavedCard ? "Saved card ready" : hasStripeCustomer ? "Card setup incomplete" : "Not set up"}',
+    '                {hasSavedCard ? "Saved card setup complete" : hasStripeCustomer ? "Card setup incomplete" : "Not set up"}',
   )
   .replace(
     '                  canOpenPortal\n                    ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"\n                    : "border-white/10 bg-white/[0.05] text-white/60",',
@@ -178,7 +189,7 @@ if (!source.includes("Stripe has created the team payment account, but no card i
 
 // A Stripe customer or a stray payment-method ID on its own is not consent for
 // automatic matchday collection. Only a completed saved-card setup with the
-// accepted mandate and its Stripe setup-session evidence is treated as ready.
+// accepted mandate and its Stripe setup-session evidence is treated as complete.
 source = source.replace(
   '            {canOpenPortal ? (',
   '            {hasSavedCard ? (',
@@ -190,16 +201,21 @@ if (
   !source.includes("reconcileTeamAutoPaySetup(teamid)") ||
   !source.includes("getTeamAutoPaySnapshot(teamid)") ||
   !source.includes("isConfirmedTeamAutoPaySetup(autoPay)") ||
+  !source.includes("Saved card setup complete") ||
   !source.includes("Card setup incomplete") ||
   !source.includes("Continue saved card setup") ||
+  !source.includes("/payments/setup-saved-card") ||
+  !source.includes("/payments/manage-saved-card") ||
   !source.includes('const canOpenPortal = hasSavedCard;') ||
   source.includes('canOpenPortal ? "Stripe account linked"') ||
-  source.includes("Set up automatic payments")
+  source.includes("Set up automatic payments") ||
+  source.includes("/payments/start-subscription") ||
+  source.includes("/payments/manage-subscription")
 ) {
   throw new Error("Native saved-card payment state was not applied correctly.");
 }
 
 fs.writeFileSync(pagePath, source, "utf8");
 console.log(
-  "Team payments only show saved-card ready when the Stripe card, accepted mandate and setup-session evidence are all present.",
+  "Team payments show an explicit completed/incomplete saved-card setup state and use saved-card route names throughout.",
 );
