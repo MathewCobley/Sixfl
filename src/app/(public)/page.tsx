@@ -20,6 +20,7 @@ export const metadata = {
 };
 
 const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
+const northallertonLeagueLink = "/leagues/sixfl-mens-northallerton-wednesday-league";
 const heartlandsLeagueLink = "/leagues/heartlands";
 const generalRegisterLink = "/register-interest";
 const generalTeamLink = "/register-interest?type=team";
@@ -29,8 +30,6 @@ const wetherbyTeamLink =
   "/register-interest?type=team&area=Wetherby&night=Wednesday";
 const wetherbyPlayerLink =
   "/register-interest?type=player&area=Wetherby&night=Wednesday";
-const northallertonTeamLink =
-  "/register-interest?type=team&area=Northallerton&night=Wednesday";
 const northallertonPlayerLink =
   "/register-interest?type=player&area=Northallerton&night=Wednesday";
 const harrogatePlayerLink =
@@ -73,15 +72,15 @@ const areaCards = [
     featured: false,
   },
   {
-    eyebrow: "NORTHALLERTON LAUNCH",
+    eyebrow: "LIVE NORTHALLERTON LEAGUE",
     title: "Northallerton Wednesday League",
-    status: "Registrations open",
-    body: "Northallerton team entries are open for the upcoming Wednesday night 6-a-side league. Individual players and referees can also register interest.",
-    primaryLabel: "Register team",
-    primaryHref: northallertonTeamLink,
+    status: "Fixtures live",
+    body: "See live fixtures, recent results, teams and the current league table for the Wednesday 6-a-side league at Northallerton Leisure Centre.",
+    primaryLabel: "View league",
+    primaryHref: northallertonLeagueLink,
     secondaryLabel: "Join as player",
     secondaryHref: northallertonPlayerLink,
-    featured: false,
+    featured: true,
   },
   {
     eyebrow: "NORTH YORKSHIRE HEARTLANDS",
@@ -184,7 +183,7 @@ export default async function HomePage() {
         >
           <div className="max-w-5xl text-left">
             <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
-              Harrogate live now • New leagues forming
+              Harrogate & Northallerton live now • New leagues forming
             </div>
 
             <h1 className="mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl sm:leading-[0.95] lg:text-7xl">
@@ -216,8 +215,15 @@ export default async function HomePage() {
               </Link>
 
               <Link
+                href={northallertonLeagueLink}
+                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-200 transition hover:bg-emerald-500/15 sm:w-auto"
+              >
+                VIEW NORTHALLERTON LEAGUE
+              </Link>
+
+              <Link
                 href={generalRegisterLink}
-                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-300 transition hover:bg-emerald-500/15 sm:w-auto"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-6 text-center text-sm font-extrabold tracking-wide text-white/80 transition hover:bg-white/[0.08] sm:w-auto"
               >
                 REGISTER
               </Link>
@@ -273,7 +279,7 @@ export default async function HomePage() {
                   Get involved with SIXFL.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  Teams, individual players and referees can register interest for live leagues and new launch areas. Harrogate is live now, while Wetherby, Northallerton and the North Yorkshire Heartlands are open for registrations.
+                  Teams, individual players and referees can register interest for live leagues and new launch areas. Harrogate and Northallerton are live now, while Wetherby and the North Yorkshire Heartlands are open for registrations.
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -362,13 +368,13 @@ function AreaCard({
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Link
           href={primaryHref}
-          className="inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-5 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
+          className="inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-5 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:min-w-[8.75rem] sm:w-auto"
         >
           {primaryLabel}
         </Link>
         <Link
           href={secondaryHref}
-          className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:w-auto"
+          className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:min-w-[8.75rem] sm:w-auto"
         >
           {secondaryLabel}
         </Link>
