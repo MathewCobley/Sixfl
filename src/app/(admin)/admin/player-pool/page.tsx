@@ -5,6 +5,7 @@
 import Link from "next/link";
 
 import DeletePlayerPoolProfileButton from "@/components/admin/player-pool/DeletePlayerPoolProfileButton";
+import PlayerPoolJoinedTeams from "@/components/admin/player-pool/PlayerPoolJoinedTeams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { ensurePlayerPoolTables, readPlayerPoolStringArray } from "@/lib/player-pool/storage";
 import { prisma } from "@/lib/prisma";
@@ -124,9 +125,6 @@ function statusClasses(status: string) {
 }
 
 function getDisplayedProfileStatus(profileStatus: string, activity: RequestRow | null) {
-  // Older PlayerPool introductions were automatically labelled TRIAL_ARRANGED as
-  // soon as SIXFL approved the introduction, even though no trial event/date was
-  // actually stored. Never present that as a confirmed trial in the admin UI.
   if (profileStatus === "TRIAL_ARRANGED" && activity?.status === "INTRODUCED") {
     return "INTRODUCED";
   }
@@ -536,6 +534,13 @@ export default async function AdminPlayerPoolPage({
                     <div className="mt-1 text-sm text-white/55">
                       {profile.email || "No email"}{profile.phone ? ` · ${profile.phone}` : ""}
                     </div>
+                    {displayedStatus === "JOINED" ? (
+                      <PlayerPoolJoinedTeams
+                        profileId={profile.id}
+                        email={profile.email}
+                        playerName={playerName}
+                      />
+                    ) : null}
                   </div>
                   <Link
                     href={`/player-pool/profile/${profile.profileToken}`}
