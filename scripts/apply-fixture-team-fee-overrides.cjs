@@ -187,4 +187,108 @@ replaceOnce(
   '  const feeAmountChanged =\n    (fixture.homeMatchFeePence ?? fixture.matchFeePence ?? 0) !==\n      (homeMatchFeePence ?? 0) ||\n    (fixture.awayMatchFeePence ?? fixture.matchFeePence ?? 0) !==\n      (awayMatchFeePence ?? 0);',
 );
 
-console.log("Applied team-specific fixture fee persistence and publishing safeguards.");
+// New fixtures must inherit each team's own standard fee rather than copying the
+// higher of the two teams to both sides. The per-team fields remain editable, so
+// a fixture-level override still wins once an admin changes it.
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/single-fixture-action.ts",
+  '    const standardFeePence = Math.max(\n      homeTeam.standardMatchFeePence ?? 0,\n      awayTeam.standardMatchFeePence ?? 0,\n    );',
+  '    const homeStandardMatchFeePence = homeTeam.standardMatchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const awayStandardMatchFeePence = awayTeam.standardMatchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const standardFeePence = Math.max(\n      homeStandardMatchFeePence,\n      awayStandardMatchFeePence,\n    );',
+);
+
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/single-fixture-action.ts",
+  'import { requireAdmin } from "@/lib/requireAdmin";\n\ntype TeamRow',
+  'import { requireAdmin } from "@/lib/requireAdmin";\n\nconst DEFAULT_MATCH_FEE_PENCE = 4000;\n\ntype TeamRow',
+);
+
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/single-fixture-action.ts",
+  '        matchFeePence: standardFeePence > 0 ? standardFeePence : null,\n        publishedAt: null,',
+  '        matchFeePence: standardFeePence,\n        homeMatchFeePence: homeStandardMatchFeePence,\n        awayMatchFeePence: awayStandardMatchFeePence,\n        publishedAt: null,',
+);
+
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
+  'function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  const homeFee = homeTeam.standardMatchFeePence ?? 0;\n  const awayFee = awayTeam.standardMatchFeePence ?? 0;\n  const highestFee = Math.max(homeFee, awayFee);\n  return highestFee > 0 ? highestFee : null;\n}',
+  'function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  return Math.max(\n    homeTeam.standardMatchFeePence ?? 4000,\n    awayTeam.standardMatchFeePence ?? 4000,\n  );\n}',
+);
+
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
+  '    status: FixtureStatus;\n    matchFeePence: number | null;\n  }> = [];',
+  '    status: FixtureStatus;\n    matchFeePence: number | null;\n    homeMatchFeePence: number;\n    awayMatchFeePence: number;\n  }> = [];',
+);
+
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
+  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),\n        });',
+  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),\n          homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,\n          awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,\n        });',
+);
+
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
+  '          status: fixtureData.status,\n          matchFeePence: fixtureData.matchFeePence,\n        },',
+  '          status: fixtureData.status,\n          matchFeePence: fixtureData.matchFeePence,\n          homeMatchFeePence: fixtureData.homeMatchFeePence,\n          awayMatchFeePence: fixtureData.awayMatchFeePence,\n        },',
+);
+
+// Publishing old drafts must also recover the team standard when the old draft
+// only contains the shared legacy fee.
+replaceAllExact(
+  "src/app/api/admin/fixtures/publish-one/route.ts",
+  'homeTeam: { id: string; name: string; logoUrl: string | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null };',
+  'homeTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };',
+  1,
+);
+
+replaceAllExact(
+  "src/app/api/admin/fixtures/publish-one/route.ts",
+  'homeTeam: { select: { id: true, name: true, logoUrl: true } },\n      awayTeam: { select: { id: true, name: true, logoUrl: true } },',
+  'homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },\n      awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },',
+  1,
+);
+
+replaceAllExact(
+  "src/app/api/admin/fixtures/publish-one/route.ts",
+  'homeTeam: { select: { id: true, name: true, logoUrl: true } },\n          awayTeam: { select: { id: true, name: true, logoUrl: true } },',
+  'homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },\n          awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },',
+  1,
+);
+
+replaceOnce(
+  "src/app/api/admin/fixtures/publish-one/route.ts",
+  '    fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n  const awayMatchFeePence =\n    fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
+  '    fixture.homeMatchFeePence ??\n    fixture.homeTeam.standardMatchFeePence ??\n    fixture.matchFeePence ??\n    DEFAULT_MATCH_FEE_PENCE;\n  const awayMatchFeePence =\n    fixture.awayMatchFeePence ??\n    fixture.awayTeam.standardMatchFeePence ??\n    fixture.matchFeePence ??\n    DEFAULT_MATCH_FEE_PENCE;',
+);
+
+replaceAllExact(
+  "src/app/(admin)/admin/fixtures/publish-actions.ts",
+  'homeTeam: { id: string; name: string; logoUrl: string | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null };',
+  'homeTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };',
+  1,
+);
+
+replaceAllExact(
+  "src/app/(admin)/admin/fixtures/publish-actions.ts",
+  'homeTeam: { select: { id: true, name: true, logoUrl: true } },\n            awayTeam: { select: { id: true, name: true, logoUrl: true } },',
+  'homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },\n            awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },',
+  1,
+);
+
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/publish-actions.ts",
+  '      fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence =\n      fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
+  '      fixture.homeMatchFeePence ??\n      fixture.homeTeam.standardMatchFeePence ??\n      fixture.matchFeePence ??\n      DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence =\n      fixture.awayMatchFeePence ??\n      fixture.awayTeam.standardMatchFeePence ??\n      fixture.matchFeePence ??\n      DEFAULT_MATCH_FEE_PENCE;',
+);
+
+// The standard-fee backfill should write the per-team values as well as the
+// legacy display amount, so running it cannot recreate a shared £40/£40 fee.
+replaceOnce(
+  "src/app/(admin)/admin/fixtures/generate/standard-fee-actions.ts",
+  '          data: { matchFeePence: displayFee },',
+  '          data: {\n            matchFeePence: displayFee,\n            homeMatchFeePence: homeFee,\n            awayMatchFeePence: awayFee,\n          },',
+);
+
+console.log(
+  "Applied team-specific fixture fees: each fixture now defaults from each team's standard fee and retains explicit fixture overrides.",
+);
