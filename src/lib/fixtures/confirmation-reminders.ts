@@ -35,23 +35,28 @@ export type QueueFixtureConfirmationSmsResult =
       teamName?: string;
     };
 
+const CANONICAL_SITE_URL = "https://sixfl.co.uk";
 const DEFAULT_CONFIRMATION_SMS_BODY =
-  "SIXFL: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}}. {{link}}";
+  "SIXFL: Can {{teamName}} play {{opponentName}}, {{kickoffDateTime}}? Choose Yes or No: {{link}}";
 const DEFAULT_URGENT_CONFIRMATION_SMS_BODY =
-  "SIXFL URGENT: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}} now. {{link}}";
+  "SIXFL URGENT: Can {{teamName}} play {{opponentName}}, {{kickoffDateTime}}? Choose Yes or No now: {{link}}";
 const LEGACY_CONFIRMATION_SMS_BODY =
   "SIXFL: Please confirm your fixture for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Confirm here: {{link}}";
 const LEGACY_URGENT_CONFIRMATION_SMS_BODY =
   "SIXFL URGENT: We still need fixture confirmation for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Please confirm now: {{link}}";
 
 function getSiteUrl() {
-  return (
+  const configured = (
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
     process.env.SITE_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     process.env.APP_URL?.trim() ||
-    "https://www.sixfl.co.uk"
-  );
+    CANONICAL_SITE_URL
+  ).replace(/\/+$/, "");
+
+  return /^https:\/\/www\.sixfl\.co\.uk$/i.test(configured)
+    ? CANONICAL_SITE_URL
+    : configured;
 }
 
 function buildAbsoluteUrl(path: string) {
