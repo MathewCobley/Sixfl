@@ -178,3 +178,34 @@ export async function updateKitOrderNotesAction(formData: FormData) {
   revalidatePath(KITS_PATH);
   redirect(redirectToKits({ notice: "order_notes_saved", team: teamName }));
 }
+
+export async function updateKitOrderSizesConfirmedAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const orderId = readString(formData, "orderId");
+  const teamName = readString(formData, "teamName") || null;
+  const sizesConfirmed = formData.get("sizesConfirmed") === "on";
+
+  if (!orderId) {
+    redirect(redirectToKits({ error: "invalid_order" }));
+  }
+
+  try {
+    const changed = await prisma.$executeRaw(Prisma.sql`
+      UPDATE "TeamKitOrder"
+      SET
+        "sizesConfirmed" = ${sizesConfirmed},
+        "lastEditedByUserId" = ${user?.id ?? null},
+        "updatedAt" = NOW()
+      WHERE "id" = ${orderId}
+    `);
+
+    if (!changed) throw new Error("Kit order not found.");
+  } catch (error) {
+    console.error("Kit order size confirmation update failed", error);
+    redirect(redirectToKits({ error: "save_failed", team: teamName }));
+  }
+
+  revalidatePath(KITS_PATH);
+  revalidatePath("/captain");
+  redirect(redirectToKits({ notice: "order_sizes_saved", team: teamName }));
+}
