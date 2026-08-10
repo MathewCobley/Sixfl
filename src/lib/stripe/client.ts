@@ -6,7 +6,7 @@ import Stripe from "stripe";
 
 let cachedStripeClient: Stripe | null = null;
 
-const PRODUCTION_SITE_URL = "https://www.sixfl.co.uk";
+const PRODUCTION_SITE_URL = "https://sixfl.co.uk";
 
 export function getStripeServerClient(): Stripe {
   if (cachedStripeClient) {
@@ -43,6 +43,13 @@ function normalisePublicSiteUrl(value: string | null | undefined) {
     const url = new URL(trimmed);
 
     if (!url.protocol.startsWith("http")) return null;
+
+    // SIXFL's authenticated app lives on the apex domain. Stripe Checkout and
+    // Billing Portal must return to the same host or a host-scoped NextAuth
+    // session can appear to disappear after the customer comes back from Stripe.
+    if (url.hostname.toLowerCase() === "www.sixfl.co.uk") {
+      url.hostname = "sixfl.co.uk";
+    }
 
     return url.toString().replace(/\/+$/, "");
   } catch {
