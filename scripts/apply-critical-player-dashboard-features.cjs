@@ -43,10 +43,11 @@ const checks = [
   },
   {
     ok:
-      playerPage.includes('fee."temporaryUserId" = ${user.id}') &&
+      playerPage.includes("const temporaryFeeUserId = previewMembership?.user.id ?? user.id;") &&
+      playerPage.includes('fee."temporaryUserId" = ${temporaryFeeUserId}') &&
       playerPage.includes("const allPlayerFees = [") &&
       playerPage.includes("Temporary player · {fee.temporaryTeamName}"),
-    message: "Temporary-player fees are not integrated into the main player match-fee ledger.",
+    message: "Temporary-player fees are not integrated into the main player match-fee ledger for real and previewed players.",
   },
 ];
 
@@ -58,5 +59,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Critical player dashboard features verified: team switching, temporary-player setup and unified player fee visibility are present.",
+  "Critical player dashboard features verified: team switching, temporary-player setup and unified player fee visibility are present for real and previewed players.",
 );
