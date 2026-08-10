@@ -217,7 +217,8 @@ model Team {
   secondaryContactEmail String?
   secondaryContactPhone String?
 
-  latestKickoffTime String?
+  latestKickoffTime     String?
+  standardMatchFeePence Int?
 
   createdByUserId String?
   createdByUser   User?   @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -502,7 +503,7 @@ model MatchResult {
   isDisputed  Boolean @default(false)
   disputeNote String?
 
-  fixture       Fixture               @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  fixture       MatchResultFixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
   enteredByUser User?                 @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
   teamMetadata  MatchResultTeamMeta[]
   disputes      ResultDispute[]
