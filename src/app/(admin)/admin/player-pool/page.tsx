@@ -24,7 +24,15 @@ export const metadata = {
   title: "SIXFL PlayerPool | Admin",
 };
 
-type SearchParams = Promise<{ saved?: string; error?: string }>;
+type ProfileView =
+  | "available"
+  | "introductions"
+  | "joined"
+  | "inactive"
+  | "awaiting"
+  | "all";
+
+type SearchParams = Promise<{ saved?: string; error?: string; view?: string }>;
 
 type ProfileRow = {
   id: string;
@@ -86,7 +94,9 @@ function nameOf(firstName: string, lastName: string | null) {
 function formatNights(value: unknown) {
   const nights = readPlayerPoolStringArray(value);
   if (!nights.length || nights.includes("ANY")) return "Flexible";
-  return nights.map((night) => night.charAt(0) + night.slice(1).toLowerCase()).join(", ");
+  return nights
+    .map((night) => night.charAt(0) + night.slice(1).toLowerCase())
+    .join(", ");
 }
 
 function statusClasses(status: string) {
@@ -101,6 +111,8 @@ function statusClasses(status: string) {
       return "border-sky-400/25 bg-sky-500/10 text-sky-100";
     case "JOINED":
       return "border-violet-400/25 bg-violet-500/10 text-violet-100";
+    case "INVITED":
+      return "border-cyan-400/25 bg-cyan-500/10 text-cyan-100";
     case "PAUSED":
     case "NOT_LOOKING":
     case "DECLINED":
@@ -119,6 +131,53 @@ function getDisplayedProfileStatus(profileStatus: string, activity: RequestRow |
     return "INTRODUCED";
   }
   return profileStatus;
+}
+
+function parseView(value?: string): ProfileView {
+  if (
+    value === "available" ||
+    value === "introductions" ||
+    value === "joined" ||
+    value === "inactive" ||
+    value === "awaiting" ||
+    value === "all"
+  ) {
+    return value;
+  }
+  return "available";
+}
+
+function profileViewFor(profile: ProfileRow, activity: RequestRow | null): Exclude<ProfileView, "all"> {
+  const status = getDisplayedProfileStatus(profile.status, activity);
+  if (status === "AVAILABLE") return "available";
+  if (
+    status === "INTRODUCTION_REQUESTED" ||
+    status === "REQUESTED" ||
+    status === "INTRODUCED" ||
+    status === "TRIAL_ARRANGED"
+  ) {
+    return "introductions";
+  }
+  if (status === "JOINED") return "joined";
+  if (status === "INVITED") return "awaiting";
+  return "inactive";
+}
+
+function viewLabel(view: ProfileView) {
+  switch (view) {
+    case "available":
+      return "Available";
+    case "introductions":
+      return "Introductions";
+    case "joined":
+      return "Joined";
+    case "inactive":
+      return "Paused / not looking";
+    case "awaiting":
+      return "Awaiting profile";
+    default:
+      return "All profiles";
+  }
 }
 
 function activityCopy(request: RequestRow) {
@@ -194,6 +253,7 @@ export default async function AdminPlayerPoolPage({
   await ensurePlayerPoolTables();
 
   const params = (await searchParams) ?? {};
+  const selectedView = parseView(params.view);
 
   const [profiles, requests, playerLeads] = await Promise.all([
     prisma.$queryRaw<ProfileRow[]>`
@@ -264,16 +324,44 @@ export default async function AdminPlayerPoolPage({
   ]);
 
   const profileLeadIds = new Set(profiles.map((profile) => profile.leadId).filter(Boolean));
-  const awaitingProfile = playerLeads.filter((lead) => !profileLeadIds.has(lead.id));
+  const awaitingProfileLeads = playerLeads.filter((lead) => !profileLeadIds.has(lead.id));
   const openRequests = requests.filter((request) => request.status === "REQUESTED");
-  const availableCount = profiles.filter((profile) => profile.status === "AVAILABLE").length;
   const latestRequestByProfileId = new Map<string, RequestRow>();
   for (const request of requests) {
     if (!latestRequestByProfileId.has(request.profileId)) {
       latestRequestByProfileId.set(request.profileId, request);
     }
   }
+
+  const counts: Record<Exclude<ProfileView, "all">, number> = {
+    available: 0,
+    introductions: 0,
+    joined: 0,
+    inactive: 0,
+    awaiting: 0,
+  };
+  for (const profile of profiles) {
+    counts[profileViewFor(profile, latestRequestByProfileId.get(profile.id) ?? null)] += 1;
+  }
+
+  const visibleProfiles =
+    selectedView === "all"
+      ? profiles
+      : profiles.filter(
+          (profile) =>
+            profileViewFor(profile, latestRequestByProfileId.get(profile.id) ?? null) === selectedView,
+        );
+
+  const totalAwaitingProfile = counts.awaiting + awaitingProfileLeads.length;
   const savedMessage = getSavedMessage(params.saved);
+  const tabs: Array<{ view: ProfileView; label: string; count: number }> = [
+    { view: "available", label: "Available", count: counts.available },
+    { view: "introductions", label: "Introductions", count: counts.introductions },
+    { view: "joined", label: "Joined", count: counts.joined },
+    { view: "inactive", label: "Paused / not looking", count: counts.inactive },
+    { view: "awaiting", label: "Awaiting profile", count: counts.awaiting },
+    { view: "all", label: "All", count: profiles.length },
+  ];
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-8 px-4 py-6 sm:px-6 lg:px-8">
@@ -287,7 +375,7 @@ export default async function AdminPlayerPoolPage({
               Match available players with teams
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">
-              Send profile forms to individual player leads, review completed profiles and approve captain introduction requests without exposing contact details prematurely.
+              Work the available pool first, then follow introductions through to joined. Older joined and inactive players stay accessible without filling the live working list.
             </p>
           </div>
           <Link
@@ -298,11 +386,12 @@ export default async function AdminPlayerPoolPage({
           </Link>
         </div>
 
-        <div className="mt-7 grid gap-4 sm:grid-cols-3">
+        <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            ["Available", availableCount],
+            ["Available", counts.available],
             ["Open requests", openRequests.length],
-            ["Awaiting profile", awaitingProfile.length],
+            ["Joined", counts.joined],
+            ["Awaiting profile", totalAwaitingProfile],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white/10 bg-black/25 p-5">
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/45">{label}</div>
@@ -374,17 +463,58 @@ export default async function AdminPlayerPoolPage({
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.035]">
-        <div className="border-b border-white/10 px-6 py-5">
+        <div className="border-b border-white/10 px-4 py-5 sm:px-6">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-300/80">Profiles</p>
-          <h2 className="mt-2 text-2xl font-black text-white">PlayerPool players</h2>
+          <div className="mt-2 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-white">{viewLabel(selectedView)}</h2>
+              <p className="mt-1 text-sm text-white/50">
+                {selectedView === "available"
+                  ? "Players currently looking for a team."
+                  : selectedView === "introductions"
+                    ? "Players with an introduction or trial-stage journey in progress."
+                    : selectedView === "joined"
+                      ? "Players whose PlayerPool journey has ended in a team."
+                      : selectedView === "inactive"
+                        ? "Players paused or no longer looking, retained for history."
+                        : selectedView === "awaiting"
+                          ? "Invited players who have not yet completed their PlayerPool profile."
+                          : "Every PlayerPool profile, regardless of status."}
+              </p>
+            </div>
+            <div className="text-sm text-white/45">{visibleProfiles.length} shown · {profiles.length} total</div>
+          </div>
+
+          <nav className="mt-5 flex flex-wrap gap-2" aria-label="PlayerPool status sections">
+            {tabs.map((tab) => {
+              const active = selectedView === tab.view;
+              return (
+                <Link
+                  key={tab.view}
+                  href={`/admin/player-pool?view=${tab.view}`}
+                  className={[
+                    "inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold transition",
+                    active
+                      ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-50"
+                      : "border-white/10 bg-black/20 text-white/55 hover:bg-white/[0.06] hover:text-white",
+                  ].join(" ")}
+                >
+                  <span>{tab.label}</span>
+                  <span className={active ? "text-emerald-200" : "text-white/35"}>{tab.count}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
+
         <div className="grid gap-4 p-4 sm:p-6 xl:grid-cols-2">
-          {profiles.length === 0 ? (
+          {visibleProfiles.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/55 xl:col-span-2">
-              No PlayerPool profiles have been created yet.
+              No players are currently in the {viewLabel(selectedView).toLowerCase()} section.
             </div>
           ) : null}
-          {profiles.map((profile) => {
+
+          {visibleProfiles.map((profile) => {
             const playerName = nameOf(profile.firstName, profile.lastName) || profile.email || "this player";
             const activity = latestRequestByProfileId.get(profile.id) ?? null;
             const displayedStatus = getDisplayedProfileStatus(profile.status, activity);
@@ -509,13 +639,13 @@ export default async function AdminPlayerPoolPage({
       <section className="rounded-3xl border border-white/10 bg-white/[0.035]">
         <div className="border-b border-white/10 px-6 py-5">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-300/80">Invite players</p>
-          <h2 className="mt-2 text-2xl font-black text-white">Player leads awaiting a profile</h2>
+          <h2 className="mt-2 text-2xl font-black text-white">Player leads not yet invited</h2>
         </div>
         <div className="divide-y divide-white/10">
-          {awaitingProfile.length === 0 ? (
+          {awaitingProfileLeads.length === 0 ? (
             <div className="px-6 py-8 text-sm text-white/55">Every current player lead has a PlayerPool profile or invitation.</div>
           ) : null}
-          {awaitingProfile.map((lead) => (
+          {awaitingProfileLeads.map((lead) => (
             <div key={lead.id} className="grid gap-4 px-6 py-5 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
                 <div className="font-bold text-white">{lead.contactName}</div>
