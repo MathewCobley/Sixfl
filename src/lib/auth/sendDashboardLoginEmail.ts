@@ -13,13 +13,25 @@ import { prisma } from "@/lib/prisma";
 
 const LOGIN_CTA_LABEL = "Sign in to SIXFL";
 const LOGIN_LINK_TTL_HOURS = 24;
+const CANONICAL_SITE_URL = "https://sixfl.co.uk";
 
 function getSiteUrl() {
-  return (
+  const configured = (
     process.env.NEXTAUTH_URL?.trim() ||
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    "https://www.sixfl.co.uk"
+    CANONICAL_SITE_URL
   ).replace(/\/+$/, "");
+
+  // The live SIXFL site uses the apex domain. A login callback that starts on
+  // www.sixfl.co.uk and then redirects to sixfl.co.uk can lose NextAuth's
+  // host-scoped session cookie, which looks to the user like they sign in and
+  // are immediately signed out again. Keep generated dashboard magic links on
+  // one canonical host even if an older environment value still contains www.
+  if (/^https:\/\/www\.sixfl\.co\.uk$/i.test(configured)) {
+    return CANONICAL_SITE_URL;
+  }
+
+  return configured;
 }
 
 function getEmailFrom() {
