@@ -18,18 +18,24 @@ export type InitialFixtureConfirmationQueueResult =
   | "no-email"
   | "skipped";
 
+const CANONICAL_SITE_URL = "https://sixfl.co.uk";
+
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
 
 function getSiteUrl() {
-  return (
+  const configured = (
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
     process.env.SITE_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     process.env.APP_URL?.trim() ||
-    "https://www.sixfl.co.uk"
-  );
+    CANONICAL_SITE_URL
+  ).replace(/\/+$/, "");
+
+  return /^https:\/\/www\.sixfl\.co\.uk$/i.test(configured)
+    ? CANONICAL_SITE_URL
+    : configured;
 }
 
 function formatKickoff(date: Date) {
@@ -58,24 +64,26 @@ function getEmailCopy(input: {
 }) {
   const fixtureLabel = `${input.teamName} v ${input.opponentName}`;
   const kickoffLabel = formatKickoff(input.kickoffAt);
+  const responseInstruction =
+    "Open the fixture and choose either ‘Yes — we can play’ or ‘No — we cannot play’. This is the whole-team response; individual player availability is separate.";
 
   if (input.mode === "auto24h") {
     return {
-      subject: `Urgent: confirm ${fixtureLabel}`,
-      body: `Your fixture is now within 24 hours and still needs confirming.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\nPlease confirm now or raise an issue using the button below.`,
+      subject: `Urgent: team response needed for ${fixtureLabel}`,
+      body: `Your fixture is now within 24 hours and SIXFL still needs to know whether your team can play.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\n${responseInstruction}`,
     };
   }
 
   if (input.mode === "auto72h") {
     return {
-      subject: `Reminder: confirm ${fixtureLabel}`,
-      body: `We are still waiting for confirmation of your upcoming fixture.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\nPlease confirm the fixture or raise an issue using the button below.`,
+      subject: `Reminder: can your team play ${fixtureLabel}?`,
+      body: `We are still waiting for your team’s response to this upcoming fixture.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\n${responseInstruction}`,
     };
   }
 
   return {
-    subject: `Please confirm ${fixtureLabel}`,
-    body: `A new SIXFL fixture is live and needs your confirmation.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\nPlease confirm the fixture or raise an issue using the button below.`,
+    subject: `Can your team play ${fixtureLabel}?`,
+    body: `A new SIXFL fixture is live and needs a response from your team.\n\nFixture: ${fixtureLabel}\nKick-off: ${kickoffLabel}\n\n${responseInstruction}`,
   };
 }
 
@@ -201,7 +209,7 @@ export async function queueInitialFixtureConfirmationEmailForTeam(input: {
         : fixture.league.name,
     },
     emailCta: {
-      label: "Confirm fixture",
+      label: "Respond to fixture",
       url: captainFixturesUrl,
     },
     metadata: {
@@ -366,7 +374,7 @@ export async function runFixtureConfirmationEmailJob() {
             : fixture.league.name,
         },
         emailCta: {
-          label: mode === "auto24h" ? "Confirm fixture now" : "Confirm fixture",
+          label: mode === "auto24h" ? "Respond to fixture now" : "Respond to fixture",
           url: captainFixturesUrl,
         },
         metadata: {
