@@ -5,6 +5,10 @@ const pagePath = path.join(
   process.cwd(),
   "src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx",
 );
+const actionsPath = path.join(
+  process.cwd(),
+  "src/app/captain/team/[teamid]/player-payments/actions.ts",
+);
 
 let source = fs.readFileSync(pagePath, "utf8");
 
@@ -110,6 +114,78 @@ if (
 }
 
 fs.writeFileSync(pagePath, source, "utf8");
+
+// An explicit fixture-level choice of "Captain already collected" must win over
+// a player's default £0 fee override. The old order forced those players back to
+// waived after every save, even when the captain deliberately chose collected.
+let actions = fs.readFileSync(actionsPath, "utf8");
+
+const oldCollectionMethod = [
+  'function getCollectionMethod(input: {',
+  '  formData: FormData;',
+  '  type: string;',
+  '  id: string;',
+  '  amountPence: number;',
+  '  forceWaived?: boolean;',
+  '}): CaptainCollectionMethod {',
+  '  if (input.forceWaived) return "waived";',
+  '',
+  '  const rawValue = getString(input.formData, `collection_${input.type}_${input.id}`);',
+  '',
+  '  if (rawValue === "captain_paid") return "captain_paid";',
+  '  if (rawValue === "waived") return "waived";',
+  '  if (input.amountPence === 0) return "waived";',
+  '',
+  '  return "link";',
+  '}',
+].join("\n");
+const newCollectionMethod = [
+  'function getCollectionMethod(input: {',
+  '  formData: FormData;',
+  '  type: string;',
+  '  id: string;',
+  '  amountPence: number;',
+  '  forceWaived?: boolean;',
+  '}): CaptainCollectionMethod {',
+  '  const rawValue = getString(input.formData, `collection_${input.type}_${input.id}`);',
+  '',
+  '  if (rawValue === "captain_paid") return "captain_paid";',
+  '  if (rawValue === "waived") return "waived";',
+  '  if (input.forceWaived) return "waived";',
+  '  if (input.amountPence === 0) return "waived";',
+  '',
+  '  return "link";',
+  '}',
+].join("\n");
+
+if (!actions.includes(newCollectionMethod)) {
+  if (!actions.includes(oldCollectionMethod)) {
+    throw new Error("Expected captain collection method source was not found.");
+  }
+  actions = actions.replace(oldCollectionMethod, newCollectionMethod);
+}
+
+if (!actions.includes('if (input.zeroFeePlayer && input.method === "waived") {')) {
+  const oldZeroFeeNote = '  if (input.zeroFeePlayer) {';
+  if (!actions.includes(oldZeroFeeNote)) {
+    throw new Error("Expected zero-fee collection note source was not found.");
+  }
+  actions = actions.replace(
+    oldZeroFeeNote,
+    '  if (input.zeroFeePlayer && input.method === "waived") {',
+  );
+}
+
+fs.writeFileSync(actionsPath, actions, "utf8");
+
+if (
+  !actions.includes('if (rawValue === "captain_paid") return "captain_paid";') ||
+  !actions.includes('if (input.forceWaived) return "waived";') ||
+  !actions.includes('if (input.zeroFeePlayer && input.method === "waived") {')
+) {
+  throw new Error("Captain-collected fixture override was not applied correctly.");
+}
+
 console.log(
-  "Squad payments now show captain-collected player money natively in the server-rendered summary.",
+  "Squad payments show captain-collected money natively and preserve an explicit captain-collected choice even for players with a default £0 fee override.",
 );
