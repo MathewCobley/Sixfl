@@ -18,8 +18,13 @@ function replaceRequired(before, after, label) {
 if (!source.includes('from "@/lib/payments/team-autopay-snapshot"')) {
   replaceRequired(
     'import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";',
-    'import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";\nimport {\n  getTeamAutoPaySnapshot,\n  reconcileTeamAutoPaySetup,\n} from "@/lib/payments/team-autopay-snapshot";',
+    'import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";\nimport {\n  getTeamAutoPaySnapshot,\n  isConfirmedTeamAutoPaySetup,\n  reconcileTeamAutoPaySetup,\n} from "@/lib/payments/team-autopay-snapshot";',
     "saved-card snapshot import",
+  );
+} else if (!source.includes("isConfirmedTeamAutoPaySetup")) {
+  source = source.replace(
+    '  getTeamAutoPaySnapshot,\n  reconcileTeamAutoPaySetup,',
+    '  getTeamAutoPaySnapshot,\n  isConfirmedTeamAutoPaySetup,\n  reconcileTeamAutoPaySetup,',
   );
 }
 
@@ -91,7 +96,7 @@ const legacyPageState = [
   '  const canOpenPortal = Boolean(subscription?.stripeCustomerId);',
   '  const subscriptionIsManaged = isManagedByStripe(subscription?.subscriptionStatus ?? null);',
 ].join("\n");
-const newPageState = [
+const previousPageState = [
   '  const hasSavedCard = Boolean(',
   '    autoPay?.autoPayEnabled && autoPay.stripeDefaultPaymentMethodId,',
   '  );',
@@ -105,9 +110,23 @@ const newPageState = [
   '  const creditMessage = getCreditMessage(sp.credit, sp.amount);',
   '  const canOpenPortal = hasSavedCard;',
 ].join("\n");
+const newPageState = [
+  '  const hasSavedCard = isConfirmedTeamAutoPaySetup(autoPay);',
+  '  const hasStripeCustomer = Boolean(autoPay?.stripeCustomerId);',
+  '  const subscriptionMessage =',
+  '    sp.autopay === "success"',
+  '      ? hasSavedCard',
+  '        ? "Saved card setup complete. Your card is ready for matchday team payments."',
+  '        : "Stripe returned you to SIXFL, but a complete saved-card mandate has not been confirmed yet. Use Continue saved card setup below to finish."',
+  '      : getSubscriptionMessage(sp.autopay ?? sp.subscription);',
+  '  const creditMessage = getCreditMessage(sp.credit, sp.amount);',
+  '  const canOpenPortal = hasSavedCard;',
+].join("\n");
 
-if (!source.includes("const hasSavedCard = Boolean(")) {
-  if (source.includes(oldPageState)) {
+if (!source.includes("const hasSavedCard = isConfirmedTeamAutoPaySetup(autoPay);")) {
+  if (source.includes(previousPageState)) {
+    source = source.replace(previousPageState, newPageState);
+  } else if (source.includes(oldPageState)) {
     source = source.replace(oldPageState, newPageState);
   } else if (source.includes(legacyPageState)) {
     source = source.replace(legacyPageState, newPageState);
@@ -143,12 +162,12 @@ source = source
   )
   .replace('                  Manage in Stripe', '                  Manage saved card');
 
-if (!source.includes("Card setup incomplete")) {
+if (!source.includes("Stripe has created the team payment account, but no card is saved yet.")) {
   const statusBlockMarker = '            <div className="mt-4 flex flex-wrap gap-2">';
   const statusNotice = [
     '            {hasStripeCustomer && !hasSavedCard ? (',
     '              <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">',
-    '                Stripe has created the team payment account, but no card is saved yet. Continue the saved-card setup to enter and confirm the card details.',
+    '                Stripe has created the team payment account, but a complete saved-card mandate is not recorded. Continue the saved-card setup to enter and confirm the card details.',
     '              </div>',
     '            ) : null}',
     '',
@@ -157,8 +176,9 @@ if (!source.includes("Card setup incomplete")) {
   replaceRequired(statusBlockMarker, statusNotice, "saved-card incomplete setup notice");
 }
 
-// A Stripe customer on its own is not a saved card. The management portal is
-// only useful after a payment method has actually been stored and autopay is enabled.
+// A Stripe customer or a stray payment-method ID on its own is not consent for
+// automatic matchday collection. Only a completed saved-card setup with the
+// accepted mandate and its Stripe setup-session evidence is treated as ready.
 source = source.replace(
   '            {canOpenPortal ? (',
   '            {hasSavedCard ? (',
@@ -169,6 +189,7 @@ if (
   !source.includes("autopay?: string") ||
   !source.includes("reconcileTeamAutoPaySetup(teamid)") ||
   !source.includes("getTeamAutoPaySnapshot(teamid)") ||
+  !source.includes("isConfirmedTeamAutoPaySetup(autoPay)") ||
   !source.includes("Card setup incomplete") ||
   !source.includes("Continue saved card setup") ||
   !source.includes('const canOpenPortal = hasSavedCard;') ||
@@ -180,5 +201,5 @@ if (
 
 fs.writeFileSync(pagePath, source, "utf8");
 console.log(
-  "Team payments now distinguish a Stripe customer from a completed saved-card setup and reconcile Stripe setup on return.",
+  "Team payments only show saved-card ready when the Stripe card, accepted mandate and setup-session evidence are all present.",
 );
