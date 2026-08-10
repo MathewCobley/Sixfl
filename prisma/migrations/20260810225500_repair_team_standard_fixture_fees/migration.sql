@@ -10,9 +10,8 @@
 -- the other team's higher shared fee (for example £40) because the generator
 -- stored only MAX(home standard fee, away standard fee).
 
--- First repair open, completely-unpaid team charges while the old per-team
--- fixture field is still NULL. Charges with any direct transaction or paid
--- player fee are deliberately left alone for manual review.
+-- First repair OPEN, completely-unpaid team charges while the old per-team
+-- fixture field is still NULL. Anything paid/settled is deliberately left alone.
 UPDATE "PaymentCharge" charge
 SET
   "amountPence" = team."standardMatchFeePence",
@@ -24,7 +23,7 @@ WHERE charge."fixtureId" = fixture."id"
   AND charge."teamId" = team."id"
   AND fixture."status" = 'SCHEDULED'
   AND fixture."kickoffAt" >= NOW()
-  AND charge."status" <> 'VOID'
+  AND charge."status" = 'OPEN'
   AND team."standardMatchFeePence" > 0
   AND charge."amountPence" = COALESCE(fixture."matchFeePence", 4000)
   AND (
@@ -46,7 +45,7 @@ WHERE charge."fixtureId" = fixture."id"
   );
 
 -- A team whose standard fixture fee is explicitly £0 should not keep an unpaid
--- legacy charge. Void only untouched charges; never void anything with money on it.
+-- legacy charge. Void only untouched OPEN charges; never void anything settled.
 UPDATE "PaymentCharge" charge
 SET
   "status" = 'VOID',
@@ -58,7 +57,7 @@ WHERE charge."fixtureId" = fixture."id"
   AND charge."teamId" = team."id"
   AND fixture."status" = 'SCHEDULED'
   AND fixture."kickoffAt" >= NOW()
-  AND charge."status" <> 'VOID'
+  AND charge."status" = 'OPEN'
   AND team."standardMatchFeePence" = 0
   AND charge."amountPence" = COALESCE(fixture."matchFeePence", 4000)
   AND (
