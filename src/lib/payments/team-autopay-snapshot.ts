@@ -9,11 +9,25 @@ export type TeamAutoPaySnapshot = {
   stripeDefaultPaymentMethodId: string | null;
   autoPayEnabled: boolean;
   autoPayMandateAcceptedAt: Date | null;
+  autoPayMandateText: string | null;
   autoPaySetupCheckoutSessionId: string | null;
   autoPayLastAttemptAt: Date | null;
   autoPayLastFailureAt: Date | null;
   autoPayLastFailureReason: string | null;
 };
+
+export function isConfirmedTeamAutoPaySetup(
+  autoPay: TeamAutoPaySnapshot | null | undefined,
+) {
+  return Boolean(
+    autoPay?.autoPayEnabled &&
+      autoPay.stripeCustomerId?.trim() &&
+      autoPay.stripeDefaultPaymentMethodId?.trim() &&
+      autoPay.autoPayMandateAcceptedAt &&
+      autoPay.autoPayMandateText?.trim() &&
+      autoPay.autoPaySetupCheckoutSessionId?.trim(),
+  );
+}
 
 function getStripeId(value: unknown) {
   if (typeof value === "string") return value;
@@ -31,6 +45,7 @@ export async function getTeamAutoPaySnapshot(teamId: string) {
       "stripeDefaultPaymentMethodId",
       "autoPayEnabled",
       "autoPayMandateAcceptedAt",
+      "autoPayMandateText",
       "autoPaySetupCheckoutSessionId",
       "autoPayLastAttemptAt",
       "autoPayLastFailureAt",
@@ -59,18 +74,14 @@ async function getSetupIntent(
 /**
  * Stripe normally completes saved-card setup through the webhook. This is a
  * second, idempotent reconciliation path for the captain's return to SIXFL so
- * the page does not stay stuck in an "account linked" state if the webhook is
- * delayed or missed.
+ * the page does not stay stuck in an incomplete state if the webhook is delayed
+ * or missed.
  */
 export async function reconcileTeamAutoPaySetup(teamId: string) {
   const current = await getTeamAutoPaySnapshot(teamId);
   if (!current) return null;
 
-  if (
-    current.autoPayEnabled &&
-    current.stripeCustomerId &&
-    current.stripeDefaultPaymentMethodId
-  ) {
+  if (isConfirmedTeamAutoPaySetup(current)) {
     return current;
   }
 
