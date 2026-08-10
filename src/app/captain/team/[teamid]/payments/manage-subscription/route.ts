@@ -4,7 +4,10 @@
 
 import { NextResponse } from "next/server";
 
-import { getTeamAutoPaySnapshot } from "@/lib/payments/team-autopay-snapshot";
+import {
+  getTeamAutoPaySnapshot,
+  isConfirmedTeamAutoPaySetup,
+} from "@/lib/payments/team-autopay-snapshot";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getPublicSiteUrl, getStripeServerClient } from "@/lib/stripe/client";
 
@@ -32,7 +35,7 @@ export async function POST(
     return NextResponse.redirect(buildReturnUrl(teamid, "missing_customer"), 303);
   }
 
-  if (!autoPay.autoPayEnabled || !autoPay.stripeDefaultPaymentMethodId) {
+  if (!isConfirmedTeamAutoPaySetup(autoPay)) {
     return NextResponse.redirect(buildReturnUrl(teamid, "incomplete"), 303);
   }
 
