@@ -69,12 +69,17 @@ export async function saveTeamAutoPaySetup(input: {
   teamId: string;
   stripeCustomerId: string;
   stripeDefaultPaymentMethodId: string;
-  setupCheckoutSessionId?: string | null;
+  setupCheckoutSessionId: string;
   mandateText?: string | null;
   db?: AutoPayDb;
 }) {
   const db = input.db ?? prisma;
   const mandateText = input.mandateText?.trim() || TEAM_AUTOPAY_MANDATE_TEXT;
+  const setupCheckoutSessionId = input.setupCheckoutSessionId.trim();
+
+  if (!setupCheckoutSessionId) {
+    throw new Error("A completed Stripe saved-card setup session is required.");
+  }
 
   await db.$executeRaw(Prisma.sql`
     UPDATE "Team"
@@ -84,7 +89,7 @@ export async function saveTeamAutoPaySetup(input: {
       "autoPayEnabled" = true,
       "autoPayMandateAcceptedAt" = NOW(),
       "autoPayMandateText" = ${mandateText},
-      "autoPaySetupCheckoutSessionId" = ${input.setupCheckoutSessionId ?? null},
+      "autoPaySetupCheckoutSessionId" = ${setupCheckoutSessionId},
       "autoPayLastFailureAt" = NULL,
       "autoPayLastFailureReason" = NULL
     WHERE "id" = ${input.teamId}
@@ -132,6 +137,9 @@ export async function getDueMatchdayAutoPayCharges(db: AutoPayDb = prisma) {
       AND t."autoPayEnabled" = true
       AND t."stripeCustomerId" IS NOT NULL
       AND t."stripeDefaultPaymentMethodId" IS NOT NULL
+      AND t."autoPayMandateAcceptedAt" IS NOT NULL
+      AND NULLIF(BTRIM(t."autoPayMandateText"), '') IS NOT NULL
+      AND NULLIF(BTRIM(t."autoPaySetupCheckoutSessionId"), '') IS NOT NULL
     GROUP BY
       pc."id",
       pc."teamId",
