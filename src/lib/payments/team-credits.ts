@@ -101,32 +101,61 @@ export async function syncPlayerOverpaymentCreditsForTeams(
   const teamIds = uniqueIds(teamIdsInput);
   if (teamIds.length === 0) return;
 
+  // Credit is the genuine cash/card surplus on a fixture charge. Player fee
+  // transactions are represented by PlayerMatchFee, so exclude their mirrored
+  // PaymentTransaction rows here. Team-credit transactions are also excluded so
+  // previously-used credit can never generate fresh credit again.
   await db.$executeRaw(Prisma.sql`
     WITH player_totals AS (
       SELECT
         pmf."teamId",
         pmf."fixtureId",
-        SUM(pmf."amountPence")::int AS "paidTotalPence"
+        SUM(pmf."amountPence")::int AS "playerPaidPence"
       FROM "PlayerMatchFee" pmf
       WHERE pmf."teamId" IN (${Prisma.join(teamIds)})
         AND pmf."status" = 'PAID'
       GROUP BY pmf."teamId", pmf."fixtureId"
     ),
+    direct_totals AS (
+      SELECT
+        transaction."chargeId",
+        SUM(transaction."amountPence")::int AS "teamPaidPence"
+      FROM "PaymentTransaction" transaction
+      WHERE transaction."teamId" IN (${Prisma.join(teamIds)})
+        AND transaction."chargeId" IS NOT NULL
+        AND COALESCE(transaction."reference", '') <> 'TEAM_CREDIT'
+        AND LOWER(COALESCE(transaction."notes", '')) NOT LIKE '%team credit used%'
+        AND LOWER(COALESCE(transaction."notes", '')) NOT LIKE '%player match fee paid online%'
+        AND LOWER(COALESCE(transaction."notes", '')) NOT LIKE '%player fee id:%'
+      GROUP BY transaction."chargeId"
+    ),
     overpaid_charges AS (
       SELECT
-        CONCAT('tcred_player_overpay_', pt."teamId", '_', pt."fixtureId") AS "id",
-        pt."teamId",
-        pt."fixtureId",
+        CONCAT('tcred_player_overpay_', pc."teamId", '_', pc."fixtureId") AS "id",
+        pc."teamId",
+        pc."fixtureId",
         pc."id" AS "chargeId",
         pc."amountPence" AS "chargeAmountPence",
-        pt."paidTotalPence",
-        (pt."paidTotalPence" - pc."amountPence")::int AS "surplusPence"
-      FROM player_totals pt
-      JOIN "PaymentCharge" pc
-        ON pc."teamId" = pt."teamId"
-       AND pc."fixtureId" = pt."fixtureId"
-      WHERE pc."status" <> 'VOID'
-        AND pt."paidTotalPence" > pc."amountPence"
+        COALESCE(pt."playerPaidPence", 0)::int AS "playerPaidPence",
+        COALESCE(dt."teamPaidPence", 0)::int AS "teamPaidPence",
+        (
+          COALESCE(pt."playerPaidPence", 0) +
+          COALESCE(dt."teamPaidPence", 0) -
+          pc."amountPence"
+        )::int AS "surplusPence"
+      FROM "PaymentCharge" pc
+      LEFT JOIN player_totals pt
+        ON pt."teamId" = pc."teamId"
+       AND pt."fixtureId" = pc."fixtureId"
+      LEFT JOIN direct_totals dt
+        ON dt."chargeId" = pc."id"
+      WHERE pc."teamId" IN (${Prisma.join(teamIds)})
+        AND pc."fixtureId" IS NOT NULL
+        AND pc."status" <> 'VOID'
+        AND (
+          COALESCE(pt."playerPaidPence", 0) +
+          COALESCE(dt."teamPaidPence", 0)
+        ) > pc."amountPence"
     )
     INSERT INTO "TeamCreditLedgerEntry" (
       "id",
@@ -145,11 +174,13 @@ export async function syncPlayerOverpaymentCreditsForTeams(
       'CREDIT_ADDED'::"TeamCreditLedgerEntryType",
       oc."surplusPence",
       CONCAT(
-        'Squad payment overpayment added to team credit ledger. Players paid £',
-        TO_CHAR((oc."paidTotalPence"::numeric / 100), 'FM999999990.00'),
+        'Fixture overpayment added to team credit. Players paid £',
+        TO_CHAR((oc."playerPaidPence"::numeric / 100), 'FM999999990.00'),
+        ' and the team paid £',
+        TO_CHAR((oc."teamPaidPence"::numeric / 100), 'FM999999990.00'),
         ' against a £',
         TO_CHAR((oc."chargeAmountPence"::numeric / 100), 'FM999999990.00'),
-        ' team fee.'
+        ' fixture charge.'
       )
     FROM overpaid_charges oc
     ON CONFLICT ("id") DO UPDATE SET
@@ -165,20 +196,40 @@ export async function syncPlayerOverpaymentCreditsForTeams(
       SELECT
         pmf."teamId",
         pmf."fixtureId",
-        SUM(pmf."amountPence")::int AS "paidTotalPence"
+        SUM(pmf."amountPence")::int AS "playerPaidPence"
       FROM "PlayerMatchFee" pmf
       WHERE pmf."teamId" IN (${Prisma.join(teamIds)})
         AND pmf."status" = 'PAID'
       GROUP BY pmf."teamId", pmf."fixtureId"
     ),
+    direct_totals AS (
+      SELECT
+        transaction."chargeId",
+        SUM(transaction."amountPence")::int AS "teamPaidPence"
+      FROM "PaymentTransaction" transaction
+      WHERE transaction."teamId" IN (${Prisma.join(teamIds)})
+        AND transaction."chargeId" IS NOT NULL
+        AND COALESCE(transaction."reference", '') <> 'TEAM_CREDIT'
+        AND LOWER(COALESCE(transaction."notes", '')) NOT LIKE '%team credit used%'
+        AND LOWER(COALESCE(transaction."notes", '')) NOT LIKE '%player match fee paid online%'
+        AND LOWER(COALESCE(transaction."notes", '')) NOT LIKE '%player fee id:%'
+      GROUP BY transaction."chargeId"
+    ),
     current_overpay_ids AS (
-      SELECT CONCAT('tcred_player_overpay_', pt."teamId", '_', pt."fixtureId") AS "id"
-      FROM player_totals pt
-      JOIN "PaymentCharge" pc
-        ON pc."teamId" = pt."teamId"
-       AND pc."fixtureId" = pt."fixtureId"
-      WHERE pc."status" <> 'VOID'
-        AND pt."paidTotalPence" > pc."amountPence"
+      SELECT CONCAT('tcred_player_overpay_', pc."teamId", '_', pc."fixtureId") AS "id"
+      FROM "PaymentCharge" pc
+      LEFT JOIN player_totals pt
+        ON pt."teamId" = pc."teamId"
+       AND pt."fixtureId" = pc."fixtureId"
+      LEFT JOIN direct_totals dt
+        ON dt."chargeId" = pc."id"
+      WHERE pc."teamId" IN (${Prisma.join(teamIds)})
+        AND pc."fixtureId" IS NOT NULL
+        AND pc."status" <> 'VOID'
+        AND (
+          COALESCE(pt."playerPaidPence", 0) +
+          COALESCE(dt."teamPaidPence", 0)
+        ) > pc."amountPence"
     )
     DELETE FROM "TeamCreditLedgerEntry" entry
     WHERE entry."teamId" IN (${Prisma.join(teamIds)})
