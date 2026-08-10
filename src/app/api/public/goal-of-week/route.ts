@@ -19,6 +19,7 @@ type FeaturedGoalRow = {
   caption: string | null;
   weekOf: Date;
   publishedAt: Date;
+  isFeatured: boolean;
   teamName: string;
   teamLogoUrl: string | null;
   leagueName: string | null;
@@ -29,7 +30,7 @@ const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
 };
 
-async function getManualFeaturedGoals() {
+async function getManualPublishedGoals() {
   return prisma.$queryRaw<FeaturedGoalRow[]>(Prisma.sql`
     SELECT
       goal."id",
@@ -39,6 +40,7 @@ async function getManualFeaturedGoals() {
       goal."caption",
       goal."weekOf",
       goal."publishedAt",
+      goal."isFeatured",
       team."name" AS "teamName",
       team."logoUrl" AS "teamLogoUrl",
       league."name" AS "leagueName",
@@ -46,10 +48,9 @@ async function getManualFeaturedGoals() {
     FROM "GoalOfWeek" goal
     JOIN "Team" team ON team."id" = goal."teamId"
     LEFT JOIN "League" league ON league."id" = team."leagueId"
-    WHERE goal."isFeatured" = true
-      AND goal."publishedAt" IS NOT NULL
+    WHERE goal."publishedAt" IS NOT NULL
     ORDER BY goal."weekOf" DESC, goal."publishedAt" DESC
-    LIMIT 2
+    LIMIT 12
   `);
 }
 
@@ -75,14 +76,37 @@ function serializeManualGoal(goal: FeaturedGoalRow | null | undefined) {
   };
 }
 
+function pickPreviousPublishedGoal(input: {
+  goals: FeaturedGoalRow[];
+  currentWeek: Date;
+  currentId?: string | null;
+}) {
+  const older = input.goals.find(
+    (goal) =>
+      goal.id !== input.currentId &&
+      goal.weekOf.getTime() < input.currentWeek.getTime() &&
+      Boolean(getYouTubeVideoId(goal.videoUrl)),
+  );
+
+  if (older) return older;
+
+  return input.goals.find(
+    (goal) =>
+      goal.id !== input.currentId && Boolean(getYouTubeVideoId(goal.videoUrl)),
+  ) ?? null;
+}
+
 export async function GET() {
   try {
     const [manualGoals, communityWinner] = await Promise.all([
-      getManualFeaturedGoals(),
+      getManualPublishedGoals(),
       getLatestCommunityGoalWinner(),
     ]);
 
-    const manualGoal = manualGoals[0] ?? null;
+    const manualGoal =
+      manualGoals.find(
+        (goal) => goal.isFeatured && Boolean(getYouTubeVideoId(goal.videoUrl)),
+      ) ?? null;
     const communityVideoUrl = communityWinner
       ? splitSixflTvUrls(communityWinner.sixflTvUrl).find((url) =>
           Boolean(getYouTubeVideoId(url)),
@@ -108,6 +132,11 @@ export async function GET() {
     );
 
     if (useCommunity && communityWinner && communityVideoUrl && communityVideoId) {
+      const previousGoal = pickPreviousPublishedGoal({
+        goals: manualGoals,
+        currentWeek: communityWinner.weekOf,
+      });
+
       return NextResponse.json(
         {
           goal: {
@@ -128,7 +157,7 @@ export async function GET() {
             nominationCount: communityWinner.nominationCount,
             voteCount: communityWinner.voteCount,
           },
-          previousGoal: serializeManualGoal(manualGoal),
+          previousGoal: serializeManualGoal(previousGoal),
         },
         { headers: noStoreHeaders },
       );
@@ -141,10 +170,16 @@ export async function GET() {
       );
     }
 
+    const previousGoal = pickPreviousPublishedGoal({
+      goals: manualGoals,
+      currentWeek: manualGoal.weekOf,
+      currentId: manualGoal.id,
+    });
+
     return NextResponse.json(
       {
         goal: serializeManualGoal(manualGoal),
-        previousGoal: serializeManualGoal(manualGoals[1]),
+        previousGoal: serializeManualGoal(previousGoal),
       },
       { headers: noStoreHeaders },
     );
