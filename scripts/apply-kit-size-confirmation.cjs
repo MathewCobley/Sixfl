@@ -46,19 +46,21 @@ if (!adminPage.includes('case "order_sizes_saved":')) {
 }
 
 if (!adminPage.includes("<KitSizeConfirmationControl")) {
-  adminPage = replaceRequired(
-    adminPage,
-    '                    <aside className="border-t border-white/10 bg-black/20 p-5 sm:p-6 xl:border-l xl:border-t-0">\n                      <div>',
+  const asideOpen =
+    '                    <aside className="border-t border-white/10 bg-black/20 p-5 sm:p-6 xl:border-l xl:border-t-0">';
+  if (!adminPage.includes(asideOpen)) {
+    throw new Error("Expected kit order workflow sidebar was not found.");
+  }
+  adminPage = adminPage.replace(
+    asideOpen,
     [
-      '                    <aside className="border-t border-white/10 bg-black/20 p-5 sm:p-6 xl:border-l xl:border-t-0">',
+      asideOpen,
       '                      <KitSizeConfirmationControl',
       '                        orderId={order.id}',
       '                        teamName={order.teamName}',
       '                      />',
       '',
-      '                      <div className="mt-6">',
     ].join("\n"),
-    "kit size confirmation admin control",
   );
 }
 
@@ -93,31 +95,27 @@ tally = replaceRequired(
 );
 
 if (!tally.includes('write(ctx, "TRY SHIRT SIZE"')) {
-  tally = replaceRequired(
-    tally,
+  const postWarningAnchor = [
+    '  write(',
+    '    ctx,',
+    '    `PREVIOUS RECORDED: ${input.warningCount}`,',
+    '    warningTextX,',
+    '    warningBoxY + 10.5,',
+    '    {',
+    '      font: font(4.6, true),',
+    '      fill: warningStage.fill,',
+    '    },',
+    '  );',
+  ].join("\n");
+
+  if (!tally.includes(postWarningAnchor)) {
+    throw new Error("Expected escalated shin-pad warning block was not found on the A5 tally sheet.");
+  }
+
+  tally = tally.replace(
+    postWarningAnchor,
     [
-      '  write(',
-      '    ctx,',
-      '    `PREVIOUS WARNINGS: ${input.warningCount}`,',
-      '    warningTextX,',
-      '    warningBoxY + 10.5,',
-      '    {',
-      '      font: font(4.6, true),',
-      '      fill: input.warningCount > 0 ? "#9a3412" : "#6b7280",',
-      '    },',
-      '  );',
-    ].join("\n"),
-    [
-      '  write(',
-      '    ctx,',
-      '    `PREVIOUS WARNINGS: ${input.warningCount}`,',
-      '    warningTextX,',
-      '    warningBoxY + 10.5,',
-      '    {',
-      '      font: font(4.6, true),',
-      '      fill: input.warningCount > 0 ? "#9a3412" : "#6b7280",',
-      '    },',
-      '  );',
+      postWarningAnchor,
       '',
       '  if (input.needsKitSizeCheck) {',
       '    write(ctx, "TRY SHIRT SIZE", input.x + 23, input.y + 37, {',
@@ -126,7 +124,6 @@ if (!tally.includes('write(ctx, "TRY SHIRT SIZE"')) {
       '    });',
       '  }',
     ].join("\n"),
-    "A5 try shirt size message",
   );
 }
 
@@ -164,7 +161,7 @@ if (!tally.includes('FROM "TeamKitOrder" kit_order')) {
       '            FROM "TeamKitOrder" kit_order',
       '            WHERE kit_order."teamId" IN (${Prisma.join(teamIds)})',
       '              AND kit_order."sizesConfirmed" = FALSE',
-      "              AND kit_order.\"status\" IN ('DRAFT', 'SUBMITTED', 'APPROVED', 'ORDERED')",
+      '              AND kit_order."status" IN (\'DRAFT\', \'SUBMITTED\', \'APPROVED\', \'ORDERED\')',
       '          `)',
       '          .catch(() => [] as KitSizeTryOnRow[])',
       '      : Promise.resolve([] as KitSizeTryOnRow[]),',
