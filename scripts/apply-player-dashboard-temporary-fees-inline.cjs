@@ -45,39 +45,44 @@ replaceRequired(
   "temporary-player fee row type anchor",
 );
 
+// Admin player preview must use the previewed player's User id, not the admin's.
+source = source.replaceAll(
+  'user: { select: { email: true, name: true } },',
+  'user: { select: { id: true, email: true, name: true } },',
+);
+
 const feeOwnerAnchor = `  const [upcomingFixtures, recentFixtures, squadMembers, playerFees] = await Promise.all([`;
-const temporaryFeeQuery = `  const temporaryPlayerFees = !previewMembership
-    ? await prisma.$queryRaw<TemporaryDashboardMatchFeeRow[]>\`
-        SELECT
-          fee."id",
-          fee."fixtureId",
-          fee."teamId",
-          team."name" AS "teamName",
-          fee."amountPence",
-          fee."status",
-          fee."paymentUrl",
-          fee."createdAt",
-          fee."paidAt",
-          fixture."kickoffAt",
-          fixture."homeTeamId",
-          home_team."name" AS "homeTeamName",
-          away_team."name" AS "awayTeamName"
-        FROM "PlayerMatchFee" fee
-        INNER JOIN "Team" team ON team."id" = fee."teamId"
-        INNER JOIN "Fixture" fixture ON fixture."id" = fee."fixtureId"
-        INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
-        INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
-        WHERE fee."temporaryUserId" = \${user.id}
-          AND fixture."publishedAt" IS NOT NULL
-          AND fee."status" IN (
-            'OPEN'::"PlayerMatchFeeStatus",
-            'PAID'::"PlayerMatchFeeStatus",
-            'WAIVED'::"PlayerMatchFeeStatus",
-            'CANCELLED'::"PlayerMatchFeeStatus"
-          )
-        ORDER BY fee."createdAt" DESC
-      \`
-    : [];
+const temporaryFeeQuery = `  const temporaryFeeUserId = previewMembership?.user.id ?? user.id;
+  const temporaryPlayerFees = await prisma.$queryRaw<TemporaryDashboardMatchFeeRow[]>\`
+    SELECT
+      fee."id",
+      fee."fixtureId",
+      fee."teamId",
+      team."name" AS "teamName",
+      fee."amountPence",
+      fee."status",
+      fee."paymentUrl",
+      fee."createdAt",
+      fee."paidAt",
+      fixture."kickoffAt",
+      fixture."homeTeamId",
+      home_team."name" AS "homeTeamName",
+      away_team."name" AS "awayTeamName"
+    FROM "PlayerMatchFee" fee
+    INNER JOIN "Team" team ON team."id" = fee."teamId"
+    INNER JOIN "Fixture" fixture ON fixture."id" = fee."fixtureId"
+    INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
+    INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
+    WHERE fee."temporaryUserId" = \${temporaryFeeUserId}
+      AND fixture."publishedAt" IS NOT NULL
+      AND fee."status" IN (
+        'OPEN'::"PlayerMatchFeeStatus",
+        'PAID'::"PlayerMatchFeeStatus",
+        'WAIVED'::"PlayerMatchFeeStatus",
+        'CANCELLED'::"PlayerMatchFeeStatus"
+      )
+    ORDER BY fee."createdAt" DESC
+  \`;
 
 ${feeOwnerAnchor}`;
 
@@ -162,7 +167,8 @@ fs.writeFileSync(filePath, source, "utf8");
 const finalSource = fs.readFileSync(filePath, "utf8");
 const requiredMarkers = [
   "TemporaryDashboardMatchFeeRow",
-  'fee."temporaryUserId" = ${user.id}',
+  "const temporaryFeeUserId = previewMembership?.user.id ?? user.id;",
+  'fee."temporaryUserId" = ${temporaryFeeUserId}',
   "const allPlayerFees = [",
   "Temporary player · {fee.temporaryTeamName}",
   "{allPlayerFees.length === 0 ? (",
@@ -176,5 +182,5 @@ for (const marker of requiredMarkers) {
 }
 
 console.log(
-  "Temporary-player match fees now follow the logged-in player into the main Player match fees ledger and totals.",
+  "Temporary-player match fees now follow the real or previewed player into the main Player match fees ledger and totals.",
 );
