@@ -9,7 +9,6 @@ import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 import PlayerPreviewLinkPersistence from "@/components/player/PlayerPreviewLinkPersistence";
 import PlayerTeamNav from "@/components/player/PlayerTeamNav";
-import PlayerTemporaryMatchFeesPanel from "@/components/player/PlayerTemporaryMatchFeesPanel";
 
 export default async function PlayerTeamLayout({
   children,
@@ -38,9 +37,6 @@ export default async function PlayerTeamLayout({
             teamId={teamid}
             href={`/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamid)}`}
           />
-          <Suspense fallback={null}>
-            <PlayerTemporaryMatchFeesPanel teamId={teamid} />
-          </Suspense>
         </div>
       </PlayerDashboardOnly>
       {children}
