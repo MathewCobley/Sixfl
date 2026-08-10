@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { runPlayerDataHealthCleanup } from "@/lib/players/player-data-health";
+import { runSafePlayerDataHealthCleanup } from "@/lib/players/player-data-health-safe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await runPlayerDataHealthCleanup({ source: "MONTHLY" });
+    const result = await runSafePlayerDataHealthCleanup({ source: "MONTHLY" });
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     console.error("Player data health job failed", error);
