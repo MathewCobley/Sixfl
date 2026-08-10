@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import {
   getPlayerDataHealthIssues,
   getPlayerDataHealthRuns,
-  runPlayerDataHealthCleanup,
 } from "@/lib/players/player-data-health";
+import { runSafePlayerDataHealthCleanup } from "@/lib/players/player-data-health-safe";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ async function runCleanupNowAction() {
 
   await requireAdmin();
   try {
-    const result = await runPlayerDataHealthCleanup({ source: "MANUAL", force: true });
+    const result = await runSafePlayerDataHealthCleanup({ source: "MANUAL", force: true });
     revalidatePath("/admin/players/data-health");
     revalidatePath("/admin/player-prospects");
     revalidatePath("/admin/player-pool");
@@ -80,7 +80,7 @@ export default async function PlayerDataHealthPage({
           <div>
             <h1 className="text-3xl font-black text-white">One person, one live identity</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">
-              This checks exact email matches where a player already has a real SIXFL squad account but older recruitment records are still open. Historical records are kept for audit; only their live recruitment status is reconciled.
+              Squad membership is the live player identity. When a verified player joins a squad, matching same-team or unassigned recruitment records are reconciled automatically. This page is the monthly backstop and audit view rather than a task you need to remember to perform.
             </p>
           </div>
           <form action={runCleanupNowAction}>
@@ -94,7 +94,7 @@ export default async function PlayerDataHealthPage({
         </div>
 
         <div className="mt-6 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-50/80">
-          <strong className="text-white">Safe scope:</strong> no users, team memberships, payments, match history, ratings, messages or notification history are deleted. Same-team prospects become Active squad; stray recruitment prospects become Duplicated; PlayerPool becomes Joined; fulfilled requests are resolved; old player leads are Closed.
+          <strong className="text-white">Automatic safety rules:</strong> nothing is deleted. Same-team prospects become Active squad, verified unassigned copies become Duplicated, matching PlayerPool profiles become Joined, and matching player leads close. Shared-email name conflicts and deliberately assigned records for another team are left untouched for review.
         </div>
       </section>
 
@@ -111,7 +111,7 @@ export default async function PlayerDataHealthPage({
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[
-          ["People needing cleanup", issues.length],
+          ["Records to review", issues.length],
           ["Open prospects", prospectCount],
           ["PlayerPool profiles", poolCount],
           ["Open requests", requestCount],
@@ -126,15 +126,15 @@ export default async function PlayerDataHealthPage({
 
       <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
         <div className="border-b border-white/10 px-5 py-4">
-          <h2 className="text-xl font-semibold text-white">Current exact-email conflicts</h2>
+          <h2 className="text-xl font-semibold text-white">Current recruitment overlaps</h2>
           <p className="mt-1 text-sm text-white/50">
-            These people are already in at least one squad but still have recruitment records behaving as live records.
+            Most same-person records will clear automatically. Anything that remains may be a shared-email or intentional cross-team case and should be inspected rather than auto-merged.
           </p>
         </div>
 
         {issues.length === 0 ? (
           <div className="px-5 py-10 text-sm text-emerald-100/75">
-            No exact-email player recruitment conflicts found.
+            No live recruitment overlaps found.
           </div>
         ) : (
           <div className="divide-y divide-white/10">
@@ -187,7 +187,7 @@ export default async function PlayerDataHealthPage({
                   <span className="text-white/40">{formatDate(run.startedAt)}</span>
                 </div>
                 <p className="mt-2 text-white/55">
-                  {run.affectedUsers} people · {run.prospectsActivated} prospects linked · {run.prospectsClosedAsDuplicate} duplicate prospects closed · {run.playerPoolProfilesJoined} PlayerPool profiles joined · {run.requestsJoined + run.requestsClosed} requests resolved · {run.leadsClosed} leads closed
+                  {run.affectedUsers} people · {run.prospectsActivated} prospects linked · {run.prospectsClosedAsDuplicate} unassigned duplicates closed · {run.playerPoolProfilesJoined} PlayerPool profiles joined · {run.requestsJoined + run.requestsClosed} requests resolved · {run.leadsClosed} leads closed
                 </p>
                 {run.error ? <p className="mt-2 text-red-200/75">{run.error}</p> : null}
               </div>
