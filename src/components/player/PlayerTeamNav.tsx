@@ -1,15 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
-const tabs = (teamId: string) => [
-  { href: `/player/team/${teamId}`, label: "Overview", exact: true },
-  { href: `/player/team/${teamId}/stats`, label: "Player stats", exact: false },
-  { href: `/player/team/${teamId}/availability`, label: "Availability", exact: false },
-  { href: `/player/team/${teamId}/tv`, label: "SIXFL TV", exact: false },
+function addPreviewMembershipId(href: string, previewMembershipId: string | null) {
+  if (!previewMembershipId) return href;
+
+  const [path, query = ""] = href.split("?");
+  const params = new URLSearchParams(query);
+  params.set("previewMembershipId", previewMembershipId);
+  const nextQuery = params.toString();
+
+  return `${path}${nextQuery ? `?${nextQuery}` : ""}`;
+}
+
+const tabs = (teamId: string, previewMembershipId: string | null) => [
   {
-    href: `/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamId)}`,
+    href: addPreviewMembershipId(`/player/team/${teamId}`, previewMembershipId),
+    label: "Overview",
+    exact: true,
+  },
+  {
+    href: addPreviewMembershipId(`/player/team/${teamId}/stats`, previewMembershipId),
+    label: "Player stats",
+    exact: false,
+  },
+  {
+    href: addPreviewMembershipId(`/player/team/${teamId}/availability`, previewMembershipId),
+    label: "Availability",
+    exact: false,
+  },
+  {
+    href: addPreviewMembershipId(`/player/team/${teamId}/tv`, previewMembershipId),
+    label: "SIXFL TV",
+    exact: false,
+  },
+  {
+    href: `/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamId)}${
+      previewMembershipId
+        ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
+        : ""
+    }`,
     label: "Goal of the Week",
     exact: false,
   },
@@ -17,13 +48,15 @@ const tabs = (teamId: string) => [
 
 export default function PlayerTeamNav({ teamId }: { teamId: string }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const previewMembershipId = searchParams.get("previewMembershipId")?.trim() || null;
 
   return (
     <nav
       aria-label="Player team sections"
       className="mx-auto mt-4 flex w-full max-w-6xl gap-2 overflow-x-auto px-4 pb-1"
     >
-      {tabs(teamId).map((tab) => {
+      {tabs(teamId, previewMembershipId).map((tab) => {
         const hrefPath = tab.href.split("?")[0] ?? tab.href;
         const active = tab.exact
           ? pathname === hrefPath || pathname === `${hrefPath}/`
