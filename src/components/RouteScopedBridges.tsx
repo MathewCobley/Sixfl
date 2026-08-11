@@ -7,6 +7,10 @@ const LeagueFreeKitOfferBridge = dynamic(
   () => import("@/components/admin/leagues/LeagueFreeKitOfferBridge"),
   { ssr: false },
 );
+const TeamFreeKitOfferOverrideBridge = dynamic(
+  () => import("@/components/admin/teams/TeamFreeKitOfferOverrideBridge"),
+  { ssr: false },
+);
 const NightBoardFixtureIssuesLink = dynamic(
   () => import("@/components/admin/night-board/NightBoardFixtureIssuesLink"),
   { ssr: false },
@@ -88,6 +92,7 @@ export default function RouteScopedBridges() {
   const isPlayer = pathname.startsWith("/player/");
   const isCaptainMatchFees = /^\/captain\/team\/[^/]+\/match-fees\/?$/.test(pathname);
   const isAdminLeagues = pathname.startsWith("/admin/leagues/");
+  const isAdminTeam = /^\/admin\/teams\/[^/]+\/?$/.test(pathname);
   const isPublicLeague = pathname.startsWith("/leagues/");
   const isNightBoard = pathname.startsWith("/admin/night-board");
   const isAdminPayments = pathname.startsWith("/admin/payments");
@@ -97,6 +102,7 @@ export default function RouteScopedBridges() {
   return (
     <>
       {(isAdminLeagues || isCaptain || isPublicLeague) ? <LeagueFreeKitOfferBridge /> : null}
+      {isAdminTeam ? <TeamFreeKitOfferOverrideBridge /> : null}
 
       {isNightBoard ? (
         <>
