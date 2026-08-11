@@ -107,13 +107,19 @@ async function applyCaptainOffer(teamId: string, signal: AbortSignal) {
     signal,
   });
   if (!response.ok) return false;
-  const data = (await response.json()) as { offerAvailable: boolean; existingEntitlement: boolean };
+  const data = (await response.json()) as {
+    offerAvailable: boolean;
+    existingEntitlement: boolean;
+    suppressed?: boolean;
+  };
 
-  // Closing a league's offer stops new teams qualifying; it must not remove an
-  // entitlement that was already granted to an existing team.
+  // Existing/submitted kit orders remain visible. A team-specific expiry is an
+  // admin-only presentation override: hide the unclaimed offer without showing
+  // the captain an "offer ended" explanation or deleting the historical request.
   if (data.offerAvailable || data.existingEntitlement) return true;
 
   hideFreeOfferCopy();
+  if (data.suppressed) return true;
 
   if (/\/kit(?:\/|$)/.test(window.location.pathname) && !document.querySelector("[data-paid-kit-only-notice]")) {
     const heading = document.querySelector("main h1") ?? document.querySelector("h1");
