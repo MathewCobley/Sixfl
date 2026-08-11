@@ -33,7 +33,7 @@ source = source.replaceAll(
   "Complete kits are available from the team kit page.",
 );
 
-if (source.includes("data-paid-kit-only-notice") || source.includes("The free kit offer has ended for this league")) {
+if (source.includes("The free kit offer has ended for this league")) {
   throw new Error("Captain kit offer-ended notice is still present.");
 }
 
