@@ -52,6 +52,7 @@ require("./apply-night-board-fixture-notes.cjs");
 require("./apply-remove-captain-kit-offer-notice.cjs");
 require("./apply-neutral-captain-kit-flow.cjs");
 require("./apply-clear-kit-payment-cta.cjs");
+require("./apply-last-minute-replacement-feature.cjs");
 require("./apply-team-referral-rewards.cjs");
 require("./apply-fixture-week-scroll-return.cjs");
 require("./apply-context-aware-payment-charge-labels.cjs");
