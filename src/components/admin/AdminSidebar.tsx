@@ -270,10 +270,10 @@ const navigationGroups = [
         description: "Credit",
       },
       {
-        name: "Subscriptions",
+        name: "Saved cards",
         href: "/admin/payments/subscriptions",
         icon: CreditCardIcon,
-        description: "Stripe",
+        description: "Matchday",
       },
     ],
   },
@@ -419,29 +419,18 @@ export default function AdminSidebar({
                         >
                           <Icon className="h-3 w-3" />
                         </span>
-
                         <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1 truncate text-[10px] font-semibold leading-tight">
-                            <span className="truncate">{item.name}</span>
-                            {showMessageBadge ? (
-                              <span className="rounded-full bg-red-500 px-1 py-0.5 text-[7px] font-bold text-white">
-                                {unreadMessagingCount}
-                              </span>
-                            ) : null}
-                            {showDisputeAlert ? (
-                              <span
-                                title={`${openDisputeCount} unresolved dispute${openDisputeCount === 1 ? "" : "s"}`}
-                                aria-label={`${openDisputeCount} unresolved dispute${openDisputeCount === 1 ? "" : "s"}`}
-                                className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-red-500 text-[8px] font-black leading-none text-white shadow-[0_0_10px_rgba(239,68,68,0.65)]"
-                              >
-                                !
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="block truncate text-[8px] leading-tight text-white/35">
-                            {item.description}
-                          </span>
+                          <span className="block truncate text-[9px] font-semibold">{item.name}</span>
+                          <span className="block truncate text-[7px] text-white/35">{item.description}</span>
                         </span>
+                        {showMessageBadge ? (
+                          <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[7px] font-black text-black">
+                            {unreadMessagingCount > 99 ? "99+" : unreadMessagingCount}
+                          </span>
+                        ) : null}
+                        {showDisputeAlert ? (
+                          <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.85)]" />
+                        ) : null}
                       </Link>
                     );
                   })}
