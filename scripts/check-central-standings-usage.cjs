@@ -49,6 +49,7 @@ require("./apply-kit-pending-payment-editability.cjs");
 require("./apply-admin-kit-payment-status.cjs");
 require("./apply-admin-kit-readiness-guard.cjs");
 require("./apply-kit-size-confirmation.cjs");
+require("./apply-night-board-fixture-notes.cjs");
 require("./apply-team-referral-rewards.cjs");
 require("./apply-fixture-week-scroll-return.cjs");
 require("./apply-context-aware-payment-charge-labels.cjs");
