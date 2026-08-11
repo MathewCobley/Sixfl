@@ -124,13 +124,21 @@ export async function ensureLastMinuteReplacementTemplates() {
 }
 
 function formatFixtureDate(value: Date, long = false) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    ...(long ? { year: "numeric", weekday: "long" as const, month: "long" as const } : {}),
-  }).format(value);
+  const options: Intl.DateTimeFormatOptions = long
+    ? {
+        timeZone: "Europe/London",
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }
+    : {
+        timeZone: "Europe/London",
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      };
+  return new Intl.DateTimeFormat("en-GB", options).format(value);
 }
 
 function formatFixtureTime(value: Date) {
@@ -364,9 +372,10 @@ export async function sendLastMinuteReplacementAlert(input: {
       sent: rows.filter((dispatch) => dispatch.status === NotificationDispatchStatus.SENT).length,
       skipped: rows.filter((dispatch) => dispatch.status === NotificationDispatchStatus.SKIPPED).length,
       failed: rows.filter((dispatch) => dispatch.status === NotificationDispatchStatus.FAILED).length,
-      queued: rows.filter((dispatch) =>
-        dispatch.status === NotificationDispatchStatus.QUEUED ||
-        dispatch.status === NotificationDispatchStatus.PROCESSING,
+      queued: rows.filter(
+        (dispatch) =>
+          dispatch.status === NotificationDispatchStatus.QUEUED ||
+          dispatch.status === NotificationDispatchStatus.PROCESSING,
       ).length,
     };
   }
