@@ -9,6 +9,7 @@ type OfferRow = {
   wantsFreeKit: boolean;
   leagueEnabled: boolean;
   hasExistingOrder: boolean;
+  freeKitOfferExpired: boolean;
 };
 
 export async function GET(
@@ -21,8 +22,9 @@ export async function GET(
   const rows = await prisma.$queryRaw<OfferRow[]>(Prisma.sql`
     SELECT
       team."id" AS "teamId",
-      team."wantsFreeKit" AS "wantsFreeKit",
+      COALESCE(team."wantsFreeKit", FALSE) AS "wantsFreeKit",
       COALESCE(league."freeKitOfferEnabled", TRUE) AS "leagueEnabled",
+      team."freeKitOfferExpiredAt" IS NOT NULL AS "freeKitOfferExpired",
       EXISTS (
         SELECT 1 FROM "TeamKitOrder" kit_order WHERE kit_order."teamId" = team."id"
       ) AS "hasExistingOrder"
@@ -35,13 +37,22 @@ export async function GET(
   const row = rows[0] ?? null;
   if (!row) return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
+  // An existing/submitted kit order always remains visible. Otherwise a
+  // team-specific admin expiry overrides the league offer and the old interest
+  // checkbox without deleting that historical record.
+  const existingEntitlement = Boolean(
+    row.hasExistingOrder || (row.wantsFreeKit && !row.freeKitOfferExpired),
+  );
   const offerAvailable = Boolean(
-    row.leagueEnabled || row.wantsFreeKit || row.hasExistingOrder,
+    row.hasExistingOrder ||
+      (!row.freeKitOfferExpired && (row.leagueEnabled || row.wantsFreeKit)),
   );
 
   return NextResponse.json({
     offerAvailable,
     leagueEnabled: Boolean(row.leagueEnabled),
-    existingEntitlement: Boolean(row.wantsFreeKit || row.hasExistingOrder),
+    existingEntitlement,
+    suppressed: Boolean(row.freeKitOfferExpired),
+    hasExistingOrder: Boolean(row.hasExistingOrder),
   });
 }
