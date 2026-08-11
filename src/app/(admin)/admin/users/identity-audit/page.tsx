@@ -14,25 +14,16 @@ function normaliseEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(value);
-}
-
 export default async function UserIdentityAuditPage() {
   await requireAdmin();
 
   const users = await prisma.user.findMany({
-    orderBy: [{ name: "asc" }, { email: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ name: "asc" }, { email: "asc" }],
     select: {
       id: true,
       name: true,
       email: true,
       role: true,
-      createdAt: true,
       createdFromLeadId: true,
       teamMembers: {
         orderBy: { createdAt: "asc" },
@@ -51,7 +42,8 @@ export default async function UserIdentityAuditPage() {
 
   const missingEmailUsers = users.filter((user) => !user.email?.trim());
   const usersWithEmail = users.filter(
-    (user): user is typeof user & { email: string } => Boolean(user.email?.trim()),
+    (user): user is (typeof users)[number] & { email: string } =>
+      Boolean(user.email?.trim()),
   );
 
   const byNormalisedEmail = new Map<string, typeof usersWithEmail>();
@@ -129,7 +121,7 @@ export default async function UserIdentityAuditPage() {
                     <span className="rounded-full border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold text-red-100">NO EMAIL</span>
                     <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-white/60">{user.role}</span>
                   </div>
-                  <div className="mt-2 text-xs text-white/40">User ID: {user.id} · Created {formatDate(user.createdAt)}</div>
+                  <div className="mt-2 text-xs text-white/40">User ID: {user.id}</div>
                   {user.createdFromLeadId ? (
                     <div className="mt-1 text-xs text-white/40">Created from lead: {user.createdFromLeadId}</div>
                   ) : null}
