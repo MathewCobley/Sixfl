@@ -103,7 +103,7 @@ export async function requireCaptain(
   const isAdmin = Boolean(rawIsAdmin && !isCaptainOnlyPreview);
   const isCaptain = Boolean(!isManagedTeam && (membership || isCaptainOnlyPreview));
 
-  if ((!rawIsAdmin && !membership) || (isManagedTeam && !rawIsAdmin)) {
+  if (!rawIsAdmin && !membership) {
     if (process.env.NODE_ENV !== "production") {
       return {
         session,
@@ -116,6 +116,21 @@ export async function requireCaptain(
     }
 
     redirect("/dashboard");
+  }
+
+  if (isManagedTeam && !rawIsAdmin) {
+    if (process.env.NODE_ENV !== "production") {
+      return {
+        session,
+        user,
+        membership,
+        isAdmin: false,
+        isCaptain: false,
+        accessMode: "captain",
+      };
+    }
+
+    redirect(`/player/team/${teamId}`);
   }
 
   return {
