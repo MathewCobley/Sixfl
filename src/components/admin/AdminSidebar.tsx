@@ -149,12 +149,6 @@ const navigationGroups = [
         icon: PhotoIcon,
         description: "Cards",
       },
-      {
-        name: "Settings",
-        href: "/admin/settings",
-        icon: Cog6ToothIcon,
-        description: "Config",
-      },
     ],
   },
   {
