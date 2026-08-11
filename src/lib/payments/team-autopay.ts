@@ -6,6 +6,7 @@ import type Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 
 import { isMatchFeeChargeDueToday } from "@/lib/payments/match-day-billing";
+import { verifyTeamAutoPayStripeEvidence } from "@/lib/payments/team-autopay-verification";
 import { prisma } from "@/lib/prisma";
 import { getStripeServerClient } from "@/lib/stripe/client";
 
@@ -20,6 +21,7 @@ type DueAutoPayCharge = {
   teamName: string;
   stripeCustomerId: string;
   stripeDefaultPaymentMethodId: string;
+  autoPaySetupCheckoutSessionId: string;
   fixtureId: string;
   title: string;
   description: string | null;
@@ -121,6 +123,7 @@ export async function getDueMatchdayAutoPayCharges(db: AutoPayDb = prisma) {
       t."name" AS "teamName",
       t."stripeCustomerId",
       t."stripeDefaultPaymentMethodId",
+      t."autoPaySetupCheckoutSessionId",
       pc."fixtureId",
       pc."title",
       pc."description",
@@ -146,6 +149,7 @@ export async function getDueMatchdayAutoPayCharges(db: AutoPayDb = prisma) {
       t."name",
       t."stripeCustomerId",
       t."stripeDefaultPaymentMethodId",
+      t."autoPaySetupCheckoutSessionId",
       pc."fixtureId",
       pc."title",
       pc."description",
@@ -262,6 +266,37 @@ export async function chargeDueMatchdayAutoPayments(options?: {
     }
 
     try {
+      const verification = await verifyTeamAutoPayStripeEvidence({
+        stripe,
+        evidence: {
+          teamId: row.teamId,
+          stripeCustomerId: row.stripeCustomerId,
+          stripeDefaultPaymentMethodId: row.stripeDefaultPaymentMethodId,
+          setupCheckoutSessionId: row.autoPaySetupCheckoutSessionId,
+        },
+      });
+
+      if (!verification.verified) {
+        const message =
+          verification.reason ||
+          "Saved-card setup is not currently verified with Stripe. Automatic payment was not attempted.";
+        await db.$executeRaw(Prisma.sql`
+          UPDATE "Team"
+          SET
+            "autoPayLastFailureAt" = NOW(),
+            "autoPayLastFailureReason" = ${message}
+          WHERE "id" = ${row.teamId}
+        `);
+        results.push({
+          chargeId: row.chargeId,
+          teamId: row.teamId,
+          status: "skipped",
+          amountPence: 0,
+          message,
+        });
+        continue;
+      }
+
       await db.$executeRaw(Prisma.sql`
         UPDATE "Team"
         SET "autoPayLastAttemptAt" = NOW()
@@ -330,7 +365,7 @@ export async function chargeDueMatchdayAutoPayments(options?: {
         chargeId: row.chargeId,
         teamId: row.teamId,
         status,
-        amountPence: outstandingPence,
+        amountPence: 0,
         message,
       });
     }
