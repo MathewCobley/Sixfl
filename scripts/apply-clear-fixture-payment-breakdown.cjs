@@ -293,6 +293,7 @@ if (
 
 fs.writeFileSync(pagePath, source, "utf8");
 require("./apply-native-team-payment-copy.cjs");
+require("./apply-simple-captain-payment-ledger.cjs");
 console.log(
-  "Fixture charges now show a clear players + team + credit calculation without duplicating player transactions, with saved-card state applied afterwards.",
+  "Fixture charges now show a clear players + team + credit calculation, then collapse to the simplified captain ledger with explicit payment source.",
 );
