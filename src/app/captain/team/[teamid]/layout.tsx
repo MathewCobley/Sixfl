@@ -21,6 +21,7 @@ import PendingActivationReturnLinks from "@/components/captain/PendingActivation
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjuryBridge";
+import { getCaptainUnreadMessageCount } from "@/lib/messaging/captain-inbox";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -212,6 +213,7 @@ type CaptainNavItem = {
   href: string;
   label: string;
   logoSrc?: string;
+  unreadCount?: number;
 };
 
 type CaptainNavGroup = {
@@ -272,6 +274,8 @@ export default async function CaptainTeamLayout({
   if (!team) {
     notFound();
   }
+
+  const unreadMessageCount = await getCaptainUnreadMessageCount(teamid);
 
   const displayCompetition = team.league?.competition ?? null;
   const displayLeague = displayCompetition?.currentLeague ?? team.league;
@@ -335,6 +339,11 @@ export default async function CaptainTeamLayout({
           : []),
         { href: `/captain/team/${teamid}/player-pool`, label: "PlayerPool" },
         { href: `/captain/team/${teamid}/kit`, label: "Team kit" },
+        {
+          href: `/captain/team/${teamid}/messages`,
+          label: "Messages",
+          unreadCount: unreadMessageCount,
+        },
         { href: `/captain/team/${teamid}/whatsapp`, label: "WhatsApp" },
       ],
     },
@@ -493,9 +502,13 @@ export default async function CaptainTeamLayout({
                     <Link
                       key={item.href}
                       href={item.href}
-                      aria-label={item.label}
+                      aria-label={
+                        item.unreadCount && item.unreadCount > 0
+                          ? `${item.label}, ${item.unreadCount} unread`
+                          : item.label
+                      }
                       title={item.logoSrc ? item.label : undefined}
-                      className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-emerald-400/25 hover:bg-emerald-500/10 hover:text-emerald-100"
                     >
                       {item.logoSrc ? (
                         <img
@@ -504,7 +517,17 @@ export default async function CaptainTeamLayout({
                           className="h-5 w-auto max-w-[5rem] object-contain"
                         />
                       ) : (
-                        item.label
+                        <>
+                          <span>{item.label}</span>
+                          {item.unreadCount && item.unreadCount > 0 ? (
+                            <span
+                              aria-hidden="true"
+                              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1.5 text-[11px] font-bold leading-none text-black"
+                            >
+                              {item.unreadCount}
+                            </span>
+                          ) : null}
+                        </>
                       )}
                     </Link>
                   ))}
