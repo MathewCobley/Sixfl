@@ -36,6 +36,19 @@ if (!page.includes("TeamKitDesignPreferencePicker")) {
   );
 }
 
+// KitDesign is deliberately accessed through the kit DB helper because this
+// repository's Prisma schema does not model the KitDesign table directly.
+// Keep the captain preference flow on the same raw-SQL-backed abstraction used
+// by the rest of the kit system instead of referencing prisma.kitDesign.
+if (!page.includes("getKitDesignById")) {
+  const simpleImport = 'import { getTeamKitOrder, listKitDesigns } from "@/lib/kits/db";';
+  const expandedImport = 'import { getKitDesignById, getTeamKitOrder, listKitDesigns } from "@/lib/kits/db";';
+  if (!page.includes(simpleImport)) {
+    throw new Error("Captain kit DB helper import was not found.");
+  }
+  page = page.replace(simpleImport, expandedImport);
+}
+
 if (!page.includes("preferredKitDesignId")) {
   const marker = "  const selectedDesignId = order?.kitDesignId ?? null;";
   if (!page.includes(marker)) {
@@ -71,10 +84,7 @@ if (!page.includes("saveKitDesignPreferenceAction")) {
     const kitDesignId = String(formData.get("kitDesignId") ?? "").trim();
     if (!kitDesignId) return;
 
-    const design = await prisma.kitDesign.findFirst({
-      where: { id: kitDesignId, isActive: true },
-      select: { id: true },
-    });
+    const design = await getKitDesignById(kitDesignId);
     if (!design) return;
 
     await prisma.$executeRaw\`
@@ -87,6 +97,13 @@ if (!page.includes("saveKitDesignPreferenceAction")) {
 
   page = page.slice(0, returnIndex) + action + page.slice(returnIndex);
 }
+
+// Repair source produced by an earlier version of this build patch. This makes
+// the patch idempotent when a prepared working tree is built again locally.
+page = page.replace(
+  `    const design = await prisma.kitDesign.findFirst({\n      where: { id: kitDesignId, isActive: true },\n      select: { id: true },\n    });`,
+  `    const design = await getKitDesignById(kitDesignId);`,
+);
 
 const hiddenFormMarker = "      {kitQuantity <= 0 ? null : designs.length === 0 ? (";
 if (page.includes(hiddenFormMarker)) {
@@ -162,6 +179,8 @@ if (
   !page.includes("TeamKitDesignPreferencePicker") ||
   !page.includes("saveKitDesignPreferenceAction") ||
   !page.includes("preferredKitDesignId") ||
+  !page.includes("getKitDesignById") ||
+  page.includes("prisma.kitDesign") ||
   page.includes("Free team kit offer") ||
   form.includes("Free kit allocation") ||
   includedPanel.includes("Free team kit offer") ||
@@ -171,5 +190,5 @@ if (
 }
 
 console.log(
-  "Captain kit pages now use neutral kit-order wording and show a saved design chooser before paid kit rows unlock.",
+  "Captain kit pages now use neutral kit-order wording and show a saved design chooser before paid kit rows unlock without relying on an unmodelled Prisma KitDesign delegate.",
 );
