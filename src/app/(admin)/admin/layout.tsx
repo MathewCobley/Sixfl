@@ -10,7 +10,6 @@ import { getAdminInboxSummary } from "@/lib/messaging/service";
 import { prisma } from "@/lib/prisma";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminSidebarDesktopColumnsBridge from "@/components/admin/AdminSidebarDesktopColumnsBridge";
-import RemoveUnusedSettingsNavBridge from "@/components/admin/RemoveUnusedSettingsNavBridge";
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
 import EmailBrandOptionBridge from "@/components/admin/email-templates/EmailBrandOptionBridge";
@@ -90,7 +89,6 @@ export default async function AdminLayout({
       <PlayerPoolTemplateCtaBridge />
       <PlayerPoolNudgeBridge />
       <AdminSidebarDesktopColumnsBridge />
-      <RemoveUnusedSettingsNavBridge />
       <AdminLeagueSeasonsBridge />
       <AdminDivisionSelectBridge />
       <FreeKitTeamBadgesBridge />
