@@ -58,6 +58,7 @@ export type FixtureWinChance = {
 type UsableResultFixture = WinChanceFixture & { result: FixtureResult };
 
 const EARLY_SEASON_PRIOR_GAMES = 2;
+const MAX_PREDICTED_SCORE = 9;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -288,6 +289,78 @@ function getPredictedOutcome(input: {
   return "away" as const;
 }
 
+function logFactorial(value: number) {
+  let total = 0;
+  for (let index = 2; index <= value; index += 1) {
+    total += Math.log(index);
+  }
+  return total;
+}
+
+function poissonLogProbability(score: number, expectedGoals: number) {
+  return (
+    score * Math.log(Math.max(expectedGoals, 0.01)) -
+    expectedGoals -
+    logFactorial(score)
+  );
+}
+
+function scorelineMatchesOutcome(input: {
+  homeScore: number;
+  awayScore: number;
+  outcome: "home" | "draw" | "away";
+}) {
+  if (input.outcome === "home") return input.homeScore > input.awayScore;
+  if (input.outcome === "away") return input.awayScore > input.homeScore;
+  return input.homeScore === input.awayScore;
+}
+
+function getMostLikelyScoreline(input: {
+  homeExpected: number;
+  awayExpected: number;
+  outcome: "home" | "draw" | "away";
+}) {
+  let best:
+    | {
+        homeScore: number;
+        awayScore: number;
+        logProbability: number;
+        expectedDistance: number;
+      }
+    | null = null;
+
+  for (let homeScore = 0; homeScore <= MAX_PREDICTED_SCORE; homeScore += 1) {
+    for (let awayScore = 0; awayScore <= MAX_PREDICTED_SCORE; awayScore += 1) {
+      if (!scorelineMatchesOutcome({ homeScore, awayScore, outcome: input.outcome })) {
+        continue;
+      }
+
+      const logProbability =
+        poissonLogProbability(homeScore, input.homeExpected) +
+        poissonLogProbability(awayScore, input.awayExpected);
+      const expectedDistance =
+        Math.abs(homeScore - input.homeExpected) +
+        Math.abs(awayScore - input.awayExpected);
+
+      if (
+        !best ||
+        logProbability > best.logProbability + 1e-9 ||
+        (Math.abs(logProbability - best.logProbability) <= 1e-9 &&
+          expectedDistance < best.expectedDistance)
+      ) {
+        best = {
+          homeScore,
+          awayScore,
+          logProbability,
+          expectedDistance,
+        };
+      }
+    }
+  }
+
+  return best ?? { homeScore: 0, awayScore: 0 };
+}
+
 function buildPredictedResult(input: {
   homeStats: TeamWinChanceStats | undefined;
   awayStats: TeamWinChanceStats | undefined;
@@ -327,32 +400,24 @@ function buildPredictedResult(input: {
     8.5,
   );
 
-  let homeScore = clamp(Math.round(homeExpected), 0, 9);
-  let awayScore = clamp(Math.round(awayExpected), 0, 9);
   const outcome = getPredictedOutcome(input.percentages);
 
-  if (outcome === "home" && homeScore <= awayScore) {
-    homeScore = clamp(awayScore + 1, 1, 9);
-  }
-
-  if (outcome === "away" && awayScore <= homeScore) {
-    awayScore = clamp(homeScore + 1, 1, 9);
-  }
-
-  if (outcome === "draw") {
-    const drawScore = clamp(
-      Math.round((homeExpected + awayExpected) / 2),
-      0,
-      8,
-    );
-    homeScore = drawScore;
-    awayScore = drawScore;
-  }
+  // The previous model rounded both expected-goal values independently and then
+  // forced the predicted winner one goal ahead. In a six-a-side league where
+  // both teams often sit around three expected goals, that collapsed a very wide
+  // range of fixtures into the same 4-3 prediction. Instead, treat each expected
+  // goal value as a scoring distribution and choose the most likely exact score
+  // that is consistent with the model's predicted match outcome.
+  const scoreline = getMostLikelyScoreline({
+    homeExpected,
+    awayExpected,
+    outcome,
+  });
 
   return {
-    homeScore,
-    awayScore,
-    label: `${homeScore}-${awayScore}`,
+    homeScore: scoreline.homeScore,
+    awayScore: scoreline.awayScore,
+    label: `${scoreline.homeScore}-${scoreline.awayScore}`,
   };
 }
 
