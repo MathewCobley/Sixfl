@@ -3,27 +3,40 @@
 // ========================================
 
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
-import { listTeamSubscriptionSnapshots } from "@/lib/payments/team-subscriptions";
+import {
+  getTeamAutoPaySnapshot,
+  isConfirmedTeamAutoPaySetup,
+} from "@/lib/payments/team-autopay-snapshot";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata = {
-  title: "Admin Payment Subscriptions | SIXFL",
+  title: "Admin Saved Cards | SIXFL",
 };
 
-function formatDate(value: Date | null) {
-  if (!value) return "—";
-
-  return formatDateTimeInLondon(value, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
+type SavedCardTeamRow = {
+  id: string;
+  name: string;
+  leagueName: string | null;
+  leagueSeason: string | null;
+  stripeCustomerId: string | null;
+  stripeDefaultPaymentMethodId: string | null;
+  autoPayEnabled: boolean;
+  autoPayMandateAcceptedAt: Date | null;
+  autoPayMandateText: string | null;
+  autoPaySetupCheckoutSessionId: string | null;
+  autoPayLastAttemptAt: Date | null;
+  autoPayLastFailureAt: Date | null;
+  autoPayLastFailureReason: string | null;
+  stripeSubscriptionId: string | null;
+  subscriptionStatus: string | null;
+};
 
 function formatDateTime(value: Date | null) {
   if (!value) return "—";
@@ -37,87 +50,141 @@ function formatDateTime(value: Date | null) {
   });
 }
 
-function formatStatus(input: {
-  subscriptionStatus: string | null;
-  setupStarted: boolean;
-  hasStripeCustomer: boolean;
-}) {
-  if (!input.subscriptionStatus) {
-    if (input.setupStarted) return "Setup started — not completed";
-    if (input.hasStripeCustomer) return "Stripe customer only";
-    return "Not started";
-  }
-
-  const labels: Record<string, string> = {
-    active: "Active",
-    trialing: "Trialling",
-    past_due: "Past due",
-    unpaid: "Unpaid",
-    incomplete: "Setup incomplete",
-    incomplete_expired: "Setup expired",
-    canceled: "Cancelled",
-    paused: "Paused",
-  };
-
-  return labels[input.subscriptionStatus] ?? input.subscriptionStatus.replaceAll("_", " ");
-}
-
-function getStatusTone(input: {
-  subscriptionStatus: string | null;
-  setupStarted: boolean;
-}) {
-  switch (input.subscriptionStatus) {
-    case "active":
-    case "trialing":
-      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-100";
-    case "past_due":
-    case "unpaid":
-    case "incomplete":
-      return "border-amber-400/25 bg-amber-500/10 text-amber-100";
-    case "canceled":
-    case "incomplete_expired":
-      return "border-red-400/25 bg-red-500/10 text-red-100";
-    default:
-      return input.setupStarted
-        ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
-        : "border-white/10 bg-white/[0.05] text-white/60";
-  }
-}
-
 function maskStripeId(value: string | null) {
   if (!value) return "—";
-  if (value.length <= 12) return value;
-  return `${value.slice(0, 8)}…${value.slice(-4)}`;
+  if (value.length <= 14) return value;
+  return `${value.slice(0, 9)}…${value.slice(-4)}`;
+}
+
+function hasLocalCompleteEvidence(row: SavedCardTeamRow) {
+  return Boolean(
+    row.autoPayEnabled &&
+      row.stripeCustomerId?.trim() &&
+      row.stripeDefaultPaymentMethodId?.trim() &&
+      row.autoPayMandateAcceptedAt &&
+      row.autoPayMandateText?.trim() &&
+      row.autoPaySetupCheckoutSessionId?.trim(),
+  );
+}
+
+function getStatus(input: {
+  confirmed: boolean;
+  localComplete: boolean;
+  setupStarted: boolean;
+  hasLegacySubscription: boolean;
+}) {
+  if (input.confirmed) {
+    return {
+      label: "Saved card complete",
+      tone: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
+    };
+  }
+
+  if (input.localComplete) {
+    return {
+      label: "Stripe verification failed",
+      tone: "border-red-400/25 bg-red-500/10 text-red-100",
+    };
+  }
+
+  if (input.setupStarted) {
+    return {
+      label: "Setup started — not completed",
+      tone: "border-amber-400/25 bg-amber-500/10 text-amber-100",
+    };
+  }
+
+  if (input.hasLegacySubscription) {
+    return {
+      label: "Legacy subscription only",
+      tone: "border-violet-400/25 bg-violet-500/10 text-violet-100",
+    };
+  }
+
+  return {
+    label: "Not set up",
+    tone: "border-white/10 bg-white/[0.05] text-white/60",
+  };
+}
+
+async function loadSavedCardTeams() {
+  return prisma.$queryRaw<SavedCardTeamRow[]>(Prisma.sql`
+    SELECT
+      team."id",
+      team."name",
+      league."name" AS "leagueName",
+      league."season" AS "leagueSeason",
+      team."stripeCustomerId",
+      team."stripeDefaultPaymentMethodId",
+      team."autoPayEnabled",
+      team."autoPayMandateAcceptedAt",
+      team."autoPayMandateText",
+      team."autoPaySetupCheckoutSessionId",
+      team."autoPayLastAttemptAt",
+      team."autoPayLastFailureAt",
+      team."autoPayLastFailureReason",
+      team."stripeSubscriptionId",
+      team."subscriptionStatus"
+    FROM "Team" team
+    LEFT JOIN "League" league ON league."id" = team."leagueId"
+    WHERE team."stripeCustomerId" IS NOT NULL
+      OR team."stripeDefaultPaymentMethodId" IS NOT NULL
+      OR team."autoPaySetupCheckoutSessionId" IS NOT NULL
+      OR team."autoPayEnabled" = true
+      OR team."stripeSubscriptionId" IS NOT NULL
+      OR team."subscriptionStatus" IS NOT NULL
+    ORDER BY team."name" ASC
+  `);
 }
 
 export default async function AdminPaymentSubscriptionsPage() {
   await requireAdmin();
 
-  const [subscriptions, setupRows] = await Promise.all([
-    listTeamSubscriptionSnapshots(),
-    prisma.$queryRaw<
-      Array<{ id: string; autoPaySetupCheckoutSessionId: string | null }>
-    >`
-      SELECT "id", "autoPaySetupCheckoutSessionId"
-      FROM "Team"
-      WHERE "autoPaySetupCheckoutSessionId" IS NOT NULL
-    `,
-  ]);
-
-  const setupSessionByTeamId = new Map(
-    setupRows.map((row) => [row.id, row.autoPaySetupCheckoutSessionId]),
+  const teams = await loadSavedCardTeams();
+  const snapshots = await Promise.all(
+    teams.map(async (team) => {
+      const snapshot = await getTeamAutoPaySnapshot(team.id);
+      return [team.id, snapshot] as const;
+    }),
   );
+  const snapshotByTeamId = new Map(snapshots);
 
-  const activeCount = subscriptions.filter((item) =>
-    ["active", "trialing"].includes(item.subscriptionStatus ?? ""),
+  const rows = teams.map((team) => {
+    const snapshot = snapshotByTeamId.get(team.id) ?? null;
+    const confirmed = isConfirmedTeamAutoPaySetup(snapshot);
+    const localComplete = hasLocalCompleteEvidence(team);
+    const setupStarted = Boolean(
+      team.stripeCustomerId ||
+        team.stripeDefaultPaymentMethodId ||
+        team.autoPaySetupCheckoutSessionId,
+    );
+    const hasLegacySubscription = Boolean(
+      team.stripeSubscriptionId || team.subscriptionStatus,
+    );
+    const status = getStatus({
+      confirmed,
+      localComplete,
+      setupStarted,
+      hasLegacySubscription,
+    });
+
+    return {
+      team,
+      snapshot,
+      confirmed,
+      localComplete,
+      setupStarted,
+      hasLegacySubscription,
+      status,
+    };
+  });
+
+  const completeCount = rows.filter((row) => row.confirmed).length;
+  const verificationIssueCount = rows.filter(
+    (row) => row.localComplete && !row.confirmed,
   ).length;
-  const setupStartedCount = subscriptions.filter(
-    (item) =>
-      !item.subscriptionStatus &&
-      Boolean(setupSessionByTeamId.get(item.id)),
-  ).length;
-  const failedCount = subscriptions.filter(
-    (item) => item.subscriptionLastPaymentFailedAt,
+  const incompleteCount = rows.filter(
+    (row) => row.setupStarted && !row.localComplete,
   ).length;
 
   return (
@@ -128,10 +195,10 @@ export default async function AdminPaymentSubscriptionsPage() {
             Payments
           </p>
           <h1 className="text-3xl font-semibold text-white">
-            Recurring subscriptions
+            Saved card matchday payments
           </h1>
           <p className="max-w-3xl text-sm leading-6 text-white/60">
-            Stripe-linked teams, including completed subscriptions and teams that have only started setup. Successful Stripe renewal invoices are recorded as payment transactions.
+            This page shows the actual saved-card setup used for one-off matchday collection. A Stripe customer or an old subscription record is not enough: SIXFL only shows a card as complete when the saved-card mandate and Stripe setup can be verified.
           </p>
         </div>
 
@@ -148,157 +215,131 @@ export default async function AdminPaymentSubscriptionsPage() {
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
             Stripe-linked teams
           </div>
-          <div className="mt-3 text-3xl font-semibold text-white">
-            {subscriptions.length}
-          </div>
-          <p className="mt-2 text-sm text-white/50">Customer, setup or subscription data exists.</p>
+          <div className="mt-3 text-3xl font-semibold text-white">{rows.length}</div>
+          <p className="mt-2 text-sm text-white/50">Any saved-card, customer or legacy Stripe data.</p>
         </div>
 
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
-            Active
+            Saved card complete
           </div>
-          <div className="mt-3 text-3xl font-semibold text-white">
-            {activeCount}
-          </div>
-          <p className="mt-2 text-sm text-emerald-100/75">Active or trialling subscriptions.</p>
+          <div className="mt-3 text-3xl font-semibold text-white">{completeCount}</div>
+          <p className="mt-2 text-sm text-emerald-100/75">Verified against Stripe now.</p>
         </div>
 
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-            Setup not completed
+            Setup incomplete
           </div>
-          <div className="mt-3 text-3xl font-semibold text-white">
-            {setupStartedCount}
-          </div>
-          <p className="mt-2 text-sm text-amber-100/75">Stripe setup was started but no subscription is recorded.</p>
+          <div className="mt-3 text-3xl font-semibold text-white">{incompleteCount}</div>
+          <p className="mt-2 text-sm text-amber-100/75">Setup started but mandate evidence is incomplete.</p>
         </div>
 
         <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-100/70">
-            Failed payment marker
+            Verification issue
           </div>
-          <div className="mt-3 text-3xl font-semibold text-white">
-            {failedCount}
-          </div>
-          <p className="mt-2 text-sm text-red-100/75">Teams with a recorded failed invoice.</p>
+          <div className="mt-3 text-3xl font-semibold text-white">{verificationIssueCount}</div>
+          <p className="mt-2 text-sm text-red-100/75">Local record looked complete but Stripe did not verify it.</p>
         </div>
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-white">Team Stripe status</h2>
-            <p className="mt-1 text-sm text-white/55">
-              A Stripe customer record alone is not an active subscription. “Setup started” means SIXFL recorded a Stripe setup checkout session, but no subscription has been completed.
-            </p>
-          </div>
+        <div>
+          <h2 className="text-xl font-semibold text-white">Team saved-card status</h2>
+          <p className="mt-1 text-sm text-white/55">
+            These statuses use the same saved-card rules as the captain payment page. Legacy recurring-subscription fields are shown only as audit information and never count as saved-card authorisation.
+          </p>
         </div>
 
         <div className="mt-5 space-y-3">
-          {subscriptions.length === 0 ? (
+          {rows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-8 text-sm text-white/55">
               No Stripe-linked teams have been recorded yet.
             </div>
           ) : null}
 
-          {subscriptions.map((item) => {
-            const setupSessionId = setupSessionByTeamId.get(item.id) ?? null;
-            const setupStarted = Boolean(setupSessionId);
-            const hasSubscription = Boolean(item.subscriptionStatus || item.stripeSubscriptionId);
-            const statusLabel = formatStatus({
-              subscriptionStatus: item.subscriptionStatus,
-              setupStarted,
-              hasStripeCustomer: Boolean(item.stripeCustomerId),
-            });
+          {rows.map(({ team, snapshot, confirmed, localComplete, setupStarted, hasLegacySubscription, status }) => {
+            const failureReason = snapshot?.autoPayLastFailureReason || team.autoPayLastFailureReason;
+            const message = confirmed
+              ? "Stripe confirms the completed saved-card setup, successful mandate and attached card. Automatic collection is permitted only for the remaining matchday balance."
+              : localComplete
+                ? failureReason || "SIXFL has local saved-card fields marked complete, but Stripe did not verify the setup. Automatic collection is blocked."
+                : setupStarted
+                  ? "The Stripe setup flow has been started, but SIXFL does not yet have all the evidence required to authorise automatic matchday collection."
+                  : hasLegacySubscription
+                    ? "Legacy recurring-subscription data exists, but it does not authorise the current saved-card matchday payment system."
+                    : "No saved-card setup has been started.";
 
             return (
-              <div key={item.id} className="rounded-2xl border border-white/10 bg-[#0d1428] p-4">
+              <div key={team.id} className="rounded-2xl border border-white/10 bg-[#0d1428] p-4">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
-                        href={`/admin/teams/${item.id}`}
+                        href={`/admin/teams/${team.id}`}
                         className="text-base font-semibold text-white transition hover:text-emerald-200"
                       >
-                        {item.name}
+                        {team.name}
                       </Link>
-                      <span
-                        className={[
-                          "inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
-                          getStatusTone({
-                            subscriptionStatus: item.subscriptionStatus,
-                            setupStarted,
-                          }),
-                        ].join(" ")}
-                      >
-                        {statusLabel}
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${status.tone}`}>
+                        {status.label}
                       </span>
                     </div>
 
                     <div className="mt-1 text-sm text-white/55">
-                      {item.leagueName
-                        ? `${item.leagueName}${item.leagueSeason ? ` · ${item.leagueSeason}` : ""}`
+                      {team.leagueName
+                        ? `${team.leagueName}${team.leagueSeason ? ` · ${team.leagueSeason}` : ""}`
                         : "No league assigned"}
                     </div>
 
-                    {!hasSubscription ? (
-                      <div className={[
-                        "mt-3 rounded-xl border px-3 py-2 text-xs leading-5",
-                        setupStarted
-                          ? "border-amber-400/20 bg-amber-500/10 text-amber-100/80"
-                          : "border-white/10 bg-white/[0.03] text-white/50",
-                      ].join(" ")}
-                      >
-                        {setupStarted
-                          ? "The captain reached the Stripe setup flow, but SIXFL has not recorded a completed subscription."
-                          : "A Stripe customer exists, but there is no recorded autopay setup session or subscription."}
+                    <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${
+                      confirmed
+                        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100/80"
+                        : localComplete
+                          ? "border-red-400/20 bg-red-500/10 text-red-100/80"
+                          : "border-amber-400/20 bg-amber-500/10 text-amber-100/80"
+                    }`}>
+                      {message}
+                    </div>
+
+                    <div className="mt-3 grid gap-2 text-xs text-white/45 sm:grid-cols-2 xl:grid-cols-4">
+                      <div>Customer: {maskStripeId(team.stripeCustomerId)}</div>
+                      <div>Setup session: {maskStripeId(team.autoPaySetupCheckoutSessionId)}</div>
+                      <div>Payment method: {maskStripeId(team.stripeDefaultPaymentMethodId)}</div>
+                      <div>Auto collection: {confirmed ? "Authorised" : "Blocked"}</div>
+                    </div>
+
+                    {hasLegacySubscription ? (
+                      <div className="mt-2 text-xs text-violet-200/55">
+                        Legacy subscription audit: {team.subscriptionStatus || "record present"} · {maskStripeId(team.stripeSubscriptionId)}
                       </div>
                     ) : null}
-
-                    <div className="mt-3 grid gap-2 text-xs text-white/45 sm:grid-cols-2 lg:grid-cols-4">
-                      <div>Customer: {maskStripeId(item.stripeCustomerId)}</div>
-                      <div>Setup session: {maskStripeId(setupSessionId)}</div>
-                      <div>Subscription: {maskStripeId(item.stripeSubscriptionId)}</div>
-                      <div>Price: {maskStripeId(item.subscriptionPriceId)}</div>
-                    </div>
                   </div>
 
-                  <div className="grid gap-3 text-sm text-white/60 sm:grid-cols-2 xl:min-w-[520px] xl:grid-cols-4 xl:text-right">
+                  <div className="grid gap-3 text-sm text-white/60 sm:grid-cols-3 xl:min-w-[560px] xl:text-right">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                        Next renewal
+                        Mandate accepted
                       </div>
                       <div className="mt-1 text-white/80">
-                        {formatDate(item.subscriptionCurrentPeriodEnd)}
+                        {formatDateTime(team.autoPayMandateAcceptedAt)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                        Last paid
+                        Last auto attempt
                       </div>
                       <div className="mt-1 text-white/80">
-                        {formatDateTime(item.subscriptionLastPaymentAt)}
+                        {formatDateTime(team.autoPayLastAttemptAt)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                        Last failed
+                        Last failure
                       </div>
-                      <div className={[
-                        "mt-1",
-                        item.subscriptionLastPaymentFailedAt ? "text-red-200" : "text-white/80",
-                      ].join(" ")}
-                      >
-                        {formatDateTime(item.subscriptionLastPaymentFailedAt)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                        Cancelled
-                      </div>
-                      <div className="mt-1 text-white/80">
-                        {formatDateTime(item.subscriptionCancelledAt)}
+                      <div className={team.autoPayLastFailureAt ? "mt-1 text-red-200" : "mt-1 text-white/80"}>
+                        {formatDateTime(team.autoPayLastFailureAt)}
                       </div>
                     </div>
                   </div>
