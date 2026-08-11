@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { TeamRole, UserRole } from "@prisma/client";
+import { TeamMode, TeamRole, UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +13,15 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getTeamRedirectPath(input: { teamId: string; role: TeamRole }) {
+function getTeamRedirectPath(input: {
+  teamId: string;
+  role: TeamRole;
+  teamMode: TeamMode;
+}) {
+  if (input.teamMode === TeamMode.MANAGED) {
+    return `/player/team/${input.teamId}`;
+  }
+
   if (input.role === TeamRole.CAPTAIN || input.role === TeamRole.MANAGER) {
     return `/captain/team/${input.teamId}`;
   }
@@ -39,6 +47,7 @@ function TeamChoiceCard({
     team: {
       id: string;
       name: string;
+      teamMode: TeamMode;
       league: {
         name: string;
         season: string | null;
@@ -51,6 +60,7 @@ function TeamChoiceCard({
       href={getTeamRedirectPath({
         teamId: membership.teamId,
         role: membership.role,
+        teamMode: membership.team.teamMode,
       })}
       className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 transition hover:border-emerald-400/30 hover:bg-emerald-500/10"
     >
@@ -99,6 +109,7 @@ export default async function DashboardPage() {
             select: {
               id: true,
               name: true,
+              teamMode: true,
               league: {
                 select: {
                   name: true,
@@ -181,6 +192,7 @@ export default async function DashboardPage() {
       getTeamRedirectPath({
         teamId: primaryMembership.teamId,
         role: primaryMembership.role,
+        teamMode: primaryMembership.team.teamMode,
       }),
     );
   }
