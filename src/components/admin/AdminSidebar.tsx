@@ -66,6 +66,12 @@ const navigationGroups = [
         description: "Accounts",
       },
       {
+        name: "Identity audit",
+        href: "/admin/users/identity-audit",
+        icon: ExclamationTriangleIcon,
+        description: "Missing emails",
+      },
+      {
         name: "Leagues",
         href: "/admin/leagues",
         icon: TrophyIcon,
