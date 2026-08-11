@@ -35,3 +35,7 @@ console.log(
 // Keep the team payment page's saved-card state native and explicit after all
 // other payment-page build patches have finished.
 require("./apply-native-team-payment-copy.cjs");
+
+// Captains must also be able to close unpaid player payment links before the
+// fixture charge itself has been settled.
+require("./apply-captain-cancel-unpaid-player-links.cjs");
