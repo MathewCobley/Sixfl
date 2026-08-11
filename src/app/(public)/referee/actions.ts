@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireReferee } from "@/lib/admin";
 import {
+  getRefereeNightFixtureIds,
   parseMoneyToPence,
   recalculateRefereeNightCashup,
 } from "@/lib/referee-nights";
@@ -117,9 +118,6 @@ async function assertNightAccess(input: {
   const rows = await prisma.$queryRaw<Array<{ id: string; refereeId: string }>>(Prisma.sql`
     SELECT rn.id, rn."refereeId"
     FROM "RefereeNight" rn
-    ${input.fixtureId
-      ? Prisma.sql`JOIN "RefereeNightFixture" rnf ON rnf."refereeNightId" = rn.id AND rnf."fixtureId" = ${input.fixtureId}`
-      : Prisma.empty}
     WHERE rn.id = ${input.refereeNightId}
     LIMIT 1
   `);
@@ -129,6 +127,13 @@ async function assertNightAccess(input: {
 
   if (input.user.role !== UserRole.ADMIN && night.refereeId !== input.user.id) {
     throw new Error("You are not allowed to access this referee night.");
+  }
+
+  if (input.fixtureId) {
+    const visibleFixtureIds = await getRefereeNightFixtureIds(input.refereeNightId);
+    if (!visibleFixtureIds.includes(input.fixtureId)) {
+      throw new Error("Fixture is not part of this referee night.");
+    }
   }
 
   return night;
