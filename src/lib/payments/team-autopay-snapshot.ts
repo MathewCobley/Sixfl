@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 
 import { saveTeamAutoPaySetup, TEAM_AUTOPAY_MANDATE_TEXT } from "@/lib/payments/team-autopay";
+import { verifyTeamAutoPayStripeEvidence } from "@/lib/payments/team-autopay-verification";
 import { prisma } from "@/lib/prisma";
 import { getStripeServerClient } from "@/lib/stripe/client";
 
@@ -38,7 +39,7 @@ function getStripeId(value: unknown) {
   return null;
 }
 
-export async function getTeamAutoPaySnapshot(teamId: string) {
+async function getStoredTeamAutoPaySnapshot(teamId: string) {
   const rows = await prisma.$queryRaw<TeamAutoPaySnapshot[]>`
     SELECT
       "stripeCustomerId",
@@ -56,6 +57,59 @@ export async function getTeamAutoPaySnapshot(teamId: string) {
   `;
 
   return rows[0] ?? null;
+}
+
+/**
+ * A local database flag is not enough to tell a captain that a card is ready.
+ * Re-check the completed Stripe setup session and attached card before exposing
+ * the team as "Saved card setup complete". If Stripe cannot verify it, return
+ * an incomplete snapshot so the UI and management route fail safe.
+ */
+export async function getTeamAutoPaySnapshot(teamId: string) {
+  const current = await getStoredTeamAutoPaySnapshot(teamId);
+  if (!current || !isConfirmedTeamAutoPaySetup(current)) return current;
+
+  const stripeCustomerId = current.stripeCustomerId?.trim();
+  const stripeDefaultPaymentMethodId = current.stripeDefaultPaymentMethodId?.trim();
+  const setupCheckoutSessionId = current.autoPaySetupCheckoutSessionId?.trim();
+
+  if (!stripeCustomerId || !stripeDefaultPaymentMethodId || !setupCheckoutSessionId) {
+    return { ...current, autoPayEnabled: false };
+  }
+
+  try {
+    const verification = await verifyTeamAutoPayStripeEvidence({
+      stripe: getStripeServerClient(),
+      evidence: {
+        teamId,
+        stripeCustomerId,
+        stripeDefaultPaymentMethodId,
+        setupCheckoutSessionId,
+      },
+    });
+
+    if (verification.verified) return current;
+
+    return {
+      ...current,
+      autoPayEnabled: false,
+      autoPayLastFailureReason:
+        verification.reason || "Saved-card setup could not be verified with Stripe.",
+    };
+  } catch (error) {
+    console.warn("Could not verify team saved-card setup with Stripe", {
+      teamId,
+      setupCheckoutSessionId,
+      error,
+    });
+
+    return {
+      ...current,
+      autoPayEnabled: false,
+      autoPayLastFailureReason:
+        "SIXFL could not verify the saved card with Stripe. No automatic payment should be treated as authorised until verification succeeds.",
+    };
+  }
 }
 
 async function getSetupIntent(
@@ -85,7 +139,8 @@ export async function reconcileTeamAutoPaySetup(teamId: string) {
     return current;
   }
 
-  const sessionId = current.autoPaySetupCheckoutSessionId?.trim();
+  const stored = await getStoredTeamAutoPaySnapshot(teamId);
+  const sessionId = stored?.autoPaySetupCheckoutSessionId?.trim();
   if (!sessionId) return current;
 
   try {
