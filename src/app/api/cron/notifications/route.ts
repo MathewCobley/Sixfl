@@ -8,6 +8,7 @@ import { runFixtureConfirmationEmailJob } from "@/lib/fixtures/confirmation-emai
 import { runFixtureConfirmationReminderJob } from "@/lib/fixtures/confirmation-reminder-job";
 import { backfillUpcomingFixtureConfirmationWarningEmails } from "@/lib/fixtures/confirmation-warning-emails";
 import { processNotificationQueue } from "@/lib/notifications/processor";
+import { chargeDueMatchdayAutoPayments } from "@/lib/payments/team-autopay";
 import { queueDueRefereeNightConfirmationChasers } from "@/lib/referee-night-confirmations";
 import { queueDueRefereeNightReminderEmails } from "@/lib/referee-night-emails";
 import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib/referee-night-assignment-sync";
@@ -80,6 +81,20 @@ export async function GET(request: NextRequest) {
       Math.max(25, queuedDispatches + 25),
     );
 
+    // Railway already calls this protected GET route on its cron schedule. Run
+    // saved-card collection here as part of the same matchday job so no separate
+    // POST-only admin endpoint or second Railway service is required.
+    const matchdayAutoPayResults = await chargeDueMatchdayAutoPayments();
+    const matchdayAutoPay = {
+      total: matchdayAutoPayResults.length,
+      paid: matchdayAutoPayResults.filter((item) => item.status === "paid").length,
+      failed: matchdayAutoPayResults.filter((item) => item.status === "failed").length,
+      requiresAction: matchdayAutoPayResults.filter(
+        (item) => item.status === "requires_action",
+      ).length,
+      skipped: matchdayAutoPayResults.filter((item) => item.status === "skipped").length,
+    };
+
     return NextResponse.json({
       ok: true,
       onboarding,
@@ -89,6 +104,7 @@ export async function GET(request: NextRequest) {
       refereeAssignmentSync,
       refereeNights,
       refereeConfirmations,
+      matchdayAutoPay,
       ...result,
     });
   } catch (error) {
