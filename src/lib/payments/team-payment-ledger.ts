@@ -17,6 +17,13 @@ type RelatedTeamRow = {
   id: string;
 };
 
+type PaymentLedgerTeamRow = {
+  id: string;
+  name: string;
+  teamMode: "STANDARD" | "MANAGED";
+  standardCreditStartedAt: Date | null;
+};
+
 type PlayerFeeRow = {
   teamId: string;
   fixtureId: string;
@@ -122,12 +129,28 @@ function sortLedgerEntriesForCaptain(entries: TeamPaymentLedgerEntry[]) {
 }
 
 export async function getRelatedTeamIdsForPaymentLedger(teamId: string) {
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { id: true, name: true, teamMode: true },
-  });
+  const [team] = await prisma.$queryRaw<PaymentLedgerTeamRow[]>(Prisma.sql`
+    SELECT
+      "id",
+      "name",
+      "teamMode"::text AS "teamMode",
+      "standardCreditStartedAt"
+    FROM "Team"
+    WHERE "id" = ${teamId}
+    LIMIT 1
+  `);
 
   if (!team) return null;
+
+  // Once a managed squad has converted to standard, this exact Team row becomes
+  // a new standard-credit identity. Do not bridge it to same-named historical
+  // STANDARD rows, otherwise old credit/charges could leak across the boundary.
+  if (team.teamMode === "STANDARD" && team.standardCreditStartedAt) {
+    return {
+      team,
+      relatedTeamIds: [team.id],
+    };
+  }
 
   // Teams were historically duplicated per season. Until there is a permanent clubId,
   // same-name team rows are the only reliable way to keep old unpaid fixture charges visible
@@ -209,10 +232,18 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       amountPence: charge.amountPence,
       paidPence,
     });
+
+    const chargeFinancialDate = charge.fixture?.kickoffAt ?? charge.dueDate ?? charge.createdAt;
+    const isAfterStandardCreditBoundary =
+      !team.standardCreditStartedAt || chargeFinancialDate >= team.standardCreditStartedAt;
+
     // Managed squads collect individual player fees; a player-fee surplus must never
-    // become standard team credit. Only STANDARD teams can expose overpayment credit.
+    // become standard team credit. After a MANAGED -> STANDARD conversion, managed-era
+    // fixtures remain visible as history but can never display or generate team credit.
     const overpaidPence =
-      team.teamMode === "STANDARD" ? Math.max(paidPence - charge.amountPence, 0) : 0;
+      team.teamMode === "STANDARD" && isAfterStandardCreditBoundary
+        ? Math.max(paidPence - charge.amountPence, 0)
+        : 0;
     const fixtureLabel = charge.fixture
       ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
       : charge.title;
