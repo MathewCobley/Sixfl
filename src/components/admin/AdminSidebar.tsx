@@ -288,6 +288,12 @@ const navigationGroups = [
     tint: "emerald",
     items: [
       {
+        name: "AI predictor",
+        href: "/admin/ai-predictor",
+        icon: TrophyIcon,
+        description: "Weekly accuracy",
+      },
+      {
         name: "Identity audit",
         href: "/admin/users/identity-audit",
         icon: ExclamationTriangleIcon,
