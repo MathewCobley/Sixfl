@@ -6,10 +6,10 @@ import Link from "next/link";
 
 const documentDetails = [
   { label: "Document", value: "League Rules" },
-  { label: "Version", value: "1.2" },
+  { label: "Version", value: "1.3" },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "23 July 2026" },
-  { label: "Next review", value: "23 July 2027" },
+  { label: "Last updated", value: "12 August 2026" },
+  { label: "Next review", value: "12 August 2027" },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "All SIXFL teams, players and league fixtures" },
 ];
@@ -79,8 +79,8 @@ export default function LeagueRulesPage() {
         />
 
         <RulesSection
-          title="4. Squad and Substitute Limits"
-          text="A team may register a maximum active squad of 15 players. A maximum of nine players may be named for any fixture, consisting of six starting players and no more than three rolling substitutes. Any guest players used for a fixture count within this nine-player matchday limit. Exceptions require prior approval from SIXFL."
+          title="4. Squad Size and Matchday Player Limit"
+          text="There is no maximum squad size. Teams may register as many players to their squad as they wish. However, a maximum of nine players may take part in any single fixture: six players on the pitch and up to three rolling substitutes. All players who participate in the fixture, including guest players, count towards this nine-player limit. Exceptions require prior approval from SIXFL."
         />
 
         <RulesSection
