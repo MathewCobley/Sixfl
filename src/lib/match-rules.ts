@@ -2,7 +2,7 @@
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 1.2 — July 2026";
+export const MATCH_RULES_VERSION = "Version 1.3 — August 2026";
 
 export type MatchRuleSection = {
   title: string;
@@ -27,6 +27,15 @@ export const matchRuleSections: MatchRuleSection[] = [
       "Footage may also be used to correct an administrative error, such as an incorrectly entered score, where the referee's actual decision or the agreed final score is clear.",
       "Unless SIXFL has announced a formal competition-specific video-review process in advance, footage will not normally be used to re-referee a match, overturn an on-field decision or amend a result arising from that decision.",
       "SIXFL may still use footage privately to support referee feedback, training and performance review without changing the match result.",
+    ],
+  },
+  {
+    title: "Players and Substitutes",
+    points: [
+      "There is no maximum registered squad size.",
+      "A maximum of nine players may take part for a team in any single fixture: six players on the pitch and up to three rolling substitutes.",
+      "Every player who participates in the fixture, including any guest player, counts towards the nine-player limit.",
+      "A team may only exceed the nine-player fixture limit with prior approval from SIXFL.",
     ],
   },
   {
