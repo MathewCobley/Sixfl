@@ -11,6 +11,7 @@ import {
   hasOpenAiPredictorConfig,
   type FixtureAiPreview,
 } from "@/lib/fixtures/aiPredictor";
+import { recoverMissingHistoricalAiPredictions } from "@/lib/fixtures/recoverHistoricalAiPredictions";
 import { calculateFixtureWinChance, type FixtureWinChance, type WinChanceFixture } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
@@ -138,6 +139,11 @@ export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
   if (ids.length === 0) return new Map<string, StoredFixtureAiPreview>();
 
   await ensurePredictionScoreColumns();
+
+  // Repair only genuinely missing completed-fixture rows. Recovery is calculated
+  // from results that had been entered before each fixture kicked off, so the
+  // fixture's own result and later information cannot influence the score.
+  await recoverMissingHistoricalAiPredictions(ids);
 
   const rows = await prisma.$queryRaw<StoredPredictionRow[]>`
     SELECT
