@@ -6,7 +6,7 @@ import Link from "next/link";
 
 const documentDetails = [
   { label: "Document", value: "League Rules" },
-  { label: "Version", value: "1.3" },
+  { label: "Version", value: "1.4" },
   { label: "Status", value: "Active" },
   { label: "Last updated", value: "12 August 2026" },
   { label: "Next review", value: "12 August 2027" },
@@ -99,17 +99,22 @@ export default function LeagueRulesPage() {
         />
 
         <RulesSection
-          title="8. Fixtures and Cancellations"
+          title="8. Abandoned Matches"
+          text="Where a referee abandons a match because of the conduct of one team, the referee's decision to abandon the match is final. The team whose conduct caused the abandonment will be responsible for payment of both its own match fee and the opposing team's match fee. The result and league outcome of any abandoned fixture will be determined by SIXFL at its sole discretion, taking into account the circumstances of the abandonment. This may include allowing the score at the time of abandonment to stand, awarding the match to either team, recording a forfeit or taking any other action SIXFL considers appropriate."
+        />
+
+        <RulesSection
+          title="9. Fixtures and Cancellations"
           text="Fixtures are scheduled by SIXFL and may be changed where necessary due to venue issues, weather, operational requirements or exceptional circumstances."
         />
 
         <RulesSection
-          title="9. Video Footage and Post-Match Review"
+          title="10. Video Footage and Post-Match Review"
           text="Referee decisions regarding facts connected with play are final. Video footage may be reviewed for disciplinary, safeguarding, administrative and referee-development purposes, including serious misconduct, violence, abuse, mistaken identity, suspected cheating, use of an ineligible player or an incorrectly entered score. Unless SIXFL has announced a formal competition-specific video-review process in advance, footage will not normally be used to re-referee a match, overturn an on-field decision or change a result arising from that decision. There is no automatic right to a video review, and footage may not be available or of equal quality for every match."
         />
 
         <RulesSection
-          title="10. League Decisions"
+          title="11. League Decisions"
           text="SIXFL reserves the right to interpret and apply league rules in the interests of fairness, safety and good league management. League decisions are final unless otherwise stated."
         />
       </div>
