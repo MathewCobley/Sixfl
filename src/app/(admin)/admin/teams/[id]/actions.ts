@@ -88,12 +88,16 @@ export async function updateTeamDetailsAction(formData: FormData) {
     select: {
       leagueId: true,
       captainUserId: true,
+      teamMode: true,
     },
   });
 
   if (!existingTeam) {
     redirect("/admin/teams");
   }
+
+  const isManagedToStandardConversion =
+    existingTeam.teamMode === TeamMode.MANAGED && teamMode === TeamMode.STANDARD;
 
   const updatedTeam = await prisma.$transaction(async (tx) => {
     const updated = await tx.team.update({
@@ -121,6 +125,18 @@ export async function updateTeamDetailsAction(formData: FormData) {
         captainUserId: true,
       },
     });
+
+    if (isManagedToStandardConversion) {
+      // This is the financial cut-off between the two payment models. Keep all
+      // historical managed-squad payment records, but do not let them become
+      // standard-team credit after the mode change. A later MANAGED -> STANDARD
+      // conversion deliberately resets the boundary again.
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "Team"
+        SET "standardCreditStartedAt" = NOW()
+        WHERE "id" = ${id}
+      `);
+    }
 
     if (leagueId) {
       await tx.$executeRaw(Prisma.sql`
@@ -158,6 +174,8 @@ export async function updateTeamDetailsAction(formData: FormData) {
   revalidatePath("/admin/captains");
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/generate");
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/payments/team-credits");
 
   if (existingTeam.leagueId) {
     revalidatePath(`/admin/leagues/${existingTeam.leagueId}`);
@@ -171,6 +189,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
 
   revalidatePath(`/captain/team/${id}`);
   revalidatePath(`/captain/team/${id}/squad`);
+  revalidatePath(`/captain/team/${id}/payments`);
 
   redirect(buildTeamRedirect(id, "?saved=1"));
 }
