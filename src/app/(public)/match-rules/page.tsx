@@ -10,8 +10,8 @@ const documentDetails = [
   { label: "Document", value: "Match Rules" },
   { label: "Version", value: MATCH_RULES_VERSION.replace("Version ", "") },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "2 July 2026" },
-  { label: "Next review", value: "2 July 2027" },
+  { label: "Last updated", value: "12 August 2026" },
+  { label: "Next review", value: "12 August 2027" },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "All SIXFL matches and competitions" },
 ];
