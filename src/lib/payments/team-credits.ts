@@ -16,6 +16,11 @@ type ChargeSummaryDb = CreditDb & Pick<typeof prisma, "paymentCharge" | "playerM
 
 type StandardTeamRow = {
   id: string;
+  standardCreditStartedAt: Date | null;
+};
+
+type EligibleChargeRow = {
+  id: string;
 };
 
 export type TeamCreditLedgerEntryType = "CREDIT_ADDED" | "CREDIT_USED" | "CREDIT_REVERSED";
@@ -44,18 +49,62 @@ function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 }
 
-async function getStandardTeamIds(teamIdsInput: string[], db: CreditDb = prisma) {
+async function getStandardTeamRows(teamIdsInput: string[], db: CreditDb = prisma) {
   const teamIds = uniqueIds(teamIdsInput);
   if (teamIds.length === 0) return [];
 
-  const rows = await db.$queryRaw<StandardTeamRow[]>(Prisma.sql`
-    SELECT "id"
+  return db.$queryRaw<StandardTeamRow[]>(Prisma.sql`
+    SELECT "id", "standardCreditStartedAt"
     FROM "Team"
     WHERE "id" IN (${Prisma.join(teamIds)})
       AND "teamMode"::text = 'STANDARD'
   `);
+}
+
+async function getStandardTeamIds(teamIdsInput: string[], db: CreditDb = prisma) {
+  const rows = await getStandardTeamRows(teamIdsInput, db);
+  return rows.map((row) => row.id);
+}
+
+async function getCreditEligibleTeamIds(teamIdsInput: string[], db: CreditDb = prisma) {
+  const rows = await getStandardTeamRows(teamIdsInput, db);
+  if (rows.length === 0) return [];
+
+  // A MANAGED -> STANDARD conversion starts a new financial identity for team
+  // credit. If a same-named historical STANDARD row is also present in the
+  // payment-ledger group, do not inherit its old credit. The most recent
+  // conversion boundary is the active standard-credit identity.
+  const converted = rows
+    .filter((row) => row.standardCreditStartedAt)
+    .sort(
+      (a, b) =>
+        (b.standardCreditStartedAt?.getTime() ?? 0) -
+        (a.standardCreditStartedAt?.getTime() ?? 0),
+    );
+
+  if (converted.length > 0) {
+    return [converted[0].id];
+  }
 
   return rows.map((row) => row.id);
+}
+
+async function isChargeEligibleForTeamCredit(chargeId: string, db: CreditDb = prisma) {
+  const rows = await db.$queryRaw<EligibleChargeRow[]>(Prisma.sql`
+    SELECT pc."id"
+    FROM "PaymentCharge" pc
+    JOIN "Team" team ON team."id" = pc."teamId"
+    LEFT JOIN "Fixture" fixture ON fixture."id" = pc."fixtureId"
+    WHERE pc."id" = ${chargeId}
+      AND team."teamMode"::text = 'STANDARD'
+      AND (
+        team."standardCreditStartedAt" IS NULL
+        OR COALESCE(fixture."kickoffAt", pc."dueDate", pc."createdAt") >= team."standardCreditStartedAt"
+      )
+    LIMIT 1
+  `);
+
+  return rows.length > 0;
 }
 
 function getEntrySignedAmount(entry: Pick<TeamCreditLedgerEntry, "entryType" | "amountPence">) {
@@ -101,8 +150,13 @@ export async function syncLegacyTeamCreditPotEntries(
       pot."createdAt"
     FROM "TeamCreditPotEntry" pot
     JOIN "Team" team ON team."id" = pot."teamId"
+    LEFT JOIN "Fixture" source_fixture ON source_fixture."id" = pot."fixtureId"
     WHERE pot."teamId" IN (${Prisma.join(teamIds)})
       AND team."teamMode"::text = 'STANDARD'
+      AND (
+        team."standardCreditStartedAt" IS NULL
+        OR COALESCE(source_fixture."kickoffAt", pot."createdAt") >= team."standardCreditStartedAt"
+      )
       AND pot."amountPence" > 0
       AND pot."sourceType" <> 'PLAYER_MATCH_FEE_OVERPAYMENT'
     ON CONFLICT ("id") DO UPDATE SET
@@ -123,7 +177,8 @@ export async function syncPlayerOverpaymentCreditsForTeams(
 
   // Credit is the genuine cash/card surplus on a STANDARD team's fixture charge.
   // Managed squads collect individual player fees and must never turn player-fee
-  // surplus into standard team credit.
+  // surplus into standard team credit. For a converted team, only fixtures from
+  // the standard-team era can generate credit.
   await db.$executeRaw(Prisma.sql`
     WITH player_totals AS (
       SELECT
@@ -164,6 +219,7 @@ export async function syncPlayerOverpaymentCreditsForTeams(
         )::int AS "surplusPence"
       FROM "PaymentCharge" pc
       JOIN "Team" team ON team."id" = pc."teamId"
+      JOIN "Fixture" fixture ON fixture."id" = pc."fixtureId"
       LEFT JOIN player_totals pt
         ON pt."teamId" = pc."teamId"
        AND pt."fixtureId" = pc."fixtureId"
@@ -171,6 +227,10 @@ export async function syncPlayerOverpaymentCreditsForTeams(
         ON dt."chargeId" = pc."id"
       WHERE pc."teamId" IN (${Prisma.join(teamIds)})
         AND team."teamMode"::text = 'STANDARD'
+        AND (
+          team."standardCreditStartedAt" IS NULL
+          OR fixture."kickoffAt" >= team."standardCreditStartedAt"
+        )
         AND pc."fixtureId" IS NOT NULL
         AND pc."status" <> 'VOID'
         AND (
@@ -240,6 +300,7 @@ export async function syncPlayerOverpaymentCreditsForTeams(
       SELECT CONCAT('tcred_player_overpay_', pc."teamId", '_', pc."fixtureId") AS "id"
       FROM "PaymentCharge" pc
       JOIN "Team" team ON team."id" = pc."teamId"
+      JOIN "Fixture" fixture ON fixture."id" = pc."fixtureId"
       LEFT JOIN player_totals pt
         ON pt."teamId" = pc."teamId"
        AND pt."fixtureId" = pc."fixtureId"
@@ -247,6 +308,10 @@ export async function syncPlayerOverpaymentCreditsForTeams(
         ON dt."chargeId" = pc."id"
       WHERE pc."teamId" IN (${Prisma.join(teamIds)})
         AND team."teamMode"::text = 'STANDARD'
+        AND (
+          team."standardCreditStartedAt" IS NULL
+          OR fixture."kickoffAt" >= team."standardCreditStartedAt"
+        )
         AND pc."fixtureId" IS NOT NULL
         AND pc."status" <> 'VOID'
         AND (
@@ -278,7 +343,7 @@ export async function getTeamCreditLedger(
   teamIdsInput: string[],
   db: CreditDb = prisma,
 ): Promise<TeamCreditLedger> {
-  const teamIds = await getStandardTeamIds(teamIdsInput, db);
+  const teamIds = await getCreditEligibleTeamIds(teamIdsInput, db);
 
   if (teamIds.length === 0) {
     return { teamIds: [], balancePence: 0, entries: [] };
@@ -304,6 +369,10 @@ export async function getTeamCreditLedger(
     LEFT JOIN "PaymentCharge" pc ON pc."id" = c."chargeId"
     WHERE c."teamId" IN (${Prisma.join(teamIds)})
       AND t."teamMode"::text = 'STANDARD'
+      AND (
+        t."standardCreditStartedAt" IS NULL
+        OR c."createdAt" >= t."standardCreditStartedAt"
+      )
     ORDER BY c."createdAt" DESC, c."id" DESC
     LIMIT 100
   `);
@@ -406,20 +475,24 @@ export async function applyAvailableTeamCreditToCharge(input: {
 
   return prisma.$transaction(async (tx) => {
     const current = await getChargeSummary(input.chargeId, tx);
-    const standardTeamIds = await getStandardTeamIds(teamIds, tx);
+    const creditEligibleTeamIds = await getCreditEligibleTeamIds(teamIds, tx);
 
-    if (!current || !standardTeamIds.includes(current.charge.teamId)) {
-      throw new Error("Team credit is only available to standard teams.");
+    if (!current || !creditEligibleTeamIds.includes(current.charge.teamId)) {
+      throw new Error("Team credit is only available to the active standard-team credit identity.");
+    }
+
+    if (!(await isChargeEligibleForTeamCredit(current.charge.id, tx))) {
+      throw new Error("Team credit cannot be used against a charge from the managed-squad period.");
     }
 
     if (current.summary.displayStatus === "PAID" || current.summary.displayStatus === "VOID") {
       return {
         amountUsedPence: 0,
-        remainingCreditPence: await getTeamCreditBalancePence(standardTeamIds, tx),
+        remainingCreditPence: await getTeamCreditBalancePence(creditEligibleTeamIds, tx),
       };
     }
 
-    const creditLedger = await getTeamCreditLedger(standardTeamIds, tx);
+    const creditLedger = await getTeamCreditLedger(creditEligibleTeamIds, tx);
     const amountUsedPence = Math.min(creditLedger.balancePence, current.summary.outstandingPence);
 
     if (amountUsedPence <= 0) {
