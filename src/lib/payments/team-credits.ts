@@ -14,6 +14,10 @@ import { prisma } from "@/lib/prisma";
 type CreditDb = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
 type ChargeSummaryDb = CreditDb & Pick<typeof prisma, "paymentCharge" | "playerMatchFee">;
 
+type StandardTeamRow = {
+  id: string;
+};
+
 export type TeamCreditLedgerEntryType = "CREDIT_ADDED" | "CREDIT_USED" | "CREDIT_REVERSED";
 
 export type TeamCreditLedgerEntry = {
@@ -40,6 +44,20 @@ function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 }
 
+async function getStandardTeamIds(teamIdsInput: string[], db: CreditDb = prisma) {
+  const teamIds = uniqueIds(teamIdsInput);
+  if (teamIds.length === 0) return [];
+
+  const rows = await db.$queryRaw<StandardTeamRow[]>(Prisma.sql`
+    SELECT "id"
+    FROM "Team"
+    WHERE "id" IN (${Prisma.join(teamIds)})
+      AND "teamMode"::text = 'STANDARD'
+  `);
+
+  return rows.map((row) => row.id);
+}
+
 function getEntrySignedAmount(entry: Pick<TeamCreditLedgerEntry, "entryType" | "amountPence">) {
   if (entry.entryType === "CREDIT_ADDED") return entry.amountPence;
   return -entry.amountPence;
@@ -49,7 +67,7 @@ export async function syncLegacyTeamCreditPotEntries(
   teamIdsInput: string[],
   db: CreditDb = prisma,
 ) {
-  const teamIds = uniqueIds(teamIdsInput);
+  const teamIds = await getStandardTeamIds(teamIdsInput, db);
   if (teamIds.length === 0) return;
 
   // Player-match-fee overpayments are now calculated directly from PlayerMatchFee + PaymentCharge.
@@ -82,7 +100,9 @@ export async function syncLegacyTeamCreditPotEntries(
       pot."description",
       pot."createdAt"
     FROM "TeamCreditPotEntry" pot
+    JOIN "Team" team ON team."id" = pot."teamId"
     WHERE pot."teamId" IN (${Prisma.join(teamIds)})
+      AND team."teamMode"::text = 'STANDARD'
       AND pot."amountPence" > 0
       AND pot."sourceType" <> 'PLAYER_MATCH_FEE_OVERPAYMENT'
     ON CONFLICT ("id") DO UPDATE SET
@@ -98,13 +118,12 @@ export async function syncPlayerOverpaymentCreditsForTeams(
   teamIdsInput: string[],
   db: CreditDb = prisma,
 ) {
-  const teamIds = uniqueIds(teamIdsInput);
+  const teamIds = await getStandardTeamIds(teamIdsInput, db);
   if (teamIds.length === 0) return;
 
-  // Credit is the genuine cash/card surplus on a fixture charge. Player fee
-  // transactions are represented by PlayerMatchFee, so exclude their mirrored
-  // PaymentTransaction rows here. Team-credit transactions are also excluded so
-  // previously-used credit can never generate fresh credit again.
+  // Credit is the genuine cash/card surplus on a STANDARD team's fixture charge.
+  // Managed squads collect individual player fees and must never turn player-fee
+  // surplus into standard team credit.
   await db.$executeRaw(Prisma.sql`
     WITH player_totals AS (
       SELECT
@@ -144,12 +163,14 @@ export async function syncPlayerOverpaymentCreditsForTeams(
           pc."amountPence"
         )::int AS "surplusPence"
       FROM "PaymentCharge" pc
+      JOIN "Team" team ON team."id" = pc."teamId"
       LEFT JOIN player_totals pt
         ON pt."teamId" = pc."teamId"
        AND pt."fixtureId" = pc."fixtureId"
       LEFT JOIN direct_totals dt
         ON dt."chargeId" = pc."id"
       WHERE pc."teamId" IN (${Prisma.join(teamIds)})
+        AND team."teamMode"::text = 'STANDARD'
         AND pc."fixtureId" IS NOT NULL
         AND pc."status" <> 'VOID'
         AND (
@@ -218,12 +239,14 @@ export async function syncPlayerOverpaymentCreditsForTeams(
     current_overpay_ids AS (
       SELECT CONCAT('tcred_player_overpay_', pc."teamId", '_', pc."fixtureId") AS "id"
       FROM "PaymentCharge" pc
+      JOIN "Team" team ON team."id" = pc."teamId"
       LEFT JOIN player_totals pt
         ON pt."teamId" = pc."teamId"
        AND pt."fixtureId" = pc."fixtureId"
       LEFT JOIN direct_totals dt
         ON dt."chargeId" = pc."id"
       WHERE pc."teamId" IN (${Prisma.join(teamIds)})
+        AND team."teamMode"::text = 'STANDARD'
         AND pc."fixtureId" IS NOT NULL
         AND pc."status" <> 'VOID'
         AND (
@@ -244,7 +267,7 @@ export async function syncTeamCreditLedgerSources(
   teamIdsInput: string[],
   db: CreditDb = prisma,
 ) {
-  const teamIds = uniqueIds(teamIdsInput);
+  const teamIds = await getStandardTeamIds(teamIdsInput, db);
   if (teamIds.length === 0) return;
 
   await syncLegacyTeamCreditPotEntries(teamIds, db);
@@ -255,7 +278,7 @@ export async function getTeamCreditLedger(
   teamIdsInput: string[],
   db: CreditDb = prisma,
 ): Promise<TeamCreditLedger> {
-  const teamIds = uniqueIds(teamIdsInput);
+  const teamIds = await getStandardTeamIds(teamIdsInput, db);
 
   if (teamIds.length === 0) {
     return { teamIds: [], balancePence: 0, entries: [] };
@@ -280,6 +303,7 @@ export async function getTeamCreditLedger(
     JOIN "Team" t ON t."id" = c."teamId"
     LEFT JOIN "PaymentCharge" pc ON pc."id" = c."chargeId"
     WHERE c."teamId" IN (${Prisma.join(teamIds)})
+      AND t."teamMode"::text = 'STANDARD'
     ORDER BY c."createdAt" DESC, c."id" DESC
     LIMIT 100
   `);
@@ -309,6 +333,11 @@ export async function addTeamCredit(input: {
 
   if (!input.teamId || !Number.isInteger(amountPence) || amountPence <= 0) {
     throw new Error("Credit amount must be more than zero.");
+  }
+
+  const standardTeamIds = await getStandardTeamIds([input.teamId], db);
+  if (!standardTeamIds.includes(input.teamId)) {
+    throw new Error("Managed teams do not use the team credit ledger.");
   }
 
   const id = `tcred_${randomUUID()}`;
@@ -377,16 +406,20 @@ export async function applyAvailableTeamCreditToCharge(input: {
 
   return prisma.$transaction(async (tx) => {
     const current = await getChargeSummary(input.chargeId, tx);
+    const standardTeamIds = await getStandardTeamIds(teamIds, tx);
 
-    if (!current || !teamIds.includes(current.charge.teamId)) {
-      throw new Error("Charge was not found for this team.");
+    if (!current || !standardTeamIds.includes(current.charge.teamId)) {
+      throw new Error("Team credit is only available to standard teams.");
     }
 
     if (current.summary.displayStatus === "PAID" || current.summary.displayStatus === "VOID") {
-      return { amountUsedPence: 0, remainingCreditPence: await getTeamCreditBalancePence(teamIds, tx) };
+      return {
+        amountUsedPence: 0,
+        remainingCreditPence: await getTeamCreditBalancePence(standardTeamIds, tx),
+      };
     }
 
-    const creditLedger = await getTeamCreditLedger(teamIds, tx);
+    const creditLedger = await getTeamCreditLedger(standardTeamIds, tx);
     const amountUsedPence = Math.min(creditLedger.balancePence, current.summary.outstandingPence);
 
     if (amountUsedPence <= 0) {
