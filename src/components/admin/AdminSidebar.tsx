@@ -66,12 +66,6 @@ const navigationGroups = [
         description: "Accounts",
       },
       {
-        name: "Identity audit",
-        href: "/admin/users/identity-audit",
-        icon: ExclamationTriangleIcon,
-        description: "Missing emails",
-      },
-      {
         name: "Leagues",
         href: "/admin/leagues",
         icon: TrophyIcon,
@@ -82,12 +76,6 @@ const navigationGroups = [
         href: "/admin/league-tables",
         icon: TrophyIcon,
         description: "Standings",
-      },
-      {
-        name: "League audit",
-        href: "/admin/audits/league-structure",
-        icon: WrenchScrewdriverIcon,
-        description: "Structure",
       },
       {
         name: "Venues",
@@ -106,24 +94,6 @@ const navigationGroups = [
         href: "/admin/messaging",
         icon: DocumentTextIcon,
         description: "Email/SMS",
-      },
-      {
-        name: "Queue",
-        href: "/admin/queue",
-        icon: Cog6ToothIcon,
-        description: "Dispatches",
-      },
-      {
-        name: "Delivery issues",
-        href: "/admin/delivery-issues",
-        icon: ExclamationTriangleIcon,
-        description: "Bounces",
-      },
-      {
-        name: "Email audit",
-        href: "/admin/email-audit",
-        icon: MagnifyingGlassIcon,
-        description: "Address counts",
       },
       {
         name: "Templates",
@@ -202,12 +172,6 @@ const navigationGroups = [
         href: "/admin/fixtures/replace-team",
         icon: UserGroupIcon,
         description: "Swap",
-      },
-      {
-        name: "Backfill",
-        href: "/admin/fixtures/backfill",
-        icon: WrenchScrewdriverIcon,
-        description: "Fees/refs",
       },
       {
         name: "Late fees",
@@ -306,12 +270,6 @@ const navigationGroups = [
         description: "Pipeline",
       },
       {
-        name: "Data health",
-        href: "/admin/players/data-health",
-        icon: WrenchScrewdriverIcon,
-        description: "Player cleanup",
-      },
-      {
         name: "Prospect teams",
         href: "/admin/team-prospects",
         icon: UserGroupIcon,
@@ -322,6 +280,54 @@ const navigationGroups = [
         href: "/admin/polls",
         icon: DocumentTextIcon,
         description: "Votes",
+      },
+    ],
+  },
+  {
+    title: "Back end functions",
+    tint: "emerald",
+    items: [
+      {
+        name: "Identity audit",
+        href: "/admin/users/identity-audit",
+        icon: ExclamationTriangleIcon,
+        description: "Missing emails",
+      },
+      {
+        name: "Player data health",
+        href: "/admin/players/data-health",
+        icon: WrenchScrewdriverIcon,
+        description: "Player cleanup",
+      },
+      {
+        name: "League audit",
+        href: "/admin/audits/league-structure",
+        icon: WrenchScrewdriverIcon,
+        description: "Structure",
+      },
+      {
+        name: "Email audit",
+        href: "/admin/email-audit",
+        icon: MagnifyingGlassIcon,
+        description: "Address counts",
+      },
+      {
+        name: "Queue",
+        href: "/admin/queue",
+        icon: Cog6ToothIcon,
+        description: "Dispatches",
+      },
+      {
+        name: "Delivery issues",
+        href: "/admin/delivery-issues",
+        icon: ExclamationTriangleIcon,
+        description: "Bounces",
+      },
+      {
+        name: "Backfill",
+        href: "/admin/fixtures/backfill",
+        icon: WrenchScrewdriverIcon,
+        description: "Fees/refs",
       },
     ],
   },
