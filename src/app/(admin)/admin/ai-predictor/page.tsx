@@ -37,6 +37,7 @@ type EvaluatedPrediction = PredictionAuditRow & {
   resultCorrect: boolean;
   exactScore: boolean;
   goalError: number;
+  recovered: boolean;
 };
 
 type WeeklyStats = {
@@ -91,18 +92,31 @@ function averageGoalError(goalError: number, total: number) {
   return (goalError / total).toFixed(1);
 }
 
-function statusClasses(correct: boolean) {
-  return correct
-    ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
-    : "border-red-400/25 bg-red-500/10 text-red-100";
-}
-
 function accuracyClasses(correct: number, total: number) {
   if (total === 0) return "text-white/55";
   const value = correct / total;
   if (value >= 0.7) return "text-emerald-300";
   if (value >= 0.5) return "text-amber-300";
   return "text-red-300";
+}
+
+function callBadge(row: EvaluatedPrediction) {
+  if (row.recovered) {
+    return {
+      label: "Recovered · excluded",
+      className: "border-amber-400/25 bg-amber-500/10 text-amber-100",
+    };
+  }
+
+  return row.resultCorrect
+    ? {
+        label: "Correct",
+        className: "border-emerald-400/25 bg-emerald-500/10 text-emerald-100",
+      }
+    : {
+        label: "Wrong",
+        className: "border-red-400/25 bg-red-500/10 text-red-100",
+      };
 }
 
 export default async function AiPredictorAccuracyPage() {
@@ -133,12 +147,12 @@ export default async function AiPredictorAccuracyPage() {
     ORDER BY fixture."kickoffAt" DESC
   `);
 
-  const measurableRows = rows.filter(
+  const scoredRows = rows.filter(
     (row): row is PredictionAuditRow & { predictedHomeScore: number; predictedAwayScore: number } =>
       row.predictedHomeScore !== null && row.predictedAwayScore !== null,
   );
 
-  const evaluated: EvaluatedPrediction[] = measurableRows.map((row) => {
+  const evaluated: EvaluatedPrediction[] = scoredRows.map((row) => {
     const predictedOutcome = outcome(row.predictedHomeScore, row.predictedAwayScore);
     const actualOutcome = outcome(row.actualHomeScore, row.actualAwayScore);
 
@@ -154,12 +168,20 @@ export default async function AiPredictorAccuracyPage() {
       goalError:
         Math.abs(row.predictedHomeScore - row.actualHomeScore) +
         Math.abs(row.predictedAwayScore - row.actualAwayScore),
+      recovered: row.source === "recovered",
     };
   });
 
+  // Recovered rows are useful for restoring missing historical fixture displays, but
+  // they were reconstructed later using the current predictor logic. Keep them visible
+  // for context without allowing them to inflate or depress the live accuracy measure.
+  const measured = evaluated.filter((row) => !row.recovered);
+  const recoveredCount = evaluated.length - measured.length;
+  const unmeasurableCount = rows.length - scoredRows.length;
+
   const weeklyMap = new Map<string, WeeklyStats>();
 
-  for (const row of evaluated) {
+  for (const row of measured) {
     const current = weeklyMap.get(row.weekKey) ?? {
       weekKey: row.weekKey,
       total: 0,
@@ -179,43 +201,45 @@ export default async function AiPredictorAccuracyPage() {
 
   const weekly = Array.from(weeklyMap.values()).sort((a, b) => b.weekKey.localeCompare(a.weekKey));
   const latestWeek = weekly[0] ?? null;
-  const totalCorrect = evaluated.filter((row) => row.resultCorrect).length;
-  const totalWrong = evaluated.length - totalCorrect;
-  const totalExact = evaluated.filter((row) => row.exactScore).length;
-  const totalGoalError = evaluated.reduce((sum, row) => sum + row.goalError, 0);
-  const unmeasurableCount = rows.length - measurableRows.length;
+  const totalCorrect = measured.filter((row) => row.resultCorrect).length;
+  const totalWrong = measured.length - totalCorrect;
+  const totalExact = measured.filter((row) => row.exactScore).length;
+  const totalGoalError = measured.reduce((sum, row) => sum + row.goalError, 0);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-          AI predictor monitoring
-        </p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
-          Predictor accuracy
-        </h1>
-        <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">
-          Tracks every completed fixture that has a stored predictor score. Result accuracy means the predictor correctly called a home win, draw or away win. Exact-score accuracy is shown separately because it is a much stricter test.
-        </p>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+            AI predictor monitoring
+          </p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
+            Predictor accuracy
+          </h1>
+          <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">
+            Tracks completed fixtures with a genuine stored pre-match predictor score. Result accuracy means the predictor correctly called a home win, draw or away win. Exact-score accuracy is shown separately because it is a much stricter test.
+          </p>
+        </div>
+        {recoveredCount > 0 ? (
+          <div className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
+            {recoveredCount} recovered historical row{recoveredCount === 1 ? "" : "s"} excluded
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/65">
-            Latest week accuracy
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/65">Latest week accuracy</p>
           <p className={`mt-3 text-4xl font-black ${latestWeek ? accuracyClasses(latestWeek.correct, latestWeek.total) : "text-white/55"}`}>
             {latestWeek ? percentage(latestWeek.correct, latestWeek.total) : "—"}
           </p>
           <p className="mt-2 text-xs text-white/45">
-            {latestWeek ? `Week commencing ${weekLabel(latestWeek.weekKey)}` : "No completed predictions yet"}
+            {latestWeek ? `Week commencing ${weekLabel(latestWeek.weekKey)}` : "No completed live predictions yet"}
           </p>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Latest week calls
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Latest week calls</p>
           <div className="mt-3 flex items-end gap-3">
             <span className="text-3xl font-black text-emerald-300">{latestWeek?.correct ?? 0}</span>
             <span className="pb-1 text-xs text-white/40">correct</span>
@@ -226,25 +250,19 @@ export default async function AiPredictorAccuracyPage() {
         </div>
 
         <div className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/65">
-            Latest exact scores
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/65">Latest exact scores</p>
           <p className="mt-3 text-4xl font-black text-sky-200">{latestWeek?.exact ?? 0}</p>
           <p className="mt-2 text-xs text-white/45">
-            {latestWeek ? `${percentage(latestWeek.exact, latestWeek.total)} of that week's fixtures` : "No completed predictions yet"}
+            {latestWeek ? `${percentage(latestWeek.exact, latestWeek.total)} of that week's fixtures` : "No completed live predictions yet"}
           </p>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            All-time result accuracy
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">All-time result accuracy</p>
+          <p className={`mt-3 text-4xl font-black ${accuracyClasses(totalCorrect, measured.length)}`}>
+            {percentage(totalCorrect, measured.length)}
           </p>
-          <p className={`mt-3 text-4xl font-black ${accuracyClasses(totalCorrect, evaluated.length)}`}>
-            {percentage(totalCorrect, evaluated.length)}
-          </p>
-          <p className="mt-2 text-xs text-white/45">
-            {totalCorrect} correct · {totalWrong} wrong · {totalExact} exact
-          </p>
+          <p className="mt-2 text-xs text-white/45">{totalCorrect} correct · {totalWrong} wrong · {totalExact} exact</p>
         </div>
       </div>
 
@@ -252,13 +270,9 @@ export default async function AiPredictorAccuracyPage() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-white">Accuracy by week</h2>
-            <p className="mt-1 text-sm text-white/55">
-              Use this table to see whether the predictor is improving or becoming less reliable from week to week.
-            </p>
+            <p className="mt-1 text-sm text-white/55">See whether genuine pre-match predictions are improving or becoming less reliable week by week.</p>
           </div>
-          <div className="text-xs text-white/40">
-            {evaluated.length} completed prediction{evaluated.length === 1 ? "" : "s"} measured
-          </div>
+          <div className="text-xs text-white/40">{measured.length} live completed prediction{measured.length === 1 ? "" : "s"} measured</div>
         </div>
 
         <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
@@ -281,19 +295,13 @@ export default async function AiPredictorAccuracyPage() {
                   <td className="px-4 py-3 text-white/65">{week.total}</td>
                   <td className="px-4 py-3 font-semibold text-emerald-300">{week.correct}</td>
                   <td className="px-4 py-3 font-semibold text-red-300">{week.wrong}</td>
-                  <td className={`px-4 py-3 font-black ${accuracyClasses(week.correct, week.total)}`}>
-                    {percentage(week.correct, week.total)}
-                  </td>
+                  <td className={`px-4 py-3 font-black ${accuracyClasses(week.correct, week.total)}`}>{percentage(week.correct, week.total)}</td>
                   <td className="px-4 py-3 text-sky-200">{week.exact} ({percentage(week.exact, week.total)})</td>
                   <td className="px-4 py-3 text-white/65">{averageGoalError(week.goalError, week.total)}</td>
                 </tr>
               ))}
               {weekly.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-8 text-white/55" colSpan={7}>
-                    No completed fixtures with a stored predictor score are available yet.
-                  </td>
-                </tr>
+                <tr><td className="px-4 py-8 text-white/55" colSpan={7}>No completed genuine predictor scores are available yet.</td></tr>
               ) : null}
             </tbody>
           </table>
@@ -304,9 +312,7 @@ export default async function AiPredictorAccuracyPage() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-white">Recent predictor checks</h2>
-            <p className="mt-1 text-sm text-white/55">
-              Predicted score versus the result currently recorded for the fixture.
-            </p>
+            <p className="mt-1 text-sm text-white/55">Predicted score versus the result currently recorded. Recovered historical rows are visible but never counted in the accuracy percentages.</p>
           </div>
           <div className="text-xs text-white/40">Latest {Math.min(evaluated.length, 100)} shown</div>
         </div>
@@ -324,40 +330,31 @@ export default async function AiPredictorAccuracyPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {evaluated.slice(0, 100).map((row) => (
-                <tr key={row.fixtureId} className="hover:bg-white/[0.025]">
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-white">{row.homeTeamName} v {row.awayTeamName}</div>
-                    {row.exactScore ? (
-                      <span className="mt-1 inline-flex rounded-full border border-sky-400/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">
-                        Exact score
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-white/60">
-                    <div>{row.leagueName}</div>
-                    <div className="mt-0.5 text-xs text-white/35">{dateTimeFormatter.format(row.kickoffAt)}</div>
-                  </td>
-                  <td className="px-4 py-3 font-black text-white">
-                    {row.predictedHomeScore}–{row.predictedAwayScore}
-                  </td>
-                  <td className="px-4 py-3 font-black text-white">
-                    {row.actualHomeScore}–{row.actualAwayScore}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(row.resultCorrect)}`}>
-                      {row.resultCorrect ? "Correct" : "Wrong"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-white/65">{row.goalError}</td>
-                </tr>
-              ))}
+              {evaluated.slice(0, 100).map((row) => {
+                const badge = callBadge(row);
+                return (
+                  <tr key={row.fixtureId} className="hover:bg-white/[0.025]">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-white">{row.homeTeamName} v {row.awayTeamName}</div>
+                      {row.exactScore ? (
+                        <span className="mt-1 inline-flex rounded-full border border-sky-400/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">Exact score</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-white/60">
+                      <div>{row.leagueName}</div>
+                      <div className="mt-0.5 text-xs text-white/35">{dateTimeFormatter.format(row.kickoffAt)}</div>
+                    </td>
+                    <td className="px-4 py-3 font-black text-white">{row.predictedHomeScore}–{row.predictedAwayScore}</td>
+                    <td className="px-4 py-3 font-black text-white">{row.actualHomeScore}–{row.actualAwayScore}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${badge.className}`}>{badge.label}</span>
+                    </td>
+                    <td className="px-4 py-3 text-white/65">{row.goalError}</td>
+                  </tr>
+                );
+              })}
               {evaluated.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-8 text-white/55" colSpan={6}>
-                    No predictor results are ready to audit yet.
-                  </td>
-                </tr>
+                <tr><td className="px-4 py-8 text-white/55" colSpan={6}>No predictor results are ready to audit yet.</td></tr>
               ) : null}
             </tbody>
           </table>
@@ -365,7 +362,7 @@ export default async function AiPredictorAccuracyPage() {
       </section>
 
       <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-xs leading-5 text-white/45">
-        Result accuracy is the main headline measure. “Avg goals out” is the average total difference between the predicted home/away scores and the actual home/away scores. {unmeasurableCount > 0 ? `${unmeasurableCount} older completed prediction${unmeasurableCount === 1 ? " has" : "s have"} no stored score and ${unmeasurableCount === 1 ? "is" : "are"} excluded from the percentages.` : "All completed stored predictions currently have a measurable score."} Overall average goals out: {averageGoalError(totalGoalError, evaluated.length)}.
+        Result accuracy is the main headline measure. “Avg goals out” is the average total difference between the predicted home/away scores and the actual home/away scores. Recovered historical rows use today’s predictor logic with only data that existed before kick-off, so they are shown for context but excluded from the live accuracy percentage. {unmeasurableCount > 0 ? `${unmeasurableCount} older completed prediction${unmeasurableCount === 1 ? " has" : "s have"} no stored score and ${unmeasurableCount === 1 ? "is" : "are"} also excluded.` : "All non-recovered completed prediction rows currently have a stored score."} Overall average goals out: {averageGoalError(totalGoalError, measured.length)}.
       </div>
     </div>
   );
