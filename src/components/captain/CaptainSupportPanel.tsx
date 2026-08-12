@@ -28,8 +28,8 @@ function getContext(pathname: string): HelpContext | null {
   if (/\/player-payments\/?$/.test(pathname)) {
     return {
       topic: "Squad payments",
-      title: "Need help with squad payments?",
-      body: "Use this page to split the team fee between players and send secure payment links. Player links only work if player emails are saved.",
+      title: "How do squad payments work?",
+      body: "Before you start, make sure every player has an email address saved in your Squad. SIXFL payment links are sent by email, so if a player's email is missing their payment link cannot be sent.",
       options: ["How do squad payments work?", "My player did not get a payment link", "I need to change a player amount", "A player has paid me directly", "I still need help"],
     };
   }
@@ -124,6 +124,10 @@ function getOptionPrompt(option: string, context: HelpContext): OptionPrompt {
 
 function isOverview(pathname: string, teamId: string) {
   return pathname === `/captain/team/${teamId}` || pathname === `/captain/team/${teamId}/`;
+}
+
+function isSquadPayments(pathname: string) {
+  return /\/player-payments\/?$/.test(pathname);
 }
 
 export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
@@ -223,6 +227,30 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
           {isOpen ? "Close help" : "Open help"}
         </button>
       </div>
+
+      {isSquadPayments(pathname) ? (
+        <div className="mt-5 rounded-2xl border border-emerald-300/25 bg-emerald-500/10 p-4 sm:p-5">
+          <p className="text-sm font-semibold text-emerald-50">Set up squad payments in 5 steps</p>
+          <ol className="mt-3 grid gap-2 text-sm leading-6 text-emerald-50/80 md:grid-cols-5">
+            <li><strong className="text-white">1.</strong> Choose the fixture.</li>
+            <li><strong className="text-white">2.</strong> Enter the normal amount per player.</li>
+            <li><strong className="text-white">3.</strong> Tick the players contributing.</li>
+            <li><strong className="text-white">4.</strong> Choose how each player is paying.</li>
+            <li><strong className="text-white">5.</strong> Save player collection.</li>
+          </ol>
+          <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-400/10 p-3 text-sm font-semibold leading-6 text-amber-50">
+            Important: make sure every player has an email address saved in your Squad before setting up payments. If an email address is missing, SIXFL cannot email that player's payment link.
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link href={`/captain/team/${teamId}/help#squad-payments`} className="inline-flex items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/20">
+              Show full squad payment guide
+            </Link>
+            <Link href={`/captain/team/${teamId}/captain-squad`} className="inline-flex items-center justify-center rounded-full border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-semibold text-white/75 transition hover:bg-white/[0.06] hover:text-white">
+              Check player emails
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {isOpen ? <SupportForm teamId={teamId} pathname={pathname} context={context} selectedOption={selectedOption} setSelectedOption={setSelectedOption} /> : null}
     </section>
