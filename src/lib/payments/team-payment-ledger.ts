@@ -124,7 +124,7 @@ function sortLedgerEntriesForCaptain(entries: TeamPaymentLedgerEntry[]) {
 export async function getRelatedTeamIdsForPaymentLedger(teamId: string) {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, teamMode: true },
   });
 
   if (!team) return null;
@@ -132,10 +132,12 @@ export async function getRelatedTeamIdsForPaymentLedger(teamId: string) {
   // Teams were historically duplicated per season. Until there is a permanent clubId,
   // same-name team rows are the only reliable way to keep old unpaid fixture charges visible
   // to the same captain/admin team view after season/division moves.
+  // Never bridge STANDARD and MANAGED records: the two modes have different payment models.
   const rows = await prisma.$queryRaw<RelatedTeamRow[]>(Prisma.sql`
     SELECT DISTINCT "id"
     FROM "Team"
     WHERE LOWER(TRIM("name")) = LOWER(TRIM(${team.name}))
+      AND "teamMode"::text = ${team.teamMode}
   `);
 
   return {
@@ -207,7 +209,10 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       amountPence: charge.amountPence,
       paidPence,
     });
-    const overpaidPence = Math.max(paidPence - charge.amountPence, 0);
+    // Managed squads collect individual player fees; a player-fee surplus must never
+    // become standard team credit. Only STANDARD teams can expose overpayment credit.
+    const overpaidPence =
+      team.teamMode === "STANDARD" ? Math.max(paidPence - charge.amountPence, 0) : 0;
     const fixtureLabel = charge.fixture
       ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
       : charge.title;
