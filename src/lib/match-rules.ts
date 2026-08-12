@@ -2,7 +2,7 @@
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 1.3 — August 2026";
+export const MATCH_RULES_VERSION = "Version 1.4 — August 2026";
 
 export type MatchRuleSection = {
   title: string;
@@ -133,6 +133,15 @@ export const matchRuleSections: MatchRuleSection[] = [
       "A second blue card in the same match results in permanent exclusion from the match.",
       "A red card results in immediate dismissal from the match.",
       "Serious disciplinary incidents may be reported to the relevant County FA.",
+    ],
+  },
+  {
+    title: "Abandoned Matches",
+    points: [
+      "Where a referee abandons a match because of the conduct of one team, the referee's decision to abandon the match is final.",
+      "The team whose conduct caused the abandonment is responsible for payment of both its own match fee and the opposing team's match fee.",
+      "The result and league outcome of any abandoned fixture will be determined by SIXFL at its sole discretion, taking into account the circumstances of the abandonment.",
+      "SIXFL may allow the score at the time of abandonment to stand, award the match to either team, record a forfeit or take any other action it considers appropriate.",
     ],
   },
 ];
