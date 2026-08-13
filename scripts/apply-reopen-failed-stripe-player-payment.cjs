@@ -250,6 +250,8 @@ if (
   throw new Error("Failed Stripe player-payment repair controls were not applied completely.");
 }
 
+require("./apply-admin-team-primary-contact-selector.cjs");
+
 console.log(
-  "Added admin-only Stripe-verified repair for falsely paid player match fees.",
+  "Added admin-only Stripe-verified repair for falsely paid player match fees and team-user primary contact selection.",
 );
