@@ -1,0 +1,24 @@
+name: Prebuild compatibility
+
+on:
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "src/app/captain/team/[teamid]/player-payments/**"
+      - "package.json"
+      - ".github/workflows/prebuild-compatibility.yml"
+
+jobs:
+  prebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run build-time compatibility patches
+        run: npm run prebuild
