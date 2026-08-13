@@ -99,7 +99,15 @@ export default async function CaptainCollectedRemittancePanel({
 
                   {cappedByOutstanding ? (
                     <p className="mt-3 text-xs leading-5 text-amber-100/80">
-                      You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected, but only {formatMoney(amountAvailableToRemitPence)} can be paid to this fixture because that is all that remains outstanding after allowing for any payment already in progress.
+                      {amountAvailableToRemitPence > 0 ? (
+                        <>
+                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. Only {formatMoney(amountAvailableToRemitPence)} needs to be passed to SIXFL for this fixture right now because the rest is already covered or accounted for by a payment in progress.
+                        </>
+                      ) : (
+                        <>
+                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. No payment is needed for this fixture right now because its remaining balance is already covered or accounted for by a payment in progress.
+                        </>
+                      )}
                     </p>
                   ) : null}
                 </div>
