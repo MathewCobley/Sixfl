@@ -62,6 +62,7 @@ require("./fix-goal-of-week-dashboard-promo-payload-narrowing.cjs");
 require("./apply-critical-player-dashboard-features.cjs");
 require("./apply-late-payment-72h-review.cjs");
 require("./apply-admin-outstanding-balance-copy.cjs");
+require("./apply-reopen-failed-stripe-player-payment.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
