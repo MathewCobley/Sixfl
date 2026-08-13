@@ -92,12 +92,25 @@ function averageGoalError(goalError: number, total: number) {
   return (goalError / total).toFixed(1);
 }
 
+function average(value: number, total: number) {
+  if (total === 0) return "—";
+  return (value / total).toFixed(1);
+}
+
 function accuracyClasses(correct: number, total: number) {
   if (total === 0) return "text-white/55";
   const value = correct / total;
   if (value >= 0.7) return "text-emerald-300";
   if (value >= 0.5) return "text-amber-300";
   return "text-red-300";
+}
+
+function concentrationClasses(count: number, total: number) {
+  if (total === 0) return "text-white/55";
+  const share = count / total;
+  if (share >= 0.4) return "text-red-300";
+  if (share >= 0.25) return "text-amber-300";
+  return "text-emerald-300";
 }
 
 function callBadge(row: EvaluatedPrediction) {
@@ -206,6 +219,21 @@ export default async function AiPredictorAccuracyPage() {
   const totalExact = measured.filter((row) => row.exactScore).length;
   const totalGoalError = measured.reduce((sum, row) => sum + row.goalError, 0);
 
+  const scorelineCounts = new Map<string, number>();
+  let predictedGoalTotal = 0;
+  let actualGoalTotal = 0;
+
+  for (const row of measured) {
+    const scoreline = `${row.predictedHomeScore}–${row.predictedAwayScore}`;
+    scorelineCounts.set(scoreline, (scorelineCounts.get(scoreline) ?? 0) + 1);
+    predictedGoalTotal += row.predictedHomeScore + row.predictedAwayScore;
+    actualGoalTotal += row.actualHomeScore + row.actualAwayScore;
+  }
+
+  const scorelineDistribution = Array.from(scorelineCounts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const mostCommonScoreline = scorelineDistribution[0] ?? null;
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -265,6 +293,54 @@ export default async function AiPredictorAccuracyPage() {
           <p className="mt-2 text-xs text-white/45">{totalCorrect} correct · {totalWrong} wrong · {totalExact} exact</p>
         </div>
       </div>
+
+      <section className="rounded-3xl border border-violet-400/15 bg-violet-500/[0.06] p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Scoreline diversity</h2>
+            <p className="mt-1 max-w-3xl text-sm text-white/55">Checks whether the exact-score model is collapsing too many different fixtures into the same prediction.</p>
+          </div>
+          <div className="text-xs text-white/40">Genuine stored predictions only</div>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Most common prediction</p>
+            <p className={`mt-2 text-3xl font-black ${mostCommonScoreline ? concentrationClasses(mostCommonScoreline[1], measured.length) : "text-white/55"}`}>
+              {mostCommonScoreline?.[0] ?? "—"}
+            </p>
+            <p className="mt-2 text-xs text-white/45">
+              {mostCommonScoreline ? `${mostCommonScoreline[1]} of ${measured.length} · ${percentage(mostCommonScoreline[1], measured.length)}` : "No measured predictions yet"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Different scorelines used</p>
+            <p className="mt-2 text-3xl font-black text-violet-200">{scorelineDistribution.length || "—"}</p>
+            <p className="mt-2 text-xs text-white/45">Across {measured.length} measured prediction{measured.length === 1 ? "" : "s"}</p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Goals per fixture</p>
+            <div className="mt-2 flex items-baseline gap-3">
+              <span className="text-3xl font-black text-violet-200">{average(predictedGoalTotal, measured.length)}</span>
+              <span className="text-xs text-white/40">predicted</span>
+              <span className="text-2xl font-black text-white/75">{average(actualGoalTotal, measured.length)}</span>
+              <span className="text-xs text-white/40">actual</span>
+            </div>
+          </div>
+        </div>
+
+        {scorelineDistribution.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {scorelineDistribution.slice(0, 8).map(([scoreline, count]) => (
+              <span key={scoreline} className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/65">
+                {scoreline} · {count}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
