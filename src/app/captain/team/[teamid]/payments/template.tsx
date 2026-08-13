@@ -34,7 +34,7 @@ export default function PaymentsTemplate({ children }: { children: React.ReactNo
     const navigation = performance.getEntriesByType("navigation")[0] as
       | PerformanceNavigationTiming
       | undefined;
-    if (navigation?.type === "back_forward") {
+    if (navigation?.type === "back_forward" || navigation?.type === "reload") {
       setShowBackRecovery(true);
     }
 
@@ -52,7 +52,7 @@ export default function PaymentsTemplate({ children }: { children: React.ReactNo
         <div className="mb-5 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-4 text-sm text-amber-50">
           <p className="font-semibold">Returned from Stripe without paying?</p>
           <p className="mt-1 leading-5 text-amber-50/75">
-            If you used your browser Back button, Stripe may still show the collected-money checkout as active. Cancel it here to release the amount and make the payment button available again.
+            If you came back without completing the payment, Stripe may still show the collected-money checkout as active. Cancel it here to release the amount and make the payment button available again.
           </p>
           <form
             action={`/captain/team/${teamId}/payments/remit-collected/cancel`}
