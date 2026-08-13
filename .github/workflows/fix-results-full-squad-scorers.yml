@@ -1,0 +1,85 @@
+name: Apply results full squad scorer fix
+
+on:
+  push:
+    branches:
+      - fix/results-full-squad-scorers
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply targeted results page fix
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/app/captain/team/[teamid]/results/page.tsx")
+          text = path.read_text()
+
+          replacements = [
+              (
+                  'const RESULT_DISPUTE_WINDOW_MS = 72 * 60 * 60 * 1000;\n',
+                  'const RESULT_DISPUTE_WINDOW_MS = 72 * 60 * 60 * 1000;\nconst MAX_MATCHDAY_PLAYERS = 9;\n',
+              ),
+              (
+                  '''  if (error.message.includes("assists cannot exceed")) {\n    return "Assists cannot be higher than your team’s official score.";\n  }\n  if (error.message.includes("not in this match squad")) {\n    return "Please choose players, scorers, assists and Player of the Match from your match squad.";\n  }\n''',
+                  '''  if (error.message.includes("assists cannot exceed")) {\n    return "Assists cannot be higher than your team’s official score.";\n  }\n  if (error.message.includes("maximum of 9")) {\n    return "A maximum of 9 players can be recorded as having played in one fixture.";\n  }\n  if (error.message.includes("not in this match squad")) {\n    return "Please choose players, scorers, assists and Player of the Match from your registered squad.";\n  }\n''',
+              ),
+              (
+                  '''    const selectedPlayers: MatchPlayerOption[] = result.fixture.selections\n      .filter((selection) => selection.selectionStatus === "SELECTED")\n      .map((selection) => ({\n        id: selection.teamMember.id,\n        name: getPlayerDisplayName(selection.teamMember),\n        email: selection.teamMember.user.email,\n        role: selection.teamMember.role,\n        isSelectedForFixture: true,\n      }));\n\n    const fallbackPlayers: MatchPlayerOption[] = team.members.map((member) => ({\n      id: member.id,\n      name: getPlayerDisplayName(member),\n      email: member.user.email,\n      role: member.role,\n      isSelectedForFixture: false,\n    }));\n\n    const players = selectedPlayers.length > 0 ? selectedPlayers : fallbackPlayers;\n''',
+                  '''    const selectedPlayerIds = new Set(\n      result.fixture.selections\n        .filter((selection) => selection.selectionStatus === "SELECTED")\n        .map((selection) => selection.teamMember.id),\n    );\n\n    const players: MatchPlayerOption[] = team.members.map((member) => ({\n      id: member.id,\n      name: getPlayerDisplayName(member),\n      email: member.user.email,\n      role: member.role,\n      isSelectedForFixture: selectedPlayerIds.has(member.id),\n    }));\n''',
+              ),
+              (
+                  '''      if (played) {\n        performanceRows.push({ teamMemberId: player.id, rating });\n      }\n    }\n\n    const isHome = result.fixture.homeTeamId === teamid;\n''',
+                  '''      if (played) {\n        performanceRows.push({ teamMemberId: player.id, rating });\n      }\n    }\n\n    if (performanceRows.length > MAX_MATCHDAY_PLAYERS) {\n      throw new Error("A maximum of 9 players can play in one fixture.");\n    }\n\n    const isHome = result.fixture.homeTeamId === teamid;\n''',
+              ),
+              (
+                  '''      const selectedPlayers: MatchPlayerOption[] = fixture.selections\n        .filter((selection) => selection.selectionStatus === "SELECTED")\n        .map((selection) => ({\n          id: selection.teamMember.id,\n          name: getPlayerDisplayName(selection.teamMember),\n          email: selection.teamMember.user.email,\n          role: selection.teamMember.role,\n          isSelectedForFixture: true,\n        }));\n      const matchPlayers =\n        selectedPlayers.length > 0 ? selectedPlayers : teamMembersAsPlayers;\n''',
+                  '''      const selectedPlayerIds = new Set(\n        fixture.selections\n          .filter((selection) => selection.selectionStatus === "SELECTED")\n          .map((selection) => selection.teamMember.id),\n      );\n      const matchPlayers = teamMembersAsPlayers.map((player) => ({\n        ...player,\n        isSelectedForFixture: selectedPlayerIds.has(player.id),\n      }));\n''',
+              ),
+              (
+                  '        isUsingSelectedPlayers: selectedPlayers.length > 0,\n',
+                  '        hasSelectedPlayers: selectedPlayerIds.size > 0,\n',
+              ),
+              (
+                  '                        Tick who played, then add their goals, optional assists and an optional rating out of 10.\n',
+                  '                        Tick the players who actually played, then add goals, optional assists and an optional rating. The full registered squad is shown so late replacements can be recorded correctly. Maximum 9 players per fixture.\n',
+              ),
+              (
+                  '                      {row.isUsingSelectedPlayers ? "Selected squad" : "Full squad fallback"}\n',
+                  '                      {row.hasSelectedPlayers ? "Full squad · selected players pre-ticked" : "Full squad"}\n',
+              ),
+              (
+                  '''                            const defaultPlayed = performance\n                              ? performance.played\n                              : row.isUsingSelectedPlayers ||\n                                Boolean(contribution) ||\n                                selectedPomMemberId === player.id;\n''',
+                  '''                            const defaultPlayed = performance\n                              ? performance.played\n                              : player.isSelectedForFixture ||\n                                Boolean(contribution) ||\n                                selectedPomMemberId === player.id;\n''',
+              ),
+              (
+                  '                      Ratings are optional. Adding a goal, assist, rating or Player of the Match automatically marks that player as having played.\n',
+                  '                      Ratings are optional. Adding a goal, assist, rating or Player of the Match automatically marks that player as having played. No more than 9 players can be recorded for the fixture.\n',
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f"Expected source snippet not found:\n{old}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+
+      - name: Commit fix
+        run: |
+          git config user.name "SIXFL GitHub Actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'src/app/captain/team/[teamid]/results/page.tsx'
+          git diff --cached --check
+          git commit -m "Allow full squad scorer entry with nine-player limit"
+          git push
