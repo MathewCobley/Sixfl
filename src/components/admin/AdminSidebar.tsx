@@ -294,6 +294,12 @@ const navigationGroups = [
         description: "Weekly accuracy",
       },
       {
+        name: "Predictor backtest",
+        href: "/admin/ai-predictor/backtest",
+        icon: TrophyIcon,
+        description: "Historical test",
+      },
+      {
         name: "Identity audit",
         href: "/admin/users/identity-audit",
         icon: ExclamationTriangleIcon,
