@@ -75,7 +75,7 @@ const repairAction = `export async function reopenFailedStripePlayerMatchFeeActi
     where: {
       teamId,
       method: "STRIPE",
-      notes: { contains: \`Player fee ID: \\${fee.id}\` },
+      notes: { contains: "Player fee ID: " + fee.id },
     },
     select: {
       id: true,
@@ -150,8 +150,8 @@ const repairAction = `export async function reopenFailedStripePlayerMatchFeeActi
   await reconcileFixtureChargeFromPlayerPayments({ teamId, fixtureId });
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
-  revalidatePath(\`/captain/team/\\${teamId}/player-payments\`);
-  revalidatePath(\`/captain/team/\\${teamId}/payments\`);
+  revalidatePath("/captain/team/" + teamId + "/player-payments");
+  revalidatePath("/captain/team/" + teamId + "/payments");
   revalidatePath("/admin/payments");
 
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=failed_stripe_reopened"));
