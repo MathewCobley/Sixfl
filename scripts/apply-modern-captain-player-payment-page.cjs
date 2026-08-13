@@ -62,31 +62,24 @@ replaceOnce(
     '  if (error === "no_team_charge") {',
     '    return "The fixture does not have an active team charge. SIXFL needs to review the fixture before player links can be created.";',
     "  }",
+    '  if (error === "charge_covered") {',
+    '    return "This fixture charge is already fully covered, so no new player links can be created.";',
+    "  }",
+    '  if (error === "allocation_exceeds_fee") {',
+    '    return "The selected player shares exceed the amount available to collect for this fixture. Reduce the amounts before saving.";',
+    "  }",
     "  return null;",
   ].join("\n"),
   "modern collection error messages",
 );
 
+// Keep this compatibility patch deliberately granular. Other payment safeguards now
+// add their own totals (for example zero-fee settled shares) to this same section.
+// Replacing one large historical block made the build brittle whenever a native
+// safeguard was added. Patch only the fields this script owns and preserve the rest.
 replaceOnce(
+  '  const selectedTeamFeePence =\n    selectedEntry?.amountPence ?? selectedFixture?.matchFeePence ?? 4000;',
   [
-    "  const playerAllocationPence = selectedFees.reduce(",
-    "    (sum, fee) => sum + fee.amountPence,",
-    "    0,",
-    "  );",
-    "  const hasPlayerCollection = selectedFees.length > 0;",
-    "  const selectedTeamFeePence =",
-    "    selectedEntry?.amountPence ?? selectedFixture?.matchFeePence ?? 4000;",
-    "  const directPaidPence = selectedEntry?.directPaidPence ?? 0;",
-    "  const collectedPence = selectedEntry?.playerPaidPence ?? 0;",
-    "  const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;",
-    "  const stillToCoverPence = selectedEntry?.outstandingPence ?? 0;",
-  ].join("\n"),
-  [
-    "  const playerAllocationPence = selectedFees.reduce(",
-    "    (sum, fee) => sum + fee.amountPence,",
-    "    0,",
-    "  );",
-    "  const hasPlayerCollection = selectedFees.length > 0;",
     "  const selectedFixtureTeamFeePence = selectedFixture",
     "    ? relatedTeamIds.includes(selectedFixture.homeTeamId)",
     "      ? selectedFixture.homeMatchFeePence ?? selectedFixture.matchFeePence",
@@ -98,22 +91,42 @@ replaceOnce(
     "    selectedEntry?.amountPence ??",
     "    selectedFixtureTeamFeePence ??",
     "    (selectedFixture ? 4000 : 0);",
-    "  const directPaidPence = selectedEntry?.directPaidPence ?? 0;",
+  ].join("\n"),
+  "modern team-specific fixture fee",
+);
+
+replaceOnce(
+  '  const collectedPence = selectedEntry?.playerPaidPence ?? 0;',
+  [
     "  const playerPaidWithoutLedgerPence = selectedFees",
     '    .filter((fee) => fee.status === "PAID")',
     "    .reduce((sum, fee) => sum + fee.amountPence, 0);",
+    "  const collectedPence =",
+    "    selectedEntry?.playerPaidPence ?? playerPaidWithoutLedgerPence;",
+  ].join("\n"),
+  "modern paid-player fallback total",
+);
+
+replaceOnce(
+  '  const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;',
+  [
     "  const playerOpenWithoutLedgerPence = selectedFees",
     '    .filter((fee) => fee.status === "OPEN")',
     "    .reduce((sum, fee) => sum + fee.amountPence, 0);",
-    "  const collectedPence =",
-    "    selectedEntry?.playerPaidPence ?? playerPaidWithoutLedgerPence;",
     "  const playerOutstandingPence =",
     "    selectedEntry?.playerOpenPence ?? playerOpenWithoutLedgerPence;",
+  ].join("\n"),
+  "modern open-player fallback total",
+);
+
+replaceOnce(
+  '  const stillToCoverPence = selectedEntry?.outstandingPence ?? 0;',
+  [
     "  const stillToCoverPence =",
     "    selectedEntry?.outstandingPence ??",
-    "    Math.max(selectedTeamFeePence - collectedPence, 0);",
+    "    Math.max(selectedTeamFeePence - captainSettledPence, 0);",
   ].join("\n"),
-  "modern team-specific fixture fee totals",
+  "modern no-ledger remaining balance",
 );
 
 replaceOnce(
@@ -170,6 +183,8 @@ replaceOnce(
 
 if (
   !source.includes("selectedFixtureTeamFeePence") ||
+  !source.includes("playerPaidWithoutLedgerPence") ||
+  !source.includes("playerOpenWithoutLedgerPence") ||
   !source.includes("Close unpaid links") ||
   !source.includes("team credit pot")
 ) {
