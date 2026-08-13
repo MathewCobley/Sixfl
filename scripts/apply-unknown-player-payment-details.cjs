@@ -67,29 +67,32 @@ function UnlinkedPlayerPaymentExplanation({
   source = source.replace(helperAnchor, `${helpers}${helperAnchor}`);
 }
 
-replaceRequired(
-  '                  <div className="font-semibold text-white">{playerName(fee)}</div>',
-  `                  <div className="font-semibold text-white">
+const playerLabelBefore =
+  '                  <div className="font-semibold text-white">{playerName(fee)}</div>';
+const playerLabelAfter = `                  <div className="font-semibold text-white">
                     {!fee.teamMember && !fee.prospect && isTemporaryPlayerPassFee(fee.note)
                       ? "Temporary player"
                       : playerName(fee)}
-                  </div>`,
+                  </div>`;
+
+replaceRequired(
+  playerLabelBefore,
+  playerLabelAfter,
   "temporary player display label",
 );
 
+// Add the explanation beside the player identity rather than matching the full
+// amount/team detail row. Earlier build patches are allowed to evolve that detail
+// copy, so using it as an anchor made deployments fail even though the actual
+// unlinked-player responsibility had not changed.
 if (!source.includes("<UnlinkedPlayerPaymentExplanation fee={fee} />")) {
-  const detailAnchor = `                  <div className="mt-1 text-xs text-white/45">
-                    {formatMoney(fee.amountPence)} ·{" "}
-                    {fee.teamId === teamid ? "Current team" : "Historical team row"}
-                  </div>`;
-
-  if (!source.includes(detailAnchor)) {
-    throw new Error(`Expected player payment detail row was not found in ${pagePath}`);
+  if (!source.includes(playerLabelAfter)) {
+    throw new Error(`Expected temporary player label was not found in ${pagePath}`);
   }
 
   source = source.replace(
-    detailAnchor,
-    `${detailAnchor}
+    playerLabelAfter,
+    `${playerLabelAfter}
                   {!fee.teamMember && !fee.prospect ? (
                     <UnlinkedPlayerPaymentExplanation fee={fee} />
                   ) : null}`,
