@@ -12,18 +12,6 @@ const actionsPath = path.join(
 
 let source = fs.readFileSync(pagePath, "utf8");
 
-function replaceBetweenRequired(startMarker, endMarker, replacement, label) {
-  if (source.includes(replacement)) return;
-
-  const start = source.indexOf(startMarker);
-  const end = start >= 0 ? source.indexOf(endMarker, start) : -1;
-  if (start < 0 || end < 0) {
-    throw new Error(`Expected ${label} source was not found in squad payments.`);
-  }
-
-  source = source.slice(0, start) + replacement + source.slice(end);
-}
-
 function insertBeforeRequired(marker, block, appliedMarker, label) {
   if (source.includes(appliedMarker)) return;
 
@@ -43,9 +31,15 @@ function replaceTextRequired(before, after, appliedMarker, label) {
   source = source.replace(before, after);
 }
 
-replaceBetweenRequired(
-  "function isCaptainCollected(note?: string | null) {",
-  "\n\nfunction statusLabel",
+// Only replace the captain-collected helper itself. The modern payment page now
+// has additional helpers (including zero-fee settled-player handling) immediately
+// after it, so the old broad start/end replacement could delete unrelated logic.
+replaceTextRequired(
+  [
+    "function isCaptainCollected(note?: string | null) {",
+    '  return Boolean(note?.includes("captain/organiser marked"));',
+    "}",
+  ].join("\n"),
   [
     "function isCaptainCollected(note?: string | null) {",
     '  const normalised = note?.toLowerCase() ?? "";',
@@ -55,6 +49,7 @@ replaceBetweenRequired(
     "  );",
     "}",
   ].join("\n"),
+  'normalised.includes("paid captain directly: captain collected")',
   "captain-collected note recognition",
 );
 
@@ -74,13 +69,9 @@ insertBeforeRequired(
   "captain-collected totals",
 );
 
-replaceTextRequired(
-  "Players have paid ${formatMoney(collectedPence)} and ${formatMoney(playerOutstandingPence)}",
-  "Players have paid ${formatMoney(collectedPence)} through SIXFL and ${formatMoney(playerOutstandingPence)}",
-  "Players have paid ${formatMoney(collectedPence)} through SIXFL",
-  "native summary paid-through-SIXFL wording",
-);
-
+// The current server page no longer uses the old sentence beginning
+// "Players have paid ...". Keep the separate captain-collected panel as the
+// authoritative distinction instead of coupling this patch to summary prose.
 const summaryParagraph =
   '        <p className="mt-3 max-w-4xl text-sm leading-6 text-white/70">{summaryText}</p>';
 replaceTextRequired(
@@ -105,10 +96,10 @@ replaceTextRequired(
 
 if (
   !source.includes('normalised.includes("paid captain directly: captain collected")') ||
+  !source.includes("function isZeroFeeCaptainSettled(") ||
   !source.includes("captainCollectedPence") ||
   !source.includes("Paid directly to captain:") ||
-  !source.includes("captain passes on to SIXFL") ||
-  !source.includes("Players have paid ${formatMoney(collectedPence)} through SIXFL")
+  !source.includes("captain passes on to SIXFL")
 ) {
   throw new Error("Native captain-collected payment summary was not applied correctly.");
 }
