@@ -229,19 +229,19 @@ export default function CaptainSupportPanel({ teamId }: { teamId: string }) {
       </div>
 
       {isSquadPayments(pathname) ? (
-        <div className="mt-5 max-w-5xl rounded-2xl border border-emerald-300/25 bg-emerald-500/10 p-5 sm:p-6">
+        <div className="mt-5 w-full rounded-2xl border border-emerald-300/25 bg-emerald-500/10 p-5 sm:p-6">
           <p className="text-sm font-semibold text-emerald-50">Set up squad payments in 5 steps</p>
-          <ol className="mt-4 grid gap-x-5 gap-y-3 text-sm leading-5 text-emerald-50/80 sm:grid-cols-2 lg:grid-cols-5">
-            <li className="flex gap-2"><strong className="shrink-0 text-white">1.</strong><span>Choose the fixture.</span></li>
-            <li className="flex gap-2"><strong className="shrink-0 text-white">2.</strong><span>Enter the normal amount per player.</span></li>
-            <li className="flex gap-2"><strong className="shrink-0 text-white">3.</strong><span>Tick the players contributing.</span></li>
-            <li className="flex gap-2"><strong className="shrink-0 text-white">4.</strong><span>Choose how each player is paying.</span></li>
-            <li className="flex gap-2"><strong className="shrink-0 text-white">5.</strong><span>Save player collection.</span></li>
+          <ol className="mt-4 grid gap-x-6 gap-y-3 text-sm leading-5 text-emerald-50/80 sm:grid-cols-2 lg:grid-cols-5 lg:gap-x-8">
+            <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-2"><strong className="text-white">1.</strong><span>Choose the fixture.</span></li>
+            <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-2"><strong className="text-white">2.</strong><span>Enter the normal amount per player.</span></li>
+            <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-2"><strong className="text-white">3.</strong><span>Tick the players contributing.</span></li>
+            <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-2"><strong className="text-white">4.</strong><span>Choose how each player is paying.</span></li>
+            <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-2"><strong className="text-white">5.</strong><span>Save player collection.</span></li>
           </ol>
-          <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-400/10 px-4 py-3.5 text-sm font-semibold leading-6 text-amber-50">
+          <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-400/10 px-4 py-3.5 text-sm font-semibold leading-6 text-amber-50">
             Important: make sure every player has an email address saved in your Squad before setting up payments. If an email address is missing, SIXFL cannot email that player's payment link.
           </div>
-          <div className="mt-5 flex flex-wrap items-center gap-2.5">
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
             <Link href={`/captain/team/${teamId}/help#squad-payments`} className="inline-flex items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/20">
               Show full squad payment guide
             </Link>
