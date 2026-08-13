@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 const RETURN_TO = "/admin/audits/stale-fixtures";
 
@@ -27,8 +28,8 @@ export async function markStaleFixtureCompletedAction(formData: FormData) {
       status: true,
       kickoffAt: true,
       leagueId: true,
-      homeTeam: { select: { name: true, isFixturePlaceholder: true } },
-      awayTeam: { select: { name: true, isFixturePlaceholder: true } },
+      homeTeam: { select: { id: true, name: true } },
+      awayTeam: { select: { id: true, name: true } },
       result: { select: { id: true, homeScore: true, awayScore: true } },
       league: { select: { slug: true } },
     },
@@ -41,7 +42,12 @@ export async function markStaleFixtureCompletedAction(formData: FormData) {
   if (fixture.kickoffAt >= new Date()) {
     redirect(messageUrl("error", "Future fixtures cannot be repaired from the stale fixture audit."));
   }
-  if (fixture.homeTeam.isFixturePlaceholder || fixture.awayTeam.isFixturePlaceholder) {
+
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds([
+    fixture.homeTeam.id,
+    fixture.awayTeam.id,
+  ]);
+  if (placeholderTeamIds.size > 0) {
     redirect(messageUrl("error", "Fixtures containing TBC must be reviewed manually."));
   }
   if (!fixture.result) {
