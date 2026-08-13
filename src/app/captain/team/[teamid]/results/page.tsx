@@ -44,6 +44,7 @@ type MatchPlayerOption = {
 };
 
 const RESULT_DISPUTE_WINDOW_MS = 72 * 60 * 60 * 1000;
+const MAX_MATCHDAY_PLAYERS = 9;
 
 const outcomeOptions = [
   { value: "", label: "All outcomes" },
@@ -190,8 +191,11 @@ function getFriendlyErrorMessage(error: unknown) {
   if (error.message.includes("assists cannot exceed")) {
     return "Assists cannot be higher than your team’s official score.";
   }
+  if (error.message.includes("maximum of 9")) {
+    return "A maximum of 9 players can be recorded as having played in one fixture.";
+  }
   if (error.message.includes("not in this match squad")) {
-    return "Please choose players, scorers, assists and Player of the Match from your match squad.";
+    return "Please choose players, scorers, assists and Player of the Match from your registered squad.";
   }
   if (error.message.includes("Result not found")) {
     return "That result could not be found.";
@@ -270,25 +274,19 @@ async function saveTeamMatchDetails(formData: FormData) {
       throw new Error("This result does not belong to the selected team.");
     }
 
-    const selectedPlayers: MatchPlayerOption[] = result.fixture.selections
-      .filter((selection) => selection.selectionStatus === "SELECTED")
-      .map((selection) => ({
-        id: selection.teamMember.id,
-        name: getPlayerDisplayName(selection.teamMember),
-        email: selection.teamMember.user.email,
-        role: selection.teamMember.role,
-        isSelectedForFixture: true,
-      }));
+    const selectedPlayerIds = new Set(
+      result.fixture.selections
+        .filter((selection) => selection.selectionStatus === "SELECTED")
+        .map((selection) => selection.teamMember.id),
+    );
 
-    const fallbackPlayers: MatchPlayerOption[] = team.members.map((member) => ({
+    const players: MatchPlayerOption[] = team.members.map((member) => ({
       id: member.id,
       name: getPlayerDisplayName(member),
       email: member.user.email,
       role: member.role,
-      isSelectedForFixture: false,
+      isSelectedForFixture: selectedPlayerIds.has(member.id),
     }));
-
-    const players = selectedPlayers.length > 0 ? selectedPlayers : fallbackPlayers;
     const playerById = new Map(players.map((player) => [player.id, player]));
     const contributions: ContributionRow[] = [];
     const performanceRows: Array<{ teamMemberId: string; rating: number | null }> = [];
@@ -327,6 +325,10 @@ async function saveTeamMatchDetails(formData: FormData) {
       if (played) {
         performanceRows.push({ teamMemberId: player.id, rating });
       }
+    }
+
+    if (performanceRows.length > MAX_MATCHDAY_PLAYERS) {
+      throw new Error("A maximum of 9 players can play in one fixture.");
     }
 
     const isHome = result.fixture.homeTeamId === teamid;
@@ -547,17 +549,15 @@ export default async function CaptainResultsPage({
       const goalsAgainst = getGoalsAgainst(fixture.result!, isHome);
       const matchDetails =
         fixture.result!.teamMetadata.find((item) => item.teamId === teamid) ?? null;
-      const selectedPlayers: MatchPlayerOption[] = fixture.selections
-        .filter((selection) => selection.selectionStatus === "SELECTED")
-        .map((selection) => ({
-          id: selection.teamMember.id,
-          name: getPlayerDisplayName(selection.teamMember),
-          email: selection.teamMember.user.email,
-          role: selection.teamMember.role,
-          isSelectedForFixture: true,
-        }));
-      const matchPlayers =
-        selectedPlayers.length > 0 ? selectedPlayers : teamMembersAsPlayers;
+      const selectedPlayerIds = new Set(
+        fixture.selections
+          .filter((selection) => selection.selectionStatus === "SELECTED")
+          .map((selection) => selection.teamMember.id),
+      );
+      const matchPlayers = teamMembersAsPlayers.map((player) => ({
+        ...player,
+        isSelectedForFixture: selectedPlayerIds.has(player.id),
+      }));
       const contributions = parseStoredContributions(matchDetails?.scorers);
       const matchPerformances = performancesByResult.get(fixture.result!.id) ?? [];
       const needsScorers = (matchDetails?.goalsRecorded ?? 0) < goalsFor;
@@ -582,7 +582,7 @@ export default async function CaptainResultsPage({
           fixture.result!.enteredAt,
         ),
         matchPlayers,
-        isUsingSelectedPlayers: selectedPlayers.length > 0,
+        hasSelectedPlayers: selectedPlayerIds.size > 0,
       };
     })
     .filter((row) => {
@@ -879,11 +879,11 @@ export default async function CaptainResultsPage({
                         Update match details
                       </h4>
                       <p className="mt-2 max-w-2xl text-sm text-white/60">
-                        Tick who played, then add their goals, optional assists and an optional rating out of 10.
+                        Tick the players who actually played, then add goals, optional assists and an optional rating. The full registered squad is shown so late replacements can be recorded correctly. Maximum 9 players per fixture.
                       </p>
                     </div>
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65">
-                      {row.isUsingSelectedPlayers ? "Selected squad" : "Full squad fallback"}
+                      {row.hasSelectedPlayers ? "Full squad · selected players pre-ticked" : "Full squad"}
                     </span>
                   </div>
 
@@ -907,7 +907,7 @@ export default async function CaptainResultsPage({
                             const performance = performanceByMemberId.get(player.id);
                             const defaultPlayed = performance
                               ? performance.played
-                              : row.isUsingSelectedPlayers ||
+                              : player.isSelectedForFixture ||
                                 Boolean(contribution) ||
                                 selectedPomMemberId === player.id;
 
@@ -991,7 +991,7 @@ export default async function CaptainResultsPage({
 
                   <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4 text-sm text-emerald-50/80 sm:flex-row sm:items-center sm:justify-between">
                     <span>
-                      Ratings are optional. Adding a goal, assist, rating or Player of the Match automatically marks that player as having played.
+                      Ratings are optional. Adding a goal, assist, rating or Player of the Match automatically marks that player as having played. No more than 9 players can be recorded for the fixture.
                     </span>
                     <button
                       type="submit"
