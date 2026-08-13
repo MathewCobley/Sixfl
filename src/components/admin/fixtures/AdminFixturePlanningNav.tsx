@@ -7,6 +7,7 @@ const items = [
   { href: "/admin/fixtures", label: "Fixtures", exact: true },
   { href: "/admin/fixtures/generate", label: "Fixture generator", exact: false },
   { href: "/admin/team-unavailability", label: "Teams unavailable", exact: true },
+  { href: "/admin/no-fixture-email-history", label: "No-fixture email history", exact: true },
 ] as const;
 
 export default function AdminFixturePlanningNav() {
