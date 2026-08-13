@@ -22,6 +22,8 @@ type Props = {
 
 type Tone = "white" | "emerald" | "amber" | "red";
 
+const ZERO_FEE_WAIVER_NOTE = "Zero-fee player share waived by SIXFL";
+
 function formatDateTime(value: Date | null) {
   if (!value) return "No date set";
   return formatDateTimeInLondon(value, {
@@ -67,7 +69,12 @@ function isCaptainCollected(note?: string | null) {
   return Boolean(note?.includes("captain/organiser marked"));
 }
 
+function isZeroFeeCaptainSettled(status?: string | null, note?: string | null) {
+  return status === "WAIVED" && Boolean(note?.includes(ZERO_FEE_WAIVER_NOTE));
+}
+
 function statusLabel(status: string, note?: string | null) {
+  if (isZeroFeeCaptainSettled(status, note)) return "Paid";
   if (isCaptainCollected(note)) return "Captain collected";
   if (status === "PAID") return "Paid";
   if (status === "WAIVED") return "No payment needed";
@@ -270,6 +277,15 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
       })
     : [];
 
+  const zeroFeeSettledPenceByFixture = new Map<string, number>();
+  for (const fee of fees) {
+    if (!isZeroFeeCaptainSettled(fee.status, fee.note)) continue;
+    zeroFeeSettledPenceByFixture.set(
+      fee.fixtureId,
+      (zeroFeeSettledPenceByFixture.get(fee.fixtureId) ?? 0) + fee.amountPence,
+    );
+  }
+
   const selectedFees = selectedFixture
     ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)
     : [];
@@ -354,16 +370,24 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
   const defaultAmount =
     currentTeamFees.find((fee) => fee.status !== "PAID")?.amountPence ?? 400;
   const selectedPaidPlayerCount = selectedFees.filter(
-    (fee) => fee.status === "PAID",
+    (fee) => fee.status === "PAID" || isZeroFeeCaptainSettled(fee.status, fee.note),
   ).length;
   const selectedOpenPlayerCount = selectedFees.filter(
     (fee) => fee.status === "OPEN",
   ).length;
   const selectedWaivedCount = selectedFees.filter(
-    (fee) => fee.status === "WAIVED" && !isCaptainCollected(fee.note),
+    (fee) =>
+      fee.status === "WAIVED" &&
+      !isCaptainCollected(fee.note) &&
+      !isZeroFeeCaptainSettled(fee.status, fee.note),
   ).length;
   const playerAllocationPence = selectedFees.reduce(
     (sum, fee) => sum + fee.amountPence,
+    0,
+  );
+  const zeroFeeSettledPence = selectedFees.reduce(
+    (sum, fee) =>
+      sum + (isZeroFeeCaptainSettled(fee.status, fee.note) ? fee.amountPence : 0),
     0,
   );
   const hasPlayerCollection = selectedFees.length > 0;
@@ -371,6 +395,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     selectedEntry?.amountPence ?? selectedFixture?.matchFeePence ?? 4000;
   const directPaidPence = selectedEntry?.directPaidPence ?? 0;
   const collectedPence = selectedEntry?.playerPaidPence ?? 0;
+  const captainDisplayedPaidPence = collectedPence + zeroFeeSettledPence;
   const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;
   const stillToCoverPence = selectedEntry?.outstandingPence ?? 0;
   const savedMessage = messageForSaved(sp.saved);
@@ -391,7 +416,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
 
   if (selectedEntry && stillToCoverPence <= 0) {
     summaryTitle = "This fixture fee is fully covered.";
-    summaryText = `${formatMoney(selectedEntry.amountPence)} has been covered: ${formatMoney(directPaidPence)} paid directly by the team and ${formatMoney(collectedPence)} paid by players.`;
+    summaryText = `${formatMoney(selectedEntry.amountPence)} has been covered: ${formatMoney(directPaidPence)} paid directly by the team and ${formatMoney(captainDisplayedPaidPence)} shown as paid by players.`;
   } else if (selectedEntry && !hasPlayerCollection) {
     summaryTitle = "No player collection has been set up yet.";
     summaryText = `The fixture fee is ${formatMoney(selectedEntry.amountPence)}. No amounts have been assigned to players and no player payment requests have been created. The team balance is currently ${formatMoney(stillToCoverPence)}.`;
@@ -402,7 +427,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
       playerOutstandingPence > 0
         ? "Player collection is active."
         : "Player collection has been created.";
-    summaryText = `${formatMoney(playerAllocationPence)} has been assigned across ${selectedFees.length} player${selectedFees.length === 1 ? "" : "s"}. Players have paid ${formatMoney(collectedPence)} and ${formatMoney(playerOutstandingPence)} is still awaiting payment from players. The team balance remaining is ${formatMoney(stillToCoverPence)}.`;
+    summaryText = `${formatMoney(playerAllocationPence)} has been assigned across ${selectedFees.length} player${selectedFees.length === 1 ? "" : "s"}. ${formatMoney(captainDisplayedPaidPence)} is shown as paid and ${formatMoney(playerOutstandingPence)} is still awaiting payment from players. The team balance remaining is ${formatMoney(stillToCoverPence)}.`;
     summaryNextStep =
       playerOutstandingPence > 0
         ? "Payment links remain open for the players shown as awaiting payment below."
@@ -481,9 +506,9 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
           },
           {
             label: "Paid by players",
-            value: formatMoney(collectedPence),
-            text: `${selectedPaidPlayerCount} player payment${selectedPaidPlayerCount === 1 ? "" : "s"} received.`,
-            tone: collectedPence > 0 ? ("emerald" as Tone) : ("white" as Tone),
+            value: formatMoney(captainDisplayedPaidPence),
+            text: `${selectedPaidPlayerCount} player share${selectedPaidPlayerCount === 1 ? "" : "s"} settled.`,
+            tone: captainDisplayedPaidPence > 0 ? ("emerald" as Tone) : ("white" as Tone),
           },
           {
             label: "Awaiting from players",
@@ -539,7 +564,11 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
               const meta = [entry.leagueSeason, entry.divisionName, entry.venueName]
                 .filter(Boolean)
                 .join(" · ");
-              const hasCollection = entry.playerPaidPence > 0 || entry.playerOpenPence > 0;
+              const zeroFeeSettledPence = entry.fixtureId
+                ? zeroFeeSettledPenceByFixture.get(entry.fixtureId) ?? 0
+                : 0;
+              const captainPlayerPaidPence = entry.playerPaidPence + zeroFeeSettledPence;
+              const hasCollection = captainPlayerPaidPence > 0 || entry.playerOpenPence > 0;
               const badgeLabel =
                 entry.outstandingPence <= 0
                   ? "Fee covered"
@@ -578,7 +607,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     ) : null}
                     {hasCollection ? (
                       <>
-                        <div>Paid by players: {formatMoney(entry.playerPaidPence)}</div>
+                        <div>Paid by players: {formatMoney(captainPlayerPaidPence)}</div>
                         <div>
                           Awaiting from players: {formatMoney(entry.playerOpenPence)}
                         </div>
@@ -745,25 +774,31 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
             This shows what has happened for each player in the selected fixture.
           </p>
           <div className="mt-4 divide-y divide-white/10">
-            {selectedFees.map((fee) => (
-              <div
-                key={fee.id}
-                className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <div className="font-semibold text-white">{playerName(fee)}</div>
-                  <div className="mt-1 text-xs text-white/45">
-                    {formatMoney(fee.amountPence)} ·{" "}
-                    {fee.teamId === teamid ? "Current team" : "Historical team row"}
-                  </div>
-                </div>
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(fee.status)}`}
+            {selectedFees.map((fee) => {
+              const captainStatus = isZeroFeeCaptainSettled(fee.status, fee.note)
+                ? "PAID"
+                : fee.status;
+
+              return (
+                <div
+                  key={fee.id}
+                  className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between"
                 >
-                  {statusLabel(fee.status, fee.note)}
-                </span>
-              </div>
-            ))}
+                  <div>
+                    <div className="font-semibold text-white">{playerName(fee)}</div>
+                    <div className="mt-1 text-xs text-white/45">
+                      {formatMoney(fee.amountPence)} ·{" "}
+                      {fee.teamId === teamid ? "Current team" : "Historical team row"}
+                    </div>
+                  </div>
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(captainStatus)}`}
+                  >
+                    {statusLabel(fee.status, fee.note)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
       ) : null}
