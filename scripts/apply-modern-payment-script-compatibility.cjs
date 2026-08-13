@@ -174,6 +174,23 @@ if (fs.existsSync(feeCapAbsolutePath)) {
     '  \'        ${phone},\\n        ${nextPlayerMatchFeeOverride},\\n        ${preferredPositions},\',',
     "player match-fee cap protected insert compatibility",
   );
+
+  // The modern squad-payment page has a no-ledger OPEN fallback between the
+  // settled and outstanding totals. Preserve it when the cap patch adds the
+  // captain-facing nominal boost for capped players.
+  patchFile(
+    feeCapScriptPath,
+    '  \'  const captainSettledPence = collectedPence + zeroFeeSettledPence;\\n  const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;\',',
+    '  \'  const captainSettledPence = collectedPence + zeroFeeSettledPence;\\n  const playerOpenWithoutLedgerPence = selectedFees\\n    .filter((fee) => fee.status === "OPEN")\\n    .reduce((sum, fee) => sum + fee.amountPence, 0);\\n  const playerOutstandingPence =\\n    selectedEntry?.playerOpenPence ?? playerOpenWithoutLedgerPence;\',',
+    "player match-fee cap modern open fallback input",
+  );
+
+  patchFile(
+    feeCapScriptPath,
+    '  \'  const captainSettledPence = collectedPence + captainSettledBoostPence;\\n  const playerOutstandingPence =\\n    (selectedEntry?.playerOpenPence ?? 0) + captainOpenBoostPence;\',',
+    '  \'  const captainSettledPence = collectedPence + captainSettledBoostPence;\\n  const playerOpenWithoutLedgerPence = selectedFees\\n    .filter((fee) => fee.status === "OPEN")\\n    .reduce((sum, fee) => sum + fee.amountPence, 0);\\n  const playerOutstandingPence =\\n    (selectedEntry?.playerOpenPence ?? playerOpenWithoutLedgerPence) +\\n    captainOpenBoostPence;\',',
+    "player match-fee cap modern open fallback output",
+  );
 }
 
 console.log(
