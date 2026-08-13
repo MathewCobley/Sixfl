@@ -100,6 +100,42 @@ if (fs.existsSync(feeCapAbsolutePath)) {
     ].join(""),
     "player match-fee cap generated note syntax",
   );
+
+  // The admin-only override patch runs earlier in prebuild and has already
+  // wrapped the existing fee field by the time the cap patch executes. Teach
+  // the cap patch to accept either the original field or that admin-only form.
+  patchFile(
+    feeCapScriptPath,
+    'editPage = replaceRequired(editPage, oldFeeBlock, newFeeBlock, "admin fee settings block");',
+    [
+      "const priorAdminFeeBlock = [",
+      '  "          {access.isAdmin ? (",',
+      '  "            <div>",',
+      '  "              <p className=\\\"text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45\\\">",',
+      '  "                Match fee setting · Admin only",',
+      '  "              </p>",',
+      '  "              <div className=\\\"mt-4 grid gap-4 md:grid-cols-2\\\">",',
+      '  "                <Field",',
+      '  "                  label=\\\"Player fee override\\\"",',
+      '  "                  name=\\\"playerMatchFeeOverride\\\"",',
+      '  "                  type=\\\"number\\\"",',
+      '  "                  defaultValue={formatFeeOverride(profile?.playerMatchFeePenceOverride)}",',
+      '  "                  placeholder=\\\"Leave blank to use the team default\\\"",',
+      '  "                  help=\\\"Admin-only setting. Use 0 for a free player. Every change is recorded in the audit log.\\\"",',
+      '  "                />",',
+      '  "              </div>",',
+      '  "            </div>",',
+      '  "          ) : null}",',
+      '].join("\\n");',
+      "editPage = replaceRequired(",
+      "  editPage,",
+      "  editPage.includes(oldFeeBlock) ? oldFeeBlock : priorAdminFeeBlock,",
+      "  newFeeBlock,",
+      '  "admin fee settings block",',
+      ");",
+    ].join("\n"),
+    "player match-fee cap admin field compatibility",
+  );
 }
 
 console.log(
