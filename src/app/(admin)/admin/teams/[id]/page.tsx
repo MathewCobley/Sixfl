@@ -26,6 +26,7 @@ import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
 import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
 import TeamEmailForm from "@/components/admin/teams/TeamEmailForm";
+import PrimaryContactMemberSelector from "@/components/admin/teams/PrimaryContactMemberSelector";
 
 function formatDispatchStatus(status: NotificationDispatchStatus) {
   switch (status) {
@@ -560,11 +561,11 @@ export default async function AdminTeamPage({
             Communications
           </Link>
           <Link
-  href={`/admin/teams/${team.id}/match-fees`}
-  className="inline-flex items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
->
-  Player match fees
-</Link>
+            href={`/admin/teams/${team.id}/match-fees`}
+            className="inline-flex items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
+          >
+            Player match fees
+          </Link>
           {team.league ? (
             <Link
               href={`/admin/leagues/${team.league.id}`}
@@ -896,54 +897,20 @@ export default async function AdminTeamPage({
                   className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
                 />
               </div>
+
               <div className="grid gap-5 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <label htmlFor="contactName" className="text-sm text-white/60">
-                    Primary contact name
-                  </label>
-                  <input
-                    id="contactName"
-                    name="contactName"
-                    type="text"
-                    defaultValue={
-                      team.contactName ?? contactSnapshot.primaryContact.name ?? ""
-                    }
-                    placeholder="John Smith"
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="contactEmail" className="text-sm text-white/60">
-                    Primary contact email
-                  </label>
-                  <input
-                    id="contactEmail"
-                    name="contactEmail"
-                    type="email"
-                    defaultValue={
-                      team.contactEmail ?? contactSnapshot.primaryContact.email ?? ""
-                    }
-                    placeholder="captain@team.com"
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="contactPhone" className="text-sm text-white/60">
-                    Primary contact mobile
-                  </label>
-                  <input
-                    id="contactPhone"
-                    name="contactPhone"
-                    type="text"
-                    defaultValue={
-                      team.contactPhone ?? contactSnapshot.primaryContact.phone ?? ""
-                    }
-                    placeholder="07700 900123"
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
-                  />
-                </div>
+                <PrimaryContactMemberSelector
+                  teamId={team.id}
+                  defaultName={
+                    team.contactName ?? contactSnapshot.primaryContact.name ?? ""
+                  }
+                  defaultEmail={
+                    team.contactEmail ?? contactSnapshot.primaryContact.email ?? ""
+                  }
+                  defaultPhone={
+                    team.contactPhone ?? contactSnapshot.primaryContact.phone ?? ""
+                  }
+                />
 
                 <div className="space-y-2">
                   <label
