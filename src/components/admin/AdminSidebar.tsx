@@ -300,6 +300,12 @@ const navigationGroups = [
         description: "Historical test",
       },
       {
+        name: "Stripe audit",
+        href: "/admin/payments/stripe-reconciliation",
+        icon: CreditCardIcon,
+        description: "Verify payments",
+      },
+      {
         name: "Identity audit",
         href: "/admin/users/identity-audit",
         icon: ExclamationTriangleIcon,
