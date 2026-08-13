@@ -223,6 +223,7 @@ export default async function AiPredictorAccuracyPage() {
       JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
       LEFT JOIN "FixtureAiPrediction" prediction ON prediction."fixtureId" = fixture."id"
       WHERE fixture."status" = 'SCHEDULED'
+        AND fixture."kickoffAt" >= CURRENT_TIMESTAMP
         AND COALESCE(home_team."isFixturePlaceholder", false) = false
         AND COALESCE(away_team."isFixturePlaceholder", false) = false
       ORDER BY fixture."kickoffAt" ASC
