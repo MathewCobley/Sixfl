@@ -210,6 +210,20 @@ if (fs.existsSync(feeCapAbsolutePath)) {
   );
 }
 
+// The predictor monitor filters rows to those with stored scores before creating
+// EvaluatedPrediction objects. Reflect that invariant in the type so downstream
+// scoreline calculations are correctly narrowed after source preparation.
+const predictorPagePath = "src/app/(admin)/admin/ai-predictor/page.tsx";
+const predictorAbsolutePath = path.join(root, predictorPagePath);
+if (fs.existsSync(predictorAbsolutePath)) {
+  patchFile(
+    predictorPagePath,
+    "type EvaluatedPrediction = PredictionAuditRow & {\n  weekKey: string;",
+    "type EvaluatedPrediction = PredictionAuditRow & {\n  predictedHomeScore: number;\n  predictedAwayScore: number;\n  weekKey: string;",
+    "AI predictor evaluated score type narrowing",
+  );
+}
+
 console.log(
   "Made legacy squad-payment build patches compatible with the modern captain page.",
 );
