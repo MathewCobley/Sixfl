@@ -21,3 +21,5 @@ if (!source.includes(after)) {
 }
 
 console.log("Clarified the admin outstanding balance so open player links are not mistaken for extra debt.");
+
+require("./apply-post-build-finalizers.cjs");
