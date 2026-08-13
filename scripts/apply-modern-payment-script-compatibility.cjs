@@ -191,6 +191,23 @@ if (fs.existsSync(feeCapAbsolutePath)) {
     '  \'  const captainSettledPence = collectedPence + captainSettledBoostPence;\\n  const playerOpenWithoutLedgerPence = selectedFees\\n    .filter((fee) => fee.status === "OPEN")\\n    .reduce((sum, fee) => sum + fee.amountPence, 0);\\n  const playerOutstandingPence =\\n    (selectedEntry?.playerOpenPence ?? playerOpenWithoutLedgerPence) +\\n    captainOpenBoostPence;\',',
     "player match-fee cap modern open fallback output",
   );
+
+  // The fixture-card wording was renamed from "paid" to "settled" before the
+  // cap feature was added. Keep the current variable name in both the expected
+  // and generated fixture-card snippets so later JSX continues to reference it.
+  patchFile(
+    feeCapScriptPath,
+    '              const captainPlayerPaidPence = entry.playerPaidPence + zeroFeeSettledPence;\\n              const hasCollection = captainPlayerPaidPence > 0 || entry.playerOpenPence > 0;',
+    '              const captainPlayerSettledPence = entry.playerPaidPence + zeroFeeSettledPence;\\n              const hasCollection = captainPlayerSettledPence > 0 || entry.playerOpenPence > 0;',
+    "player match-fee cap settled fixture input",
+  );
+
+  patchFile(
+    feeCapScriptPath,
+    '              const captainPlayerPaidPence = entry.playerPaidPence + settledBoostPence;\\n              const captainPlayerOpenPence = entry.playerOpenPence + openBoostPence;\\n              const hasCollection = captainPlayerPaidPence > 0 || captainPlayerOpenPence > 0;',
+    '              const captainPlayerSettledPence = entry.playerPaidPence + settledBoostPence;\\n              const captainPlayerOpenPence = entry.playerOpenPence + openBoostPence;\\n              const hasCollection = captainPlayerSettledPence > 0 || captainPlayerOpenPence > 0;',
+    "player match-fee cap settled fixture output",
+  );
 }
 
 console.log(
