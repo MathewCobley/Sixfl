@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
+import PrimaryContactFieldsClient from "@/components/admin/teams/PrimaryContactFieldsClient";
 
 function getRoleLabel(role: string) {
   if (role === "CAPTAIN") return "Captain";
@@ -9,8 +11,14 @@ function getRoleLabel(role: string) {
 
 export default async function PrimaryContactMemberSelector({
   teamId,
+  defaultName,
+  defaultEmail,
+  defaultPhone,
 }: {
   teamId: string;
+  defaultName: string;
+  defaultEmail: string;
+  defaultPhone: string;
 }) {
   const members = await prisma.teamMember.findMany({
     where: { teamId },
@@ -27,39 +35,31 @@ export default async function PrimaryContactMemberSelector({
     },
   });
 
-  return (
-    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-4">
-      <label
-        htmlFor="primaryContactMemberId"
-        className="text-sm font-semibold text-emerald-100"
-      >
-        Change primary contact
-      </label>
-      <p className="mt-1 text-xs leading-5 text-white/50">
-        Choose an existing user from this team, then save the team details. SIXFL
-        will use that user&apos;s saved name, email and squad mobile where available.
-        Leave this blank to keep using the manual contact fields below.
-      </p>
-      <select
-        id="primaryContactMemberId"
-        name="primaryContactMemberId"
-        defaultValue=""
-        className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-      >
-        <option value="">Keep current / enter manually</option>
-        {members.map((member) => {
-          const name = member.user.name?.trim();
-          const email = member.user.email?.trim();
-          const label = name || email || "Unnamed user";
+  const profiles = await getTeamMemberProfilesByTeamMemberIds(
+    members.map((member) => member.id),
+  );
 
-          return (
-            <option key={member.id} value={member.id}>
-              {label}
-              {email && email !== label ? ` · ${email}` : ""} · {getRoleLabel(member.role)}
-            </option>
-          );
-        })}
-      </select>
-    </div>
+  const options = members.map((member) => {
+    const name = member.user.name?.trim() ?? "";
+    const email = member.user.email?.trim() ?? "";
+    const phone = profiles.get(member.id)?.phone?.trim() ?? "";
+    const displayName = name || email || "Unnamed user";
+
+    return {
+      value: member.id,
+      label: `${displayName}${email && email !== displayName ? ` · ${email}` : ""} · ${getRoleLabel(member.role)}`,
+      name,
+      email,
+      phone,
+    };
+  });
+
+  return (
+    <PrimaryContactFieldsClient
+      options={options}
+      defaultName={defaultName}
+      defaultEmail={defaultEmail}
+      defaultPhone={defaultPhone}
+    />
   );
 }
