@@ -15,7 +15,7 @@ function paymentsUrl(teamId: string, state: string) {
   return url;
 }
 
-async function cancelPendingCheckouts(teamId: string) {
+async function cancelLatestPendingCheckout(teamId: string) {
   await ensureCaptainCollectedRemittanceTable();
 
   const ledger = await getTeamPaymentLedger(teamId);
@@ -24,7 +24,7 @@ async function cancelPendingCheckouts(teamId: string) {
   const chargeIds = Array.from(
     new Set(ledger.entries.filter((entry) => Boolean(entry.fixtureId)).map((entry) => entry.chargeId)),
   );
-  if (chargeIds.length === 0 || ledger.relatedTeamIds.length === 0) return "cancelled";
+  if (chargeIds.length === 0 || ledger.relatedTeamIds.length === 0) return "released";
 
   const pendingRows = await prisma.$queryRaw<Array<{ checkoutSessionId: string }>>(Prisma.sql`
     SELECT remittance."checkoutSessionId"
@@ -34,50 +34,49 @@ async function cancelPendingCheckouts(teamId: string) {
     WHERE remittance."chargeId" IN (${Prisma.join(chargeIds)})
       AND remittance."teamId" IN (${Prisma.join(ledger.relatedTeamIds)})
       AND payment."id" IS NULL
+    ORDER BY remittance."createdAt" DESC
+    LIMIT 1
   `);
 
-  if (pendingRows.length === 0) return "cancelled";
+  const pending = pendingRows[0];
+  if (!pending) return "released";
 
-  const stripe = getStripeServerClient();
-  let released = 0;
+  try {
+    const stripe = getStripeServerClient();
+    const session = await stripe.checkout.sessions.retrieve(pending.checkoutSessionId);
 
-  for (const row of pendingRows) {
-    try {
-      const session = await stripe.checkout.sessions.retrieve(row.checkoutSessionId);
-
-      if (session.payment_status === "paid" || session.status === "complete") {
-        continue;
-      }
-
-      if (session.status === "open") {
-        await stripe.checkout.sessions.expire(row.checkoutSessionId);
-      }
-
-      await prisma.$executeRaw(Prisma.sql`
-        DELETE FROM "CaptainCollectedRemittanceCheckout"
-        WHERE "checkoutSessionId" = ${row.checkoutSessionId}
-          AND NOT EXISTS (
-            SELECT 1
-            FROM "PaymentTransaction" payment
-            WHERE payment."stripeCheckoutSessionId" = ${row.checkoutSessionId}
-          )
-      `);
-      released += 1;
-    } catch (error) {
-      console.error("Could not cancel captain collected remittance checkout", {
-        teamId,
-        checkoutSessionId: row.checkoutSessionId,
-        error,
-      });
+    if (session.payment_status === "paid" || session.status === "complete") {
+      return "processing";
     }
-  }
 
-  return released > 0 ? "cancelled" : "processing";
+    if (session.status === "open") {
+      await stripe.checkout.sessions.expire(pending.checkoutSessionId);
+    }
+
+    await prisma.$executeRaw(Prisma.sql`
+      DELETE FROM "CaptainCollectedRemittanceCheckout"
+      WHERE "checkoutSessionId" = ${pending.checkoutSessionId}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "PaymentTransaction" payment
+          WHERE payment."stripeCheckoutSessionId" = ${pending.checkoutSessionId}
+        )
+    `);
+
+    return "released";
+  } catch (error) {
+    console.error("Could not cancel captain collected remittance checkout", {
+      teamId,
+      checkoutSessionId: pending.checkoutSessionId,
+      error,
+    });
+    return "processing";
+  }
 }
 
 async function handleCancellation(teamId: string) {
   await requireCaptain(teamId);
-  const state = await cancelPendingCheckouts(teamId);
+  const state = await cancelLatestPendingCheckout(teamId);
   return NextResponse.redirect(paymentsUrl(teamId, state), 303);
 }
 
