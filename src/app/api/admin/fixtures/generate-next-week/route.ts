@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { FixtureStatus, Prisma } from "@prisma/client";
 
+import { refreshStoredAiPreviewsForLeague } from "@/lib/fixtures/storedAiPredictions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -311,7 +312,34 @@ export async function POST(request: Request) {
       }),
     });
 
+    const createdFixtures = await prisma.fixture.findMany({
+      where: {
+        leagueId,
+        round,
+        status: FixtureStatus.SCHEDULED,
+      },
+      select: { id: true },
+    });
+    const createdFixtureIds = createdFixtures.map((fixture) => fixture.id);
+
+    let predictorStored = true;
+    try {
+      await refreshStoredAiPreviewsForLeague(leagueId, {
+        fixtureIds: createdFixtureIds,
+      });
+    } catch (error) {
+      predictorStored = false;
+      console.error("Generated fixtures but failed to store their AI predictions", {
+        requestId,
+        leagueId,
+        round,
+        fixtureIds: createdFixtureIds,
+        error,
+      });
+    }
+
     revalidatePath("/admin/fixtures");
+    revalidatePath("/admin/ai-predictor");
     revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
     revalidatePath(`/admin/leagues/${leagueId}`);
 
@@ -323,6 +351,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       created: pairs.length,
+      predictorStored,
+      predictorFixtureCount: createdFixtureIds.length,
       round,
       requestId,
     });
