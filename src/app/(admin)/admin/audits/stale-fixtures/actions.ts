@@ -27,8 +27,8 @@ export async function markStaleFixtureCompletedAction(formData: FormData) {
       status: true,
       kickoffAt: true,
       leagueId: true,
-      homeTeam: { select: { name: true } },
-      awayTeam: { select: { name: true } },
+      homeTeam: { select: { name: true, isFixturePlaceholder: true } },
+      awayTeam: { select: { name: true, isFixturePlaceholder: true } },
       result: { select: { id: true, homeScore: true, awayScore: true } },
       league: { select: { slug: true } },
     },
@@ -40,6 +40,9 @@ export async function markStaleFixtureCompletedAction(formData: FormData) {
   }
   if (fixture.kickoffAt >= new Date()) {
     redirect(messageUrl("error", "Future fixtures cannot be repaired from the stale fixture audit."));
+  }
+  if (fixture.homeTeam.isFixturePlaceholder || fixture.awayTeam.isFixturePlaceholder) {
+    redirect(messageUrl("error", "Fixtures containing TBC must be reviewed manually."));
   }
   if (!fixture.result) {
     redirect(messageUrl("error", "A fixture can only be marked completed here when a result already exists."));
