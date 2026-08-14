@@ -2,6 +2,11 @@
 // File: src/lib/payments/charge-summary.ts
 // ========================================
 
+import {
+  getPlayerFeeCashReceivedPence,
+  getPlayerFeeSubsidyPence,
+} from "@/lib/payments/player-fee-coverage";
+
 type TeamChargeForSummary = {
   amountPence: number;
   fixtureId?: string | null;
@@ -15,6 +20,8 @@ type TeamChargeForSummary = {
 type PaidPlayerMatchFeeForSummary = {
   fixtureId: string;
   amountPence: number;
+  status: string;
+  note?: string | null;
 };
 
 export function isPlayerMatchFeeTransaction(transaction: { notes?: string | null }) {
@@ -39,8 +46,19 @@ export function buildPaidPlayerMatchFeeTotalsByFixture(
   paidPlayerMatchFees: PaidPlayerMatchFeeForSummary[],
 ) {
   return paidPlayerMatchFees.reduce((totals, fee) => {
-    totals.set(fee.fixtureId, (totals.get(fee.fixtureId) ?? 0) + fee.amountPence);
+    const cashPence = getPlayerFeeCashReceivedPence(fee);
+    totals.set(fee.fixtureId, (totals.get(fee.fixtureId) ?? 0) + cashPence);
 
+    return totals;
+  }, new Map<string, number>());
+}
+
+function buildPlayerMatchFeeSubsidyTotalsByFixture(
+  playerMatchFees: PaidPlayerMatchFeeForSummary[],
+) {
+  return playerMatchFees.reduce((totals, fee) => {
+    const subsidyPence = getPlayerFeeSubsidyPence(fee);
+    totals.set(fee.fixtureId, (totals.get(fee.fixtureId) ?? 0) + subsidyPence);
     return totals;
   }, new Map<string, number>());
 }
@@ -84,29 +102,38 @@ export function summariseChargesWithPlayerMatchFees<TCharge extends TeamChargeFo
   const playerMatchFeeTotalsByFixture = buildPaidPlayerMatchFeeTotalsByFixture(
     paidPlayerMatchFees,
   );
+  const playerMatchFeeSubsidyTotalsByFixture = buildPlayerMatchFeeSubsidyTotalsByFixture(
+    paidPlayerMatchFees,
+  );
 
   return charges.map((charge) => {
     const directPaidPence = getDirectChargePaidTotal(charge.transactions);
     const playerPaidPence = charge.fixtureId
       ? playerMatchFeeTotalsByFixture.get(charge.fixtureId) ?? 0
       : 0;
+    const playerSubsidyPence = charge.fixtureId
+      ? playerMatchFeeSubsidyTotalsByFixture.get(charge.fixtureId) ?? 0
+      : 0;
     const paidPence = directPaidPence + playerPaidPence;
+    const coveredPence = paidPence + playerSubsidyPence;
     const displayStatus = getDisplayChargeStatus({
       storedStatus: charge.status,
       amountPence: charge.amountPence,
-      paidPence,
+      paidPence: coveredPence,
     });
     const outstandingPence = getDisplayChargeOutstandingPence({
       displayStatus,
       amountPence: charge.amountPence,
-      paidPence,
+      paidPence: coveredPence,
     });
 
     return {
       charge,
       directPaidPence,
       playerPaidPence,
+      playerSubsidyPence,
       paidPence,
+      coveredPence,
       outstandingPence,
       displayStatus,
     };
