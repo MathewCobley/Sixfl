@@ -6,7 +6,7 @@ import Link from "next/link";
 
 const documentDetails = [
   { label: "Document", value: "Privacy Policy" },
-  { label: "Version", value: "1.0" },
+  { label: "Version", value: "1.1" },
   { label: "Status", value: "Active" },
   { label: "Last updated", value: "14 August 2026" },
   { label: "Next review", value: "14 August 2027" },
@@ -105,6 +105,11 @@ export default function PrivacyPolicyPage() {
               records where relevant;
             </li>
             <li>
+              photographs, video footage and audio captured at SIXFL fixtures or
+              events, including footage recorded using Veo or similar camera
+              systems and identifying details visible or audible in that footage;
+            </li>
+            <li>
               payment and transaction information, including payment status,
               amounts, references and records needed to administer fees and
               refunds;
@@ -137,6 +142,10 @@ export default function PrivacyPolicyPage() {
             <li>
               from social-media platforms when you submit a lead or enquiry form
               connected with a SIXFL advert;
+            </li>
+            <li>
+              from Veo or similar match-recording systems when a fixture or event
+              is filmed;
             </li>
             <li>
               from payment, communications, hosting, analytics and other service
@@ -187,6 +196,17 @@ export default function PrivacyPolicyPage() {
                 </tr>
                 <tr>
                   <td className="border-b border-white/10 px-3 py-3">
+                    Recording fixtures and creating match footage, highlights,
+                    league media, promotional content and records of incidents
+                  </td>
+                  <td className="border-b border-white/10 px-3 py-3">
+                    Legitimate interests, subject to balancing against the rights
+                    and expectations of participants; consent where appropriate
+                    or required
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border-b border-white/10 px-3 py-3">
                     Managing disputes, discipline, safety, fraud prevention and
                     legal or regulatory requirements
                   </td>
@@ -220,9 +240,9 @@ export default function PrivacyPolicyPage() {
             Where we rely on legitimate interests, those interests include
             operating and growing SIXFL, responding to people who have shown an
             interest in our leagues, keeping accurate operational records,
-            protecting the service and communicating effectively with teams and
-            participants. We consider these interests against the rights and
-            expectations of the people involved.
+            protecting the service, producing league media and communicating
+            effectively with teams and participants. We consider these interests
+            against the rights and expectations of the people involved.
           </p>
         </PolicySection>
 
@@ -247,7 +267,57 @@ export default function PrivacyPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="6. Special category and sensitive information">
+        <PolicySection title="6. Match filming, Veo cameras and publication">
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-5">
+            <p className="font-bold text-white">
+              SIXFL fixtures may be filmed using Veo cameras or other recording
+              equipment.
+            </p>
+          </div>
+          <p>
+            Players, referees, team officials and other people present at a
+            fixture may appear or be heard in match recordings. This may include
+            a person&apos;s image, voice, playing number, name where displayed or
+            associated with a clip, and their actions during the match.
+          </p>
+          <p>
+            We may use match footage to provide fixture coverage, create
+            highlights and SIXFL TV content, promote SIXFL and its leagues,
+            produce social-media content, maintain a record of league activity,
+            support football analysis and, where appropriate, help review an
+            incident, complaint or disciplinary matter.
+          </p>
+          <p>
+            Full-match recordings, highlights, goals and other clips may be
+            published on SIXFL channels, including the SIXFL website, SIXFL TV,
+            <strong> YouTube</strong>, Facebook, Instagram and other social-media
+            services. Once content is published on a third-party platform, that
+            platform may process viewing and account information under its own
+            privacy terms and may host or make the content available outside the
+            United Kingdom.
+          </p>
+          <p>
+            We generally rely on our legitimate interests in operating,
+            documenting and promoting an organised football league when recording
+            and using ordinary match footage. We consider whether the use is
+            necessary and proportionate and balance our interests against the
+            rights, expectations and privacy of the people shown. We may rely on
+            consent instead where the circumstances or law make that more
+            appropriate.
+          </p>
+          <p>
+            Where reasonably practicable, SIXFL will make participants aware that
+            filming is taking place through fixture communications, venue notices
+            or other appropriate information. If you have a particular privacy,
+            safety or safeguarding concern about being filmed or about footage
+            that has been published, contact <strong>hello@sixfl.co.uk</strong>.
+            We will consider the circumstances and any applicable data-protection
+            rights. A request does not automatically require removal in every
+            case, but it will be reviewed properly.
+          </p>
+        </PolicySection>
+
+        <PolicySection title="7. Special category and sensitive information">
           <p>
             Please do not provide health information or other particularly
             sensitive personal information unless it is genuinely needed for a
@@ -258,7 +328,7 @@ export default function PrivacyPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="7. Who we may share information with">
+        <PolicySection title="8. Who we may share information with">
           <p>
             We do not sell personal information. We may share relevant
             information, only where reasonably necessary, with:
@@ -277,6 +347,14 @@ export default function PrivacyPolicyPage() {
               service providers;
             </li>
             <li>
+              Veo and other video-hosting, editing or match-recording providers
+              used to capture, store or process fixture footage;
+            </li>
+            <li>
+              YouTube, Facebook, Instagram and other publication or social-media
+              platforms where SIXFL publishes match footage or league content;
+            </li>
+            <li>
               team captains, referees, venues and league officials where needed
               to organise or safely administer participation;
             </li>
@@ -288,22 +366,24 @@ export default function PrivacyPolicyPage() {
           <p>
             Service providers acting on our behalf are expected to use personal
             information only for the services they provide to SIXFL and to keep
-            it appropriately protected.
+            it appropriately protected. Some third-party publication platforms
+            may also process information for their own purposes under their own
+            privacy terms.
           </p>
         </PolicySection>
 
-        <PolicySection title="8. International transfers">
+        <PolicySection title="9. International transfers">
           <p>
-            Some technology, communications, analytics, payment or social-media
-            providers may process information outside the United Kingdom. Where
-            data-protection law requires safeguards for an international
-            transfer, we use providers and transfer arrangements intended to meet
-            those requirements, such as applicable adequacy arrangements or
-            approved contractual safeguards.
+            Some technology, communications, analytics, payment, video-hosting or
+            social-media providers may process information outside the United
+            Kingdom. Where data-protection law requires safeguards for an
+            international transfer, we use providers and transfer arrangements
+            intended to meet those requirements, such as applicable adequacy
+            arrangements or approved contractual safeguards.
           </p>
         </PolicySection>
 
-        <PolicySection title="9. How long we keep information">
+        <PolicySection title="10. How long we keep information">
           <p>
             We keep personal information only for as long as it is reasonably
             needed for the purpose it was collected, including legal,
@@ -323,6 +403,13 @@ export default function PrivacyPolicyPage() {
               or legal matters.
             </li>
             <li>
+              Match recordings and published highlights may be retained for
+              longer where they form part of SIXFL&apos;s league media, sporting
+              record or published archive. We may remove or review footage where
+              there is a valid privacy, safety, safeguarding or legal reason to
+              do so.
+            </li>
+            <li>
               Incident, disciplinary and safeguarding records are kept for a
               period appropriate to the nature and seriousness of the matter and
               any applicable legal or safety requirements.
@@ -334,7 +421,7 @@ export default function PrivacyPolicyPage() {
           </ul>
         </PolicySection>
 
-        <PolicySection title="10. Marketing and your right to object">
+        <PolicySection title="11. Marketing and your right to object">
           <div className="rounded-2xl border border-amber-300/25 bg-amber-300/10 p-5 text-white/85">
             <p className="font-bold text-amber-100">
               You have the right to object at any time to the use of your personal
@@ -353,7 +440,7 @@ export default function PrivacyPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="11. Your data-protection rights">
+        <PolicySection title="12. Your data-protection rights">
           <p>
             Depending on the circumstances and lawful basis, you may have rights
             to:
@@ -376,7 +463,7 @@ export default function PrivacyPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="12. Complaints">
+        <PolicySection title="13. Complaints">
           <p>
             If you have a concern about how SIXFL has used your personal
             information, please contact us first so we can try to resolve it. You
@@ -394,7 +481,7 @@ export default function PrivacyPolicyPage() {
           </a>
         </PolicySection>
 
-        <PolicySection title="13. Security">
+        <PolicySection title="14. Security">
           <p>
             We use reasonable technical and organisational measures intended to
             protect personal information against unauthorised access, loss,
@@ -404,7 +491,7 @@ export default function PrivacyPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="14. Automated decision-making">
+        <PolicySection title="15. Automated decision-making">
           <p>
             SIXFL does not use solely automated decisions about individuals that
             produce legal or similarly significant effects. We may use automated
@@ -414,7 +501,7 @@ export default function PrivacyPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="15. Changes to this policy">
+        <PolicySection title="16. Changes to this policy">
           <p>
             We may update this policy when our services, systems or legal
             obligations change. The current version and last-updated date will be
