@@ -13,7 +13,7 @@ const pagePath = path.join(
 let source = fs.readFileSync(pagePath, "utf8");
 
 if (!source.includes("const isKitCharge =")) {
-  const totalAppliedBlock = `              const totalAppliedPence = Math.min(\n                entry.paidPence,\n                entry.amountPence,\n              );`;
+  const totalAppliedBlock = `              const totalAppliedPence = Math.min(\n                entry.coveredPence,\n                entry.amountPence,\n              );`;
 
   const contextualBlock = `${totalAppliedBlock}\n              const isKitCharge = entry.title\n                .trim()\n                .toLowerCase()\n                .startsWith(\"additional kit contribution\");`;
 
@@ -29,8 +29,8 @@ source = source.replace(
 );
 
 source = source.replace(
-  `                          <div className="flex items-center justify-between gap-4">\n                            <span>Players paid</span>\n                            <span className="font-semibold text-white">\n                              {formatMoney(entry.playerPaidPence)}\n                            </span>\n                          </div>`,
-  `                          {!isKitCharge ? (\n                            <div className="flex items-center justify-between gap-4">\n                              <span>Players paid</span>\n                              <span className="font-semibold text-white">\n                                {formatMoney(entry.playerPaidPence)}\n                              </span>\n                            </div>\n                          ) : null}`,
+  `                          <div className="flex items-center justify-between gap-4">\n                            <span>Player shares settled</span>\n                            <span className="font-semibold text-white">\n                              {formatMoney(playerSettledPence)}\n                            </span>\n                          </div>`,
+  `                          {!isKitCharge ? (\n                            <div className="flex items-center justify-between gap-4">\n                              <span>Player shares settled</span>\n                              <span className="font-semibold text-white">\n                                {formatMoney(playerSettledPence)}\n                              </span>\n                            </div>\n                          ) : null}`,
 );
 
 source = source.replace(
