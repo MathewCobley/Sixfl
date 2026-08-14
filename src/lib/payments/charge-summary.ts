@@ -20,9 +20,17 @@ type TeamChargeForSummary = {
 type PaidPlayerMatchFeeForSummary = {
   fixtureId: string;
   amountPence: number;
-  status: string;
+  status?: string;
   note?: string | null;
 };
+
+function normalisePlayerFeeForSummary(fee: PaidPlayerMatchFeeForSummary) {
+  return {
+    amountPence: fee.amountPence,
+    status: fee.status ?? "PAID",
+    note: fee.note ?? null,
+  };
+}
 
 export function isPlayerMatchFeeTransaction(transaction: { notes?: string | null }) {
   const notes = transaction.notes?.toLowerCase() ?? "";
@@ -46,7 +54,7 @@ export function buildPaidPlayerMatchFeeTotalsByFixture(
   paidPlayerMatchFees: PaidPlayerMatchFeeForSummary[],
 ) {
   return paidPlayerMatchFees.reduce((totals, fee) => {
-    const cashPence = getPlayerFeeCashReceivedPence(fee);
+    const cashPence = getPlayerFeeCashReceivedPence(normalisePlayerFeeForSummary(fee));
     totals.set(fee.fixtureId, (totals.get(fee.fixtureId) ?? 0) + cashPence);
 
     return totals;
@@ -57,7 +65,7 @@ function buildPlayerMatchFeeSubsidyTotalsByFixture(
   playerMatchFees: PaidPlayerMatchFeeForSummary[],
 ) {
   return playerMatchFees.reduce((totals, fee) => {
-    const subsidyPence = getPlayerFeeSubsidyPence(fee);
+    const subsidyPence = getPlayerFeeSubsidyPence(normalisePlayerFeeForSummary(fee));
     totals.set(fee.fixtureId, (totals.get(fee.fixtureId) ?? 0) + subsidyPence);
     return totals;
   }, new Map<string, number>());
