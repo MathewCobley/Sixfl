@@ -43,8 +43,16 @@ if (!source.includes("const teamCreditUsedPence =")) {
                 entry.directPaidPence - teamCreditUsedPence,
                 0,
               );
+              const playerSettledPence =
+                entry.playerPaidPence + entry.playerSubsidyPence;
+              const playerLinksOpenPence = Math.max(
+                entry.playerOpenPence,
+                playerCollectionDetails
+                  .filter((payment) => payment.statusLabel === "Awaiting payment")
+                  .reduce((sum, payment) => sum + payment.amountPence, 0),
+              );
               const totalAppliedPence = Math.min(
-                entry.paidPence,
+                entry.coveredPence,
                 entry.amountPence,
               );`;
 
@@ -86,9 +94,9 @@ if (summaryStart >= 0) {
 
                         <div className="mt-3 space-y-2 text-sm text-white/65">
                           <div className="flex items-center justify-between gap-4">
-                            <span>Players paid</span>
+                            <span>Player shares settled</span>
                             <span className="font-semibold text-white">
-                              {formatMoney(entry.playerPaidPence)}
+                              {formatMoney(playerSettledPence)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-4">
@@ -128,12 +136,12 @@ if (summaryStart >= 0) {
                           </div>
                         </div>
 
-                        {entry.playerOpenPence > 0 ? (
+                        {playerLinksOpenPence > 0 ? (
                           <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5">
                             <div className="flex items-center justify-between gap-4 text-sm text-amber-100">
                               <span className="font-semibold">Player links still open</span>
                               <span className="font-semibold">
-                                {formatMoney(entry.playerOpenPence)}
+                                {formatMoney(playerLinksOpenPence)}
                               </span>
                             </div>
                             <p className="mt-1 text-xs leading-5 text-amber-50/70">
@@ -214,17 +222,17 @@ if (warningStart >= 0) {
     throw new Error("Fixture payment breakdown warning end marker is missing.");
   }
 
-  const clearWarning = `                      {entry.displayStatus === "PAID" && entry.playerOpenPence > 0 ? (
+  const clearWarning = `                      {entry.displayStatus === "PAID" && playerLinksOpenPence > 0 ? (
                         <div className="w-full max-w-xl rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-left">
                           <div className="font-semibold text-amber-100">
                             Fixture paid — these player links are extra
                           </div>
                           <p className="mt-2 text-sm leading-6 text-amber-50/80">
-                            The fixture charge is already fully covered. The remaining {formatMoney(entry.playerOpenPence)} is still available to collect from players, but it is not owed to SIXFL for this fixture.
+                            The fixture charge is already fully covered. The remaining {formatMoney(playerLinksOpenPence)} is still available to collect from players, but it is not owed to SIXFL for this fixture.
                           </p>
 
                           <div className="mt-3 rounded-xl border border-amber-300/20 bg-black/20 px-3 py-2 text-sm text-amber-50/85">
-                            {formatMoney(entry.playerPaidPence)} players + {formatMoney(teamPaymentPence)} team payment + {formatMoney(teamCreditUsedPence)} team credit = {formatMoney(totalAppliedPence)} applied.
+                            {formatMoney(playerSettledPence)} player shares + {formatMoney(teamPaymentPence)} team payment + {formatMoney(teamCreditUsedPence)} team credit = {formatMoney(totalAppliedPence)} applied.
                           </div>
 
                           {unpaidPlayers.length > 0 ? (
@@ -286,6 +294,7 @@ if (
   !source.includes("Total applied to fixture") ||
   !source.includes("Fixture paid — these player links are extra") ||
   !source.includes("Team payment and credit details") ||
+  !source.includes("Player shares settled") ||
   source.includes("Direct team payment details")
 ) {
   throw new Error("Clear fixture payment breakdown was not applied correctly.");
@@ -294,5 +303,5 @@ if (
 fs.writeFileSync(pagePath, source, "utf8");
 require("./apply-native-team-payment-copy.cjs");
 console.log(
-  "Fixture charges now show a clear players + team + credit calculation without duplicating player transactions, with saved-card state applied afterwards.",
+  "Fixture charges now show settled player shares + team + credit without exposing SIXFL player subsidies.",
 );
