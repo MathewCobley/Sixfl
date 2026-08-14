@@ -63,6 +63,7 @@ export default async function CaptainCollectedRemittancePanel({
           const heldButNotRemittedPence = snapshot.unremittedPence;
           const cappedByOutstanding =
             snapshot.availablePence > amountAvailableToRemitPence;
+          const hasPendingCheckout = snapshot.pendingPence > 0;
 
           return (
             <article
@@ -101,11 +102,15 @@ export default async function CaptainCollectedRemittancePanel({
                     <p className="mt-3 text-xs leading-5 text-amber-100/80">
                       {amountAvailableToRemitPence > 0 ? (
                         <>
-                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. Only {formatMoney(amountAvailableToRemitPence)} needs to be passed to SIXFL for this fixture right now because the rest is already covered or accounted for by a payment in progress.
+                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. Only {formatMoney(amountAvailableToRemitPence)} needs to be passed to SIXFL for this fixture. {hasPendingCheckout
+                            ? "The rest of the balance is already covered or has a Stripe checkout pending."
+                            : "The rest of the fixture balance has already been covered."}
                         </>
                       ) : (
                         <>
-                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. No payment is needed for this fixture right now because its remaining balance is already covered or accounted for by a payment in progress.
+                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. {hasPendingCheckout
+                            ? "No further payment is due for this fixture while the remaining balance is covered or has a Stripe checkout pending."
+                            : "No further payment is due for this fixture because its balance has already been fully covered."}
                         </>
                       )}
                     </p>
@@ -177,7 +182,7 @@ export default async function CaptainCollectedRemittancePanel({
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-50">
-                      No collected player money needs to be passed to this fixture right now.
+                      This fixture balance is fully settled. No collected player money needs to be passed to SIXFL for it.
                     </div>
                   )}
                 </div>
