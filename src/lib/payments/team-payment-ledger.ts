@@ -11,6 +11,10 @@ import {
   getDisplayChargeOutstandingPence,
   getDisplayChargeStatus,
 } from "@/lib/payments/charge-summary";
+import {
+  getPlayerFeeCashReceivedPence,
+  getPlayerFeeSubsidyPence,
+} from "@/lib/payments/player-fee-coverage";
 import { prisma } from "@/lib/prisma";
 
 type RelatedTeamRow = {
@@ -28,6 +32,8 @@ type PlayerFeeRow = {
   teamId: string;
   fixtureId: string;
   amountPence: number;
+  status: string;
+  note: string | null;
 };
 
 export type TeamPaymentLedgerEntry = {
@@ -49,8 +55,10 @@ export type TeamPaymentLedgerEntry = {
   amountPence: number;
   directPaidPence: number;
   playerPaidPence: number;
+  playerSubsidyPence: number;
   playerOpenPence: number;
   paidPence: number;
+  coveredPence: number;
   outstandingPence: number;
   overpaidPence: number;
   storedStatus: string;
@@ -96,6 +104,18 @@ function buildPlayerFeeTotalsByTeamFixture(fees: PlayerFeeRow[]) {
   for (const fee of fees) {
     const key = playerFeeKey(fee.teamId, fee.fixtureId);
     totals.set(key, (totals.get(key) ?? 0) + fee.amountPence);
+  }
+  return totals;
+}
+
+function buildPlayerFeeCoverageByTeamFixture(fees: PlayerFeeRow[]) {
+  const totals = new Map<string, { cashPence: number; subsidyPence: number }>();
+  for (const fee of fees) {
+    const key = playerFeeKey(fee.teamId, fee.fixtureId);
+    const current = totals.get(key) ?? { cashPence: 0, subsidyPence: 0 };
+    current.cashPence += getPlayerFeeCashReceivedPence(fee);
+    current.subsidyPence += getPlayerFeeSubsidyPence(fee);
+    totals.set(key, current);
   }
   return totals;
 }
@@ -175,7 +195,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
 
   const { team, relatedTeamIds } = identity;
 
-  const [charges, paidPlayerFees, openPlayerFees] = await Promise.all([
+  const [charges, coveredPlayerFees, openPlayerFees] = await Promise.all([
     prisma.paymentCharge.findMany({
       where: {
         teamId: { in: relatedTeamIds },
@@ -200,37 +220,52 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     prisma.playerMatchFee.findMany({
       where: {
         teamId: { in: relatedTeamIds },
-        status: "PAID",
+        status: { in: ["PAID", "WAIVED"] },
       },
-      select: { teamId: true, fixtureId: true, amountPence: true },
+      select: {
+        teamId: true,
+        fixtureId: true,
+        amountPence: true,
+        status: true,
+        note: true,
+      },
     }),
     prisma.playerMatchFee.findMany({
       where: {
         teamId: { in: relatedTeamIds },
         status: "OPEN",
       },
-      select: { teamId: true, fixtureId: true, amountPence: true },
+      select: {
+        teamId: true,
+        fixtureId: true,
+        amountPence: true,
+        status: true,
+        note: true,
+      },
     }),
   ]);
 
-  const paidByTeamFixture = buildPlayerFeeTotalsByTeamFixture(paidPlayerFees);
+  const coverageByTeamFixture = buildPlayerFeeCoverageByTeamFixture(coveredPlayerFees);
   const openByTeamFixture = buildPlayerFeeTotalsByTeamFixture(openPlayerFees);
 
   const unsortedEntries = charges.map<TeamPaymentLedgerEntry>((charge) => {
     const fixtureKey = charge.fixtureId ? playerFeeKey(charge.teamId, charge.fixtureId) : null;
     const directPaidPence = getDirectChargePaidTotal(charge.transactions);
-    const playerPaidPence = fixtureKey ? paidByTeamFixture.get(fixtureKey) ?? 0 : 0;
+    const playerCoverage = fixtureKey ? coverageByTeamFixture.get(fixtureKey) : null;
+    const playerPaidPence = playerCoverage?.cashPence ?? 0;
+    const playerSubsidyPence = playerCoverage?.subsidyPence ?? 0;
     const playerOpenPence = fixtureKey ? openByTeamFixture.get(fixtureKey) ?? 0 : 0;
     const paidPence = directPaidPence + playerPaidPence;
+    const coveredPence = paidPence + playerSubsidyPence;
     const displayStatus = getDisplayChargeStatus({
       storedStatus: charge.status,
       amountPence: charge.amountPence,
-      paidPence,
+      paidPence: coveredPence,
     });
     const outstandingPence = getDisplayChargeOutstandingPence({
       displayStatus,
       amountPence: charge.amountPence,
-      paidPence,
+      paidPence: coveredPence,
     });
 
     const chargeFinancialDate = charge.fixture?.kickoffAt ?? charge.dueDate ?? charge.createdAt;
@@ -240,6 +275,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     // Managed squads collect individual player fees; a player-fee surplus must never
     // become standard team credit. After a MANAGED -> STANDARD conversion, managed-era
     // fixtures remain visible as history but can never display or generate team credit.
+    // SIXFL subsidy is coverage, never cash, so it cannot create overpayment credit.
     const overpaidPence =
       team.teamMode === "STANDARD" && isAfterStandardCreditBoundary
         ? Math.max(paidPence - charge.amountPence, 0)
@@ -268,8 +304,10 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       amountPence: charge.amountPence,
       directPaidPence,
       playerPaidPence,
+      playerSubsidyPence,
       playerOpenPence,
       paidPence,
+      coveredPence,
       outstandingPence,
       overpaidPence,
       storedStatus: charge.status,
