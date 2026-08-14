@@ -16,6 +16,15 @@ function paymentsUrl(teamId: string, values?: Record<string, string>) {
   return url;
 }
 
+function remittanceCancelUrl(teamId: string, chargeId: string) {
+  const url = new URL(
+    `/captain/team/${teamId}/payments/remit-collected/cancel`,
+    `${getPublicSiteUrl()}/`,
+  );
+  url.searchParams.set("chargeId", chargeId);
+  return url.toString();
+}
+
 function parsePounds(value: FormDataEntryValue | null) {
   const raw = String(value ?? "").replace(/[£,\s]/g, "").trim();
   const amount = Number(raw);
@@ -94,7 +103,7 @@ export async function POST(
     remit: "success",
     amount: String(requestedAmountPence),
   }).toString();
-  const cancelUrl = paymentsUrl(teamid, { remit: "cancelled" }).toString();
+  const cancelUrl = remittanceCancelUrl(teamid, entry.chargeId);
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
