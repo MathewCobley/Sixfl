@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 
-import CaptainCollectedCreditOptions from "@/components/captain/CaptainCollectedCreditOptions";
 import CaptainCollectedRemittanceNotice from "@/components/captain/CaptainCollectedRemittanceNotice";
 import CaptainCollectedRemittancePanel from "@/components/captain/CaptainCollectedRemittancePanel";
 
@@ -27,7 +26,6 @@ export default async function CaptainPaymentsLayout({
           View team credit ledger
         </Link>
       </div>
-      <CaptainCollectedCreditOptions teamId={teamid} />
       <CaptainCollectedRemittancePanel teamId={teamid} />
       {children}
     </div>
