@@ -109,7 +109,7 @@ export default async function CaptainCollectedRemittancePanel({
                       ) : (
                         <>
                           You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. {hasPendingCheckout
-                            ? "No further payment is due for this fixture while the remaining balance is covered or has a Stripe checkout pending."
+                            ? "No further payment is due while a Stripe checkout is holding the remaining amount. You can cancel that checkout below if you want to pay a different way."
                             : "No further payment is due for this fixture because its balance has already been fully covered."}
                         </>
                       )}
@@ -177,8 +177,23 @@ export default async function CaptainCollectedRemittancePanel({
                       </details>
                     </>
                   ) : snapshot.pendingPence > 0 ? (
-                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-50">
-                      A Stripe checkout for this collected money is already in progress. This prevents the same cash being sent twice.
+                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3 text-sm text-amber-50">
+                      <p>
+                        A Stripe checkout for this collected money is still in progress. Cancel it if you want to release the amount and choose another payment method.
+                      </p>
+                      <form
+                        action={`/captain/team/${teamId}/payments/remit-collected/cancel`}
+                        method="post"
+                        className="mt-3"
+                      >
+                        <input type="hidden" name="chargeId" value={entry.chargeId} />
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-amber-200/30 bg-amber-300 px-4 py-2.5 text-sm font-black text-black transition hover:bg-amber-200"
+                        >
+                          Cancel pending checkout
+                        </button>
+                      </form>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-50">
