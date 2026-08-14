@@ -148,6 +148,10 @@ export default function SiteFooter() {
             </div>
 
             <nav className="mt-4 flex flex-col gap-1 text-sm text-white/80">
+              <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/privacy-policy">
+                Privacy Policy
+              </Link>
+
               <Link className="inline-flex min-h-9 items-center transition hover:text-emerald-400" href="/league-rules">
                 League Rules
               </Link>
