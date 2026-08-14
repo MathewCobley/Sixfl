@@ -241,6 +241,7 @@ export default function NightBoardTeamIssuesPanel() {
                   const isHomeTeam = issue.fixture.homeTeam.id === issue.teamId;
                   const opponent = isHomeTeam ? issue.fixture.awayTeam.name : issue.fixture.homeTeam.name;
                   const raisedBy = issue.confirmedByUser?.name || issue.confirmedByUser?.email || "Captain";
+                  const raisedByEmail = issue.confirmedByUser?.email?.trim() || null;
 
                   return (
                     <div key={issue.id} className="rounded-3xl border border-red-400/20 bg-red-500/[0.07] p-4 sm:p-5">
@@ -252,9 +253,13 @@ export default function NightBoardTeamIssuesPanel() {
                             {formatKickoff(issue.fixture.kickoffAt)}{issue.fixture.pitch ? ` · ${issue.fixture.pitch}` : ""}
                           </div>
                         </div>
-                        <div className="text-xs text-white/40 sm:text-right">
-                          <div>{raisedBy}</div>
-                          <div>{formatStamp(issue.issueRaisedAt) ?? "Time not recorded"}</div>
+                        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs sm:text-right">
+                          <div className="font-semibold uppercase tracking-[0.12em] text-white/35">Raised by</div>
+                          <div className="mt-1 font-semibold text-white/85">{raisedBy}</div>
+                          {raisedByEmail && raisedByEmail !== raisedBy ? (
+                            <div className="mt-0.5 text-white/40">{raisedByEmail}</div>
+                          ) : null}
+                          <div className="mt-1 text-white/40">{formatStamp(issue.issueRaisedAt) ?? "Time not recorded"}</div>
                         </div>
                       </div>
 
@@ -287,6 +292,11 @@ export default function NightBoardTeamIssuesPanel() {
                         >
                           Send reply to {issue.team.name}
                         </button>
+                        {data.emailReplyConfigured ? (
+                          <p className="text-xs leading-5 text-white/45">
+                            If the team replies to this email, their response comes back into SIXFL Messages on the same email conversation.
+                          </p>
+                        ) : null}
                       </form>
                     </div>
                   );
