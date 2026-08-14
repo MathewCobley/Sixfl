@@ -117,8 +117,23 @@ export default async function CaptainCollectedCreditOptions({
 
                 <div className="w-full shrink-0 lg:w-[320px]">
                   {blockedByPendingCheckout ? (
-                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-50">
-                      Cancel the pending Stripe checkout first, then you can use team credit instead.
+                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3 text-sm text-amber-50">
+                      <p>
+                        A Stripe checkout is still holding this amount. Cancel it to release the hold, then you can use team credit instead.
+                      </p>
+                      <form
+                        action={`/captain/team/${teamId}/payments/remit-collected/cancel`}
+                        method="post"
+                        className="mt-3"
+                      >
+                        <input type="hidden" name="chargeId" value={entry.chargeId} />
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-amber-200/30 bg-amber-300 px-4 py-2.5 text-sm font-black text-black transition hover:bg-amber-200"
+                        >
+                          Cancel pending checkout
+                        </button>
+                      </form>
                     </div>
                   ) : (
                     <form
