@@ -37,9 +37,17 @@ export type QueueFixtureConfirmationSmsResult =
 
 const CANONICAL_SITE_URL = "https://sixfl.co.uk";
 const DEFAULT_CONFIRMATION_SMS_BODY =
-  "SIXFL: Can {{teamName}} play {{opponentName}}, {{kickoffDateTime}}? Choose Yes or No: {{link}}";
+  "SIXFL: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}} here: {{link}}. Do not reply YES/NO - SMS replies do not confirm the fixture.";
 const DEFAULT_URGENT_CONFIRMATION_SMS_BODY =
+  "SIXFL URGENT: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}} here now: {{link}}. Do not reply YES/NO - SMS replies do not confirm the fixture.";
+const PREVIOUS_DEFAULT_CONFIRMATION_SMS_BODY =
+  "SIXFL: Can {{teamName}} play {{opponentName}}, {{kickoffDateTime}}? Choose Yes or No: {{link}}";
+const PREVIOUS_DEFAULT_URGENT_CONFIRMATION_SMS_BODY =
   "SIXFL URGENT: Can {{teamName}} play {{opponentName}}, {{kickoffDateTime}}? Choose Yes or No now: {{link}}";
+const SEEDED_CONFIRMATION_SMS_BODY =
+  "SIXFL: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}}. {{link}}";
+const SEEDED_URGENT_CONFIRMATION_SMS_BODY =
+  "SIXFL URGENT: Confirm {{teamName}} v {{opponentName}}, {{kickoffDateTime}} now. {{link}}";
 const LEGACY_CONFIRMATION_SMS_BODY =
   "SIXFL: Please confirm your fixture for {{teamName}} vs {{opponentName}} on {{kickoffDateTime}}. Confirm here: {{link}}";
 const LEGACY_URGENT_CONFIRMATION_SMS_BODY =
@@ -141,6 +149,10 @@ function resolveFixtureConfirmationTemplateBody(input: {
   }
 
   if (
+    body === PREVIOUS_DEFAULT_CONFIRMATION_SMS_BODY ||
+    body === PREVIOUS_DEFAULT_URGENT_CONFIRMATION_SMS_BODY ||
+    body === SEEDED_CONFIRMATION_SMS_BODY ||
+    body === SEEDED_URGENT_CONFIRMATION_SMS_BODY ||
     body === LEGACY_CONFIRMATION_SMS_BODY ||
     body === LEGACY_URGENT_CONFIRMATION_SMS_BODY
   ) {
