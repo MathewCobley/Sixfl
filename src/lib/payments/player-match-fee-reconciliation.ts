@@ -6,6 +6,10 @@ import { PaymentChargeStatus } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
+import {
+  getPlayerFeeCashReceivedPence,
+  getPlayerFeeSubsidyPence,
+} from "@/lib/payments/player-fee-coverage";
 import { syncFixtureOverpaymentCredit } from "@/lib/payments/team-credit-pot";
 import { prisma } from "@/lib/prisma";
 
@@ -19,12 +23,14 @@ function getLondonDateKey(value: Date | null | undefined) {
   });
 }
 
-function appendCoveredNote(description: string | null, paidTotalPence: number) {
-  const note = `Covered by player payments totalling £${(paidTotalPence / 100).toFixed(2)}.`;
+function appendCoveredNote(description: string | null, coveredTotalPence: number) {
+  const note = `Covered by player shares totalling £${(coveredTotalPence / 100).toFixed(2)}.`;
   const cleaned = description?.trim();
 
   if (!cleaned) return note;
-  if (cleaned.includes("Covered by player payments")) return cleaned;
+  if (cleaned.includes("Covered by player shares") || cleaned.includes("Covered by player payments")) {
+    return cleaned;
+  }
 
   return `${cleaned}\n${note}`;
 }
@@ -64,7 +70,7 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
   teamId: string;
   fixtureId: string;
 }) {
-  const [fixture, paidFees] = await Promise.all([
+  const [fixture, playerFees] = await Promise.all([
     prisma.fixture.findFirst({
       where: {
         id: input.fixtureId,
@@ -79,20 +85,30 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
       where: {
         teamId: input.teamId,
         fixtureId: input.fixtureId,
-        status: "PAID",
+        status: { in: ["PAID", "WAIVED"] },
       },
       select: {
         id: true,
         amountPence: true,
+        status: true,
+        note: true,
       },
     }),
   ]);
 
   if (!fixture) return null;
 
-  const paidTotalPence = paidFees.reduce((sum, fee) => sum + fee.amountPence, 0);
+  const paidTotalPence = playerFees.reduce(
+    (sum, fee) => sum + getPlayerFeeCashReceivedPence(fee),
+    0,
+  );
+  const subsidyPence = playerFees.reduce(
+    (sum, fee) => sum + getPlayerFeeSubsidyPence(fee),
+    0,
+  );
+  const coveredTotalPence = paidTotalPence + subsidyPence;
 
-  if (paidTotalPence <= 0) return null;
+  if (coveredTotalPence <= 0) return null;
 
   const fixtureDateKey = getLondonDateKey(fixture.kickoffAt);
   const chargeStatuses = Object.values(PaymentChargeStatus).filter(
@@ -127,15 +143,21 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     return {
       chargeId: null,
       paidTotalPence,
+      subsidyPence,
+      coveredTotalPence,
       covered: false,
       overpaymentPence: 0,
     };
   }
 
+  // Team credit is based on genuine money received only. A SIXFL subsidy can
+  // cover a fixture but can never create an overpayment balance for the team.
   const overpaymentPence = Math.max(paidTotalPence - matchingCharge.amountPence, 0);
 
   await linkPlayerFeeTransactionsToCharge({
-    playerMatchFeeIds: paidFees.map((fee) => fee.id),
+    playerMatchFeeIds: playerFees
+      .filter((fee) => fee.status === "PAID")
+      .map((fee) => fee.id),
     chargeId: matchingCharge.id,
   });
 
@@ -147,10 +169,12 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     chargeAmountPence: matchingCharge.amountPence,
   });
 
-  if (paidTotalPence < matchingCharge.amountPence) {
+  if (coveredTotalPence < matchingCharge.amountPence) {
     return {
       chargeId: matchingCharge.id,
       paidTotalPence,
+      subsidyPence,
+      coveredTotalPence,
       covered: false,
       overpaymentPence,
     };
@@ -161,7 +185,7 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     data: {
       status: "PAID",
       description: appendOverpaymentNote(
-        appendCoveredNote(matchingCharge.description, paidTotalPence),
+        appendCoveredNote(matchingCharge.description, coveredTotalPence),
         overpaymentPence,
       ),
     },
@@ -172,6 +196,8 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
   return {
     chargeId: matchingCharge.id,
     paidTotalPence,
+    subsidyPence,
+    coveredTotalPence,
     covered: true,
     overpaymentPence,
   };
