@@ -9,7 +9,15 @@ import {
   requireValidTwilioSignature,
 } from "@/lib/twilio/validateTwilioSignature";
 import { normalizePhoneNumber } from "@/lib/messaging/phone";
-import { recordInboundSms } from "@/lib/messaging/service";
+import { recordInboundSms, recordOutboundSms } from "@/lib/messaging/service";
+import { prisma } from "@/lib/prisma";
+
+const CANONICAL_SITE_URL = "https://sixfl.co.uk";
+const FIXTURE_CONFIRMATION_SMS_SOURCE_TYPES = [
+  "FIXTURE_CONFIRMATION_CHASE_SMS",
+  "FIXTURE_CONFIRMATION_AUTO_SMS_72H",
+  "FIXTURE_CONFIRMATION_AUTO_SMS_24H",
+] as const;
 
 function buildTwimlMessageResponse(message: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(
@@ -59,6 +67,103 @@ function isHelpKeyword(body: string): boolean {
   return ["HELP", "INFO"].includes(value);
 }
 
+function isFixtureYesNoReply(body: string): boolean {
+  const value = body.trim().toUpperCase();
+  return ["YES", "Y", "NO", "N"].includes(value);
+}
+
+function getSiteUrl() {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.SITE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    CANONICAL_SITE_URL
+  ).replace(/\/+$/, "");
+}
+
+function getMetadataString(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function findFixtureReplyTarget(fromNumber: string) {
+  const recentDispatches = await prisma.notificationDispatch.findMany({
+    where: {
+      channel: "SMS",
+      status: "SENT",
+      sourceType: { in: [...FIXTURE_CONFIRMATION_SMS_SOURCE_TYPES] },
+      recipient: {
+        phoneNormalized: fromNumber,
+      },
+    },
+    orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+    take: 12,
+    select: {
+      sourceId: true,
+      metadata: true,
+    },
+  });
+
+  for (const dispatch of recentDispatches) {
+    const sourceParts = dispatch.sourceId?.split(":") ?? [];
+    const fixtureId =
+      getMetadataString(dispatch.metadata, "fixtureId") || sourceParts[0] || null;
+    const teamId =
+      getMetadataString(dispatch.metadata, "teamId") || sourceParts[1] || null;
+
+    if (!fixtureId || !teamId) continue;
+
+    const [fixture, confirmation] = await Promise.all([
+      prisma.fixture.findUnique({
+        where: { id: fixtureId },
+        select: {
+          id: true,
+          status: true,
+          publishedAt: true,
+          kickoffAt: true,
+          homeTeamId: true,
+          awayTeamId: true,
+        },
+      }),
+      prisma.fixtureCaptainConfirmation.findUnique({
+        where: {
+          fixtureId_teamId: {
+            fixtureId,
+            teamId,
+          },
+        },
+        select: { status: true },
+      }),
+    ]);
+
+    if (
+      !fixture ||
+      fixture.status !== "SCHEDULED" ||
+      !fixture.publishedAt ||
+      fixture.kickoffAt <= new Date() ||
+      (fixture.homeTeamId !== teamId && fixture.awayTeamId !== teamId) ||
+      confirmation?.status === "CONFIRMED" ||
+      confirmation?.status === "ISSUE_RAISED"
+    ) {
+      continue;
+    }
+
+    const url = new URL(
+      `/captain/team/${teamId}/fixtures?fixtureId=${encodeURIComponent(fixtureId)}`,
+      getSiteUrl(),
+    ).toString();
+
+    return { fixtureId, teamId, url };
+  }
+
+  return null;
+}
+
 export async function POST(request: Request): Promise<Response> {
   try {
     const params = await parseTwilioFormRequest(request);
@@ -78,7 +183,7 @@ export async function POST(request: Request): Promise<Response> {
       return xmlResponse(buildEmptyTwimlResponse(), 200);
     }
 
-    await recordInboundSms({
+    const thread = await recordInboundSms({
       fromNumber,
       toNumber,
       body,
@@ -93,6 +198,32 @@ export async function POST(request: Request): Promise<Response> {
           "You have been opted out of SMS messages from SIXFL. Reply START to opt back in.",
         ),
       );
+    }
+
+    if (isFixtureYesNoReply(body)) {
+      const target = await findFixtureReplyTarget(fromNumber);
+
+      if (target) {
+        const guidance = `Thanks. Your fixture response has not been recorded yet. Please confirm your team's availability using this link: ${target.url}`;
+
+        await recordOutboundSms({
+          recipientId: thread?.recipientId ?? null,
+          teamId: target.teamId,
+          leagueId: thread?.leagueId ?? null,
+          sourceType: "FIXTURE_CONFIRMATION_SMS_REPLY_GUIDANCE",
+          sourceId: `${target.fixtureId}:${target.teamId}:${messageSid || Date.now()}`,
+          contactName: thread?.contactName ?? thread?.team?.name ?? null,
+          phone: fromNumber,
+          body: guidance,
+          fromNumber: toNumber,
+          toNumber: fromNumber,
+          provider: "twilio",
+          providerStatus: "accepted",
+          sentAt: new Date(),
+        });
+
+        return xmlResponse(buildTwimlMessageResponse(guidance));
+      }
     }
 
     if (isStartKeyword(body)) {
