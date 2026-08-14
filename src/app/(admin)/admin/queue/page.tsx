@@ -121,6 +121,15 @@ function formatDateTime(value: Date | null) {
   }).format(value);
 }
 
+function getMetadataString(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function getStatusClasses(status: NotificationDispatchStatus) {
   switch (status) {
     case "SENT":
@@ -230,6 +239,7 @@ export default async function AdminQueuePage({
         bodyText: true,
         sourceType: true,
         sourceId: true,
+        metadata: true,
         scheduledFor: true,
         sentAt: true,
         failedAt: true,
@@ -242,11 +252,31 @@ export default async function AdminQueuePage({
             displayName: true,
             phone: true,
             email: true,
+            metadata: true,
           },
         },
       },
     }),
   ]);
+
+  const teamIds = Array.from(
+    new Set(
+      recent
+        .map(
+          (item) =>
+            getMetadataString(item.metadata, "teamId") ||
+            getMetadataString(item.recipient.metadata, "teamId"),
+        )
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const teamRows = teamIds.length
+    ? await prisma.team.findMany({
+        where: { id: { in: teamIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const teamNameById = new Map(teamRows.map((team) => [team.id, team.name]));
 
   const filterTabs: Array<{ key: QueueFilter; label: string; count: number }> = [
     { key: "all", label: "All", count: all },
@@ -438,6 +468,10 @@ export default async function AdminQueuePage({
           {recent.map((item) => {
             const preview = item.bodyText.trim().replace(/\s+/g, " ").slice(0, 160);
             const recipient = item.recipient.displayName || item.recipient.email || item.recipient.phone || "Unknown recipient";
+            const teamId =
+              getMetadataString(item.metadata, "teamId") ||
+              getMetadataString(item.recipient.metadata, "teamId");
+            const teamName = teamId ? teamNameById.get(teamId) ?? null : null;
 
             return (
               <div key={item.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -455,6 +489,17 @@ export default async function AdminQueuePage({
                       </span>
                     </div>
                     <h3 className="mt-3 text-sm font-semibold text-white">{recipient}</h3>
+                    {teamName && teamId ? (
+                      <div className="mt-1 text-xs text-white/50">
+                        Team:{" "}
+                        <Link
+                          href={`/admin/teams/${teamId}`}
+                          className="font-semibold text-emerald-200 hover:text-emerald-100"
+                        >
+                          {teamName}
+                        </Link>
+                      </div>
+                    ) : null}
                     <p className="mt-1 text-sm text-white/55">{item.subject || preview || "No body preview"}</p>
                   </div>
                   <div className="grid gap-2 text-xs text-white/45 sm:grid-cols-2 lg:w-[440px]">
