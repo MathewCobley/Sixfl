@@ -96,9 +96,17 @@ export async function GET(request: Request) {
     },
   });
 
+  const issuesWithRaisingTeam = issues.map((issue) => ({
+    ...issue,
+    confirmedByUser: {
+      name: `${issue.confirmedByUser?.name?.trim() || "Captain"} · Team: ${issue.team.name}`,
+      email: issue.confirmedByUser?.email ?? null,
+    },
+  }));
+
   return NextResponse.json({
     selectedDate,
     emailReplyConfigured: Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim()),
-    issues,
+    issues: issuesWithRaisingTeam,
   });
 }
