@@ -99,30 +99,48 @@ replaceOnce(
     const paidToCaptain =
       fee.status === "WAIVED" &&
       Boolean(fee.note?.includes("captain/organiser marked"));
+    const hiddenZeroFeeSettlement =
+      fee.status === "WAIVED" &&
+      Boolean(fee.note?.includes("Zero-fee player share waived by SIXFL"));
+    const capMatch =
+      /Player fee cap applied: captain share £([0-9,.]+); player charged £([0-9,.]+)\./i.exec(
+        fee.note ?? "",
+      );
+    const captainSharePence = capMatch
+      ? Math.round(Number(capMatch[1].replace(/,/g, "")) * 100)
+      : fee.amountPence;
+    const displayAmountPence =
+      Number.isFinite(captainSharePence) && captainSharePence >= 0
+        ? captainSharePence
+        : fee.amountPence;
     const statusLabel =
-      fee.status === "PAID"
-        ? "Paid online"
-        : fee.status === "OPEN"
-          ? "Awaiting payment"
-          : paidToCaptain
-            ? "Paid to captain"
-            : fee.amountPence === 0
-              ? "No charge"
-              : "Waived";
-    const statusMeta =
-      fee.status === "PAID" && fee.paidAt
-        ? "Paid " + formatUkDateTime(fee.paidAt)
-        : paidToCaptain && fee.waivedAt
-          ? "Recorded " + formatUkDateTime(fee.waivedAt)
+      hiddenZeroFeeSettlement
+        ? "Settled"
+        : fee.status === "PAID"
+          ? "Paid online"
           : fee.status === "OPEN"
-            ? fee.paymentUrl
-              ? "Payment link open"
-              : "Awaiting payment link"
-            : fee.waivedAt
-              ? "Recorded " + formatUkDateTime(fee.waivedAt)
-              : "Recorded in player collection";
+            ? "Awaiting payment"
+            : paidToCaptain
+              ? "Paid to captain"
+              : fee.amountPence === 0
+                ? "No charge"
+                : "No payment needed";
+    const statusMeta =
+      hiddenZeroFeeSettlement && fee.waivedAt
+        ? "Settled " + formatUkDateTime(fee.waivedAt)
+        : fee.status === "PAID" && fee.paidAt
+          ? "Paid " + formatUkDateTime(fee.paidAt)
+          : paidToCaptain && fee.waivedAt
+            ? "Recorded " + formatUkDateTime(fee.waivedAt)
+            : fee.status === "OPEN"
+              ? fee.paymentUrl
+                ? "Payment link open"
+                : "Awaiting payment link"
+              : fee.waivedAt
+                ? "Recorded " + formatUkDateTime(fee.waivedAt)
+                : "Recorded in player collection";
     const tone =
-      fee.status === "PAID" || paidToCaptain
+      fee.status === "PAID" || paidToCaptain || hiddenZeroFeeSettlement
         ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
         : fee.status === "OPEN"
           ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
@@ -132,7 +150,7 @@ replaceOnce(
       id: fee.id,
       name: getPayerName({ teamMember: fee.teamMember, prospect: fee.prospect }),
       contact: getPayerContact({ teamMember: fee.teamMember, prospect: fee.prospect }),
-      amountPence: fee.amountPence,
+      amountPence: displayAmountPence,
       statusLabel,
       statusMeta,
       tone,
@@ -216,5 +234,5 @@ replaceOnce(
 );
 
 console.log(
-  "Applied direct and player-level payment details to every team fixture charge.",
+  "Applied direct and player-level payment details to every team fixture charge without exposing hidden SIXFL player concessions.",
 );
