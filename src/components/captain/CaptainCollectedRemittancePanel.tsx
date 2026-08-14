@@ -1,4 +1,5 @@
 import { getCaptainCollectedRemittanceSnapshots } from "@/lib/payments/captain-collected-remittance";
+import { getTeamCreditLedger } from "@/lib/payments/team-credits";
 import { formatPaymentFixtureDate, formatPaymentMoney, getTeamPaymentLedger } from "@/lib/payments/team-payment-ledger";
 
 function formatMoney(amountPence: number) {
@@ -18,13 +19,18 @@ export default async function CaptainCollectedRemittancePanel({
     .map((entry) => ({ ...entry, fixtureId: entry.fixtureId as string }));
   if (fixtureEntries.length === 0) return null;
 
-  const snapshots = await getCaptainCollectedRemittanceSnapshots(
-    fixtureEntries.map((entry) => ({
-      chargeId: entry.chargeId,
-      teamId: entry.teamId,
-      fixtureId: entry.fixtureId,
-    })),
-  );
+  const [snapshots, creditLedger] = await Promise.all([
+    getCaptainCollectedRemittanceSnapshots(
+      fixtureEntries.map((entry) => ({
+        chargeId: entry.chargeId,
+        teamId: entry.teamId,
+        fixtureId: entry.fixtureId,
+      })),
+    ),
+    getTeamCreditLedger(ledger.relatedTeamIds),
+  ]);
+
+  const creditBalancePence = Math.max(creditLedger.balancePence, 0);
 
   const rows = fixtureEntries
     .map((entry) => {
@@ -35,11 +41,17 @@ export default async function CaptainCollectedRemittancePanel({
         snapshot.availablePence,
         entry.outstandingPence,
       );
+      const creditAvailableForCollectedPence = Math.min(
+        creditBalancePence,
+        snapshot.availablePence,
+        entry.outstandingPence,
+      );
 
       return {
         entry,
         snapshot,
         amountAvailableToRemitPence,
+        creditAvailableForCollectedPence,
       };
     })
     .filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -52,14 +64,19 @@ export default async function CaptainCollectedRemittancePanel({
         Money collected by captain
       </p>
       <h2 className="mt-2 text-2xl font-semibold text-white">
-        Pass player money on to SIXFL without paying the whole fixture balance
+        Settle player money collected by the captain
       </h2>
       <p className="mt-2 max-w-4xl text-sm leading-6 text-cyan-50/70">
-        These amounts come from players marked <strong>Paid captain directly</strong>. Use this section to send only the money you have collected. Your own player link and any other open player links stay separate.
+        These amounts come from players marked <strong>Paid captain directly</strong>. For each fixture, either pass the collected money to SIXFL or use available team credit instead. Your own player link and any other open player links stay separate.
       </p>
+      {creditBalancePence > 0 ? (
+        <div className="mt-3 inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-50">
+          Team credit available: {formatMoney(creditBalancePence)}
+        </div>
+      ) : null}
 
       <div className="mt-5 space-y-4">
-        {rows.map(({ entry, snapshot, amountAvailableToRemitPence }) => {
+        {rows.map(({ entry, snapshot, amountAvailableToRemitPence, creditAvailableForCollectedPence }) => {
           const heldButNotRemittedPence = snapshot.unremittedPence;
           const cappedByOutstanding =
             snapshot.availablePence > amountAvailableToRemitPence;
@@ -93,6 +110,11 @@ export default async function CaptainCollectedRemittancePanel({
                         Stripe checkout pending {formatMoney(snapshot.pendingPence)}
                       </span>
                     ) : null}
+                    {creditAvailableForCollectedPence > 0 ? (
+                      <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-emerald-50">
+                        Credit can cover {formatMoney(creditAvailableForCollectedPence)}
+                      </span>
+                    ) : null}
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/65">
                       Fixture outstanding {formatMoney(entry.outstandingPence)}
                     </span>
@@ -102,7 +124,7 @@ export default async function CaptainCollectedRemittancePanel({
                     <p className="mt-3 text-xs leading-5 text-amber-100/80">
                       {amountAvailableToRemitPence > 0 ? (
                         <>
-                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. Only {formatMoney(amountAvailableToRemitPence)} needs to be passed to SIXFL for this fixture. {hasPendingCheckout
+                          You still hold {formatMoney(heldButNotRemittedPence)} recorded as collected. Only {formatMoney(amountAvailableToRemitPence)} needs to be settled against this fixture. {hasPendingCheckout
                             ? "The rest of the balance is already covered or has a Stripe checkout pending."
                             : "The rest of the fixture balance has already been covered."}
                         </>
@@ -118,8 +140,47 @@ export default async function CaptainCollectedRemittancePanel({
                 </div>
 
                 <div className="w-full shrink-0 lg:w-[310px]">
-                  {amountAvailableToRemitPence > 0 ? (
+                  {hasPendingCheckout ? (
+                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3 text-sm text-amber-50">
+                      <p>
+                        A Stripe checkout for this collected money is still in progress. Cancel it to release the amount and choose again.
+                      </p>
+                      <form
+                        action={`/captain/team/${teamId}/payments/remit-collected/cancel`}
+                        method="post"
+                        className="mt-3"
+                      >
+                        <input type="hidden" name="chargeId" value={entry.chargeId} />
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-amber-200/30 bg-amber-300 px-4 py-2.5 text-sm font-black text-black transition hover:bg-amber-200"
+                        >
+                          Cancel pending checkout
+                        </button>
+                      </form>
+                    </div>
+                  ) : amountAvailableToRemitPence > 0 ? (
                     <>
+                      {creditAvailableForCollectedPence > 0 ? (
+                        <>
+                          <form
+                            action={`/captain/team/${teamId}/payments/use-credit-for-collected`}
+                            method="post"
+                          >
+                            <input type="hidden" name="chargeId" value={entry.chargeId} />
+                            <button
+                              type="submit"
+                              className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-emerald-300 px-4 py-3 text-sm font-black text-black transition hover:bg-emerald-200"
+                            >
+                              Use {formatMoney(creditAvailableForCollectedPence)} team credit instead
+                            </button>
+                          </form>
+                          <div className="my-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            or
+                          </div>
+                        </>
+                      ) : null}
+
                       <form
                         action={`/captain/team/${teamId}/payments/remit-collected`}
                         method="post"
@@ -176,25 +237,6 @@ export default async function CaptainCollectedRemittancePanel({
                         </form>
                       </details>
                     </>
-                  ) : snapshot.pendingPence > 0 ? (
-                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3 text-sm text-amber-50">
-                      <p>
-                        A Stripe checkout for this collected money is still in progress. Cancel it if you want to release the amount and choose another payment method.
-                      </p>
-                      <form
-                        action={`/captain/team/${teamId}/payments/remit-collected/cancel`}
-                        method="post"
-                        className="mt-3"
-                      >
-                        <input type="hidden" name="chargeId" value={entry.chargeId} />
-                        <button
-                          type="submit"
-                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-amber-200/30 bg-amber-300 px-4 py-2.5 text-sm font-black text-black transition hover:bg-amber-200"
-                        >
-                          Cancel pending checkout
-                        </button>
-                      </form>
-                    </div>
                   ) : (
                     <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-50">
                       This fixture balance is fully settled. No collected player money needs to be passed to SIXFL for it.
