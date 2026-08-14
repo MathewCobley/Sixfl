@@ -67,7 +67,7 @@ function getEmailCopy(input: {
   const fixtureLabel = `${input.teamName} v ${input.opponentName}`;
   const kickoffLabel = formatKickoff(input.kickoffAt);
   const onlineInstruction =
-    `Open the fixture and choose either ‘Yes — we can play’ or ‘No — we cannot play’. This is the whole-team response; individual player availability is separate. Online responses close ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.`;
+    `Please confirm using the button below. Replies to this email are not recorded as your fixture response.\n\nOpen the fixture and select either ‘Yes — we can play’ or ‘No — we cannot play’. This is the whole-team response; individual player availability is separate. Online responses close ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.`;
   const lateInstruction =
     `The online response window closes ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. If you need to report or change anything inside that window, email ${SIXFL_FIXTURE_EMAIL} directly.`;
 
@@ -213,7 +213,7 @@ export async function queueInitialFixtureConfirmationEmailForTeam(input: {
         : fixture.league.name,
     },
     emailCta: {
-      label: "Respond to fixture",
+      label: "Confirm team availability",
       url: captainFixturesUrl,
     },
     metadata: {
@@ -378,7 +378,7 @@ export async function runFixtureConfirmationEmailJob() {
             : fixture.league.name,
         },
         emailCta: {
-          label: mode === "initial" ? "Respond to fixture" : "Open fixture details",
+          label: mode === "initial" ? "Confirm team availability" : "Open fixture details",
           url: captainFixturesUrl,
         },
         metadata: {
