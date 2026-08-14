@@ -64,6 +64,7 @@ require("./apply-late-payment-72h-review.cjs");
 require("./apply-admin-outstanding-balance-copy.cjs");
 require("./apply-reopen-failed-stripe-player-payment.cjs");
 require("./apply-team-credit-cap-policy.cjs");
+require("./fix-team-credit-cap-policy-build.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
