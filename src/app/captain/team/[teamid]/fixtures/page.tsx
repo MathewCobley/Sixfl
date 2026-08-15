@@ -151,7 +151,7 @@ function getFriendlyErrorMessage(error: unknown) {
       return "Only published scheduled upcoming fixtures can be confirmed.";
     }
     if (error.message.includes("Fixture response window closed")) {
-      return `Online team responses close ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Please email ${SIXFL_FIXTURE_EMAIL} if you need to change or report anything now.`;
+      return `Late changes and issue reports close online ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. You can still confirm that your team can play, but please email ${SIXFL_FIXTURE_EMAIL} if your team cannot play or anything needs changing now.`;
     }
     if (error.message.includes("Issue note must be at least")) {
       return "Please add a short note so SIXFL knows what the issue is.";
@@ -206,11 +206,11 @@ function getFixtureConfirmationSummary(input: {
     };
   }
 
-  if (diffHours <= 72) {
+  if (diffHours <= FIXTURE_RESPONSE_LOCK_HOURS) {
     return {
-      label: "Online response closed",
-      tone: "red",
-      helper: `Within ${FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off — contact SIXFL directly`,
+      label: "Awaiting confirmation",
+      tone: "amber",
+      helper: `Within ${FIXTURE_RESPONSE_LOCK_HOURS} hours — you can still confirm your team can play; contact SIXFL directly for any late change or issue`,
     };
   }
 
@@ -242,7 +242,11 @@ function buildFixtureRedirect(teamid: string, input: { fixtureId: string; saved?
   return `/captain/team/${teamid}/fixtures?${searchParams.toString()}`;
 }
 
-async function getConfirmableFixture(fixtureId: string, teamid: string) {
+async function getConfirmableFixture(
+  fixtureId: string,
+  teamid: string,
+  options?: { allowLateConfirmation?: boolean },
+) {
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },
     select: {
@@ -269,7 +273,10 @@ async function getConfirmableFixture(fixtureId: string, teamid: string) {
   if (await fixtureHasPlaceholderTeam(fixtureId)) {
     throw new Error("This fixture is still provisional.");
   }
-  if (isFixtureResponseLocked(fixture.kickoffAt)) {
+  if (
+    isFixtureResponseLocked(fixture.kickoffAt) &&
+    !options?.allowLateConfirmation
+  ) {
     throw new Error("Fixture response window closed.");
   }
 
@@ -292,7 +299,9 @@ async function confirmFixtureAction(formData: FormData) {
   const access = await requireCaptain(teamid);
 
   try {
-    await getConfirmableFixture(fixtureId, teamid);
+    await getConfirmableFixture(fixtureId, teamid, {
+      allowLateConfirmation: true,
+    });
 
     await prisma.fixtureCaptainConfirmation.upsert({
       where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
@@ -564,7 +573,7 @@ export default async function CaptainFixturesPage({
             {selectedFixture ? (
               <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/85">
                 <strong className="text-sky-50">This is about the whole team.</strong>{" "}
-                Tell SIXFL whether your team can fulfil the fixture. Individual player availability is handled separately in the Availability tab. Online team responses close {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.
+                You can confirm that your team can play right up until kick-off. If your team cannot play, you need to change a previous response, or there is another fixture issue, use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly. Individual player availability is handled separately in the Availability tab.
               </div>
             ) : null}
 
@@ -613,25 +622,42 @@ export default async function CaptainFixturesPage({
                   </p>
                 </div>
               ) : selectedResponseLocked ? (
-                <div className="rounded-3xl border border-red-400/25 bg-red-500/10 p-5 text-red-50">
-                  <p className="text-base font-semibold">Online response window closed</p>
-                  <p className="mt-2 text-sm leading-6 text-red-100/80">
-                    Team responses are locked {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off so SIXFL has time to deal with any fixture changes properly. If your team can no longer play, or you need to change a previous response, email SIXFL directly now.
+                <div className="rounded-3xl border border-amber-400/25 bg-amber-500/10 p-5 text-amber-50">
+                  <p className="text-base font-semibold">You can still confirm your team can play</p>
+                  <p className="mt-2 text-sm leading-6 text-amber-100/80">
+                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. A positive confirmation is still useful and can be submitted below. If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
                   </p>
+
+                  <form action={confirmFixtureAction} className="mt-4">
+                    <input type="hidden" name="teamid" value={team.id} />
+                    <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                    <button
+                      type="submit"
+                      disabled={isSelectedFixtureConfirmed}
+                      className={`inline-flex min-h-12 w-full items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                        isSelectedFixtureConfirmed
+                          ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/75"
+                          : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
+                      }`}
+                    >
+                      {isSelectedFixtureConfirmed ? "✓ Team can play" : "Yes — we can play"}
+                    </button>
+                  </form>
+
                   <a
                     href={selectedFixtureEmailHref}
-                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-red-100 px-4 py-2.5 text-sm font-semibold text-red-950 transition hover:bg-white"
+                    className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-amber-300/25 bg-black/20 px-4 py-2.5 text-sm font-semibold text-amber-50 transition hover:bg-black/30"
                   >
-                    Email SIXFL about this fixture
+                    Need to change something? Email SIXFL
                   </a>
-                  <p className="mt-3 text-xs text-red-100/65">{SIXFL_FIXTURE_EMAIL}</p>
+                  <p className="mt-3 text-xs text-amber-100/65">{SIXFL_FIXTURE_EMAIL}</p>
                 </div>
               ) : (
                 <>
                   <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
                     <p className="text-base font-semibold text-white">Can your team play this fixture?</p>
                     <p className="mt-1 text-sm leading-6 text-white/55">
-                      Choose one. You can correct your response here until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. After that, contact SIXFL directly.
+                      You can confirm yes at any time before kick-off. If you need to say no, change a response or raise an issue, use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly.
                     </p>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
