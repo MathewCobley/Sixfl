@@ -145,3 +145,4 @@ console.log(
 );
 
 require("./apply-admin-kit-draft-visibility.cjs");
+require("./apply-league-kit-design-lock.cjs");
