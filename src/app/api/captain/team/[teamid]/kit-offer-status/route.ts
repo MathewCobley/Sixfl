@@ -37,22 +37,23 @@ export async function GET(
   const row = rows[0] ?? null;
   if (!row) return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-  // An existing/submitted kit order always remains visible. Otherwise a
-  // team-specific admin expiry overrides the league offer and the old interest
-  // checkbox without deleting that historical record.
+  // Existing/current kit orders retain the entitlement they were created with.
+  // The admin expiry only removes an unclaimed free-kit entitlement. A team with
+  // an expired offer and no order can still use the normal paid £20 kit flow.
+  const suppressed = Boolean(row.freeKitOfferExpired && !row.hasExistingOrder);
   const existingEntitlement = Boolean(
-    row.hasExistingOrder || (row.wantsFreeKit && !row.freeKitOfferExpired),
+    row.hasExistingOrder || (row.wantsFreeKit && !suppressed),
   );
   const offerAvailable = Boolean(
     row.hasExistingOrder ||
-      (!row.freeKitOfferExpired && (row.leagueEnabled || row.wantsFreeKit)),
+      (!suppressed && (row.leagueEnabled || row.wantsFreeKit)),
   );
 
   return NextResponse.json({
     offerAvailable,
     leagueEnabled: Boolean(row.leagueEnabled),
     existingEntitlement,
-    suppressed: Boolean(row.freeKitOfferExpired),
+    suppressed,
     hasExistingOrder: Boolean(row.hasExistingOrder),
   });
 }
