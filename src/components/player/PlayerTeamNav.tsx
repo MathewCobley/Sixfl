@@ -31,6 +31,11 @@ const tabs = (teamId: string, previewMembershipId: string | null) => [
     exact: false,
   },
   {
+    href: addPreviewMembershipId(`/player/team/${teamId}/league-results`, previewMembershipId),
+    label: "League results",
+    exact: false,
+  },
+  {
     href: addPreviewMembershipId(`/player/team/${teamId}/tv`, previewMembershipId),
     label: "SIXFL TV",
     exact: false,
