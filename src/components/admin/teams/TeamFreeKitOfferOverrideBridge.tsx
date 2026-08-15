@@ -65,12 +65,14 @@ export default function TeamFreeKitOfferOverrideBridge() {
         const copy = document.createElement("div");
         const title = document.createElement("div");
         title.className = "font-semibold text-white";
-        title.textContent = "Free kit offer not applied / expired";
+        title.textContent = data.hasExistingOrder
+          ? "Hide additional kit purchases from captain"
+          : "Free kit offer not applied / expired";
 
         const description = document.createElement("p");
         description.className = "mt-1 text-sm leading-5 text-white/55";
         description.textContent = data.hasExistingOrder
-          ? "This team already has a kit order, so its kit entitlement is preserved and cannot be hidden here."
+          ? "Tick this to hide the option to buy more £20 kits. The existing kit order, kit details and any historical payment records remain unchanged."
           : "Tick this to hide the unclaimed free-kit offer from this team's captain pages. The original request stays recorded for audit/history, and future teams are unaffected.";
 
         const status = document.createElement("p");
@@ -79,12 +81,13 @@ export default function TeamFreeKitOfferOverrideBridge() {
         const input = document.createElement("input");
         input.type = "checkbox";
         input.checked = data.expired;
-        input.disabled = data.hasExistingOrder;
-        input.className = "mt-1 h-5 w-5 accent-amber-400 disabled:opacity-40";
+        input.className = "mt-1 h-5 w-5 accent-amber-400";
 
         const refreshStatus = () => {
           if (data.hasExistingOrder) {
-            status.textContent = "Existing/submitted kit order — entitlement preserved";
+            status.textContent = input.checked
+              ? "HIDDEN — captain cannot create new additional-kit payment requests"
+              : "VISIBLE — captain can buy additional £20 kits";
             return;
           }
           status.textContent = input.checked
@@ -116,7 +119,7 @@ export default function TeamFreeKitOfferOverrideBridge() {
             refreshStatus();
           }
 
-          input.disabled = data.hasExistingOrder;
+          input.disabled = false;
         });
 
         copy.append(title, description, status);
