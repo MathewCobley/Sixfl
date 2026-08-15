@@ -18,6 +18,7 @@ const homepagePath = "src/app/(public)/page.tsx";
 const publicLayoutPath = "src/app/(public)/layout.tsx";
 const tvSectionPath = "src/components/home/SixflTvHomepageSection.tsx";
 const predictorPath = "src/components/home/HomepageAiPredictorSection.tsx";
+const leagueDirectoryPath = "src/components/home/HomepageLeagueDirectory.tsx";
 const goalPatchPath = "scripts/apply-goal-of-week.cjs";
 
 const retiredHomepageBridges = [
@@ -34,6 +35,7 @@ const homepage = read(homepagePath);
 const layout = read(publicLayoutPath);
 const tvSection = read(tvSectionPath);
 const predictor = read(predictorPath);
+const leagueDirectory = read(leagueDirectoryPath);
 const goalPatch = read(goalPatchPath);
 
 assert(
@@ -47,6 +49,26 @@ assert(
 assert(
   homepage.includes("<HomepageAiPredictorSection"),
   "Homepage must render the AI Predictor directly.",
+);
+assert(
+  homepage.includes('import HomepageLeagueDirectory from "@/components/home/HomepageLeagueDirectory";'),
+  "Homepage must import the database-driven league directory.",
+);
+assert(
+  homepage.includes("<HomepageLeagueDirectory />"),
+  "Homepage must render the database-driven league directory.",
+);
+assert(
+  !homepage.includes("const areaCards ="),
+  "Homepage league launches must not return to a hard-coded areaCards list.",
+);
+assert(
+  leagueDirectory.includes('data-testid="homepage-league-directory"'),
+  "Homepage league directory critical marker is missing.",
+);
+assert(
+  leagueDirectory.includes("getHomepageLeagues()"),
+  "Homepage league directory must read current launch leagues from the database.",
 );
 assert(
   homepage.includes('data-testid="homepage-hero"'),
