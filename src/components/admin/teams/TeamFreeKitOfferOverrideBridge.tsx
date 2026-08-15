@@ -65,15 +65,13 @@ export default function TeamFreeKitOfferOverrideBridge() {
         const copy = document.createElement("div");
         const title = document.createElement("div");
         title.className = "font-semibold text-white";
-        title.textContent = data.hasExistingOrder
-          ? "Hide additional kit purchases from captain"
-          : "Free kit offer not applied / expired";
+        title.textContent = "Free kit offer not applied / expired";
 
         const description = document.createElement("p");
         description.className = "mt-1 text-sm leading-5 text-white/55";
         description.textContent = data.hasExistingOrder
-          ? "Tick this to hide the option to buy more £20 kits. The existing kit order, kit details and any historical payment records remain unchanged."
-          : "Tick this to hide the unclaimed free-kit offer from this team's captain pages. The original request stays recorded for audit/history, and future teams are unaffected.";
+          ? "This team already has a kit order, so its existing kit entitlement is preserved. Paid additional kits remain available through the normal kit order."
+          : "Tick this to remove the free-kit entitlement from this team. They can still order and pay for kits at the normal £20 per complete kit. The original free-kit request remains recorded for audit/history.";
 
         const status = document.createElement("p");
         status.className = "mt-2 text-xs font-semibold text-amber-100/75";
@@ -81,20 +79,19 @@ export default function TeamFreeKitOfferOverrideBridge() {
         const input = document.createElement("input");
         input.type = "checkbox";
         input.checked = data.expired;
-        input.className = "mt-1 h-5 w-5 accent-amber-400";
+        input.disabled = data.hasExistingOrder;
+        input.className = "mt-1 h-5 w-5 accent-amber-400 disabled:opacity-40";
 
         const refreshStatus = () => {
           if (data.hasExistingOrder) {
-            status.textContent = input.checked
-              ? "HIDDEN — captain cannot create new additional-kit payment requests"
-              : "VISIBLE — captain can buy additional £20 kits";
+            status.textContent = "EXISTING KIT ORDER — current entitlement preserved";
             return;
           }
           status.textContent = input.checked
-            ? "EXPIRED / NOT APPLIED — captain will not see the free-kit offer"
+            ? "FREE OFFER OFF — captain can still buy kits at £20 each"
             : data.wantsFreeKit
-              ? "REQUEST ON RECORD — captain can still see the free-kit offer"
-              : "NOT EXPIRED — normal league/free-kit rules apply";
+              ? "FREE OFFER ON — included kit allocation is available"
+              : "NORMAL PAID KIT RULES APPLY";
         };
         refreshStatus();
 
@@ -119,7 +116,7 @@ export default function TeamFreeKitOfferOverrideBridge() {
             refreshStatus();
           }
 
-          input.disabled = false;
+          input.disabled = data.hasExistingOrder;
         });
 
         copy.append(title, description, status);
