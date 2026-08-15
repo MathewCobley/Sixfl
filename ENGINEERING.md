@@ -103,7 +103,7 @@ Rules:
 - a regression fix should leave behind a permanent contract where practical;
 - do not merge while `.github/workflows/critical-feature-contracts.yml` is failing;
 - permanent behaviour should live natively in the owning React/server source, not solely inside an `apply-*.cjs` build rewrite;
-- all source-preparation steps must be idempotent: a second full prebuild must not change the already-prepared source;
+- any preparation script that preserves a protected critical feature must be idempotent when re-run after the complete prebuild; the wider legacy prebuild chain should be reduced rather than expanded;
 - when changing a protected area, extend its contracts to cover any new invariant that would be costly to lose later.
 
 See `docs/critical-feature-contracts.md` for the protected behaviours and expansion plan.
