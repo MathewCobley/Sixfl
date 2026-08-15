@@ -105,7 +105,7 @@ expectRegex(
   "kits",
   kitFormPath,
   kitForm,
-  />Taken<\/div>/,
+  />Taken<\/div>|unavailable \? "Taken" : selected \? "Selected" : "Choose"/,
   "taken designs must be labelled Taken",
 );
 
