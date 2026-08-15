@@ -82,8 +82,8 @@ jobs:
           test ! -e src/components/captain/StandardTeamKitCopyBridge.tsx
           test ! -e src/components/admin/teams/FreeKitTeamBadgesBridge.tsx
           ! grep -R "Compulsory printing contribution\|£10 per shirt\|£70 Founding Team Kit Package\|£90 Founding Team Kit Package" src --include='*.ts' --include='*.tsx'
-          grep -q "There is no printing charge" src/components/captain/TeamKitOrderForm.tsx
-          grep -q "IncludedKitPaymentPanel" src/app/captain/team/\[teamid\]/kit/page.tsx
+          grep -q "saveTeamKitOrderV2Action" src/app/captain/team/\[teamid\]/kit/page.tsx
+          node scripts/check-critical-feature-contracts.mjs
 
       - name: Audit DOM bridge policy
         run: npm run audit:dom
