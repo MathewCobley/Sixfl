@@ -206,7 +206,7 @@
           "contains": [
             "PLAYER_POOL_LOGO_URL",
             "alt=\"SIXFL PlayerPool\"",
-            "Available players for {team.name}"
+            "Players for {team.name}"
           ]
         }
       ]

@@ -1,0 +1,69 @@
+name: SIXFL critical feature contracts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  contracts:
+    name: Preserve existing critical features
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply the complete production source-preparation chain
+        run: npm run prebuild
+
+      - name: Check critical feature contracts
+        run: node scripts/check-critical-feature-contracts.mjs
+
+      - name: Snapshot protected kit source
+        run: |
+          git diff --binary -- \
+            src/app/captain/team/\[teamid\]/kit/page.tsx \
+            src/app/captain/team/\[teamid\]/kit/actions.ts \
+            src/app/captain/team/\[teamid\]/kit/save-v2.ts \
+            src/components/captain/TeamKitOrderForm.tsx \
+            > /tmp/kit-contract-before.diff
+
+      - name: Re-run the kit reservation preparation
+        run: node scripts/apply-league-kit-design-lock.cjs
+
+      - name: Reject non-idempotent kit reservation preparation
+        shell: bash
+        run: |
+          git diff --binary -- \
+            src/app/captain/team/\[teamid\]/kit/page.tsx \
+            src/app/captain/team/\[teamid\]/kit/actions.ts \
+            src/app/captain/team/\[teamid\]/kit/save-v2.ts \
+            src/components/captain/TeamKitOrderForm.tsx \
+            > /tmp/kit-contract-after.diff
+          if ! diff -u /tmp/kit-contract-before.diff /tmp/kit-contract-after.diff; then
+            echo ""
+            echo "ERROR: the kit reservation preparation changed already-prepared kit source."
+            echo "The reservation safeguard must be idempotent and safe to apply after the complete prebuild chain."
+            exit 1
+          fi
+
+      - name: Re-check critical feature contracts
+        run: node scripts/check-critical-feature-contracts.mjs
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type-check protected application source
+        run: npx tsc --noEmit

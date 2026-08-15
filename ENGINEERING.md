@@ -91,6 +91,23 @@ data-
 /admin/teams/
 ```
 
+## Critical feature contracts
+
+Compiling successfully is not proof that an existing SIXFL feature survived a change.
+
+For business-critical areas, preserve behaviour with executable feature contracts. The contracts are run after the complete source-preparation chain, so they validate the code Railway will actually build.
+
+Rules:
+
+- new functionality must not remove an existing contract unless the product behaviour is deliberately being changed;
+- a regression fix should leave behind a permanent contract where practical;
+- do not merge while `.github/workflows/critical-feature-contracts.yml` is failing;
+- permanent behaviour should live natively in the owning React/server source, not solely inside an `apply-*.cjs` build rewrite;
+- any preparation script that preserves a protected critical feature must be idempotent when re-run after the complete prebuild; the wider legacy prebuild chain should be reduced rather than expanded;
+- when changing a protected area, extend its contracts to cover any new invariant that would be costly to lose later.
+
+See `docs/critical-feature-contracts.md` for the protected behaviours and expansion plan.
+
 ## Messaging and notification safety
 
 - Notification/cron routes must return useful JSON errors where possible.
@@ -104,6 +121,13 @@ Before pushing route/API changes, do at least one of:
 
 ```text
 npm run build
+```
+
+For changes to kits, payments, players/squads, fixtures/results, league tables, player pool, previews or referee/night-board operations, also run:
+
+```text
+npm run prebuild
+node scripts/check-critical-feature-contracts.mjs
 ```
 
 or, if build cannot be run, manually search for conflicting dynamic route folders such as:

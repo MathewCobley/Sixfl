@@ -63,6 +63,27 @@ npm run audit:dom:changed
 
 `audit:dom` reports the full legacy inventory. `audit:dom:changed` fails when changed source files add or modify suspicious DOM mutation without a valid exception.
 
+## Critical feature contracts
+
+A new feature must never silently remove an existing working feature.
+
+- A change is complete only when the new behaviour works **and** all existing critical feature contracts for the affected area still pass after the full `npm run prebuild` chain.
+- Never merge a pull request while the **SIXFL critical feature contracts** workflow is red.
+- When a regression is fixed, add a permanent executable contract where practical so the same regression cannot silently return.
+- Permanent business behaviour belongs in the React/Next.js/server source that owns it. Do not implement new permanent functionality solely through another `apply-*.cjs` source-rewriting patch.
+- Existing `apply-*.cjs` scripts are compatibility debt. If a critical feature still depends on one, protect the final prepared source with a contract until the behaviour is moved natively.
+- Any preparation script that preserves a protected critical feature must be idempotent when re-run after the complete prebuild. The wider legacy prebuild chain is technical debt and must be reduced rather than expanded.
+- For kits, payments, players/squads, fixtures/results, league tables, player pool, previews and referee/night-board operations, inspect the existing contracts before changing the area and extend them when introducing a new invariant.
+
+The policy and current protected behaviours are documented in `docs/critical-feature-contracts.md`.
+
+Local verification for critical changes:
+
+```bash
+npm run prebuild
+node scripts/check-critical-feature-contracts.mjs
+```
+
 ## Change-completion standard
 
 Do not report a partial change as complete. Before saying a task is **done**:
