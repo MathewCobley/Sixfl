@@ -23,8 +23,8 @@ function walk(directory) {
     const before = source;
 
     source = source
-      .replaceAll("Send kit payment links", "Request player kit payments")
-      .replaceAll("Send £20 payment links", "Request £20 kit payments");
+      .replaceAll("Send kit payment links", "Order team kits")
+      .replaceAll("Request player kit payments", "Order team kits");
 
     if (source !== before) {
       fs.writeFileSync(fullPath, source, "utf8");
@@ -37,6 +37,6 @@ for (const root of roots) walk(root);
 
 console.log(
   replacements > 0
-    ? `Renamed kit payment CTA in ${replacements} captain source file${replacements === 1 ? "" : "s"}.`
-    : "Kit payment CTA already uses the clearer wording.",
+    ? `Renamed kit ordering CTA in ${replacements} captain source file${replacements === 1 ? "" : "s"}.`
+    : "Kit ordering CTA already uses the preferred wording.",
 );
