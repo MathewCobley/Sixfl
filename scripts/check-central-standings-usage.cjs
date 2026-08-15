@@ -66,6 +66,7 @@ require("./apply-reopen-failed-stripe-player-payment.cjs");
 require("./apply-team-credit-cap-policy.cjs");
 require("./fix-team-credit-cap-policy-build.cjs");
 require("./apply-team-credit-replenishment-fix.cjs");
+require("./apply-free-kit-expiry-paid-kit-mode.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
