@@ -17,7 +17,7 @@ The workflow `.github/workflows/critical-feature-contracts.yml` runs on every pu
 
 It deliberately runs `npm run prebuild` before checking contracts because SIXFL currently has a long source-preparation chain. Contracts therefore inspect the source that Railway will actually build, rather than only the source as it appeared before preparation.
 
-For any critical behaviour that still depends on a preparation script, the workflow also re-runs that specific preparation after the complete prebuild and rejects it if it changes already-prepared source. This makes the protected patch idempotent without pretending the whole legacy prebuild chain is already clean.
+For any critical behaviour that still depends on a preparation script, the workflow can also re-run that specific preparation after the complete prebuild and reject it if it changes already-prepared source. This makes the protected patch idempotent without pretending the whole legacy prebuild chain is already clean.
 
 A red **SIXFL critical feature contracts** check means **do not merge**.
 
@@ -29,9 +29,9 @@ Permanent product behaviour belongs in the React/Next.js/server source that owns
 
 When a critical feature currently depends on a preparation script, its final behaviour must be protected by a feature contract until the patch is removed and the behaviour is native. Any preparation script used to preserve a protected feature must itself be safe to re-run after the full prebuild.
 
-## First protected area: team kit design reservation
+## Protected behaviour
 
-The following behaviour is now a permanent SIXFL contract:
+### Team kit design reservation
 
 - a kit design submitted by another team in the same league is reserved;
 - the reserved design remains visible in the catalogue;
@@ -43,22 +43,52 @@ The following behaviour is now a permanent SIXFL contract:
 - `CANCELLED` kit orders do not reserve a design;
 - concurrent submissions are serialized at league level so two teams cannot reserve the same design at the same moment.
 
-These assertions live in `scripts/check-critical-feature-contracts.mjs`.
+### Player and team payments
+
+- a new player payment link cannot be created for a player who has no saved email address;
+- the captain UI clearly identifies that an email is required and prevents new selection for a link;
+- player match-fee overrides remain admin-only on both the page and server action;
+- every player fee override change retains an audit record;
+- team credit remains a standard-team feature;
+- team credit headroom remains capped at one match fee;
+- existing credit is used before collecting more money;
+- maximum further collection remains bounded by the outstanding fixture balance plus permitted credit headroom.
+
+### Player identity safety
+
+- a shared email address is not enough to merge or reuse a differently named player account;
+- account resolution retains the `SHARED_EMAIL_DIFFERENT_PLAYER` conflict state;
+- login-email resolution is serialized so concurrent activations cannot race through the duplicate check;
+- managed-squad joining and signed-in activation both pass through the central identity-safety service;
+- identity conflicts remain pending/separate instead of silently renaming, linking or merging people;
+- blocked identity collisions remain auditable.
+
+### League standings
+
+- `src/lib/standings.ts` remains the authoritative entry point for league/team standings;
+- product code cannot directly import the low-level `src/lib/leagueTable.ts` calculator;
+- league-facing pages cannot introduce their own `buildLeagueTable()` calculator.
+
+### PlayerPool
+
+- the captain PlayerPool page remains natively available and branded;
+- it stays scoped to the captain's team;
+- captains retain the introduction-request action;
+- approved introductions retain the add-to-squad action.
+
+These assertions live in `scripts/check-critical-feature-contracts.mjs` and are checked after the complete production source-preparation chain.
 
 ## Areas to add next
 
-The contract framework should be expanded whenever these areas are changed:
+The contract framework should continue to expand when these areas are changed:
 
-- kits and kit payments;
-- team and player match-fee collection;
-- team credit and payment caps;
-- player creation, identity collision prevention and merges;
+- remaining kit payment/order readiness rules;
 - managed/standard squad switching;
-- player pool and prospect workflows;
 - fixture publication and availability;
-- results and league tables;
+- result entry, disputes and correction workflows;
 - captain/player/admin preview boundaries;
-- referee and night-board operations.
+- referee and night-board operations;
+- notification delivery and template ownership.
 
 Do not create a large fragile snapshot of whole pages. Protect the business rules and user-visible controls that must survive future work.
 
