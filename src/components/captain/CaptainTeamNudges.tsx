@@ -96,7 +96,12 @@ async function getPendingFixtureConfirmation(teamId: string) {
 
 async function getKitOfferType(teamId: string): Promise<KitOfferType> {
   const rows = await prisma.$queryRaw<
-    Array<{ legacyOffer: boolean; wantsKitOffer: boolean }>
+    Array<{
+      legacyOffer: boolean;
+      wantsKitOffer: boolean;
+      freeKitOfferExpired: boolean;
+      hasExistingOrder: boolean;
+    }>
   >(Prisma.sql`
     SELECT
       (
@@ -136,11 +141,28 @@ async function getKitOfferType(teamId: string): Promise<KitOfferType> {
           WHERE offer_team."id" = ${teamId}
             AND offer_team."wantsFreeKit" = TRUE
         )
-      ) AS "wantsKitOffer"
+      ) AS "wantsKitOffer",
+      EXISTS (
+        SELECT 1
+        FROM "Team" suppressed_team
+        WHERE suppressed_team."id" = ${teamId}
+          AND suppressed_team."freeKitOfferExpiredAt" IS NOT NULL
+      ) AS "freeKitOfferExpired",
+      EXISTS (
+        SELECT 1
+        FROM "TeamKitOrder" current_order
+        WHERE current_order."teamId" = ${teamId}
+      ) AS "hasExistingOrder"
   `);
 
-  if (rows[0]?.legacyOffer) return "FREE_KIT";
-  if (rows[0]?.wantsKitOffer) return "FOUNDING_PACKAGE";
+  const row = rows[0];
+
+  // The admin tick removes an unclaimed free-kit entitlement only. Captains can
+  // still buy normal £20 kits, while any existing/current order keeps the offer
+  // it was created with.
+  if (row?.freeKitOfferExpired && !row.hasExistingOrder) return "STANDARD";
+  if (row?.legacyOffer) return "FREE_KIT";
+  if (row?.wantsKitOffer) return "FOUNDING_PACKAGE";
   return "STANDARD";
 }
 
