@@ -74,10 +74,18 @@ export async function PATCH(
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
+  if (body.expired && current.hasExistingOrder) {
+    return NextResponse.json(
+      {
+        error:
+          "This team already has a kit order. Its existing kit entitlement is preserved.",
+      },
+      { status: 409 },
+    );
+  }
+
   const reason = body.expired
-    ? current.hasExistingOrder
-      ? "Admin hid future additional-kit purchasing from the captain. Existing kit order and historical payment records remain available."
-      : "Admin marked the unclaimed free-kit offer as not applied / expired. Original free-kit interest remains on record."
+    ? "Admin marked the unclaimed free-kit offer as not applied / expired. Original free-kit interest remains on record. Paid kit ordering remains available."
     : null;
 
   await prisma.$executeRaw(Prisma.sql`
