@@ -96,3 +96,30 @@ UPDATE "League"
 SET "homepageStage" = 'HIDDEN'
 WHERE LOWER(COALESCE("name", '')) LIKE '%heartlands%'
    OR LOWER(COALESCE("slug", '')) LIKE '%heartlands%';
+
+-- Publishing the first fixture is the natural transition from recruiting to a
+-- live league. Keep HIDDEN leagues hidden and leave explicitly LIVE leagues alone.
+CREATE OR REPLACE FUNCTION "promote_homepage_league_on_fixture_publish"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."publishedAt" IS NOT NULL
+     AND (OLD."publishedAt" IS NULL OR OLD."publishedAt" IS DISTINCT FROM NEW."publishedAt") THEN
+    UPDATE "League"
+    SET
+      "homepageStage" = 'LIVE',
+      "updatedAt" = NOW()
+    WHERE "id" = NEW."leagueId"
+      AND "homepageStage" IN ('FORMING', 'PLANNED');
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "Fixture_promote_homepage_league_on_publish" ON "Fixture";
+CREATE TRIGGER "Fixture_promote_homepage_league_on_publish"
+AFTER UPDATE OF "publishedAt" ON "Fixture"
+FOR EACH ROW
+EXECUTE FUNCTION "promote_homepage_league_on_fixture_publish"();
