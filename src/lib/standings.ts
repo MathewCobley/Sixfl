@@ -111,10 +111,20 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
       })),
     );
 
+    const dividedRows = divisions.flatMap((division) => division.rows);
+
+    // A league can retain active division records while a new/current season's
+    // active teams have not yet been assigned to a division. In that state the
+    // division tables are legitimately empty, but the league itself is not.
+    // Fall back to the authoritative active season-team list rather than showing
+    // "0 teams" or reconstructing membership from historical fixtures.
+    const rows =
+      dividedRows.length > 0 ? dividedRows : await getLeagueTable(leagueId);
+
     return {
       league,
       divisions,
-      rows: divisions.flatMap((division) => division.rows),
+      rows,
       hasDivisions: true,
       membershipConflicts,
     };
@@ -150,6 +160,21 @@ export async function getTeamStanding(input: {
           row: division.rows[positionIndex],
         };
       }
+    }
+
+    // If the current season has active league members that have not yet been
+    // assigned to an active division, the fallback rows above still provide a
+    // useful current standing instead of reporting that the team is absent.
+    const fallbackIndex = standings.rows.findIndex((row) => teamIds.has(row.teamId));
+    if (fallbackIndex >= 0) {
+      return {
+        teamId: standings.rows[fallbackIndex].teamId,
+        divisionId: null,
+        divisionName: null,
+        position: fallbackIndex + 1,
+        totalTeams: standings.rows.length,
+        row: standings.rows[fallbackIndex],
+      };
     }
   } else {
     const positionIndex = standings.rows.findIndex((row) => teamIds.has(row.teamId));
