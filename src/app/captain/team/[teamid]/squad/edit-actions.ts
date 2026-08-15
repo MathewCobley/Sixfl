@@ -85,7 +85,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
     redirect("/captain");
   }
 
-  if (Number.isNaN(playerMatchFeeOverride)) {
+  if (access.isAdmin && Number.isNaN(playerMatchFeeOverride)) {
     redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank.", access.isAdmin));
   }
 
@@ -143,14 +143,25 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   const phoneNormalized = normalizePhoneNumber(phone);
 
   const existingProfiles = await prisma.$queryRaw<
-    Array<{ sourceProspectId: string | null }>
+    Array<{
+      sourceProspectId: string | null;
+      playerMatchFeePenceOverride: number | null;
+    }>
   >`
-    SELECT "sourceProspectId"
+    SELECT "sourceProspectId", "playerMatchFeePenceOverride"
     FROM "TeamMemberProfile"
     WHERE "teamMemberId" = ${membershipId}
     LIMIT 1
   `;
   const sourceProspectId = existingProfiles[0]?.sourceProspectId ?? null;
+  const existingPlayerMatchFeeOverride =
+    existingProfiles[0]?.playerMatchFeePenceOverride ?? null;
+  const nextPlayerMatchFeeOverride = access.isAdmin
+    ? playerMatchFeeOverride
+    : existingPlayerMatchFeeOverride;
+  const playerMatchFeeOverrideChanged =
+    access.isAdmin &&
+    existingPlayerMatchFeeOverride !== nextPlayerMatchFeeOverride;
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`
@@ -214,7 +225,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         ${profileId},
         ${membershipId},
         ${phone},
-        ${playerMatchFeeOverride},
+        ${nextPlayerMatchFeeOverride},
         ${preferredPositions},
         ${experienceSummary},
         ${availabilityLevel},
@@ -234,6 +245,50 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         "notes" = EXCLUDED."notes",
         "updatedAt" = NOW()
     `;
+
+    if (playerMatchFeeOverrideChanged) {
+      await tx.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "TeamMemberFeeOverrideAudit" (
+          "id" TEXT NOT NULL,
+          "teamMemberId" TEXT NOT NULL,
+          "teamId" TEXT NOT NULL,
+          "oldAmountPence" INTEGER,
+          "newAmountPence" INTEGER,
+          "changedByUserId" TEXT,
+          "changedByEmail" TEXT,
+          "source" TEXT NOT NULL,
+          "reason" TEXT,
+          "changedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "TeamMemberFeeOverrideAudit_pkey" PRIMARY KEY ("id")
+        );
+      `);
+
+      await tx.$executeRaw`
+        INSERT INTO "TeamMemberFeeOverrideAudit" (
+          "id",
+          "teamMemberId",
+          "teamId",
+          "oldAmountPence",
+          "newAmountPence",
+          "changedByUserId",
+          "changedByEmail",
+          "source",
+          "reason",
+          "changedAt"
+        ) VALUES (
+          ${randomUUID()},
+          ${membershipId},
+          ${teamid},
+          ${existingPlayerMatchFeeOverride},
+          ${nextPlayerMatchFeeOverride},
+          ${access.user?.id ?? null},
+          ${access.user?.email ?? null},
+          ${"ADMIN_PLAYER_EDIT"},
+          ${"Administrator changed player match fee override"},
+          NOW()
+        )
+      `;
+    }
 
     if (sourceProspectId) {
       const splitName = (displayName ?? "").split(/\s+/).filter(Boolean);
