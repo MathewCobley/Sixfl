@@ -104,8 +104,8 @@ expectText("payments", playerPaymentPagePath, playerPaymentPage, "Email required
 
 expectText("payments", squadEditActionPath, squadEditAction, "const nextPlayerMatchFeeOverride = access.isAdmin", "captains must not be able to change player fee overrides server-side");
 expectText("payments", squadEditActionPath, squadEditAction, "TeamMemberFeeOverrideAudit", "player fee override changes must retain an audit trail");
-expectText("payments", squadEditPagePath, squadEditPage, "Match fee setting · Admin only", "player fee override control must remain visibly admin-only");
-expectText("payments", squadEditPagePath, squadEditPage, "Every change is recorded in the audit log.", "admin fee override UI must explain its audit protection");
+expectRegex("payments", squadEditPagePath, squadEditPage, /\{access\.isAdmin \? \([\s\S]{0,1600}name="playerMatchFeeOverride"/, "player fee override control must remain inside the admin-only UI block");
+expectRegex("payments", squadEditPagePath, squadEditPage, /Match fee settings? · Admin only[\s\S]{0,2200}name="playerMatchFeeCap"/, "admin-only maximum player charge control must remain available");
 
 expectText("payments", creditPolicyPath, creditPolicy, 'team.teamMode !== "STANDARD"', "team credit policy must remain limited to standard teams");
 expectText("payments", creditPolicyPath, creditPolicy, "positivePence(team.standardMatchFeePence) || fixtureFeePence", "team credit must remain capped from the standard/fixture match fee");
