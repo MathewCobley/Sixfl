@@ -1,0 +1,55 @@
+name: SIXFL critical feature contracts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  contracts:
+    name: Preserve existing critical features
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply the complete production source-preparation chain
+        run: npm run prebuild
+
+      - name: Check critical feature contracts
+        run: node scripts/check-critical-feature-contracts.mjs
+
+      - name: Check central standings contract
+        run: node scripts/check-central-standings-usage.cjs
+
+      - name: Snapshot first prepared source
+        run: git diff --binary -- src scripts prisma package.json > /tmp/prebuild-first.diff
+
+      - name: Run source preparation a second time
+        run: npm run prebuild
+
+      - name: Reject order-dependent or non-idempotent preparation
+        shell: bash
+        run: |
+          git diff --binary -- src scripts prisma package.json > /tmp/prebuild-second.diff
+          if ! diff -u /tmp/prebuild-first.diff /tmp/prebuild-second.diff; then
+            echo ""
+            echo "ERROR: npm run prebuild changes the prepared source differently on a second run."
+            echo "This means build-time patches are order-dependent or non-idempotent and could silently remove an existing feature."
+            exit 1
+          fi
+
+      - name: Re-check critical feature contracts after second preparation
+        run: node scripts/check-critical-feature-contracts.mjs
