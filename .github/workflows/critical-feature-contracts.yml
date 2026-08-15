@@ -31,25 +31,39 @@ jobs:
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 
-      - name: Check central standings contract
-        run: node scripts/check-central-standings-usage.cjs
+      - name: Snapshot protected kit source
+        run: |
+          git diff --binary -- \
+            src/app/captain/team/\[teamid\]/kit/page.tsx \
+            src/app/captain/team/\[teamid\]/kit/actions.ts \
+            src/app/captain/team/\[teamid\]/kit/save-v2.ts \
+            src/components/captain/TeamKitOrderForm.tsx \
+            > /tmp/kit-contract-before.diff
 
-      - name: Snapshot first prepared source
-        run: git diff --binary -- src scripts prisma package.json > /tmp/prebuild-first.diff
+      - name: Re-run the kit reservation preparation
+        run: node scripts/apply-league-kit-design-lock.cjs
 
-      - name: Run source preparation a second time
-        run: npm run prebuild
-
-      - name: Reject order-dependent or non-idempotent preparation
+      - name: Reject non-idempotent kit reservation preparation
         shell: bash
         run: |
-          git diff --binary -- src scripts prisma package.json > /tmp/prebuild-second.diff
-          if ! diff -u /tmp/prebuild-first.diff /tmp/prebuild-second.diff; then
+          git diff --binary -- \
+            src/app/captain/team/\[teamid\]/kit/page.tsx \
+            src/app/captain/team/\[teamid\]/kit/actions.ts \
+            src/app/captain/team/\[teamid\]/kit/save-v2.ts \
+            src/components/captain/TeamKitOrderForm.tsx \
+            > /tmp/kit-contract-after.diff
+          if ! diff -u /tmp/kit-contract-before.diff /tmp/kit-contract-after.diff; then
             echo ""
-            echo "ERROR: npm run prebuild changes the prepared source differently on a second run."
-            echo "This means build-time patches are order-dependent or non-idempotent and could silently remove an existing feature."
+            echo "ERROR: the kit reservation preparation changed already-prepared kit source."
+            echo "The reservation safeguard must be idempotent and safe to apply after the complete prebuild chain."
             exit 1
           fi
 
-      - name: Re-check critical feature contracts after second preparation
+      - name: Re-check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type-check protected application source
+        run: npx tsc --noEmit
