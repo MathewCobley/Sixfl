@@ -140,7 +140,7 @@ export default async function EditSquadPlayerPage({
   params: Promise<{ teamid: string; membershipId: string }>;
 }) {
   const { teamid, membershipId } = await params;
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
@@ -271,21 +271,23 @@ export default async function EditSquadPlayerPage({
             </div>
           </div>
 
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Match fee setting
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <Field
-                label="Player fee override"
-                name="playerMatchFeeOverride"
-                type="number"
-                defaultValue={formatFeeOverride(profile?.playerMatchFeePenceOverride)}
-                placeholder="Leave blank to use the team default"
-                help="Use 0 for a free player. Leave blank to use the default amount on the squad payments page."
-              />
+          {access.isAdmin ? (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                Match fee setting · Admin only
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Player fee override"
+                  name="playerMatchFeeOverride"
+                  type="number"
+                  defaultValue={formatFeeOverride(profile?.playerMatchFeePenceOverride)}
+                  placeholder="Leave blank to use the team default"
+                  help="Admin-only setting. Use 0 for a free player. Every change is recorded in the audit log."
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
