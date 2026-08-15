@@ -68,6 +68,7 @@ require("./fix-team-credit-cap-policy-build.cjs");
 require("./apply-team-credit-replenishment-fix.cjs");
 require("./apply-free-kit-expiry-paid-kit-mode.cjs");
 require("./apply-ai-prediction-publication-snapshot.cjs");
+require("./fix-ai-prediction-publication-selects.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
