@@ -30,7 +30,7 @@ UPDATE "League"
 SET "homepageStage" = 'HIDDEN',
     "homepagePriority" = 100;
 
--- Any current active league that already has published fixtures is genuinely live.
+-- Any current active competition season that already has published fixtures is live.
 UPDATE "League" league
 SET "homepageStage" = 'LIVE',
     "homepagePriority" = 10
@@ -45,11 +45,20 @@ WHERE league."competitionId" = competition."id"
       AND fixture."publishedAt" IS NOT NULL
   );
 
+-- Legacy ungrouped records are not all trustworthy as current leagues. Only the
+-- known Harrogate/Northallerton live areas are opted in automatically here.
 UPDATE "League" league
 SET "homepageStage" = 'LIVE',
     "homepagePriority" = 10
 WHERE league."competitionId" IS NULL
   AND league."isActive" = TRUE
+  AND (
+    LOWER(COALESCE(league."area", '')) LIKE '%harrogate%'
+    OR LOWER(COALESCE(league."name", '')) LIKE '%harrogate%'
+    OR LOWER(COALESCE(league."venueName", '')) LIKE '%rossett%'
+    OR LOWER(COALESCE(league."area", '')) LIKE '%northallerton%'
+    OR LOWER(COALESCE(league."name", '')) LIKE '%northallerton%'
+  )
   AND EXISTS (
     SELECT 1
     FROM "Fixture" fixture
