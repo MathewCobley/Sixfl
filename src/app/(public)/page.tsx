@@ -7,6 +7,7 @@ import Link from "next/link";
 import HomepageAiPredictorSection, {
   type PredictorSampleTeamLogos,
 } from "@/components/home/HomepageAiPredictorSection";
+import HomepageLeagueDirectory from "@/components/home/HomepageLeagueDirectory";
 import SixflTvHomepageSection from "@/components/home/SixflTvHomepageSection";
 import { prisma } from "@/lib/prisma";
 
@@ -16,84 +17,15 @@ export const revalidate = 0;
 export const metadata = {
   title: "SIXFL | North Yorkshire 6-a-side football leagues",
   description:
-    "Find local SIXFL 6-a-side football leagues across North Yorkshire, including Harrogate, Wetherby, Northallerton and the North Yorkshire Heartlands. View fixtures and tables or register as a team, player or referee.",
+    "Find live SIXFL 6-a-side leagues and new leagues forming across North Yorkshire. View fixtures and tables or register as a team, player or referee.",
 };
 
-const harrogateLeagueLink = "/leagues/rossett-mens-tuesday";
-const northallertonLeagueLink = "/leagues/sixfl-mens-northallerton-wednesday-league";
-const heartlandsLeagueLink = "/leagues/heartlands";
 const generalRegisterLink = "/register-interest";
 const generalTeamLink = "/register-interest?type=team";
 const generalPlayerLink = "/register-interest?type=player";
 const generalRefereeLink = "/register-interest?type=referee";
-const wetherbyTeamLink =
-  "/register-interest?type=team&area=Wetherby&night=Wednesday";
-const wetherbyPlayerLink =
-  "/register-interest?type=player&area=Wetherby&night=Wednesday";
-const northallertonPlayerLink =
-  "/register-interest?type=player&area=Northallerton&night=Wednesday";
-const harrogatePlayerLink =
-  "/register-interest?type=player&area=Harrogate&night=Tuesday";
-
-const leagueTypes = ["MEN’S LEAGUES"];
-const launchAreas = [
-  "Harrogate",
-  "Wetherby",
-  "Northallerton",
-  "North Yorkshire Heartlands",
-  "Ripon",
-  "York",
-  "Leeds",
-];
 const predictorHomeTeamName = "Six Offenders";
 const predictorAwayTeamName = "Crescent United";
-
-const areaCards = [
-  {
-    eyebrow: "LIVE HARROGATE LEAGUE",
-    title: "Harrogate West Tuesday League",
-    status: "Fixtures live",
-    body: "See upcoming fixtures, recent results, teams and the current league table for the Tuesday 6-a-side league at Rossett Sports Centre.",
-    primaryLabel: "View league",
-    primaryHref: harrogateLeagueLink,
-    secondaryLabel: "Join as player",
-    secondaryHref: harrogatePlayerLink,
-    featured: true,
-  },
-  {
-    eyebrow: "WETHERBY LAUNCH",
-    title: "Wetherby Wednesday League",
-    status: "Registrations open",
-    body: "Wetherby team entries are now open for a new Wednesday night SIXFL league at Boston Spa Academy. Captains, players and referees can register interest now.",
-    primaryLabel: "Register team",
-    primaryHref: wetherbyTeamLink,
-    secondaryLabel: "Join as player",
-    secondaryHref: wetherbyPlayerLink,
-    featured: false,
-  },
-  {
-    eyebrow: "LIVE NORTHALLERTON LEAGUE",
-    title: "Northallerton Wednesday League",
-    status: "Fixtures live",
-    body: "See live fixtures, recent results, teams and the current league table for the Wednesday 6-a-side league at Northallerton Leisure Centre.",
-    primaryLabel: "View league",
-    primaryHref: northallertonLeagueLink,
-    secondaryLabel: "Join as player",
-    secondaryHref: northallertonPlayerLink,
-    featured: true,
-  },
-  {
-    eyebrow: "NORTH YORKSHIRE HEARTLANDS",
-    title: "North Yorkshire Heartlands League",
-    status: "Registrations open",
-    body: "A new SIXFL league for Bedale, Richmond, Thirsk, Catterick and the surrounding area. Teams and individual players can view the details and register now.",
-    primaryLabel: "Register team",
-    primaryHref: `${heartlandsLeagueLink}?type=team#register`,
-    secondaryLabel: "Join as player",
-    secondaryHref: `${heartlandsLeagueLink}?type=player#register`,
-    featured: false,
-  },
-];
 
 const whySixflPoints = [
   {
@@ -167,7 +99,7 @@ export default async function HomePage() {
     <div className="relative min-h-screen overflow-hidden bg-black text-white">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(16,185,129,0.18),transparent_24%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,rgba(16,185,129,0.12),transparent_22%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,rgba(14,165,233,0.13),transparent_22%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.08),transparent_28%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04),transparent_20%,rgba(0,0,0,0.78))]" />
         <div className="absolute inset-0 opacity-[0.08] bg-[linear-gradient(90deg,rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:56px_56px]" />
@@ -183,42 +115,34 @@ export default async function HomePage() {
         >
           <div className="max-w-5xl text-left">
             <div className="inline-flex max-w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-center text-[10px] font-extrabold uppercase leading-5 tracking-[0.14em] text-emerald-300 sm:px-4 sm:text-xs sm:tracking-[0.22em]">
-              Harrogate & Northallerton live now • New leagues forming
+              Live leagues • New leagues forming across North Yorkshire
             </div>
 
             <h1 className="mt-6 max-w-4xl text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl sm:leading-[0.95] lg:text-7xl">
-              Local 6-a-side football across North Yorkshire.
+              Local 6-a-side football.
               <br />
               <span className="text-emerald-500 drop-shadow-[0_0_30px_rgba(16,185,129,0.55)]">
-                Easy to join. Easy to follow.
+                Find your league — or help build the next one.
               </span>
             </h1>
 
             <p className="mt-6 max-w-3xl text-base leading-8 text-white/72 sm:text-lg">
-              Find a local SIXFL league, check live fixtures and tables, or register interest for an upcoming launch as a team, player or referee.
+              See the leagues already playing, then find the SIXFL launches currently recruiting teams and individual players. New areas appear here as soon as they start building.
             </p>
-
-            <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold tracking-[0.18em] text-emerald-300/90">
-              {leagueTypes.map((type) => (
-                <span key={type} className="inline-flex items-center">
-                  {type}
-                </span>
-              ))}
-            </div>
 
             <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
-                href={harrogateLeagueLink}
+                href="#live-leagues"
                 className="inline-flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 px-6 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:w-auto"
               >
-                VIEW HARROGATE LEAGUE
+                VIEW LIVE LEAGUES
               </Link>
 
               <Link
-                href={northallertonLeagueLink}
-                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-6 text-center text-sm font-extrabold tracking-wide text-emerald-200 transition hover:bg-emerald-500/15 sm:w-auto"
+                href="#forming-leagues"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-sky-400/35 bg-sky-400/10 px-6 text-center text-sm font-extrabold tracking-wide text-sky-100 transition hover:bg-sky-400/15 sm:w-auto"
               >
-                VIEW NORTHALLERTON LEAGUE
+                NEW LEAGUES FORMING
               </Link>
 
               <Link
@@ -230,15 +154,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div
-            className={`mt-10 grid gap-4 ${
-              areaCards.length === 4 ? "lg:grid-cols-2" : "lg:grid-cols-3"
-            }`}
-          >
-            {areaCards.map((area) => (
-              <AreaCard key={area.title} {...area} />
-            ))}
-          </div>
+          <HomepageLeagueDirectory />
         </section>
 
         <SixflTvHomepageSection />
@@ -273,24 +189,28 @@ export default async function HomePage() {
             <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
               <div className="lg:col-span-7">
                 <div className="text-[11px] font-bold tracking-[0.24em] text-emerald-300">
-                  JOIN A LEAGUE
+                  JOIN SIXFL
                 </div>
                 <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  Get involved with SIXFL.
+                  Your area can be the next SIXFL league.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
-                  Teams, individual players and referees can register interest for live leagues and new launch areas. Harrogate and Northallerton are live now, while Wetherby and the North Yorkshire Heartlands are open for registrations.
+                  Choose a live league, register for one that is forming now, or tell us where you want SIXFL to launch next. Teams, individual players and referees can all register interest.
                 </p>
 
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {launchAreas.map((area) => (
-                    <span
-                      key={area}
-                      className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[11px] font-bold text-white/80"
-                    >
-                      {area}
-                    </span>
-                  ))}
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link
+                    href="/bring-sixfl-to-your-area"
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-5 text-sm font-black text-emerald-100 transition hover:bg-emerald-500/15"
+                  >
+                    Bring SIXFL to your area
+                  </Link>
+                  <Link
+                    href={generalRegisterLink}
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-black/25 px-5 text-sm font-black text-white/80 transition hover:bg-black/40"
+                  >
+                    See all registration options
+                  </Link>
                 </div>
               </div>
 
@@ -311,75 +231,6 @@ export default async function HomePage() {
         </section>
       </div>
     </div>
-  );
-}
-
-function AreaCard({
-  eyebrow,
-  title,
-  status,
-  body,
-  primaryLabel,
-  primaryHref,
-  secondaryLabel,
-  secondaryHref,
-  featured,
-}: {
-  eyebrow: string;
-  title: string;
-  status: string;
-  body: string;
-  primaryLabel: string;
-  primaryHref: string;
-  secondaryLabel: string;
-  secondaryHref: string;
-  featured: boolean;
-}) {
-  return (
-    <article
-      className={`rounded-[1.5rem] border p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-[1.75rem] sm:p-6 ${
-        featured
-          ? "border-emerald-500/25 bg-emerald-500/[0.08]"
-          : "border-white/10 bg-black/35"
-      }`}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">
-          {eyebrow}
-        </div>
-        <div
-          className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
-            featured
-              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-              : "border-white/10 bg-white/5 text-white/75"
-          }`}
-        >
-          {status}
-        </div>
-      </div>
-
-      <h2 className="mt-5 text-2xl font-black tracking-tight text-white sm:text-3xl">
-        {title}
-      </h2>
-      <p className="mt-3 text-sm leading-7 text-white/66 sm:text-base">
-        {body}
-      </p>
-
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <Link
-          href={primaryHref}
-          className="inline-flex h-11 w-full items-center justify-center rounded-full bg-emerald-500 px-5 text-center text-sm font-extrabold tracking-wide text-black transition hover:scale-[1.02] hover:bg-emerald-400 sm:min-w-[8.75rem] sm:w-auto"
-        >
-          {primaryLabel}
-        </Link>
-        <Link
-          href={secondaryHref}
-          className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-center text-sm font-extrabold tracking-wide text-white transition hover:bg-white/10 sm:min-w-[8.75rem] sm:w-auto"
-        >
-          {secondaryLabel}
-        </Link>
-      </div>
-    </article>
   );
 }
 
