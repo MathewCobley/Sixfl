@@ -29,7 +29,7 @@ function formatMoney(amountPence: number) {
 
 async function getKitEligibility(teamId: string) {
   const rows = await prisma.$queryRaw<
-    Array<{ eligible: boolean; legacyOffer: boolean }>
+    Array<{ eligible: boolean; legacyOffer: boolean; suppressed: boolean }>
   >`
     SELECT
       (
@@ -61,12 +61,19 @@ async function getKitEligibility(teamId: string) {
             AND legacy_team."wantsFreeKit" = TRUE
             AND legacy_team."createdAt" < ${KIT_PACKAGE_CHANGEOVER_AT}
         )
-      ) AS "legacyOffer"
+      ) AS "legacyOffer",
+      EXISTS (
+        SELECT 1
+        FROM "Team" visibility_team
+        WHERE visibility_team."id" = ${teamId}
+          AND visibility_team."freeKitOfferExpiredAt" IS NOT NULL
+      ) AS "suppressed"
   `;
 
   return {
     eligible: Boolean(rows[0]?.eligible),
     legacyOffer: Boolean(rows[0]?.legacyOffer),
+    suppressed: Boolean(rows[0]?.suppressed),
   };
 }
 
@@ -219,6 +226,7 @@ export async function GET(
   return NextResponse.json({
     eligible: eligibility.eligible,
     legacyOffer: eligibility.legacyOffer,
+    additionalKitPurchasesAvailable: !eligibility.suppressed,
     includedKitQuantity: INCLUDED_KIT_QUANTITY,
     extraKitPricePence: EXTRA_KIT_PRICE_PENCE,
     team: {
@@ -282,6 +290,13 @@ export async function POST(
   if (!eligibility.eligible) {
     return NextResponse.json(
       { error: "This team is not eligible for the kit offer." },
+      { status: 403 },
+    );
+  }
+
+  if (eligibility.suppressed) {
+    return NextResponse.json(
+      { error: "Additional kit purchases are currently hidden for this team." },
       { status: 403 },
     );
   }
@@ -386,9 +401,6 @@ export async function POST(
         purchaseOnly: !eligibility.eligible,
       });
 
-      // These defaults are retained temporarily because the existing standard-kit
-      // prebuild migration still recognises them. The player-facing copy above is
-      // the source of truth for every email that is actually queued.
       const notificationDefaults = {
         subject: `${team.name} additional kit contribution`,
         body: `Hi ${payerName},\n\nYour captain has asked you to contribute ${formatMoney(charge.amountPence)} towards ${quantity} additional SIXFL team kit${quantity === 1 ? "" : "s"}. The extra kits cost £20 each and the total has been divided between the selected team members.\n\nUse the secure payment link below.`,
