@@ -17,7 +17,7 @@ The workflow `.github/workflows/critical-feature-contracts.yml` runs on every pu
 
 It deliberately runs `npm run prebuild` before checking contracts because SIXFL currently has a long source-preparation chain. Contracts therefore inspect the source that Railway will actually build, rather than only the source as it appeared before preparation.
 
-The workflow also runs the preparation chain twice and rejects the change if the second run changes the prepared source again. This catches order-dependent and non-idempotent build patches.
+For any critical behaviour that still depends on a preparation script, the workflow also re-runs that specific preparation after the complete prebuild and rejects it if it changes already-prepared source. This makes the protected patch idempotent without pretending the whole legacy prebuild chain is already clean.
 
 A red **SIXFL critical feature contracts** check means **do not merge**.
 
@@ -27,7 +27,7 @@ Permanent product behaviour belongs in the React/Next.js/server source that owns
 
 `apply-*.cjs` scripts are migration/compatibility debt. They may temporarily preserve old behaviour, but new permanent functionality must not rely solely on another post-processing patch being remembered in the correct order.
 
-When a critical feature currently depends on a preparation script, its final behaviour must be protected by a feature contract until the patch is removed and the behaviour is native.
+When a critical feature currently depends on a preparation script, its final behaviour must be protected by a feature contract until the patch is removed and the behaviour is native. Any preparation script used to preserve a protected feature must itself be safe to re-run after the full prebuild.
 
 ## First protected area: team kit design reservation
 
@@ -70,7 +70,8 @@ When fixing a regression or adding an important invariant:
 2. add an assertion to `scripts/check-critical-feature-contracts.mjs` or a dedicated executable contract test;
 3. make the contract describe the business rule rather than the current ticket;
 4. run the complete prebuild chain before the contract;
-5. ensure the test fails if the protected behaviour is deliberately removed in a temporary branch;
-6. only then merge.
+5. if a critical preparation script is still required, prove that re-running that script does not alter the already-prepared source;
+6. ensure the test fails if the protected behaviour is deliberately removed in a temporary branch;
+7. only then merge.
 
 Every regression that reaches production should, where practical, leave behind a permanent automated check so the same failure cannot recur silently.
