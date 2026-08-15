@@ -58,9 +58,17 @@ if (!form.includes('const unavailable = design.taken && !selected;')) {
   );
 }
 
+// Older catalogue cards selected the design using the whole card button.
 form = form.replace(
   '                      onClick={() => setSelectedDesignId(design.id)}\n                      aria-pressed={selected}',
   '                      onClick={() => { if (!unavailable) setSelectedDesignId(design.id); }}\n                      disabled={unavailable}\n                      aria-disabled={unavailable}\n                      aria-pressed={selected}',
+);
+
+// Current catalogue cards use an image lightbox with a separate Choose button.
+// Apply the same reservation protection to that real interactive control.
+form = form.replace(
+  '                        onClick={() => setSelectedDesignId(design.id)}\n                        aria-pressed={selected}',
+  '                        onClick={() => { if (!unavailable) setSelectedDesignId(design.id); }}\n                        disabled={unavailable}\n                        aria-disabled={unavailable}\n                        aria-pressed={selected}',
 );
 
 if (!form.includes('unavailable\n                          ? "cursor-not-allowed border-white/5 bg-black/10 opacity-35 grayscale"')) {
@@ -70,10 +78,20 @@ if (!form.includes('unavailable\n                          ? "cursor-not-allowed
   );
 }
 
+// Older card markup gets a dedicated Taken line.
 if (!form.includes('{unavailable ? (\n                          <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-200">Taken</div>')) {
   form = form.replace(
     '                        <div className="mt-0.5 truncate text-[11px] text-white/40">\n                          {design.name ?? "Team kit"}\n                        </div>',
     '                        <div className="mt-0.5 truncate text-[11px] text-white/40">\n                          {design.name ?? "Team kit"}\n                        </div>\n                        {unavailable ? (\n                          <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-200">Taken</div>\n                        ) : null}',
+  );
+}
+
+// Current lightbox card uses the right-hand Choose/Selected badge. Reuse that
+// badge for Taken so there is no second competing action label.
+if (!form.includes('unavailable ? "Taken" : selected ? "Selected" : "Choose"')) {
+  form = form.replace(
+    '{selected ? "Selected" : "Choose"}',
+    '{unavailable ? "Taken" : selected ? "Selected" : "Choose"}',
   );
 }
 
@@ -83,6 +101,26 @@ if (!action.includes('const designConflict = await prisma.$queryRaw')) {
   action = action.replace(
     '  const design = await getKitDesignById(kitDesignId);\n  if (!design) {\n    redirect(buildRedirect(teamId, { error: "design_unavailable" }));\n  }\n',
     `  const design = await getKitDesignById(kitDesignId);\n  if (!design) {\n    redirect(buildRedirect(teamId, { error: "design_unavailable" }));\n  }\n\n  const designConflict = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql\`\n    SELECT orders."id"\n    FROM "TeamKitOrder" orders\n    JOIN "Team" this_team ON this_team."id" = \${teamId}\n    JOIN "Team" other_team ON other_team."id" = orders."teamId"\n    WHERE other_team."leagueId" = this_team."leagueId"\n      AND orders."teamId" <> \${teamId}\n      AND orders."kitDesignId" = \${kitDesignId}\n      AND orders."status"::text NOT IN ('DRAFT', 'CANCELLED')\n    LIMIT 1\n  \`);\n  if (designConflict[0]) {\n    redirect(buildRedirect(teamId, { error: "design_taken" }));\n  }\n`,
+  );
+}
+
+const hasTakenLabel =
+  form.includes('unavailable ? "Taken" : selected ? "Selected" : "Choose"') ||
+  form.includes('text-amber-200">Taken</div>');
+
+if (
+  !page.includes("const takenDesignIds = new Set") ||
+  !page.includes("taken: takenDesignIds.has(design.id)") ||
+  !form.includes("const unavailable = design.taken && !selected;") ||
+  !form.includes("disabled={unavailable}") ||
+  !form.includes("aria-disabled={unavailable}") ||
+  !form.includes("opacity-35 grayscale") ||
+  !hasTakenLabel ||
+  !action.includes("designConflict") ||
+  !action.includes('error: "design_taken"')
+) {
+  throw new Error(
+    "League kit design reservation was not fully applied to the final captain kit UI and server action.",
   );
 }
 
