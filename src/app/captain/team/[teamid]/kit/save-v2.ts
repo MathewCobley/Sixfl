@@ -158,6 +158,36 @@ export async function saveTeamKitOrderV2Action(formData: FormData) {
         throw new Error("KIT_ORDER_LOCKED");
       }
 
+      if (status === "SUBMITTED") {
+        // Lock the league row before checking the design. This serialises kit
+        // submissions within a league, so two teams cannot submit the same
+        // previously-unreserved design at the same moment.
+        const leagueRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT league."id"
+          FROM "League" league
+          JOIN "Team" team ON team."leagueId" = league."id"
+          WHERE team."id" = ${teamId}
+          FOR UPDATE OF league
+        `);
+
+        if (leagueRows[0]) {
+          const designConflict = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT other_order."id"
+            FROM "TeamKitOrder" other_order
+            JOIN "Team" other_team ON other_team."id" = other_order."teamId"
+            WHERE other_team."leagueId" = ${leagueRows[0].id}
+              AND other_order."teamId" <> ${teamId}
+              AND other_order."kitDesignId" = ${kitDesignId}
+              AND other_order."status"::text NOT IN ('DRAFT', 'CANCELLED')
+            LIMIT 1
+          `);
+
+          if (designConflict[0]) {
+            throw new Error("KIT_DESIGN_TAKEN");
+          }
+        }
+      }
+
       if (existingOrder) {
         await tx.$executeRaw(Prisma.sql`
           UPDATE "TeamKitOrder"
@@ -250,7 +280,9 @@ export async function saveTeamKitOrderV2Action(formData: FormData) {
         error:
           error instanceof Error && error.message === "KIT_ORDER_LOCKED"
             ? "order_locked"
-            : "extra_kits_not_saved",
+            : error instanceof Error && error.message === "KIT_DESIGN_TAKEN"
+              ? "design_taken"
+              : "extra_kits_not_saved",
       }),
     );
   }
