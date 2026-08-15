@@ -124,11 +124,19 @@ export default async function AdminLeaguesPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-white">Leagues</h1>
-        <p className="text-sm text-white/60">
-          Manage parent competitions and the seasons that sit underneath them.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold text-white">Leagues</h1>
+          <p className="text-sm text-white/60">
+            Manage parent competitions and the seasons that sit underneath them.
+          </p>
+        </div>
+        <Link
+          href="/admin/leagues/homepage"
+          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-5 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15"
+        >
+          Homepage leagues
+        </Link>
       </div>
 
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
@@ -230,7 +238,7 @@ export default async function AdminLeaguesPage() {
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
         <h2 className="mb-2 text-lg font-semibold text-white">Create new league season</h2>
         <p className="mb-5 text-sm text-white/55">
-          For existing competitions, use the competition season panel on the league page to create the next season. This form is mainly for creating a brand-new league setup.
+          For existing competitions, use the competition season panel on the league page to create the next season. This form is mainly for creating a brand-new league setup. Brand-new league records default to Forming on the homepage and can be changed from Homepage leagues.
         </p>
 
         <LeagueForm
