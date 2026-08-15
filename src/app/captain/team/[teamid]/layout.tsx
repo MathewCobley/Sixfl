@@ -250,6 +250,7 @@ export default async function CaptainTeamLayout({
         select: {
           id: true,
           name: true,
+          slug: true,
           season: true,
           isActive: true,
           competition: {
@@ -260,6 +261,7 @@ export default async function CaptainTeamLayout({
                 select: {
                   id: true,
                   name: true,
+                  slug: true,
                   season: true,
                   isActive: true,
                 },
@@ -280,6 +282,7 @@ export default async function CaptainTeamLayout({
   const displayCompetition = team.league?.competition ?? null;
   const displayLeague = displayCompetition?.currentLeague ?? team.league;
   const displayLeagueName = displayCompetition?.name ?? displayLeague?.name ?? "No competition assigned";
+  const displayLeagueSlug = displayLeague?.slug ?? null;
   const displaySeason = displayLeague?.season ?? null;
   const displayIsLive = displayLeague?.isActive ?? false;
 
@@ -367,7 +370,10 @@ export default async function CaptainTeamLayout({
           href: `/captain/team/${teamid}#captain-league-table`,
           label: "Table",
         },
-        { href: `/captain/team/${teamid}/results-history`, label: "Results" },
+        { href: `/captain/team/${teamid}/results-history`, label: "Team results" },
+        ...(displayLeagueSlug
+          ? [{ href: `/leagues/${displayLeagueSlug}/results`, label: "League results" }]
+          : []),
         { href: `/captain/team/${teamid}/player-stats`, label: "Player stats" },
         {
           href: `/captain/team/${teamid}/tv`,
