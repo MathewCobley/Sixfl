@@ -4,7 +4,10 @@ import {
   NotificationRecipientSourceType,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import {
+  getNotificationRecipientBySource,
+  upsertNotificationRecipient,
+} from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 
 const REFERRAL_RECORDED_SOURCE = "team-referral-recorded";
@@ -74,23 +77,30 @@ export async function queueReferralRecordedEmail(referralId: string) {
   const teamLabel = referral.leadTeamName?.trim() || referral.leadName?.trim() || "the team you referred";
   const reward = money(referral.rewardPence);
 
-  const recipient = await upsertNotificationRecipient({
+  const existingRecipient = await getNotificationRecipientBySource({
     sourceType: NotificationRecipientSourceType.USER,
     sourceId: referral.referrerUserId,
-    audience: NotificationAudience.USER,
-    displayName: referral.referrerName,
-    email: referral.referrerEmail,
-    transactionalEmailOptIn: true,
-    metadata: {
-      referralId: referral.id,
-    },
   });
+
+  const recipient =
+    existingRecipient ??
+    (await upsertNotificationRecipient({
+      sourceType: NotificationRecipientSourceType.USER,
+      sourceId: referral.referrerUserId,
+      audience: NotificationAudience.USER,
+      displayName: referral.referrerName,
+      email: referral.referrerEmail,
+      transactionalEmailOptIn: true,
+      metadata: {
+        referralId: referral.id,
+      },
+    }));
 
   await queueDirectNotification({
     recipientId: recipient.id,
     channel: NotificationChannel.EMAIL,
     audience: NotificationAudience.USER,
-    subject: "Your SIXFL team referral is being tracked",
+    subject: "Your SIXFL team referral has been recorded",
     body: [
       `Hi ${firstName(referral.referrerName)},`,
       "",
