@@ -13,6 +13,7 @@ import { queueDueRefereeNightConfirmationChasers } from "@/lib/referee-night-con
 import { queueDueRefereeNightReminderEmails } from "@/lib/referee-night-emails";
 import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib/referee-night-assignment-sync";
 import { prisma } from "@/lib/prisma";
+import { queueMissingReferralRecordedEmails } from "@/lib/team-referral-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -70,13 +71,15 @@ export async function GET(request: NextRequest) {
     const refereeAssignmentSync = await syncUpcomingRefereeAssignmentsForConfirmations();
     const refereeNights = await queueDueRefereeNightReminderEmails();
     const refereeConfirmations = await queueDueRefereeNightConfirmationChasers();
+    const referralEmails = await queueMissingReferralRecordedEmails();
     const queuedDispatches =
       onboarding.queuedDispatches +
       fixtureConfirmations.queued +
       fixtureConfirmationEmails.queued +
       fixtureConfirmationWarnings.queued +
       refereeNights.queued +
-      refereeConfirmations.queued;
+      refereeConfirmations.queued +
+      referralEmails.queued;
     const result = await processNotificationQueue(
       Math.max(25, queuedDispatches + 25),
     );
@@ -104,6 +107,7 @@ export async function GET(request: NextRequest) {
       refereeAssignmentSync,
       refereeNights,
       refereeConfirmations,
+      referralEmails,
       matchdayAutoPay,
       ...result,
     });
