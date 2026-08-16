@@ -49,6 +49,11 @@ const tabs = (teamId: string, previewMembershipId: string | null) => [
     label: "Goal of the Week",
     exact: false,
   },
+  {
+    href: "/player/referrals",
+    label: "Refer a team · £75",
+    exact: false,
+  },
 ];
 
 export default function PlayerTeamNav({ teamId }: { teamId: string }) {
