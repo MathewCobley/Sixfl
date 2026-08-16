@@ -228,6 +228,11 @@ function buildLeagueTable(
   return table;
 }
 
+function isVenueToBeConfirmed(value?: string | null) {
+  const venue = value?.trim().toUpperCase();
+  return venue === "TBC" || venue === "T.B.C.";
+}
+
 function buildSeoLocation(input: {
   area?: string | null;
   venueName?: string | null;
@@ -249,7 +254,22 @@ function buildSeoVenue(input: {
   venueName?: string | null;
   area?: string | null;
 }) {
-  return input.venueName?.trim() || input.area?.trim() || "your local venue";
+  const venue = input.venueName?.trim();
+
+  if (venue && !isVenueToBeConfirmed(venue)) return venue;
+
+  return input.area?.trim() || "your local venue";
+}
+
+function buildPublicVenue(input: {
+  venueName?: string | null;
+  area?: string | null;
+}) {
+  const venue = input.venueName?.trim();
+
+  if (venue && isVenueToBeConfirmed(venue)) return "To be confirmed";
+
+  return venue || input.area?.trim() || "To be confirmed";
 }
 
 function buildSeoLeagueHeading(location: string) {
@@ -385,6 +405,10 @@ export default async function LeagueLandingPage({ params }: PageProps) {
     venueName: league.venueName,
     area: league.area,
   });
+  const publicVenue = buildPublicVenue({
+    venueName: league.venueName,
+    area: league.area,
+  });
   const seoLeagueHeading = buildSeoLeagueHeading(seoLocation);
 
   const heroEyebrow = [seoVenue, nightLabel, leagueTypeCompact]
@@ -416,7 +440,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
     },
     {
       label: "Venue",
-      value: seoVenue,
+      value: publicVenue,
     },
     {
       label: "Season",
@@ -1442,7 +1466,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                 <div className="flex items-center justify-between gap-4">
                   <span>Venue</span>
                   <span className="text-right font-medium text-white">
-                    {seoVenue}
+                    {publicVenue}
                   </span>
                 </div>
 
