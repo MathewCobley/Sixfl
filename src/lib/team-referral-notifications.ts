@@ -94,14 +94,14 @@ export async function queueReferralRecordedEmail(referralId: string) {
     body: [
       `Hi ${firstName(referral.referrerName)},`,
       "",
-      `Thanks for referring ${teamLabel} to SIXFL. We have recorded your referral and you do not need to do anything else right now.`,
+      `Thanks for referring ${teamLabel} to SIXFL. We have recorded your referral and SIXFL will track it automatically.`,
       "",
-      "What happens next:",
+      "How the reward works:",
       `• The referred team needs to join a SIXFL league.`,
-      `• Once they complete ${referral.requiredMatches} league matches, your ${reward} referral reward becomes payable.`,
+      `• The ${reward} referral reward is payable after the team completes ${referral.requiredMatches} league matches.`,
       "• Cancelled or postponed fixtures do not count towards the total.",
       "",
-      "You can follow the team's progress at any time from your SIXFL referral page.",
+      "You can see the team's current progress at any time from your SIXFL referral page.",
       "",
       "{{cta}}",
       "",
@@ -130,7 +130,8 @@ export async function queueMissingReferralRecordedEmails(limit = 100) {
     SELECT r."id"
     FROM "TeamReferral" r
     INNER JOIN "User" u ON u."id" = r."referrerUserId"
-    WHERE u."email" IS NOT NULL
+    WHERE r."paidAt" IS NULL
+      AND u."email" IS NOT NULL
       AND BTRIM(u."email") <> ''
       AND NOT EXISTS (
         SELECT 1
