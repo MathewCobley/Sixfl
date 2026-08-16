@@ -61,6 +61,12 @@ const joinRoutes = [
     href: generalRefereeLink,
     cta: "Referee interest",
   },
+  {
+    title: "Refer a team · Earn £75",
+    desc: "Already play in SIXFL? Refer a new team and earn £75 after they complete three league matches.",
+    href: "/player/referrals",
+    cta: "Get my referral link",
+  },
 ];
 
 function normaliseTeamName(name: string) {
