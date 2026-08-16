@@ -236,8 +236,8 @@ export default async function HomepageLeagueDirectory() {
       <LeagueGroup
         id="forming-leagues"
         eyebrow="FORMING NOW"
-        title="New leagues building now"
-        copy="These are real SIXFL launch areas where we are actively recruiting teams and individual players."
+        title="Leagues forming now"
+        copy="We’re actively building these new SIXFL leagues now. Register your team or join as a player."
         leagues={forming}
       />
       <LeagueGroup
