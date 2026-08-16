@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { queueReferralRecordedEmail } from "@/lib/team-referral-notifications";
 
 export const TEAM_REFERRAL_REWARD_PENCE = 7500;
 export const TEAM_REFERRAL_REQUIRED_MATCHES = 3;
@@ -64,16 +65,26 @@ export async function attachReferralToLead(input: {
   const referrerUserId = rows[0]?.userId;
   if (!referrerUserId) return false;
 
-  await prisma.$executeRaw`
+  const referralId = randomUUID();
+  const inserted = await prisma.$queryRaw<Array<{ id: string }>>`
     INSERT INTO "TeamReferral" (
       "id", "referrerUserId", "interestLeadId", "rewardPence", "requiredMatches", "updatedAt"
     )
     VALUES (
-      ${randomUUID()}, ${referrerUserId}, ${input.interestLeadId},
+      ${referralId}, ${referrerUserId}, ${input.interestLeadId},
       ${TEAM_REFERRAL_REWARD_PENCE}, ${TEAM_REFERRAL_REQUIRED_MATCHES}, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("interestLeadId") DO NOTHING
+    RETURNING "id"
   `;
+
+  if (inserted[0]?.id) {
+    try {
+      await queueReferralRecordedEmail(inserted[0].id);
+    } catch (error) {
+      console.error("Referral confirmation email queue failed:", error);
+    }
+  }
 
   return true;
 }
