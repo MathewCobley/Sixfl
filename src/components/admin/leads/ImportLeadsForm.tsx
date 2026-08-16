@@ -19,6 +19,7 @@ const initialState: ImportLeadsState = {
   processed: 0,
   created: 0,
   skipped: 0,
+  skippedDetails: [],
   errors: [],
 };
 
@@ -123,6 +124,20 @@ export default function ImportLeadsForm() {
               <span className="rounded-full border border-white/10 bg-black/15 px-3 py-1">{state.skipped} skipped</span>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {state.skippedDetails.length > 0 ? (
+        <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+          <div className="font-semibold">Skipped existing leads</div>
+          <p className="mt-1 text-xs text-sky-100/65">
+            These rows were not imported because SIXFL found an existing lead with the same email address or phone number.
+          </p>
+          <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sky-100/85">
+            {state.skippedDetails.map((detail, index) => (
+              <li key={`${index}-${detail}`}>{detail}</li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
