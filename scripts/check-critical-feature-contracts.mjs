@@ -175,6 +175,29 @@ expectText("PlayerPool", playerPoolPagePath, playerPoolPage, "Players for {team.
 expectText("PlayerPool", playerPoolPagePath, playerPoolPage, "requestPlayerPoolIntroductionAction", "captains must retain the introduction-request action");
 expectText("PlayerPool", playerPoolPagePath, playerPoolPage, "addPlayerPoolPlayerToSquadAction", "approved PlayerPool introductions must retain the add-to-squad action");
 
+// ---------------------------------------------------------------------------
+// TEAM REFERRALS — the £75 scheme must stay discoverable and the registration
+// handoff must continue carrying the referring player's code into the lead.
+// ---------------------------------------------------------------------------
+const playerReferralPagePath = "src/app/player/referrals/page.tsx";
+const playerTeamNavPath = "src/components/player/PlayerTeamNav.tsx";
+const homepagePath = "src/app/(public)/page.tsx";
+const referralPreparationPath = "scripts/apply-team-referral-rewards.cjs";
+
+const playerReferralPage = read(playerReferralPagePath);
+const playerTeamNav = read(playerTeamNavPath);
+const homepage = read(homepagePath);
+const referralPreparation = read(referralPreparationPath);
+
+expectText("team referrals", playerReferralPagePath, playerReferralPage, "Refer a team and earn £75", "player referral reward page must remain available");
+expectText("team referrals", playerReferralPagePath, playerReferralPage, "register-interest?type=team&ref=", "player referral page must generate a team-registration link containing the referral code");
+expectText("team referrals", playerTeamNavPath, playerTeamNav, 'href: "/player/referrals"', "player navigation must permanently expose the referral page");
+expectText("team referrals", playerTeamNavPath, playerTeamNav, "Refer a team · £75", "player navigation must clearly advertise the £75 team referral reward");
+expectText("team referrals", homepagePath, homepage, 'href: "/player/referrals"', "public homepage must expose the referral scheme");
+expectText("team referrals", homepagePath, homepage, "Refer a team · Earn £75", "homepage referral entry point must explain the reward");
+expectText("team referrals", referralPreparationPath, referralPreparation, "attachReferralToLead", "registration preparation must continue attaching valid referral codes to team leads");
+expectText("team referrals", referralPreparationPath, referralPreparation, 'name="referralCode"', "team registration must continue carrying the referral code through the form");
+
 if (failures.length) {
   console.error("\nSIXFL CRITICAL FEATURE CONTRACTS FAILED\n");
   for (const failure of failures) console.error(` - ${failure}`);
