@@ -83,9 +83,12 @@ patchFile(
       );
     }
 
+    // Remove only the legacy local table calculator. Older versions of this
+    // patch consumed everything through buildSeoLocation(), which also deleted
+    // any helper added between those functions (for example venue/TBC helpers).
     source = source.replace(
-      /function buildLeagueTable\([\s\S]*?\n}\n\nfunction buildSeoLocation/,
-      "function buildSeoLocation",
+      /function buildLeagueTable\([\s\S]*?\n}\n\n(?=function isVenueToBeConfirmed|function buildSeoLocation)/,
+      "",
     );
 
     const leagueFoundAnchor = `  if (!league) {\n    notFound();\n  }\n\n  const nightLabel = formatPreferredNight(league.dayOfWeek);`;
