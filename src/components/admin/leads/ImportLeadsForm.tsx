@@ -88,7 +88,7 @@ export default function ImportLeadsForm() {
             <label className="text-sm text-white/70">Area override (optional)</label>
             <input
               name="defaultArea"
-              placeholder="Leave blank to infer Catterick/Richmond from the Meta ad"
+              placeholder="Leave blank to infer the area from the Meta ad"
               className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/30"
             />
           </div>
