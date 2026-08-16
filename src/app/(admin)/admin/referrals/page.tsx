@@ -84,11 +84,15 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
       LIMIT 250
     `,
     prisma.$queryRaw<PlayerOptionRow[]>`
-      SELECT DISTINCT u."id", u."name", u."email"
+      SELECT u."id", u."name", u."email"
       FROM "User" u
-      INNER JOIN "TeamMember" member ON member."userId" = u."id"
       WHERE u."email" IS NOT NULL
         AND BTRIM(u."email") <> ''
+        AND EXISTS (
+          SELECT 1
+          FROM "TeamMember" member
+          WHERE member."userId" = u."id"
+        )
       ORDER BY COALESCE(NULLIF(BTRIM(u."name"), ''), u."email"), u."email"
     `,
   ]);
