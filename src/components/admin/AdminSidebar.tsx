@@ -258,6 +258,12 @@ const navigationGroups = [
         description: "Inbound",
       },
       {
+        name: "Team referrals",
+        href: "/admin/referrals",
+        icon: CreditCardIcon,
+        description: "£75 rewards",
+      },
+      {
         name: "Player pool",
         href: "/admin/player-pool",
         icon: UserGroupIcon,
