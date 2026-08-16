@@ -83,9 +83,11 @@ patchFile(
       );
     }
 
+    // Remove only the legacy local table calculator. Keep any helper functions
+    // that now sit between it and buildSeoLocation (for example venue helpers).
     source = source.replace(
-      /function buildLeagueTable\([\s\S]*?\n}\n\nfunction buildSeoLocation/,
-      "function buildSeoLocation",
+      /function buildLeagueTable\([\s\S]*?\n}\n\n(?=function (?:isVenueToBeConfirmed|buildSeoLocation))/, 
+      "",
     );
 
     const leagueFoundAnchor = `  if (!league) {\n    notFound();\n  }\n\n  const nightLabel = formatPreferredNight(league.dayOfWeek);`;
