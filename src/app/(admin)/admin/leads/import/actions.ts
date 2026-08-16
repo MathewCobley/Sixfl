@@ -1,5 +1,5 @@
 // ========================================
-// File: src/app/admin/leads/import/actions.ts
+// File: src/app/(admin)/admin/leads/import/actions.ts
 // ========================================
 
 "use server";
@@ -14,6 +14,7 @@ import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 export type ImportLeadsState = {
   success: boolean;
   message: string;
+  processed: number;
   created: number;
   skipped: number;
   errors: string[];
@@ -22,6 +23,7 @@ export type ImportLeadsState = {
 const INITIAL_STATE: ImportLeadsState = {
   success: false,
   message: "",
+  processed: 0,
   created: 0,
   skipped: 0,
   errors: [],
@@ -29,6 +31,10 @@ const INITIAL_STATE: ImportLeadsState = {
 
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function compactHeader(value: string) {
+  return normalizeHeader(value).replace(/[^a-z0-9]/g, "");
 }
 
 function parseCsvLine(line: string): string[] {
@@ -75,7 +81,12 @@ function parseCsv(text: string): { headers: string[]; rows: Record<string, strin
     return { headers: [], rows: [] };
   }
 
-  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
+  // Meta currently exports the email column with a blank heading. Give every
+  // blank heading a stable synthetic key so its value is not lost.
+  const headers = parseCsvLine(lines[0]).map((header, index) => {
+    const normalized = normalizeHeader(header);
+    return normalized || `column${index + 1}`;
+  });
 
   const rows = lines.slice(1).map((line) => {
     const values = parseCsvLine(line);
@@ -101,8 +112,22 @@ function getFirstNonEmpty(row: Record<string, string>, keys: string[]) {
   return "";
 }
 
+function getFirstByHeaderContains(row: Record<string, string>, needles: string[]) {
+  const compactNeedles = needles.map(compactHeader);
+
+  for (const [key, value] of Object.entries(row)) {
+    if (!value?.trim()) continue;
+    const compactKey = compactHeader(key);
+    if (compactNeedles.some((needle) => compactKey.includes(needle))) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
 function buildContactName(row: Record<string, string>) {
-  const explicitContactName = getFirstNonEmpty(row, ["contactName", "name", "fullName"]);
+  const explicitContactName = getFirstNonEmpty(row, ["contactName", "name", "fullName", "full_name"]);
   if (explicitContactName) return explicitContactName;
 
   const firstName = getFirstNonEmpty(row, ["firstName", "firstname", "first"]);
@@ -111,7 +136,7 @@ function buildContactName(row: Record<string, string>) {
   const combined = `${firstName} ${lastName}`.trim();
   if (combined) return combined;
 
-  const email = getFirstNonEmpty(row, ["email"]);
+  const email = findEmail(row);
   if (!email) return "";
 
   return email.split("@")[0];
@@ -125,24 +150,163 @@ function toInterestType(value: FormDataEntryValue | null): InterestType {
   return InterestType.TEAM;
 }
 
-function isTruthy(value: FormDataEntryValue | null) {
-  return value === "on" || value === "true" || value === "1";
-}
-
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function findEmail(row: Record<string, string>) {
+  const namedEmail = getFirstNonEmpty(row, ["email", "emailAddress", "email_address"]);
+  if (namedEmail) return normalizeEmail(namedEmail);
+
+  // Meta's lead export can contain the email value under a blank column heading.
+  const inferredEmail = Object.values(row).find((value) => isValidEmail(value.trim()));
+  return inferredEmail ? normalizeEmail(inferredEmail) : "";
+}
+
+function cleanPhone(value: string) {
+  return value.trim().replace(/^p:\s*/i, "");
+}
+
+function findPhone(row: Record<string, string>) {
+  return cleanPhone(
+    getFirstNonEmpty(row, ["phone", "phoneNumber", "phone_number", "mobile", "telephone"]),
+  );
+}
+
+function normalizeAnswer(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function humanizeAnswer(value: string) {
+  const text = value.trim().replace(/_/g, " ").replace(/\s+/g, " ");
+  if (!text) return "";
+
+  const withContractions = text.replace(/^i[’']?m\b/i, "I'm");
+  return withContractions.charAt(0).toUpperCase() + withContractions.slice(1);
+}
+
+function inferInterestType(row: Record<string, string>, fallback: InterestType) {
+  const answer = getFirstByHeaderContains(row, ["what are you looking for"]);
+  if (!answer) return fallback;
+
+  const normalized = normalizeAnswer(answer);
+
+  if (normalized.includes("individual") && normalized.includes("team")) {
+    return InterestType.PLAYER;
+  }
+
+  if (normalized.includes("player") && normalized.includes("looking")) {
+    return InterestType.PLAYER;
+  }
+
+  if (normalized.includes("team")) {
+    return InterestType.TEAM;
+  }
+
+  if (normalized.includes("referee")) {
+    return InterestType.REFEREE;
+  }
+
+  return fallback;
+}
+
+function isMetaRow(row: Record<string, string>) {
+  const leadId = getFirstNonEmpty(row, ["id"]);
+  const platform = getFirstNonEmpty(row, ["platform"]);
+  const adName = getFirstNonEmpty(row, ["adName", "ad_name"]);
+  const campaignName = getFirstNonEmpty(row, ["campaignName", "campaign_name"]);
+
+  return leadId.startsWith("l:") || Boolean(platform && (adName || campaignName));
+}
+
+function platformLabel(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "fb" || normalized === "facebook") return "Facebook";
+  if (normalized === "ig" || normalized === "instagram") return "Instagram";
+  return value.trim() || "Meta";
+}
+
+function inferMetaArea(row: Record<string, string>) {
+  const adName = getFirstNonEmpty(row, ["adName", "ad_name"]);
+  const adSetName = getFirstNonEmpty(row, ["adsetName", "adset_name"]);
+
+  for (const candidate of [adName, adSetName]) {
+    if (!candidate) continue;
+    const parts = candidate
+      .split(/\s+[–—-]\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (parts.length >= 2 && /^heartlands$/i.test(parts[0])) {
+      return parts[1];
+    }
+  }
+
+  return "";
+}
+
+function parseCreatedAt(row: Record<string, string>) {
+  const raw = getFirstNonEmpty(row, ["createdTime", "created_time"]);
+  if (!raw) return null;
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildMetaMessage(row: Record<string, string>) {
+  if (!isMetaRow(row)) return "";
+
+  const leadId = getFirstNonEmpty(row, ["id"]);
+  const platform = getFirstNonEmpty(row, ["platform"]);
+  const campaignName = getFirstNonEmpty(row, ["campaignName", "campaign_name"]);
+  const adName = getFirstNonEmpty(row, ["adName", "ad_name"]);
+  const intent = getFirstByHeaderContains(row, ["what are you looking for"]);
+  const startTiming = getFirstByHeaderContains(row, ["when would you like to start playing"]);
+
+  return [
+    intent ? `Interest: ${humanizeAnswer(intent)}` : "",
+    startTiming ? `Start: ${humanizeAnswer(startTiming)}` : "",
+    leadId ? `Meta lead ID: ${leadId}` : "",
+    platform ? `Platform: ${platformLabel(platform)}` : "",
+    campaignName ? `Campaign: ${campaignName}` : "",
+    adName ? `Ad: ${adName}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function buildSource(row: Record<string, string>, sourceOverride: string) {
+  const explicitSource = getFirstNonEmpty(row, ["source"]);
+  if (explicitSource) return explicitSource;
+  if (sourceOverride) return sourceOverride;
+
+  if (isMetaRow(row)) {
+    const platform = getFirstNonEmpty(row, ["platform"]);
+    return `Meta - ${platformLabel(platform)}`;
+  }
+
+  return "Legacy import";
+}
+
 export async function importLeadsAction(
   _prevState: ImportLeadsState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ImportLeadsState> {
   await requireAdmin();
 
   const file = formData.get("file");
   const defaultInterestType = toInterestType(formData.get("defaultInterestType"));
-  const defaultSource = String(formData.get("defaultSource") ?? "Legacy import").trim() || "Legacy import";
-  const skipExisting = isTruthy(formData.get("skipExisting"));
+  const sourceOverride = String(formData.get("defaultSource") ?? "").trim();
+  const areaOverride = String(formData.get("defaultArea") ?? "").trim();
 
   if (!(file instanceof File) || file.size === 0) {
     return {
@@ -169,12 +333,13 @@ export async function importLeadsAction(
   }
 
   const parsedRows = rows.map((row, index) => {
-    const email = normalizeEmail(getFirstNonEmpty(row, ["email"]));
+    const email = findEmail(row);
     const contactName = buildContactName(row);
     const teamName = getFirstNonEmpty(row, ["teamName", "teamname", "team"]);
-    const phone = getFirstNonEmpty(row, ["phone", "mobile", "telephone"]);
-    const area = getFirstNonEmpty(row, ["area", "location"]);
-    const source = getFirstNonEmpty(row, ["source"]) || defaultSource;
+    const phone = findPhone(row);
+    const phoneNormalized = normalizeUkMobileNumber(phone);
+    const area = areaOverride || getFirstNonEmpty(row, ["area", "location"]) || inferMetaArea(row);
+    const source = buildSource(row, sourceOverride);
 
     return {
       rowNumber: index + 2,
@@ -182,14 +347,18 @@ export async function importLeadsAction(
       contactName,
       teamName,
       phone,
-      phoneNormalized: normalizeUkMobileNumber(phone),
+      phoneNormalized,
       area,
       source,
+      interestType: inferInterestType(row, defaultInterestType),
+      message: buildMetaMessage(row),
+      createdAt: parseCreatedAt(row),
     };
   });
 
   const errors: string[] = [];
-  const seenInCsv = new Set<string>();
+  const seenEmails = new Set<string>();
+  const seenPhones = new Set<string>();
 
   const validRows = parsedRows.filter((row) => {
     if (!row.email) {
@@ -197,7 +366,7 @@ export async function importLeadsAction(
       return false;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+    if (!isValidEmail(row.email)) {
       errors.push(`Row ${row.rowNumber}: invalid email "${row.email}".`);
       return false;
     }
@@ -207,12 +376,18 @@ export async function importLeadsAction(
       return false;
     }
 
-    if (seenInCsv.has(row.email)) {
+    if (seenEmails.has(row.email)) {
       errors.push(`Row ${row.rowNumber}: duplicate email "${row.email}" within CSV.`);
       return false;
     }
 
-    seenInCsv.add(row.email);
+    if (row.phoneNormalized && seenPhones.has(row.phoneNormalized)) {
+      errors.push(`Row ${row.rowNumber}: duplicate phone "${row.phone}" within CSV.`);
+      return false;
+    }
+
+    seenEmails.add(row.email);
+    if (row.phoneNormalized) seenPhones.add(row.phoneNormalized);
     return true;
   });
 
@@ -220,39 +395,63 @@ export async function importLeadsAction(
     return {
       success: false,
       message: "No valid rows were found to import.",
+      processed: rows.length,
       created: 0,
-      skipped: 0,
+      skipped: rows.length,
       errors,
     };
   }
 
-  const existingLeads = await prisma.interestLead.findMany({
-    where: {
-      email: {
-        in: validRows.map((row) => row.email),
-        mode: "insensitive",
-      },
-    },
-    select: {
-      email: true,
-    },
-  });
+  const emails = validRows.map((row) => row.email);
+  const phones = validRows.flatMap((row) => (row.phoneNormalized ? [row.phoneNormalized] : []));
+  const duplicateWhere: Prisma.InterestLeadWhereInput[] = [
+    ...(emails.length
+      ? [
+          {
+            email: {
+              in: emails,
+              mode: "insensitive" as const,
+            },
+          },
+        ]
+      : []),
+    ...(phones.length ? [{ phoneNormalized: { in: phones } }] : []),
+  ];
 
-  const existingEmailSet = new Set(existingLeads.map((lead) => lead.email?.trim().toLowerCase()).filter(Boolean));
+  const existingLeads = duplicateWhere.length
+    ? await prisma.interestLead.findMany({
+        where: { OR: duplicateWhere },
+        select: {
+          email: true,
+          phoneNormalized: true,
+        },
+      })
+    : [];
 
-  const rowsToCreate = validRows.filter((row) => {
-    if (skipExisting && existingEmailSet.has(row.email)) {
-      return false;
-    }
-    return true;
-  });
+  const existingEmailSet = new Set(
+    existingLeads.flatMap((lead) => (lead.email ? [normalizeEmail(lead.email)] : [])),
+  );
+  const existingPhoneSet = new Set(
+    existingLeads.flatMap((lead) => (lead.phoneNormalized ? [lead.phoneNormalized] : [])),
+  );
 
-  const skipped = validRows.length - rowsToCreate.length;
+  // Imports are deliberately duplicate-safe. A matching email OR normalized
+  // phone is skipped so re-uploading a Meta export cannot create duplicate leads.
+  const rowsToCreate = validRows.filter(
+    (row) =>
+      !existingEmailSet.has(row.email) &&
+      !(row.phoneNormalized && existingPhoneSet.has(row.phoneNormalized)),
+  );
+
+  const invalidCount = rows.length - validRows.length;
+  const existingCount = validRows.length - rowsToCreate.length;
+  const skipped = invalidCount + existingCount;
 
   if (rowsToCreate.length === 0) {
     return {
-      success: false,
-      message: "All valid rows were skipped because they already exist.",
+      success: true,
+      message: `Import checked ${rows.length} row${rows.length === 1 ? "" : "s"}. Nothing new was added.`,
+      processed: rows.length,
       created: 0,
       skipped,
       errors,
@@ -260,7 +459,7 @@ export async function importLeadsAction(
   }
 
   const createData: Prisma.InterestLeadCreateManyInput[] = rowsToCreate.map((row) => ({
-    interestType: defaultInterestType,
+    interestType: row.interestType,
     status: LeadStatus.NEW,
     contactName: row.contactName,
     email: row.email,
@@ -268,7 +467,9 @@ export async function importLeadsAction(
     phoneNormalized: row.phoneNormalized,
     teamName: row.teamName || null,
     area: row.area || null,
-    source: row.source || defaultSource,
+    message: row.message || null,
+    source: row.source,
+    ...(row.createdAt ? { createdAt: row.createdAt } : {}),
   }));
 
   const result = await prisma.interestLead.createMany({
@@ -280,7 +481,8 @@ export async function importLeadsAction(
 
   return {
     success: true,
-    message: `Import complete. Created ${result.count} lead${result.count === 1 ? "" : "s"}.`,
+    message: `Import complete. Created ${result.count} lead${result.count === 1 ? "" : "s"} from ${rows.length} row${rows.length === 1 ? "" : "s"}.`,
+    processed: rows.length,
     created: result.count,
     skipped,
     errors,
