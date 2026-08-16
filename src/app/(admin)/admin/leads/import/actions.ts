@@ -17,6 +17,7 @@ export type ImportLeadsState = {
   processed: number;
   created: number;
   skipped: number;
+  skippedDetails: string[];
   errors: string[];
 };
 
@@ -26,6 +27,7 @@ const INITIAL_STATE: ImportLeadsState = {
   processed: 0,
   created: 0,
   skipped: 0,
+  skippedDetails: [],
   errors: [],
 };
 
@@ -398,6 +400,7 @@ export async function importLeadsAction(
       processed: rows.length,
       created: 0,
       skipped: rows.length,
+      skippedDetails: [],
       errors,
     };
   }
@@ -422,27 +425,60 @@ export async function importLeadsAction(
     ? await prisma.interestLead.findMany({
         where: { OR: duplicateWhere },
         select: {
+          id: true,
+          contactName: true,
           email: true,
+          phone: true,
           phoneNormalized: true,
         },
       })
     : [];
 
-  const existingEmailSet = new Set(
-    existingLeads.flatMap((lead) => (lead.email ? [normalizeEmail(lead.email)] : [])),
-  );
-  const existingPhoneSet = new Set(
-    existingLeads.flatMap((lead) => (lead.phoneNormalized ? [lead.phoneNormalized] : [])),
+  const duplicateMatches = validRows.flatMap((row) => {
+    const emailMatch = existingLeads.find(
+      (lead) => lead.email && normalizeEmail(lead.email) === row.email,
+    );
+    const phoneMatch = row.phoneNormalized
+      ? existingLeads.find((lead) => lead.phoneNormalized === row.phoneNormalized)
+      : undefined;
+
+    if (!emailMatch && !phoneMatch) return [];
+
+    const matchedLead = emailMatch ?? phoneMatch;
+    const sameExistingLead = Boolean(
+      emailMatch && phoneMatch && emailMatch.id === phoneMatch.id,
+    );
+
+    let reason = "matching existing lead";
+    if (emailMatch && phoneMatch && sameExistingLead) reason = "same email and phone";
+    else if (emailMatch && phoneMatch) reason = "email and phone match existing leads";
+    else if (emailMatch) reason = "same email";
+    else if (phoneMatch) reason = "same phone";
+
+    const existingName = matchedLead?.contactName?.trim() || "Existing lead";
+
+    return [
+      {
+        rowNumber: row.rowNumber,
+        detail:
+          existingName.toLowerCase() === row.contactName.trim().toLowerCase()
+            ? `${row.contactName} — skipped (${reason}).`
+            : `${row.contactName} — skipped (${reason}; existing lead: ${existingName}).`,
+      },
+    ];
+  });
+
+  const duplicateRowNumbers = new Set(
+    duplicateMatches.map((match) => match.rowNumber),
   );
 
   // Imports are deliberately duplicate-safe. A matching email OR normalized
   // phone is skipped so re-uploading a Meta export cannot create duplicate leads.
   const rowsToCreate = validRows.filter(
-    (row) =>
-      !existingEmailSet.has(row.email) &&
-      !(row.phoneNormalized && existingPhoneSet.has(row.phoneNormalized)),
+    (row) => !duplicateRowNumbers.has(row.rowNumber),
   );
 
+  const skippedDetails = duplicateMatches.map((match) => match.detail);
   const invalidCount = rows.length - validRows.length;
   const existingCount = validRows.length - rowsToCreate.length;
   const skipped = invalidCount + existingCount;
@@ -454,6 +490,7 @@ export async function importLeadsAction(
       processed: rows.length,
       created: 0,
       skipped,
+      skippedDetails,
       errors,
     };
   }
@@ -485,6 +522,7 @@ export async function importLeadsAction(
     processed: rows.length,
     created: result.count,
     skipped,
+    skippedDetails,
     errors,
   };
 }
