@@ -7,6 +7,7 @@ import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
 import { runFixtureConfirmationEmailJob } from "@/lib/fixtures/confirmation-emails";
 import { runFixtureConfirmationReminderJob } from "@/lib/fixtures/confirmation-reminder-job";
 import { backfillUpcomingFixtureConfirmationWarningEmails } from "@/lib/fixtures/confirmation-warning-emails";
+import { queueMissingMetaLeadWelcomeEmails } from "@/lib/leads/meta-welcome-emails";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { chargeDueMatchdayAutoPayments } from "@/lib/payments/team-autopay";
 import { queueDueRefereeNightConfirmationChasers } from "@/lib/referee-night-confirmations";
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
     const refereeNights = await queueDueRefereeNightReminderEmails();
     const refereeConfirmations = await queueDueRefereeNightConfirmationChasers();
     const referralEmails = await queueMissingReferralRecordedEmails();
+    const metaLeadWelcomeEmails = await queueMissingMetaLeadWelcomeEmails();
     const queuedDispatches =
       onboarding.queuedDispatches +
       fixtureConfirmations.queued +
@@ -79,7 +81,8 @@ export async function GET(request: NextRequest) {
       fixtureConfirmationWarnings.queued +
       refereeNights.queued +
       refereeConfirmations.queued +
-      referralEmails.queued;
+      referralEmails.queued +
+      metaLeadWelcomeEmails.queued;
     const result = await processNotificationQueue(
       Math.max(25, queuedDispatches + 25),
     );
@@ -108,6 +111,7 @@ export async function GET(request: NextRequest) {
       refereeNights,
       refereeConfirmations,
       referralEmails,
+      metaLeadWelcomeEmails,
       matchdayAutoPay,
       ...result,
     });
