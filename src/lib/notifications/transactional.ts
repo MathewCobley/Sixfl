@@ -120,6 +120,7 @@ export async function queueLeadWelcomeNotifications(input: {
   >;
   signupUrl?: string;
   teamEntryStatus?: TeamEntryStatus | null;
+  includeSms?: boolean;
 }) {
   const recipient = await upsertNotificationRecipient({
     sourceType: NotificationRecipientSourceType.LEAD,
@@ -170,7 +171,7 @@ export async function queueLeadWelcomeNotifications(input: {
     }),
   ];
 
-  if (input.lead.phone?.trim()) {
+  if ((input.includeSms ?? true) && input.lead.phone?.trim()) {
     queued.push(
       await queueNotificationFromTemplate({
         templateKey: smsTemplateKey,
