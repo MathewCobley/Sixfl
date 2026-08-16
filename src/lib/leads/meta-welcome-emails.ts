@@ -25,7 +25,10 @@ export async function queueMissingMetaLeadWelcomeEmails(limit = 100) {
       lead."teamName",
       lead."marketingConsent"
     FROM "InterestLead" lead
-    WHERE lead."source" ILIKE 'Meta - %'
+    WHERE (
+        lead."source" ILIKE 'Meta - %'
+        OR lead."message" ILIKE '%Meta lead ID:%'
+      )
       AND lead."email" IS NOT NULL
       AND BTRIM(lead."email") <> ''
       AND NOT EXISTS (
